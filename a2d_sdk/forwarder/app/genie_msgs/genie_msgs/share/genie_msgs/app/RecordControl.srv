@@ -1,0 +1,5 @@
+std_msgs/Header     req_header
+bool                record        # false: 停止录制, true: 开始录制
+---
+std_msgs/Header     res_header
+uint8               exec_result   # 参考RtnType定义

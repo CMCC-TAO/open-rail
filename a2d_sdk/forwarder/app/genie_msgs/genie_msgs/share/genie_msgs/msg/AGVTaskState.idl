@@ -1,0 +1,29 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/hal/agv/AGVTaskState.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct AGVTaskState {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "task执行id")
+      uint32 task_uuid;
+
+      @verbatim (language="comment", text=
+        "task请求id")
+      string task_reqid;
+
+      @verbatim (language="comment", text=
+        "站台索引")
+      int32 curr_station_idx;
+
+      @verbatim (language="comment", text=
+        "0: 未工作 1: 工作中")
+      uint32 finish_state;
+    };
+  };
+};

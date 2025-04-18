@@ -1,0 +1,21 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/remote/NoitomReset.srv
+// generated code does not contain a copyright notice
+
+
+module genie_msgs {
+  module srv {
+    struct NoitomReset_Request {
+      uint8 structure_needs_at_least_one_member;
+    };
+    struct NoitomReset_Response {
+      @verbatim (language="comment", text=
+        "重置操作是否成功")
+      boolean success;
+
+      @verbatim (language="comment", text=
+        "操作结果描述")
+      string message;
+    };
+  };
+};

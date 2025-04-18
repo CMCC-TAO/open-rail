@@ -1,0 +1,4 @@
+std_msgs/Header     header
+int32               joint_flag
+float32[]           joint_states    # 关节初始化位置
+bool                block           # true: sync, false: async

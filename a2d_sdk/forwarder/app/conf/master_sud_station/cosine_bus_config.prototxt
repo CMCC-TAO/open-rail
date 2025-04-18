@@ -1,0 +1,12 @@
+# station-to-station send
+topic_config{
+    bus_topic_name: "station/perception/station_psap_vehicle"
+    independent:0
+    middleware:"aorta"
+}
+# vehicle-to-station
+topic_config{
+    bus_topic_name: "np/apps/parking/par_vehicle_state_station"
+    independent:0
+    middleware:"aorta"
+}

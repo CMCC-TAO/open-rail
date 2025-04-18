@@ -1,0 +1,32 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/arm/ArmInitPose.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    struct ArmInitPose_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "0 = left, 1 = right, 2 = both")
+      uint32 arm_sel;
+
+      @verbatim (language="comment", text=
+        "0 = no reset, 1 = reset to set pose, 2 = reset to default pose")
+      uint32 reset_mode;
+
+      @verbatim (language="comment", text=
+        "true: sync, false: async")
+      boolean block;
+    };
+    struct ArmInitPose_Response {
+      std_msgs::msg::Header res_header;
+
+      @verbatim (language="comment", text=
+        "0: success, 1: failed")
+      uint8 exec_result;
+    };
+  };
+};

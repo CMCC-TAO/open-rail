@@ -1,0 +1,110 @@
+{
+    "unicast" : "172.20.2.23",
+    "netmask" : "255.255.255.0",
+    "logging" :
+    {
+        "level" : "debug",
+        "console" : "false",
+        "file" : { "enable" : "true", "path" : "/tmp/vsomeip.log" },
+        "dlt" : "false"
+    },
+    "applications": [
+      
+        {
+            "name": "psapui-service",
+            "id": "0x2401"
+        },
+        {
+            "name": "psapsi-service",
+            "id": "0x2402"
+        },
+        {
+            "name": "aquila-service",
+            "id": "0x2403"
+        }
+    ],
+    "routing" : "routingmanagerd",
+    "service-discovery" :
+    {
+        "enable" : "true",
+        "multicast" : "239.192.255.251",
+        "port" : "30490",
+        "protocol" : "udp",
+        "initial_delay_min" : "50",
+        "initial_delay_max" : "50",
+        "repetitions_base_delay" : "100",
+        "repetitions_max" : "3",
+        "ttl" : "16777215",
+        "cyclic_offer_delay" : "2000",
+        "request_response_delay" : "1000"
+    },
+    "servicegroups": [
+        {
+            "name": "default",
+            "services": [
+                {
+                    "service": "0x3010",
+                    "instance": "1",
+                    "reliable": {
+                        "port": "53011",
+                        "enable-magic-cookies": "false"
+                    },
+                    "events": [
+                        {
+                            "event": "0x8100",
+                            "is_field": "false",
+                            "is_reliable": "true"
+                        },
+                        {
+                            "event": "0x8101",
+                            "is_field": "false",
+                            "is_reliable": "true"
+                        }
+                    ],
+                    "eventgroups": [
+                        {
+                            "eventgroup": "0x01",
+                            "events": [
+                                "0x8100"
+                            ]
+                        },
+                        {
+                            "eventgroup": "0x02",
+                            "events": [
+                                "0x8101"
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "service": "0x3011",
+                    "instance": "1",
+                    "unreliable": "53012"
+                },
+                {
+                    "service": "0x3013",
+                    "instance": "1",
+                    "reliable": {
+                        "port": "53019",
+                        "enable-magic-cookies": "false"
+                    },
+                    "events": [
+                        {
+                            "event": "0x8001",
+                            "is_field": "false",
+                            "is_reliable": "true"
+                        }
+                    ],
+                    "eventgroups": [
+                        {
+                            "eventgroup": "0x01",
+                            "events": [
+                                "0x8001"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }   
+    ]
+}

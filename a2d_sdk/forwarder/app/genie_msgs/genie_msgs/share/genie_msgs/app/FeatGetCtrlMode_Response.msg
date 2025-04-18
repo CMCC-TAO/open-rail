@@ -1,0 +1,14 @@
+
+std_msgs/Header     res_header
+uint8               online        # 0: offline, 1: online
+uint8               remote_mode   # 0: vr, 1: mocap
+
+# bitwise
+# bit0 = head
+# bit1 = left arm
+# bit2 = right arm
+# bit3 = waist
+# bit4 = lift
+# bit5 = agv
+uint16               ctrl_mode     # bitwise
+uint8               exec_result   # 0: success, 1: failed 

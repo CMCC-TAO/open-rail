@@ -1,0 +1,37 @@
+
+
+# someip send
+topic_config{
+    bus_topic_name: "common/vehicle_out/psap_ui_results_eth"
+    middleware:"someip"
+    net_id:3
+    msg_type:"PsapUiResult"
+    transponds:{
+        middleware:"aorta"
+    }
+}
+
+topic_config{
+    bus_topic_name: "common/vehicle_out/sapa_ui_results_eth"
+    middleware:"someip"
+    net_id:3
+    msg_type:"SapaUiResult"
+    transponds:{
+        middleware:"aorta"
+    }
+}
+
+# someip env
+env{
+    key:"VSOMEIP_CONFIGURATION"
+    value:"/home/mazu/app/conf/s3_someip/cosine-someip.json"
+}
+env{
+    key:"COMMONAPI_CONFIG"
+    value:"/home/mazu/app/conf/s3_someip/cosine-commonapi.ini"
+}
+env{
+    key:"COMMONAPI_SOMEIP_CONFIG"
+    value:"/home/mazu/app/conf/s3_someip/cosine-commonapi-someip.ini"
+}
+

@@ -1,0 +1,22 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/hal/waist/WaistState.msg
+// generated code does not contain a copyright notice
+
+#include "genie_msgs/msg/MotorState.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct WaistState {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "每个关节的状态")
+      sequence<genie_msgs::msg::MotorState> motor_states;
+
+      @verbatim (language="comment", text=
+        "电机名 waist_pitch, lift")
+      sequence<string> name;
+    };
+  };
+};

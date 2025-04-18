@@ -1,0 +1,11 @@
+std_msgs/Header     header
+string              task_reqid            # 任务编号
+uint32              map_id                # 使用地图编号，缺省0
+TargetStation[]     target_station_list   # 站台列表
+bool                is_loop               # 是否循环
+---
+std_msgs/Header     res_header
+uint32              req_result
+uint32              ret_code              # 0:成功，其他失败
+uint32              task_uuid             # 任务编号(由底盘生成）
+string              task_reqid            # 任务编号

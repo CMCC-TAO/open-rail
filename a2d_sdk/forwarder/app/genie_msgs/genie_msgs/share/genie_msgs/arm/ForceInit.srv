@@ -1,0 +1,6 @@
+std_msgs/Header     header
+uint32              force_id    # 0x00 = left | end, 0x10 = right | end
+bool                block
+---
+std_msgs/Header     res_header
+uint8               exec_result # 0: success, 1: failed  

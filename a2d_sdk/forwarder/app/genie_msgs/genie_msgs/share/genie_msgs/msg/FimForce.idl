@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/fault_manager/FimForce.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct FimForce {
+      std_msgs::msg::Header header;
+
+      sequence<uint8> fim_force;
+
+      sequence<uint16> force_err_code;
+    };
+  };
+};

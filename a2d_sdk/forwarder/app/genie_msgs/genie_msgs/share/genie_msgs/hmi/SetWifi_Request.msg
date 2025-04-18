@@ -1,0 +1,2 @@
+string ssid
+string password

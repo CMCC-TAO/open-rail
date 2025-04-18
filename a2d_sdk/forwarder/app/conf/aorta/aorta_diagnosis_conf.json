@@ -1,0 +1,28 @@
+{
+  "enable_diagnosis": true,
+  "connect_xdiagnosis_timeout_ms": 1000,
+  "transport_diagnosis": {
+    "enable": true,
+    "enabled_diagnosis_list": [
+      "udp_sub_dataloss_diagnosis",
+      "tcp_sub_dataloss_diagnosis",
+      "etimedout_diagnosis"
+    ],
+    "udp_sub_dataloss_diagnosis": {
+      "consecutive_dataloss_threshold": 3
+    },
+    "tcp_sub_dataloss_diagnosis": {
+      "consecutive_dataloss_threshold": 3,
+      "dataloss_rate_threshold": 0.5
+    }
+  },
+  "discovery_diagnosis": {
+    "enable": true,
+    "enabled_diagnosis_list": [
+      "connect_err_diagnosis",
+      "topo_config_err_diagnosis",
+      "distribute_init_err_diagnosis",
+      "topo_hash_not_equal_diagnosis"
+    ]
+  }
+}

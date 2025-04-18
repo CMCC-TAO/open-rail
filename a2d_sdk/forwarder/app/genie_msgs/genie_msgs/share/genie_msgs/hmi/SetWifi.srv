@@ -1,0 +1,5 @@
+string ssid
+string password
+---
+bool success
+string message

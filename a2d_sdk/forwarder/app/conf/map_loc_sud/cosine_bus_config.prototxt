@@ -1,0 +1,31 @@
+topic_config{
+    bus_topic_name: "common/dlb/record_response"
+    independent:0
+    middleware:"aorta"
+}
+topic_config{
+    bus_topic_name: "cosine/lord/safety/map_loc_alarm_state"
+    middleware:"aorta"
+    qos: {reliability : 1 durability : 2 history : 1 depth : 5}
+}
+
+# recv
+# s1
+topic_config{
+    bus_topic_name: "cosine/lord/safety/master_arg_alarm_state"
+    middleware:"aorta"
+    qos: {reliability : 1 durability : 2 history : 1 depth : 5}
+}
+topic_config{
+    bus_topic_name: "cosine/lord/safety/rel_loc_alarm_state"
+    middleware:"aorta"
+    qos: {reliability : 1 durability : 2 history : 1 depth : 5}
+}
+
+# recv
+# s3
+topic_config{
+    bus_topic_name: "cosine/lord/safety/slave_arg_alarm_state"
+    middleware:"aorta"
+    qos: {reliability : 1 durability : 2 history : 1 depth : 5}
+}

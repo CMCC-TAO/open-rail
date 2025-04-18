@@ -1,0 +1,66 @@
+# recv
+# s1
+topic_config{
+    bus_topic_name: "rear_short_camera"
+    independent:0
+    middleware:"ligo"
+    recv_target_socs:1
+    enable:0
+}
+topic_config{
+    bus_topic_name: "park_left_camera"
+    independent:0
+    middleware:"ligo"
+    recv_target_socs:1
+    enable:0
+}
+topic_config{
+    bus_topic_name: "park_right_camera"
+    independent:0
+    middleware:"ligo"
+    recv_target_socs:1
+    enable:0
+}
+
+# s4
+topic_config{
+    bus_topic_name: "park_front_camera"
+    independent:0
+    middleware:"ligo"
+    recv_target_socs:4
+    enable:0
+}
+topic_config{
+    bus_topic_name: "park_rear_camera"
+    independent:0
+    middleware:"ligo"
+    recv_target_socs:4
+    enable:0
+}
+topic_config{
+    bus_topic_name: "front_left_camera"
+    independent:0
+    middleware:"ligo"
+    recv_target_socs:4
+    enable:0
+}
+topic_config{
+    bus_topic_name: "front_right_camera"
+    independent:0
+    middleware:"ligo"
+    recv_target_socs:4
+    enable:0
+}
+
+# dds
+topic_config{
+    bus_topic_name: "common/sensors/camera_compress_data"
+    independent:0
+    middleware:"aorta"
+}
+
+topic_config{
+    bus_topic_name: "common/dlb/record_response"
+    independent:0
+    middleware:"aorta"
+}

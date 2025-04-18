@@ -1,0 +1,3 @@
+std_msgs/Header     req_header
+uint32              arm_sel       # 0 = left, 1 = right, 2 = both
+bool                control       # false: 不控制机械臂, true: 控制机械臂

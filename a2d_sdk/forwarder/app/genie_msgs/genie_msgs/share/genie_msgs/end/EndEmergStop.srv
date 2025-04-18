@@ -1,0 +1,5 @@
+std_msgs/Header     header
+uint8               stop_flag     # 0: resume, 1: stop
+---
+std_msgs/Header     res_header
+uint8               exec_result   # 0: success, 1: failed 

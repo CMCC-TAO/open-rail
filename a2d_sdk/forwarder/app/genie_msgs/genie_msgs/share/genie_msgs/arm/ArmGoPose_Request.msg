@@ -1,0 +1,4 @@
+std_msgs/Header     header
+uint32              arm_sel         # 0 = left, 1 = right, 2 = both
+float32[]           joint_states    # 关节初始化位置
+bool                block           # true: sync, false: async

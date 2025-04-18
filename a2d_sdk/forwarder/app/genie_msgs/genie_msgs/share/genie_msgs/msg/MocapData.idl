@@ -1,0 +1,29 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/remote/MocapData.msg
+// generated code does not contain a copyright notice
+
+#include "genie_msgs/msg/MocapJointState.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct MocapData {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "遥设备状态   0: normal, 1: not calibrated")
+      uint32 status;
+
+      @verbatim (language="comment", text=
+        "对于手臂的状态值" "\n"
+        "  kNormal                       = 0x0000 #正常" "\n"
+        "  kNotCalibrated                = 0x0001 #未标定" "\n"
+        "遥设备错误码")
+      uint32 err_code;
+
+      @verbatim (language="comment", text=
+        "动捕或者VR手势识别的数据")
+      sequence<genie_msgs::msg::MocapJointState> mocap_joint_states;
+    };
+  };
+};

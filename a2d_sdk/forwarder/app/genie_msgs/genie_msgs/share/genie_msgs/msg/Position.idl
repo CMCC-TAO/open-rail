@@ -1,0 +1,65 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/hal/agv/Position.msg
+// generated code does not contain a copyright notice
+
+#include "genie_msgs/msg/AGVTaskState.idl"
+#include "genie_msgs/msg/MotorState.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct Position {
+      std_msgs::msg::Header header;
+
+      int32 agv_status;
+
+      float position_conf;
+
+      float agv_pos_x;
+
+      float agv_pos_y;
+
+      float agv_pos_z;
+
+      float agv_angle;
+
+      float odom_x;
+
+      float odom_y;
+
+      float odom_z;
+
+      float odom_angle;
+
+      float linear_speed;
+
+      float angular_speed;
+
+      float acc_x;
+
+      float acc_y;
+
+      float acc_z;
+
+      float gyro_x;
+
+      float gyro_y;
+
+      float gyro_z;
+
+      float roll;
+
+      float pitch;
+
+      float yaw;
+
+      @verbatim (language="comment", text=
+        "底盘电机状态")
+      sequence<genie_msgs::msg::MotorState> motor_states;
+
+      @verbatim (language="comment", text=
+        "AGV任务状态")
+      genie_msgs::msg::AGVTaskState agv_task_state;
+    };
+  };
+};

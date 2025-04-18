@@ -1,0 +1,39 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/app/FeatSetCtrlMode.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    struct FeatSetCtrlMode_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "0: offline, 1: online")
+      uint8 online;
+
+      @verbatim (language="comment", text=
+        "0: vr, 1: mocap")
+      uint8 remote_mode;
+
+      @verbatim (language="comment", text=
+        "bitwise" "\n"
+        "bit0 = head" "\n"
+        "bit1 = left arm" "\n"
+        "bit2 = right arm" "\n"
+        "bit3 = waist" "\n"
+        "bit4 = lift" "\n"
+        "bit5 = agv" "\n"
+        "bitwise")
+      uint16 ctrl_mode;
+    };
+    struct FeatSetCtrlMode_Response {
+      std_msgs::msg::Header res_header;
+
+      @verbatim (language="comment", text=
+        "0: success, 1: failed")
+      uint8 exec_result;
+    };
+  };
+};

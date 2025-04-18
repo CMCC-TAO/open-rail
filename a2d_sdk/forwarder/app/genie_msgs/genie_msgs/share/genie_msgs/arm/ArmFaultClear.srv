@@ -1,0 +1,8 @@
+# Provide arm fault clear cmd services
+# service name: /hal/arm_fault_clear
+
+std_msgs/Header     header
+uint32              arm_sel       # 0 = left, 1 = right, 2 = both
+---
+std_msgs/Header     res_header
+uint8               exec_result   # 0: success, 1: failed 

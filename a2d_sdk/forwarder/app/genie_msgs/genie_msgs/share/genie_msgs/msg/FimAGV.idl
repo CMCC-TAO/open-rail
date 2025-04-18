@@ -1,0 +1,19 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/fault_manager/FimAGV.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct FimAGV {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "0:normal 1:error 2:unconnected")
+      uint8 fim_agv;
+
+      uint16 agv_err_code;
+    };
+  };
+};
