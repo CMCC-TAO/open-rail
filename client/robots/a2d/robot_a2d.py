@@ -2,12 +2,13 @@ import time
 import cv2
 import numpy as np
 from collections import deque
-from utils import misc
+# from utils import misc
 from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
 
 class RobotA2D():
     def __init__(self):
+        # self.name_cameras = ['head', 'hand_left', 'hand_right']
         self.name_cameras = ['head', 'hand_left', 'hand_right']
         self.camera= Camera(self.name_cameras)
         self.robot = Robot()
@@ -42,41 +43,44 @@ class RobotA2D():
     def get_obs_nearest(self):
         result = {'list_timestamp': []}
         image, ref_timestamp = self.camera.get_latest_image('head')
+        fps = self.camera.get_fps('head')
+        print(f'ref_timestamp: {ref_timestamp}, fps: {fps}')
+        # print(ref_timestamp)
         result['ref_timestamp'] = [ref_timestamp / 1e9, time.time()]  # [0] - [1] = -0.06s
         result['obs.cam.head'] = image
         # 无阻塞，image每个5ms左右，因此需要判断舍弃
-        if len(self.obs_buffer) > 0:
-            latest_obs = self.obs_buffer[-1]
-            if latest_obs['ref_timestamp'][0] == ref_timestamp / 1e9:
-                return None
+        # if len(self.obs_buffer) > 0:
+        #     latest_obs = self.obs_buffer[-1]
+        #     if latest_obs['ref_timestamp'][0] == ref_timestamp / 1e9:
+        #         return None
 
-        result['list_timestamp'].append(ref_timestamp / 1e9)
-        image, timestamp = self.camera.get_image_nearest('hand_left', ref_timestamp)
-        result['obs.cam.hand_left'] = image
-        result['list_timestamp'].append(timestamp / 1e9)
-        image, timestamp= self.camera.get_image_nearest('hand_right', ref_timestamp)
-        result['obs.cam.hand_right'] = image
-        result['list_timestamp'].append(timestamp / 1e9)
+        # result['list_timestamp'].append(ref_timestamp / 1e9)
+        # image, timestamp = self.camera.get_image_nearest('hand_left', ref_timestamp)
+        # result['obs.cam.hand_left'] = image
+        # result['list_timestamp'].append(timestamp / 1e9)
+        # image, timestamp= self.camera.get_image_nearest('hand_right', ref_timestamp)
+        # result['obs.cam.hand_right'] = image
+        # result['list_timestamp'].append(timestamp / 1e9)
 
-        arm_states, time_stamp = self.robot.arm_joint_states_nearest(ref_timestamp)
-        result['obs.state.arm'] = arm_states
-        result['list_timestamp'].append(time_stamp / 1e9)
-        gripper_states, timestamp = self.robot.gripper_joint_states_nearest(ref_timestamp)
-        result['obs.state.gripper'] = gripper_states
-        result['list_timestamp'].append(timestamp / 1e9)
-        head_states, time_stamp = self.robot.head_joint_states_nearest(ref_timestamp)
-        result['obs.state.head'] = head_states
-        result['list_timestamp'].append(time_stamp / 1e9)
-        waist_states, time_stamp = self.robot.waist_joint_states_nearest(ref_timestamp)
-        result['obs.state.waist'] = waist_states
-        result['list_timestamp'].append(time_stamp / 1e9)
-        result['obs.state'] = np.array(arm_states + gripper_states + head_states + waist_states)
-        self.obs_buffer.append(result)
+        # arm_states, time_stamp = self.robot.arm_joint_states_nearest(ref_timestamp)
+        # result['obs.state.arm'] = arm_states
+        # result['list_timestamp'].append(time_stamp / 1e9)
+        # gripper_states, timestamp = self.robot.gripper_joint_states_nearest(ref_timestamp)
+        # result['obs.state.gripper'] = gripper_states
+        # result['list_timestamp'].append(timestamp / 1e9)
+        # head_states, time_stamp = self.robot.head_joint_states_nearest(ref_timestamp)
+        # result['obs.state.head'] = head_states
+        # result['list_timestamp'].append(time_stamp / 1e9)
+        # waist_states, time_stamp = self.robot.waist_joint_states_nearest(ref_timestamp)
+        # result['obs.state.waist'] = waist_states
+        # result['list_timestamp'].append(time_stamp / 1e9)
+        # result['obs.state'] = np.array(arm_states + gripper_states + head_states + waist_states)
+        # self.obs_buffer.append(result)
         # print('aaaaaaaaaaaaaaaaa', max(result['list_timestamp']) - min(result['list_timestamp']), result['list_timestamp'], result['ref_timestamp'], '\n')
-        # cv2.imshow('head', result['obs.cam.head'])
+        cv2.imshow('head', result['obs.cam.head'])
         # cv2.imshow('hand_left', result['obs.cam.hand_left'])
         # cv2.imshow('hand_right', result['obs.cam.hand_right'])
-        # cv2.waitKey(1)
+        cv2.waitKey(1)
         return result
 
     def get_obs_buffer(self):
@@ -91,6 +95,6 @@ if __name__ == '__main__':
     try:
         while True:
             robot.get_obs_nearest()
-            time.sleep(0.1)  # 控制循环频率
+            time.sleep(0.001)  # 控制循环频率
     except KeyboardInterrupt:
         robot.close()
