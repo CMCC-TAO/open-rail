@@ -1,90 +1,91 @@
 import time
 import cv2
 import numpy as np
-from collections import deque
+# from collections import deque
+from ml_collections import ConfigDict
 # from utils import misc
 from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
 
 class RobotA2D():
-    def __init__(self):
+    def __init__(self, observer_config: ConfigDict, controller_config: ConfigDict):
         # self.name_cameras = ['head', 'hand_left', 'hand_right']
-        self.name_cameras = ['head', 'hand_left', 'hand_right']
-        self.camera= Camera(self.name_cameras)
+        self.observer_config = observer_config
+        self.controller_config = controller_config
+        # self.name_cameras = ['head', 'hand_left', 'hand_right']
+        self.camera= Camera(observer_config.camera_names)
         self.robot = Robot()
-        self.obs_buffer = deque(maxlen=10)
+        self.currt_timestamp = 0
+        # self.obs_buffer = deque(maxlen=10)
         time.sleep(1)
 
-    def get_cameras(self, timestamp=None):
-        list_time = []
-        for name in self.name_cameras:
-            image, time_stamp = self.camera.get_latest_image(name)
-            # fps = self.camera.get_fps(name)
-            # latency = self.camera.get_latency_stats(name, window_seconds=5.0)
-            # print(f"get image time: {time.time() - timeaaa}, {fps}, {latency['max_latency_ms']}")
-            # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-            # cv2.imshow(name, image)
-        body_states = self.robot.body_pose_joint_states()
-        arm_states, time_stamp1 = self.robot.arm_joint_states()
-        list_time.append(time_stamp1 / 1e9)
-        gripper_states, time_stamp2 = self.robot.gripper_states()
-        list_time.append(time_stamp2 / 1e9)
-        print(max(list_time) - min(list_time), list_time)
+    # def get_cameras(self, timestamp=None):
+    #     list_time = []
+    #     for name in self.name_cameras:
+    #         image, time_stamp = self.camera.get_latest_image(name)
+    #         # fps = self.camera.get_fps(name)
+    #         # latency = self.camera.get_latency_stats(name, window_seconds=5.0)
+    #         # print(f"get image time: {time.time() - timeaaa}, {fps}, {latency['max_latency_ms']}")
+    #         # image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+    #         # cv2.imshow(name, image)
+    #     body_states = self.robot.body_pose_joint_states()
+    #     arm_states, time_stamp1 = self.robot.arm_joint_states()
+    #     list_time.append(time_stamp1 / 1e9)
+    #     gripper_states, time_stamp2 = self.robot.gripper_states()
+    #     list_time.append(time_stamp2 / 1e9)
+    #     print(max(list_time) - min(list_time), list_time)
 
     def control_robot(self, data):
-        action = data['pred_action']
-        obs_state = data['obs_state']
-        action = misc.smooth_each_dim_with_spline(np.concatenate([action[0], action[-1]], axis=0), num_smooth_points=50, s=0.05)
-        for i, act in enumerate(action):
-            self.robot.move_arm(action[i, 0:14].tolist())
-            self.robot.move_gripper(action[i, 14:16].tolist())
-            time.sleep(0.01)
+        print(data)
+        # action = data['pred_action']
+        # obs_state = data['obs_state']
+        # # action = misc.smooth_each_dim_with_spline(np.concatenate([action[0], action[-1]], axis=0), num_smooth_points=50, s=0.05)
+        # for i, act in enumerate(action):
+        #     self.robot.move_arm(action[i, 0:14].tolist())
+        #     self.robot.move_gripper(action[i, 14:16].tolist())
+        #     time.sleep(0.01)
 
-    def get_obs_nearest(self):
-        result = {'list_timestamp': []}
+    def retrieve_observation(self):
+        result = {}
+        # head camera is required
+        if 'head' not in self.observer_config.camera_names:
+            print(f'head camera is required: {self.observer_config.camera_names}')
+            return None
+        
         image, ref_timestamp = self.camera.get_latest_image('head')
-        fps = self.camera.get_fps('head')
-        print(f'ref_timestamp: {ref_timestamp}, fps: {fps}')
+        if self.currt_timestamp == ref_timestamp:
+            return None
+        else:
+            self.currt_timestamp = ref_timestamp
+
+        # fps = self.camera.get_fps('head')
+        # print(f'ref_timestamp: {ref_timestamp}, fps: {fps}')
         # print(ref_timestamp)
-        result['ref_timestamp'] = [ref_timestamp / 1e9, time.time()]  # [0] - [1] = -0.06s
+        result['ref_timestamp'] = ref_timestamp
         result['obs.cam.head'] = image
-        # 无阻塞，image每个5ms左右，因此需要判断舍弃
-        # if len(self.obs_buffer) > 0:
-        #     latest_obs = self.obs_buffer[-1]
-        #     if latest_obs['ref_timestamp'][0] == ref_timestamp / 1e9:
-        #         return None
 
-        # result['list_timestamp'].append(ref_timestamp / 1e9)
-        # image, timestamp = self.camera.get_image_nearest('hand_left', ref_timestamp)
-        # result['obs.cam.hand_left'] = image
-        # result['list_timestamp'].append(timestamp / 1e9)
-        # image, timestamp= self.camera.get_image_nearest('hand_right', ref_timestamp)
-        # result['obs.cam.hand_right'] = image
-        # result['list_timestamp'].append(timestamp / 1e9)
+        for camera in self.observer_config.camera_names:
+            if camera != 'head':
+                image, timestamp = self.camera.get_image_nearest(camera, ref_timestamp)
+                # TODO: check time offset between the current camera and head camera using abs(timestamp - ref_timestamp)
+                result[f'obs.cam.{camera}'] = image
 
-        # arm_states, time_stamp = self.robot.arm_joint_states_nearest(ref_timestamp)
-        # result['obs.state.arm'] = arm_states
-        # result['list_timestamp'].append(time_stamp / 1e9)
-        # gripper_states, timestamp = self.robot.gripper_joint_states_nearest(ref_timestamp)
-        # result['obs.state.gripper'] = gripper_states
-        # result['list_timestamp'].append(timestamp / 1e9)
-        # head_states, time_stamp = self.robot.head_joint_states_nearest(ref_timestamp)
-        # result['obs.state.head'] = head_states
-        # result['list_timestamp'].append(time_stamp / 1e9)
-        # waist_states, time_stamp = self.robot.waist_joint_states_nearest(ref_timestamp)
-        # result['obs.state.waist'] = waist_states
-        # result['list_timestamp'].append(time_stamp / 1e9)
-        # result['obs.state'] = np.array(arm_states + gripper_states + head_states + waist_states)
-        # self.obs_buffer.append(result)
-        # print('aaaaaaaaaaaaaaaaa', max(result['list_timestamp']) - min(result['list_timestamp']), result['list_timestamp'], result['ref_timestamp'], '\n')
-        cv2.imshow('head', result['obs.cam.head'])
-        # cv2.imshow('hand_left', result['obs.cam.hand_left'])
-        # cv2.imshow('hand_right', result['obs.cam.hand_right'])
-        cv2.waitKey(1)
+        joint_states = []
+        for proprio in self.observer_config.proprio_names:
+            joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
+            currt_joint_states, time_stamp = joint_states_nearest_fun(ref_timestamp)
+            joint_states.extend(currt_joint_states)
+        result[f'obs.state'] = np.array(joint_states)
+        # # self.obs_buffer.append(result)
+        # # print('aaaaaaaaaaaaaaaaa', max(result['list_timestamp']) - min(result['list_timestamp']), result['list_timestamp'], result['ref_timestamp'], '\n')
+        # cv2.imshow('head', result['obs.cam.head'])
+        # # cv2.imshow('hand_left', result['obs.cam.hand_left'])
+        # # cv2.imshow('hand_right', result['obs.cam.hand_right'])
+        # cv2.waitKey(1)
         return result
 
-    def get_obs_buffer(self):
-        return self.obs_buffer
+    # def get_obs_buffer(self):
+    #     return self.obs_buffer
 
     def close(self):
         self.camera.close()
