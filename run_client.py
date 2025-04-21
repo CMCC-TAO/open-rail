@@ -1,17 +1,22 @@
 import time
 from conf.config import get_client_config
 from client.robots.a2d.robot_a2d import RobotA2D
+from client.core.realtime_data_manager import RealtimeDataManager
+from client.core.vla_client import VLAClient
 
 if __name__ == "__main__":
     config = get_client_config()
     # print(config)
     robot = RobotA2D(config.observer, config.controller)
+    rdm = RealtimeDataManager(config.rdm)
+    vla_client = VLAClient(config, rdm, robot)
+    vla_client.startObserve()
+    
     try:
         while True:
-            observations = robot.retrieve_observation()
-            if observations is not None:
-                print(observations['ref_timestamp'])
-                print(observations['obs.state'])
-            time.sleep(0.001)  # 控制循环频率
+            time.sleep(1)
     except KeyboardInterrupt:
+        print("程序被中断")
+    finally:
         robot.close()
+        vla_client.close()
