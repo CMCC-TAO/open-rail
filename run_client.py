@@ -21,8 +21,14 @@ if __name__ == "__main__":
                 vla_client.startObserve()
             elif cmd == 'stop':
                 print("停止")
+            elif cmd == 'exit':
+                print("退出程序")
+                break
             else:
-                print('未知指令')
+                print('未知指令, 请使用一下指令：')
+                print(' start/run: 启动程序')
+                print(' stop: 结束程序')
+                print(' exit: 推出程序')
             time.sleep(0.1)
     except KeyboardInterrupt:
         print("程序被中断")
