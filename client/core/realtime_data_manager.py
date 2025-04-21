@@ -11,13 +11,26 @@ class RealtimeDataManager():
         if rdm_config.show_data:
             pass #
 
+        self.init_timestamp = None
+        self.frame_count = 0
         self.currt_timestamp = None
 
 
-    def add(self, msg):
+    def addObserveData(self, frame):
         # 将传入的消息msg添加到buffer列表中
-        self.observe_buffer.append(msg)
-        self.observe_buffer.pop()
+        self.frame_count += 1
+        # 前面几帧数据不稳定，丢弃
+        if self.init_timestamp is None and self.frame_count > 5:
+            self.init_timestamp = frame['ref_timestamp']
+            self.frame_count = 1
+        if self.init_timestamp is not None:
+            self.observe_buffer.append(frame)
+    
+    def getObserveData(self):
+        return self.observe_buffer.pop()
+    
+    def getObserveDataLeft(self):
+        return self.observe_buffer.popleft()
 
     def get_closest(self, target_stamp):
         # 找到时间最接近的消息
