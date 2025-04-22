@@ -33,6 +33,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("程序被中断")
     finally:
-        pass
-        # robot.close()
-        # vla_client.close()
+        # pass
+        robot.close()
+        vla_client.close()

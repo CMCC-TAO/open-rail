@@ -1,15 +1,15 @@
+import cv2
 import zmq
 import time
 import json
 import threading
 import pickle
-from collections import deque
 from ml_collections import ConfigDict
 
-from core.obs_robot import RobotObs
-from core.action_robot import RobotAction
-from robots.a2d import robot_a2d
-
+# from core.obs_robot import RobotObs
+# from core.action_robot import RobotAction
+# from robots.a2d import robot_a2d
+from utils import misc
 from .realtime_data_manager import RealtimeDataManager
 
 class BaseClient():
@@ -20,8 +20,8 @@ class BaseClient():
         self.dealer = self.context.socket(zmq.DEALER)
         # self.dealer.setsockopt(zmq.SNDTIMEO, 5000)  # 5秒超时
         self.dealer.setsockopt(zmq.SNDHWM, 1)  # 设置发送缓冲区为1条消息
-        self.dealer.connect(config.zmp_addr)
-        print(f'zmq client: {config.zmp_addr} is started...')
+        self.dealer.connect(config.zmq_addr)
+        print(f'zmq client: {config.zmq_addr} is started...')
         self.running = False
         self.observe_thread = threading.Thread(target=self.observe_thread_fun, daemon=True)
         # self.receive_thread.start()
@@ -30,6 +30,7 @@ class BaseClient():
         
         self.thread_lock = threading.Lock()
         self.receive_callback = None
+        self.inference_count = 0
 
     def observe_thread_fun(self):
         pass
@@ -42,12 +43,7 @@ class BaseClient():
     
     def inference_thread_fun(self):
         pass
-        # while self.running:
-        #     with self.thread_lock:
-        #         if self.inference_thread is not None:
-        #             self.inference_thread()
-        #         else:
-        #             print("未设置inference_thread")
+
     def receive_messages(self):
         try:
             # 阻塞接收，在线程中使用
@@ -58,7 +54,9 @@ class BaseClient():
                     message['data'] = pickle.loads(parts[0]) # 0是二进制数据
                     message['meta'] = json.loads(parts[1].decode('utf8')) # 1是元数据JSON
                     return message
-
+                else:
+                    print("返回数据有问题")
+                    return None
                     # with self.result_lock:
                     #     if self.receive_callback:
                     #         self.receive_callback(message_obj)
@@ -68,6 +66,7 @@ class BaseClient():
             print(f"接收消息时出错: {e}")
             import traceback
             traceback.print_exc()
+            return None
     
     def send_message(self, data, meta={}):
         try:
@@ -155,9 +154,10 @@ class BaseClient():
 
 # VLA客户端
 class VLAClient(BaseClient):
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, robot: robot_a2d):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, robot):
         super().__init__(config, rdm)
-        self.vla_data = None
+        self.config = config
+        # self.vla_data = None
         self.robot = robot
         # self.set_receive_callback(self.receive_callback)
         # self.server_received_buffer = deque(maxlen=10)
@@ -166,40 +166,79 @@ class VLAClient(BaseClient):
         while self.running:
             observations = self.robot.retrieve_observation()
             if observations is not None:
-                print(observations.keys())
-                print(observations['ref_timestamp'])
-                print(observations['obs.state'])
-                self.rdm.add(observations)
+                # print(observations.keys())
+                # print(observations['ref_timestamp'])
+                # print(observations['obs.state'])
+                with self.thread_lock:
+                    self.rdm.addObserveData(observations)
             time.sleep(0.001)  # 控制循环频率
-    # def receive_callback(self, message):
-    #     data = message['data']
-    #     if data['type'] == 'action':
-    #         # print(data)
-    #         self.vla_data = data
-    #     elif data['type'] == 'obs_received':
-    #         ref_timestamp = data['ref_timestamp']
-    #         print(f"收发延迟：{time.time() - ref_timestamp[1]}")
-    #         # 确保服务器已收到指定时间戳的obs
-    #         obs_buffer = self.robot.get_obs_buffer()
-    #         for i in range(len(obs_buffer) - 1, -1, -1):
-    #             if obs_buffer[i]['ref_timestamp'][0] == ref_timestamp[0]:
-    #                 self.server_received_buffer.append(obs_buffer[i])
-    #                 break
 
-    # def get_vla_action(self):
-    #     self.vla_data = None
-    #     # 请求服务端推理最新指定时间戳的obs
-    #     data = {'type': 'get_vla_action', 'ref_timestamp': self.server_received_buffer[-1]['ref_timestamp'], 'history_length': 1}
-    #     self.send_message(data)
-    #     cnt = 0
-    #     while True:
-    #         time.sleep(0.001)
-    #         if self.vla_data:
-    #             return self.vla_data
-    #         cnt += 1
-    #         if cnt > 3000:
-    #             break
-    #     return None
+    def inference_thread_fun(self):
+        while self.running:
+            if self.inference_count == 0:
+                # 第一次推理
+                with self.thread_lock:
+                    frame = self.rdm.getObserveData()
+                if frame is not None:
+                    data = self.prepareData(frame)
+                    self.send_message(data)
+                    result = self.receive_messages()
+                    print(result)
+                    self.inference_count += 1
+                else:
+                    print("没有观测数据，跳过推理")
+                    time.sleep(0.010)
+                    continue
+            elif self.inference_count == 1:
+                # 第二次推理
+                print(f'wait time: {self.config.controller.time_delay/1000}')
+                time.sleep(self.config.controller.time_delay/1000)
+                with self.thread_lock:
+                    frame = self.rdm.getObserveData()
+                if frame is not None:
+                    data = self.prepareData(frame)
+                    self.send_message(data)
+                    result = self.receive_messages()
+                    print(result)
+                    self.inference_count += 1
+                else:
+                    print("没有观测数据，跳过推理")
+                    time.sleep(0.010)
+                    continue
+            else:
+                # 后续推理，贪心
+                with self.thread_lock:
+                    frame = self.rdm.getObserveData()
+                if frame is not None:
+                    data = self.prepareData(frame)
+                    self.send_message(data)
+                    result = self.receive_messages()
+                    print(result)
+                    self.inference_count += 1
+                else:
+                    print("没有观测数据，跳过推理")
+                    time.sleep(0.010)
+                    continue
+            # 请求服务端推理最新指定时间戳的obs
+            # time.sleep(0.001)
+
+    def prepareData(self, frame):
+        img_head = misc.crop_and_resize(frame['obs.cam.head'])
+        img_hand_left = misc.crop_and_resize(frame['obs.cam.hand_left'])
+        img_hand_right = misc.crop_and_resize(frame['obs.cam.hand_right'])
+        data = {
+            'type': 'vla',
+            'img_keys': ['cam.head', 'cam.hand_left', 'cam.hand_right'],
+            'ref_timestamp': frame['ref_timestamp'],
+            'obs': {
+                'cam.head': cv2.imencode('.jpg', img_head)[1],
+                'cam.hand_left': cv2.imencode('.jpg', img_hand_left)[1],
+                'cam.hand_right': cv2.imencode('.jpg', img_hand_right)[1],
+                'state': frame['obs.state'],
+                'annotation.human.action.task_description': ['pour milk'],
+            },
+        }
+        return data
 
 if __name__ == "__main__":
     pass
