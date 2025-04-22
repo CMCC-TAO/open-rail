@@ -30,6 +30,8 @@ class BaseClient():
         
         self.thread_lock = threading.Lock()
         self.receive_callback = None
+        self.inference_first = False
+        self.inference_second = False
 
     def observe_thread_fun(self):
         pass
@@ -176,6 +178,8 @@ class VLAClient(BaseClient):
     
     def inference_thread_fun(self):
         while self.running:
+            with self.thread_lock:
+                observations = self.rdm.getObserveData()
             observations = self.robot.retrieve_observation()
             if observations is not None:
                 print(observations.keys())
