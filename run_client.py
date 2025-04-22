@@ -1,6 +1,6 @@
 import time
 from conf.config import get_client_config
-from client.robots.a2d.robot_a2d import RobotA2D
+from client.robots.a2d import RobotA2D
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.vla_client import VLAClient
 
@@ -19,6 +19,7 @@ if __name__ == "__main__":
                 break
             elif cmd == 'start' or cmd == 'run':
                 vla_client.startObserve()
+                vla_client.startInference()
             elif cmd == 'stop':
                 print("停止")
             elif cmd == 'exit':

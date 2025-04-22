@@ -7,7 +7,7 @@ from collections import deque
 
 from core.obs_robot import RobotObs
 from core.action_robot import RobotAction
-from robots.a2d import robot_a2d
+from robots.a2d import RobotA2D
 
 class Config:
     ZMQ_ADDR = 'tcp://172.18.12.24:5566'  # localhost
@@ -111,7 +111,7 @@ class ClientVLA(ClientBase):
         return None
 
 if __name__ == "__main__":
-    robot = robot_a2d.RobotA2D()
+    robot = RobotA2D()
     client_vla = ClientVLA(robot)
     robot_obs = RobotObs(robot, client_vla)
     robot_obs.run()

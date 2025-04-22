@@ -45,5 +45,30 @@ def get_client_config():
     config.rdm = get_realtime_data_manager_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
-    config.zmq_addr = 'tcp://172.18.12.24:5566'  # localhost
+    # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
+    config.zmq = get_zmq_config()
+    return config
+
+def get_zmq_config():
+    """Generate config for zmq
+
+    Returns:
+        ConfigDict: Configuration for zmq.
+    """
+    config = ConfigDict()
+    config.client_addr = 'tcp://localhost:5566'  # server address and port
+    # config.server_addr = 'tcp://*:5566' # server address and port
+    config.server_addr = 'tcp://localhost:5566' # server address and port
+    return config
+
+def get_server_config():
+    """Generate config for Client
+
+    Returns:
+        ConfigDict: Configuration for Client.
+    """
+    config = ConfigDict()
+    config.zmq = get_zmq_config()
+    # MAIN_CLIENT_ID = 'ZROBOT'
+    config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
     return config
