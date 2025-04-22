@@ -5,23 +5,23 @@ from ml_collections import ConfigDict
 
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
-from ..robots.a2d import RobotA2D
+from ..robots.base import RobotBase
 from ..utils import misc
 from .zmq_client import ZMQClient
 from .realtime_data_manager import RealtimeDataManager
 
 # VLA客户端
 class VLAClient():
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, zmq_client: ZMQClient, robot: RobotA2D):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, zmq_client: ZMQClient, robot: RobotBase):
         self.config = config
         self.rdm = rdm
         self.zmq_client = zmq_client
         self.robot = robot
         self.running = False
 
-        self.observe_thread = threading.Thread(target=self.observe_thread_fun, daemon=True)
-        self.inference_thread = threading.Thread(target=self.inference_thread_fun, daemon=True)
-        self.control_thread = threading.Thread(target=self.control_thread_fun, daemon=True)
+        self.observe_thread = threading.Thread(target=self.observeThreadFun, daemon=True)
+        self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
+        self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
         
         self.thread_lock = threading.Lock()
         self.receive_callback = None
@@ -41,7 +41,7 @@ class VLAClient():
                     self.rdm.addObserveData(observations)
             time.sleep(0.001)  # 控制循环频率
     
-    def inferThreadFun(self):
+    def inferenceThreadFun(self):
         print('推理线程已启动...')
         while self.running:
             if self.inference_count == 0:

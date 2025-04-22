@@ -1,36 +1,22 @@
 import time
+from client.core import zmq_client
 from conf.config import get_client_config
 from client.robots.a2d import RobotA2D
-from client.core.realtime_data_manager import RealtimeDataManager
+from client.robots.base import RobotBase
 from client.core.vla_client import VLAClient
+from client.core.zmq_client import ZMQClient
+from client.core.realtime_data_manager import RealtimeDataManager
 
 if __name__ == "__main__":
     config = get_client_config()
     # print(config)
-    robot = RobotA2D(config.observer, config.controller)
+    zmq_client = ZMQClient(config.zmq)
+    robot = RobotBase(config.observer, config.controller)
     rdm = RealtimeDataManager(config.rdm)
-    vla_client = VLAClient(config, rdm, robot)
+    vla_client = VLAClient(config, rdm, zmq_client, robot)
     
     try:
-        while True:
-            cmd = input("请输入指令：")
-            # print(f'输入的指令是：{cmd}')
-            if cmd == 'exit':
-                break
-            elif cmd == 'start' or cmd == 'run':
-                vla_client.startObserve()
-                vla_client.startInference()
-            elif cmd == 'stop':
-                print("停止")
-            elif cmd == 'exit':
-                print("退出程序")
-                break
-            else:
-                print('未知指令, 请使用以下指令：')
-                print('--start/run: 启动程序')
-                print('--stop: 结束程序')
-                print('--exit: 推出程序')
-            time.sleep(0.1)
+        vla_client.run()
     except KeyboardInterrupt:
         print("程序被中断")
     finally:
