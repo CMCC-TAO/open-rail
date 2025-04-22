@@ -29,10 +29,17 @@ class RealtimeDataManager():
         print(f'frame_count: {self.frame_count}, observe_buffer len: {len(self.observe_buffer)}')
     
     def getObserveData(self):
-        return self.observe_buffer.pop()
+        if self.observe_buffer:
+            return self.observe_buffer.pop()
+        else:
+            return None  # or handle the empty case appropriately
+        # return self.observe_buffer.pop()
     
     def getObserveDataLeft(self):
-        return self.observe_buffer.popleft()
+        if self.observe_buffer:
+            return self.observe_buffer.popleft()
+        else:
+            return None  # or handle the empty case appropriately
 
     def get_closest(self, target_stamp):
         # 找到时间最接近的消息

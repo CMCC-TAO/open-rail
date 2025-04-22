@@ -30,7 +30,12 @@ class BaseClient():
         
         self.thread_lock = threading.Lock()
         self.receive_callback = None
+<<<<<<< HEAD
         self.inference_count = 0
+=======
+        self.inference_first = False
+        self.inference_second = False
+>>>>>>> 5e853e5e7e8189542f144a7d09d60391055f7844
 
     def observe_thread_fun(self):
         pass
@@ -172,7 +177,7 @@ class VLAClient(BaseClient):
                 with self.thread_lock:
                     self.rdm.addObserveData(observations)
             time.sleep(0.001)  # 控制循环频率
-
+    
     def inference_thread_fun(self):
         while self.running:
             if self.inference_count == 0:
