@@ -30,12 +30,7 @@ class BaseClient():
         
         self.thread_lock = threading.Lock()
         self.receive_callback = None
-<<<<<<< HEAD
         self.inference_count = 0
-=======
-        self.inference_first = False
-        self.inference_second = False
->>>>>>> 5e853e5e7e8189542f144a7d09d60391055f7844
 
     def observe_thread_fun(self):
         pass
