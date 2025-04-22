@@ -18,7 +18,7 @@ def get_controller_config():
         ConfigDict: Configuration for Controller.
     """
     config = ConfigDict()
-    config.time_delay = 0 # Time delay for robot controller, in milliseconds [ms]
+    config.time_delay = 100 # Time delay for robot controller, in milliseconds [ms]
     config.control_period = 33 # Control period to control robot, in milliseconds [ms]
     config.strategy = 'step' # Control strategy, choices = ('Step', 'realtime', 'fusion)
     return config
