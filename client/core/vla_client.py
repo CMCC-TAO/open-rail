@@ -138,8 +138,21 @@ class VLAClient(BaseClient):
                 print(observations.keys())
                 print(observations['ref_timestamp'])
                 print(observations['obs.state'])
-                self.rdm.add(observations)
+                # realtime data manager write operation
+                with self.thread_lock:
+                    self.rdm.add(observations)
             time.sleep(0.001)  # 控制循环频率
+    
+    def inference_thread_fun(self):
+        while self.running:
+            observations = self.robot.retrieve_observation()
+            if observations is not None:
+                print(observations.keys())
+                print(observations['ref_timestamp'])
+                print(observations['obs.state'])
+                # realtime data manager write operation
+                with self.thread_lock:
+                    self.rdm.add(observations)
     # def receive_callback(self, message):
     #     data = message['data']
     #     if data['type'] == 'action':
