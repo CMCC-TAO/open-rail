@@ -26,7 +26,7 @@ class RealtimeDataManager():
         if self.init_timestamp is not None:
             self.observe_buffer.append(frame)
         
-        print(f'frame_count: {self.frame_count}, observe_buffer len: {len(self.observe_buffer)}')
+        # print(f'frame_count: {self.frame_count}, observe_buffer len: {len(self.observe_buffer)}')
     
     def getObserveData(self):
         if self.observe_buffer:
