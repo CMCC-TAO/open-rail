@@ -35,8 +35,9 @@ class RobotA2D():
     #     list_time.append(time_stamp2 / 1e9)
     #     print(max(list_time) - min(list_time), list_time)
 
-    def control_robot(self, data):
-        print(data)
+    def controlRobot(self, action):
+        self.robot.move_arm(action[0:14].tolist())
+        self.robot.move_gripper(action[14:16].tolist())
         # action = data['pred_action']
         # obs_state = data['obs_state']
         # # action = misc.smooth_each_dim_with_spline(np.concatenate([action[0], action[-1]], axis=0), num_smooth_points=50, s=0.05)
@@ -45,7 +46,7 @@ class RobotA2D():
         #     self.robot.move_gripper(action[i, 14:16].tolist())
         #     time.sleep(0.01)
 
-    def retrieve_observation(self):
+    def retrieveObservation(self):
         result = {}
         # head camera is required
         if 'head' not in self.observer_config.camera_names:
@@ -96,7 +97,7 @@ if __name__ == '__main__':
     robot = RobotA2D()
     try:
         while True:
-            result = robot.retrieve_observation()
+            result = robot.retrieveObservation()
             print(result.keys())
             time.sleep(0.001)  # 控制循环频率
     except KeyboardInterrupt:

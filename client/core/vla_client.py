@@ -32,7 +32,7 @@ class VLAClient():
     def observeThreadFun(self):
         print('观测线程已启动...')
         while self.running:
-            observations = self.robot.retrieve_observation()
+            observations = self.robot.retrieveObservation()
             if observations is not None:
                 # print(observations.keys())
                 # print(observations['ref_timestamp'])

@@ -18,7 +18,7 @@ class RobotBase():
     def control_robot(self, data):
         print(data)
 
-    def retrieve_observation(self):
+    def retrieveObservation(self):
         return None
 
     # def get_obs_buffer(self):
