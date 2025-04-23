@@ -5,14 +5,14 @@ from ml_collections import ConfigDict
 
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
-from ..robots.base import RobotBase
+from ..robots.a2d import RobotA2D
 from ..utils import misc
 from .zmq_client import ZMQClient
 from .realtime_data_manager import RealtimeDataManager
 
 # VLA客户端
 class VLAClient():
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, zmq_client: ZMQClient, robot: RobotBase):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, zmq_client: ZMQClient, robot: RobotA2D):
         self.config = config
         self.rdm = rdm
         self.zmq_client = zmq_client
@@ -120,12 +120,12 @@ class VLAClient():
         # 启动线程
         self.observe_thread.start()
         self.inference_thread.start()
-        self.control_thread.start()
+        # self.control_thread.start()
 
         # 等待线程结束
         self.observe_thread.join()
         self.inference_thread.join()
-        self.control_thread.join()
+        # self.control_thread.join()
 
         print('推理框架客户端已启动。')
     
@@ -141,6 +141,9 @@ class VLAClient():
     def close(self):
         with self.thread_lock:
             self.running = False
+        self.observe_thread.join(timeout=1.0)
+        self.inference_thread.join(timeout=1.0)
+        self.control_thread.join(timeout=1.0)
         self.zmq_client.close()
 
 

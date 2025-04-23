@@ -6,15 +6,18 @@ from ml_collections import ConfigDict
 # from utils import misc
 from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
-from .base import RobotBase
 
-class RobotA2D(RobotBase):
+class RobotA2D():
     def __init__(self, observer_config: ConfigDict, controller_config: ConfigDict):
-        super().__init__(observer_config, controller_config)
         # self.name_cameras = ['head', 'hand_left', 'hand_right']
+        self.observer_config = observer_config
+        self.controller_config = controller_config
         # self.name_cameras = ['head', 'hand_left', 'hand_right']
         self.camera= Camera(observer_config.camera_names)
         self.robot = Robot()
+        self.currt_timestamp = 0
+        # self.obs_buffer = deque(maxlen=10)
+        time.sleep(1)
 
     # def get_cameras(self, timestamp=None):
     #     list_time = []
@@ -73,6 +76,7 @@ class RobotA2D(RobotBase):
             currt_joint_states, time_stamp = joint_states_nearest_fun(ref_timestamp)
             joint_states.extend(currt_joint_states)
         result[f'obs.state'] = np.array(joint_states)
+        # print(result[f'obs.state'])
         # # self.obs_buffer.append(result)
         # # print('aaaaaaaaaaaaaaaaa', max(result['list_timestamp']) - min(result['list_timestamp']), result['list_timestamp'], result['ref_timestamp'], '\n')
         # cv2.imshow('head', result['obs.cam.head'])
@@ -92,7 +96,8 @@ if __name__ == '__main__':
     robot = RobotA2D()
     try:
         while True:
-            robot.get_obs_nearest()
+            result = robot.retrieve_observation()
+            print(result.keys())
             time.sleep(0.001)  # 控制循环频率
     except KeyboardInterrupt:
         robot.close()

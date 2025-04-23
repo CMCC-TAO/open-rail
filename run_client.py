@@ -11,7 +11,7 @@ if __name__ == "__main__":
     config = get_client_config()
     # print(config)
     zmq_client = ZMQClient(config.zmq)
-    robot = RobotBase(config.observer, config.controller)
+    robot = RobotA2D(config.observer, config.controller)
     rdm = RealtimeDataManager(config.rdm)
     vla_client = VLAClient(config, rdm, zmq_client, robot)
     
