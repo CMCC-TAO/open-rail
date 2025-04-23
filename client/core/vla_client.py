@@ -1,6 +1,7 @@
 import cv2
 import time
 import threading
+import numpy as np
 from ml_collections import ConfigDict
 
 # from core.obs_robot import RobotObs
@@ -46,28 +47,12 @@ class VLAClient():
         print('推理线程已启动...')
         while self.running:
             # 第一次推理
-            # with self.thread_lock:
-            #     data = self.rdm.getObserveData()
-            # if data is not None:
-            #     # data = self.prepareData(frame)
-            #     self.zmq_client.sendMessage(data)
-            # time.sleep(0.1)
             if self.inference_count == 0:
-                # 第一次推理
-                with self.thread_lock:
-                    data = self.rdm.getObserveData()
-                if data is not None:
-                    # data = self.prepareData(frame)
-                    self.zmq_client.sendMessage(data)
-                    result = self.zmq_client.recvMessage()
-                    print(result)
-                    self.inference_count += 1
-            #     else:
-            #         print("没有观测数据，跳过推理")
-            #         time.sleep(0.010)
-            #         continue
-            # elif self.inference_count == 1:
-            #     # 第二次推理
+                self.inferenceFirstTime()
+                time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
+            # 第二次推理
+            elif self.inference_count == 1:
+                self.inferenceStep()
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)
             #     with self.thread_lock:
@@ -98,16 +83,85 @@ class VLAClient():
             #         continue
             # 请求服务端推理最新指定时间戳的obs
             time.sleep(0.1)
+    def inferenceFirstTime(self):
+        # 第一次推理
+        with self.thread_lock:
+            data = self.rdm.getObserveData()
+        if data is not None:
+            # data = self.prepareData(frame)
+            # 首先发送数据进行推理,然后阻塞等待推理结果
+            # print(data['obs']['state'])
+            # obs_state = data['obs']['state']
+            # for state in obs_state:
+            #     print(type(state))
+            self.zmq_client.sendMessage(data)
+            result = self.zmq_client.recvMessage()
+            action_data = result['data']
+            # print(result)
+            # ref_timestamp = action_data['ref_timestamp']
+            # print(f'当前动作时间戳: {ref_timestamp}')
+            # 获取当前数据的时间戳,更新时间戳
+            with self.thread_lock:
+                data = self.rdm.getObserveData()
+            ref_timestamp = data['ref_timestamp']
+            # print(f'当前数据时间戳: {ref_timestamp}')
+            action_data['ref_timestamp'] = ref_timestamp
+            # ref_timestamp = action_data['ref_timestamp']
+            # print(f'当前动作时间戳: {ref_timestamp}')
+            action_chunk, timestamp_chunk = self.processAction(action_data)
+            # print(timestamp_chunk)
+            with self.thread_lock:
+                self.rdm.addActionData(action_chunk, timestamp_chunk)
+            self.inference_count += 1
+        else:
+            print("没有观测数据，跳过推理")
     
+    def inferenceStep(self):
+        # 第一次推理
+        with self.thread_lock:
+            data = self.rdm.getObserveData()
+        if data is not None:
+            # 首先发送数据进行推理,然后阻塞等待推理结果
+            self.zmq_client.sendMessage(data)
+            result = self.zmq_client.recvMessage()
+            action_data = result['data']
+            # print(result)
+            # ref_timestamp = action_data['ref_timestamp']
+            # print(f'当前动作时间戳: {ref_timestamp}')
+            # 获取当前数据的时间戳,更新时间戳
+            action_chunk, timestamp_chunk = self.processAction(action_data)
+            # print(timestamp_chunk)
+            with self.thread_lock:
+                self.rdm.addActionData(action_chunk, timestamp_chunk)
+            self.inference_count += 1
+        else:
+            print("没有观测数据，跳过推理")
+
     def controlThreadFun(self):
         print('控制线程已启动...')
-        pass
+        while self.running:
+            with self.thread_lock:
+                action_chunk, timestamp_chunk = self.rdm.getActionData()
+            if action_chunk is not None:
+                # print(action)
+                # print(action['ref_timestamp'])
+                # print(action['pred_action'])
+                for action in action_chunk:
+                    self.robot.controlRobot(action)
+                    time.sleep((self.config.controller.control_period-1)/1000)
+            else:
+                # print("没有动作数据，跳过控制")
+                time.sleep(0.010)
+                continue
+            # 获取当前时间戳
 
     def processData(self, frame):
         start_time = time.time()
         img_head = misc.crop_and_resize(frame['obs.cam.head'])
         img_hand_left = misc.crop_and_resize(frame['obs.cam.hand_left'])
         img_hand_right = misc.crop_and_resize(frame['obs.cam.hand_right'])
+        # if frame['obs.state'][-1] is None:
+        #     frame['obs.state'][-1] = 0.0
         data = {
             'type': 'vla',
             'img_keys': ['cam.head', 'cam.hand_left', 'cam.hand_right'],
@@ -125,6 +179,30 @@ class VLAClient():
         elapsed_time = (end_time - start_time) * 1000
         # print(f"图像编码时间: {elapsed_time} ms")
         return data
+    
+    def processAction(self, action):
+        # {'type': 'action', 'pred_action': array([[-1.0059779 ,  0.58745086,  0.32646954, -1.2613511 ,  0.7208374 ,
+        #  1.4398973 , -0.1548205 ,  1.0740726 , -0.6103424 , -0.28125978,
+        #  1.2830431 , -0.72958744, -1.4945612 ,  0.18649821,  0.00195312,
+        #  0.        ],], dtype=float32), 'ref_timestamp': 1745389475305775776}
+        # 将传入的消息msg添加到buffer列表中
+        action_chunk = []
+        timestamp_chunk = []
+        action_type = action['type']
+        if action_type == 'action':
+            pred_action = action['pred_action']
+            ref_timestamp = action['ref_timestamp']
+            for index, action in enumerate(pred_action):
+                timestamp =  ref_timestamp + self.config.controller.control_period * index * 1000000
+                action_chunk.append(action)
+                timestamp_chunk.append(timestamp)
+            
+            return action_chunk, timestamp_chunk
+            # print(type(pred_action))
+            # print(ref_timestamp)
+        else:
+            print(f'数据类型出错: {action_type}')
+            return None, None
 
     def run(self):
         with self.thread_lock:
@@ -133,11 +211,11 @@ class VLAClient():
         # 启动线程
         self.observe_thread.start()
         self.inference_thread.start()
-        # self.control_thread.start()
+        self.control_thread.start()
 
         # 等待线程结束
         self.observe_thread.join()
-        self.inference_thread.join()
+        # self.inference_thread.join()
         # self.control_thread.join()
 
         print('推理框架客户端已启动。')
