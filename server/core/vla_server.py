@@ -9,8 +9,9 @@ from concurrent.futures import ThreadPoolExecutor
 from collections import deque
 from .zmq_server import ZMQServer
 # from .models.gr00t import vla_model
+from ..models.gr00t import ModelVLA
 class VLAServer:
-    def __init__(self, config: ConfigDict, zmq_server: ZMQServer,  model = None):
+    def __init__(self, config: ConfigDict, zmq_server: ZMQServer,  model: ModelVLA = None):
         self.config = config
         self.zmq_server = zmq_server
         self.model = model
@@ -21,6 +22,8 @@ class VLAServer:
         
         # 创建线程池用于处理推理任务
         self.executor = ThreadPoolExecutor(max_workers=config.max_workers)
+        # 创建线程池用于并行解码图像数据
+        self.image_decode_executor = ThreadPoolExecutor(max_workers=3)
         # 创建推理任务队列，避免重复提交相同的推理任务
         # self.inference_queue = queue.Queue()
         # self.inference_in_progress = False
@@ -41,21 +44,29 @@ class VLAServer:
         # 等待线程结束
         self.receive_thread.join()
     
+    def image_decode(self, key, data):
+        data['obs'][key] = cv2.imdecode(data['obs'][key], cv2.IMREAD_COLOR)
+    
     def inference(self, data):
         try:
             # 解码图像数据，TODO： 1. 多线程解码，提升效率; 2. 支持多帧数据
             start_time = time.time()
             img_keys = data['img_keys']
-            for img_key in img_keys:
-                data['obs'][img_key] = cv2.imdecode(data['obs'][img_key], cv2.IMREAD_COLOR)
+            # for img_key in img_keys:
+            #     data['obs'][img_key] = cv2.imdecode(data['obs'][img_key], cv2.IMREAD_COLOR)
+            # 提交推理任务到线程池
+            futures = [self.image_decode_executor.submit(self.image_decode, img_key, data) for img_key in img_keys]
+            # 等待所有任务完成并获取结果
+            results = [future.result() for future in futures]
+            # future.add_done_callback(self._inference_callback)
             end_time = time.time()
             # 计算并打印运行时间
             elapsed_time = (end_time - start_time) * 1000
             print(f"图像解码时间: {elapsed_time} ms")
             
             # 提交推理任务到线程池
-            # future = self.executor.submit(self.model.infer, data)
-            # future.add_done_callback(self.inference_callback)
+            future = self.executor.submit(self.model.infer, data)
+            future.add_done_callback(self.inference_callback)
         except Exception as e:
             print(f"处理推理队列时出错: {e}")
             import traceback
@@ -64,7 +75,8 @@ class VLAServer:
     def inference_callback(self, future):
         try:
             result = future.result() # 获取线程结果
-            self.send_message(result)
+            print(result)
+            self.zmq_server.sendMessage(result)
         except Exception as e:
             print(f"推理回调时出错: {e}")
             import traceback

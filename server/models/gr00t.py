@@ -9,10 +9,10 @@ from gr00t.experiment.data_config import DATA_CONFIG_MAP
 
 class ModelVLA:
     def __init__(self):
-        MODEL_PATH = "/mnt/data0/zhaolei/repo/Isaac-GR00T/output/gr00t_bread/checkpoint-60000"
+        MODEL_PATH = "/home/robot/Downloads/checkpoint-60000"
         # EMBODIMENT_TAG = "gr1"
         EMBODIMENT_TAG = EmbodimentTag.NEW_EMBODIMENT
-        os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
         data_config = DATA_CONFIG_MAP["a2d_arms_only"]
@@ -25,7 +25,7 @@ class ModelVLA:
             modality_config=modality_config,
             modality_transform=modality_transform,
             device=device,
-            denoising_steps=16,
+            denoising_steps=4,
         )
         print(self.policy.model)
 
@@ -37,8 +37,7 @@ class ModelVLA:
             else:
                 print(key, value)
 
-    def infer(self, sequence):
-        data = sequence[0]
+    def infer(self, data):
         obs = data['obs'].copy()
         obs['state'] = obs['state'][None]
         print(obs['cam.head'].shape, obs['state'].shape)

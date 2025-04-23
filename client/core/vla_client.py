@@ -37,65 +37,74 @@ class VLAClient():
                 # print(observations.keys())
                 # print(observations['ref_timestamp'])
                 # print(observations['obs.state'])
+                data = self.processData(observations)
                 with self.thread_lock:
-                    self.rdm.addObserveData(observations)
+                    self.rdm.addObserveData(data)
             time.sleep(0.001)  # 控制循环频率
     
     def inferenceThreadFun(self):
         print('推理线程已启动...')
         while self.running:
+            # 第一次推理
+            # with self.thread_lock:
+            #     data = self.rdm.getObserveData()
+            # if data is not None:
+            #     # data = self.prepareData(frame)
+            #     self.zmq_client.sendMessage(data)
+            # time.sleep(0.1)
             if self.inference_count == 0:
                 # 第一次推理
                 with self.thread_lock:
-                    frame = self.rdm.getObserveData()
-                if frame is not None:
-                    data = self.prepareData(frame)
+                    data = self.rdm.getObserveData()
+                if data is not None:
+                    # data = self.prepareData(frame)
                     self.zmq_client.sendMessage(data)
                     result = self.zmq_client.recvMessage()
                     print(result)
                     self.inference_count += 1
-                else:
-                    print("没有观测数据，跳过推理")
-                    time.sleep(0.010)
-                    continue
-            elif self.inference_count == 1:
-                # 第二次推理
-                print(f'wait time: {self.config.controller.time_delay/1000}')
-                time.sleep(self.config.controller.time_delay/1000)
-                with self.thread_lock:
-                    frame = self.rdm.getObserveData()
-                if frame is not None:
-                    data = self.prepareData(frame)
-                    self.send_message(data)
-                    result = self.receive_messages()
-                    print(result)
-                    self.inference_count += 1
-                else:
-                    print("没有观测数据，跳过推理")
-                    time.sleep(0.010)
-                    continue
-            else:
-                # 后续推理，贪心
-                with self.thread_lock:
-                    frame = self.rdm.getObserveData()
-                if frame is not None:
-                    data = self.prepareData(frame)
-                    self.send_message(data)
-                    result = self.receive_messages()
-                    print(result)
-                    self.inference_count += 1
-                else:
-                    print("没有观测数据，跳过推理")
-                    time.sleep(0.010)
-                    continue
+            #     else:
+            #         print("没有观测数据，跳过推理")
+            #         time.sleep(0.010)
+            #         continue
+            # elif self.inference_count == 1:
+            #     # 第二次推理
+            #     print(f'wait time: {self.config.controller.time_delay/1000}')
+            #     time.sleep(self.config.controller.time_delay/1000)
+            #     with self.thread_lock:
+            #         frame = self.rdm.getObserveData()
+            #     if frame is not None:
+            #         data = self.prepareData(frame)
+            #         self.send_message(data)
+            #         result = self.receive_messages()
+            #         print(result)
+            #         self.inference_count += 1
+            #     else:
+            #         print("没有观测数据，跳过推理")
+            #         time.sleep(0.010)
+            #         continue
+            # else:
+            #     # 后续推理，贪心
+            #     with self.thread_lock:
+            #         frame = self.rdm.getObserveData()
+            #     if frame is not None:
+            #         data = self.prepareData(frame)
+            #         self.send_message(data)
+            #         result = self.receive_messages()
+            #         print(result)
+            #         self.inference_count += 1
+            #     else:
+            #         print("没有观测数据，跳过推理")
+            #         time.sleep(0.010)
+            #         continue
             # 请求服务端推理最新指定时间戳的obs
-            # time.sleep(0.001)
+            time.sleep(0.1)
     
     def controlThreadFun(self):
         print('控制线程已启动...')
         pass
 
-    def prepareData(self, frame):
+    def processData(self, frame):
+        start_time = time.time()
         img_head = misc.crop_and_resize(frame['obs.cam.head'])
         img_hand_left = misc.crop_and_resize(frame['obs.cam.hand_left'])
         img_hand_right = misc.crop_and_resize(frame['obs.cam.hand_right'])
@@ -111,6 +120,10 @@ class VLAClient():
                 'annotation.human.action.task_description': ['pour milk'],
             },
         }
+        end_time = time.time()
+        # 计算并打印运行时间
+        elapsed_time = (end_time - start_time) * 1000
+        # print(f"图像编码时间: {elapsed_time} ms")
         return data
 
     def run(self):
