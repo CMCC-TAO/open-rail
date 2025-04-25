@@ -121,9 +121,13 @@ class RobotA2DMock():
         # # cv2.imshow('hand_right', result['obs.cam.hand_right'])
         # cv2.waitKey(1)
         end_time = time.time()
-        # print(f'get obs time: {(end_time - start_time)*1000} ms')
+        # print(f'get obs time: {(end_time - start_time)*1000} ms, end_time: {end_time}')
         if end_time-start_time < self.period:
-            time.sleep(self.period - (end_time - start_time))
+            sleep_time = self.period - (end_time - start_time)
+            # print(f'sleep time: {sleep_time}')
+            time.sleep(sleep_time)
+        end_time = time.time()
+        # print(f'get obs time: {(end_time - start_time)*1000} ms, end_time: {end_time}')
         return result
 
     # def get_obs_buffer(self):

@@ -100,8 +100,8 @@ class VLAClient():
             # ref_timestamp = action_data['ref_timestamp']
             # print(f'当前动作时间戳: {ref_timestamp}')
             # 获取当前数据的时间戳,更新时间戳
-            with self.thread_lock:
-                data = self.rdm.getObserveData()
+            # with self.thread_lock:
+            data = self.rdm.getObserveData()
             ref_timestamp = data['ref_timestamp']
             # print(f'当前数据时间戳: {ref_timestamp}')
             action_data['ref_timestamp'] = ref_timestamp
@@ -109,8 +109,8 @@ class VLAClient():
             # print(f'当前动作时间戳: {ref_timestamp}')
             action_chunk, timestamp_chunk = self.processAction(action_data)
             # print(timestamp_chunk)
-            with self.thread_lock:
-                self.rdm.addActionData(action_chunk, timestamp_chunk)
+            # with self.thread_lock:
+            self.rdm.addActionData(action_chunk, timestamp_chunk)
             self.inference_count += 1
         else:
             print("没有观测数据，跳过推理")
@@ -141,12 +141,13 @@ class VLAClient():
             # popActionData函数是线程安全的，不需要加锁
             action_chunk, timestamp_chunk = self.rdm.popActionData()
             if action_chunk is not None:
+                # print(f'action_chunk shape: {action_chunk.shape}')
                 # print(action)
                 # print(action['ref_timestamp'])
                 # print(action['pred_action'])
-                for action in action_chunk:
-                    self.robot.controlRobot(action)
-                    time.sleep((self.config.controller.control_period-1)/1000)
+                # for action in action_chunk:
+                self.robot.controlRobot(action_chunk)
+                time.sleep((self.config.controller.control_period-1)/1000)
             else:
                 # print("没有动作数据，跳过控制")
                 time.sleep(0.010)
@@ -208,8 +209,8 @@ class VLAClient():
     
         # 启动线程
         self.observe_thread.start()
-        # self.inference_thread.start()
-        # self.control_thread.start()
+        self.inference_thread.start()
+        self.control_thread.start()
 
         # 等待线程结束
         self.observe_thread.join()
