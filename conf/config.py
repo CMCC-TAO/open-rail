@@ -6,7 +6,8 @@ def get_realtime_data_manager_config():
         ConfigDict: Configuration for RealtimeDataManager.
     """
     config = ConfigDict()
-    config.max_len = 100 # Max length of the sequence to store data
+    config.max_len = 100 # Max length of the sequence to store observe data
+    # config.control_max_len = 1000 # Max length of the sequence to store control data
     config.record_data = False # True to record data, False to not record data
     config.show_data = False # True to show data, False to not show data
     return config
@@ -18,8 +19,8 @@ def get_controller_config():
         ConfigDict: Configuration for Controller.
     """
     config = ConfigDict()
-    config.wait_step = 5 # Time delay for robot controller, in milliseconds [ms]
-    config.control_period = 30 # Control period to control robot, in milliseconds [ms]
+    config.wait_step = 4 # Time delay for robot controller, in milliseconds [ms]
+    config.control_period = 50 # Control period to control robot, in milliseconds [ms]
     config.strategy = 'step' # Control strategy, choices = ('Step', 'realtime', 'fusion)
     return config
 

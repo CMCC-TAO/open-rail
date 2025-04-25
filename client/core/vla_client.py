@@ -39,8 +39,7 @@ class VLAClient():
                 # print(observations['ref_timestamp'])
                 # print(observations['obs.state'])
                 data = self.processData(observations)
-                with self.thread_lock:
-                    self.rdm.addObserveData(data)
+                self.rdm.addObserveData(data)
             time.sleep(0.001)  # 控制循环频率
     
     def inferenceThreadFun(self):
@@ -51,7 +50,7 @@ class VLAClient():
                 self.inferenceFirstTime()
                 time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
             # 第二次推理
-            elif self.inference_count == 1:
+            elif self.inference_count < 20:
                 self.inferenceStep()
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)
@@ -82,11 +81,10 @@ class VLAClient():
             #         time.sleep(0.010)
             #         continue
             # 请求服务端推理最新指定时间戳的obs
-            time.sleep(0.1)
+            # time.sleep(0.1)
     def inferenceFirstTime(self):
-        # 第一次推理
-        with self.thread_lock:
-            data = self.rdm.getObserveData()
+        # 第一次推理，getObserveData函数是线程安全的，不需要加锁
+        data = self.rdm.getObserveData()
         if data is not None:
             # data = self.prepareData(frame)
             # 首先发送数据进行推理,然后阻塞等待推理结果
@@ -117,9 +115,8 @@ class VLAClient():
             print("没有观测数据，跳过推理")
     
     def inferenceStep(self):
-        # 第一次推理
-        with self.thread_lock:
-            data = self.rdm.getObserveData()
+        # getObserveData函数是线程安全的，不需要加锁
+        data = self.rdm.getObserveData()
         if data is not None:
             # 首先发送数据进行推理,然后阻塞等待推理结果
             self.zmq_client.sendMessage(data)
@@ -131,8 +128,8 @@ class VLAClient():
             # 获取当前数据的时间戳,更新时间戳
             action_chunk, timestamp_chunk = self.processAction(action_data)
             # print(timestamp_chunk)
-            with self.thread_lock:
-                self.rdm.addActionData(action_chunk, timestamp_chunk)
+            # addActionData函数是线程安全的，不需要加锁
+            self.rdm.addActionData(action_chunk, timestamp_chunk)
             self.inference_count += 1
         else:
             print("没有观测数据，跳过推理")
@@ -140,8 +137,8 @@ class VLAClient():
     def controlThreadFun(self):
         print('控制线程已启动...')
         while self.running:
-            with self.thread_lock:
-                action_chunk, timestamp_chunk = self.rdm.getActionData()
+            # popActionData函数是线程安全的，不需要加锁
+            action_chunk, timestamp_chunk = self.rdm.popActionData()
             if action_chunk is not None:
                 # print(action)
                 # print(action['ref_timestamp'])
