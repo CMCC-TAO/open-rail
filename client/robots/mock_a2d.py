@@ -16,14 +16,21 @@ class RobotA2DMock():
         self.dataset = LeRobotDataset(repo_id=repo_id if repo_id is not None else 'task_39_only1',
                                 root=root if root is not None else '/home/robot/Music/task_39_only1',
                                 local_files_only=True)
-
+        self.dataloader = iter(torch.utils.data.DataLoader(
+            self.dataset,
+            num_workers=4,
+            batch_size=1,
+            shuffle=False,
+        ))
         # And see how many frames you have:
         print(f"Selected episodes: {self.dataset.episodes}")
         print(f"Number of episodes selected: {self.dataset.num_episodes}")
         print(f"Number of frames selected: {self.dataset.num_frames}")
+        print(f"Dataset fps: {self.dataset.meta.fps}")
         # self.name_cameras = ['head', 'hand_left', 'hand_right']
         self.init_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
         self.currt_index = 0
+        self.period = 1.0 / self.dataset.meta.fps # in seconds
         # self.obs_buffer = deque(maxlen=10)
         time.sleep(1)
 
@@ -56,9 +63,23 @@ class RobotA2DMock():
         #     time.sleep(0.01)
 
     def retrieveObservation(self):
+        start_time = time.time()
         result = {}
-        data = self.dataset[self.currt_index]
+        if self.currt_index >= self.dataset.num_frames:
+            print(f'End of dataset, currt_index: {self.currt_index}, num_frames: {self.dataset.num_frames}')
+            self.dataloader = iter(torch.utils.data.DataLoader(
+                self.dataset,
+                num_workers=4,
+                batch_size=1,
+                shuffle=False,
+            ))
+            self.currt_index = 0
+            # self.currt_index = self.dataset.num_frames - 1
+            # return None
+        # data = self.dataset[self.currt_index]
         self.currt_index += 1
+        data = next(self.dataloader)
+        # print(batch['observation.state'])
         # data_keys(['observation.images.top_head', 'observation.images.hand_left', 'observation.images.hand_right', 'observation.state', 'action', 'episode_index', 'frame_index', 'index', 'task_index', 'timestamp'])
         # print(data.keys())
         # print(data['observation.images.top_head'].permute(1, 2, 0).shape)
@@ -69,17 +90,18 @@ class RobotA2DMock():
             print(f'head camera is required: {self.observer_config.camera_names}')
             return None
         
-        image, ref_timestamp = data['observation.images.top_head'].permute(1, 2, 0).cpu().numpy(), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+        image, ref_timestamp = data['observation.images.top_head'][0].permute(1, 2, 0).cpu().numpy(), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
 
         # fps = self.camera.get_fps('head')
         # print(f'ref_timestamp: {ref_timestamp}, fps: {fps}')
         # print(ref_timestamp)
         result['ref_timestamp'] = ref_timestamp
+        # print(f'{ref_timestamp}')
         result['obs.cam.head'] = image
 
         for camera in self.observer_config.camera_names:
             if camera != 'head':
-                image, ref_timestamp = data[f'observation.images.{camera}'].permute(1, 2, 0).cpu().numpy(), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+                image = data[f'observation.images.{camera}'][0].permute(1, 2, 0).cpu().numpy()
                 # TODO: check time offset between the current camera and head camera using abs(timestamp - ref_timestamp)
                 result[f'obs.cam.{camera}'] = image
 
@@ -88,7 +110,7 @@ class RobotA2DMock():
         #     joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
         #     currt_joint_states, time_stamp = joint_states_nearest_fun(ref_timestamp)
         #     joint_states.extend(currt_joint_states)
-        result[f'obs.state'] = data["observation.state"].cpu().numpy()
+        result[f'obs.state'] = data["observation.state"][0].cpu().numpy()
         # print(result[f'obs.state'].shape)
         # print(result[f'obs.state'])
         # # self.obs_buffer.append(result)
@@ -97,6 +119,10 @@ class RobotA2DMock():
         # # cv2.imshow('hand_left', result['obs.cam.hand_left'])
         # # cv2.imshow('hand_right', result['obs.cam.hand_right'])
         # cv2.waitKey(1)
+        end_time = time.time()
+        # print(f'get obs time: {(end_time - start_time)*1000} ms')
+        if end_time-start_time < self.period:
+            time.sleep(self.period - (end_time - start_time))
         return result
 
     # def get_obs_buffer(self):

@@ -208,8 +208,8 @@ class VLAClient():
     
         # 启动线程
         self.observe_thread.start()
-        self.inference_thread.start()
-        self.control_thread.start()
+        # self.inference_thread.start()
+        # self.control_thread.start()
 
         # 等待线程结束
         self.observe_thread.join()
