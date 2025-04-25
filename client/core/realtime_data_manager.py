@@ -43,10 +43,10 @@ class RealtimeDataManager():
             self.start_time = time.time()
             # 首次添加数据，直接添加到action_chunks和timestamp_chunks中
             timestamp_chunk_new = [timestamp -self.init_control_timestamp for timestamp in timestamp_chunk]
-            print(f'timestamp_chunks: {timestamp_chunk_new}')
             with self.action_thread_lock:
                 self.action_chunks.extend(action_chunk)
                 self.timestamp_chunks.extend(timestamp_chunk_new)
+                print(f'timestamp_chunks: {self.timestamp_chunks}')
         else:
             self.currt_time = time.time()
             # time_duration = int((self.currt_time - self.start_time) * 1e9)
@@ -71,7 +71,8 @@ class RealtimeDataManager():
                         self.action_chunks.append(action_chunk[index])
                         self.timestamp_chunks.append(timestamp_chunk_new[index])
                 end_time = time.time()
-                print(f'动作融合花费时间: {(end_time - start_time) * 1000} ms')
+                print(f'timestamp_chunks: {self.timestamp_chunks}')
+                # print(f'动作融合花费时间: {(end_time - start_time) * 1000} ms')
     
     def popActionData(self):
         # 确保线程安全
