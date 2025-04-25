@@ -7,13 +7,14 @@ from ml_collections import ConfigDict
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
 from ..robots.a2d import RobotA2D
+from ..robots.mock_a2d import RobotA2DMock
 from ..utils import misc
 from .zmq_client import ZMQClient
 from .realtime_data_manager import RealtimeDataManager
 
 # VLA客户端
 class VLAClient():
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, zmq_client: ZMQClient, robot: RobotA2D):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, zmq_client: ZMQClient, robot: RobotA2D | RobotA2DMock):
         self.config = config
         self.rdm = rdm
         self.zmq_client = zmq_client
