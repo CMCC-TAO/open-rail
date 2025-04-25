@@ -90,7 +90,8 @@ class RobotA2DMock():
             print(f'head camera is required: {self.observer_config.camera_names}')
             return None
         
-        image, ref_timestamp = data['observation.images.top_head'][0].permute(1, 2, 0).cpu().numpy(), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+        image, ref_timestamp = (data['observation.images.top_head'][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+        # print(image.dtype)
 
         # fps = self.camera.get_fps('head')
         # print(f'ref_timestamp: {ref_timestamp}, fps: {fps}')
@@ -101,7 +102,7 @@ class RobotA2DMock():
 
         for camera in self.observer_config.camera_names:
             if camera != 'head':
-                image = data[f'observation.images.{camera}'][0].permute(1, 2, 0).cpu().numpy()
+                image = (data[f'observation.images.{camera}'][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8)
                 # TODO: check time offset between the current camera and head camera using abs(timestamp - ref_timestamp)
                 result[f'obs.cam.{camera}'] = image
 
@@ -144,7 +145,7 @@ if __name__ == '__main__':
     try:
         while True:
             result = robot.retrieveObservation()
-            print(result.keys())
+            # print(result.keys())
             time.sleep(0.1)  # 控制循环频率
     except KeyboardInterrupt:
         robot.close()

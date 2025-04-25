@@ -1,5 +1,6 @@
 # C extensions
 *.so
+python3.10.INFO
 
 # Distribution / packaging
 .Python
