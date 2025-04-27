@@ -6,6 +6,7 @@ from client.robots.base import RobotBase
 from client.robots.mock_a2d import RobotA2DMock
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
+from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
 
 if __name__ == "__main__":
@@ -17,7 +18,8 @@ if __name__ == "__main__":
     root = '/home/robot/Music/task_39_only1'
     robot = RobotA2DMock(config.observer, config.controller, repo_id, root)
     rdm = RealtimeDataManager(config.rdm)
-    vla_client = VLAClient(config, rdm, zmq_client, robot)
+    traj_generator = TrajectoryGenerator(config=config.traj)
+    vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
     
     try:
         vla_client.run()

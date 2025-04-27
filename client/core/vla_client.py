@@ -10,19 +10,22 @@ from ..robots.a2d import RobotA2D
 from ..robots.mock_a2d import RobotA2DMock
 from ..utils import misc
 from .zmq_client import ZMQClient
+from .trajectory_generator import TrajectoryGenerator
 from .realtime_data_manager import RealtimeDataManager
 
 # VLA客户端
 class VLAClient():
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, zmq_client: ZMQClient, robot: RobotA2D | RobotA2DMock):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: RobotA2D | RobotA2DMock):
         self.config = config
         self.rdm = rdm
+        self.traj_generator = traj_generator
         self.zmq_client = zmq_client
         self.robot = robot
         self.running = False
 
         self.observe_thread = threading.Thread(target=self.observeThreadFun, daemon=True)
         self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
+        self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, daemon=True)
         self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
         
         self.thread_lock = threading.Lock()
@@ -139,6 +142,7 @@ class VLAClient():
         print('控制线程已启动...')
         while self.running:
             # popActionData函数是线程安全的，不需要加锁
+            start_time = time.time()
             action_chunk, timestamp_chunk = self.rdm.popActionData()
             if action_chunk is not None:
                 # print(f'action_chunk shape: {action_chunk.shape}')
@@ -147,9 +151,36 @@ class VLAClient():
                 # print(action['pred_action'])
                 # for action in action_chunk:
                 self.robot.controlRobot(action_chunk)
-                time.sleep((self.config.controller.control_period-1)/1000)
+                end_time = time.time()
+                time_diff = end_time - start_time
+                if time_diff < self.config.controller.control_period/1000:
+                    time.sleep(self.config.controller.control_period/1000 - time_diff)
             else:
                 # print("没有动作数据，跳过控制")
+                time.sleep(0.010)
+                continue
+            # 获取当前时间戳
+    
+    def interpolateThreadFun(self):
+        print('轨迹插值线程已启动...')
+        while self.running:
+            # popActionData函数是线程安全的，不需要加锁
+            start_time = time.time()
+            action_chunk, timestamp_chunk = self.rdm.popActionData()
+            if action_chunk is not None:
+                # print(f'action_chunk shape: {action_chunk.shape}')
+                # print(action)
+                # print(action['ref_timestamp'])
+                # print(action['pred_action'])
+                # for action in action_chunk:
+                self.traj_generator.addWayPoint(action_chunk)
+                end_time = time.time()
+                time_diff = end_time - start_time
+                # 根据control_period控制轨迹执行的时间
+                if time_diff < self.config.controller.control_period/1000:
+                    time.sleep(self.config.controller.control_period/1000 - time_diff)
+            else:
+                print("没有动作数据，跳过轨迹插值")
                 time.sleep(0.010)
                 continue
             # 获取当前时间戳

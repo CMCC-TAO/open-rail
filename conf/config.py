@@ -36,6 +36,22 @@ def get_observer_config():
     config.observe_period = 15 # Observation period to get robot observations, in milliseconds [ms]
     return config
 
+def get_trajectory_config():
+    """Generate config for Trajectory Generator.
+
+    Returns:
+        ConfigDict: Configuration for Trajectory Generator.
+    """
+    config = ConfigDict()
+    config.max_len = 1000 # Max length of the sequence to store waypoints and trajectory points
+    config.dof = 14  # Degrees of Freedoms
+    config.fine_interval = 0.01  # Time interval
+    config.coarse_interval = 0.01  # Time interval
+    config.max_velocity = [2.0] * config.dof
+    config.max_acceleration = [1.0] * config.dof
+    config.max_jerk = [5.0] * config.dof
+    return config
+
 def get_client_config():
     """Generate config for Client
 
@@ -44,6 +60,7 @@ def get_client_config():
     """
     config = ConfigDict()
     config.rdm = get_realtime_data_manager_config()
+    config.traj = get_trajectory_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
