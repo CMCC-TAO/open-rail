@@ -32,6 +32,10 @@ class TrajectoryGenerator():
         self.coarse_output_param = OutputParameter(config.dof)
         self.coarse_ruckig = Ruckig(config.dof, config.coarse_interval)
 
+        # 初始的目标速度为0
+        self.target_vel = [0.0] * config.dof
+        self.last_point = None
+
         self.generate_thread = threading.Thread(target=self.generateThreadFun, daemon=True)
         self.thread_lock = threading.Lock()
 
@@ -41,22 +45,31 @@ class TrajectoryGenerator():
 
     def addWayPoint(self, point: list):
         # 添加Waypoint，若没有初始化,首先初始化
+        print(f'add waypoint: {point[0:6]}')
         if self.is_initialized is False:
             self.fine_input_param.current_position = point
             self.coarse_input_param.current_position = point
+            self.last_point = point
             self.is_initialized = True
         else:
             self.way_points.put(point)
+        # print(f'added waypoint: {point}')
     
     def popTrajPoint(self):
         return self.traj_points.get()
     
     def generateThreadFun(self):
         while self.is_running:
-            target_point = self.waypoints.get(block=True)
+            # 只要有waypoint，就持续运行生成轨迹
+            target_point = self.way_points.get(block=True)
+            print(f'vel = {(target_point - self.last_point)[0:6] * 30}')
+            # print(f'target point len: {len(target_point)}')
+
+            start_time = time.time()
             # 首先是粗略模式生成轨迹，粗略模式用于获取速度
-            self.coarse_input_param.target_position = target_point
-            self.coarse_input_param.target_velocity = [0.0, 0.0, 0.0]
+            self.coarse_input_param.target_position = target_point[0:self.config.dof]
+            self.coarse_input_param.target_velocity = self.target_vel
+            # print(f'target_vel: {self.target_vel}')
             # 粗略模式，实时轨迹生成
             traj_vel = []
             while self.coarse_ruckig.update(self.coarse_input_param, self.coarse_output_param) == Result.Working:
@@ -66,9 +79,14 @@ class TrajectoryGenerator():
                 # print(f'traj len: {len(trajectory)}, velocity: {output_param.new_velocity}')
                 self.coarse_input_param.current_acceleration = self.coarse_output_param.new_acceleration
             coarse_traj_len = len(traj_vel)
-            print(f'coarse traj len: {coarse_traj_len}')
+            end_time = time.time()
+            time_diff = end_time - start_time
+            print(f'coarse traj len: {coarse_traj_len}, traj time: {coarse_traj_len * self.config.coarse_interval: .4f} s, time used: {time_diff*1000: .4f}ms')
+            self.target_vel = traj_vel[coarse_traj_len // 2]
+            # for vel in traj_vel:
+            #     print(vel[:7])
             # print('generate_thread start')
-            time.sleep(1.0)
+            # time.sleep(1.0)
 
     def getObserveData(self):
         with self.observe_thread_lock:

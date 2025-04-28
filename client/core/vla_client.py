@@ -9,6 +9,7 @@ from ml_collections import ConfigDict
 from ..robots.a2d import RobotA2D
 from ..robots.mock_a2d import RobotA2DMock
 from ..utils import misc
+from ..utils.util import run_time_decorator
 from .zmq_client import ZMQClient
 from .trajectory_generator import TrajectoryGenerator
 from .realtime_data_manager import RealtimeDataManager
@@ -86,6 +87,7 @@ class VLAClient():
             #         continue
             # 请求服务端推理最新指定时间戳的obs
             # time.sleep(0.1)
+    @run_time_decorator
     def inferenceFirstTime(self):
         # 第一次推理，getObserveData函数是线程安全的，不需要加锁
         data = self.rdm.getObserveData()
@@ -117,9 +119,10 @@ class VLAClient():
             self.inference_count += 1
         else:
             print("没有观测数据，跳过推理")
-    
+    @run_time_decorator
     def inferenceStep(self):
         # getObserveData函数是线程安全的，不需要加锁
+        
         data = self.rdm.getObserveData()
         if data is not None:
             # 首先发送数据进行推理,然后阻塞等待推理结果
@@ -209,7 +212,7 @@ class VLAClient():
         elapsed_time = (end_time - start_time) * 1000
         # print(f"图像编码时间: {elapsed_time} ms")
         return data
-    
+    @run_time_decorator
     def processAction(self, action):
         # {'type': 'action', 'pred_action': array([[-1.0059779 ,  0.58745086,  0.32646954, -1.2613511 ,  0.7208374 ,
         #  1.4398973 , -0.1548205 ,  1.0740726 , -0.6103424 , -0.28125978,
@@ -241,7 +244,8 @@ class VLAClient():
         # 启动线程
         self.observe_thread.start()
         self.inference_thread.start()
-        self.control_thread.start()
+        self.interpolate_thread.start()
+        # self.control_thread.start()
 
         # 等待线程结束
         self.observe_thread.join()
@@ -256,6 +260,7 @@ class VLAClient():
             self.running = False
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
+        self.interpolate_thread.join(timeout=1.0)
         self.control_thread.join(timeout=1.0)
         print('推理框架客户端已关闭。')
 
@@ -264,8 +269,10 @@ class VLAClient():
             self.running = False
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
+        self.interpolate_thread.join(timeout=1.0)
         self.control_thread.join(timeout=1.0)
         self.zmq_client.close()
+        self.traj_generator.close()
 
 
 if __name__ == "__main__":
