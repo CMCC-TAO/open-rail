@@ -105,4 +105,5 @@ class RealtimeDataManager():
         differences = [abs(timestamp - target_timestamp) for timestamp in timestamp_list]
         # 找到最小差值的索引
         closest_index = differences.index(min(differences))
-        return closest_index
+        return closest_index# 数据可视化函数
+    

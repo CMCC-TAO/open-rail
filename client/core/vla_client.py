@@ -1,7 +1,9 @@
 import cv2
 import time
+import queue
 import threading
 import numpy as np
+from matplotlib  import pyplot as plt
 from ml_collections import ConfigDict
 
 # from core.obs_robot import RobotObs
@@ -32,6 +34,9 @@ class VLAClient():
         self.thread_lock = threading.Lock()
         self.receive_callback = None
         self.inference_count = 0
+        
+        if config.show_data:
+            self.action_queue = queue.Queue(maxsize=1000)
         # self.set_receive_callback(self.receive_callback)
         # self.server_received_buffer = deque(maxlen=10)
 
@@ -116,6 +121,9 @@ class VLAClient():
             # print(timestamp_chunk)
             # with self.thread_lock:
             self.rdm.addActionData(action_chunk, timestamp_chunk)
+            if self.config.show_data:
+                for action in action_chunk:
+                    self.action_queue.put(action[0])
             self.inference_count += 1
         else:
             print("没有观测数据，跳过推理")
@@ -137,6 +145,9 @@ class VLAClient():
             # print(timestamp_chunk)
             # addActionData函数是线程安全的，不需要加锁
             self.rdm.addActionData(action_chunk, timestamp_chunk)
+            if self.config.show_data:
+                for action in action_chunk:
+                    self.action_queue.put(action[0])
             self.inference_count += 1
         else:
             print("没有观测数据，跳过推理")
@@ -247,6 +258,9 @@ class VLAClient():
         self.interpolate_thread.start()
         # self.control_thread.start()
 
+        if self.config.show_data:
+            self.show_action_data()
+
         # 等待线程结束
         self.observe_thread.join()
         # self.inference_thread.join()
@@ -273,6 +287,23 @@ class VLAClient():
         self.control_thread.join(timeout=1.0)
         self.zmq_client.close()
         self.traj_generator.close()
+    
+    def show_action_data(self,):
+        plt.ion()  # 开启交互模式
+        fig, ax = plt.subplots()
+        x_data, y_data = [], []
+
+        def update_plot(frame):
+            if not self.action_queue.empty():
+                data = self.action_queue.get()
+                x_data.append(frame)
+                y_data.append(data)
+                ax.clear()
+                ax.plot(x_data, y_data)
+            return ax,
+
+        ani = plt.FuncAnimation(fig, update_plot, frames=range(16), blit=True, interval=50)
+        plt.show()
 
 
 if __name__ == "__main__":
