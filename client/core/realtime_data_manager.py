@@ -1,3 +1,4 @@
+import copy
 import time
 import threading
 from collections import deque
@@ -38,7 +39,7 @@ class RealtimeDataManager():
     
     def addActionData(self, action_chunk, timestamp_chunk):
         # 第一次添加数据的时候，记录初始时间戳,作为控制的开始时间
-        if self.init_control_timestamp is None:
+        if self.init_control_timestamp is None or len(self.action_chunks) == 0:
             self.init_control_timestamp = timestamp_chunk[0]
             self.start_time = time.time()
             # 首次添加数据，直接添加到action_chunks和timestamp_chunks中
@@ -59,17 +60,22 @@ class RealtimeDataManager():
             # 确保线程安全
             with self.action_thread_lock:
                 start_time = time.time()
-                assign_index = self.get_closest_index(self.timestamp_chunks, timestamp_chunk_new[0])
+                candidate_index = 0
+                for index in range(len(timestamp_chunk_new)):
+                    if timestamp_chunk_new[index] > self.timestamp_chunks[0]:
+                        candidate_index = index
+                        break
+                assign_index = self.get_closest_index(self.timestamp_chunks, timestamp_chunk_new[candidate_index])
                 # 然后进行融合
                 target_chunk_len = len(self.timestamp_chunks)
                 currt_chunk_len = len(action_chunk)
-                for index in range(currt_chunk_len):
+                for index in range(currt_chunk_len - candidate_index):
                     if assign_index + index < target_chunk_len:
-                        self.action_chunks[assign_index + index] = (self.action_chunks[assign_index + index] + action_chunk[index]) / 2.0
-                        self.timestamp_chunks[assign_index + index] = timestamp_chunk_new[index]
+                        self.action_chunks[assign_index + index] = (self.action_chunks[assign_index + index] + action_chunk[candidate_index + index]) / 2.0
+                        self.timestamp_chunks[assign_index + index] = timestamp_chunk_new[candidate_index + index]
                     else:
-                        self.action_chunks.append(action_chunk[index])
-                        self.timestamp_chunks.append(timestamp_chunk_new[index])
+                        self.action_chunks.append(action_chunk[candidate_index + index])
+                        self.timestamp_chunks.append(timestamp_chunk_new[candidate_index + index])
                 end_time = time.time()
                 print(f'timestamp_chunks: {self.timestamp_chunks}')
                 # print(f'动作融合花费时间: {(end_time - start_time) * 1000} ms')
@@ -81,6 +87,12 @@ class RealtimeDataManager():
                 return self.action_chunks.pop(0), self.timestamp_chunks.pop(0)
             else:
                 return None, None
+    
+    def getActionChunk(self):
+        # 确保线程安全
+        with self.action_thread_lock:
+            return copy.copy(self.action_chunks)
+    
     def getObserveData(self):
         with self.observe_thread_lock:
             if self.observe_buffer:

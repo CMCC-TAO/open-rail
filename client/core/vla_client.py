@@ -1,9 +1,11 @@
+import copy
 import cv2
 import time
 import queue
 import threading
 import numpy as np
 from matplotlib  import pyplot as plt
+from matplotlib.animation import FuncAnimation
 from ml_collections import ConfigDict
 
 # from core.obs_robot import RobotObs
@@ -32,11 +34,26 @@ class VLAClient():
         self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
         
         self.thread_lock = threading.Lock()
+        self.show_thread_lock = threading.Lock()
         self.receive_callback = None
         self.inference_count = 0
         
         if config.show_data:
-            self.action_queue = queue.Queue(maxsize=1000)
+            # 创建画布和折线图
+            self.fig, self.ax = plt.subplots()
+            self.line, = self.ax.plot([], [], 'b-', lw=1)
+            self.ax.set_ylabel('Joint Value')
+            self.ax.set_xlabel('Time Step')
+            self.ax.set_title('Predicted Action Chunk')
+            self.xdata = []
+            self.ydata = []
+            # self.xdata = queue.Queue(maxsize=100)
+            # self.ydata = queue.Queue(maxsize=100)
+            # self.fig, self.ax = plt.subplots()
+            # self.action_chunk = None
+            # self.show_thread = threading.Thread(target=self.showThreadFun, daemon=True)
+            # x_data, y_data = [], []
+            # self.action_queue = queue.Queue(maxsize=1000)
         # self.set_receive_callback(self.receive_callback)
         # self.server_received_buffer = deque(maxlen=10)
 
@@ -121,9 +138,10 @@ class VLAClient():
             # print(timestamp_chunk)
             # with self.thread_lock:
             self.rdm.addActionData(action_chunk, timestamp_chunk)
-            if self.config.show_data:
-                for action in action_chunk:
-                    self.action_queue.put(action[0])
+            # if self.config.show_data:
+            #     with  self.show_thread_lock:
+            #         self.action_chunk = [action[0] for action in action_chunk]
+                # self.show_thread.start()
             self.inference_count += 1
         else:
             print("没有观测数据，跳过推理")
@@ -146,8 +164,11 @@ class VLAClient():
             # addActionData函数是线程安全的，不需要加锁
             self.rdm.addActionData(action_chunk, timestamp_chunk)
             if self.config.show_data:
-                for action in action_chunk:
-                    self.action_queue.put(action[0])
+                with self.show_thread_lock:
+                    self.action_chunk = [action[2] for action in action_chunk]
+            # if self.config.show_data:
+            #     for action in action_chunk:
+            #         self.action_queue.put(action[0])
             self.inference_count += 1
         else:
             print("没有观测数据，跳过推理")
@@ -181,7 +202,12 @@ class VLAClient():
             # popActionData函数是线程安全的，不需要加锁
             start_time = time.time()
             action_chunk, timestamp_chunk = self.rdm.popActionData()
+            print(f'popActionData: {timestamp_chunk}')
             if action_chunk is not None:
+                # self.xdata.put(action_chunk[0])
+                # self.ydata.put(timestamp_chunk[0]/1e9)
+                self.xdata.append(timestamp_chunk/1e9)
+                self.ydata.append(action_chunk[0])
                 # print(f'action_chunk shape: {action_chunk.shape}')
                 # print(action)
                 # print(action['ref_timestamp'])
@@ -257,10 +283,8 @@ class VLAClient():
         self.inference_thread.start()
         self.interpolate_thread.start()
         # self.control_thread.start()
-
         if self.config.show_data:
-            self.show_action_data()
-
+            self.showActionChunk()
         # 等待线程结束
         self.observe_thread.join()
         # self.inference_thread.join()
@@ -287,23 +311,67 @@ class VLAClient():
         self.control_thread.join(timeout=1.0)
         self.zmq_client.close()
         self.traj_generator.close()
-    
-    def show_action_data(self,):
-        plt.ion()  # 开启交互模式
-        fig, ax = plt.subplots()
-        x_data, y_data = [], []
+    def updateVisualization(self, frame):
+        # 更新图表数据
+        print(f'updateVisualization: {frame}')
+        print(f'self.xdata: {self.xdata}')
+        print(f'self.ydata: {self.ydata}')
+        # self.line.set_data(self.xdata, self.ydata)
+        return self.ax.plot(self.xdata, self.ydata, 'b-', lw=1)
 
-        def update_plot(frame):
-            if not self.action_queue.empty():
-                data = self.action_queue.get()
-                x_data.append(frame)
-                y_data.append(data)
-                ax.clear()
-                ax.plot(x_data, y_data)
-            return ax,
+        # # 动态调整X轴范围（保持最新数据在视图中）
+        # if new_x > max_data_points:
+        #     ax.set_xlim(new_x - max_data_points, new_x)
+        # else:
+        #     ax.set_xlim(0, max_data_points)
+        
+        # self.ax.relim()          # 重新计算数据范围
+        # self.ax.autoscale_view() # 自动缩放Y轴
+        # return self.line,
+    def showActionChunk(self):
+        # 创建动画对象
+        ani = FuncAnimation(
+            fig=self.fig,
+            func=self.updateVisualization,
+            # init_func=init,
+            frames=None,        # 无限循环
+            interval=30,        # 更新间隔50ms（约20帧/秒）
+            blit=True,          # 优化渲染性能
+            cache_frame_data=False
+        )
 
-        ani = plt.FuncAnimation(fig, update_plot, frames=range(16), blit=True, interval=50)
         plt.show()
+        # while True:
+        #     if self.action_chunk is None:
+        #         time.sleep(0.5)
+        #         continue
+        #     with self.show_thread_lock:
+        #         action_chunk = copy.copy(self.action_chunk)
+        #     self.ax.clear()
+        #     self.ax.plot(range(len(action_chunk)), action_chunk)
+        #     print('show action chunk')
+        #     plt.show()
+            # time.sleep(0.1)
+        # plt.ion()  # 开启交互模式
+        # fig, ax = plt.subplots()
+        # x_data, y_data = [], []
+
+
+        # def update_plot(frame):
+        #     print('update_plot')
+        #     try:
+        #         if not self.action_queue.empty():
+        #             data = self.action_queue.get(block=True)
+        #             x_data.append(frame)
+        #             y_data.append(data)
+        #             ax.clear()
+        #             ax.plot(x_data, y_data)
+        #         return ax
+        #     except Exception as e:
+        #         print(f"Error: {e}")
+        #         # return ax
+
+        # ani = FuncAnimation(fig, update_plot, frames=range(16), blit=True, interval=50)
 
 
 if __name__ == "__main__":
