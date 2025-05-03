@@ -9,9 +9,10 @@ from concurrent.futures import ThreadPoolExecutor
 from collections import deque
 from .zmq_server import ZMQServer
 # from .models.gr00t import vla_model
-from ..models.gr00t import ModelVLA
+from ..models.gr00t import ModelVLA as GR00T
+from ..models.act import ModelVLA as ACT
 class VLAServer:
-    def __init__(self, config: ConfigDict, zmq_server: ZMQServer,  model: ModelVLA = None):
+    def __init__(self, config: ConfigDict, zmq_server: ZMQServer,  model: GR00T | ACT = None):
         self.config = config
         self.zmq_server = zmq_server
         self.model = model

@@ -1,0 +1,123 @@
+dataset_repo_id: "lerobot/pusht"
+device: "cuda"
+env:
+  action_dim: 9
+  episode_length: 300
+  fps: 30
+  gym:
+    obs_type: "pixels_agent_pos"
+    render_mode: "rgb_array"
+    visualization_height: 384
+    visualization_width: 384
+  image_size: 96
+  name: "pusht"
+  state_dim: 9
+  task: "PushT-v0"
+eval:
+  batch_size: 50
+  n_episodes: 50
+  use_async_envs: false
+fps: 10
+override_dataset_stats:
+  action:
+    max: [511.0, 511.0]
+    min: [12.0, 25.0]
+  observation.image:
+    mean: [[[0.5]], [[0.5]], [[0.5]]]
+    std: [[[0.5]], [[0.5]], [[0.5]]]
+  observation.state:
+    max: [496.14618, 510.9579]
+    min: [13.456424, 32.938293]
+policy:
+  beta_end: 0.02
+  beta_schedule: "squaredcos_cap_v2"
+  beta_start: 0.0001
+  clip_sample: true
+  clip_sample_range: 1.0
+  crop_is_random: true
+  crop_shape: [480, 480]
+  diffusion_step_embed_dim: 128
+  do_mask_loss_for_padding: false
+  down_dims: [512, 1024, 2048]
+  horizon: 48
+  n_action_steps: 40
+  n_groups: 8
+  n_obs_steps: 1
+  input_normalization_modes:
+    observation.image: "mean_std"
+    observation.state: "min_max"
+  input_shapes:
+    observation.image: [3, 680, 480]
+    observation.state: ['${env.state_dim}']
+  kernel_size: 5
+  name: "diffusion"
+  noise_scheduler_type: "DDIM"
+  num_inference_steps: null
+  num_train_timesteps: 10
+  output_normalization_modes:
+    action: "min_max"
+  output_shapes:
+    action: ['${env.action_dim}']
+  prediction_type: "epsilon"
+  pretrained_backbone_weights: null
+  spatial_softmax_num_keypoints: 32
+  use_film_scale_modulation: true
+  use_group_norm: true
+  vision_backbone: "resnet18"
+resume: false
+seed: 100000
+training:
+  adam_betas: [0.95, 0.999]
+  adam_eps: 1e-08
+  adam_weight_decay: 1e-06
+  batch_size: 64
+  delta_timestamps:
+    action: '[i / ${fps} for i in range(1 - ${policy.n_obs_steps}, 1 - ${policy.n_obs_steps} + ${policy.horizon})]'
+    observation.image: '[i / ${fps} for i in range(1 - ${policy.n_obs_steps}, 1)]'
+    observation.state: '[i / ${fps} for i in range(1 - ${policy.n_obs_steps}, 1)]'
+  do_online_rollout_async: false
+  drop_n_last_frames: 7
+  eval_freq: 25000
+  grad_clip_norm: 10
+  image_transforms:
+    brightness:
+      min_max: [0.8, 1.2]
+      weight: 1
+    contrast:
+      min_max: [0.8, 1.2]
+      weight: 1
+    enable: false
+    hue:
+      min_max: [-0.05, 0.05]
+      weight: 1
+    max_num_transforms: 3
+    random_order: false
+    saturation:
+      min_max: [0.5, 1.5]
+      weight: 1
+    sharpness:
+      min_max: [0.8, 1.2]
+      weight: 1
+  log_freq: 200
+  lr: 1e-5
+  lr_scheduler: "cosine"
+  lr_warmup_steps: 500
+  num_workers: 4
+  offline_steps: 200000
+  online_buffer_capacity: null
+  online_buffer_seed_size: 0
+  online_env_seed: null
+  online_rollout_batch_size: 1
+  online_rollout_n_episodes: 1
+  online_sampling_ratio: 0.5
+  online_steps: 0
+  online_steps_between_rollouts: 1
+  save_checkpoint: true
+  save_freq: 25000
+use_amp: True
+video_backend: "pyav"
+wandb:
+  disable_artifact: false
+  enable: false
+  notes: ""
+  project: "lerobot"
