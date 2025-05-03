@@ -163,14 +163,15 @@ class ModelVLA:
         curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(dim=0)
         return curr_image
 
-    def infer(self, sequence):
-        data = sequence[0]
-        print(data.keys())
-        # obs = data['obs'].copy()
-        obs = data.copy()
-        # obs['state'] = obs['state'][None]
-        #print(obs['video.cam_right_high'].shape, obs['state'].shape)
-        aaa = time.time()
+    def infer(self, data):
+        print(f'data keys: {data.keys()}')
+        obs = data['obs'].copy()
+        print(f'obs keys: {obs.keys()}')
+        obs['state'] = obs['state'][None]
+        image_shape = obs['cam.head'].shape
+        print(f'image shape: {image_shape}')
+        state_shape = obs['state'].shape
+        print(f'state shape: {state_shape}')
 
         with torch.inference_mode():
             
@@ -209,6 +210,8 @@ class ModelVLA:
                 qpos = obs['observation.state'][:,0:16].cuda()
             else:
                 qpos = obs['observation.state'].cuda()
+            
+            start_time = time.time()
             pre_data = self.policy(qpos, curr_image,command_embedding=command_embedding)
                         #print("len data",len(data))
             if len(pre_data )== 2:
@@ -223,8 +226,9 @@ class ModelVLA:
             predicted_action = self.unnormalize_outputs({"action": all_actions.cpu()[0]})["action"].numpy()[:,0:16]
 
             #predicted_action = self.policy.get_action(obs)
-            print(time.time() - aaa, obs.keys())
-            print('predicted_action', predicted_action.shape)
+            end_time = time.time()
+            print(f'infer time: {(end_time - start_time) * 1000: .02f} ms')
+            print(f'predicted_action shape: {predicted_action.shape}')
             return {"type": "action", "pred_action": predicted_action, 'obs_state': obs['state'], "ref_timestamp": data["ref_timestamp"]}
 
     def test_policy(self, obs):

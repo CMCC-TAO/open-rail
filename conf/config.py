@@ -97,5 +97,5 @@ def get_server_config():
     config.zmq = get_zmq_config()
     # MAIN_CLIENT_ID = 'ZROBOT'
     config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
-    config.model = ModelType.GR00T
+    config.model = ModelType.ACT
     return config

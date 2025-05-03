@@ -38,9 +38,14 @@ class ModelVLA:
                 print(key, value)
 
     def infer(self, data):
+        print(f'data keys: {data.keys()}')
         obs = data['obs'].copy()
+        print(f'obs keys: {obs.keys()}')
         obs['state'] = obs['state'][None]
-        print(obs['cam.head'].shape, obs['state'].shape)
+        image_shape = obs['cam.head'].shape
+        print(f'image shape: {image_shape}')
+        state_shape = obs['state'].shape
+        print(f'state shape: {state_shape}')
         inp_obs = {
             "video.cam_right_high": obs['cam.head'][None],
             "video.cam_left_wrist": obs['cam.hand_left'][None],
@@ -52,14 +57,15 @@ class ModelVLA:
             # "state": np.random.rand(1, 20),
             "annotation.human.action.task_description": obs['annotation.human.action.task_description'],
         }
-        aaa = time.time()
+        start_time = time.time()
         predicted_action = self.policy.get_action(inp_obs)
-        print(time.time() - aaa, obs.keys())
+        end_time = time.time()
+        print(f'infer time: {(end_time - start_time) * 1000: .02f} ms')
         predicted_action = np.concatenate([
             v.reshape(-1, 1) if v.ndim == 1 else v 
             for v in predicted_action.values()
         ], axis=1)
-        print('predicted_action', predicted_action.shape)
+        print(f'predicted_action shape: {predicted_action.shape}')
         return {"type": "action", "pred_action": predicted_action, 'obs_state': obs['state'], "ref_timestamp": data["ref_timestamp"]}
 
     def test_policy(self, obs):

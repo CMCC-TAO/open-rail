@@ -1,1 +1,1 @@
-from .vla_model import ModelVLA
+from .act import ModelVLA
