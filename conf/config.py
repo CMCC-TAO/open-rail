@@ -16,7 +16,7 @@ def get_realtime_data_manager_config():
     config.max_len = 100 # Max length of the sequence to store observe data
     # config.control_max_len = 1000 # Max length of the sequence to store control data
     config.record_data = False # True to record data, False to not record data
-    config.show_data = False # True to show data, False to not show data
+    # config.show_data = False # True to show data, False to not show data
     return config
 
 def get_controller_config():
@@ -73,6 +73,7 @@ def get_client_config():
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
     config.show_data = True # True to show data, False to not show data
+    config.traj_strategy = 'curve_fitting' # Trajectory strategy, choices = ('curve_fitting', 'interpolation')
     return config
 
 def get_zmq_config():

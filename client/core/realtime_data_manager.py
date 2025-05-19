@@ -16,8 +16,9 @@ class RealtimeDataManager():
         if rdm_config.record_data:
             pass #
 
-        if rdm_config.show_data:
-            pass #
+        # if rdm_config.show_data:
+        #     pass #
+        # self.action_data_received = False
 
         self.init_timestamp = None
         self.init_control_timestamp = None #A2D TimeStamp

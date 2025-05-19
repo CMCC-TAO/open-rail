@@ -323,7 +323,26 @@ class VLAClient():
         print(f'self.xdata: {self.xdata}')
         print(f'self.ydata: {self.ydata1}')
         # self.line.set_data(self.xdata, self.ydata)
-        lines = self.axs[0].plot(self.xdata, self.ydata0, 'b-', lw=1) + self.axs[1].plot(self.xdata, self.ydata1, 'r-', lw=1)
+        if len(self.xdata) > 0:
+            x_min= min(self.xdata[-32:])
+            x_max= max(self.xdata[-32:])
+            y0_min= min(self.ydata0[-32:])
+            y0_max= max(self.ydata0[-32:])
+            y1_min= min(self.ydata1[-32:])
+            y1_max= max(self.ydata1[-32:])
+        else:
+            x_min = 0.0
+            x_max = 0.5
+            y0_min = -1.0
+            y0_max = 1.0
+            y1_min = -1.0
+            y1_max = 1.0
+        self.axs[0].set_xlim(x_min, x_max)
+        self.axs[0].set_ylim(y0_min, y0_max)
+        self.axs[1].set_xlim(x_min, x_max)
+        self.axs[1].set_ylim(y1_min, y1_max)
+
+        lines = self.axs[0].plot(self.xdata[-32:], self.ydata0[-32:], 'b-', lw=1) + self.axs[1].plot(self.xdata[-32:], self.ydata1[-32:], 'r-', lw=1)
         # return self.ax.plot(self.xdata, self.ydata, 'b-', lw=1)
         return lines
 
