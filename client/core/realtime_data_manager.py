@@ -47,7 +47,7 @@ class RealtimeDataManager():
             with self.action_thread_lock:
                 self.action_chunks.extend(action_chunk)
                 self.timestamp_chunks.extend(timestamp_chunk_new)
-                print(f'timestamp_chunks: {self.timestamp_chunks}')
+            print(f'timestamp_chunks: {self.timestamp_chunks}')
         else:
             self.currt_time = time.time()
             # time_duration = int((self.currt_time - self.start_time) * 1e9)

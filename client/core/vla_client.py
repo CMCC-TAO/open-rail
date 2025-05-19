@@ -40,13 +40,18 @@ class VLAClient():
         
         if config.show_data:
             # 创建画布和折线图
-            self.fig, self.ax = plt.subplots()
-            self.line, = self.ax.plot([], [], 'b-', lw=1)
-            self.ax.set_ylabel('Joint Value')
-            self.ax.set_xlabel('Time Step')
-            self.ax.set_title('Predicted Action Chunk')
+            self.fig, self.axs = plt.subplots(2, 1, figsize=(10, 4))
+            print(self.axs)
+            self.line = self.axs[0].plot([], [], 'b-', lw=1)
+            self.line = self.axs[1].plot([], [], 'r-', lw=1)
+            self.axs[0].set_ylabel('Joint Value')
+            self.axs[0].set_xlabel('Time Step')
+            self.axs[0].set_title('Predicted Action Chunk')
+            self.axs[1].set_ylabel('Joint Value')
+            self.axs[1].set_xlabel('Time Step')
             self.xdata = []
-            self.ydata = []
+            self.ydata0 = []
+            self.ydata1 = []
             # self.xdata = queue.Queue(maxsize=100)
             # self.ydata = queue.Queue(maxsize=100)
             # self.fig, self.ax = plt.subplots()
@@ -77,7 +82,7 @@ class VLAClient():
                 self.inferenceFirstTime()
                 time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
             # 第二次推理
-            elif self.inference_count < 20:
+            elif self.inference_count < 500:
                 self.inferenceStep()
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)
@@ -207,7 +212,8 @@ class VLAClient():
                 # self.xdata.put(action_chunk[0])
                 # self.ydata.put(timestamp_chunk[0]/1e9)
                 self.xdata.append(timestamp_chunk/1e9)
-                self.ydata.append(action_chunk[0])
+                self.ydata0.append(action_chunk[0])
+                self.ydata1.append(action_chunk[1])
                 # print(f'action_chunk shape: {action_chunk.shape}')
                 # print(action)
                 # print(action['ref_timestamp'])
@@ -315,9 +321,11 @@ class VLAClient():
         # 更新图表数据
         print(f'updateVisualization: {frame}')
         print(f'self.xdata: {self.xdata}')
-        print(f'self.ydata: {self.ydata}')
+        print(f'self.ydata: {self.ydata1}')
         # self.line.set_data(self.xdata, self.ydata)
-        return self.ax.plot(self.xdata, self.ydata, 'b-', lw=1)
+        lines = self.axs[0].plot(self.xdata, self.ydata0, 'b-', lw=1) + self.axs[1].plot(self.xdata, self.ydata1, 'r-', lw=1)
+        # return self.ax.plot(self.xdata, self.ydata, 'b-', lw=1)
+        return lines
 
         # # 动态调整X轴范围（保持最新数据在视图中）
         # if new_x > max_data_points:
