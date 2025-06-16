@@ -14,6 +14,7 @@ from ..robots.a2d import RobotA2D
 from ..robots.mock_a2d import RobotA2DMock
 from ..utils import misc
 from ..utils.util import run_time_decorator
+from ..utils.multi_thread_timer import MultiThreadTimer
 from .zmq_client import ZMQClient
 from .trajectory_generator import TrajectoryGenerator
 from .realtime_data_manager import RealtimeDataManager
@@ -30,8 +31,9 @@ class VLAClient():
 
         self.observe_thread = threading.Thread(target=self.observeThreadFun, daemon=True)
         self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
-        self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, daemon=True)
-        self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
+        self.interpolate_thread = None
+        # self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
+        self.control_thread_timer = MultiThreadTimer(10, self.controlThreadFun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
@@ -41,7 +43,7 @@ class VLAClient():
         if config.show_data:
             # 创建画布和折线图
             self.fig, self.axs = plt.subplots(2, 1, figsize=(10, 4))
-            print(self.axs)
+            # print(self.axs)
             self.line = self.axs[0].plot([], [], 'b-', lw=1)
             self.line = self.axs[1].plot([], [], 'r-', lw=1)
             self.axs[0].set_ylabel('Joint Value')
@@ -80,9 +82,10 @@ class VLAClient():
             # 第一次推理
             if self.inference_count == 0:
                 self.inferenceFirstTime()
-                time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
+                # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
+                time.sleep(1.5)
             # 第二次推理
-            elif self.inference_count < 500:
+            elif self.inference_count < 2:
                 self.inferenceStep()
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)
@@ -143,6 +146,9 @@ class VLAClient():
             # print(timestamp_chunk)
             # with self.thread_lock:
             self.rdm.addActionData(action_chunk, timestamp_chunk)
+
+            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, daemon=True)
+            self.interpolate_thread.start()
             # if self.config.show_data:
             #     with  self.show_thread_lock:
             #         self.action_chunk = [action[0] for action in action_chunk]
@@ -168,9 +174,12 @@ class VLAClient():
             # print(timestamp_chunk)
             # addActionData函数是线程安全的，不需要加锁
             self.rdm.addActionData(action_chunk, timestamp_chunk)
-            if self.config.show_data:
-                with self.show_thread_lock:
-                    self.action_chunk = [action[2] for action in action_chunk]
+
+            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, daemon=True)
+            self.interpolate_thread.start()
+            # if self.config.show_data:
+            #     with self.show_thread_lock:
+            #         self.action_chunk = [action[2] for action in action_chunk]
             # if self.config.show_data:
             #     for action in action_chunk:
             #         self.action_queue.put(action[0])
@@ -179,56 +188,85 @@ class VLAClient():
             print("没有观测数据，跳过推理")
 
     def controlThreadFun(self):
-        print('控制线程已启动...')
-        while self.running:
-            # popActionData函数是线程安全的，不需要加锁
-            start_time = time.time()
-            action_chunk, timestamp_chunk = self.rdm.popActionData()
-            if action_chunk is not None:
-                # print(f'action_chunk shape: {action_chunk.shape}')
-                # print(action)
-                # print(action['ref_timestamp'])
-                # print(action['pred_action'])
-                # for action in action_chunk:
-                self.robot.controlRobot(action_chunk)
-                end_time = time.time()
-                time_diff = end_time - start_time
-                if time_diff < self.config.controller.control_period/1000:
-                    time.sleep(self.config.controller.control_period/1000 - time_diff)
-            else:
-                # print("没有动作数据，跳过控制")
-                time.sleep(0.010)
-                continue
+        # print(f'[{time.time()}]控制线程已启动...')
+        action = self.rdm.getActionFitted()
+        if action is not None:
+            # pass
+            # print(f'[{time.time()}]控制线程已启动...')
+            # self.robot.controlRobot(action)
+            if self.config.show_data:
+                with self.show_thread_lock:
+                    self.ydata0.append(action[0])
+                    self.ydata1.append(action[1])
+                    self.xdata.append(len(self.ydata0))
+                    # print(f'step: {len(self.ydata0)}')
+            # print(f'action: {action}')
+        # while self.running:
+        #     # popActionData函数是线程安全的，不需要加锁
+        #     start_time = time.time()
+        #     action_chunk, timestamp_chunk = self.rdm.popActionData()
+        #     if action_chunk is not None:
+        #         # print(f'action_chunk shape: {action_chunk.shape}')
+        #         # print(action)
+        #         # print(action['ref_timestamp'])
+        #         # print(action['pred_action'])
+        #         # for action in action_chunk:
+        #         self.robot.controlRobot(action_chunk)
+        #         end_time = time.time()
+        #         time_diff = end_time - start_time
+        #         if time_diff < self.config.controller.control_period/1000:
+        #             time.sleep(self.config.controller.control_period/1000 - time_diff)
+        #     else:
+        #         # print("没有动作数据，跳过控制")
+        #         time.sleep(0.010)
+        #         continue
             # 获取当前时间戳
     
     def interpolateThreadFun(self):
-        print('轨迹插值线程已启动...')
-        while self.running:
-            # popActionData函数是线程安全的，不需要加锁
-            start_time = time.time()
-            action_chunk, timestamp_chunk = self.rdm.popActionData()
-            print(f'popActionData: {timestamp_chunk}')
-            if action_chunk is not None:
-                # self.xdata.put(action_chunk[0])
-                # self.ydata.put(timestamp_chunk[0]/1e9)
-                self.xdata.append(timestamp_chunk/1e9)
-                self.ydata0.append(action_chunk[0])
-                self.ydata1.append(action_chunk[1])
-                # print(f'action_chunk shape: {action_chunk.shape}')
-                # print(action)
-                # print(action['ref_timestamp'])
-                # print(action['pred_action'])
-                # for action in action_chunk:
-                self.traj_generator.addWayPoint(action_chunk)
-                end_time = time.time()
-                time_diff = end_time - start_time
-                # 根据control_period控制轨迹执行的时间
-                if time_diff < self.config.controller.control_period/1000:
-                    time.sleep(self.config.controller.control_period/1000 - time_diff)
-            else:
-                print("没有动作数据，跳过轨迹插值")
-                time.sleep(0.010)
-                continue
+        print(f'轨迹插值/拟合线程已启动, {self.config.traj_strategy}...')
+        if self.config.traj_strategy == 'interpolation':
+            # self.traj_generator.interpolateTrajectory()
+            pass
+        elif self.config.traj_strategy == 'fitting':
+            # 准备轨迹拟合用的数据
+            timestamps, action_chunk, start_time, end_time = self.rdm.popActionChunk()
+            # trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001)
+            
+            action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=3, time_step=0.001)
+            # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
+            # action_chunk_fitted shape: (16, 1548)
+            #TODO: 根据time_step 计算出offset
+            # offset = int((self.rdm.getCurrentTime() - start_time) * 1000) # 1/time_step
+            self.rdm.updateActionChunkFitted(action_chunk_fitted, timestamps_fitted)
+            # pass
+        else:
+            print(f'未知的轨迹策略: {self.config.traj_strategy}')
+        # while self.running:
+        #     # popActionData函数是线程安全的，不需要加锁
+        #     start_time = time.time()
+        #     action_chunk, timestamp_chunk = self.rdm.popActionData()
+        #     print(f'popActionData: {timestamp_chunk}')
+        #     if action_chunk is not None:
+        #         # self.xdata.put(action_chunk[0])
+        #         # self.ydata.put(timestamp_chunk[0]/1e9)
+        #         self.xdata.append(timestamp_chunk/1e9)
+        #         self.ydata0.append(action_chunk[0])
+        #         self.ydata1.append(action_chunk[1])
+        #         # print(f'action_chunk shape: {action_chunk.shape}')
+        #         # print(action)
+        #         # print(action['ref_timestamp'])
+        #         # print(action['pred_action'])
+        #         # for action in action_chunk:
+        #         self.traj_generator.addWayPoint(action_chunk)
+        #         end_time = time.time()
+        #         time_diff = end_time - start_time
+        #         # 根据control_period控制轨迹执行的时间
+        #         if time_diff < self.config.controller.control_period/1000:
+        #             time.sleep(self.config.controller.control_period/1000 - time_diff)
+        #     else:
+        #         print("没有动作数据，跳过轨迹插值")
+        #         time.sleep(0.010)
+        #         continue
             # 获取当前时间戳
 
     def processData(self, frame):
@@ -287,15 +325,15 @@ class VLAClient():
         # 启动线程
         self.observe_thread.start()
         self.inference_thread.start()
-        self.interpolate_thread.start()
+        # self.interpolate_thread.start()
         # self.control_thread.start()
+        self.control_thread_timer.start()
         if self.config.show_data:
             self.showActionChunk()
         # 等待线程结束
         self.observe_thread.join()
         # self.inference_thread.join()
         # self.control_thread.join()
-
         print('推理框架客户端已启动。')
     
     
@@ -305,7 +343,8 @@ class VLAClient():
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
         self.interpolate_thread.join(timeout=1.0)
-        self.control_thread.join(timeout=1.0)
+        # self.control_thread.join(timeout=1.0)
+        self.control_thread_timer.join(timeout=1.0)
         print('推理框架客户端已关闭。')
 
     def close(self):
@@ -314,22 +353,23 @@ class VLAClient():
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
         self.interpolate_thread.join(timeout=1.0)
-        self.control_thread.join(timeout=1.0)
+        # self.control_thread.join(timeout=1.0)
+        self.control_thread_timer.join(timeout=1.0)
         self.zmq_client.close()
         self.traj_generator.close()
     def updateVisualization(self, frame):
         # 更新图表数据
-        print(f'updateVisualization: {frame}')
-        print(f'self.xdata: {self.xdata}')
-        print(f'self.ydata: {self.ydata1}')
+        # print(f'updateVisualization: {frame}')
+        # print(f'self.xdata: {self.xdata}')
+        # print(f'self.ydata: {self.ydata1}')
         # self.line.set_data(self.xdata, self.ydata)
         if len(self.xdata) > 0:
-            x_min= min(self.xdata[-32:])
-            x_max= max(self.xdata[-32:])
-            y0_min= min(self.ydata0[-32:])
-            y0_max= max(self.ydata0[-32:])
-            y1_min= min(self.ydata1[-32:])
-            y1_max= max(self.ydata1[-32:])
+            x_min= min(self.xdata[:])
+            x_max= max(self.xdata[:])
+            y0_min= min(self.ydata0[:])
+            y0_max= max(self.ydata0[:])
+            y1_min= min(self.ydata1[:])
+            y1_max= max(self.ydata1[:])
         else:
             x_min = 0.0
             x_max = 0.5
@@ -342,7 +382,8 @@ class VLAClient():
         self.axs[1].set_xlim(x_min, x_max)
         self.axs[1].set_ylim(y1_min, y1_max)
 
-        lines = self.axs[0].plot(self.xdata[-32:], self.ydata0[-32:], 'b-', lw=1) + self.axs[1].plot(self.xdata[-32:], self.ydata1[-32:], 'r-', lw=1)
+        # lines = self.axs[0].plot(self.xdata[-32:], self.ydata0[-32:], 'b-', lw=1) + self.axs[1].plot(self.xdata[-32:], self.ydata1[-32:], 'r-', lw=1)
+        lines = self.axs[0].plot(self.xdata[:], self.ydata0[:], 'b-', lw=1) + self.axs[1].plot(self.xdata[:], self.ydata1[:], 'r-', lw=1)
         # return self.ax.plot(self.xdata, self.ydata, 'b-', lw=1)
         return lines
 

@@ -1,8 +1,14 @@
 import time
-import threading
 import queue
+import threading
+import numpy as np
+import matplotlib
+# matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from ml_collections import ConfigDict
+from concurrent.futures import ThreadPoolExecutor
 from ruckig import InputParameter, OutputParameter, Result, Ruckig
+from ..utils.util import run_time_decorator
 class TrajectoryGenerator():
     def __init__(self, config: ConfigDict):
         self.config = config
@@ -41,7 +47,15 @@ class TrajectoryGenerator():
 
         self.is_initialized = False
         self.is_running = True
+
+        self.frame = 0
         self.generate_thread.start()
+
+
+        # 轨迹曲线拟合所需要的变量
+        # 创建线程池用于并行轨迹曲线拟合
+        self.fitting_executor = ThreadPoolExecutor(max_workers=16)
+
 
     def addWayPoint(self, point: list):
         # 添加Waypoint，若没有初始化,首先初始化
@@ -101,6 +115,68 @@ class TrajectoryGenerator():
             return self.observe_buffer.popleft()
         else:
             return None  # or handle the empty case appropriately
+    
+    def jointTrajFitting(self, timestamps, joint_chunk, index, start_time, end_time, deg = 3, time_step = 0.001):
+        # x = np.array(timestamps)
+        # y = np.array(joint_chunk)
+        # 进行多项式拟合
+        coefficients = np.polyfit(timestamps, joint_chunk, deg=deg)
+        # 使用拟合得到的多项式计算y值
+        polynomial = np.poly1d(coefficients)
+        x = np.arange(start_time, end_time, time_step)
+        joint_chunk_fitted = polynomial(x)
+
+        # if index == 0:
+        #     # 可视化
+        #     # 创建一个新的图形
+        #     fig, ax = plt.subplots()
+
+        #     # 绘制第一条曲线，使用红色实线
+        #     ax.plot(timestamps, joint_chunk, label='joint_chunk', color='red', linestyle='-')
+
+        #     # 绘制第二条曲线，使用蓝色虚线
+        #     ax.plot(x, joint_chunk_fitted, label='joint_chunk_fitted', color='blue', linestyle='--')
+
+        #     # 添加图例
+        #     ax.legend()
+
+        #     # 添加标题和标签
+        #     ax.set_title(f'joint {index}')
+        #     ax.set_xlabel('time [s]')
+        #     ax.set_ylabel('joint value')
+
+        #     # 保存图片
+        #     plt.savefig(f'joint_{index}_{self.frame}.png', dpi=300)
+        #     self.frame += 1
+        return index, joint_chunk_fitted
+
+    @run_time_decorator
+    def trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):
+        # 对Action进行预处理，action_chunk是动作维度的List格式[[action], [action], [action], ...]
+        # 需要将action_chunk转换为关节维度的格式，以Numpy表示
+        timestamps_np = np.array(timestamps)
+        joint_chunks = self.toJointChunk(action_chunk)
+        futures = [self.fitting_executor.submit(self.jointTrajFitting, timestamps_np, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(joint_chunks)]
+        # 等待所有任务完成并获取结果
+        results = [future.result() for future in futures]
+        # 解析结果
+        final_results = [None] * len(results)
+        for index, joint_chunk_fitted in results:
+            final_results[index] = joint_chunk_fitted
+        return np.array(final_results), np.arange(start_time, end_time, time_step)
+    
+    @run_time_decorator
+    def toJointChunk(self, action_chunk):
+        joint_chunks = []
+        action_dim = len(action_chunk[0])
+        for index in range(action_dim):
+            joint_chunks.append([])
+        
+        for action in action_chunk:
+            for index in range(action_dim):
+                joint_chunks[index].append(action[index])
+        return joint_chunks
+    
     def run(self):
         with self.thread_lock:
             self.is_running = True
