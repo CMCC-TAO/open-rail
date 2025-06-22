@@ -18,7 +18,7 @@ class RobotA2DMock():
                                 local_files_only=True)
         self.dataloader = iter(torch.utils.data.DataLoader(
             self.dataset,
-            num_workers=4,
+            num_workers=1,
             batch_size=1,
             shuffle=False,
         ))
@@ -69,7 +69,7 @@ class RobotA2DMock():
             print(f'End of dataset, currt_index: {self.currt_index}, num_frames: {self.dataset.num_frames}')
             self.dataloader = iter(torch.utils.data.DataLoader(
                 self.dataset,
-                num_workers=4,
+                num_workers=1,
                 batch_size=1,
                 shuffle=False,
             ))
@@ -97,7 +97,7 @@ class RobotA2DMock():
         # print(f'ref_timestamp: {ref_timestamp}, fps: {fps}')
         # print(ref_timestamp)
         result['ref_timestamp'] = ref_timestamp
-        # print(f'{ref_timestamp}')
+        # print(f'ref_timestamp: {ref_timestamp}, state: {data["observation.state"].cpu().numpy()[0][:5]}')
         result['obs.cam.head'] = image
 
         for camera in self.observer_config.camera_names:

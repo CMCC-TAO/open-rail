@@ -72,7 +72,7 @@ def get_client_config():
     config.observer = get_observer_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
-    config.show_data = True # True to show data, False to not show data
+    config.show_data = False # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
     return config
 

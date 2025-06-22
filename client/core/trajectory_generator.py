@@ -2,8 +2,6 @@ import time
 import queue
 import threading
 import numpy as np
-import matplotlib
-# matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
@@ -41,6 +39,10 @@ class TrajectoryGenerator():
         # 初始的目标速度为0
         self.target_vel = [0.0] * config.dof
         self.last_point = None
+        self.traj = None
+        self.traj_fitted = None
+        self.timestamps = None
+        self.timestamps_fitted = None
 
         self.generate_thread = threading.Thread(target=self.generateThreadFun, daemon=True)
         self.thread_lock = threading.Lock()
@@ -154,16 +156,55 @@ class TrajectoryGenerator():
     def trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):
         # 对Action进行预处理，action_chunk是动作维度的List格式[[action], [action], [action], ...]
         # 需要将action_chunk转换为关节维度的格式，以Numpy表示
-        timestamps_np = np.array(timestamps)
-        joint_chunks = self.toJointChunk(action_chunk)
-        futures = [self.fitting_executor.submit(self.jointTrajFitting, timestamps_np, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(joint_chunks)]
+        futures = [self.fitting_executor.submit(self.jointTrajFitting, timestamps, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(action_chunk)]
         # 等待所有任务完成并获取结果
         results = [future.result() for future in futures]
         # 解析结果
         final_results = [None] * len(results)
         for index, joint_chunk_fitted in results:
             final_results[index] = joint_chunk_fitted
-        return np.array(final_results), np.arange(start_time, end_time, time_step)
+        if self.traj_fitted is None:
+            self.traj_fitted = np.array(final_results)
+            self.traj = action_chunk
+            print(f'traj_fitted shape: {self.traj_fitted.shape}, traj shape: {self.traj.shape}')
+            self.timestamps_fitted = np.arange(start_time, end_time, time_step)
+            self.timestamps = timestamps
+        else:
+            traj_fitted_new = np.array(final_results)
+            timestamps_fitted_new = np.arange(start_time, end_time, time_step)
+
+            joint_index = 0
+            # plot and save old and new traj
+            fig, ax = plt.subplots()
+
+            # 绘制旧轨迹
+            # ax.plot(self.timestamps_fitted, self.traj_fitted[joint_index, :], label='last_traj_ft', color='red', linestyle='-')
+            # ax.plot(self.timestamps, self.traj[joint_index, :], label='last_traj_gt', color='blue', linestyle='dotted')
+            ax.scatter(self.timestamps, self.traj[joint_index, :], label='last_traj_gt', color='blue')
+
+            # 绘制新轨迹
+            # ax.plot(timestamps_fitted_new, traj_fitted_new[joint_index, :], label='new_traj_ft', color='red', linestyle='-')
+            # ax.plot(timestamps, action_chunk[joint_index, :], label='new_traj_gt', color='green', linestyle='dotted')
+            ax.scatter(timestamps, action_chunk[joint_index, :], label='new_traj_gt', color='green')
+
+            # 添加图例
+            ax.legend()
+
+            # 添加标题和标签
+            ax.set_title(f'joint {joint_index}')
+            ax.set_xlabel('time [s]')
+            ax.set_ylabel('joint value')
+
+            # 保存图片
+            plt.savefig(f'joint_{joint_index}_fitted_{self.frame}.png', dpi=300)
+            self.frame += 1
+
+            self.traj_fitted = traj_fitted_new
+            self.timestamps_fitted = timestamps_fitted_new
+            self.traj = action_chunk
+            self.timestamps = timestamps
+
+        return self.traj_fitted, self.timestamps_fitted
     
     @run_time_decorator
     def toJointChunk(self, action_chunk):

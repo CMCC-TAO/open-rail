@@ -19,13 +19,13 @@ class MultiThreadTimer:
 
     def _run(self):
         while not self._stop_event.is_set():
-            start_time = time.time()
+            start_time = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
             # 在一个新线程中启动回调函数
             t = threading.Thread(target=self.callback, args=self.args, kwargs=self.kwargs)
             t.start()
-            end_time = time.time()
+            end_time = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
             elapsed_time = end_time - start_time
-            time.sleep(max(0.0, self.interval/1000.0 - elapsed_time))
+            time.sleep(max(0.0, self.interval/1000.0 - elapsed_time/1e9))
 
     def start(self):
         self._thread.start()

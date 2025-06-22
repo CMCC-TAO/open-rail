@@ -1,4 +1,5 @@
 import time
+import matplotlib
 from client.core import zmq_client
 from conf.config import get_client_config
 from client.robots.a2d import RobotA2D
@@ -11,6 +12,8 @@ from client.core.realtime_data_manager import RealtimeDataManager
 
 if __name__ == "__main__":
     config = get_client_config()
+    if not config.show_data:
+        matplotlib.use('Agg')
     # print(config)
     zmq_client = ZMQClient(config.zmq)
     # robot = RobotA2D(config.observer, config.controller)

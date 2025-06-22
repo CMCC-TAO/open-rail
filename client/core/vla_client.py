@@ -33,7 +33,7 @@ class VLAClient():
         self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
         self.interpolate_thread = None
         # self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
-        self.control_thread_timer = MultiThreadTimer(10, self.controlThreadFun)
+        self.control_thread_timer = MultiThreadTimer(1, self.controlThreadFun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
@@ -83,7 +83,7 @@ class VLAClient():
             if self.inference_count == 0:
                 self.inferenceFirstTime()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-                time.sleep(1.5)
+                time.sleep(0.5)
             # 第二次推理
             elif self.inference_count < 2:
                 self.inferenceStep()
@@ -147,13 +147,17 @@ class VLAClient():
             # with self.thread_lock:
             self.rdm.addActionData(action_chunk, timestamp_chunk)
 
-            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, daemon=True)
+            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 32}, daemon=True)
             self.interpolate_thread.start()
+            # 初次推理需要等待等待插值完成，更新init_control_timestamp
+            self.interpolate_thread.join()
+            self.rdm.updateControlTimeStamp()
             # if self.config.show_data:
-            #     with  self.show_thread_lock:
+            #     with self.show_thread_lock:
             #         self.action_chunk = [action[0] for action in action_chunk]
                 # self.show_thread.start()
             self.inference_count += 1
+            print('初次推理完成')
         else:
             print("没有观测数据，跳过推理")
     @run_time_decorator
@@ -175,11 +179,11 @@ class VLAClient():
             # addActionData函数是线程安全的，不需要加锁
             self.rdm.addActionData(action_chunk, timestamp_chunk)
 
-            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, daemon=True)
+            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 20, 'num_samples_raw': 12}, daemon=True)
             self.interpolate_thread.start()
             # if self.config.show_data:
             #     with self.show_thread_lock:
-            #         self.action_chunk = [action[2] for action in action_chunk]
+            #         self.action_chunk = [action[0] for action in action_chunk]
             # if self.config.show_data:
             #     for action in action_chunk:
             #         self.action_queue.put(action[0])
@@ -190,12 +194,14 @@ class VLAClient():
     def controlThreadFun(self):
         # print(f'[{time.time()}]控制线程已启动...')
         action = self.rdm.getActionFitted()
+        # action, timestamp = self.rdm.popActionData()
         if action is not None:
-            # pass
+            pass
             # print(f'[{time.time()}]控制线程已启动...')
             # self.robot.controlRobot(action)
             if self.config.show_data:
                 with self.show_thread_lock:
+                    # show raw action chunk
                     self.ydata0.append(action[0])
                     self.ydata1.append(action[1])
                     self.xdata.append(len(self.ydata0))
@@ -222,17 +228,29 @@ class VLAClient():
         #         continue
             # 获取当前时间戳
     
-    def interpolateThreadFun(self):
+    def interpolateThreadFun(self, num_samples_fitted, num_samples_raw):
         print(f'轨迹插值/拟合线程已启动, {self.config.traj_strategy}...')
         if self.config.traj_strategy == 'interpolation':
             # self.traj_generator.interpolateTrajectory()
             pass
         elif self.config.traj_strategy == 'fitting':
             # 准备轨迹拟合用的数据
-            timestamps, action_chunk, start_time, end_time = self.rdm.popActionChunk()
+            # 首先准备拟合的数据
+            timestamps_fitted, action_chunk_fitted = self.rdm.getFittedActionChunk(index_offset=0, num_samples=num_samples_fitted)
+            timestamps, action_chunk = self.rdm.popActionChunk(index_offset=10, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
+            if timestamps_fitted is not None:
+                print(f'timestamps_fitted: {timestamps_fitted}')
+                print(f'timestamps: {timestamps}')
+                timestamps = np.concatenate((timestamps_fitted, timestamps), axis=0)
+            # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}, action_chunk shape: {action_chunk.shape}')
+            if action_chunk_fitted is not None:
+                action_chunk = np.concatenate((action_chunk_fitted, action_chunk), axis=1)
+            print(f'timestamps_all shape: {timestamps.shape}, action_chunk_all shape: {action_chunk.shape}')
+            start_time = np.amin(timestamps)
+            end_time = np.amax(timestamps)
             # trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001)
             
-            action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=3, time_step=0.001)
+            action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=4, time_step=0.001)
             # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
             # action_chunk_fitted shape: (16, 1548)
             #TODO: 根据time_step 计算出offset
