@@ -1,0 +1,4 @@
+source;share/ros_environment/local_setup.bash
+source;share/ros_environment/local_setup.dsv
+source;share/ros_environment/local_setup.sh
+source;share/ros_environment/local_setup.zsh

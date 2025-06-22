@@ -1,0 +1,4 @@
+source;share/rcl_action/local_setup.bash
+source;share/rcl_action/local_setup.dsv
+source;share/rcl_action/local_setup.sh
+source;share/rcl_action/local_setup.zsh

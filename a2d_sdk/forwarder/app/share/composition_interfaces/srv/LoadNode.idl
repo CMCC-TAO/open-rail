@@ -1,0 +1,67 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from composition_interfaces/srv/LoadNode.srv
+// generated code does not contain a copyright notice
+
+#include "rcl_interfaces/msg/Parameter.idl"
+
+module composition_interfaces {
+  module srv {
+    @verbatim (language="comment", text=
+      "The ROS package in which the composable node can be found.")
+    struct LoadNode_Request {
+      string package_name;
+
+      @verbatim (language="comment", text=
+        "A plugin within the ROS package \"package_name\".")
+      string plugin_name;
+
+      @verbatim (language="comment", text=
+        "The assigned name of the composable node. Leave empty to use the node's" "\n"
+        "default name.")
+      string node_name;
+
+      @verbatim (language="comment", text=
+        "The assigned namespace of the composable node. Leave empty to use the node's" "\n"
+        "default namespace.")
+      string node_namespace;
+
+      @verbatim (language="comment", text=
+        "The assigned log level of the composable node. Enum values are found in" "\n"
+        "message rcl_interfaces/Log.")
+      uint8 log_level;
+
+      @verbatim (language="comment", text=
+        "Remapping rules for this composable node." "\n"
+        "" "\n"
+        "For more info about static_remapping rules and their syntax, see" "\n"
+        "https://design.ros2.org/articles/static_remapping.html" "\n"
+        "TODO(sloretz) rcl_interfaces message for remap rules?")
+      sequence<string> remap_rules;
+
+      @verbatim (language="comment", text=
+        "The Parameters of this composable node to set.")
+      sequence<rcl_interfaces::msg::Parameter> parameters;
+
+      @verbatim (language="comment", text=
+        "key/value arguments that are specific to a type of container process.")
+      sequence<rcl_interfaces::msg::Parameter> extra_arguments;
+    };
+    @verbatim (language="comment", text=
+      "True if the node was successfully loaded.")
+    struct LoadNode_Response {
+      boolean success;
+
+      @verbatim (language="comment", text=
+        "Human readable error message if success is false, else empty string.")
+      string error_message;
+
+      @verbatim (language="comment", text=
+        "Name of the loaded composable node (including namespace).")
+      string full_node_name;
+
+      @verbatim (language="comment", text=
+        "A unique identifier for the loaded node.")
+      uint64 unique_id;
+    };
+  };
+};

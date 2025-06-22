@@ -1,0 +1,4 @@
+source;share/rqt_image_view/local_setup.bash
+source;share/rqt_image_view/local_setup.dsv
+source;share/rqt_image_view/local_setup.sh
+source;share/rqt_image_view/local_setup.zsh

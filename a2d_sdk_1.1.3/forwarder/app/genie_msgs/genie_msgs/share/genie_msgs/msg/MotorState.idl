@@ -1,0 +1,90 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/common/MotorState.msg
+// generated code does not contain a copyright notice
+
+
+module genie_msgs {
+  module msg {
+    struct MotorState {
+      uint32 id;
+
+      @verbatim (language="comment", text=
+        "电机使能")
+      boolean enable;
+
+      double position;
+
+      double velocity;
+
+      @verbatim (language="comment", text=
+        "力矩")
+      double effort;
+
+      @verbatim (language="comment", text=
+        "电流  单位 mA")
+      float current;
+
+      @verbatim (language="comment", text=
+        "电压  单位 V")
+      float voltage;
+
+      @verbatim (language="comment", text=
+        "温度  单位 度")
+      float temperature;
+
+      @verbatim (language="comment", text=
+        "默认状态值为0 正常" "\n"
+        "对于灵巧手的状态值" "\n"
+        "  kOpening = 0       # 正在展开" "\n"
+        "  kClosing = 1       # 正在抓取" "\n"
+        "  kPosReached = 2    # 位置到位停止" "\n"
+        "  kOverCurrent = 3   # 电流保护停止" "\n"
+        "  kForceReached = 4  # 力控到位停止" "\n"
+        "  kStuck = 5         # 电机堵转停止" "\n"
+        "对于手臂的状态值" "\n"
+        "  kJointNormal                  = 0x0000 #关节正常" "\n"
+        "  kFOCError                     = 0x0001 #FOC错误" "\n"
+        "  kOverVoltage                  = 0x0002 #过压。" "\n"
+        "  kUnderVoltage                 = 0x0004 #欠压。" "\n"
+        "  kOverTemperature              = 0x0008 #过温。" "\n"
+        "  kStartFailure                 = 0x0010 #启动失败。" "\n"
+        "  kEncoderError                 = 0x0020 #编码器错误。" "\n"
+        "  kOverCurrent                  = 0x0040 #过流。" "\n"
+        "  kSoftwareError                = 0x0080 #软件错误。" "\n"
+        "  kTemperatureSensorError       = 0x0100 #温度传感器错误。" "\n"
+        "  kPositionLimitExceeded        = 0x0200 #位置超限错误。" "\n"
+        "  kInvalidJointID               = 0x0400 #关节ID非法。" "\n"
+        "  kPositionTrackingError        = 0x0800 #位置跟踪错误。" "\n"
+        "  kCurrentDetectionError        = 0x1000 #电流检测错误。" "\n"
+        "  kBrakeOpenFailure             = 0x2000 #抱闸打开失败。" "\n"
+        "  kPositionCommandStepWarning   = 0x4000 #位置指令阶跃警告。" "\n"
+        "  kMultiTurnJointLostCount      = 0x8000 #多圈关节丢圈数。" "\n"
+        "  kOtherErr                     = 0xF000 #通信丢帧。")
+      uint32 status;
+
+      @verbatim (language="comment", text=
+        "默认错误码为0" "\n"
+        "对于手臂关节错误码" "\n"
+        "  kJointNormal                  = 0x0000 #关节正常" "\n"
+        "  kFOCError                     = 0x0001 #FOC错误" "\n"
+        "  kOverVoltage                  = 0x0002 #过压。" "\n"
+        "  kUnderVoltage                 = 0x0004 #欠压。" "\n"
+        "  kOverTemperature              = 0x0008 #过温。" "\n"
+        "  kStartFailure                 = 0x0010 #启动失败。" "\n"
+        "  kEncoderError                 = 0x0020 #编码器错误。" "\n"
+        "  kOverCurrent                  = 0x0040 #过流。" "\n"
+        "  kSoftwareError                = 0x0080 #软件错误。" "\n"
+        "  kTemperatureSensorError       = 0x0100 #温度传感器错误。" "\n"
+        "  kPositionLimitExceeded        = 0x0200 #位置超限错误。" "\n"
+        "  kInvalidJointID               = 0x0400 #关节ID非法。" "\n"
+        "  kPositionTrackingError        = 0x0800 #位置跟踪错误。" "\n"
+        "  kCurrentDetectionError        = 0x1000 #电流检测错误。" "\n"
+        "  kBrakeOpenFailure             = 0x2000 #抱闸打开失败。" "\n"
+        "  kPositionCommandStepWarning   = 0x4000 #位置指令阶跃警告。" "\n"
+        "  kMultiTurnJointLostCount      = 0x8000 #多圈关节丢圈数。" "\n"
+        "  kOtherErr                     = 0xF000 #通信丢帧" "\n"
+        "系统错误码")
+      uint32 err_code;
+    };
+  };
+};

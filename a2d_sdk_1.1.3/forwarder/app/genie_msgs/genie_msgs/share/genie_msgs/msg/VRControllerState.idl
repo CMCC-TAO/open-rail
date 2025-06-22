@@ -1,0 +1,56 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/remote/VRControllerState.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Quaternion.idl"
+#include "geometry_msgs/msg/Vector3.idl"
+
+module genie_msgs {
+  module msg {
+    struct VRControllerState {
+      @verbatim (language="comment", text=
+        "控制器名称（例如：\"left\" 或 \"right\"）")
+      string name;
+
+      @verbatim (language="comment", text=
+        "控制器ID")
+      uint32 id;
+
+      @verbatim (language="comment", text=
+        "按键1状态")
+      boolean key_one;
+
+      @verbatim (language="comment", text=
+        "按键2状态")
+      boolean key_two;
+
+      @verbatim (language="comment", text=
+        "手柄扳机值")
+      double hand_trig;
+
+      @verbatim (language="comment", text=
+        "食指扳机值")
+      double index_trig;
+
+      @verbatim (language="comment", text=
+        "摇杆X轴值")
+      double axis_x;
+
+      @verbatim (language="comment", text=
+        "摇杆Y轴值")
+      double axis_y;
+
+      @verbatim (language="comment", text=
+        "摇杆按下")
+      boolean axis_click;
+
+      @verbatim (language="comment", text=
+        "控制器位置")
+      geometry_msgs::msg::Vector3 position;
+
+      @verbatim (language="comment", text=
+        "控制器旋转（四元数）")
+      geometry_msgs::msg::Quaternion orientation;
+    };
+  };
+};

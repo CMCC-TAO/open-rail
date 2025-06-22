@@ -1,0 +1,4 @@
+source;share/tango_icons_vendor/local_setup.bash
+source;share/tango_icons_vendor/local_setup.dsv
+source;share/tango_icons_vendor/local_setup.sh
+source;share/tango_icons_vendor/local_setup.zsh

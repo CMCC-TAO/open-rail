@@ -1,0 +1,23 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/agv/AGVMapDelete.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      " /hal/map/remove_map" "\n"
+      "根据map 列表获取的地图，选择一个可以进行删除")
+    struct AGVMapDelete_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "map id")
+      int32 map_id;
+    };
+    struct AGVMapDelete_Response {
+      int32 error_code;
+    };
+  };
+};

@@ -1,0 +1,6 @@
+msg/JointCommand.idl
+msg/JointCommand.msg
+msg/JointState.idl
+msg/JointState.msg
+msg/RttestResults.idl
+msg/RttestResults.msg

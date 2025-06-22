@@ -1,0 +1,4 @@
+source;share/image_tools/local_setup.bash
+source;share/image_tools/local_setup.dsv
+source;share/image_tools/local_setup.sh
+source;share/image_tools/local_setup.zsh

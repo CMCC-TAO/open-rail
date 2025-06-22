@@ -1,4 +1,4 @@
-mode: HYBRID_DEPLOY
+mode: COPILOT
 # two preprocess config examples:
 img_preproc [
     {

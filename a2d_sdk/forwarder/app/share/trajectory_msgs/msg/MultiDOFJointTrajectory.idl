@@ -1,0 +1,25 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from trajectory_msgs/msg/MultiDOFJointTrajectory.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+#include "trajectory_msgs/msg/MultiDOFJointTrajectoryPoint.idl"
+
+module trajectory_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "The header is used to specify the coordinate frame and the reference time for the trajectory durations")
+    struct MultiDOFJointTrajectory {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "A representation of a multi-dof joint trajectory (each point is a transformation)" "\n"
+        "Each point along the trajectory will include an array of positions/velocities/accelerations" "\n"
+        "that has the same length as the array of joint names, and has the same order of joints as" "\n"
+        "the joint names array.")
+      sequence<string> joint_names;
+
+      sequence<trajectory_msgs::msg::MultiDOFJointTrajectoryPoint> points;
+    };
+  };
+};

@@ -1,0 +1,4 @@
+source;share/dummy_robot_bringup/local_setup.bash
+source;share/dummy_robot_bringup/local_setup.dsv
+source;share/dummy_robot_bringup/local_setup.sh
+source;share/dummy_robot_bringup/local_setup.zsh

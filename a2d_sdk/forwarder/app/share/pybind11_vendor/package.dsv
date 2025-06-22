@@ -1,0 +1,4 @@
+source;share/pybind11_vendor/local_setup.bash
+source;share/pybind11_vendor/local_setup.dsv
+source;share/pybind11_vendor/local_setup.sh
+source;share/pybind11_vendor/local_setup.zsh

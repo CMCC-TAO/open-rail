@@ -1,0 +1,4 @@
+source;share/action_tutorials_cpp/local_setup.bash
+source;share/action_tutorials_cpp/local_setup.dsv
+source;share/action_tutorials_cpp/local_setup.sh
+source;share/action_tutorials_cpp/local_setup.zsh

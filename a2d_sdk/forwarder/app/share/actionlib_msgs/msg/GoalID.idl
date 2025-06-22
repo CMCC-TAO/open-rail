@@ -1,0 +1,23 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from actionlib_msgs/msg/GoalID.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Time.idl"
+
+module actionlib_msgs {
+  module msg {
+    struct GoalID {
+      @verbatim (language="comment", text=
+        "The stamp should store the time at which this goal was requested." "\n"
+        "It is used by an action server when it tries to preempt all" "\n"
+        "goals that were requested before a certain time")
+      builtin_interfaces::msg::Time stamp;
+
+      @verbatim (language="comment", text=
+        "The id provides a way to associate feedback and" "\n"
+        "result message with specific goal requests. The id" "\n"
+        "specified must be unique.")
+      string id;
+    };
+  };
+};

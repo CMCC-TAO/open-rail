@@ -1,0 +1,4 @@
+source;share/class_loader/local_setup.bash
+source;share/class_loader/local_setup.dsv
+source;share/class_loader/local_setup.sh
+source;share/class_loader/local_setup.zsh

@@ -1,0 +1,4 @@
+source;share/uncrustify_vendor/local_setup.bash
+source;share/uncrustify_vendor/local_setup.dsv
+source;share/uncrustify_vendor/local_setup.sh
+source;share/uncrustify_vendor/local_setup.zsh

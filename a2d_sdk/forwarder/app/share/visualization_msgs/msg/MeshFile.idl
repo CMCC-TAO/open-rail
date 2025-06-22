@@ -1,0 +1,21 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from visualization_msgs/msg/MeshFile.msg
+// generated code does not contain a copyright notice
+
+
+module visualization_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Used to send raw mesh files.")
+    struct MeshFile {
+      @verbatim (language="comment", text=
+        "The filename is used for both debug purposes and to provide a file extension" "\n"
+        "for whatever parser is used.")
+      string filename;
+
+      @verbatim (language="comment", text=
+        "This stores the raw text of the mesh file.")
+      sequence<uint8> data;
+    };
+  };
+};

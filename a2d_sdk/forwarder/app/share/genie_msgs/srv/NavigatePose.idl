@@ -1,0 +1,25 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/agv/NavigatePose.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "/sdk/nav/navigate_to_pose  #全局路径规划" "\n"
+      "/sdk/nav/move_relative     #相对位置移动")
+    struct NavigatePose_Request {
+      std_msgs::msg::Header header;
+
+      float x;
+
+      float y;
+
+      float theta;
+    };
+    struct NavigatePose_Response {
+      int32 error_code;
+    };
+  };
+};

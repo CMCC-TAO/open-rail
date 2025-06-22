@@ -1,0 +1,4 @@
+source;share/mcap_vendor/local_setup.bash
+source;share/mcap_vendor/local_setup.dsv
+source;share/mcap_vendor/local_setup.sh
+source;share/mcap_vendor/local_setup.zsh

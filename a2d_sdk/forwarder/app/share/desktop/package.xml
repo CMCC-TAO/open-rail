@@ -1,0 +1,74 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="2">
+  <name>desktop</name>
+  <version>0.10.0</version>
+  <description>A package which extends 'ros_base' and includes high level packages like vizualization tools and demos.</description>
+  <maintainer email="steven@openrobotics.org">Steven! Ragnarök</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>ros_base</exec_depend>
+
+  <exec_depend>angles</exec_depend>
+  <exec_depend>depthimage_to_laserscan</exec_depend>
+  <exec_depend>joy</exec_depend>
+  <exec_depend>pcl_conversions</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+  <exec_depend>rviz_default_plugins</exec_depend>
+  <exec_depend>teleop_twist_joy</exec_depend>
+  <exec_depend>teleop_twist_keyboard</exec_depend>
+
+  <!-- demos repo -->
+  <exec_depend>action_tutorials_cpp</exec_depend>
+  <exec_depend>action_tutorials_interfaces</exec_depend>
+  <exec_depend>action_tutorials_py</exec_depend>
+  <exec_depend>composition</exec_depend>
+  <exec_depend>demo_nodes_cpp</exec_depend>
+  <exec_depend>demo_nodes_cpp_native</exec_depend>
+  <exec_depend>demo_nodes_py</exec_depend>
+  <exec_depend>dummy_map_server</exec_depend>
+  <exec_depend>dummy_robot_bringup</exec_depend>
+  <exec_depend>dummy_sensors</exec_depend>
+  <exec_depend>image_tools</exec_depend>
+  <exec_depend>intra_process_demo</exec_depend>
+  <exec_depend>lifecycle</exec_depend>
+  <exec_depend>logging_demo</exec_depend>
+  <exec_depend>pendulum_control</exec_depend>
+  <exec_depend>pendulum_msgs</exec_depend>
+  <exec_depend>quality_of_service_demo_cpp</exec_depend>
+  <exec_depend>quality_of_service_demo_py</exec_depend>
+  <exec_depend>topic_monitor</exec_depend>
+
+  <!-- tlsf repo -->
+  <exec_depend>tlsf</exec_depend>
+  <exec_depend>tlsf_cpp</exec_depend>
+
+  <!-- examples repo -->
+  <exec_depend>examples_rclcpp_minimal_action_client</exec_depend>
+  <exec_depend>examples_rclcpp_minimal_action_server</exec_depend>
+  <exec_depend>examples_rclcpp_minimal_client</exec_depend>
+  <exec_depend>examples_rclcpp_minimal_composition</exec_depend>
+  <exec_depend>examples_rclcpp_minimal_publisher</exec_depend>
+  <exec_depend>examples_rclcpp_minimal_service</exec_depend>
+  <exec_depend>examples_rclcpp_minimal_subscriber</exec_depend>
+  <exec_depend>examples_rclcpp_minimal_timer</exec_depend>
+  <exec_depend>examples_rclcpp_multithreaded_executor</exec_depend>
+  <exec_depend>examples_rclpy_executors</exec_depend>
+  <exec_depend>examples_rclpy_minimal_action_client</exec_depend>
+  <exec_depend>examples_rclpy_minimal_action_server</exec_depend>
+  <exec_depend>examples_rclpy_minimal_client</exec_depend>
+  <exec_depend>examples_rclpy_minimal_publisher</exec_depend>
+  <exec_depend>examples_rclpy_minimal_service</exec_depend>
+  <exec_depend>examples_rclpy_minimal_subscriber</exec_depend>
+
+  <!-- rqt metapackages -->
+  <exec_depend>rqt_common_plugins</exec_depend>
+
+  <exec_depend>turtlesim</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

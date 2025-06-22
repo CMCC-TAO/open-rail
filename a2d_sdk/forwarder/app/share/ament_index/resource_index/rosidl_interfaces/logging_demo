@@ -1,0 +1,4 @@
+srv/ConfigLogger.idl
+srv/ConfigLogger.srv
+srv/ConfigLogger_Request.msg
+srv/ConfigLogger_Response.msg

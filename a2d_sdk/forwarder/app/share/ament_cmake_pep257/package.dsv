@@ -1,0 +1,4 @@
+source;share/ament_cmake_pep257/local_setup.bash
+source;share/ament_cmake_pep257/local_setup.dsv
+source;share/ament_cmake_pep257/local_setup.sh
+source;share/ament_cmake_pep257/local_setup.zsh

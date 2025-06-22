@@ -1,0 +1,36 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from map_msgs/srv/GetPointMapROI.srv
+// generated code does not contain a copyright notice
+
+#include "sensor_msgs/msg/PointCloud2.idl"
+
+module map_msgs {
+  module srv {
+    struct GetPointMapROI_Request {
+      double x;
+
+      double y;
+
+      double z;
+
+      @verbatim (language="comment", text=
+        "if != 0, circular ROI of radius r")
+      double r;
+
+      @verbatim (language="comment", text=
+        "if r == 0, length of AABB on x")
+      double l_x;
+
+      @verbatim (language="comment", text=
+        "if r == 0, length of AABB on y")
+      double l_y;
+
+      @verbatim (language="comment", text=
+        "if r == 0, length of AABB on z")
+      double l_z;
+    };
+    struct GetPointMapROI_Response {
+      sensor_msgs::msg::PointCloud2 sub_map;
+    };
+  };
+};

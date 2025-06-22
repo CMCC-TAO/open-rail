@@ -1,0 +1,4 @@
+source;share/sdl2_vendor/local_setup.bash
+source;share/sdl2_vendor/local_setup.dsv
+source;share/sdl2_vendor/local_setup.sh
+source;share/sdl2_vendor/local_setup.zsh

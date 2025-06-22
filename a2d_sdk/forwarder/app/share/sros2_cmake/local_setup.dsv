@@ -1,0 +1,2 @@
+source;share/sros2_cmake/environment/ament_prefix_path.sh
+source;share/sros2_cmake/environment/path.sh

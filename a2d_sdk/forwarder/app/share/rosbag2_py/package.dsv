@@ -1,0 +1,4 @@
+source;share/rosbag2_py/local_setup.bash
+source;share/rosbag2_py/local_setup.dsv
+source;share/rosbag2_py/local_setup.sh
+source;share/rosbag2_py/local_setup.zsh

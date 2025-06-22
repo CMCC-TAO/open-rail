@@ -1,0 +1,4 @@
+source;share/sros2_cmake/local_setup.bash
+source;share/sros2_cmake/local_setup.dsv
+source;share/sros2_cmake/local_setup.sh
+source;share/sros2_cmake/local_setup.zsh

@@ -1,0 +1,7 @@
+# /hal/map/map_list
+#获取所有地图列表
+std_msgs/Header header
+---
+int32[] map_id
+string[] map_name
+int32 error_code

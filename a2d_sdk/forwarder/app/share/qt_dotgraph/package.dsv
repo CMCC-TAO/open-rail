@@ -1,0 +1,4 @@
+source;share/qt_dotgraph/local_setup.bash
+source;share/qt_dotgraph/local_setup.dsv
+source;share/qt_dotgraph/local_setup.sh
+source;share/qt_dotgraph/local_setup.zsh

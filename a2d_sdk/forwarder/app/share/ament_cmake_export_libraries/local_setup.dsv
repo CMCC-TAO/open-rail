@@ -1,0 +1,2 @@
+source;share/ament_cmake_export_libraries/environment/ament_prefix_path.sh
+source;share/ament_cmake_export_libraries/environment/path.sh

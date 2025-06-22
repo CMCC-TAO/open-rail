@@ -1,0 +1,4 @@
+quality_of_service_demo::MessageLostListener;lib/libmessage_lost.so
+quality_of_service_demo::MessageLostTalker;lib/libmessage_lost.so
+quality_of_service_demo::QosOverridesListener;lib/libqos_overrides.so
+quality_of_service_demo::QosOverridesTalker;lib/libqos_overrides.so

@@ -1,0 +1,4 @@
+source;share/rcl_logging_interface/local_setup.bash
+source;share/rcl_logging_interface/local_setup.dsv
+source;share/rcl_logging_interface/local_setup.sh
+source;share/rcl_logging_interface/local_setup.zsh

@@ -1,0 +1,6 @@
+# /sdk/nav/navigate_to_pose  #全局路径规划
+# /sdk/nav/move_relative     #相对位置移动
+std_msgs/Header header
+float32 x         
+float32 y
+float32 theta

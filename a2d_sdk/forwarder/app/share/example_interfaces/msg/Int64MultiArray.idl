@@ -1,0 +1,25 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from example_interfaces/msg/Int64MultiArray.msg
+// generated code does not contain a copyright notice
+
+#include "example_interfaces/msg/MultiArrayLayout.idl"
+
+module example_interfaces {
+  module msg {
+    @verbatim (language="comment", text=
+      "This is an example of using complex datatypes." "\n"
+      "It is not recommended to use directly." "\n"
+      "To use a similar datastruct please define a custom message with appropriate semantic meaning.")
+    struct Int64MultiArray {
+      @verbatim (language="comment", text=
+        "Please look at the MultiArrayLayout message definition for" "\n"
+        "documentation on all multiarrays." "\n"
+        "specification of data layout")
+      example_interfaces::msg::MultiArrayLayout layout;
+
+      @verbatim (language="comment", text=
+        "array of data")
+      sequence<int64> data;
+    };
+  };
+};

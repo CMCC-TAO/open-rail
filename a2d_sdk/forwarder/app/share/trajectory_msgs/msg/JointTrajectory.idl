@@ -1,0 +1,27 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from trajectory_msgs/msg/JointTrajectory.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+#include "trajectory_msgs/msg/JointTrajectoryPoint.idl"
+
+module trajectory_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "The header is used to specify the coordinate frame and the reference time for" "\n"
+      "the trajectory durations")
+    struct JointTrajectory {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "The names of the active joints in each trajectory point. These names are" "\n"
+        "ordered and must correspond to the values in each trajectory point.")
+      sequence<string> joint_names;
+
+      @verbatim (language="comment", text=
+        "Array of trajectory points, which describe the positions, velocities," "\n"
+        "accelerations and/or efforts of the joints at each time point.")
+      sequence<trajectory_msgs::msg::JointTrajectoryPoint> points;
+    };
+  };
+};

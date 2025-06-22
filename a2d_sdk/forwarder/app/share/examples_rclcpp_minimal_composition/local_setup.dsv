@@ -1,0 +1,3 @@
+source;share/examples_rclcpp_minimal_composition/environment/ament_prefix_path.sh
+source;share/examples_rclcpp_minimal_composition/environment/library_path.sh
+source;share/examples_rclcpp_minimal_composition/environment/path.sh

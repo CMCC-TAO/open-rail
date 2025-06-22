@@ -1,0 +1,3 @@
+# /hal/nav/collision
+std_msgs/Header header
+int32 collision_level         # 避障等级1，2，3 ， 等级越高，越灵敏

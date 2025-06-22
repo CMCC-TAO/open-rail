@@ -1,0 +1,20 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from diagnostic_msgs/srv/SelfTest.srv
+// generated code does not contain a copyright notice
+
+#include "diagnostic_msgs/msg/DiagnosticStatus.idl"
+
+module diagnostic_msgs {
+  module srv {
+    struct SelfTest_Request {
+      uint8 structure_needs_at_least_one_member;
+    };
+    struct SelfTest_Response {
+      string id;
+
+      octet passed;
+
+      sequence<diagnostic_msgs::msg::DiagnosticStatus> status;
+    };
+  };
+};

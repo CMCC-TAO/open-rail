@@ -1,0 +1,4 @@
+source;share/launch_testing_ament_cmake/local_setup.bash
+source;share/launch_testing_ament_cmake/local_setup.dsv
+source;share/launch_testing_ament_cmake/local_setup.sh
+source;share/launch_testing_ament_cmake/local_setup.zsh

@@ -1,0 +1,4 @@
+source;share/rosidl_adapter/local_setup.bash
+source;share/rosidl_adapter/local_setup.dsv
+source;share/rosidl_adapter/local_setup.sh
+source;share/rosidl_adapter/local_setup.zsh

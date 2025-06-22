@@ -1,0 +1,4 @@
+source;share/orocos_kdl_vendor/local_setup.bash
+source;share/orocos_kdl_vendor/local_setup.dsv
+source;share/orocos_kdl_vendor/local_setup.sh
+source;share/orocos_kdl_vendor/local_setup.zsh

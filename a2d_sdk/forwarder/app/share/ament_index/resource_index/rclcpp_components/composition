@@ -1,0 +1,5 @@
+composition::Talker;lib/libtalker_component.so
+composition::Listener;lib/liblistener_component.so
+composition::NodeLikeListener;lib/libnode_like_listener_component.so
+composition::Server;lib/libserver_component.so
+composition::Client;lib/libclient_component.so

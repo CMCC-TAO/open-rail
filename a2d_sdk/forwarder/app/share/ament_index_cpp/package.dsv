@@ -1,0 +1,4 @@
+source;share/ament_index_cpp/local_setup.bash
+source;share/ament_index_cpp/local_setup.dsv
+source;share/ament_index_cpp/local_setup.sh
+source;share/ament_index_cpp/local_setup.zsh

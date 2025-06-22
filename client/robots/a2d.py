@@ -94,11 +94,22 @@ class RobotA2D():
         self.robot.shutdown()
 
 if __name__ == '__main__':
-    robot = RobotA2D()
+    import sys
+    import os
+    # 获取当前文件的绝对路径
+    current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    print(current_dir)
+    # 将当前目录添加到 sys.path
+    sys.path.append(current_dir)
+    from conf.config import get_client_config
+    config = get_client_config()
+    robot = RobotA2D(config.observer, config.controller)
     try:
         while True:
             result = robot.retrieveObservation()
-            print(result.keys())
+            if result is not None:
+                print(result.keys())
+                print(f'ref_timestamp: {result["ref_timestamp"]}, obs.state: {result["obs.state"]}')
             time.sleep(0.001)  # 控制循环频率
     except KeyboardInterrupt:
         robot.close()

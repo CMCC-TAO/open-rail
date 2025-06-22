@@ -1,0 +1,8 @@
+msg/Mesh.idl
+msg/Mesh.msg
+msg/MeshTriangle.idl
+msg/MeshTriangle.msg
+msg/Plane.idl
+msg/Plane.msg
+msg/SolidPrimitive.idl
+msg/SolidPrimitive.msg

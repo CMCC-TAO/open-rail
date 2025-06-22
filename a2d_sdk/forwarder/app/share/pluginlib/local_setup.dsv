@@ -1,0 +1,2 @@
+source;share/pluginlib/environment/ament_prefix_path.sh
+source;share/pluginlib/environment/path.sh

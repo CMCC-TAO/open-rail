@@ -1,0 +1,3 @@
+source;share/image_tools/environment/ament_prefix_path.sh
+source;share/image_tools/environment/library_path.sh
+source;share/image_tools/environment/path.sh

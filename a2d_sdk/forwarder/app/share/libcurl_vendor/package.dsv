@@ -1,0 +1,4 @@
+source;share/libcurl_vendor/local_setup.bash
+source;share/libcurl_vendor/local_setup.dsv
+source;share/libcurl_vendor/local_setup.sh
+source;share/libcurl_vendor/local_setup.zsh

@@ -1,0 +1,27 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/perception/BevObject.msg
+// generated code does not contain a copyright notice
+
+#include "genie_msgs/msg/Point3D.idl"
+
+module genie_msgs {
+  module msg {
+    struct BevObject {
+      sequence<genie_msgs::msg::Point3D> pos;
+
+      sequence<genie_msgs::msg::Point3D> size;
+
+      sequence<genie_msgs::msg::Point3D> polygon;
+
+      sequence<genie_msgs::msg::Point3D> velocity;
+
+      sequence<genie_msgs::msg::Point3D> acceleration;
+
+      sequence<genie_msgs::msg::Point3D> euler_angle;
+
+      sequence<genie_msgs::msg::Point3D> euler_angle_rate;
+
+      float confidence;
+    };
+  };
+};

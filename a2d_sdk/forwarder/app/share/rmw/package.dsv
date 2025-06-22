@@ -1,0 +1,4 @@
+source;share/rmw/local_setup.bash
+source;share/rmw/local_setup.dsv
+source;share/rmw/local_setup.sh
+source;share/rmw/local_setup.zsh

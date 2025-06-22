@@ -1,0 +1,25 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from visualization_msgs/srv/GetInteractiveMarkers.srv
+// generated code does not contain a copyright notice
+
+#include "visualization_msgs/msg/InteractiveMarker.idl"
+
+module visualization_msgs {
+  module srv {
+    struct GetInteractiveMarkers_Request {
+      uint8 structure_needs_at_least_one_member;
+    };
+    @verbatim (language="comment", text=
+      "Sequence number." "\n"
+      "Set to the sequence number of the latest update message" "\n"
+      "at the time the server received the request." "\n"
+      "Clients use this to detect if any updates were missed.")
+    struct GetInteractiveMarkers_Response {
+      uint64 sequence_number;
+
+      @verbatim (language="comment", text=
+        "All interactive markers provided by the server.")
+      sequence<visualization_msgs::msg::InteractiveMarker> markers;
+    };
+  };
+};

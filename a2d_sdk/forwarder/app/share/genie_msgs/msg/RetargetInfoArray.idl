@@ -1,0 +1,13 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/motion_control/RetargetInfoArray.msg
+// generated code does not contain a copyright notice
+
+#include "genie_msgs/msg/RetargetInfo.idl"
+
+module genie_msgs {
+  module msg {
+    struct RetargetInfoArray {
+      sequence<genie_msgs::msg::RetargetInfo> retarget_infos;
+    };
+  };
+};

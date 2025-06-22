@@ -1,0 +1,18 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from rosbag2_interfaces/srv/Seek.srv
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Time.idl"
+
+module rosbag2_interfaces {
+  module srv {
+    struct Seek_Request {
+      builtin_interfaces::msg::Time time;
+    };
+    struct Seek_Response {
+      @verbatim (language="comment", text=
+        "return true if valid time in bag duration, and successful seek")
+      boolean success;
+    };
+  };
+};

@@ -1,0 +1,32 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from nav_msgs/srv/GetPlan.srv
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/PoseStamped.idl"
+#include "nav_msgs/msg/Path.idl"
+
+module nav_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "Get a plan from the current position to the goal Pose")
+    struct GetPlan_Request {
+      @verbatim (language="comment", text=
+        "The start pose for the plan")
+      geometry_msgs::msg::PoseStamped start;
+
+      @verbatim (language="comment", text=
+        "The final pose of the goal position")
+      geometry_msgs::msg::PoseStamped goal;
+
+      @verbatim (language="comment", text=
+        "If the goal is obstructed, how many meters the planner can" "\n"
+        "relax the constraint in x and y before failing.")
+      float tolerance;
+    };
+    @verbatim (language="comment", text=
+      "Array of poses from start to goal if one was successfully found.")
+    struct GetPlan_Response {
+      nav_msgs::msg::Path plan;
+    };
+  };
+};

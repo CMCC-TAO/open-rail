@@ -1,0 +1,29 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from visualization_msgs/msg/InteractiveMarkerInit.msg
+// generated code does not contain a copyright notice
+
+#include "visualization_msgs/msg/InteractiveMarker.idl"
+
+module visualization_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Identifying string. Must be unique in the topic namespace" "\n"
+      "that this server works on.")
+    struct InteractiveMarkerInit {
+      string server_id;
+
+      @verbatim (language="comment", text=
+        "Sequence number." "\n"
+        "The client will use this to detect if it has missed a subsequent" "\n"
+        "update.  Every update message will have the same sequence number as" "\n"
+        "an init message.  Clients will likely want to unsubscribe from the" "\n"
+        "init topic after a successful initialization to avoid receiving" "\n"
+        "duplicate data.")
+      uint64 seq_num;
+
+      @verbatim (language="comment", text=
+        "All markers.")
+      sequence<visualization_msgs::msg::InteractiveMarker> markers;
+    };
+  };
+};

@@ -1,0 +1,2 @@
+source;share/rosidl_runtime_cpp/environment/ament_prefix_path.sh
+source;share/rosidl_runtime_cpp/environment/path.sh

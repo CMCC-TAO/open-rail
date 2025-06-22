@@ -1,0 +1,4 @@
+source;share/fastrtps_cmake_module/local_setup.bash
+source;share/fastrtps_cmake_module/local_setup.dsv
+source;share/fastrtps_cmake_module/local_setup.sh
+source;share/fastrtps_cmake_module/local_setup.zsh

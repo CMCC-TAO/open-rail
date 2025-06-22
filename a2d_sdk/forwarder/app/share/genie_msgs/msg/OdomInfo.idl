@@ -1,0 +1,44 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/slam/OdomInfo.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Time.idl"
+#include "geometry_msgs/msg/Point.idl"
+#include "geometry_msgs/msg/Quaternion.idl"
+#include "geometry_msgs/msg/Vector3.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    typedef float float__36[36];
+    struct OdomInfo {
+      std_msgs::msg::Header header;
+
+      builtin_interfaces::msg::Time measuring_ts;
+
+      builtin_interfaces::msg::Time publish_ts;
+
+      string frame_id;
+
+      string child_frame_id;
+
+      sequence<float> velocity;
+
+      sequence<float> velocity_body;
+
+      sequence<float> acceleration;
+
+      sequence<float> ang_vel;
+
+      boolean is_slipping;
+
+      geometry_msgs::msg::Point position;
+
+      geometry_msgs::msg::Quaternion orientation_quat;
+
+      geometry_msgs::msg::Vector3 orientation_euler;
+
+      float__36 covariance;
+    };
+  };
+};

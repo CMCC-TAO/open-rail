@@ -1,0 +1,4 @@
+source;share/rosidl_typesupport_introspection_c/environment/ament_prefix_path.sh
+source;share/rosidl_typesupport_introspection_c/environment/library_path.sh
+source;share/rosidl_typesupport_introspection_c/environment/path.sh
+source;share/rosidl_typesupport_introspection_c/environment/pythonpath.sh

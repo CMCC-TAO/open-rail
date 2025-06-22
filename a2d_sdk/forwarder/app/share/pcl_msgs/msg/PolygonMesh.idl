@@ -1,0 +1,25 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from pcl_msgs/msg/PolygonMesh.msg
+// generated code does not contain a copyright notice
+
+#include "pcl_msgs/msg/Vertices.idl"
+#include "sensor_msgs/msg/PointCloud2.idl"
+#include "std_msgs/msg/Header.idl"
+
+module pcl_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Separate header for the polygonal surface")
+    struct PolygonMesh {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "Vertices of the mesh as a point cloud")
+      sensor_msgs::msg::PointCloud2 cloud;
+
+      @verbatim (language="comment", text=
+        "List of polygons")
+      sequence<pcl_msgs::msg::Vertices> polygons;
+    };
+  };
+};

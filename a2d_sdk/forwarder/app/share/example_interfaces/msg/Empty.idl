@@ -1,0 +1,15 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from example_interfaces/msg/Empty.msg
+// generated code does not contain a copyright notice
+
+
+module example_interfaces {
+  module msg {
+    @verbatim (language="comment", text=
+      "If you want to test with this that's fine, but if you are deploying" "\n"
+      "it into a system you should create a semantically meaningful message type.")
+    struct Empty {
+      uint8 structure_needs_at_least_one_member;
+    };
+  };
+};

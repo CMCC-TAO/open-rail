@@ -1,0 +1,16 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from map_msgs/srv/ProjectedMapsInfo.srv
+// generated code does not contain a copyright notice
+
+#include "map_msgs/msg/ProjectedMapInfo.idl"
+
+module map_msgs {
+  module srv {
+    struct ProjectedMapsInfo_Request {
+      sequence<map_msgs::msg::ProjectedMapInfo> projected_maps_info;
+    };
+    struct ProjectedMapsInfo_Response {
+      uint8 structure_needs_at_least_one_member;
+    };
+  };
+};

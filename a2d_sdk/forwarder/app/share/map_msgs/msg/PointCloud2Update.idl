@@ -1,0 +1,24 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from map_msgs/msg/PointCloud2Update.msg
+// generated code does not contain a copyright notice
+
+#include "sensor_msgs/msg/PointCloud2.idl"
+#include "std_msgs/msg/Header.idl"
+
+module map_msgs {
+  module msg {
+    module PointCloud2Update_Constants {
+      const uint32 ADD = 0;
+      const uint32 DELETE = 1;
+    };
+    struct PointCloud2Update {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "type of update, one of ADD or DELETE")
+      uint32 type;
+
+      sensor_msgs::msg::PointCloud2 points;
+    };
+  };
+};

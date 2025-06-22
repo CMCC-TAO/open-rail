@@ -1,0 +1,47 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/motion_control/MotionControlStatus.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Pose.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    module MotionControlStatus_Constants {
+      @verbatim (language="comment", text=
+        "运控模式")
+      const uint8 MODE_STOP = 0;
+      const uint8 MODE_SERVO = 1;
+      const uint8 MODE_PLANNING = 2;
+    };
+    struct MotionControlStatus {
+      @verbatim (language="comment", text=
+        "frame id 默认填写base_link, timestamp发送时间")
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        " 反馈末端位姿状态" "\n"
+        "运控参数配置定义")
+      sequence<string> frame_names;
+
+      sequence<geometry_msgs::msg::Pose> frame_poses;
+
+      @verbatim (language="comment", text=
+        "反馈自碰撞状态" "\n"
+        "[collision_pair_1， collision_pair_2]组成一组碰撞对的frame名称")
+      @unit (value="collision_pair_1， collision_pair_2")
+      sequence<string> collision_pairs_1;
+
+      sequence<string> collision_pairs_2;
+
+      uint8 mode;
+
+      @verbatim (language="comment", text=
+        "实时控制的运控错误码" "\n"
+        "0: no error")
+      uint8 error_code;
+
+      string error_msg;
+    };
+  };
+};

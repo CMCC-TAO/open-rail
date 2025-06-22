@@ -1,0 +1,24 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from map_msgs/msg/ProjectedMapInfo.msg
+// generated code does not contain a copyright notice
+
+
+module map_msgs {
+  module msg {
+    struct ProjectedMapInfo {
+      string frame_id;
+
+      double x;
+
+      double y;
+
+      double width;
+
+      double height;
+
+      double min_z;
+
+      double max_z;
+    };
+  };
+};

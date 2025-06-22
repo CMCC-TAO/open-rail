@@ -1,0 +1,109 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/hal/peri/PeriCmd.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct PeriCmd {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "下电ready反馈")
+      uint8 compute_center_ready_shut_down;
+
+      @verbatim (language="comment", text=
+        "软急停")
+      uint8 soft_emergency_stop;
+
+      @verbatim (language="comment", text=
+        "重启HUB请求-当前是camera")
+      uint8 hub1_reset_request;
+
+      @verbatim (language="comment", text=
+        "重启HUB请求-键鼠wifi-usbdebug")
+      uint8 hub2_reset_request;
+
+      @verbatim (language="comment", text=
+        "左臂重启请求")
+      uint8 left_arm_reset_request;
+
+      @verbatim (language="comment", text=
+        "右臂重启请求")
+      uint8 right_arm_reset_request;
+
+      @verbatim (language="comment", text=
+        "左手/左夹爪重启请求")
+      uint8 left_end_reset_request;
+
+      @verbatim (language="comment", text=
+        "右手/右夹爪重启请求")
+      uint8 right_end_reset_request;
+
+      @verbatim (language="comment", text=
+        "腰部俯仰电机重启请求")
+      uint8 waist_pitch_motor_reset_request;
+
+      @verbatim (language="comment", text=
+        "升降电机重启请求")
+      uint8 lift_motor_reset_request;
+
+      @verbatim (language="comment", text=
+        "头部yaw电机重启请求")
+      uint8 head_yaw_motor_reset_request;
+
+      @verbatim (language="comment", text=
+        "头部pitch电机重启请求")
+      uint8 head_pitch_motor_reset_request;
+
+      @verbatim (language="comment", text=
+        "agv重启请求")
+      uint8 agv_reset_request;
+
+      @verbatim (language="comment", text=
+        "orin的工作模式")
+      uint8 work_mode;
+
+      @verbatim (language="comment", text=
+        "orin的工作模式的具体状态")
+      uint8 feature_status;
+
+      @verbatim (language="comment", text=
+        "左臂开启/关闭请求")
+      uint8 left_arm_power_ctrl_req;
+
+      @verbatim (language="comment", text=
+        "右臂开启/关闭请求")
+      uint8 right_arm_power_ctrl_req;
+
+      @verbatim (language="comment", text=
+        "左手/左夹爪开启/关闭请求")
+      uint8 left_end_power_ctrl_req;
+
+      @verbatim (language="comment", text=
+        "右手/右夹爪开启/关闭请求")
+      uint8 right_end_power_ctrl_req;
+
+      @verbatim (language="comment", text=
+        "腰部俯仰电机开启/关闭请求")
+      uint8 waist_pitch_motor_power_ctrl_req;
+
+      @verbatim (language="comment", text=
+        "升降电机开启/关闭请求")
+      uint8 lift_motor_power_ctrl_req;
+
+      @verbatim (language="comment", text=
+        "头部yaw电机开启/关闭请求")
+      uint8 head_yaw_motor_power_ctrl_req;
+
+      @verbatim (language="comment", text=
+        "头部pitch电机开启/关闭请求")
+      uint8 head_pitch_motor_power_ctrl_req;
+
+      @verbatim (language="comment", text=
+        "agv开启/关闭请求")
+      uint8 agv_power_ctrl_req;
+    };
+  };
+};

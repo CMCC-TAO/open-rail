@@ -1,0 +1,4 @@
+source;share/rqt_py_common/local_setup.bash
+source;share/rqt_py_common/local_setup.dsv
+source;share/rqt_py_common/local_setup.sh
+source;share/rqt_py_common/local_setup.zsh

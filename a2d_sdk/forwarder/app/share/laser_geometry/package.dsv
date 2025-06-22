@@ -1,0 +1,4 @@
+source;share/laser_geometry/local_setup.bash
+source;share/laser_geometry/local_setup.dsv
+source;share/laser_geometry/local_setup.sh
+source;share/laser_geometry/local_setup.zsh

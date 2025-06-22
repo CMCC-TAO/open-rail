@@ -1,0 +1,4 @@
+source;share/pluginlib/local_setup.bash
+source;share/pluginlib/local_setup.dsv
+source;share/pluginlib/local_setup.sh
+source;share/pluginlib/local_setup.zsh

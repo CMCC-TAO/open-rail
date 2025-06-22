@@ -1,0 +1,4 @@
+source;share/resource_retriever/local_setup.bash
+source;share/resource_retriever/local_setup.dsv
+source;share/resource_retriever/local_setup.sh
+source;share/resource_retriever/local_setup.zsh

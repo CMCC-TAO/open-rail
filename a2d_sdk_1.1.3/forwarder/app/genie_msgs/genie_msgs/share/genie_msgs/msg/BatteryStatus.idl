@@ -1,0 +1,37 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/hal/energy/BatteryStatus.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct BatteryStatus {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "单位: %, 0~100 @TODO: 和供应商统一")
+      float energy;
+
+      @verbatim (language="comment", text=
+        "单位: V")
+      float voltage;
+
+      @verbatim (language="comment", text=
+        "单位: A")
+      float current;
+
+      @verbatim (language="comment", text=
+        "单位: Ah")
+      float capacity;
+
+      @verbatim (language="comment", text=
+        "单位: ℃")
+      float temperature;
+
+      @verbatim (language="comment", text=
+        "0: unknown, 1: charging, 2: discharging, 3: not charging, 4: full, 5: empty")
+      uint8 status;
+    };
+  };
+};

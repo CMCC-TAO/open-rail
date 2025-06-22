@@ -1,0 +1,29 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/voice/TtsRequest.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "提供请求文本信息进行语音播放的服务" "\n"
+      "服务名:  /voice/tts/test")
+    struct TtsRequest_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "文本内容")
+      string tts_text;
+
+      @verbatim (language="comment", text=
+        "请求方")
+      string requester;
+    };
+    struct TtsRequest_Response {
+      @verbatim (language="comment", text=
+        "0: success")
+      uint32 result;
+    };
+  };
+};

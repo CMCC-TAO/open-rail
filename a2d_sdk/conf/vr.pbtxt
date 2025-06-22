@@ -1,0 +1,5 @@
+mode: COPILOT
+hybrid_deploy_config {
+  use_cosine_sdk: true
+  camera_model: "vr"
+}

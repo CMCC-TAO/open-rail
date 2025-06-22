@@ -1,0 +1,4 @@
+source;share/python_cmake_module/local_setup.bash
+source;share/python_cmake_module/local_setup.dsv
+source;share/python_cmake_module/local_setup.sh
+source;share/python_cmake_module/local_setup.zsh

@@ -1,0 +1,29 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from nav_msgs/msg/OccupancyGrid.msg
+// generated code does not contain a copyright notice
+
+#include "nav_msgs/msg/MapMetaData.idl"
+#include "std_msgs/msg/Header.idl"
+
+module nav_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "This represents a 2-D grid map")
+    struct OccupancyGrid {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "MetaData for the map")
+      nav_msgs::msg::MapMetaData info;
+
+      @verbatim (language="comment", text=
+        "The map data, in row-major order, starting with (0,0)." "\n"
+        "Cell (1, 0) will be listed second, representing the next cell in the x direction." "\n"
+        "Cell (0, 1) will be at the index equal to info.width, followed by (1, 1)." "\n"
+        "The values inside are application dependent, but frequently," "\n"
+        "0 represents unoccupied, 1 represents definitely occupied, and" "\n"
+        "-1 represents unknown.")
+      sequence<int8> data;
+    };
+  };
+};

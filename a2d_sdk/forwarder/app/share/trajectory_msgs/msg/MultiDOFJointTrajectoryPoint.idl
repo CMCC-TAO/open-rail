@@ -1,0 +1,29 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from trajectory_msgs/msg/MultiDOFJointTrajectoryPoint.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Duration.idl"
+#include "geometry_msgs/msg/Transform.idl"
+#include "geometry_msgs/msg/Twist.idl"
+
+module trajectory_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Each multi-dof joint can specify a transform (up to 6 DOF).")
+    struct MultiDOFJointTrajectoryPoint {
+      sequence<geometry_msgs::msg::Transform> transforms;
+
+      @verbatim (language="comment", text=
+        "There can be a velocity specified for the origin of the joint.")
+      sequence<geometry_msgs::msg::Twist> velocities;
+
+      @verbatim (language="comment", text=
+        "There can be an acceleration specified for the origin of the joint.")
+      sequence<geometry_msgs::msg::Twist> accelerations;
+
+      @verbatim (language="comment", text=
+        "Desired time from the trajectory start to arrive at this trajectory point.")
+      builtin_interfaces::msg::Duration time_from_start;
+    };
+  };
+};

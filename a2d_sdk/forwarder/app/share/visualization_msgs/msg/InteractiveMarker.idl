@@ -1,0 +1,48 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from visualization_msgs/msg/InteractiveMarker.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Pose.idl"
+#include "std_msgs/msg/Header.idl"
+#include "visualization_msgs/msg/InteractiveMarkerControl.idl"
+#include "visualization_msgs/msg/MenuEntry.idl"
+
+module visualization_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Time/frame info." "\n"
+      "If header.time is set to 0, the marker will be retransformed into" "\n"
+      "its frame on each timestep. You will receive the pose feedback" "\n"
+      "in the same frame." "\n"
+      "Otherwise, you might receive feedback in a different frame." "\n"
+      "For rviz, this will be the current 'fixed frame' set by the user.")
+    struct InteractiveMarker {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "Initial pose. Also, defines the pivot point for rotations.")
+      geometry_msgs::msg::Pose pose;
+
+      @verbatim (language="comment", text=
+        "Identifying string. Must be globally unique in" "\n"
+        "the topic that this message is sent through.")
+      string name;
+
+      @verbatim (language="comment", text=
+        "Short description (< 40 characters).")
+      string description;
+
+      @verbatim (language="comment", text=
+        "Scale to be used for default controls (default=1).")
+      float scale;
+
+      @verbatim (language="comment", text=
+        "All menu and submenu entries associated with this marker.")
+      sequence<visualization_msgs::msg::MenuEntry> menu_entries;
+
+      @verbatim (language="comment", text=
+        "List of controls displayed for this marker.")
+      sequence<visualization_msgs::msg::InteractiveMarkerControl> controls;
+    };
+  };
+};

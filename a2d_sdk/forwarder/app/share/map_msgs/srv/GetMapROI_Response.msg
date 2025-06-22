@@ -1,0 +1,2 @@
+
+nav_msgs/OccupancyGrid sub_map

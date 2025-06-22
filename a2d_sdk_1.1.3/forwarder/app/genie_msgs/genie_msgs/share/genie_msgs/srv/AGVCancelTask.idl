@@ -1,0 +1,30 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/agv/AGVCancelTask.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    struct AGVCancelTask_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "任务执行编号")
+      string task_uuid;
+    };
+    struct AGVCancelTask_Response {
+      std_msgs::msg::Header res_header;
+
+      uint32 req_result;
+
+      @verbatim (language="comment", text=
+        "0:成功，其他失败")
+      uint32 ret_code;
+
+      @verbatim (language="comment", text=
+        "任务编号(由底盘生成）")
+      uint32 task_uuid;
+    };
+  };
+};

@@ -1,0 +1,4 @@
+source;share/rmw_dds_common/environment/ament_prefix_path.sh
+source;share/rmw_dds_common/environment/library_path.sh
+source;share/rmw_dds_common/environment/path.sh
+source;share/rmw_dds_common/environment/pythonpath.sh

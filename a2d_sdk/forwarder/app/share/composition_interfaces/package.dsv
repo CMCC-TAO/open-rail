@@ -1,0 +1,4 @@
+source;share/composition_interfaces/local_setup.bash
+source;share/composition_interfaces/local_setup.dsv
+source;share/composition_interfaces/local_setup.sh
+source;share/composition_interfaces/local_setup.zsh

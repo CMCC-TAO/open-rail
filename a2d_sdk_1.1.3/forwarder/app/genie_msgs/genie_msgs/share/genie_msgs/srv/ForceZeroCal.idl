@@ -1,0 +1,20 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/arm/ForceZeroCal.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    struct ForceZeroCal_Request {
+      std_msgs::msg::Header header;
+    };
+    struct ForceZeroCal_Response {
+      std_msgs::msg::Header res_header;
+
+      @verbatim (language="comment", text=
+        "0: success, 1: failed")
+      uint8 exec_result;
+    };
+  };
+};

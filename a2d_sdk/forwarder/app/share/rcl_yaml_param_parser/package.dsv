@@ -1,0 +1,4 @@
+source;share/rcl_yaml_param_parser/local_setup.bash
+source;share/rcl_yaml_param_parser/local_setup.dsv
+source;share/rcl_yaml_param_parser/local_setup.sh
+source;share/rcl_yaml_param_parser/local_setup.zsh

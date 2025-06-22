@@ -1,0 +1,41 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from diagnostic_msgs/msg/DiagnosticStatus.msg
+// generated code does not contain a copyright notice
+
+#include "diagnostic_msgs/msg/KeyValue.idl"
+
+module diagnostic_msgs {
+  module msg {
+    module DiagnosticStatus_Constants {
+      @verbatim (language="comment", text=
+        "Possible levels of operations.")
+      const octet OK = 0;
+      const octet WARN = 1;
+      const octet ERROR = 2;
+      const octet STALE = 3;
+    };
+    @verbatim (language="comment", text=
+      "This message holds the status of an individual component of the robot.")
+    struct DiagnosticStatus {
+      @verbatim (language="comment", text=
+        "Level of operation enumerated above.")
+      octet level;
+
+      @verbatim (language="comment", text=
+        "A description of the test/component reporting.")
+      string name;
+
+      @verbatim (language="comment", text=
+        "A description of the status.")
+      string message;
+
+      @verbatim (language="comment", text=
+        "A hardware unique string.")
+      string hardware_id;
+
+      @verbatim (language="comment", text=
+        "An array of values associated with the status.")
+      sequence<diagnostic_msgs::msg::KeyValue> values;
+    };
+  };
+};

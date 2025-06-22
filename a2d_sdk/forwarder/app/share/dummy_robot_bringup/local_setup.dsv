@@ -1,0 +1,2 @@
+source;share/dummy_robot_bringup/environment/ament_prefix_path.sh
+source;share/dummy_robot_bringup/environment/path.sh

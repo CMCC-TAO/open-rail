@@ -1,0 +1,4 @@
+source;share/rttest/local_setup.bash
+source;share/rttest/local_setup.dsv
+source;share/rttest/local_setup.sh
+source;share/rttest/local_setup.zsh

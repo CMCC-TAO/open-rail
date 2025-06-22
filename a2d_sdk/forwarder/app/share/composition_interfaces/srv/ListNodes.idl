@@ -1,0 +1,21 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from composition_interfaces/srv/ListNodes.srv
+// generated code does not contain a copyright notice
+
+
+module composition_interfaces {
+  module srv {
+    struct ListNodes_Request {
+      uint8 structure_needs_at_least_one_member;
+    };
+    @verbatim (language="comment", text=
+      "List of full node names including namespace.")
+    struct ListNodes_Response {
+      sequence<string> full_node_names;
+
+      @verbatim (language="comment", text=
+        "corresponding unique ids (must have same length as full_node_names).")
+      sequence<uint64> unique_ids;
+    };
+  };
+};

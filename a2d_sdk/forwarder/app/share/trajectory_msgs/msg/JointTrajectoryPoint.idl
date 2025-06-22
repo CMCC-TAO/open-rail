@@ -1,0 +1,43 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from trajectory_msgs/msg/JointTrajectoryPoint.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Duration.idl"
+
+module trajectory_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Each trajectory point specifies either positions[, velocities[, accelerations]]" "\n"
+      "or positions[, effort] for the trajectory to be executed." "\n"
+      "All specified values are in the same order as the joint names in JointTrajectory.msg.")
+    struct JointTrajectoryPoint {
+      @verbatim (language="comment", text=
+        "Single DOF joint positions for each joint relative to their \"0\" position." "\n"
+        "The units depend on the specific joint type: radians for revolute or" "\n"
+        "continuous joints, and meters for prismatic joints.")
+      sequence<double> positions;
+
+      @verbatim (language="comment", text=
+        "The rate of change in position of each joint. Units are joint type dependent." "\n"
+        "Radians/second for revolute or continuous joints, and meters/second for" "\n"
+        "prismatic joints.")
+      sequence<double> velocities;
+
+      @verbatim (language="comment", text=
+        "Rate of change in velocity of each joint. Units are joint type dependent." "\n"
+        "Radians/second^2 for revolute or continuous joints, and meters/second^2 for" "\n"
+        "prismatic joints.")
+      sequence<double> accelerations;
+
+      @verbatim (language="comment", text=
+        "The torque or the force to be applied at each joint. For revolute/continuous" "\n"
+        "joints effort denotes a torque in newton-meters. For prismatic joints, effort" "\n"
+        "denotes a force in newtons.")
+      sequence<double> effort;
+
+      @verbatim (language="comment", text=
+        "Desired time from the trajectory start to arrive at this trajectory point.")
+      builtin_interfaces::msg::Duration time_from_start;
+    };
+  };
+};

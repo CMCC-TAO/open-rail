@@ -1,0 +1,4 @@
+# generated from rosidl_cmake/cmake/rosidl_cmake-extras.cmake.in
+
+set(map_msgs_IDL_FILES "msg/OccupancyGridUpdate.idl;msg/PointCloud2Update.idl;msg/ProjectedMapInfo.idl;msg/ProjectedMap.idl;srv/GetMapROI.idl;srv/GetPointMapROI.idl;srv/GetPointMap.idl;srv/ProjectedMapsInfo.idl;srv/SaveMap.idl;srv/SetMapProjections.idl")
+set(map_msgs_INTERFACE_FILES "msg/OccupancyGridUpdate.msg;msg/PointCloud2Update.msg;msg/ProjectedMapInfo.msg;msg/ProjectedMap.msg;srv/GetMapROI.srv;srv/GetMapROI_Request.msg;srv/GetMapROI_Response.msg;srv/GetPointMapROI.srv;srv/GetPointMapROI_Request.msg;srv/GetPointMapROI_Response.msg;srv/GetPointMap.srv;srv/GetPointMap_Request.msg;srv/GetPointMap_Response.msg;srv/ProjectedMapsInfo.srv;srv/ProjectedMapsInfo_Request.msg;srv/ProjectedMapsInfo_Response.msg;srv/SaveMap.srv;srv/SaveMap_Request.msg;srv/SaveMap_Response.msg;srv/SetMapProjections.srv;srv/SetMapProjections_Request.msg;srv/SetMapProjections_Response.msg")

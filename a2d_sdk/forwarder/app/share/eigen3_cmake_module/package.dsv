@@ -1,0 +1,4 @@
+source;share/eigen3_cmake_module/local_setup.bash
+source;share/eigen3_cmake_module/local_setup.dsv
+source;share/eigen3_cmake_module/local_setup.sh
+source;share/eigen3_cmake_module/local_setup.zsh

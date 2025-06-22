@@ -1,0 +1,11 @@
+source;share/ros_environment/environment/0.ros_distro_check.sh
+source;share/ros_environment/environment/1.ros_distro.sh
+source;share/ros_environment/environment/1.ros_localhost_only.sh
+source;share/ros_environment/environment/1.ros_python_version.sh
+source;share/ros_environment/environment/1.ros_version.sh
+source;share/ros_environment/environment/ament_prefix_path.sh
+source;share/ros_environment/environment/path.sh
+source;share/ros_environment/environment/1.ros_distro.dsv
+source;share/ros_environment/environment/1.ros_localhost_only.dsv
+source;share/ros_environment/environment/1.ros_python_version.dsv
+source;share/ros_environment/environment/1.ros_version.dsv

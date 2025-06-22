@@ -1,0 +1,24 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/fault_manager/PublicFaultMsg.msg
+// generated code does not contain a copyright notice
+
+#include "genie_msgs/msg/FaultType.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct PublicFaultMsg {
+      std_msgs::msg::Header header;
+
+      sequence<genie_msgs::msg::FaultType> fault_codes;
+
+      uint64 publish_ptp_ts;
+
+      string publisher_id;
+
+      uint64 counter;
+
+      uint64 publish_ts;
+    };
+  };
+};

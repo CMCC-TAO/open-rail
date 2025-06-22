@@ -1,0 +1,4 @@
+source;share/unique_identifier_msgs/local_setup.bash
+source;share/unique_identifier_msgs/local_setup.dsv
+source;share/unique_identifier_msgs/local_setup.sh
+source;share/unique_identifier_msgs/local_setup.zsh

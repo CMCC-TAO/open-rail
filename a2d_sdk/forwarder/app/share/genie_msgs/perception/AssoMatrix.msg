@@ -1,0 +1,3 @@
+int32 sensor_type
+builtin_interfaces/Time sensor_time
+int32 asso_index

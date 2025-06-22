@@ -1,0 +1,19 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from actionlib_msgs/msg/GoalStatusArray.msg
+// generated code does not contain a copyright notice
+
+#include "actionlib_msgs/msg/GoalStatus.idl"
+#include "std_msgs/msg/Header.idl"
+
+module actionlib_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Stores the statuses for goals that are currently being tracked" "\n"
+      "by an action server")
+    struct GoalStatusArray {
+      std_msgs::msg::Header header;
+
+      sequence<actionlib_msgs::msg::GoalStatus> status_list;
+    };
+  };
+};

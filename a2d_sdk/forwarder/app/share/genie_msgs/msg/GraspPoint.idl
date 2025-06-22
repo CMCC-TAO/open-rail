@@ -1,0 +1,23 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/perception/GraspPoint.msg
+// generated code does not contain a copyright notice
+
+#include "genie_msgs/msg/Point3D.idl"
+
+module genie_msgs {
+  module msg {
+    struct GraspPoint {
+      sequence<genie_msgs::msg::Point3D> pos;
+
+      sequence<genie_msgs::msg::Point3D> direction;
+
+      sequence<genie_msgs::msg::Point3D> in_plane_rotation;
+
+      sequence<float> depth;
+
+      sequence<float> width;
+
+      sequence<float> score;
+    };
+  };
+};

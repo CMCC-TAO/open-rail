@@ -1,0 +1,5 @@
+uint8 r
+uint8 g
+uint8 b
+uint8 width
+uint8 off

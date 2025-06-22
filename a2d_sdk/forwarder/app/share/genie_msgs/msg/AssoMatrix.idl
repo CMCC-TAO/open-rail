@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/perception/AssoMatrix.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Time.idl"
+
+module genie_msgs {
+  module msg {
+    struct AssoMatrix {
+      int32 sensor_type;
+
+      builtin_interfaces::msg::Time sensor_time;
+
+      int32 asso_index;
+    };
+  };
+};

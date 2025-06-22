@@ -1,0 +1,4 @@
+source;share/resource_retriever/environment/ament_prefix_path.sh
+source;share/resource_retriever/environment/library_path.sh
+source;share/resource_retriever/environment/path.sh
+source;share/resource_retriever/environment/pythonpath.sh

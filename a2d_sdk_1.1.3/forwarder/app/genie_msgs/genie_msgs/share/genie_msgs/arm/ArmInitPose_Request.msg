@@ -1,0 +1,4 @@
+std_msgs/Header     header
+uint32              arm_sel       # 0 = left, 1 = right, 2 = both
+uint32              reset_mode    # 0 = no reset, 1 = reset to set pose, 2 = reset to default pose
+bool                block         # true: sync, false: async

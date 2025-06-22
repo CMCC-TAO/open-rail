@@ -1,0 +1,10 @@
+string[] camera_id
+Point3D[] pos
+Point3D[] corner
+Point3D[] size
+Point3D[] mask
+int32 instance_id
+Point3D ground_point
+float32 confidence
+int32 class_type
+int32 sub_type

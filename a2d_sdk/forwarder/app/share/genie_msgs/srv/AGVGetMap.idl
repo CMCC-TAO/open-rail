@@ -1,0 +1,49 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/agv/AGVGetMap.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      " /hal/map/get_map" "\n"
+      "根据指定map id 获取地图详细信息")
+    struct AGVGetMap_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "map id")
+      int32 map_id;
+    };
+    struct AGVGetMap_Response {
+      @verbatim (language="comment", text=
+        "地图原点x")
+      int32 x;
+
+      @verbatim (language="comment", text=
+        "地图原点y")
+      int32 y;
+
+      @verbatim (language="comment", text=
+        "地图 宽")
+      int32 width;
+
+      @verbatim (language="comment", text=
+        "地图 高")
+      int32 height;
+
+      @verbatim (language="comment", text=
+        "地图ming")
+      string name;
+
+      @verbatim (language="comment", text=
+        "地图图片，以base64编码的png图片，png背景为透明")
+      string data;
+
+      @verbatim (language="comment", text=
+        "错误码 0:成功")
+      int32 error_code;
+    };
+  };
+};

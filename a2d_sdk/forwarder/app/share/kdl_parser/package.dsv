@@ -1,0 +1,4 @@
+source;share/kdl_parser/local_setup.bash
+source;share/kdl_parser/local_setup.dsv
+source;share/kdl_parser/local_setup.sh
+source;share/kdl_parser/local_setup.zsh

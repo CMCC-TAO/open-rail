@@ -1,0 +1,2 @@
+source;share/shared_queues_vendor/environment/ament_prefix_path.sh
+source;share/shared_queues_vendor/environment/path.sh

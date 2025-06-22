@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="2">
+  <name>rqt_common_plugins</name>
+  <version>1.2.0</version>
+  <description>
+    rqt_common_plugins metapackage provides ROS backend graphical tools suite that can be used on/off of robot runtime.<br />
+    <br />
+    To run any rqt plugins, just type in a single command "rqt", then select any plugins you want from the GUI that launches afterwards.<br />
+    <br />
+    rqt consists of three following metapackages:<br />
+    <ul>
+     <li><a href = "http://ros.org/wiki/rqt">rqt</a> - core modules of rqt (ROS GUI) framework. rqt plugin developers barely needs to pay attention to this metapackage.</li>
+     <li>rqt_common_plugins (you're here!)</li>
+     <li><a href = "http://ros.org/wiki/rqt_robot_plugins">rqt_robot_plugins</a> - rqt plugins that are particularly used with robots during their runtime.</li><br />
+    </ul>
+   <br />
+  </description>
+  <maintainer email="ivanpauno@ekumenlabs.com">Ivan Paunovic</maintainer>
+
+  <license>BSD</license>
+
+  <url type="website">http://ros.org/wiki/rqt_common_plugins</url>
+  <url type="repository">https://github.com/ros-visualization/rqt_common_plugins</url>
+  <url type="bugtracker">https://github.com/ros-visualization/rqt_common_plugins/issues</url>
+
+  <author>Dirk Thomas</author>
+  <author>Dorian Scholz</author>
+  <author>Thibault Kruse</author>
+  <author>Aaron Blasdel</author>
+  <author>Isaac Saito</author>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>rqt_action</exec_depend>
+  <exec_depend>rqt_bag</exec_depend>
+  <exec_depend>rqt_bag_plugins</exec_depend>
+  <exec_depend>rqt_console</exec_depend>
+  <exec_depend>rqt_graph</exec_depend>
+  <exec_depend>rqt_image_view</exec_depend>
+  <exec_depend>rqt_msg</exec_depend>
+  <exec_depend>rqt_plot</exec_depend>
+  <exec_depend>rqt_publisher</exec_depend>
+  <exec_depend>rqt_py_common</exec_depend>
+  <exec_depend>rqt_py_console</exec_depend>
+  <exec_depend>rqt_reconfigure</exec_depend>
+  <exec_depend>rqt_service_caller</exec_depend>
+  <exec_depend>rqt_shell</exec_depend>
+  <exec_depend>rqt_srv</exec_depend>
+  <exec_depend>rqt_topic</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

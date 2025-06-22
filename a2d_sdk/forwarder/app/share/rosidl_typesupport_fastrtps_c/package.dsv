@@ -1,0 +1,4 @@
+source;share/rosidl_typesupport_fastrtps_c/local_setup.bash
+source;share/rosidl_typesupport_fastrtps_c/local_setup.dsv
+source;share/rosidl_typesupport_fastrtps_c/local_setup.sh
+source;share/rosidl_typesupport_fastrtps_c/local_setup.zsh

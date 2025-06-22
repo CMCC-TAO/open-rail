@@ -1,0 +1,8 @@
+msg/JointTrajectory.idl
+msg/JointTrajectory.msg
+msg/JointTrajectoryPoint.idl
+msg/JointTrajectoryPoint.msg
+msg/MultiDOFJointTrajectory.idl
+msg/MultiDOFJointTrajectory.msg
+msg/MultiDOFJointTrajectoryPoint.idl
+msg/MultiDOFJointTrajectoryPoint.msg

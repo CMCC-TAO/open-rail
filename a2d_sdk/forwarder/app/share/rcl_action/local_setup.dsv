@@ -1,0 +1,3 @@
+source;share/rcl_action/environment/ament_prefix_path.sh
+source;share/rcl_action/environment/library_path.sh
+source;share/rcl_action/environment/path.sh

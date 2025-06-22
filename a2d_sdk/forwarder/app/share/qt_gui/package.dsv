@@ -1,0 +1,4 @@
+source;share/qt_gui/local_setup.bash
+source;share/qt_gui/local_setup.dsv
+source;share/qt_gui/local_setup.sh
+source;share/qt_gui/local_setup.zsh

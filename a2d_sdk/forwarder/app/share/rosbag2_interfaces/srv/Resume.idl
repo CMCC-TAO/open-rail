@@ -1,0 +1,15 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from rosbag2_interfaces/srv/Resume.srv
+// generated code does not contain a copyright notice
+
+
+module rosbag2_interfaces {
+  module srv {
+    struct Resume_Request {
+      uint8 structure_needs_at_least_one_member;
+    };
+    struct Resume_Response {
+      uint8 structure_needs_at_least_one_member;
+    };
+  };
+};

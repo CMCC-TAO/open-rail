@@ -1,0 +1,4 @@
+source;share/rcpputils/local_setup.bash
+source;share/rcpputils/local_setup.dsv
+source;share/rcpputils/local_setup.sh
+source;share/rcpputils/local_setup.zsh

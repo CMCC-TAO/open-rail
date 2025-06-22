@@ -1,0 +1,4 @@
+source;share/sqlite3_vendor/local_setup.bash
+source;share/sqlite3_vendor/local_setup.dsv
+source;share/sqlite3_vendor/local_setup.sh
+source;share/sqlite3_vendor/local_setup.zsh

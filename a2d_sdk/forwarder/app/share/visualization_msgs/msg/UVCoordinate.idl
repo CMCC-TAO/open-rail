@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from visualization_msgs/msg/UVCoordinate.msg
+// generated code does not contain a copyright notice
+
+
+module visualization_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Location of the pixel as a ratio of the width of a 2D texture." "\n"
+      "Values should be in range:.")
+    struct UVCoordinate {
+      float u;
+
+      float v;
+    };
+  };
+};

@@ -1,0 +1,4 @@
+source;share/rosbag2_cpp/local_setup.bash
+source;share/rosbag2_cpp/local_setup.dsv
+source;share/rosbag2_cpp/local_setup.sh
+source;share/rosbag2_cpp/local_setup.zsh

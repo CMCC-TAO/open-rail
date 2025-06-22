@@ -1,0 +1,4 @@
+source;share/tlsf/local_setup.bash
+source;share/tlsf/local_setup.dsv
+source;share/tlsf/local_setup.sh
+source;share/tlsf/local_setup.zsh

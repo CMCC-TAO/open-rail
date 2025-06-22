@@ -1,0 +1,22 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/agv/AGVCollisionLevel.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "/hal/nav/collision")
+    struct AGVCollisionLevel_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "避障等级1，2，3 ， 等级越高，越灵敏")
+      int32 collision_level;
+    };
+    struct AGVCollisionLevel_Response {
+      int32 error_code;
+    };
+  };
+};

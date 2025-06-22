@@ -1,0 +1,2 @@
+logging_demo::LoggerConfig;lib/liblogger_config_component.so
+logging_demo::LoggerUsage;lib/liblogger_usage_component.so

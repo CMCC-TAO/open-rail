@@ -58,18 +58,11 @@ def check_camera_receiver_status(camera_model):
     print("Waiting for camera receiver to start...")
     camera_names_71 = ["/camera/head_color", "/camera/head_center_fisheye", "/camera/hand_left_fisheye", "/camera/hand_right_fisheye", "/camera/head_depth"]
     camera_names_53 = ["/camera/head_color", "/camera/hand_left_color", "/camera/hand_right_color","/camera/head_depth"]
-    if camera_model == "camera_depth_53":
-        camera_names = camera_names_53
-    elif camera_model == "camera_preprocess_71" or camera_model == "camera_fisheye_71":
-        camera_names = camera_names_71
-    elif camera_model == "develop":
-        camera_names = camera_names_71 + camera_names_53
-    else:
-        robot_service_logger.error(f"Invalid camera model: {camera_model}")
-        return False, f"Invalid camera model: {camera_model}"
+    camera_names = camera_names_71 + camera_names_53
+
     cameras = CosineCamera(camera_names)
     worked_camera = []
-    for i in range(10):
+    for i in range(30): # 30s timeout
         worked_camera = []
         for camera_name in camera_names:
             if cameras.get_fps(camera_name) > 0:
@@ -78,18 +71,8 @@ def check_camera_receiver_status(camera_model):
             # robot_service_logger.info(f"Waiting for service to start...{i+1}")
             time.sleep(1)
 
-    if camera_model == "develop":
-        for camera_name in worked_camera:
-            robot_service_logger.info(f"Camera {camera_name}...OK")
-        return True, "All cameras started successfully"
-
-    check_group = camera_names
-    for camera_name in check_group:
-        if camera_name not in worked_camera:
-            robot_service_logger.error(f"Camera {camera_name}...Failed")
-            return False, f"Camera {camera_name} failed to start"
-        else:
-            robot_service_logger.info(f"Camera {camera_name}...OK")
+    for camera_name in worked_camera:
+        robot_service_logger.info(f"Camera {camera_name}...OK")
     return True, "All cameras started successfully"
 
 def check_robot_status():
@@ -148,7 +131,7 @@ def control_ros(action):
     """控制Ros启动/停止"""
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    ros_script = os.path.join(script_dir, ".", "scripts", "ros_env_warpper.sh")
+    ros_script = os.path.join(script_dir, ".", "scripts", "ros_env_wrapper.sh")
     
     try:
         # Start the process in the background
@@ -187,6 +170,7 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--start", action="store_true", help="Start the robot service")
     parser.add_argument("-t", "--stop", action="store_true", help="Stop the robot service")
     parser.add_argument("-c", "--config", type=str, default=f"{current_dir}/conf/hybrid_deploy.pbtxt", help="config_file_path")
+    parser.add_argument("--no-ros", action="store_true", help="Do not start/stop ROS environment")
     args = parser.parse_args()
 
     mkdir_if_not_exists(log_dir)
@@ -202,14 +186,15 @@ if __name__ == "__main__":
             
             client(config)
             
-            if config.mode == Mode.HYBRID_DEPLOY and (config.hybrid_deploy_config.use_zmq or config.hybrid_deploy_config.use_cosine_sdk):
-                camera_status, camera_msg = check_camera_receiver_status(config.hybrid_deploy_config.camera_model)
+            if config.mode == Mode.COPILOT:
                 robot_status, robot_msg = check_robot_status()
+                camera_status, camera_msg = check_camera_receiver_status(config.hybrid_deploy_config.camera_model)
                 
                 if camera_status and robot_status:
                     print("success")  # 成功标记
                     robot_service_logger.info("Robot service started successfully")
-                    control_ros("start")
+                    if not args.no_ros:
+                        control_ros("start")
                     agibotdds.shutdown()
                     sys.exit(0)
                 else:

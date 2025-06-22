@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from map_msgs/msg/ProjectedMap.msg
+// generated code does not contain a copyright notice
+
+#include "nav_msgs/msg/OccupancyGrid.idl"
+
+module map_msgs {
+  module msg {
+    struct ProjectedMap {
+      nav_msgs::msg::OccupancyGrid map;
+
+      double min_z;
+
+      double max_z;
+    };
+  };
+};

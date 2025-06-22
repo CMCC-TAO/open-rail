@@ -1,0 +1,4 @@
+source;share/rosidl_default_runtime/local_setup.bash
+source;share/rosidl_default_runtime/local_setup.dsv
+source;share/rosidl_default_runtime/local_setup.sh
+source;share/rosidl_default_runtime/local_setup.zsh

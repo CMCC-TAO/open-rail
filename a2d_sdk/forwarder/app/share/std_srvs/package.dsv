@@ -1,0 +1,4 @@
+source;share/std_srvs/local_setup.bash
+source;share/std_srvs/local_setup.dsv
+source;share/std_srvs/local_setup.sh
+source;share/std_srvs/local_setup.zsh

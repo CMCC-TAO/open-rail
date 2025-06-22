@@ -1,0 +1,30 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/agv/AGVMappingControl.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "/hal/slam/mapping_Control")
+    struct AGVMappingControl_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "1 开始建图 2 停止建图")
+      int32 control;
+
+      @verbatim (language="comment", text=
+        "当contol 为 2(停止建图时使用)时 true 保存地图  false 丢弃地图")
+      boolean save_map;
+
+      @verbatim (language="comment", text=
+        "地图名称")
+      string map_name;
+    };
+    struct AGVMappingControl_Response {
+      int32 error_code;
+    };
+  };
+};

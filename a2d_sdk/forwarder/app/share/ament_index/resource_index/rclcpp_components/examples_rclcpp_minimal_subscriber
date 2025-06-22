@@ -1,0 +1,3 @@
+WaitSetSubscriber;lib/libwait_set_subscriber_library.so
+StaticWaitSetSubscriber;lib/libwait_set_subscriber_library.so
+TimeTriggeredWaitSetSubscriber;lib/libwait_set_subscriber_library.so

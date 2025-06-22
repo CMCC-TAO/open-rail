@@ -1,0 +1,34 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/body/BodyPose.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    struct BodyPose_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "1.头部 2.腰部")
+      uint32 body_part;
+
+      int32 joint_flag;
+
+      @verbatim (language="comment", text=
+        "关节初始化位置")
+      sequence<float> joint_states;
+
+      @verbatim (language="comment", text=
+        "true: sync, false: async")
+      boolean block;
+    };
+    struct BodyPose_Response {
+      std_msgs::msg::Header res_header;
+
+      @verbatim (language="comment", text=
+        "0: success, 1: failed")
+      uint8 exec_result;
+    };
+  };
+};

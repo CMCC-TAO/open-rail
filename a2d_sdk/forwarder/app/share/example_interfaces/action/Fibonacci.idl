@@ -1,0 +1,24 @@
+// generated from rosidl_adapter/resource/action.idl.em
+// with input from example_interfaces/action/Fibonacci.action
+// generated code does not contain a copyright notice
+
+
+module example_interfaces {
+  module action {
+    @verbatim (language="comment", text=
+      "Goal")
+    struct Fibonacci_Goal {
+      int32 order;
+    };
+    @verbatim (language="comment", text=
+      "Result")
+    struct Fibonacci_Result {
+      sequence<int32> sequence;
+    };
+    @verbatim (language="comment", text=
+      "Feedback")
+    struct Fibonacci_Feedback {
+      sequence<int32> sequence;
+    };
+  };
+};

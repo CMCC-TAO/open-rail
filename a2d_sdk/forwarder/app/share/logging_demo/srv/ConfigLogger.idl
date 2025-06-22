@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from logging_demo/srv/ConfigLogger.srv
+// generated code does not contain a copyright notice
+
+
+module logging_demo {
+  module srv {
+    struct ConfigLogger_Request {
+      string logger_name;
+
+      string level;
+    };
+    struct ConfigLogger_Response {
+      boolean success;
+    };
+  };
+};

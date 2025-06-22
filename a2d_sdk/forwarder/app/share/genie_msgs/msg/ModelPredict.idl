@@ -1,0 +1,59 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/motion_control/ModelPredict.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Pose.idl"
+#include "sensor_msgs/msg/JointState.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct ModelPredict {
+      @verbatim (language="comment", text=
+        "header timestamp为模型开始推理的时间")
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "头旋转 头俯仰 腰俯仰 腰升降，左臂 右臂等关节names")
+      sequence<string> body_joint_names;
+
+      @verbatim (language="comment", text=
+        "头 腰，臂等关节状态，顺序与names一致")
+      sequence<double> body_joint_positions;
+
+      @verbatim (language="comment", text=
+        "模型输出类型" "\n"
+        "0: 相对位置" "\n"
+        "1: 绝对位置" "\n"
+        "2: 绝对关节角" "\n"
+        "3: 相对关节角")
+      uint8 model_output_type;
+
+      sequence<string> target_link_names;
+
+      @verbatim (language="comment", text=
+        "pose数组")
+      sequence<geometry_msgs::msg::Pose> target_poses;
+
+      @verbatim (language="comment", text=
+        "输出目标关节角数组")
+      sequence<sensor_msgs::msg::JointState> target_joint_states;
+
+      @verbatim (language="comment", text=
+        "输出目标关节速度")
+      sequence<float> target_velocities;
+
+      @verbatim (language="comment", text=
+        "输出目标关节力矩")
+      sequence<float> target_efforts;
+
+      @verbatim (language="comment", text=
+        "两帧之间的等待时间")
+      double model_sleep_time;
+
+      @verbatim (language="comment", text=
+        "单帧输出的轨迹参考时间")
+      double trajectory_reference_time;
+    };
+  };
+};

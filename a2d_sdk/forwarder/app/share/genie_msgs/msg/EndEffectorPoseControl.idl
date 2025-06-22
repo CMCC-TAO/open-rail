@@ -1,0 +1,38 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/motion_control/EndEffectorPoseControl.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Pose.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    module EndEffectorPoseControl_Constants {
+      const uint32 GROUP_LEFT_ARM = 4;
+      const uint32 GROUP_RIGHT_ARM = 8;
+      const uint32 GROUP_DUAL_ARM = 12;
+      const uint32 GROUP_LEFT_ARM_WAIST_LIFT = 20;
+      const uint32 GROUP_LEFT_ARM_WAIST_PITCH = 36;
+      const uint32 GROUP_LEFT_ARM_WAIST = 52;
+      const uint32 GROUP_RIGHT_ARM_WAIST_LIFT = 24;
+      const uint32 GROUP_RIGHT_ARM_WAIST_PITCH = 40;
+      const uint32 GROUP_RIGHT_ARM_WAIST = 56;
+      const uint32 GROUP_DUAL_ARM_WAIST_LIFT = 28;
+      const uint32 GROUP_DUAL_ARM_WAIST_PITCH = 44;
+      const uint32 GROUP_DUAL_ARM_WAIST = 60;
+    };
+    @verbatim (language="comment", text=
+      "frame id 无用, timestamp发送时间")
+    struct EndEffectorPoseControl {
+      std_msgs::msg::Header header;
+
+      double lifetime;
+
+      uint32 control_group;
+
+      geometry_msgs::msg::Pose left_end_effector_pose;
+
+      geometry_msgs::msg::Pose right_end_effector_pose;
+    };
+  };
+};

@@ -1,0 +1,22 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from map_msgs/srv/GetMapROI.srv
+// generated code does not contain a copyright notice
+
+#include "nav_msgs/msg/OccupancyGrid.idl"
+
+module map_msgs {
+  module srv {
+    struct GetMapROI_Request {
+      double x;
+
+      double y;
+
+      double l_x;
+
+      double l_y;
+    };
+    struct GetMapROI_Response {
+      nav_msgs::msg::OccupancyGrid sub_map;
+    };
+  };
+};

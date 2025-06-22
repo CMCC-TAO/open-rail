@@ -1,0 +1,4 @@
+source;share/examples_rclcpp_multithreaded_executor/local_setup.bash
+source;share/examples_rclcpp_multithreaded_executor/local_setup.dsv
+source;share/examples_rclcpp_multithreaded_executor/local_setup.sh
+source;share/examples_rclcpp_multithreaded_executor/local_setup.zsh

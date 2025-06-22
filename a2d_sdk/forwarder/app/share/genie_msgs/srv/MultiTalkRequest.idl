@@ -1,0 +1,29 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/voice/MultiTalkRequest.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "提供多轮对话服务" "\n"
+      "服务名: /voice/multi_talk_req")
+    struct MultiTalkRequest_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "任务id")
+      uint32 task_id;
+
+      @verbatim (language="comment", text=
+        "任务内容")
+      string task_str;
+    };
+    struct MultiTalkRequest_Response {
+      @verbatim (language="comment", text=
+        "0: success  1.任务内容为空")
+      uint32 result;
+    };
+  };
+};

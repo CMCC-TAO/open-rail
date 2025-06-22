@@ -1,0 +1,4 @@
+source;share/ament_cmake_export_interfaces/local_setup.bash
+source;share/ament_cmake_export_interfaces/local_setup.dsv
+source;share/ament_cmake_export_interfaces/local_setup.sh
+source;share/ament_cmake_export_interfaces/local_setup.zsh

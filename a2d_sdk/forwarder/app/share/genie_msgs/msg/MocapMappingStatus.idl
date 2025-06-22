@@ -1,0 +1,27 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/remote/MocapMappingStatus.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct MocapMappingStatus {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "index 0: head yaw" "\n"
+        "index 1: head pitch" "\n"
+        "index 2: left arm" "\n"
+        "index 3: right arm" "\n"
+        "index 4: waist lift" "\n"
+        "index 5: waist pitch" "\n"
+        "index 6: chassis" "\n"
+        "0: no mapping" "\n"
+        "1: mapping")
+      sequence<int32> mapping_status;
+
+      int32 enable_status;
+    };
+  };
+};

@@ -1,0 +1,26 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/remote/VRData.msg
+// generated code does not contain a copyright notice
+
+#include "genie_msgs/msg/VRControllerState.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct VRData {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "遥设备状态")
+      uint32 status;
+
+      @verbatim (language="comment", text=
+        "遥设备错误码")
+      uint32 err_code;
+
+      @verbatim (language="comment", text=
+        "手柄状态， 0 = left，1 = right")
+      sequence<genie_msgs::msg::VRControllerState> vr_controller_states;
+    };
+  };
+};

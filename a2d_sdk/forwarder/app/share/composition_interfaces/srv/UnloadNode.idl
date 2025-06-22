@@ -1,0 +1,23 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from composition_interfaces/srv/UnloadNode.srv
+// generated code does not contain a copyright notice
+
+
+module composition_interfaces {
+  module srv {
+    @verbatim (language="comment", text=
+      "Container specific unique id of a loaded node.")
+    struct UnloadNode_Request {
+      uint64 unique_id;
+    };
+    @verbatim (language="comment", text=
+      "True if the node existed and was unloaded.")
+    struct UnloadNode_Response {
+      boolean success;
+
+      @verbatim (language="comment", text=
+        "Human readable error message if success is false, else empty string.")
+      string error_message;
+    };
+  };
+};

@@ -1,0 +1,54 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from stereo_msgs/msg/DisparityImage.msg
+// generated code does not contain a copyright notice
+
+#include "sensor_msgs/msg/Image.idl"
+#include "sensor_msgs/msg/RegionOfInterest.idl"
+#include "std_msgs/msg/Header.idl"
+
+module stereo_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "Separate header for compatibility with current TimeSynchronizer." "\n"
+      "Likely to be removed in a later release, use image.header instead.")
+    struct DisparityImage {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "Floating point disparity image. The disparities are pre-adjusted for any" "\n"
+        "x-offset between the principal points of the two cameras (in the case" "\n"
+        "that they are verged). That is: d = x_l - x_r - (cx_l - cx_r)")
+      sensor_msgs::msg::Image image;
+
+      @verbatim (language="comment", text=
+        "Stereo geometry. For disparity d, the depth from the camera is Z = fT/d." "\n"
+        "Focal length, pixels")
+      float f;
+
+      @verbatim (language="comment", text=
+        "Baseline, world units")
+      float t;
+
+      @verbatim (language="comment", text=
+        "Subwindow of (potentially) valid disparity values.")
+      sensor_msgs::msg::RegionOfInterest valid_window;
+
+      @verbatim (language="comment", text=
+        "The range of disparities searched." "\n"
+        "In the disparity image, any disparity less than min_disparity is invalid." "\n"
+        "The disparity search range defines the horopter, or 3D volume that the" "\n"
+        "stereo algorithm can \"see\". Points with Z outside of:" "\n"
+        "    Z_min = fT / max_disparity" "\n"
+        "    Z_max = fT / min_disparity" "\n"
+        "could not be found.")
+      float min_disparity;
+
+      float max_disparity;
+
+      @verbatim (language="comment", text=
+        "Smallest allowed disparity increment. The smallest achievable depth range" "\n"
+        "resolution is delta_Z = (Z^2/fT)*delta_d.")
+      float delta_d;
+    };
+  };
+};

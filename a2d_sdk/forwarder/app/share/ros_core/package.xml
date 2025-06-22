@@ -1,0 +1,78 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format2.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="2">
+  <name>ros_core</name>
+  <version>0.10.0</version>
+  <description>A package to aggregate the packages required to use publish / subscribe, services, generate messages and other core ROS concepts.</description>
+  <maintainer email="steven@openrobotics.org">Steven! Ragnarök</maintainer>
+  <license>Apache License 2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <!-- ament_cmake repo -->
+  <exec_depend>ament_cmake</exec_depend>
+  <exec_depend>ament_cmake_auto</exec_depend>
+  <exec_depend>ament_cmake_gtest</exec_depend>
+  <exec_depend>ament_cmake_gmock</exec_depend>
+  <exec_depend>ament_cmake_pytest</exec_depend>
+
+  <!-- ament_cmake_ros repo -->
+  <exec_depend>ament_cmake_ros</exec_depend>
+
+  <!-- ament_index repo -->
+  <exec_depend>ament_index_cpp</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+
+  <!-- ament_lint repo -->
+  <exec_depend>ament_lint_auto</exec_depend>
+  <exec_depend>ament_lint_common</exec_depend>
+
+  <!-- rcl repo -->
+  <exec_depend>rcl_lifecycle</exec_depend>
+
+  <!-- rclcpp repo -->
+  <exec_depend>rclcpp</exec_depend>
+  <exec_depend>rclcpp_action</exec_depend>
+  <exec_depend>rclcpp_lifecycle</exec_depend>
+
+  <!-- rclpy repo -->
+  <exec_depend>rclpy</exec_depend>
+
+  <!-- rosidl_defaults repo -->
+  <exec_depend>rosidl_default_generators</exec_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+
+  <!-- ros_environment repo -->
+  <exec_depend>ros_environment</exec_depend>
+
+  <!-- common_interfaces repo -->
+  <exec_depend>common_interfaces</exec_depend>
+
+  <!-- launch repo -->
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_testing</exec_depend>
+  <exec_depend>launch_testing_ament_cmake</exec_depend>
+  <exec_depend>launch_xml</exec_depend>
+  <exec_depend>launch_yaml</exec_depend>
+
+  <!-- launch_ros repo -->
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>launch_testing_ros</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
+  
+  <!-- ros2cli_common_extensions repo -->
+  <exec_depend>ros2cli_common_extensions</exec_depend>
+
+  <!-- sros2 repo -->
+  <exec_depend>sros2</exec_depend>
+  <exec_depend>sros2_cmake</exec_depend>
+
+  <!-- class_loader repo -->
+  <exec_depend>class_loader</exec_depend>
+  <!-- pluginlib repo -->
+  <exec_depend>pluginlib</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

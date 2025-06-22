@@ -1,0 +1,24 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from genie_msgs/srv/hal/arm/ArmEmergStop.srv
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module srv {
+    struct ArmEmergStop_Request {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "0: resume, 1: stop")
+      uint8 stop_flag;
+    };
+    struct ArmEmergStop_Response {
+      std_msgs::msg::Header res_header;
+
+      @verbatim (language="comment", text=
+        "0: success, 1: failed")
+      uint8 exec_result;
+    };
+  };
+};

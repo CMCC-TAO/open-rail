@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from rosbag2_interfaces/srv/SetRate.srv
+// generated code does not contain a copyright notice
+
+
+module rosbag2_interfaces {
+  module srv {
+    struct SetRate_Request {
+      double rate;
+    };
+    struct SetRate_Response {
+      @verbatim (language="comment", text=
+        "true if valid rate (> 0) was set")
+      boolean success;
+    };
+  };
+};

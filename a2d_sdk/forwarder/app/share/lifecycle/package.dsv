@@ -1,0 +1,4 @@
+source;share/lifecycle/local_setup.bash
+source;share/lifecycle/local_setup.dsv
+source;share/lifecycle/local_setup.sh
+source;share/lifecycle/local_setup.zsh

@@ -1,0 +1,44 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from visualization_msgs/msg/InteractiveMarkerUpdate.msg
+// generated code does not contain a copyright notice
+
+#include "visualization_msgs/msg/InteractiveMarker.idl"
+#include "visualization_msgs/msg/InteractiveMarkerPose.idl"
+
+module visualization_msgs {
+  module msg {
+    module InteractiveMarkerUpdate_Constants {
+      @verbatim (language="comment", text=
+        "Type holds the purpose of this message.  It must be one of UPDATE or KEEP_ALIVE." "\n"        "UPDATE: Incremental update to previous state." "\n"        "        The sequence number must be 1 higher than for" "\n"        "        the previous update." "\n"        "KEEP_ALIVE: Indicates the that the server is still living." "\n"        "            The sequence number does not increase." "\n"        "            No payload data should be filled out (markers, poses, or erases).")
+      const uint8 KEEP_ALIVE = 0;
+      const uint8 UPDATE = 1;
+    };
+    struct InteractiveMarkerUpdate {
+      @verbatim (language="comment", text=
+        "Identifying string. Must be unique in the topic namespace" "\n"
+        "that this server works on.")
+      string server_id;
+
+      @verbatim (language="comment", text=
+        "Sequence number." "\n"
+        "The client will use this to detect if it has missed an update.")
+      uint64 seq_num;
+
+      uint8 type;
+
+      @verbatim (language="comment", text=
+        "Note: No guarantees on the order of processing." "\n"
+        "      Contents must be kept consistent by sender." "\n"
+        "Markers to be added or updated")
+      sequence<visualization_msgs::msg::InteractiveMarker> markers;
+
+      @verbatim (language="comment", text=
+        "Poses of markers that should be moved")
+      sequence<visualization_msgs::msg::InteractiveMarkerPose> poses;
+
+      @verbatim (language="comment", text=
+        "Names of markers to be erased")
+      sequence<string> erases;
+    };
+  };
+};

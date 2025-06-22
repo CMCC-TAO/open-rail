@@ -1,0 +1,4 @@
+source;share/laser_geometry/environment/ament_prefix_path.sh
+source;share/laser_geometry/environment/library_path.sh
+source;share/laser_geometry/environment/path.sh
+source;share/laser_geometry/environment/pythonpath.sh

@@ -1,0 +1,79 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from visualization_msgs/msg/InteractiveMarkerControl.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Quaternion.idl"
+#include "visualization_msgs/msg/Marker.idl"
+
+module visualization_msgs {
+  module msg {
+    module InteractiveMarkerControl_Constants {
+      @verbatim (language="comment", text=
+        "Orientation mode: controls how orientation changes." "\n"        "INHERIT: Follow orientation of interactive marker" "\n"        "FIXED: Keep orientation fixed at initial state" "\n"        "VIEW_FACING: Align y-z plane with screen (x: forward, y:left, z:up).")
+      const uint8 INHERIT = 0;
+      const uint8 FIXED = 1;
+      const uint8 VIEW_FACING = 2;
+      @verbatim (language="comment", text=
+        "Interaction mode for this control" "\n"        "" "\n"        "NONE: This control is only meant for visualization; no context menu." "\n"        "MENU: Like NONE, but right-click menu is active." "\n"        "BUTTON: Element can be left-clicked." "\n"        "MOVE_AXIS: Translate along local x-axis." "\n"        "MOVE_PLANE: Translate in local y-z plane." "\n"        "ROTATE_AXIS: Rotate around local x-axis." "\n"        "MOVE_ROTATE: Combines MOVE_PLANE and ROTATE_AXIS.")
+      const uint8 NONE = 0;
+      const uint8 MENU = 1;
+      const uint8 BUTTON = 2;
+      const uint8 MOVE_AXIS = 3;
+      const uint8 MOVE_PLANE = 4;
+      const uint8 ROTATE_AXIS = 5;
+      const uint8 MOVE_ROTATE = 6;
+      @verbatim (language="comment", text=
+        "\"3D\" interaction modes work with the mouse+SHIFT+CTRL or with 3D cursors." "\n"        "MOVE_3D: Translate freely in 3D space." "\n"        "ROTATE_3D: Rotate freely in 3D space about the origin of parent frame." "\n"        "MOVE_ROTATE_3D: Full 6-DOF freedom of translation and rotation about the cursor origin.")
+      const uint8 MOVE_3D = 7;
+      const uint8 ROTATE_3D = 8;
+      const uint8 MOVE_ROTATE_3D = 9;
+    };
+    @verbatim (language="comment", text=
+      "Represents a control that is to be displayed together with an interactive marker")
+    struct InteractiveMarkerControl {
+      @verbatim (language="comment", text=
+        "Identifying string for this control." "\n"
+        "You need to assign a unique value to this to receive feedback from the GUI" "\n"
+        "on what actions the user performs on this control (e.g. a button click).")
+      string name;
+
+      @verbatim (language="comment", text=
+        "Defines the local coordinate frame (relative to the pose of the parent" "\n"
+        "interactive marker) in which is being rotated and translated." "\n"
+        "Default: Identity")
+      geometry_msgs::msg::Quaternion orientation;
+
+      uint8 orientation_mode;
+
+      uint8 interaction_mode;
+
+      @verbatim (language="comment", text=
+        "If true, the contained markers will also be visible" "\n"
+        "when the gui is not in interactive mode.")
+      boolean always_visible;
+
+      @verbatim (language="comment", text=
+        "Markers to be displayed as custom visual representation." "\n"
+        "Leave this empty to use the default control handles." "\n"
+        "" "\n"
+        "Note:" "\n"
+        "- The markers can be defined in an arbitrary coordinate frame," "\n"
+        "  but will be transformed into the local frame of the interactive marker." "\n"
+        "- If the header of a marker is empty, its pose will be interpreted as" "\n"
+        "  relative to the pose of the parent interactive marker.")
+      sequence<visualization_msgs::msg::Marker> markers;
+
+      @verbatim (language="comment", text=
+        "In VIEW_FACING mode, set this to true if you don't want the markers" "\n"
+        "to be aligned with the camera view point. The markers will show up" "\n"
+        "as in INHERIT mode.")
+      boolean independent_marker_orientation;
+
+      @verbatim (language="comment", text=
+        "Short description (< 40 characters) of what this control does," "\n"
+        "e.g. \"Move the robot\"." "\n"
+        "Default: A generic description based on the interaction mode")
+      string description;
+    };
+  };
+};

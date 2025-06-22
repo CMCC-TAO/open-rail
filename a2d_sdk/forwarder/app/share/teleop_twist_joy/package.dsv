@@ -1,0 +1,4 @@
+source;share/teleop_twist_joy/local_setup.bash
+source;share/teleop_twist_joy/local_setup.dsv
+source;share/teleop_twist_joy/local_setup.sh
+source;share/teleop_twist_joy/local_setup.zsh

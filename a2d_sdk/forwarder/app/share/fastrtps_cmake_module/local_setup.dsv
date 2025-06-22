@@ -1,0 +1,2 @@
+source;share/fastrtps_cmake_module/environment/ament_prefix_path.sh
+source;share/fastrtps_cmake_module/environment/path.sh

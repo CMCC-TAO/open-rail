@@ -1,0 +1,4 @@
+source;share/interactive_markers/local_setup.bash
+source;share/interactive_markers/local_setup.dsv
+source;share/interactive_markers/local_setup.sh
+source;share/interactive_markers/local_setup.zsh

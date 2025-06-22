@@ -1,0 +1,6 @@
+msg/MetricsMessage.idl
+msg/MetricsMessage.msg
+msg/StatisticDataPoint.idl
+msg/StatisticDataPoint.msg
+msg/StatisticDataType.idl
+msg/StatisticDataType.msg

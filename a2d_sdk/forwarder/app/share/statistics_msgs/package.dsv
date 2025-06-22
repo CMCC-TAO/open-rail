@@ -1,0 +1,4 @@
+source;share/statistics_msgs/local_setup.bash
+source;share/statistics_msgs/local_setup.dsv
+source;share/statistics_msgs/local_setup.sh
+source;share/statistics_msgs/local_setup.zsh

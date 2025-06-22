@@ -1,0 +1,2 @@
+source;share/ros2cli_common_extensions/environment/ament_prefix_path.sh
+source;share/ros2cli_common_extensions/environment/path.sh

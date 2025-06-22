@@ -1,0 +1,3 @@
+source;share/libyaml_vendor/environment/ament_prefix_path.sh
+source;share/libyaml_vendor/environment/library_path.sh
+source;share/libyaml_vendor/environment/path.sh

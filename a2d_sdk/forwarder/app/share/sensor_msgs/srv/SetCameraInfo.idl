@@ -1,0 +1,32 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from sensor_msgs/srv/SetCameraInfo.srv
+// generated code does not contain a copyright notice
+
+#include "sensor_msgs/msg/CameraInfo.idl"
+
+module sensor_msgs {
+  module srv {
+    @verbatim (language="comment", text=
+      "This service requests that a camera stores the given CameraInfo as that" "\n"
+      "camera's calibration information." "\n"
+      "" "\n"
+      "The width and height in the camera_info field should match what the" "\n"
+      "camera is currently outputting on its camera_info topic, and the camera" "\n"
+      "will assume that the region of the imager that is being referred to is" "\n"
+      "the region that the camera is currently capturing.")
+    struct SetCameraInfo_Request {
+      @verbatim (language="comment", text=
+        "The camera_info to store")
+      sensor_msgs::msg::CameraInfo camera_info;
+    };
+    struct SetCameraInfo_Response {
+      @verbatim (language="comment", text=
+        "True if the call succeeded")
+      boolean success;
+
+      @verbatim (language="comment", text=
+        "Used to give details about success")
+      string status_message;
+    };
+  };
+};

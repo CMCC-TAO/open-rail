@@ -1,0 +1,14 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from pcl_msgs/msg/Vertices.msg
+// generated code does not contain a copyright notice
+
+
+module pcl_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "List of point indices")
+    struct Vertices {
+      sequence<uint32> vertices;
+    };
+  };
+};

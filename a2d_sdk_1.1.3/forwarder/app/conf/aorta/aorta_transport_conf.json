@@ -1,0 +1,149 @@
+{
+  "transport_options": [
+    {
+      "soc": "SampleSoc",
+      "apps": [
+        {
+          "app_name": "*",
+          "transport_param": [
+            {
+              "topics": "*",
+              "tcp_param": {
+                "socket_param": {
+                  "send_buffer_size": "4MB",
+                  "receive_buffer_size": "4MB",
+                  "enable_nodelay": true,
+                  "backlog": 128,
+                  "enable_linger": false,
+                  "enable_quickack": true,
+                  "user_timeout_in_ms": 30000
+                }
+              },
+              "udp_param": {
+                "max_sendmsg_num": 20,
+                "sent_cache_size": 10,
+                "reliable_queue_size": 5,
+                "fragment_size": "32000B",
+                "congestion_control_interval": 5,
+                "flow_control_interval": 5,
+                "congestion_msg_size_threshold": "51200B",
+                "max_network_mbps": 1000,
+                "congestion_trigger_factor": 3,
+                "notify_interval_in_ms": 1,
+                "msg_timeout_in_ms": 0,
+                "max_rto_num": 3,
+                "abnormal_sequence_range": 10,
+                "socket_param": {
+                  "send_buffer_size": "4MB",
+                  "receive_buffer_size": "4MB",
+                  "multicast_ttl": 1
+                }
+              },
+              "shm_param": {
+                "socket_param": {
+                  "backlog": 128
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "soc": "*",
+      "apps": [
+        {
+          "app_name": "*",
+          "transport_param": [
+            {
+              "topics": [
+                "common/perception/od_output_adb",
+                "common/perception/od_output_lidar",
+                "common/perception/od_output_stamp",
+                "common/perception/vision_road_detection",
+                "common/perception/perception_objects",
+                "np/apps/ehy_obf_output",
+                "np/apps/ehy_tsi_output",
+                "common/vehicle_in/vehicle_10ms",
+                "common/localization/global_localization",
+                "common/perception/od_output",
+                "common/perception/od_output_adp",
+                "common/perception/vision_road_sign",
+                "common/perception/vision_failsafe",
+                "common/perception/multisource_object",
+                "np/apps/ehy_tsi_outputs",
+                "common/perception/od_output_lidar_stamp",
+                "common/perception/od_output_adp_stamp",
+                "/world_model/dynamic_map",
+                "/perception/fusion_objects",
+                "/world_model/traffic_info",
+                "common/avp/semantic_occupancy_grid",
+                "common/map_engine/sd_map"
+              ],
+              "tcp_param": {
+                "socket_param": {
+                  "user_timeout_in_ms": 30000
+                }
+              }
+            },
+            {
+              "topics": [
+                "common/localization/relative_localization",
+                "cosine/lord/safety/s1_rls_diagnosis",
+                "common/perception/side_feature",
+                "common/perception/side_feature_objects",
+                "cosine/lord/safety/rel_loc_alarm_state",
+                "np/apps/fcts_out",
+                "common/perception/radar_object",
+                "common/sensors/gnss_result"
+              ],
+              "tcp_param": {
+                "socket_param": {
+                  "user_timeout_in_ms": 1000
+                }
+              }
+            }
+          ]
+        },
+        {
+          "app_name": "dds_record",
+          "transport_param": [
+            {
+              "topics": "*",
+              "udp_param": {
+                "reliable_queue_size": 10
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "transport_mechanism": {
+    "tcp_transport": [
+      "*"
+    ],
+    "multicast_transport": [
+      "common/vehicle_in/vehicle_50ms",
+      "common/vehicle_in/vehicle_10ms",
+      "common/localization/global_localization",
+      "common/localization/relative_localization",
+      "common/perception/lidar_failsafe",
+      "common/dms/adms",
+      "common/perception/vision_failsafe",
+      "common/sensors/gnss_result",
+      "common/diagnostic/fault/fault_lidar_internal",
+      "common/dms/dms_drive_assist",
+      "common/dms/dms_result",
+      "common/map_engine/sd_map",
+      "common/perception/perception_objects",
+      "common/perception/road_perception_2d_bev",
+      "common/perception/svc_perception",
+      "common/perception/vision_road_detection",
+      "np/apps/ehy_tsi_outputs",
+      "np/apps/fcts_out",
+      "np/apps/parking_outputs",
+      "common/perception/multisource_object"
+    ]
+  }
+}

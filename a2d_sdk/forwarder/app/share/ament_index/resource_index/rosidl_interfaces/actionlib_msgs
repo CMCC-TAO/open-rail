@@ -1,0 +1,6 @@
+msg/GoalID.idl
+msg/GoalID.msg
+msg/GoalStatus.idl
+msg/GoalStatus.msg
+msg/GoalStatusArray.idl
+msg/GoalStatusArray.msg

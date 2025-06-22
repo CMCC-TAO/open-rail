@@ -1,0 +1,25 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from example_interfaces/srv/Trigger.srv
+// generated code does not contain a copyright notice
+
+
+module example_interfaces {
+  module srv {
+    @verbatim (language="comment", text=
+      "An example of a trigger service." "\n"
+      "This can be used for testing but a semantically meaningful" "\n"
+      "one should be created to be built upon.")
+    struct Trigger_Request {
+      uint8 structure_needs_at_least_one_member;
+    };
+    struct Trigger_Response {
+      @verbatim (language="comment", text=
+        "indicate successful run of triggered service")
+      boolean success;
+
+      @verbatim (language="comment", text=
+        "informational, e.g. for error messages.")
+      string message;
+    };
+  };
+};

@@ -1,0 +1,52 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/slam/GridmapInfo.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Time.idl"
+#include "geometry_msgs/msg/Pose.idl"
+#include "geometry_msgs/msg/Vector3.idl"
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct GridmapInfo {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "触发时间戳（PTP时钟）")
+      builtin_interfaces::msg::Time measuring_ts;
+
+      @verbatim (language="comment", text=
+        "接收时间戳")
+      builtin_interfaces::msg::Time publish_ts;
+
+      @verbatim (language="comment", text=
+        "地图参考坐标系（如 \"map\"）")
+      string frame_id;
+
+      @verbatim (language="comment", text=
+        "地图元信息" "\n"
+        "米/格")
+      float resolution;
+
+      uint32 width;
+
+      uint32 height;
+
+      @verbatim (language="comment", text=
+        "地图原点" "\n"
+        "原点 pose（包含 position 和 quaternion orientation）")
+      geometry_msgs::msg::Pose origin;
+
+      @verbatim (language="comment", text=
+        "原点姿态（欧拉角表示，可选补充信息）")
+      geometry_msgs::msg::Vector3 orientation_euler;
+
+      @verbatim (language="comment", text=
+        "地图栅格数据" "\n"
+        "栅格地图数据，长度 = width * height" "\n"
+        "-1: 未知，0: 空闲，100: 障碍")
+      sequence<int8> data;
+    };
+  };
+};

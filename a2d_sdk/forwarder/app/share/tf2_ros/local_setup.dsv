@@ -1,0 +1,3 @@
+source;share/tf2_ros/environment/ament_prefix_path.sh
+source;share/tf2_ros/environment/library_path.sh
+source;share/tf2_ros/environment/path.sh

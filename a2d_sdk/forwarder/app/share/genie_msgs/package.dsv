@@ -1,0 +1,4 @@
+source;share/genie_msgs/local_setup.bash
+source;share/genie_msgs/local_setup.dsv
+source;share/genie_msgs/local_setup.sh
+source;share/genie_msgs/local_setup.zsh

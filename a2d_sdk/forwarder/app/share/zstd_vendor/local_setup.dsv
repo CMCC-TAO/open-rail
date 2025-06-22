@@ -1,0 +1,2 @@
+source;share/zstd_vendor/environment/ament_prefix_path.sh
+source;share/zstd_vendor/environment/path.sh

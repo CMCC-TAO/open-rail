@@ -1,0 +1,2 @@
+source;share/python_cmake_module/environment/ament_prefix_path.sh
+source;share/python_cmake_module/environment/path.sh

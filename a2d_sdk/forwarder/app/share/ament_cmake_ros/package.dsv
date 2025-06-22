@@ -1,0 +1,4 @@
+source;share/ament_cmake_ros/local_setup.bash
+source;share/ament_cmake_ros/local_setup.dsv
+source;share/ament_cmake_ros/local_setup.sh
+source;share/ament_cmake_ros/local_setup.zsh

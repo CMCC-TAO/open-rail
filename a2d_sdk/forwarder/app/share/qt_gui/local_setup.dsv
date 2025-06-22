@@ -1,0 +1,3 @@
+source;share/qt_gui/environment/ament_prefix_path.sh
+source;share/qt_gui/environment/path.sh
+source;share/qt_gui/environment/pythonpath.sh

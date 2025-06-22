@@ -1,0 +1,4 @@
+source;share/logging_demo/local_setup.bash
+source;share/logging_demo/local_setup.dsv
+source;share/logging_demo/local_setup.sh
+source;share/logging_demo/local_setup.zsh

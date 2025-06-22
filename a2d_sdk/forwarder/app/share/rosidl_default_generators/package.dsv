@@ -1,0 +1,4 @@
+source;share/rosidl_default_generators/local_setup.bash
+source;share/rosidl_default_generators/local_setup.dsv
+source;share/rosidl_default_generators/local_setup.sh
+source;share/rosidl_default_generators/local_setup.zsh

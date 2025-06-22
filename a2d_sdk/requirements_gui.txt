@@ -7,3 +7,4 @@ zmq==0.0.0
 pyzmq==26.2.0
 matplotlib
 math
+pynput

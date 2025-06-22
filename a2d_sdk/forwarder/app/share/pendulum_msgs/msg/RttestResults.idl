@@ -1,0 +1,31 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from pendulum_msgs/msg/RttestResults.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Time.idl"
+#include "pendulum_msgs/msg/JointCommand.idl"
+#include "pendulum_msgs/msg/JointState.idl"
+
+module pendulum_msgs {
+  module msg {
+    struct RttestResults {
+      builtin_interfaces::msg::Time stamp;
+
+      pendulum_msgs::msg::JointCommand command;
+
+      pendulum_msgs::msg::JointState state;
+
+      uint64 cur_latency;
+
+      double mean_latency;
+
+      uint64 min_latency;
+
+      uint64 max_latency;
+
+      uint64 minor_pagefaults;
+
+      uint64 major_pagefaults;
+    };
+  };
+};

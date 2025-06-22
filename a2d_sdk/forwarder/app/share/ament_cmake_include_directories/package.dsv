@@ -1,0 +1,4 @@
+source;share/ament_cmake_include_directories/local_setup.bash
+source;share/ament_cmake_include_directories/local_setup.dsv
+source;share/ament_cmake_include_directories/local_setup.sh
+source;share/ament_cmake_include_directories/local_setup.zsh

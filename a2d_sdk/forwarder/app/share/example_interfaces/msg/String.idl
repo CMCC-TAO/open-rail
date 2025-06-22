@@ -1,0 +1,17 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from example_interfaces/msg/String.msg
+// generated code does not contain a copyright notice
+
+
+module example_interfaces {
+  module msg {
+    @verbatim (language="comment", text=
+      "This is an example message of using a primitive datatype, string." "\n"
+      "If you want to test with this that's fine, but if you are deploying" "\n"
+      "it into a system you should create a semantically meaningful message type." "\n"
+      "If you want to embed it in another message, use the primitive data type instead.")
+    struct String {
+      string data;
+    };
+  };
+};

@@ -1,0 +1,4 @@
+source;share/ament_lint_auto/local_setup.bash
+source;share/ament_lint_auto/local_setup.dsv
+source;share/ament_lint_auto/local_setup.sh
+source;share/ament_lint_auto/local_setup.zsh

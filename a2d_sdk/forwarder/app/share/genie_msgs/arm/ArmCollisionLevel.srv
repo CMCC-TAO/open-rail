@@ -1,0 +1,5 @@
+# service name: /hal/collision_level
+std_msgs/Header     header
+uint32              level       #避障等级 0~8 0-无碰撞检测，8-碰撞检测最灵敏
+---
+int32               error_code  #0，无错误 1: 左臂设置失败， 2:右臂设置失败

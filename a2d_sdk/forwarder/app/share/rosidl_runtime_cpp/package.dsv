@@ -1,0 +1,4 @@
+source;share/rosidl_runtime_cpp/local_setup.bash
+source;share/rosidl_runtime_cpp/local_setup.dsv
+source;share/rosidl_runtime_cpp/local_setup.sh
+source;share/rosidl_runtime_cpp/local_setup.zsh

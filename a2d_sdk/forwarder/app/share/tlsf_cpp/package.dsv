@@ -1,0 +1,4 @@
+source;share/tlsf_cpp/local_setup.bash
+source;share/tlsf_cpp/local_setup.dsv
+source;share/tlsf_cpp/local_setup.sh
+source;share/tlsf_cpp/local_setup.zsh

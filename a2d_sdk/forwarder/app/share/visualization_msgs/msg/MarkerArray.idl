@@ -1,0 +1,13 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from visualization_msgs/msg/MarkerArray.msg
+// generated code does not contain a copyright notice
+
+#include "visualization_msgs/msg/Marker.idl"
+
+module visualization_msgs {
+  module msg {
+    struct MarkerArray {
+      sequence<visualization_msgs::msg::Marker> markers;
+    };
+  };
+};

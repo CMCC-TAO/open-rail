@@ -9,8 +9,10 @@
 # fi
 
 #CURRENT_SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+# CURRENT_SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
 CURRENT_SCRIPT_DIR="$(dirname "$(realpath "${PWD}")")"
-# CURRENT_SCRIPT_DIR="$(dirname "$(realpath "${ZSH_SOURCE[0]}")")"
+LOG_DIR="$CURRENT_SCRIPT_DIR/log"
+mkdir -p $LOG_DIR
 
 # 获取本地 IP 地址
 local_ip=$(ip -o -4 addr list | grep '10.42.0.' | awk '{print $4}' | cut -d/ -f1)
@@ -24,6 +26,9 @@ else
 fi
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
+export DYLOG_log_dir=$LOG_DIR
+export DYLOG_LOG_SIZE=20000
+export DYLOG_DEFAULT_LEVEL=FATAL
 
 # 存在ros2则source
 if [ -f "/opt/ros/humble/setup.zsh" ]; then
@@ -36,8 +41,10 @@ if [ -f "/opt/ros/humble/setup.zsh" ]; then
     export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
     ros2 daemon stop
     ros2 daemon start
+
     # 检查是否存在forwarder/app/bin/forwarder
     if [ -f "${CURRENT_SCRIPT_DIR}/forwarder/app/bin/forwarder" ]; then
-        source ${CURRENT_SCRIPT_DIR}/forwarder/app/genie_msgs/setup.zsh
+        source ${CURRENT_SCRIPT_DIR}/forwarder/app/share/genie_msgs/local_setup.zsh
+        ln -s /opt/ros/humble/opt ${CURRENT_SCRIPT_DIR}/forwarder/app/opt
     fi
 fi

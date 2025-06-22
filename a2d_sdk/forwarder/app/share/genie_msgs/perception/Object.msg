@@ -1,0 +1,12 @@
+int32 track_id
+CameraObject[] cam_obj
+BevObject bev_obj
+GraspPoint[] grasp_point
+AssoMatrix[] asso_matrix
+int32 sensor_type
+int32 class_type
+int32 sub_type
+int32 grasp_type
+int32 motion_status
+float32 tracking_time
+float32 tracking_score

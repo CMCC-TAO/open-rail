@@ -1,0 +1,5 @@
+#提供语种设定服务
+#/voice/language
+std_msgs/Header     header
+uint32 LANGUAGE_TYPE_ENGLISH = 1
+uint32 language_type    

@@ -1,0 +1,4 @@
+source;share/rosbag2_compression/local_setup.bash
+source;share/rosbag2_compression/local_setup.dsv
+source;share/rosbag2_compression/local_setup.sh
+source;share/rosbag2_compression/local_setup.zsh

@@ -1,0 +1,75 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from visualization_msgs/msg/ImageMarker.msg
+// generated code does not contain a copyright notice
+
+#include "builtin_interfaces/msg/Duration.idl"
+#include "geometry_msgs/msg/Point.idl"
+#include "std_msgs/msg/ColorRGBA.idl"
+#include "std_msgs/msg/Header.idl"
+
+module visualization_msgs {
+  module msg {
+    module ImageMarker_Constants {
+      const int32 CIRCLE = 0;
+      const int32 LINE_STRIP = 1;
+      const int32 LINE_LIST = 2;
+      const int32 POLYGON = 3;
+      const int32 POINTS = 4;
+      const int32 ADD = 0;
+      const int32 REMOVE = 1;
+    };
+    struct ImageMarker {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "Namespace which is used with the id to form a unique id.")
+      string ns;
+
+      @verbatim (language="comment", text=
+        "Unique id within the namespace.")
+      int32 id;
+
+      @verbatim (language="comment", text=
+        "One of the above types, e.g. CIRCLE, LINE_STRIP, etc.")
+      int32 type;
+
+      @verbatim (language="comment", text=
+        "Either ADD or REMOVE.")
+      int32 action;
+
+      @verbatim (language="comment", text=
+        "Two-dimensional coordinate position, in pixel-coordinates.")
+      geometry_msgs::msg::Point position;
+
+      @verbatim (language="comment", text=
+        "The scale of the object, e.g. the diameter for a CIRCLE.")
+      float scale;
+
+      @verbatim (language="comment", text=
+        "The outline color of the marker.")
+      std_msgs::msg::ColorRGBA outline_color;
+
+      @verbatim (language="comment", text=
+        "Whether or not to fill in the shape with color.")
+      uint8 filled;
+
+      @verbatim (language="comment", text=
+        "Fill color; in the range:")
+      @unit (value="0.0-1.0")
+      std_msgs::msg::ColorRGBA fill_color;
+
+      @verbatim (language="comment", text=
+        "How long the object should last before being automatically deleted." "\n"
+        "0 indicates forever.")
+      builtin_interfaces::msg::Duration lifetime;
+
+      @verbatim (language="comment", text=
+        "Coordinates in 2D in pixel coords. Used for LINE_STRIP, LINE_LIST, POINTS, etc.")
+      sequence<geometry_msgs::msg::Point> points;
+
+      @verbatim (language="comment", text=
+        "The color for each line, point, etc. in the points field.")
+      sequence<std_msgs::msg::ColorRGBA> outline_colors;
+    };
+  };
+};

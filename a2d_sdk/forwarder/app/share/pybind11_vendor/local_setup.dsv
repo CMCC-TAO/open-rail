@@ -1,0 +1,2 @@
+source;share/pybind11_vendor/environment/ament_prefix_path.sh
+source;share/pybind11_vendor/environment/path.sh

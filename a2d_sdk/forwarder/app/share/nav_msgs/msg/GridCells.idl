@@ -1,0 +1,28 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from nav_msgs/msg/GridCells.msg
+// generated code does not contain a copyright notice
+
+#include "geometry_msgs/msg/Point.idl"
+#include "std_msgs/msg/Header.idl"
+
+module nav_msgs {
+  module msg {
+    @verbatim (language="comment", text=
+      "An array of cells in a 2D grid")
+    struct GridCells {
+      std_msgs::msg::Header header;
+
+      @verbatim (language="comment", text=
+        "Width of each cell")
+      float cell_width;
+
+      @verbatim (language="comment", text=
+        "Height of each cell")
+      float cell_height;
+
+      @verbatim (language="comment", text=
+        "Each cell is represented by the Point at the center of the cell")
+      sequence<geometry_msgs::msg::Point> cells;
+    };
+  };
+};

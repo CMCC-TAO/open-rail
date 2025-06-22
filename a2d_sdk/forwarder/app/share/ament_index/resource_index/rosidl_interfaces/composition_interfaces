@@ -1,0 +1,12 @@
+srv/ListNodes.idl
+srv/ListNodes.srv
+srv/ListNodes_Request.msg
+srv/ListNodes_Response.msg
+srv/LoadNode.idl
+srv/LoadNode.srv
+srv/LoadNode_Request.msg
+srv/LoadNode_Response.msg
+srv/UnloadNode.idl
+srv/UnloadNode.srv
+srv/UnloadNode_Request.msg
+srv/UnloadNode_Response.msg

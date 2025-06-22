@@ -1,0 +1,19 @@
+// generated from rosidl_adapter/resource/msg.idl.em
+// with input from genie_msgs/msg/app/fault_manager/FimCamera.msg
+// generated code does not contain a copyright notice
+
+#include "std_msgs/msg/Header.idl"
+
+module genie_msgs {
+  module msg {
+    struct FimCamera {
+      std_msgs::msg::Header header;
+
+      sequence<uint8> fim_camera;
+
+      sequence<string> camera_name;
+
+      sequence<uint16> err_code;
+    };
+  };
+};
