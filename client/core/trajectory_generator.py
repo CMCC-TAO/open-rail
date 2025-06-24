@@ -173,31 +173,31 @@ class TrajectoryGenerator():
             traj_fitted_new = np.array(final_results)
             timestamps_fitted_new = np.arange(start_time, end_time, time_step)
 
-            joint_index = 0
-            # plot and save old and new traj
-            fig, ax = plt.subplots()
+            # joint_index = 0
+            # # plot and save old and new traj
+            # fig, ax = plt.subplots()
 
-            # 绘制旧轨迹
-            # ax.plot(self.timestamps_fitted, self.traj_fitted[joint_index, :], label='last_traj_ft', color='red', linestyle='-')
-            # ax.plot(self.timestamps, self.traj[joint_index, :], label='last_traj_gt', color='blue', linestyle='dotted')
-            ax.scatter(self.timestamps, self.traj[joint_index, :], label='last_traj_gt', color='blue')
+            # # 绘制旧轨迹
+            # # ax.plot(self.timestamps_fitted, self.traj_fitted[joint_index, :], label='last_traj_ft', color='red', linestyle='-')
+            # # ax.plot(self.timestamps, self.traj[joint_index, :], label='last_traj_gt', color='blue', linestyle='dotted')
+            # ax.scatter(self.timestamps, self.traj[joint_index, :], label='last_traj_gt', color='blue')
 
-            # 绘制新轨迹
-            # ax.plot(timestamps_fitted_new, traj_fitted_new[joint_index, :], label='new_traj_ft', color='red', linestyle='-')
-            # ax.plot(timestamps, action_chunk[joint_index, :], label='new_traj_gt', color='green', linestyle='dotted')
-            ax.scatter(timestamps, action_chunk[joint_index, :], label='new_traj_gt', color='green')
+            # # 绘制新轨迹
+            # # ax.plot(timestamps_fitted_new, traj_fitted_new[joint_index, :], label='new_traj_ft', color='red', linestyle='-')
+            # # ax.plot(timestamps, action_chunk[joint_index, :], label='new_traj_gt', color='green', linestyle='dotted')
+            # ax.scatter(timestamps, action_chunk[joint_index, :], label='new_traj_gt', color='green')
 
-            # 添加图例
-            ax.legend()
+            # # 添加图例
+            # ax.legend()
 
-            # 添加标题和标签
-            ax.set_title(f'joint {joint_index}')
-            ax.set_xlabel('time [s]')
-            ax.set_ylabel('joint value')
+            # # 添加标题和标签
+            # ax.set_title(f'joint {joint_index}')
+            # ax.set_xlabel('time [s]')
+            # ax.set_ylabel('joint value')
 
-            # 保存图片
-            plt.savefig(f'joint_{joint_index}_fitted_{self.frame}.png', dpi=300)
-            self.frame += 1
+            # # 保存图片
+            # plt.savefig(f'joint_{joint_index}_fitted_{self.frame}.png', dpi=300)
+            # self.frame += 1
 
             self.traj_fitted = traj_fitted_new
             self.timestamps_fitted = timestamps_fitted_new

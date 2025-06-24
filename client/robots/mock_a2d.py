@@ -1,5 +1,6 @@
 import time
 import torch
+import random
 import lerobot
 import numpy as np
 # from collections import deque
@@ -51,7 +52,8 @@ class RobotA2DMock():
     #     print(max(list_time) - min(list_time), list_time)
 
     def controlRobot(self, action):
-        print(f'Mock control robot...')
+        if random.random() < 0.001:
+            print(f'Mock control robot...')
         # self.robot.move_arm(action[0:14].tolist())
         # self.robot.move_gripper(action[14:16].tolist())
         # action = data['pred_action']

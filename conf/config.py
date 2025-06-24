@@ -6,6 +6,10 @@ class ModelType(str, Enum):
     ACT = 'act'
     GR00T = 'gr00t'
 
+class RobotType(str, Enum):
+    A2D = 'a2d'
+    MOCK = 'mock'
+
 def get_realtime_data_manager_config():
     """Generate config for RealtimeDataManager
 
@@ -27,7 +31,7 @@ def get_controller_config():
     """
     config = ConfigDict()
     config.wait_step = 4 # Time delay for robot controller, in milliseconds [ms]
-    config.control_period = 50 # Control period to control robot, in milliseconds [ms]
+    config.control_period = 100 # Control period to control robot, in milliseconds [ms]
     config.strategy = 'step' # Control strategy, choices = ('Step', 'realtime', 'fusion)
     return config
 
@@ -66,13 +70,14 @@ def get_client_config():
         ConfigDict: Configuration for Client.
     """
     config = ConfigDict()
+    config.robot = RobotType.MOCK
     config.rdm = get_realtime_data_manager_config()
     config.traj = get_trajectory_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
-    config.show_data = False # True to show data, False to not show data
+    config.show_data = True # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
     return config
 
@@ -98,5 +103,6 @@ def get_server_config():
     config.zmq = get_zmq_config()
     # MAIN_CLIENT_ID = 'ZROBOT'
     config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
-    config.model = ModelType.ACT
+    # config.model = ModelType.ACT
+    config.model = ModelType.GR00T
     return config

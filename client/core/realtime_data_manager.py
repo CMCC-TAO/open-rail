@@ -56,7 +56,7 @@ class RealtimeDataManager():
         # currt_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
         print(f'init_control_timestamp: {self.init_control_timestamp}')
         currt_time = time.time()
-        self.init_control_timestamp = self.init_control_timestamp + (currt_time - self.init_control_time) * 1e9
+        self.init_control_timestamp = self.init_control_timestamp + int((currt_time - self.init_control_time) * 1e9)
         self.init_control_time = currt_time
         print(f'init_control_timestamp updated: {self.init_control_timestamp}')
         self.update_control_time = True
@@ -124,7 +124,7 @@ class RealtimeDataManager():
                         self.timestamp_chunks.append(timestamp_chunk_new[candidate_index + index])
                 end_time = time.time()
         print(f'init_control_timestamp: {self.init_control_timestamp}, init_observe_timestamp: {self.init_observe_timestamp}')
-        rounded = [round(x, 2) for x in self.timestamp_chunks]
+        rounded = [round(x, 4) for x in self.timestamp_chunks]
         print(f'timestamp_chunks: {rounded}')
                 # print(f'动作融合花费时间: {(end_time - start_time) * 1000} ms')
 
@@ -244,12 +244,13 @@ class RealtimeDataManager():
         with self.polynomial_thread_lock:
             # 更新index
             if self.action_chunk_index is None:
-                self.action_chunk_index = -1
+                self.action_chunk_index = 0
             else:
+                print(f'action_chunk_index old: {self.action_chunk_index}')
                 currt_timestamp = self.timestamps_fitted[self.action_chunk_index]
                 action = self.action_chunk_fitted[:, self.action_chunk_index]
-                self.action_chunk_index = self.getClosestIndex(timestamps_fitted, currt_timestamp) - 1
-                print(f'action_chunk_index: {self.action_chunk_index}')
+                self.action_chunk_index = self.getClosestIndex(timestamps_fitted, currt_timestamp)
+                print(f'action_chunk_index new: {self.action_chunk_index}')
                 print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
                 print(f'old action: {action}')
                 # self.action_chunk_index = offset

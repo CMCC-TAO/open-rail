@@ -83,7 +83,7 @@ class VLAClient():
             if self.inference_count == 0:
                 self.inferenceFirstTime()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-                time.sleep(0.5)
+                # time.sleep(0.5)
             # 第二次推理
             elif self.inference_count < 2:
                 self.inferenceStep()
@@ -196,9 +196,9 @@ class VLAClient():
         action = self.rdm.getActionFitted()
         # action, timestamp = self.rdm.popActionData()
         if action is not None:
-            pass
+            # pass
             # print(f'[{time.time()}]控制线程已启动...')
-            # self.robot.controlRobot(action)
+            self.robot.controlRobot(action)
             if self.config.show_data:
                 with self.show_thread_lock:
                     # show raw action chunk
@@ -360,7 +360,7 @@ class VLAClient():
             self.running = False
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
-        self.interpolate_thread.join(timeout=1.0)
+        # self.interpolate_thread.join(timeout=1.0)
         # self.control_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
         print('推理框架客户端已关闭。')
@@ -370,11 +370,13 @@ class VLAClient():
             self.running = False
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
-        self.interpolate_thread.join(timeout=1.0)
+        # self.interpolate_thread.join(timeout=1.0)
         # self.control_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
         self.zmq_client.close()
         self.traj_generator.close()
+        print('推理框架客户端已关闭。')
+
     def updateVisualization(self, frame):
         # 更新图表数据
         # print(f'updateVisualization: {frame}')

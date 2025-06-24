@@ -92,6 +92,7 @@ class RobotA2D():
     def close(self):
         self.camera.close()
         self.robot.shutdown()
+        print('close robot')
 
 if __name__ == '__main__':
     import sys
