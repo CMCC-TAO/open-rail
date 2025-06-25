@@ -145,7 +145,7 @@ class VLAClient():
             action_chunk, timestamp_chunk = self.processAction(action_data)
             # print(timestamp_chunk)
             # with self.thread_lock:
-            self.rdm.addActionData(action_chunk, timestamp_chunk)
+            self.rdm.addActionData(action_chunk, timestamp_chunk, strategy=self.config.chunk_strategy)
 
             self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 48}, daemon=True)
             self.interpolate_thread.start()
@@ -177,7 +177,7 @@ class VLAClient():
             action_chunk, timestamp_chunk = self.processAction(action_data)
             # print(timestamp_chunk)
             # addActionData函数是线程安全的，不需要加锁
-            self.rdm.addActionData(action_chunk, timestamp_chunk)
+            self.rdm.addActionData(action_chunk, timestamp_chunk, strategy=self.config.chunk_strategy)
 
             self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 48}, daemon=True)
             self.interpolate_thread.start()
@@ -237,7 +237,7 @@ class VLAClient():
             # 准备轨迹拟合用的数据
             # 首先准备拟合的数据
             timestamps_fitted, action_chunk_fitted = self.rdm.getFittedActionChunk(index_offset=0, num_samples=num_samples_fitted)
-            timestamps, action_chunk = self.rdm.popActionChunk(index_offset=0, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
+            timestamps, action_chunk = self.rdm.popActionChunk(index_offset=5, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
             if timestamps_fitted is not None:
                 print(f'timestamps_fitted: {timestamps_fitted}')
                 print(f'timestamps: {timestamps}')
@@ -250,7 +250,7 @@ class VLAClient():
             end_time = np.amax(timestamps)
             # trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001)
             
-            action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=4, time_step=0.01)
+            action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=self.config.fitting_deg, time_step=self.config.fitting_time_step/1000)
             # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
             # action_chunk_fitted shape: (16, 1548)
             #TODO: 根据time_step 计算出offset
@@ -328,7 +328,7 @@ class VLAClient():
             pred_action = action['pred_action']
             ref_timestamp = action['ref_timestamp']
             for index, action in enumerate(pred_action):
-                timestamp =  ref_timestamp + self.config.controller.control_period * index * 1000000
+                timestamp =  ref_timestamp + self.config.observer.period * index * 1000000 # observer.period单位是毫秒，需要转换成纳秒，即*1e6
                 action_chunk.append(action)
                 timestamp_chunk.append(timestamp)
             

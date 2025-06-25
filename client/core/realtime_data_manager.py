@@ -57,23 +57,29 @@ class RealtimeDataManager():
         print(f'init_control_timestamp: {self.init_control_timestamp}')
         currt_time = time.time()
         self.init_control_timestamp = self.init_control_timestamp + int((currt_time - self.init_control_time) * 1e9)
+        print(f'init_control_timestamp updated: {self.init_control_timestamp}, time_offset: {(currt_time - self.init_control_time) * 1000} ms')
         self.init_control_time = currt_time
-        print(f'init_control_timestamp updated: {self.init_control_timestamp}')
         self.update_control_time = True
 
-    def addActionData(self, action_chunk, timestamp_chunk):
+    def addActionData(self, action_chunk, timestamp_chunk, strategy = 'latest'):
         # 第一次添加数据的时候，记录初始时间戳,作为控制的开始时间
         if self.init_control_timestamp is None or len(self.action_chunks) == 0:
             self.init_control_timestamp = timestamp_chunk[0]
             self.init_control_time = time.time()
             # 首次添加数据，直接添加到action_chunks和timestamp_chunks中
-            timestamp_chunk_new = [(timestamp -self.init_control_timestamp) / 1e9 for timestamp in timestamp_chunk]
+            timestamp_chunk_new = [(timestamp - self.init_control_timestamp) / 1e9 for timestamp in timestamp_chunk]
             if self.action_chunk_last is None:
                 self.action_chunk_last = action_chunk
                 self.timestamp_last = timestamp_chunk_new
             with self.action_thread_lock:
-                self.action_chunks.extend(action_chunk)
-                self.timestamp_chunks.extend(timestamp_chunk_new)
+                if strategy == 'fusion':
+                    self.action_chunks.extend(action_chunk)
+                    self.timestamp_chunks.extend(timestamp_chunk_new)
+                elif strategy == 'latest':
+                    self.action_chunks = action_chunk
+                    self.timestamp_chunks = timestamp_chunk_new
+                else:
+                    raise ValueError(f'Invalid strategy: {strategy}')
             # print(f'timestamp_chunks: {self.timestamp_chunks}')
         else:
             # self.currt_time = time.time()
@@ -83,7 +89,7 @@ class RealtimeDataManager():
             # print(f'time duration in a2d: {(timestamp_chunk[0] - self.init_control_timestamp) / 1e6} ms')
             # 新的action_chunk需要跟已有的进行融合
             # 首先对齐时间戳
-            timestamp_chunk_new = [(timestamp -self.init_control_timestamp) / 1e9 for timestamp in timestamp_chunk]
+            timestamp_chunk_new = [(timestamp - self.init_control_timestamp) / 1e9 for timestamp in timestamp_chunk]
 
             # if not self.isDraw:
             #     self.isDraw = True
@@ -105,29 +111,38 @@ class RealtimeDataManager():
 
             # 确保线程安全
             with self.action_thread_lock:
-                start_time = time.time()
-                candidate_index = 0
-                for index in range(len(timestamp_chunk_new)):
-                    if timestamp_chunk_new[index] > self.timestamp_chunks[0]:
-                        candidate_index = index
-                        break
-                assign_index = self.getClosestIndex(self.timestamp_chunks, timestamp_chunk_new[candidate_index])
-                # 然后进行融合
-                target_chunk_len = len(self.timestamp_chunks)
-                currt_chunk_len = len(action_chunk)
-                for index in range(currt_chunk_len - candidate_index):
-                    if assign_index + index < target_chunk_len:
-                        self.action_chunks[assign_index + index] = (self.action_chunks[assign_index + index] + action_chunk[candidate_index + index]) / 2.0
-                        self.timestamp_chunks[assign_index + index] = (self.timestamp_chunks[assign_index + index] + timestamp_chunk_new[candidate_index + index]) / 2.0
-                    else:
-                        self.action_chunks.append(action_chunk[candidate_index + index])
-                        self.timestamp_chunks.append(timestamp_chunk_new[candidate_index + index])
-                end_time = time.time()
-        print(f'init_control_timestamp: {self.init_control_timestamp}, init_observe_timestamp: {self.init_observe_timestamp}')
+                if strategy == 'fusion':
+                    self.fusionActionChunks(action_chunk, timestamp_chunk_new)
+                elif strategy == 'latest':
+                    self.action_chunks = action_chunk
+                    self.timestamp_chunks = timestamp_chunk_new
+                else:
+                    raise ValueError(f'Invalid strategy: {strategy}')
+        
+        # print(f'init_control_timestamp: {self.init_control_timestamp}, init_observe_timestamp: {self.init_observe_timestamp}')
         rounded = [round(x, 4) for x in self.timestamp_chunks]
         print(f'timestamp_chunks: {rounded}')
                 # print(f'动作融合花费时间: {(end_time - start_time) * 1000} ms')
 
+    @run_time_decorator
+    def fusionActionChunks(self, action_chunk, timestamp_chunk):
+        candidate_index = 0
+        for index in range(len(timestamp_chunk)):
+            if timestamp_chunk[index] > self.timestamp_chunks[0]:
+                candidate_index = index
+                break
+        assign_index = self.getClosestIndex(self.timestamp_chunks, timestamp_chunk[candidate_index])
+        # 然后进行融合
+        target_chunk_len = len(self.timestamp_chunks)
+        currt_chunk_len = len(action_chunk)
+        for index in range(currt_chunk_len - candidate_index):
+            if assign_index + index < target_chunk_len:
+                self.action_chunks[assign_index + index] = (self.action_chunks[assign_index + index] + action_chunk[candidate_index + index]) / 2.0
+                self.timestamp_chunks[assign_index + index] = (self.timestamp_chunks[assign_index + index] + timestamp_chunk[candidate_index + index]) / 2.0
+            else:
+                self.action_chunks.append(action_chunk[candidate_index + index])
+                self.timestamp_chunks.append(timestamp_chunk[candidate_index + index])
+        
     def popActionData(self, num_samples=32):
         # 确保线程安全
         with self.action_thread_lock:
@@ -175,7 +190,7 @@ class RealtimeDataManager():
             # TODO:  处理无有效数据
             print("[Error] No valid data in action chunk.")
             return None, None
-        valid_index = valid_index - 1
+        
         # 数据拟合需要往前找3帧，防止出现拟合结果不平顺的情况，TODO：可以将这部分变成可配置的参数
         # start_index = max(0, valid_index - num_samples // 4)
         start_index = max(0, valid_index)
@@ -187,9 +202,9 @@ class RealtimeDataManager():
         # end_time = self.timestamp_chunks[end_index - 1]
 
         # 丢掉过期数据，需要保证线程安全
-        with self.action_thread_lock:
-            del self.action_chunks[:start_index]
-            del self.timestamp_chunks[:start_index]
+        # with self.action_thread_lock:
+        #     del self.action_chunks[:start_index]
+        #     del self.timestamp_chunks[:start_index]
         
         # print(f'timestamps for curve fitting: {timestamps}, start_time: {start_time}, end_time: {end_time}')
         return np.array(timestamps), np.array(self.toJointChunk(action_chunks))
@@ -250,6 +265,8 @@ class RealtimeDataManager():
                 currt_timestamp = self.timestamps_fitted[self.action_chunk_index]
                 action = self.action_chunk_fitted[:, self.action_chunk_index]
                 self.action_chunk_index = self.getClosestIndex(timestamps_fitted, currt_timestamp)
+                if timestamps_fitted[self.action_chunk_index] < currt_timestamp:
+                    self.action_chunk_index += 1
                 print(f'action_chunk_index new: {self.action_chunk_index}')
                 print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
                 print(f'old action: {action}')

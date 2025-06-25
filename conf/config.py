@@ -31,7 +31,7 @@ def get_controller_config():
     """
     config = ConfigDict()
     config.wait_step = 4 # Time delay for robot controller, in milliseconds [ms]
-    config.control_period = 33 # Control period to control robot, in milliseconds [ms]
+    config.period = 10 # Control period to control robot, in milliseconds [ms]
     config.strategy = 'step' # Control strategy, choices = ('Step', 'realtime', 'fusion)
     return config
 
@@ -44,7 +44,7 @@ def get_observer_config():
     config = ConfigDict()
     config.camera_names = ['head', 'hand_left', 'hand_right'] # Cameras used to get observations
     config.proprio_names = ['arm', 'gripper', 'head', 'waist']
-    config.observe_period = 15 # Observation period to get robot observations, in milliseconds [ms]
+    config.period = 33 # Observation period to get robot observations, in milliseconds [ms]
     return config
 
 def get_trajectory_config():
@@ -79,6 +79,9 @@ def get_client_config():
     config.zmq = get_zmq_config()
     config.show_data = False # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
+    config.fitting_time_step = 10 # 轨迹拟合的时间步长，单位为毫秒
+    config.fitting_deg = 4 #多项式拟合的阶数
+    config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     return config
 
 def get_zmq_config():
