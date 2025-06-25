@@ -55,8 +55,10 @@ class TrajectoryGenerator():
 
 
         # 轨迹曲线拟合所需要的变量
-        # 创建线程池用于并行轨迹曲线拟合
-        self.fitting_executor = ThreadPoolExecutor(max_workers=16)
+        # 创建线程池用于并行关节轨迹曲线拟合
+        self.joint_fitting_executor = ThreadPoolExecutor(max_workers=16)
+        # 创建线程池用于夹爪轨迹曲线拟合
+        self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=2)
 
 
     def addWayPoint(self, point: list):
@@ -152,16 +154,55 @@ class TrajectoryGenerator():
         #     self.frame += 1
         return index, joint_chunk_fitted
 
+    def gripperTrajFitting(self, timestamps, gripper_chunk, index, start_time, end_time, time_step = 0.001):
+        # 去除异常值，使用中位数滤波
+        length = len(gripper_chunk)
+        window_size_half = 4
+        for currt_index in range(length):
+            if currt_index < window_size_half:
+                window_min = 0
+                window_max = min(length, window_size_half * 2 + 1)
+            elif currt_index >= length - window_size_half:
+                window_min = max(0, length - window_size_half * 2 -1)
+                window_max = length
+            else:
+                window_min = currt_index - window_size_half
+                window_max = currt_index + window_size_half + 1
+            mean = np.mean(gripper_chunk[window_min:window_max])
+            gripper_chunk[currt_index] = mean
+            # var  = np.var(gripper_chunk[window_min:window_max])
+            # std_dev  = np.std(gripper_chunk[window_min:window_max])
+            # if gripper_chunk[currt_index] > mean + 1.5 * std_dev or gripper_chunk[currt_index] < mean - 1.5 * std_dev: 
+            #     gripper_chunk[currt_index] = mean
+            #     print(f'smooth gripper value')
+        
+        timestamp_fitted = np.arange(start_time, end_time, time_step)
+        gripper_chunk_fitted = []
+        currt_index = 0
+        for timestamp in timestamp_fitted:
+            if timestamp > timestamps[currt_index]:
+                currt_index = min(length, currt_index + 1)
+            gripper_chunk_fitted.append((gripper_chunk[max(currt_index - 1, 0)] + gripper_chunk[min(currt_index, length - 1)]) / 2.0)
+
+        return index, gripper_chunk_fitted
+
     @run_time_decorator
     def trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):
         # 对Action进行预处理，action_chunk是动作维度的List格式[[action], [action], [action], ...]
         # 需要将action_chunk转换为关节维度的格式，以Numpy表示
-        futures = [self.fitting_executor.submit(self.jointTrajFitting, timestamps, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(action_chunk)]
+        joint_futures = [self.joint_fitting_executor.submit(self.jointTrajFitting, timestamps, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(action_chunk[0:14, :])]
+        gripper_futures = [self.gripper_fitting_executor.submit(self.gripperTrajFitting, timestamps, np.array(joint_chunk), 14+index, start_time, end_time, time_step) for index, joint_chunk in enumerate(action_chunk[14:, :])]
+
         # 等待所有任务完成并获取结果
-        results = [future.result() for future in futures]
+        gripper_results = [future.result() for future in gripper_futures]
+        joint_results = [future.result() for future in joint_futures]
+        results = joint_results + gripper_results
         # 解析结果
         final_results = [None] * len(results)
+        # print(f'final_results length: {len(final_results)}')
         for index, joint_chunk_fitted in results:
+            # print(f'index = {index}')
+            # print(f'action shape: {action_chunk.shape}')
             final_results[index] = joint_chunk_fitted
         if self.traj_fitted is None:
             self.traj_fitted = np.array(final_results)

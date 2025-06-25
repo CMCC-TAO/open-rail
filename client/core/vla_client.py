@@ -33,7 +33,7 @@ class VLAClient():
         self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
         self.interpolate_thread = None
         # self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
-        self.control_thread_timer = MultiThreadTimer(10, self.controlThreadFun)
+        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self.controlThreadFun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
@@ -87,6 +87,7 @@ class VLAClient():
             # 第二次推理
             elif self.inference_count < 10000:
                 self.inferenceStep()
+                time.sleep(0.1)
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)
             #     with self.thread_lock:
@@ -202,8 +203,8 @@ class VLAClient():
             if self.config.show_data:
                 with self.show_thread_lock:
                     # show raw action chunk
-                    self.ydata0.append(action[0])
-                    self.ydata1.append(action[1])
+                    self.ydata0.append(action[14])
+                    self.ydata1.append(action[15])
                     self.xdata.append(len(self.ydata0))
                     # print(f'step: {len(self.ydata0)}')
             # print(f'action: {action}')
@@ -237,7 +238,7 @@ class VLAClient():
             # 准备轨迹拟合用的数据
             # 首先准备拟合的数据
             timestamps_fitted, action_chunk_fitted = self.rdm.getFittedActionChunk(index_offset=0, num_samples=num_samples_fitted)
-            timestamps, action_chunk = self.rdm.popActionChunk(index_offset=5, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
+            timestamps, action_chunk = self.rdm.popActionChunk(index_offset=0, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
             if timestamps_fitted is not None:
                 print(f'timestamps_fitted: {timestamps_fitted}')
                 print(f'timestamps: {timestamps}')
@@ -371,6 +372,7 @@ class VLAClient():
     def close(self):
         with self.thread_lock:
             self.running = False
+        plt.close()
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
         # self.interpolate_thread.join(timeout=1.0)

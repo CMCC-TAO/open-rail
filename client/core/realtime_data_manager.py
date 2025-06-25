@@ -226,7 +226,8 @@ class RealtimeDataManager():
                 return 0.0
             # 否则返回timestamps_fitted中action_chunk_index对应的值
             else:
-                return self.timestamps_fitted[self.action_chunk_index + index_offset]
+                length = len(self.timestamps_fitted)
+                return self.timestamps_fitted[min(length - 1, self.action_chunk_index + index_offset)]
         # return time.time() - self.init_control_time
 
     def getFittedActionChunk(self, index_offset=0, num_samples=20):
@@ -269,12 +270,12 @@ class RealtimeDataManager():
                     self.action_chunk_index += 1
                 print(f'action_chunk_index new: {self.action_chunk_index}')
                 print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
-                print(f'old action: {action}')
+                # print(f'old action: {action}')
                 # self.action_chunk_index = offset
             self.action_chunk_fitted = action_chunk_fitted
             self.timestamps_fitted = timestamps_fitted
             action = self.action_chunk_fitted[:, self.action_chunk_index]
-            print(f'new action: {action}')
+            # print(f'new action: {action}')
             # print(f'action_chunk_index: {self.action_chunk_index}')
             # print(f'action_chunk_fitted shape: {self.action_chunk_fitted.shape}')
             # print(f'action_chunk_fitted: {self.action_chunk_fitted[:, -2]}')

@@ -16,6 +16,7 @@ class RobotA2D():
         self.camera= Camera(observer_config.camera_names)
         self.robot = Robot()
         self.currt_timestamp = 0
+        self.gripper_count = 0
         # self.obs_buffer = deque(maxlen=10)
         time.sleep(1)
 
@@ -37,7 +38,16 @@ class RobotA2D():
 
     def controlRobot(self, action):
         self.robot.move_arm(action[0:14].tolist())
-        self.robot.move_gripper(action[14:16].tolist())
+        # gripper_cmd = np.clip(action[14:16], 0.0, 1.0)
+        # self.robot.move_gripper(gripper_cmd.tolist())
+        # print(f'gripper_states: {gripper_cmd.tolist()}')
+        if self.gripper_count < 30:
+            self.gripper_count += 1
+        else:
+            gripper_cmd = np.clip(action[14:16], 0.0, 1.0)
+            self.robot.move_gripper(gripper_cmd.tolist())
+            print(f'gripper_states: {gripper_cmd.tolist()}')
+            self.gripper_count = 0
         # action = data['pred_action']
         # obs_state = data['obs_state']
         # # action = misc.smooth_each_dim_with_spline(np.concatenate([action[0], action[-1]], axis=0), num_smooth_points=50, s=0.05)
@@ -45,6 +55,9 @@ class RobotA2D():
         #     self.robot.move_arm(action[i, 0:14].tolist())
         #     self.robot.move_gripper(action[i, 14:16].tolist())
         #     time.sleep(0.01)
+    def controlGripper(self, gripper_cmd):
+        self.robot.move_gripper(gripper_cmd)
+        print(f'gripper_states: {gripper_cmd}')
 
     def retrieveObservation(self):
         result = {}
@@ -97,6 +110,7 @@ class RobotA2D():
 if __name__ == '__main__':
     import sys
     import os
+    import random
     # 获取当前文件的绝对路径
     current_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     print(current_dir)
@@ -107,10 +121,31 @@ if __name__ == '__main__':
     robot = RobotA2D(config.observer, config.controller)
     try:
         while True:
-            result = robot.retrieveObservation()
-            if result is not None:
-                print(result.keys())
-                print(f'ref_timestamp: {result["ref_timestamp"]}, obs.state: {result["obs.state"]}')
-            time.sleep(0.001)  # 控制循环频率
+            # if (random.random() < 0.5)
+            # for index in range(20):
+            #     robot.controlGripper([0.9, 0.9])
+            #     time.sleep(0.005)
+            # for index in range(2):
+            #     robot.controlGripper([0.0, 0.0])
+            #     time.sleep(0.005)
+            char = input("Press 'q' to quit: ") 
+            if char == 'q':
+                break
+            elif char == 'open':
+                robot.controlGripper([0.0, 0.0])
+            elif char == 'close':
+                robot.controlGripper([0.9, 0.9])
+            else:
+                print(f'unknown command: {char}')
+
+        # robot = RobotA2D(config.observer, config.controller)
+        # # robot.get_cameras()
+        # while True:
+            
+            # result = robot.retrieveObservation()
+            # if result is not None:
+            #     print(result.keys())
+            #     print(f'ref_timestamp: {result["ref_timestamp"]}, obs.state: {result["obs.state"]}')
+            # time.sleep(0.001)  # 控制循环频率
     except KeyboardInterrupt:
         robot.close()
