@@ -30,6 +30,32 @@ def crop_and_resize(img, target_height=480, target_width=640):
         resized = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_AREA)
         return resized
 
+def pad_and_resize(img, target_height=480, target_width=640, pad_color=(0, 0, 0)):
+    h, w = img.shape[:2]
+    target_ratio = target_width / target_height
+    current_ratio = w / h
+
+    # 计算需要填充的边
+    if current_ratio > target_ratio:
+        # 填充高度（长边是宽度）
+        new_height = int(w / target_ratio)  # 按目标比例计算新高度
+        delta = new_height - h
+        top = delta // 2
+        bottom = delta - top
+        padded = cv2.copyMakeBorder(img, top, bottom, 0, 0, cv2.BORDER_CONSTANT, value=pad_color)  # 宽度不变，填充上下
+    else:
+        # 填充宽度（长边是高度）
+        new_width = int(h * target_ratio)  # 按目标比例计算新宽度
+        delta = new_width - w
+        left = delta // 2
+        right = delta - left
+        padded = cv2.copyMakeBorder(img, 0, 0, left, right, cv2.BORDER_CONSTANT, value=pad_color)  # 高度不变，填充左右
+
+    # 缩放至目标尺寸（使用INTER_AREA插值适用于缩小图像）
+    resized = cv2.resize(padded, (target_width, target_height), interpolation=cv2.INTER_AREA)
+    return resized
+
+
 class RobotSmoother:
     def __init__(self, robot_interface):
         self.robot = robot_interface

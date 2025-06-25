@@ -33,7 +33,7 @@ class VLAClient():
         self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
         self.interpolate_thread = None
         # self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
-        self.control_thread_timer = MultiThreadTimer(1, self.controlThreadFun)
+        self.control_thread_timer = MultiThreadTimer(10, self.controlThreadFun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
@@ -83,9 +83,9 @@ class VLAClient():
             if self.inference_count == 0:
                 self.inferenceFirstTime()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-                # time.sleep(0.5)
+                time.sleep(0.5)
             # 第二次推理
-            elif self.inference_count < 2:
+            elif self.inference_count < 10000:
                 self.inferenceStep()
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)
@@ -147,7 +147,7 @@ class VLAClient():
             # with self.thread_lock:
             self.rdm.addActionData(action_chunk, timestamp_chunk)
 
-            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 32}, daemon=True)
+            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 48}, daemon=True)
             self.interpolate_thread.start()
             # 初次推理需要等待等待插值完成，更新init_control_timestamp
             self.interpolate_thread.join()
@@ -179,7 +179,7 @@ class VLAClient():
             # addActionData函数是线程安全的，不需要加锁
             self.rdm.addActionData(action_chunk, timestamp_chunk)
 
-            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 20, 'num_samples_raw': 12}, daemon=True)
+            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 48}, daemon=True)
             self.interpolate_thread.start()
             # if self.config.show_data:
             #     with self.show_thread_lock:
@@ -237,7 +237,7 @@ class VLAClient():
             # 准备轨迹拟合用的数据
             # 首先准备拟合的数据
             timestamps_fitted, action_chunk_fitted = self.rdm.getFittedActionChunk(index_offset=0, num_samples=num_samples_fitted)
-            timestamps, action_chunk = self.rdm.popActionChunk(index_offset=10, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
+            timestamps, action_chunk = self.rdm.popActionChunk(index_offset=0, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
             if timestamps_fitted is not None:
                 print(f'timestamps_fitted: {timestamps_fitted}')
                 print(f'timestamps: {timestamps}')
@@ -250,7 +250,7 @@ class VLAClient():
             end_time = np.amax(timestamps)
             # trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001)
             
-            action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=4, time_step=0.001)
+            action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=4, time_step=0.01)
             # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
             # action_chunk_fitted shape: (16, 1548)
             #TODO: 根据time_step 计算出offset
@@ -289,9 +289,12 @@ class VLAClient():
 
     def processData(self, frame):
         start_time = time.time()
-        img_head = misc.crop_and_resize(frame['obs.cam.head'])
-        img_hand_left = misc.crop_and_resize(frame['obs.cam.hand_left'])
-        img_hand_right = misc.crop_and_resize(frame['obs.cam.hand_right'])
+        # img_head = misc.crop_and_resize(frame['obs.cam.head'])
+        # img_hand_left = misc.crop_and_resize(frame['obs.cam.hand_left'])
+        # img_hand_right = misc.crop_and_resize(frame['obs.cam.hand_right'])
+        img_head = misc.pad_and_resize(frame['obs.cam.head'])
+        img_hand_left = misc.pad_and_resize(frame['obs.cam.hand_left'])
+        img_hand_right = misc.pad_and_resize(frame['obs.cam.hand_right'])
         # if frame['obs.state'][-1] is None:
         #     frame['obs.state'][-1] = 0.0
         data = {
@@ -303,7 +306,7 @@ class VLAClient():
                 'cam.hand_left': cv2.imencode('.jpg', img_hand_left)[1],
                 'cam.hand_right': cv2.imencode('.jpg', img_hand_right)[1],
                 'state': frame['obs.state'],
-                'annotation.human.action.task_description': ['pour milk'],
+                'annotation.human.action.task_description': ['pick bottle into box'],
             },
         }
         end_time = time.time()

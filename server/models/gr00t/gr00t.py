@@ -9,7 +9,8 @@ from gr00t.experiment.data_config import DATA_CONFIG_MAP
 
 class ModelVLA:
     def __init__(self):
-        MODEL_PATH = "/home/robot/Downloads/checkpoint-60000"
+        # MODEL_PATH = "/home/robot/Downloads/checkpoint-60000"
+        MODEL_PATH = "/home/robot/Downloads/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000"
         # EMBODIMENT_TAG = "gr1"
         EMBODIMENT_TAG = EmbodimentTag.NEW_EMBODIMENT
         os.environ["CUDA_VISIBLE_DEVICES"] = "0"

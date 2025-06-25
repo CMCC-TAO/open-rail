@@ -64,7 +64,17 @@ class VLAServer:
             # 计算并打印运行时间
             elapsed_time = (end_time - start_time) * 1000
             print(f"图像解码时间: {elapsed_time} ms")
-            
+
+            keys = data['obs'].keys()
+            print(f'data[obs] keys: {keys}')
+            # cv2.imshow('head', data['obs']['cam.head'])
+            # cv2.imshow('hand_left', data['obs']['cam.hand_left'])
+            # cv2.imshow('hand_right', data['obs']['cam.hand_right'])
+            # cv2.waitKey(1)
+            # cv2.imwrite('head.jpg', data['obs']['cam.head'])
+            # cv2.imwrite('hand_left.jpg', data['obs']['cam.hand_left'])
+            # cv2.imwrite('hand_right.jpg', data['obs']['cam.hand_right'])
+            # cv2.waitKey(1)
             # 提交推理任务到线程池
             future = self.executor.submit(self.model.infer, data)
             future.add_done_callback(self.inference_callback)
