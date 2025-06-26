@@ -268,6 +268,7 @@ class RealtimeDataManager():
                 self.action_chunk_index = self.getClosestIndex(timestamps_fitted, currt_timestamp)
                 if timestamps_fitted[self.action_chunk_index] < currt_timestamp:
                     self.action_chunk_index += 1
+                self.action_chunk_index += 0
                 print(f'action_chunk_index new: {self.action_chunk_index}')
                 print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
                 # print(f'old action: {action}')

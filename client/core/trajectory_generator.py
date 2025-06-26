@@ -169,6 +169,14 @@ class TrajectoryGenerator():
                 window_min = currt_index - window_size_half
                 window_max = currt_index + window_size_half + 1
             mean = np.mean(gripper_chunk[window_min:window_max])
+            # 数值增大增小，显著
+            # mean = (mean - 0.5) * 1.1 + 0.5
+            if mean > 0.95:
+                mean = 1.0
+            elif mean < 0.05:
+                mean = 0.0
+            else:
+                pass
             gripper_chunk[currt_index] = mean
             # var  = np.var(gripper_chunk[window_min:window_max])
             # std_dev  = np.std(gripper_chunk[window_min:window_max])

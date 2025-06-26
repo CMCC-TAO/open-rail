@@ -83,11 +83,12 @@ class VLAClient():
             if self.inference_count == 0:
                 self.inferenceFirstTime()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-                time.sleep(0.5)
+                time.sleep(1.0)
             # 第二次推理
             elif self.inference_count < 10000:
                 self.inferenceStep()
-                time.sleep(0.1)
+                time.sleep(1.75)
+                # char = input("Press 'q' to quit: ") 
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)
             #     with self.thread_lock:
@@ -372,7 +373,7 @@ class VLAClient():
     def close(self):
         with self.thread_lock:
             self.running = False
-        plt.close()
+        # plt.close()
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
         # self.interpolate_thread.join(timeout=1.0)

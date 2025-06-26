@@ -17,6 +17,7 @@ class RobotA2D():
         self.robot = Robot()
         self.currt_timestamp = 0
         self.gripper_count = 0
+        self.gripper_cmd = [0.0, 0.0]
         # self.obs_buffer = deque(maxlen=10)
         time.sleep(1)
 
@@ -41,13 +42,18 @@ class RobotA2D():
         # gripper_cmd = np.clip(action[14:16], 0.0, 1.0)
         # self.robot.move_gripper(gripper_cmd.tolist())
         # print(f'gripper_states: {gripper_cmd.tolist()}')
-        if self.gripper_count < 30:
+        # 统计gripper值的变化，当变化积累到一定次数后，发送一次gripper命令
+        new_gripper_cmd = action[14:16]
+        if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
             self.gripper_count += 1
-        else:
-            gripper_cmd = np.clip(action[14:16], 0.0, 1.0)
-            self.robot.move_gripper(gripper_cmd.tolist())
-            print(f'gripper_states: {gripper_cmd.tolist()}')
+        if self.gripper_count > 40:
+            self.robot.move_gripper(new_gripper_cmd.tolist())
+            print(f'gripper_states: {new_gripper_cmd.tolist()}')
+            self.gripper_cmd = new_gripper_cmd
             self.gripper_count = 0
+        else:
+            pass
+            # print(f'gripper_cout: {self.gripper_count}')
         # action = data['pred_action']
         # obs_state = data['obs_state']
         # # action = misc.smooth_each_dim_with_spline(np.concatenate([action[0], action[-1]], axis=0), num_smooth_points=50, s=0.05)
