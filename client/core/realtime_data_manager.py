@@ -79,11 +79,13 @@ class RealtimeDataManager():
         # self.last_infer_time = self.currt_infer_time
         currt_infer_time = self.start_traj_marker - self.start_infer_marker
         self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count
+        print(f'avg infer time: {self.avg_infer_time}')
 
     def setAvgTrajTime(self):
         # self.last_traj_time = self.currt_traj_time
         currt_traj_time = self.start_ctrl_marker - self.start_traj_marker
         self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count
+        print(f'avg traj time: {self.avg_traj_time}')
     
     def getAvgInferTime(self):
         return self.avg_infer_time
@@ -185,7 +187,8 @@ class RealtimeDataManager():
         with self.action_thread_lock:
             # 根据观测数据时间戳对Action Chunk进行对齐
             # 需要减掉开始控制的时间，首帧是0，后续帧是首帧推理和轨迹拟合的时间之和
-            timestamp_chunk[0] = timestamp_chunk[0] - self.init_observe_timestamp - self.init_control_time
+            print(f'init_observe_timestamp: {self.init_observe_timestamp}, init_control_time: {self.init_control_time}, currt_ref_timestamp: {timestamp_chunk[0]}')
+            timestamp_chunk[0] = (timestamp_chunk[0] - self.init_observe_timestamp) / 1e9 - self.init_control_time
             for index in range(1, len(timestamp_chunk)):
                 timestamp_chunk[index] = timestamp_chunk[index] + timestamp_chunk[0]
             # if not self.timestamp_chunks.isEmpty():

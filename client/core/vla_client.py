@@ -24,6 +24,7 @@ from .realtime_data_manager import RealtimeDataManager
 class VLAClient():
     def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: RobotA2D | RobotA2DMock):
         self.config = config
+        self.config.observer.period = 1.0 / self.config.observer.fps
         self.rdm = rdm
         self.traj_generator = traj_generator
         self.zmq_client = zmq_client
@@ -94,7 +95,7 @@ class VLAClient():
                                 self.inference_thread = threading.Thread(target=self.inferenceFirstThreadFun, daemon=True)
                                 self.inference_thread.start()
                             # infer_count > 0，则开启非
-                            else:
+                            elif self.rdm.infer_count < 3:
                                 self.inference_thread = threading.Thread(target=self.inferenceStepThreadFun, daemon=True)
                                 self.inference_thread.start()
             time.sleep(0.001)  # 控制循环频率
@@ -169,10 +170,10 @@ class VLAClient():
 
             # 记录轨迹拟合的时间戳
             self.rdm.setTrajTimeMarker()
-            self.trajFittingStep(num_samples_fitted=12, num_samples_raw=48)
+            self.trajFittingStep(num_samples_fitted=24, num_samples_raw=48)
 
             # # 记录控制的时间戳
-            # self.rdm.setControlTimestamp()
+            self.rdm.setControlTimeMarker()
 
             # 统计平均推理时间和平均轨迹拟合时间
             self.rdm.setAvgInferTime()
@@ -202,8 +203,8 @@ class VLAClient():
             if self.config.show_data:
                 with self.show_thread_lock:
                     # show raw action chunk
-                    self.ydata0.append(action[14])
-                    self.ydata1.append(action[15])
+                    self.ydata0.append(action[0])
+                    self.ydata1.append(action[1])
                     self.xdata.append(len(self.ydata0))
                     # print(f'step: {len(self.ydata0)}')
             # print(f'action: {action}')
@@ -228,64 +229,64 @@ class VLAClient():
         #         continue
             # 获取当前时间戳
     
-    @run_time_decorator
-    def interpolateThreadFun(self, num_samples_fitted, num_samples_raw):
-        print(f'轨迹插值/拟合线程已启动, {self.config.traj_strategy}...')
-        if self.config.traj_strategy == 'interpolation':
-            # self.traj_generator.interpolateTrajectory()
-            pass
-        elif self.config.traj_strategy == 'fitting':
-            # 准备轨迹拟合用的数据
-            # 首先准备拟合的数据
-            timestamps_fitted, action_chunk_fitted = self.rdm.getFittedActionChunk(index_offset=0, num_samples=num_samples_fitted)
-            timestamps, action_chunk = self.rdm.popActionChunk(index_offset=0, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
-            if timestamps_fitted is not None:
-                print(f'timestamps_fitted: {timestamps_fitted}')
-                print(f'timestamps: {timestamps}')
-                timestamps = np.concatenate((timestamps_fitted, timestamps), axis=0)
-            # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}, action_chunk shape: {action_chunk.shape}')
-            if action_chunk_fitted is not None:
-                action_chunk = np.concatenate((action_chunk_fitted, action_chunk), axis=1)
-            print(f'timestamps_all shape: {timestamps.shape}, action_chunk_all shape: {action_chunk.shape}')
-            start_time = np.amin(timestamps)
-            end_time = np.amax(timestamps)
+    # @run_time_decorator
+    # def interpolateThreadFun(self, num_samples_fitted, num_samples_raw):
+    #     print(f'轨迹插值/拟合线程已启动, {self.config.traj_strategy}...')
+    #     if self.config.traj_strategy == 'interpolation':
+    #         # self.traj_generator.interpolateTrajectory()
+    #         pass
+    #     elif self.config.traj_strategy == 'fitting':
+    #         # 准备轨迹拟合用的数据
+    #         # 首先准备拟合的数据
+    #         timestamps_fitted, action_chunk_fitted = self.rdm.getFittedActionChunk(index_offset=0, num_samples=num_samples_fitted)
+    #         timestamps, action_chunk = self.rdm.popActionChunk(index_offset=0, num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
+    #         if timestamps_fitted is not None:
+    #             print(f'timestamps_fitted: {timestamps_fitted}')
+    #             print(f'timestamps: {timestamps}')
+    #             timestamps = np.concatenate((timestamps_fitted, timestamps), axis=0)
+    #         # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}, action_chunk shape: {action_chunk.shape}')
+    #         if action_chunk_fitted is not None:
+    #             action_chunk = np.concatenate((action_chunk_fitted, action_chunk), axis=1)
+    #         print(f'timestamps_all shape: {timestamps.shape}, action_chunk_all shape: {action_chunk.shape}')
+    #         start_time = np.amin(timestamps)
+    #         end_time = np.amax(timestamps)
             
-            action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=self.config.fitting_deg, time_step=self.config.fitting_time_step/1000)
-            # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
-            # action_chunk_fitted shape: (16, 1548)
-            #TODO: 根据time_step 计算出offset
-            # offset = int((self.rdm.getCurrentTime() - start_time) * 1000) # 1/time_step
-            self.rdm.updateActionChunkFitted(action_chunk_fitted, timestamps_fitted)
-            # pass
-        else:
-            print(f'未知的轨迹策略: {self.config.traj_strategy}')
-        # while self.running:
-        #     # popActionData函数是线程安全的，不需要加锁
-        #     start_time = time.time()
-        #     action_chunk, timestamp_chunk = self.rdm.popActionData()
-        #     print(f'popActionData: {timestamp_chunk}')
-        #     if action_chunk is not None:
-        #         # self.xdata.put(action_chunk[0])
-        #         # self.ydata.put(timestamp_chunk[0]/1e9)
-        #         self.xdata.append(timestamp_chunk/1e9)
-        #         self.ydata0.append(action_chunk[0])
-        #         self.ydata1.append(action_chunk[1])
-        #         # print(f'action_chunk shape: {action_chunk.shape}')
-        #         # print(action)
-        #         # print(action['ref_timestamp'])
-        #         # print(action['pred_action'])
-        #         # for action in action_chunk:
-        #         self.traj_generator.addWayPoint(action_chunk)
-        #         end_time = time.time()
-        #         time_diff = end_time - start_time
-        #         # 根据control_period控制轨迹执行的时间
-        #         if time_diff < self.config.controller.control_period/1000:
-        #             time.sleep(self.config.controller.control_period/1000 - time_diff)
-        #     else:
-        #         print("没有动作数据，跳过轨迹插值")
-        #         time.sleep(0.010)
-        #         continue
-            # 获取当前时间戳
+    #         action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=self.config.fitting_deg, time_step=self.config.fitting_time_step/1000)
+    #         # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
+    #         # action_chunk_fitted shape: (16, 1548)
+    #         #TODO: 根据time_step 计算出offset
+    #         # offset = int((self.rdm.getCurrentTime() - start_time) * 1000) # 1/time_step
+    #         self.rdm.updateActionChunkFitted(action_chunk_fitted, timestamps_fitted)
+    #         # pass
+    #     else:
+    #         print(f'未知的轨迹策略: {self.config.traj_strategy}')
+    #     # while self.running:
+    #     #     # popActionData函数是线程安全的，不需要加锁
+    #     #     start_time = time.time()
+    #     #     action_chunk, timestamp_chunk = self.rdm.popActionData()
+    #     #     print(f'popActionData: {timestamp_chunk}')
+    #     #     if action_chunk is not None:
+    #     #         # self.xdata.put(action_chunk[0])
+    #     #         # self.ydata.put(timestamp_chunk[0]/1e9)
+    #     #         self.xdata.append(timestamp_chunk/1e9)
+    #     #         self.ydata0.append(action_chunk[0])
+    #     #         self.ydata1.append(action_chunk[1])
+    #     #         # print(f'action_chunk shape: {action_chunk.shape}')
+    #     #         # print(action)
+    #     #         # print(action['ref_timestamp'])
+    #     #         # print(action['pred_action'])
+    #     #         # for action in action_chunk:
+    #     #         self.traj_generator.addWayPoint(action_chunk)
+    #     #         end_time = time.time()
+    #     #         time_diff = end_time - start_time
+    #     #         # 根据control_period控制轨迹执行的时间
+    #     #         if time_diff < self.config.controller.control_period/1000:
+    #     #             time.sleep(self.config.controller.control_period/1000 - time_diff)
+    #     #     else:
+    #     #         print("没有动作数据，跳过轨迹插值")
+    #     #         time.sleep(0.010)
+    #     #         continue
+    #         # 获取当前时间戳
     @run_time_decorator
     def trajFittingStep(self, num_samples_fitted, num_samples_raw):
         # 首先根据平均轨迹拟合时间和控制时间间隔，计算取拟合轨迹数据的偏移量
@@ -420,7 +421,7 @@ class VLAClient():
             pred_action = action['pred_action']
             ref_timestamp = action['ref_timestamp']
             for index, action in enumerate(pred_action):
-                timestamp =  ref_timestamp + self.config.observer.period * index * 1000000 # observer.period单位是毫秒，需要转换成纳秒，即*1e6
+                timestamp =  ref_timestamp + self.config.observer.period * index * 1e9 # observer.period单位是秒，需要转换成纳秒，即*1e9
                 action_chunk.append(action)
                 timestamp_chunk.append(timestamp)
             
@@ -446,8 +447,8 @@ class VLAClient():
             ref_timestamp = action['ref_timestamp']
             for index, action in enumerate(pred_action):
                 action_chunk.append(action)
-                # timestamp_chunk.append(self.config.observer.period * index * 1000000) # observer.period单位是毫秒，需要转换成纳秒，即*1e6
-                timestamp_chunk.append(self.config.observer.period * index / 1000.0) # observer.period单位是毫秒，需要转换成秒
+                # timestamp_chunk.append(self.config.observer.period * index * 1e9) # observer.period单位是秒，需要转换成纳秒，即*1e9
+                timestamp_chunk.append(self.config.observer.period * index) # observer.period单位是秒
             timestamp_chunk[0] = ref_timestamp # 首帧是观测数据的时间戳ref_timestamp
             return action_chunk, timestamp_chunk
             # print(type(pred_action))
