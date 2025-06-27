@@ -80,8 +80,10 @@ def get_client_config():
     config.zmq = get_zmq_config()
     config.show_data = False # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
+    config.fitting_num_samples = 48
     config.fitting_time_step = period # 轨迹拟合的时间步长，单位为毫秒
     config.fitting_deg = 3 #多项式拟合的阶数
+    config.wait_frame = 5 # 每一帧推理完成后的休眠帧数，每一帧33ms
     config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
     return config

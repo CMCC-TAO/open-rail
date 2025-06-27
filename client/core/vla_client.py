@@ -1,4 +1,5 @@
 import copy
+import math
 import cv2
 import time
 import queue
@@ -30,15 +31,21 @@ class VLAClient():
         self.running = False
 
         self.observe_thread = threading.Thread(target=self.observeThreadFun, daemon=True)
-        self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
+        self.inference_thread = None
+        # self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
         self.interpolate_thread = None
         # self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self.controlThreadFun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
-        self.receive_callback = None
-        self.inference_count = 0
+        # self.receive_callback = None
+        
+        # inference variables
+        self.infer_count = 0
+        self.infer_flag = False
+        self.wait_frame_count = 0
+        self.infer_thread_lock = threading.Lock()
         
         if config.show_data:
             # 创建画布和折线图
@@ -74,100 +81,32 @@ class VLAClient():
                 # print(observations['obs.state'])
                 data = self.processData(observations)
                 self.rdm.addObserveData(data)
+                with self.infer_thread_lock:
+                    # infer_flag == False，表示当前没有推理任务，可以开始推理
+                    if self.infer_flag == False:
+                        if self.wait_frame_count < self.config.wait_frame:
+                            self.wait_frame_count += 1
+                        else:
+                            self.wait_frame_count = 0
+                            self.infer_flag = True
+                            # 开启推理线程，infer_count == 0，则开启首次推理
+                            if self.rdm.infer_count == 0:
+                                self.inference_thread = threading.Thread(target=self.inferenceFirstThreadFun, daemon=True)
+                                self.inference_thread.start()
+                            # infer_count > 0，则开启非
+                            else:
+                                self.inference_thread = threading.Thread(target=self.inferenceStepThreadFun, daemon=True)
+                                self.inference_thread.start()
             time.sleep(0.001)  # 控制循环频率
     
-    def inferenceThreadFun(self):
-        print('推理线程已启动...')
-        while self.running:
-            # 第一次推理
-            if self.inference_count == 0:
-                self.inferenceFirstTime()
-                # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-                time.sleep(1.0)
-            # 第二次推理
-            elif self.inference_count < 10000:
-                self.inferenceStep()
-                time.sleep(1.75)
-                # char = input("Press 'q' to quit: ") 
-            #     print(f'wait time: {self.config.controller.time_delay/1000}')
-            #     time.sleep(self.config.controller.time_delay/1000)
-            #     with self.thread_lock:
-            #         frame = self.rdm.getObserveData()
-            #     if frame is not None:
-            #         data = self.prepareData(frame)
-            #         self.send_message(data)
-            #         result = self.receive_messages()
-            #         print(result)
-            #         self.inference_count += 1
-            #     else:
-            #         print("没有观测数据，跳过推理")
-            #         time.sleep(0.010)
-            #         continue
-            # else:
-            #     # 后续推理，贪心
-            #     with self.thread_lock:
-            #         frame = self.rdm.getObserveData()
-            #     if frame is not None:
-            #         data = self.prepareData(frame)
-            #         self.send_message(data)
-            #         result = self.receive_messages()
-            #         print(result)
-            #         self.inference_count += 1
-            #     else:
-            #         print("没有观测数据，跳过推理")
-            #         time.sleep(0.010)
-            #         continue
-            # 请求服务端推理最新指定时间戳的obs
-            # time.sleep(0.1)
     @run_time_decorator
-    def inferenceFirstTime(self):
-        # 第一次推理，getObserveData函数是线程安全的，不需要加锁
-        data = self.rdm.getObserveData()
-        if data is not None:
-            # data = self.prepareData(frame)
-            # 首先发送数据进行推理,然后阻塞等待推理结果
-            # print(data['obs']['state'])
-            # obs_state = data['obs']['state']
-            # for state in obs_state:
-            #     print(type(state))
-            self.zmq_client.sendMessage(data)
-            result = self.zmq_client.recvMessage()
-            action_data = result['data']
-            # print(result)
-            # ref_timestamp = action_data['ref_timestamp']
-            # print(f'当前动作时间戳: {ref_timestamp}')
-            # 获取当前数据的时间戳,更新时间戳
-            # with self.thread_lock:
-            data = self.rdm.getObserveData()
-            ref_timestamp = data['ref_timestamp']
-            # print(f'当前数据时间戳: {ref_timestamp}')
-            action_data['ref_timestamp'] = ref_timestamp
-            # ref_timestamp = action_data['ref_timestamp']
-            # print(f'当前动作时间戳: {ref_timestamp}')
-            action_chunk, timestamp_chunk = self.processAction(action_data)
-            # print(timestamp_chunk)
-            # with self.thread_lock:
-            self.rdm.addActionData(action_chunk, timestamp_chunk, strategy=self.config.chunk_strategy)
-
-            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 48}, daemon=True)
-            self.interpolate_thread.start()
-            # 初次推理需要等待等待插值完成，更新init_control_timestamp
-            self.interpolate_thread.join()
-            self.rdm.updateControlTimeStamp()
-            # if self.config.show_data:
-            #     with self.show_thread_lock:
-            #         self.action_chunk = [action[0] for action in action_chunk]
-                # self.show_thread.start()
-            self.inference_count += 1
-            print('初次推理完成')
-        else:
-            print("没有观测数据，跳过推理")
-    @run_time_decorator
-    def inferenceStep(self):
+    def inferenceFirstThreadFun(self):
         # getObserveData函数是线程安全的，不需要加锁
-        
         data = self.rdm.getObserveData()
         if data is not None:
+            # 首次推理需要记录开始推理的时间戳，用于更新控制时间戳
+            self.rdm.setInferTimeMarker()
+            self.rdm.addInferCount()
             # 首先发送数据进行推理,然后阻塞等待推理结果
             self.zmq_client.sendMessage(data)
             result = self.zmq_client.recvMessage()
@@ -176,22 +115,81 @@ class VLAClient():
             # ref_timestamp = action_data['ref_timestamp']
             # print(f'当前动作时间戳: {ref_timestamp}')
             # 获取当前数据的时间戳,更新时间戳
-            action_chunk, timestamp_chunk = self.processAction(action_data)
+            action_chunk, timestamp_chunk = self.processActionNew(action_data)
             # print(timestamp_chunk)
             # addActionData函数是线程安全的，不需要加锁
-            self.rdm.addActionData(action_chunk, timestamp_chunk, strategy=self.config.chunk_strategy)
+            self.rdm.setInitObserveTimestamp(timestamp=timestamp_chunk[0])
+            self.rdm.updateActionChunk(action_chunk, timestamp_chunk)
 
-            self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 48}, daemon=True)
-            self.interpolate_thread.start()
+            # 记录轨迹拟合的时间戳
+            self.rdm.setTrajTimeMarker()
+            self.trajFittingFirst(num_samples=self.config.fitting_num_samples)
+
+            # 记录控制的时间戳
+            # TODO: 应该在此处开启控制线程
+            self.rdm.setControlTimeMarker()
+            self.rdm.setInitControlTime()
+
+            # 统计平均推理时间和平均轨迹拟合时间
+            self.rdm.setAvgInferTime()
+            self.rdm.setAvgTrajTime()
             # if self.config.show_data:
             #     with self.show_thread_lock:
             #         self.action_chunk = [action[0] for action in action_chunk]
             # if self.config.show_data:
             #     for action in action_chunk:
             #         self.action_queue.put(action[0])
-            self.inference_count += 1
+            # self.inference_count += 1
+        else:
+            print("No observe data, skip inference.")
+        
+        # 推理结束后将正在推理标记设置为False，便于开启下一次推理
+        with self.infer_thread_lock:
+            self.infer_flag = False
+    @run_time_decorator
+    def inferenceStepThreadFun(self):
+        # getObserveData函数是线程安全的，不需要加锁
+        data = self.rdm.getObserveData()
+        if data is not None:
+            # 记录开始推理的时间戳
+            self.rdm.setInferTimeMarker()
+            self.rdm.addInferCount()
+            # 首先发送数据进行推理,然后阻塞等待推理结果
+            self.zmq_client.sendMessage(data)
+            result = self.zmq_client.recvMessage()
+            action_data = result['data']
+            # print(result)
+            # ref_timestamp = action_data['ref_timestamp']
+            # print(f'当前动作时间戳: {ref_timestamp}')
+            # 获取当前数据的时间戳,更新时间戳
+            action_chunk, timestamp_chunk = self.processActionNew(action_data)
+            # print(timestamp_chunk)
+            # addActionData函数是线程安全的，不需要加锁
+            self.rdm.updateActionChunk(action_chunk, timestamp_chunk)
+
+            # 记录轨迹拟合的时间戳
+            self.rdm.setTrajTimeMarker()
+            self.trajFittingStep(num_samples_fitted=12, num_samples_raw=48)
+
+            # # 记录控制的时间戳
+            # self.rdm.setControlTimestamp()
+
+            # 统计平均推理时间和平均轨迹拟合时间
+            self.rdm.setAvgInferTime()
+            self.rdm.setAvgTrajTime()
+            # if self.config.show_data:
+            #     with self.show_thread_lock:
+            #         self.action_chunk = [action[0] for action in action_chunk]
+            # if self.config.show_data:
+            #     for action in action_chunk:
+            #         self.action_queue.put(action[0])
+            # self.inference_count += 1
         else:
             print("没有观测数据，跳过推理")
+        
+        # 推理结束后将正在推理标记设置为False，便于开启下一次推理
+        with self.infer_thread_lock:
+            self.infer_flag = False
 
     def controlThreadFun(self):
         # print(f'[{time.time()}]控制线程已启动...')
@@ -230,6 +228,7 @@ class VLAClient():
         #         continue
             # 获取当前时间戳
     
+    @run_time_decorator
     def interpolateThreadFun(self, num_samples_fitted, num_samples_raw):
         print(f'轨迹插值/拟合线程已启动, {self.config.traj_strategy}...')
         if self.config.traj_strategy == 'interpolation':
@@ -250,7 +249,6 @@ class VLAClient():
             print(f'timestamps_all shape: {timestamps.shape}, action_chunk_all shape: {action_chunk.shape}')
             start_time = np.amin(timestamps)
             end_time = np.amax(timestamps)
-            # trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001)
             
             action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=self.config.fitting_deg, time_step=self.config.fitting_time_step/1000)
             # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
@@ -261,6 +259,98 @@ class VLAClient():
             # pass
         else:
             print(f'未知的轨迹策略: {self.config.traj_strategy}')
+        # while self.running:
+        #     # popActionData函数是线程安全的，不需要加锁
+        #     start_time = time.time()
+        #     action_chunk, timestamp_chunk = self.rdm.popActionData()
+        #     print(f'popActionData: {timestamp_chunk}')
+        #     if action_chunk is not None:
+        #         # self.xdata.put(action_chunk[0])
+        #         # self.ydata.put(timestamp_chunk[0]/1e9)
+        #         self.xdata.append(timestamp_chunk/1e9)
+        #         self.ydata0.append(action_chunk[0])
+        #         self.ydata1.append(action_chunk[1])
+        #         # print(f'action_chunk shape: {action_chunk.shape}')
+        #         # print(action)
+        #         # print(action['ref_timestamp'])
+        #         # print(action['pred_action'])
+        #         # for action in action_chunk:
+        #         self.traj_generator.addWayPoint(action_chunk)
+        #         end_time = time.time()
+        #         time_diff = end_time - start_time
+        #         # 根据control_period控制轨迹执行的时间
+        #         if time_diff < self.config.controller.control_period/1000:
+        #             time.sleep(self.config.controller.control_period/1000 - time_diff)
+        #     else:
+        #         print("没有动作数据，跳过轨迹插值")
+        #         time.sleep(0.010)
+        #         continue
+            # 获取当前时间戳
+    @run_time_decorator
+    def trajFittingStep(self, num_samples_fitted, num_samples_raw):
+        # 首先根据平均轨迹拟合时间和控制时间间隔，计算取拟合轨迹数据的偏移量
+        index_offset = math.floor(self.rdm.getAvgTrajTime() * 1000 / self.config.controller.period)
+        timestamps_fitted, action_chunk_fitted = self.rdm.getFittedActionChunk(index_offset=index_offset, num_samples=num_samples_fitted)
+        timestamps, action_chunk = self.rdm.popActionChunk(time_offset=self.rdm.getAvgTrajTime(), num_samples=num_samples_raw) #轨迹拟合需要10ms左右的时间
+        if timestamps_fitted is not None:
+            print(f'timestamps_fitted: {timestamps_fitted}')
+            print(f'timestamps: {timestamps}')
+            timestamps = np.concatenate((timestamps_fitted, timestamps), axis=0)
+        # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}, action_chunk shape: {action_chunk.shape}')
+        if action_chunk_fitted is not None:
+            action_chunk = np.concatenate((action_chunk_fitted, action_chunk), axis=1)
+        print(f'timestamps_all shape: {timestamps.shape}, action_chunk_all shape: {action_chunk.shape}')
+        start_time = np.amin(timestamps)
+        end_time = np.amax(timestamps)
+        # trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001)
+        
+        action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=self.config.fitting_deg, time_step=self.config.fitting_time_step/1000)
+        # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
+        # action_chunk_fitted shape: (16, 1548)
+        #TODO: 根据time_step 计算出offset
+        # offset = int((self.rdm.getCurrentTime() - start_time) * 1000) # 1/time_step
+        self.rdm.updateActionChunkFitted(action_chunk_fitted, timestamps_fitted)
+        # pass
+        # while self.running:
+        #     # popActionData函数是线程安全的，不需要加锁
+        #     start_time = time.time()
+        #     action_chunk, timestamp_chunk = self.rdm.popActionData()
+        #     print(f'popActionData: {timestamp_chunk}')
+        #     if action_chunk is not None:
+        #         # self.xdata.put(action_chunk[0])
+        #         # self.ydata.put(timestamp_chunk[0]/1e9)
+        #         self.xdata.append(timestamp_chunk/1e9)
+        #         self.ydata0.append(action_chunk[0])
+        #         self.ydata1.append(action_chunk[1])
+        #         # print(f'action_chunk shape: {action_chunk.shape}')
+        #         # print(action)
+        #         # print(action['ref_timestamp'])
+        #         # print(action['pred_action'])
+        #         # for action in action_chunk:
+        #         self.traj_generator.addWayPoint(action_chunk)
+        #         end_time = time.time()
+        #         time_diff = end_time - start_time
+        #         # 根据control_period控制轨迹执行的时间
+        #         if time_diff < self.config.controller.control_period/1000:
+        #             time.sleep(self.config.controller.control_period/1000 - time_diff)
+        #     else:
+        #         print("没有动作数据，跳过轨迹插值")
+        #         time.sleep(0.010)
+        #         continue
+            # 获取当前时间戳
+    @run_time_decorator
+    def trajFittingFirst(self, num_samples):
+        timestamps, action_chunk = self.rdm.popActionChunk(time_offset=0.0, num_samples=num_samples) #轨迹拟合需要10ms左右的时间
+        print(f'timestamps for fitting: {timestamps}')
+        start_time = np.amin(timestamps)
+        end_time = np.amax(timestamps)
+        action_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=self.config.fitting_deg, time_step=self.config.fitting_time_step/1000)
+        # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
+        # action_chunk_fitted shape: (16, 1548)
+        #TODO: 根据time_step 计算出offset
+        # offset = int((self.rdm.getCurrentTime() - start_time) * 1000) # 1/time_step
+        self.rdm.updateActionChunkFitted(action_chunk_fitted, timestamps_fitted)
+        # pass
         # while self.running:
         #     # popActionData函数是线程安全的，不需要加锁
         #     start_time = time.time()
@@ -340,6 +430,31 @@ class VLAClient():
         else:
             print(f'数据类型出错: {action_type}')
             return None, None
+    @run_time_decorator
+    def processActionNew(self, action):
+        # timestamp_chunk的逻辑发生了变化，首帧是观测数据的时间戳ref_timestamp, 后续帧是相对时间
+        # {'type': 'action', 'pred_action': array([[-1.0059779 ,  0.58745086,  0.32646954, -1.2613511 ,  0.7208374 ,
+        #  1.4398973 , -0.1548205 ,  1.0740726 , -0.6103424 , -0.28125978,
+        #  1.2830431 , -0.72958744, -1.4945612 ,  0.18649821,  0.00195312,
+        #  0.        ],], dtype=float32), 'ref_timestamp': 1745389475305775776}
+        # 将传入的消息msg添加到buffer列表中
+        action_chunk = []
+        timestamp_chunk = []
+        action_type = action['type']
+        if action_type == 'action':
+            pred_action = action['pred_action']
+            ref_timestamp = action['ref_timestamp']
+            for index, action in enumerate(pred_action):
+                action_chunk.append(action)
+                # timestamp_chunk.append(self.config.observer.period * index * 1000000) # observer.period单位是毫秒，需要转换成纳秒，即*1e6
+                timestamp_chunk.append(self.config.observer.period * index / 1000.0) # observer.period单位是毫秒，需要转换成秒
+            timestamp_chunk[0] = ref_timestamp # 首帧是观测数据的时间戳ref_timestamp
+            return action_chunk, timestamp_chunk
+            # print(type(pred_action))
+            # print(ref_timestamp)
+        else:
+            print(f'数据类型出错: {action_type}')
+            return None, None
 
     def run(self):
         with self.thread_lock:
@@ -347,7 +462,7 @@ class VLAClient():
     
         # 启动线程
         self.observe_thread.start()
-        self.inference_thread.start()
+        # self.inference_thread.start()
         # self.interpolate_thread.start()
         # self.control_thread.start()
         self.control_thread_timer.start()
@@ -364,7 +479,7 @@ class VLAClient():
         with self.thread_lock:
             self.running = False
         self.observe_thread.join(timeout=1.0)
-        self.inference_thread.join(timeout=1.0)
+        # self.inference_thread.join(timeout=1.0)
         # self.interpolate_thread.join(timeout=1.0)
         # self.control_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
@@ -375,7 +490,7 @@ class VLAClient():
             self.running = False
         # plt.close()
         self.observe_thread.join(timeout=1.0)
-        self.inference_thread.join(timeout=1.0)
+        # self.inference_thread.join(timeout=1.0)
         # self.interpolate_thread.join(timeout=1.0)
         # self.control_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
@@ -467,6 +582,123 @@ class VLAClient():
 
         # ani = FuncAnimation(fig, update_plot, frames=range(16), blit=True, interval=50)
 
+    # def inferenceThreadFun(self):
+    #     print('推理线程已启动...')
+    #     while self.running:
+    #         # 第一次推理
+    #         if self.inference_count == 0:
+    #             self.inferenceFirstTime()
+    #             # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
+    #             time.sleep(1.0)
+    #         # 第二次推理
+    #         elif self.inference_count < 10000:
+    #             self.inferenceStep()
+    #             time.sleep(1.75)
+    #             # char = input("Press 'q' to quit: ") 
+    #         #     print(f'wait time: {self.config.controller.time_delay/1000}')
+    #         #     time.sleep(self.config.controller.time_delay/1000)
+    #         #     with self.thread_lock:
+    #         #         frame = self.rdm.getObserveData()
+    #         #     if frame is not None:
+    #         #         data = self.prepareData(frame)
+    #         #         self.send_message(data)
+    #         #         result = self.receive_messages()
+    #         #         print(result)
+    #         #         self.inference_count += 1
+    #         #     else:
+    #         #         print("没有观测数据，跳过推理")
+    #         #         time.sleep(0.010)
+    #         #         continue
+    #         # else:
+    #         #     # 后续推理，贪心
+    #         #     with self.thread_lock:
+    #         #         frame = self.rdm.getObserveData()
+    #         #     if frame is not None:
+    #         #         data = self.prepareData(frame)
+    #         #         self.send_message(data)
+    #         #         result = self.receive_messages()
+    #         #         print(result)
+    #         #         self.inference_count += 1
+    #         #     else:
+    #         #         print("没有观测数据，跳过推理")
+    #         #         time.sleep(0.010)
+    #         #         continue
+    #         # 请求服务端推理最新指定时间戳的obs
+    #         # time.sleep(0.1)
+
+    # @run_time_decorator
+    # def inferenceFirstTime(self):
+    #     # 第一次推理，getObserveData函数是线程安全的，不需要加锁
+    #     data = self.rdm.getObserveData()
+    #     if data is not None:
+    #         # data = self.prepareData(frame)
+    #         # 首先发送数据进行推理,然后阻塞等待推理结果
+    #         # print(data['obs']['state'])
+    #         # obs_state = data['obs']['state']
+    #         # for state in obs_state:
+    #         #     print(type(state))
+    #         self.zmq_client.sendMessage(data)
+    #         result = self.zmq_client.recvMessage()
+    #         action_data = result['data']
+    #         # print(result)
+    #         # ref_timestamp = action_data['ref_timestamp']
+    #         # print(f'当前动作时间戳: {ref_timestamp}')
+    #         # 获取当前数据的时间戳,更新时间戳
+    #         # with self.thread_lock:
+    #         data = self.rdm.getObserveData()
+    #         ref_timestamp = data['ref_timestamp']
+    #         # print(f'当前数据时间戳: {ref_timestamp}')
+    #         action_data['ref_timestamp'] = ref_timestamp
+    #         # ref_timestamp = action_data['ref_timestamp']
+    #         # print(f'当前动作时间戳: {ref_timestamp}')
+    #         action_chunk, timestamp_chunk = self.processAction(action_data)
+    #         # print(timestamp_chunk)
+    #         # with self.thread_lock:
+    #         self.rdm.addActionData(action_chunk, timestamp_chunk, strategy=self.config.chunk_strategy)
+
+    #         self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 48}, daemon=True)
+    #         self.interpolate_thread.start()
+    #         # 初次推理需要等待等待插值完成，更新init_control_timestamp
+    #         self.interpolate_thread.join()
+    #         self.rdm.updateControlTimeStamp()
+    #         # if self.config.show_data:
+    #         #     with self.show_thread_lock:
+    #         #         self.action_chunk = [action[0] for action in action_chunk]
+    #             # self.show_thread.start()
+    #         self.inference_count += 1
+    #         print('初次推理完成')
+    #     else:
+    #         print("没有观测数据，跳过推理")
+    # @run_time_decorator
+    # def inferenceStep(self):
+    #     # getObserveData函数是线程安全的，不需要加锁
+        
+    #     data = self.rdm.getObserveData()
+    #     if data is not None:
+    #         # 首先发送数据进行推理,然后阻塞等待推理结果
+    #         self.zmq_client.sendMessage(data)
+    #         result = self.zmq_client.recvMessage()
+    #         action_data = result['data']
+    #         # print(result)
+    #         # ref_timestamp = action_data['ref_timestamp']
+    #         # print(f'当前动作时间戳: {ref_timestamp}')
+    #         # 获取当前数据的时间戳,更新时间戳
+    #         action_chunk, timestamp_chunk = self.processAction(action_data)
+    #         # print(timestamp_chunk)
+    #         # addActionData函数是线程安全的，不需要加锁
+    #         self.rdm.addActionData(action_chunk, timestamp_chunk, strategy=self.config.chunk_strategy)
+
+    #         self.interpolate_thread = threading.Thread(target=self.interpolateThreadFun, kwargs={'num_samples_fitted': 0, 'num_samples_raw': 48}, daemon=True)
+    #         self.interpolate_thread.start()
+    #         # if self.config.show_data:
+    #         #     with self.show_thread_lock:
+    #         #         self.action_chunk = [action[0] for action in action_chunk]
+    #         # if self.config.show_data:
+    #         #     for action in action_chunk:
+    #         #         self.action_queue.put(action[0])
+    #         self.inference_count += 1
+    #     else:
+    #         print("没有观测数据，跳过推理")
 
 if __name__ == "__main__":
     pass
