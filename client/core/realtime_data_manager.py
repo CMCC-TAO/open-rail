@@ -188,7 +188,8 @@ class RealtimeDataManager():
             # 根据观测数据时间戳对Action Chunk进行对齐
             # 需要减掉开始控制的时间，首帧是0，后续帧是首帧推理和轨迹拟合的时间之和
             print(f'init_observe_timestamp: {self.init_observe_timestamp}, init_control_time: {self.init_control_time}, currt_ref_timestamp: {timestamp_chunk[0]}')
-            timestamp_chunk[0] = (timestamp_chunk[0] - self.init_observe_timestamp) / 1e9 - self.init_control_time
+            # timestamp_chunk[0] = (timestamp_chunk[0] - self.init_observe_timestamp) / 1e9 - self.init_control_time - 0.1
+            timestamp_chunk[0] = 0.0
             for index in range(1, len(timestamp_chunk)):
                 timestamp_chunk[index] = timestamp_chunk[index] + timestamp_chunk[0]
             # if not self.timestamp_chunks.isEmpty():
@@ -292,7 +293,8 @@ class RealtimeDataManager():
         # 2. 管理ActionChunk和Timestamps队列，丢弃掉过期数据；
         # 备注： 过期数据指的是时间戳在当前时间之前的数据
         # currt_time = time.time() - self.init_control_time
-        currt_time = self.getCurrentTime()
+        # currt_time = self.getCurrentTime()
+        currt_time = 0.0
         target_time = currt_time + time_offset
         print(f'currt_time: {currt_time}, target_time: {target_time}')
         # 找到首帧有效数据的index
@@ -420,7 +422,7 @@ class RealtimeDataManager():
                 print(f'currt_timestamp: {currt_timestamp}, timestamps_fitted: {timestamps_fitted[::5]}')
                 if timestamps_fitted[self.action_chunk_index] < currt_timestamp:
                     self.action_chunk_index += 1
-                # self.action_chunk_index += 0
+                self.action_chunk_index = 30
                 print(f'action_chunk_index new: {self.action_chunk_index}')
                 print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
                 # print(f'old action: {action}')

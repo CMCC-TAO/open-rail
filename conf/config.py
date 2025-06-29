@@ -10,7 +10,7 @@ class RobotType(str, Enum):
     A2D = 'a2d'
     MOCK = 'mock'
 
-period = 3
+period = 10
 def get_realtime_data_manager_config():
     """Generate config for RealtimeDataManager
 
@@ -71,19 +71,19 @@ def get_client_config():
         ConfigDict: Configuration for Client.
     """
     config = ConfigDict()
-    config.robot = RobotType.MOCK
+    config.robot = RobotType.A2D
     config.rdm = get_realtime_data_manager_config()
     config.traj = get_trajectory_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
-    config.show_data = True # True to show data, False to not show data
+    config.show_data = False # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 48
     config.fitting_time_step = period # 轨迹拟合的时间步长，单位为毫秒
     config.fitting_deg = 4 #多项式拟合的阶数
-    config.wait_frame = 10 # 每一帧推理完成后的休眠帧数，每一帧33ms
+    config.wait_frame = 15 # 每一帧推理完成后的休眠帧数，每一帧33ms
     config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
     return config

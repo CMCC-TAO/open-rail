@@ -32,8 +32,8 @@ class VLAClient():
         self.running = False
 
         self.observe_thread = threading.Thread(target=self.observeThreadFun, daemon=True)
-        self.inference_thread = None
-        # self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
+        # self.inference_thread = None
+        self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
         self.interpolate_thread = None
         # self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self.controlThreadFun)
@@ -82,22 +82,22 @@ class VLAClient():
                 # print(observations['obs.state'])
                 data = self.processData(observations)
                 self.rdm.addObserveData(data)
-                with self.infer_thread_lock:
-                    # infer_flag == False，表示当前没有推理任务，可以开始推理
-                    if self.infer_flag == False:
-                        if self.wait_frame_count < self.config.wait_frame:
-                            self.wait_frame_count += 1
-                        else:
-                            self.wait_frame_count = 0
-                            self.infer_flag = True
-                            # 开启推理线程，infer_count == 0，则开启首次推理
-                            if self.rdm.infer_count == 0:
-                                self.inference_thread = threading.Thread(target=self.inferenceFirstThreadFun, daemon=True)
-                                self.inference_thread.start()
-                            # infer_count > 0，则开启非
-                            elif self.rdm.infer_count < 3:
-                                self.inference_thread = threading.Thread(target=self.inferenceStepThreadFun, daemon=True)
-                                self.inference_thread.start()
+                # with self.infer_thread_lock:
+                #     # infer_flag == False，表示当前没有推理任务，可以开始推理
+                #     if self.infer_flag == False:
+                #         if self.wait_frame_count < self.config.wait_frame:
+                #             self.wait_frame_count += 1
+                #         else:
+                #             self.wait_frame_count = 0
+                #             self.infer_flag = True
+                #             # 开启推理线程，infer_count == 0，则开启首次推理
+                #             if self.rdm.infer_count == 0:
+                #                 self.inference_thread = threading.Thread(target=self.inferenceFirstThreadFun, daemon=True)
+                #                 self.inference_thread.start()
+                #             # infer_count > 0，则开启非
+                #             elif self.rdm.infer_count < 10:
+                #                 self.inference_thread = threading.Thread(target=self.inferenceStepThreadFun, daemon=True)
+                #                 self.inference_thread.start()
             time.sleep(0.001)  # 控制循环频率
     
     @run_time_decorator
@@ -145,8 +145,8 @@ class VLAClient():
             print("No observe data, skip inference.")
         
         # 推理结束后将正在推理标记设置为False，便于开启下一次推理
-        with self.infer_thread_lock:
-            self.infer_flag = False
+        # with self.infer_thread_lock:
+        #     self.infer_flag = False
     @run_time_decorator
     def inferenceStepThreadFun(self):
         # getObserveData函数是线程安全的，不需要加锁
@@ -170,7 +170,7 @@ class VLAClient():
 
             # 记录轨迹拟合的时间戳
             self.rdm.setTrajTimeMarker()
-            self.trajFittingStep(num_samples_fitted=24, num_samples_raw=48)
+            self.trajFittingStep(num_samples_fitted=0, num_samples_raw=self.config.fitting_num_samples)
 
             # # 记录控制的时间戳
             self.rdm.setControlTimeMarker()
@@ -189,8 +189,8 @@ class VLAClient():
             print("没有观测数据，跳过推理")
         
         # 推理结束后将正在推理标记设置为False，便于开启下一次推理
-        with self.infer_thread_lock:
-            self.infer_flag = False
+        # with self.infer_thread_lock:
+        #     self.infer_flag = False
 
     def controlThreadFun(self):
         # print(f'[{time.time()}]控制线程已启动...')
@@ -463,7 +463,7 @@ class VLAClient():
     
         # 启动线程
         self.observe_thread.start()
-        # self.inference_thread.start()
+        self.inference_thread.start()
         # self.interpolate_thread.start()
         # self.control_thread.start()
         self.control_thread_timer.start()
@@ -491,7 +491,7 @@ class VLAClient():
             self.running = False
         # plt.close()
         self.observe_thread.join(timeout=1.0)
-        # self.inference_thread.join(timeout=1.0)
+        self.inference_thread.join(timeout=1.0)
         # self.interpolate_thread.join(timeout=1.0)
         # self.control_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
@@ -583,49 +583,53 @@ class VLAClient():
 
         # ani = FuncAnimation(fig, update_plot, frames=range(16), blit=True, interval=50)
 
-    # def inferenceThreadFun(self):
-    #     print('推理线程已启动...')
-    #     while self.running:
-    #         # 第一次推理
-    #         if self.inference_count == 0:
-    #             self.inferenceFirstTime()
-    #             # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-    #             time.sleep(1.0)
-    #         # 第二次推理
-    #         elif self.inference_count < 10000:
-    #             self.inferenceStep()
-    #             time.sleep(1.75)
-    #             # char = input("Press 'q' to quit: ") 
-    #         #     print(f'wait time: {self.config.controller.time_delay/1000}')
-    #         #     time.sleep(self.config.controller.time_delay/1000)
-    #         #     with self.thread_lock:
-    #         #         frame = self.rdm.getObserveData()
-    #         #     if frame is not None:
-    #         #         data = self.prepareData(frame)
-    #         #         self.send_message(data)
-    #         #         result = self.receive_messages()
-    #         #         print(result)
-    #         #         self.inference_count += 1
-    #         #     else:
-    #         #         print("没有观测数据，跳过推理")
-    #         #         time.sleep(0.010)
-    #         #         continue
-    #         # else:
-    #         #     # 后续推理，贪心
-    #         #     with self.thread_lock:
-    #         #         frame = self.rdm.getObserveData()
-    #         #     if frame is not None:
-    #         #         data = self.prepareData(frame)
-    #         #         self.send_message(data)
-    #         #         result = self.receive_messages()
-    #         #         print(result)
-    #         #         self.inference_count += 1
-    #         #     else:
-    #         #         print("没有观测数据，跳过推理")
-    #         #         time.sleep(0.010)
-    #         #         continue
-    #         # 请求服务端推理最新指定时间戳的obs
-    #         # time.sleep(0.1)
+    def inferenceThreadFun(self):
+        print('推理线程已启动...')
+        while self.running:
+            # 第一次推理
+            if self.rdm.infer_count == 0:
+                self.inferenceFirstThreadFun()
+                # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
+                time.sleep(1.0)
+                # char = input("Press 'q' to quit: ")
+            # 第二次推理
+            elif self.rdm.infer_count < 10000:
+                self.inferenceStepThreadFun()
+                # self.inferenceFirstThreadFun()
+                # char = input("Press 'q' to quit: ")
+                # char = input("Press 'q' to quit: ")
+                time.sleep(0.4)
+                # char = input("Press 'q' to quit: ") 
+            #     print(f'wait time: {self.config.controller.time_delay/1000}')
+            #     time.sleep(self.config.controller.time_delay/1000)
+            #     with self.thread_lock:
+            #         frame = self.rdm.getObserveData()
+            #     if frame is not None:
+            #         data = self.prepareData(frame)
+            #         self.send_message(data)
+            #         result = self.receive_messages()
+            #         print(result)
+            #         self.inference_count += 1
+            #     else:
+            #         print("没有观测数据，跳过推理")
+            #         time.sleep(0.010)
+            #         continue
+            # else:
+            #     # 后续推理，贪心
+            #     with self.thread_lock:
+            #         frame = self.rdm.getObserveData()
+            #     if frame is not None:
+            #         data = self.prepareData(frame)
+            #         self.send_message(data)
+            #         result = self.receive_messages()
+            #         print(result)
+            #         self.inference_count += 1
+            #     else:
+            #         print("没有观测数据，跳过推理")
+            #         time.sleep(0.010)
+            #         continue
+            # 请求服务端推理最新指定时间戳的obs
+            # time.sleep(0.1)
 
     # @run_time_decorator
     # def inferenceFirstTime(self):
