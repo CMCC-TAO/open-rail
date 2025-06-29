@@ -29,11 +29,12 @@ class RealtimeDataManager():
 
         self.init_observe_timestamp = None # Timestamp of the first observe data to inference
         # self.init_control_timestamp = None # Timestamp of the first action to execute
-        self.init_control_time = 0.0 # Time of the first action to execute in seconds with respect to the first observe timestamp
+        # self.init_control_time = 0.0 # Time of the first action to execute in seconds with respect to the first observe timestamp
         # self.update_control_time = False # update control time when first action executed
         # self.currt_time = None
         self.frame_count = 0
         self.action_chunk_fitted = None
+        self.vel_chunk_fitted = None
         self.timestamps_fitted = None
         self.action_chunk_index = None
 
@@ -60,11 +61,13 @@ class RealtimeDataManager():
     def setInitObserveTimestamp(self, timestamp):
         self.init_observe_timestamp = timestamp
     
-    def setInitControlTime(self):
-        currt_infer_time = (self.start_traj_marker - self.start_infer_marker)
-        currt_traj_time = (self.start_ctrl_marker - self.start_traj_marker)
-        self.init_control_time = currt_infer_time + currt_traj_time # in seconds
+    # def setInitControlTime(self):
+    #     currt_infer_time = (self.start_traj_marker - self.start_infer_marker)
+    #     currt_traj_time = (self.start_ctrl_marker - self.start_traj_marker)
+    #     self.init_control_time = currt_infer_time + currt_traj_time # in seconds
     # 用于统计推理时间和轨迹拟合时间
+    def setObserveTimeMarker(self, timestamp):
+        self.observe_marker = timestamp
     def setInferTimeMarker(self):
         self.start_infer_marker = time.perf_counter()
     # 用于统计推理时间和轨迹拟合时间
@@ -187,7 +190,7 @@ class RealtimeDataManager():
         with self.action_thread_lock:
             # 根据观测数据时间戳对Action Chunk进行对齐
             # 需要减掉开始控制的时间，首帧是0，后续帧是首帧推理和轨迹拟合的时间之和
-            print(f'init_observe_timestamp: {self.init_observe_timestamp}, init_control_time: {self.init_control_time}, currt_ref_timestamp: {timestamp_chunk[0]}')
+            # print(f'init_observe_timestamp: {self.init_observe_timestamp}, init_control_time: {self.init_control_time}, currt_ref_timestamp: {timestamp_chunk[0]}')
             # timestamp_chunk[0] = (timestamp_chunk[0] - self.init_observe_timestamp) / 1e9 - self.init_control_time - 0.1
             timestamp_chunk[0] = 0.0
             for index in range(1, len(timestamp_chunk)):
@@ -409,33 +412,64 @@ class RealtimeDataManager():
         for i in range(len(self._timestamp)):# 遍历所有帧的时间戳并找到第一个大于当前时间的索引i（并不是严格等于）；如果找不到这样的索引，则返回-1表示没有未来数据。这个函数的作用是找到下一个需要发送的数据的索引，以便在控制循环中处理这些数据。通过这种方式可以确保在控制循环中只处理未来的数据而不是过去的数据，从而避免了不必要
                 return self.timestamps_fitted[self.action_chunk_index]
     
-    def updateActionChunkFitted(self, action_chunk_fitted, timestamps_fitted):
-        with self.polynomial_thread_lock:
-            # 更新index, 首次更新;
-            if self.action_chunk_index is None:
+    def updateActionChunkFitted(self, action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action = False, search_length = 10, smooth_action = False, max_acc=50.0):
+        # 更新index, 首次更新;
+        if self.action_chunk_index is None:
+            with self.polynomial_thread_lock:
                 self.action_chunk_index = 0
-            else: # 后续融合更新
-                # print(f'action_chunk_index old: {self.action_chunk_index}')
-                currt_timestamp = self.timestamps_fitted[self.action_chunk_index]
-                # action = self.action_chunk_fitted[:, self.action_chunk_index]
-                self.action_chunk_index = self.getClosestIndex(timestamps_fitted, currt_timestamp)
-                print(f'currt_timestamp: {currt_timestamp}, timestamps_fitted: {timestamps_fitted[::5]}')
-                if timestamps_fitted[self.action_chunk_index] < currt_timestamp:
-                    self.action_chunk_index += 1
-                self.action_chunk_index = 30
-                print(f'action_chunk_index new: {self.action_chunk_index}')
-                print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
-                # print(f'old action: {action}')
-                # self.action_chunk_index = offset
-            self.action_chunk_fitted = action_chunk_fitted
-            self.timestamps_fitted = timestamps_fitted
+                self.action_chunk_fitted = action_chunk_fitted
+                self.vel_chunk_fitted = vel_chunk_fitted
+                self.timestamps_fitted = timestamps_fitted
+        else: # 后续融合更新
+            # print(f'action_chunk_index old: {self.action_chunk_index}')
+            # 统计从收到观测数据到完成轨迹拟合所需要的时间
+            # currt_timestamp = self.timestamps_fitted[self.action_chunk_index]
+            target_chunk_index = 0
+            time_offset = self.start_ctrl_marker - self.observe_marker
+            print(f'total inference time: {time_offset} s')
+            # action = self.action_chunk_fitted[:, self.action_chunk_index]
+            # self.action_chunk_index = self.getClosestIndex(timestamps_fitted, currt_timestamp)
+            # print(f'currt_timestamp: {currt_timestamp}, timestamps_fitted: {timestamps_fitted[::5]}')
+            for index in range(len(timestamps_fitted)):
+                if timestamps_fitted[index] > time_offset:
+                    target_chunk_index = index
+                    break
+            
+            if search_action:
+                currt_action = None
+                currt_vel = None
+                candidate_action_chunk = None
+                with self.polynomial_thread_lock:
+                    currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
+                    currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
+                    candidate_action_chunk = copy.deepcopy(self.action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
+
+            # self.action_chunk_index = 30
+            print(f'action_chunk_index: {target_chunk_index}')
+            # print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
+            # print(f'old action: {action}')
+            # self.action_chunk_index = offset
+            with self.polynomial_thread_lock:
+                self.action_chunk_index = 0
+                self.action_chunk_fitted = action_chunk_fitted
+                self.vel_chunk_fitted = vel_chunk_fitted
+                self.timestamps_fitted = timestamps_fitted
             # action = self.action_chunk_fitted[:, self.action_chunk_index]
             # print(f'new action: {action}')
             # print(f'action_chunk_index: {self.action_chunk_index}')
             # print(f'action_chunk_fitted shape: {self.action_chunk_fitted.shape}')
             # print(f'action_chunk_fitted: {self.action_chunk_fitted[:, -2]}')
             # print(f'action_chunk_fitted: {self.action_chunk_fitted[:, -1]}')
-    
+    def searchSmoothAction(self, currt_action, currt_vel, candidate_action_chunk, search_length):
+        target_index = 0
+        action_dim = len(currt_action)
+        for candidate_index in range(search_length):
+            candidate_action = candidate_action_chunk[:, candidate_index]
+            qualified_count = 0
+            for index in range(action_dim):
+                if currt_vel[index] == 0.0 or (candidate_action[index] - currt_action[index]) * currt_vel[index] > 0.0:
+                    qualified_count += 1
+        return target_index
     def getActionFitted(self):
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:

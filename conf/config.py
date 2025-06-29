@@ -10,7 +10,7 @@ class RobotType(str, Enum):
     A2D = 'a2d'
     MOCK = 'mock'
 
-period = 10
+period = 5
 def get_realtime_data_manager_config():
     """Generate config for RealtimeDataManager
 

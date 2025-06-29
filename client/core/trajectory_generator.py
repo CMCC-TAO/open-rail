@@ -41,6 +41,7 @@ class TrajectoryGenerator():
         self.last_point = None
         self.traj = None
         self.traj_fitted = None
+        self.vel_fitted = None
         self.timestamps = None
         self.timestamps_fitted = None
 
@@ -125,10 +126,18 @@ class TrajectoryGenerator():
         # y = np.array(joint_chunk)
         # 进行多项式拟合
         coefficients = np.polyfit(timestamps, joint_chunk, deg=deg)
-        # 使用拟合得到的多项式计算y值
+        # 使用 numpy.polyder 计算多项式的导数
+        derivative_coefficients = np.polyder(coefficients)
+        
+        # 使用拟合得到的多项式计算拟合后的关节角度值
         polynomial = np.poly1d(coefficients)
         x = np.arange(start_time, end_time, time_step)
         joint_chunk_fitted = polynomial(x)
+        
+        # 求导，计算关节速度
+        derivative_polynomial = np.poly1d(derivative_coefficients)
+        # x = np.arange(start_time, end_time, time_step)
+        velocity_chunk_fitted = derivative_polynomial(x)
 
         # if index == 0:
         #     # 可视化
@@ -152,7 +161,7 @@ class TrajectoryGenerator():
         #     # 保存图片
         #     plt.savefig(f'joint_{index}_{self.frame}.png', dpi=300)
         #     self.frame += 1
-        return index, joint_chunk_fitted
+        return index, joint_chunk_fitted, velocity_chunk_fitted
 
     def gripperTrajFitting(self, timestamps, gripper_chunk, index, start_time, end_time, time_step = 0.001):
         # 去除异常值，使用中位数滤波
@@ -192,7 +201,7 @@ class TrajectoryGenerator():
                 currt_index = min(length, currt_index + 1)
             gripper_chunk_fitted.append((gripper_chunk[max(currt_index - 1, 0)] + gripper_chunk[min(currt_index, length - 1)]) / 2.0)
 
-        return index, gripper_chunk_fitted
+        return index, gripper_chunk_fitted, gripper_chunk_fitted * 0.0 #夹爪的速度不考虑
 
     @run_time_decorator
     def trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):
@@ -205,21 +214,25 @@ class TrajectoryGenerator():
         gripper_results = [future.result() for future in gripper_futures]
         joint_results = [future.result() for future in joint_futures]
         results = joint_results + gripper_results
-        # 解析结果
-        final_results = [None] * len(results)
+        # 解析结果, joint_results代表关节角度数据，velocity_results代表关节速度数据
+        final_joint_results = [None] * len(results)
+        final_velocity_results = [None] * len(results)
         # print(f'final_results length: {len(final_results)}')
-        for index, joint_chunk_fitted in results:
+        for index, joint_chunk_fitted, velocity_chunk_fitted in results:
             # print(f'index = {index}')
             # print(f'action shape: {action_chunk.shape}')
-            final_results[index] = joint_chunk_fitted
+            final_joint_results[index] = joint_chunk_fitted
+            final_velocity_results[index] = velocity_chunk_fitted
         if self.traj_fitted is None:
-            self.traj_fitted = np.array(final_results)
+            self.traj_fitted = np.array(final_joint_results)
+            self.vel_fitted = np.array(final_velocity_results)
             self.traj = action_chunk
             print(f'traj_fitted shape: {self.traj_fitted.shape}, traj shape: {self.traj.shape}')
             self.timestamps_fitted = np.arange(start_time, end_time, time_step)
             self.timestamps = timestamps
         else:
-            traj_fitted_new = np.array(final_results)
+            traj_fitted_new = np.array(final_joint_results)
+            vel_fitted_new = np.array(final_velocity_results)
             timestamps_fitted_new = np.arange(start_time, end_time, time_step)
 
             # joint_index = 0
@@ -249,11 +262,12 @@ class TrajectoryGenerator():
             # self.frame += 1
 
             self.traj_fitted = traj_fitted_new
+            self.vel_fitted = vel_fitted_new
             self.timestamps_fitted = timestamps_fitted_new
             self.traj = action_chunk
             self.timestamps = timestamps
 
-        return self.traj_fitted, self.timestamps_fitted
+        return self.traj_fitted, self.vel_fitted, self.timestamps_fitted
     
     @run_time_decorator
     def toJointChunk(self, action_chunk):
