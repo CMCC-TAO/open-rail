@@ -10,7 +10,7 @@ class RobotType(str, Enum):
     A2D = 'a2d'
     MOCK = 'mock'
 
-period = 5
+period = 10
 def get_realtime_data_manager_config():
     """Generate config for RealtimeDataManager
 
@@ -78,7 +78,7 @@ def get_client_config():
     config.observer = get_observer_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
-    config.show_data = False # True to show data, False to not show data
+    config.show_data = True # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 48
     config.fitting_time_step = period # 轨迹拟合的时间步长，单位为毫秒

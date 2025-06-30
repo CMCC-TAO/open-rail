@@ -67,7 +67,13 @@ class ModelVLA:
             for v in predicted_action.values()
         ], axis=1)
         print(f'predicted_action shape: {predicted_action.shape}')
-        return {"type": "action", "pred_action": predicted_action, 'obs_state': obs['state'], "ref_timestamp": data["ref_timestamp"]}
+        return {
+            "type": "action",
+            "pred_action": predicted_action,
+            'obs_state': obs['state'],
+            "ref_timestamp": data["ref_timestamp"],
+            'loc_timestamp': data['loc_timestamp']
+            }
 
     def test_policy(self, obs):
         obs = obs.copy()

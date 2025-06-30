@@ -201,7 +201,7 @@ class TrajectoryGenerator():
                 currt_index = min(length, currt_index + 1)
             gripper_chunk_fitted.append((gripper_chunk[max(currt_index - 1, 0)] + gripper_chunk[min(currt_index, length - 1)]) / 2.0)
 
-        return index, gripper_chunk_fitted, gripper_chunk_fitted * 0.0 #夹爪的速度不考虑
+        return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted) #夹爪的速度不考虑
 
     @run_time_decorator
     def trajFitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):

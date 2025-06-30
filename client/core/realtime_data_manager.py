@@ -434,7 +434,7 @@ class RealtimeDataManager():
                 if timestamps_fitted[index] > time_offset:
                     target_chunk_index = index
                     break
-            
+            target_chunk_index += 12
             if search_action:
                 currt_action = None
                 currt_vel = None
@@ -450,7 +450,7 @@ class RealtimeDataManager():
             # print(f'old action: {action}')
             # self.action_chunk_index = offset
             with self.polynomial_thread_lock:
-                self.action_chunk_index = 0
+                self.action_chunk_index = target_chunk_index
                 self.action_chunk_fitted = action_chunk_fitted
                 self.vel_chunk_fitted = vel_chunk_fitted
                 self.timestamps_fitted = timestamps_fitted

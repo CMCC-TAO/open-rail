@@ -130,7 +130,7 @@ class VLAClient():
             # 记录控制的时间戳
             # TODO: 应该在此处开启控制线程
             self.rdm.setControlTimeMarker()
-            self.rdm.updateActionChunkFitted(action_chunk_fitted, timestamps_fitted)
+            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted)
             # self.rdm.setInitControlTime()
 
             # 统计平均推理时间和平均轨迹拟合时间
@@ -173,11 +173,11 @@ class VLAClient():
 
             # 记录轨迹拟合的时间戳
             self.rdm.setTrajTimeMarker()
-            action_chunk_fitted, timestamps_fitted = self.trajFittingFirst(num_samples=self.config.fitting_num_samples)
+            action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self.trajFittingFirst(num_samples=self.config.fitting_num_samples)
 
             # # 记录控制的时间戳
             self.rdm.setControlTimeMarker()
-            self.rdm.updateActionChunkFitted(action_chunk_fitted, timestamps_fitted)
+            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted)
 
             # 统计平均推理时间和平均轨迹拟合时间
             self.rdm.setAvgInferTime()
@@ -608,7 +608,7 @@ class VLAClient():
                 # self.inferenceFirstThreadFun()
                 # char = input("Press 'q' to quit: ")
                 # char = input("Press 'q' to quit: ")
-                time.sleep(0.4)
+                time.sleep(0.6)
                 # char = input("Press 'q' to quit: ") 
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)
