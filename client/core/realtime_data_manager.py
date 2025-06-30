@@ -435,9 +435,9 @@ class RealtimeDataManager():
                     target_chunk_index = index
                     break
             # target_chunk_index += 12
+            currt_action = None
+            currt_vel = None
             if search_action:
-                currt_action = None
-                currt_vel = None
                 candidate_action_chunk = None
                 with self.polynomial_thread_lock:
                     currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
@@ -447,7 +447,20 @@ class RealtimeDataManager():
                 target_chunk_index += index_offset
 
             # self.action_chunk_index = 30
+            # 解决本部分耗时问题
+            target_chunk_index += 0
             print(f'action_chunk_index: {target_chunk_index}')
+
+            smooth_length = 15
+            if smooth_action:
+                if currt_action is None:
+                    with self.polynomial_thread_lock:
+                        currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
+                        currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
+                candidate_action_chunk = action_chunk_fitted[:, target_chunk_index:target_chunk_index + smooth_length]
+                smoothed_action_chunk = self.smoothActionTraj(currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length)
+                # self.action_chunk_fitted[:, target_chunk_index:target_chunk_index + smooth_length]
+                
             # print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
             # print(f'old action: {action}')
             # self.action_chunk_index = offset
@@ -492,6 +505,35 @@ class RealtimeDataManager():
                     qualified_joint_num = qualified_count
         print(f'target_index: {target_index}, qualified dim: {qualified_joint_num}')
         return target_index
+    def smoothActionTraj(self, currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length=15):
+        action_dim = len(currt_action)
+        max_accs = [max_acc] * len(currt_action)
+        period = 0.005
+        for index in range(smooth_length):
+            candidate_action = candidate_action_chunk[:, index]
+            action_diff = candidate_action - currt_action
+            acc_flag = [1.0 if joint_diff > 0.0 else -1.0 for joint_diff in action_diff]
+            next_max_vel = currt_vel + acc_flag * max_accs * period
+            next_max_action = currt_action + currt_vel * period + 0.5 * acc_flag * max_accs * period * period
+            for joint_index in range(action_dim):
+                if acc_flag[joint_index] == 1.0:
+                    if candidate_action[joint_index] > next_max_action[joint_index]:
+                        candidate_action[joint_index] = next_max_action[joint_index]
+                        currt_vel[joint_index] = next_max_vel[joint_index]
+                    else:
+                        currt_vel[joint_index] = (candidate_action[joint_index] - currt_action[joint_index]) / period
+                elif acc_flag[joint_index] == -1.0:
+                    if candidate_action[joint_index] < next_max_action[joint_index]:
+                        candidate_action[joint_index] = next_max_action[joint_index]
+                        currt_vel[joint_index] = next_max_vel[joint_index]
+                    else:
+                        currt_vel[joint_index] = (candidate_action[joint_index] - currt_action[joint_index]) / period
+                else:
+                    pass
+            print(f'currt_action: {currt_action[:7]}')
+            print(f'candi_action: {candidate_action[:7]}')
+            currt_action = candidate_action
+        return candidate_action_chunk
     
     def getActionFitted(self):
         with self.polynomial_thread_lock:

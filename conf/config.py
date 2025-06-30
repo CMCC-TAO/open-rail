@@ -71,7 +71,7 @@ def get_client_config():
         ConfigDict: Configuration for Client.
     """
     config = ConfigDict()
-    config.robot = RobotType.A2D
+    config.robot = RobotType.MOCK
     config.rdm = get_realtime_data_manager_config()
     config.traj = get_trajectory_config()
     config.controller = get_controller_config()
