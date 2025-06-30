@@ -177,7 +177,8 @@ class VLAClient():
 
             # # 记录控制的时间戳
             self.rdm.setControlTimeMarker()
-            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted)
+            
+            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action=True, search_length=60)
 
             # 统计平均推理时间和平均轨迹拟合时间
             self.rdm.setAvgInferTime()
@@ -603,7 +604,7 @@ class VLAClient():
                 time.sleep(1.0)
                 # char = input("Press 'q' to quit: ")
             # 第二次推理
-            elif self.rdm.infer_count < 10000:
+            elif self.rdm.infer_count < 1000:
                 self.inferenceStepThreadFun()
                 # self.inferenceFirstThreadFun()
                 # char = input("Press 'q' to quit: ")

@@ -412,7 +412,7 @@ class RealtimeDataManager():
         for i in range(len(self._timestamp)):# 遍历所有帧的时间戳并找到第一个大于当前时间的索引i（并不是严格等于）；如果找不到这样的索引，则返回-1表示没有未来数据。这个函数的作用是找到下一个需要发送的数据的索引，以便在控制循环中处理这些数据。通过这种方式可以确保在控制循环中只处理未来的数据而不是过去的数据，从而避免了不必要
                 return self.timestamps_fitted[self.action_chunk_index]
     
-    def updateActionChunkFitted(self, action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action = False, search_length = 10, smooth_action = False, max_acc=50.0):
+    def updateActionChunkFitted(self, action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action = False, search_length = 20, smooth_action = False, max_acc=50.0):
         # 更新index, 首次更新;
         if self.action_chunk_index is None:
             with self.polynomial_thread_lock:
@@ -434,7 +434,7 @@ class RealtimeDataManager():
                 if timestamps_fitted[index] > time_offset:
                     target_chunk_index = index
                     break
-            target_chunk_index += 12
+            # target_chunk_index += 12
             if search_action:
                 currt_action = None
                 currt_vel = None
@@ -443,6 +443,8 @@ class RealtimeDataManager():
                     currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
                     currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
                     candidate_action_chunk = copy.deepcopy(self.action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
+                index_offset = self.searchSmoothAction(currt_action, currt_vel, candidate_action_chunk, search_length)
+                target_chunk_index += index_offset
 
             # self.action_chunk_index = 30
             print(f'action_chunk_index: {target_chunk_index}')
@@ -461,15 +463,36 @@ class RealtimeDataManager():
             # print(f'action_chunk_fitted: {self.action_chunk_fitted[:, -2]}')
             # print(f'action_chunk_fitted: {self.action_chunk_fitted[:, -1]}')
     def searchSmoothAction(self, currt_action, currt_vel, candidate_action_chunk, search_length):
+        valid_joints = [index for index, value in enumerate(abs(currt_vel) > 5e-3) if value]
+        print(f'valid_joints: {valid_joints}')
+        currt_action = currt_action[valid_joints]
+        currt_vel = currt_vel[valid_joints]
+        print(f'currt_vel: {currt_vel}')
         target_index = 0
-        action_dim = len(currt_action)
-        for candidate_index in range(search_length):
-            candidate_action = candidate_action_chunk[:, candidate_index]
+        valid_joint_num = len(valid_joints)
+        qualified_joint_num = 0
+        for candidate_index in range(0, search_length, 5):
+            candidate_action = candidate_action_chunk[valid_joints, candidate_index]
+            action_diff = candidate_action - currt_action
+            # print(f'currt_vel: {currt_vel}')
+            print(f'candidate action diff: {action_diff}')
             qualified_count = 0
-            for index in range(action_dim):
-                if currt_vel[index] == 0.0 or (candidate_action[index] - currt_action[index]) * currt_vel[index] > 0.0:
+            for index in range(valid_joint_num):
+                # v = 0.0 是夹爪的速度，不考虑夹爪的情况；当速度很小时，默认手臂静止，不考虑该种情况
+                if action_diff[index] * currt_vel[index] > 0.0:
                     qualified_count += 1
+            print(f'candidate_index: {candidate_index}, qualified count: {qualified_count}')
+            if qualified_count == valid_joint_num:
+                target_index = candidate_index
+                qualified_joint_num = qualified_count
+                break
+            else:
+                if qualified_count > qualified_joint_num:
+                    target_index = candidate_index
+                    qualified_joint_num = qualified_count
+        print(f'target_index: {target_index}, qualified dim: {qualified_joint_num}')
         return target_index
+    
     def getActionFitted(self):
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:
