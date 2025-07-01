@@ -45,7 +45,7 @@ def get_observer_config():
     config = ConfigDict()
     config.camera_names = ['head', 'hand_left', 'hand_right'] # Cameras used to get observations
     config.proprio_names = ['arm', 'gripper', 'head', 'waist']
-    config.fps = 40 # Observation period to get robot observations, in milliseconds [ms]
+    config.fps = 50 # Observation period to get robot observations, in milliseconds [ms]
     return config
 
 def get_trajectory_config():
@@ -71,7 +71,7 @@ def get_client_config():
         ConfigDict: Configuration for Client.
     """
     config = ConfigDict()
-    config.robot = RobotType.MOCK
+    config.robot = RobotType.A2D
     config.rdm = get_realtime_data_manager_config()
     config.traj = get_trajectory_config()
     config.controller = get_controller_config()

@@ -46,7 +46,7 @@ class RobotA2D():
         new_gripper_cmd = action[14:16]
         if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
             self.gripper_count += 1
-        if self.gripper_count > 30:
+        if self.gripper_count > 25:
             self.robot.move_gripper(new_gripper_cmd.tolist())
             print(f'gripper_states: {new_gripper_cmd.tolist()}')
             self.gripper_cmd = new_gripper_cmd

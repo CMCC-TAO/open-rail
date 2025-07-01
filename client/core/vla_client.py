@@ -178,7 +178,7 @@ class VLAClient():
             # # 记录控制的时间戳
             self.rdm.setControlTimeMarker()
             
-            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action=True, search_length=60)
+            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action=True, search_length=60, smooth_action=True, smooth_length=30)
 
             # 统计平均推理时间和平均轨迹拟合时间
             self.rdm.setAvgInferTime()
@@ -207,7 +207,8 @@ class VLAClient():
             self.robot.controlRobot(action)
             if self.config.show_data:
                 with self.show_thread_lock:
-                    # show raw action chunk
+                    # if len(self.ydata0) < 200:
+                        # show raw action chunk
                     self.ydata0.append(action[0])
                     self.ydata1.append(action[1])
                     self.xdata.append(len(self.ydata0))

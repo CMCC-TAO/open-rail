@@ -412,7 +412,7 @@ class RealtimeDataManager():
         for i in range(len(self._timestamp)):# 遍历所有帧的时间戳并找到第一个大于当前时间的索引i（并不是严格等于）；如果找不到这样的索引，则返回-1表示没有未来数据。这个函数的作用是找到下一个需要发送的数据的索引，以便在控制循环中处理这些数据。通过这种方式可以确保在控制循环中只处理未来的数据而不是过去的数据，从而避免了不必要
                 return self.timestamps_fitted[self.action_chunk_index]
     
-    def updateActionChunkFitted(self, action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action = False, search_length = 20, smooth_action = False, max_acc=50.0):
+    def updateActionChunkFitted(self, action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action = False, search_length = 20, smooth_action = False, smooth_length = 20):
         # 更新index, 首次更新;
         if self.action_chunk_index is None:
             with self.polynomial_thread_lock:
@@ -439,36 +439,41 @@ class RealtimeDataManager():
             currt_vel = None
             if search_action:
                 candidate_action_chunk = None
+                candidate_action_chunk = copy.deepcopy(action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
                 with self.polynomial_thread_lock:
                     currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
                     currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
-                    candidate_action_chunk = copy.deepcopy(self.action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
                 index_offset = self.searchSmoothAction(currt_action, currt_vel, candidate_action_chunk, search_length)
                 target_chunk_index += index_offset
 
             # self.action_chunk_index = 30
             # 解决本部分耗时问题
-            target_chunk_index += 0
+            # target_chunk_index += 0
             print(f'action_chunk_index: {target_chunk_index}')
 
-            smooth_length = 15
             if smooth_action:
+                base_ratio = 0.75
                 if currt_action is None:
                     with self.polynomial_thread_lock:
                         currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
-                        currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
-                candidate_action_chunk = action_chunk_fitted[:, target_chunk_index:target_chunk_index + smooth_length]
-                smoothed_action_chunk = self.smoothActionTraj(currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length)
+                for index in range(smooth_length):
+                    ratio = (1 - base_ratio) * index / smooth_length
+                    action_chunk_fitted[:14, target_chunk_index + index] = (base_ratio + ratio) * action_chunk_fitted[:14, target_chunk_index + index] + (1 - base_ratio - ratio) * currt_action[:14]
+                # currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
+                # currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
+                # smoothed_action_chunk = self.smoothActionTraj(currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length)
                 # self.action_chunk_fitted[:, target_chunk_index:target_chunk_index + smooth_length]
                 
             # print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
             # print(f'old action: {action}')
             # self.action_chunk_index = offset
+            gripper_offset = 15
             with self.polynomial_thread_lock:
                 self.action_chunk_index = target_chunk_index
                 self.action_chunk_fitted = action_chunk_fitted
                 self.vel_chunk_fitted = vel_chunk_fitted
                 self.timestamps_fitted = timestamps_fitted
+                self.action_chunk_fitted[14:, :-gripper_offset] = action_chunk_fitted[14:, gripper_offset:]
             # action = self.action_chunk_fitted[:, self.action_chunk_index]
             # print(f'new action: {action}')
             # print(f'action_chunk_index: {self.action_chunk_index}')
@@ -505,14 +510,14 @@ class RealtimeDataManager():
                     qualified_joint_num = qualified_count
         print(f'target_index: {target_index}, qualified dim: {qualified_joint_num}')
         return target_index
-    def smoothActionTraj(self, currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length=15):
+    def smoothActionTrajOLD(self, currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length=15):
         action_dim = len(currt_action)
-        max_accs = [max_acc] * len(currt_action)
+        max_accs = np.array([max_acc] * len(currt_action))
         period = 0.005
         for index in range(smooth_length):
             candidate_action = candidate_action_chunk[:, index]
             action_diff = candidate_action - currt_action
-            acc_flag = [1.0 if joint_diff > 0.0 else -1.0 for joint_diff in action_diff]
+            acc_flag = np.array([1.0 if joint_diff > 0.0 else -1.0 for joint_diff in action_diff])
             next_max_vel = currt_vel + acc_flag * max_accs * period
             next_max_action = currt_action + currt_vel * period + 0.5 * acc_flag * max_accs * period * period
             for joint_index in range(action_dim):
