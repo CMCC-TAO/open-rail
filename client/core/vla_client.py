@@ -602,7 +602,7 @@ class VLAClient():
             if self.rdm.infer_count == 0:
                 self.inferenceFirstThreadFun()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-                time.sleep(1.0)
+                time.sleep(0.6)
                 # char = input("Press 'q' to quit: ")
             # 第二次推理
             elif self.rdm.infer_count < 1000:
@@ -610,7 +610,7 @@ class VLAClient():
                 # self.inferenceFirstThreadFun()
                 # char = input("Press 'q' to quit: ")
                 # char = input("Press 'q' to quit: ")
-                time.sleep(0.6)
+                time.sleep(0.4)
                 # char = input("Press 'q' to quit: ") 
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)

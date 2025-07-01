@@ -467,7 +467,7 @@ class RealtimeDataManager():
             # print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
             # print(f'old action: {action}')
             # self.action_chunk_index = offset
-            gripper_offset = 15
+            gripper_offset = 25
             with self.polynomial_thread_lock:
                 self.action_chunk_index = target_chunk_index
                 self.action_chunk_fitted = action_chunk_fitted
