@@ -103,7 +103,7 @@ class VLAClient():
     @run_time_decorator
     def inferenceFirstThreadFun(self):
         # getObserveData函数是线程安全的，不需要加锁
-        data = self.rdm.getObserveData()
+        data = self.rdm.getObserveData(num_samples = 1 if self.config.history_frame == False else 2)
         if data is not None:
             # 首次推理需要记录开始推理的时间戳，用于更新控制时间戳
             self.rdm.setInferTimeMarker()
@@ -152,7 +152,7 @@ class VLAClient():
     @run_time_decorator
     def inferenceStepThreadFun(self):
         # getObserveData函数是线程安全的，不需要加锁
-        data = self.rdm.getObserveData()
+        data = self.rdm.getObserveData(num_samples = 1 if self.config.history_frame == False else 2)
         if data is not None:
             # 记录开始推理的时间戳
             self.rdm.setInferTimeMarker()
@@ -602,7 +602,7 @@ class VLAClient():
             if self.rdm.infer_count == 0:
                 self.inferenceFirstThreadFun()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-                time.sleep(0.6)
+                time.sleep(self.config.sleep_time)
                 # char = input("Press 'q' to quit: ")
             # 第二次推理
             elif self.rdm.infer_count < 1000:
@@ -610,7 +610,7 @@ class VLAClient():
                 # self.inferenceFirstThreadFun()
                 # char = input("Press 'q' to quit: ")
                 # char = input("Press 'q' to quit: ")
-                time.sleep(0.4)
+                time.sleep(self.config.sleep_time)
                 # char = input("Press 'q' to quit: ") 
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)

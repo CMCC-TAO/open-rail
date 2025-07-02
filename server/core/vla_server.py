@@ -52,21 +52,33 @@ class VLAServer:
         try:
             # 解码图像数据，TODO： 1. 多线程解码，提升效率; 2. 支持多帧数据
             start_time = time.time()
-            img_keys = data['img_keys']
-            # for img_key in img_keys:
-            #     data['obs'][img_key] = cv2.imdecode(data['obs'][img_key], cv2.IMREAD_COLOR)
-            # 提交推理任务到线程池
-            futures = [self.image_decode_executor.submit(self.image_decode, img_key, data) for img_key in img_keys]
-            # 等待所有任务完成并获取结果
-            results = [future.result() for future in futures]
+            if isinstance(data, list):
+                # TODO: 并行化处理
+                for data_item in data:
+                    img_keys = data_item['img_keys']
+                    # for img_key in img_keys:
+                    #     data['obs'][img_key] = cv2.imdecode(data['obs'][img_key], cv2.IMREAD_COLOR)
+                    # 提交推理任务到线程池
+                    futures = [self.image_decode_executor.submit(self.image_decode, img_key, data_item) for img_key in img_keys]
+                    # 等待所有任务完成并获取结果
+                    results = [future.result() for future in futures]
+
+            else:
+                img_keys = data['img_keys']
+                # for img_key in img_keys:
+                #     data['obs'][img_key] = cv2.imdecode(data['obs'][img_key], cv2.IMREAD_COLOR)
+                # 提交推理任务到线程池
+                futures = [self.image_decode_executor.submit(self.image_decode, img_key, data) for img_key in img_keys]
+                # 等待所有任务完成并获取结果
+                results = [future.result() for future in futures]
+                keys = data['obs'].keys()
+                print(f'data[obs] keys: {keys}')
             # future.add_done_callback(self._inference_callback)
             end_time = time.time()
             # 计算并打印运行时间
             elapsed_time = (end_time - start_time) * 1000
             print(f"图像解码时间: {elapsed_time} ms")
 
-            keys = data['obs'].keys()
-            print(f'data[obs] keys: {keys}')
             # cv2.imshow('head', data['obs']['cam.head'])
             # cv2.imshow('hand_left', data['obs']['cam.hand_left'])
             # cv2.imshow('hand_right', data['obs']['cam.hand_right'])

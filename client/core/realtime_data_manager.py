@@ -556,10 +556,11 @@ class RealtimeDataManager():
         with self.action_thread_lock:
             return copy.copy(self.action_chunks)
     
-    def getObserveData(self):
+    def getObserveData(self, num_samples = 1):
         with self.observe_thread_lock:
-            if self.observe_buffer:
-                return self.observe_buffer.pop()
+            if len(self.observe_buffer) >= num_samples:
+                data = self.observe_buffer.pop() if num_samples == 1 else [self.observe_buffer.pop() for _ in range(num_samples)]
+                return data
             else:
                 return None  # or handle the empty case appropriately
         # return self.observe_buffer.pop()

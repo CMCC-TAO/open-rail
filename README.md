@@ -17,9 +17,16 @@ xxxx
 cd a2d_sdk
 source env.zsh
 python robot_service.py -s -c ./conf/hybrid_deploy_depth53.pbtxt
+cd ..
 ```
 
 * 运行客户端
+需要先配置lerobot环境
+* 设置lerobot环境
+```
+conda activate lerobot
+```
+
 ```
 python run_client.py
 ```
