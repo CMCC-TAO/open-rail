@@ -72,21 +72,21 @@ def get_client_config():
         ConfigDict: Configuration for Client.
     """
     config = ConfigDict()
-    config.robot = RobotType.A2D
+    config.robot = RobotType.MOCK
     config.rdm = get_realtime_data_manager_config()
     config.traj = get_trajectory_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
-    config.show_data = False # True to show data, False to not show data
+    config.show_data = True # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 64
     config.fitting_time_step = period # 轨迹拟合的时间步长，单位为毫秒
     config.fitting_deg = 4 #多项式拟合的阶数
     config.wait_frame = 15 # 每一帧推理完成后的休眠帧数，每一帧33ms, 已废弃
     config.sleep_time = 0.6 # 每一帧推理完成后的休眠时间，单位为秒
-    config.history_frame = True # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
+    config.history_frame = False # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
     config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
     return config
@@ -114,5 +114,5 @@ def get_server_config():
     # MAIN_CLIENT_ID = 'ZROBOT'
     config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
     # config.model = ModelType.ACT
-    config.model = ModelType.RDT
+    config.model = ModelType.GR00T
     return config

@@ -539,6 +539,7 @@ class VLAClient():
         # lines = self.axs[0].plot(self.xdata[-32:], self.ydata0[-32:], 'b-', lw=1) + self.axs[1].plot(self.xdata[-32:], self.ydata1[-32:], 'r-', lw=1)
         lines = self.axs[0].plot(self.xdata[:], self.ydata0[:], 'b-', lw=1) + self.axs[1].plot(self.xdata[:], self.ydata1[:], 'r-', lw=1)
         # return self.ax.plot(self.xdata, self.ydata, 'b-', lw=1)
+        print(self.ydata0)
         return lines
 
         # # 动态调整X轴范围（保持最新数据在视图中）
@@ -605,7 +606,7 @@ class VLAClient():
                 time.sleep(self.config.sleep_time)
                 # char = input("Press 'q' to quit: ")
             # 第二次推理
-            elif self.rdm.infer_count < 1000:
+            elif self.rdm.infer_count < 2:
                 self.inferenceStepThreadFun()
                 # self.inferenceFirstThreadFun()
                 # char = input("Press 'q' to quit: ")
