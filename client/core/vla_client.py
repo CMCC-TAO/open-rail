@@ -606,7 +606,7 @@ class VLAClient():
                 time.sleep(self.config.sleep_time)
                 # char = input("Press 'q' to quit: ")
             # 第二次推理
-            elif self.rdm.infer_count < 2:
+            elif self.rdm.infer_count < 10000:
                 self.inferenceStepThreadFun()
                 # self.inferenceFirstThreadFun()
                 # char = input("Press 'q' to quit: ")

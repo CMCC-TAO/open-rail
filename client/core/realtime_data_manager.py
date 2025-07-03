@@ -457,6 +457,7 @@ class RealtimeDataManager():
                 if currt_action is None:
                     with self.polynomial_thread_lock:
                         currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
+                smooth_length = min(smooth_length, len(timestamps_fitted) - target_chunk_index)
                 for index in range(smooth_length):
                     ratio = (1 - smooth_base) * math.pow(index / smooth_length, smooth_ratio)
                     action_chunk_fitted[:14, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_fitted[:14, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action[:14]
