@@ -1,5 +1,6 @@
 import copy
 import time
+import math
 import threading
 import matplotlib.pyplot as plt
 import numpy as np
@@ -412,7 +413,7 @@ class RealtimeDataManager():
         for i in range(len(self._timestamp)):# 遍历所有帧的时间戳并找到第一个大于当前时间的索引i（并不是严格等于）；如果找不到这样的索引，则返回-1表示没有未来数据。这个函数的作用是找到下一个需要发送的数据的索引，以便在控制循环中处理这些数据。通过这种方式可以确保在控制循环中只处理未来的数据而不是过去的数据，从而避免了不必要
                 return self.timestamps_fitted[self.action_chunk_index]
     
-    def updateActionChunkFitted(self, action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action = False, search_length = 20, smooth_action = False, smooth_length = 20):
+    def updateActionChunkFitted(self, action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action = False, search_length = 20, smooth_action = False, smooth_length = 20, smooth_base = 0.1, smooth_ratio = 0.5, gripper_offset = 25):
         # 更新index, 首次更新;
         if self.action_chunk_index is None:
             with self.polynomial_thread_lock:
@@ -452,13 +453,13 @@ class RealtimeDataManager():
             print(f'action_chunk_index: {target_chunk_index}')
 
             if smooth_action:
-                base_ratio = 0.75
+                # base_ratio = 0.1
                 if currt_action is None:
                     with self.polynomial_thread_lock:
                         currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
                 for index in range(smooth_length):
-                    ratio = (1 - base_ratio) * index / smooth_length
-                    action_chunk_fitted[:14, target_chunk_index + index] = (base_ratio + ratio) * action_chunk_fitted[:14, target_chunk_index + index] + (1 - base_ratio - ratio) * currt_action[:14]
+                    ratio = (1 - smooth_base) * math.pow(index / smooth_length, smooth_ratio)
+                    action_chunk_fitted[:14, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_fitted[:14, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action[:14]
                 # currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
                 # currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
                 # smoothed_action_chunk = self.smoothActionTraj(currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length)
@@ -467,7 +468,7 @@ class RealtimeDataManager():
             # print(f'currt_timestamp: {currt_timestamp}, update_timestamp: {timestamps_fitted[self.action_chunk_index]}')
             # print(f'old action: {action}')
             # self.action_chunk_index = offset
-            gripper_offset = 25
+            # gripper_offset = 25
             with self.polynomial_thread_lock:
                 self.action_chunk_index = target_chunk_index
                 self.action_chunk_fitted = action_chunk_fitted

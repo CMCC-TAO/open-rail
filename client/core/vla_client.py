@@ -178,7 +178,7 @@ class VLAClient():
             # # 记录控制的时间戳
             self.rdm.setControlTimeMarker()
             
-            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action=True, search_length=60, smooth_action=True, smooth_length=30)
+            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
 
             # 统计平均推理时间和平均轨迹拟合时间
             self.rdm.setAvgInferTime()

@@ -11,7 +11,7 @@ class RobotType(str, Enum):
     A2D = 'a2d'
     MOCK = 'mock'
 
-period = 10
+period = 5
 def get_realtime_data_manager_config():
     """Generate config for RealtimeDataManager
 
@@ -84,6 +84,13 @@ def get_client_config():
     config.fitting_num_samples = 64
     config.fitting_time_step = period # 轨迹拟合的时间步长，单位为毫秒
     config.fitting_deg = 4 #多项式拟合的阶数
+    config.search_action = True # 是否前向搜索平滑动作
+    config.search_length = 50 # 前向搜索的长度
+    config.smooth_action = True # 是否平滑动作
+    config.smooth_length = 50 # 平滑动作的长度
+    config.smooth_base = 0.1 # 平滑动作的基础值，基础值约小表示约平滑
+    config.smooth_ratio = 0.5 # 平滑动作的比例，推荐0.5
+    config.gripper_offset = 25 # 夹爪向前偏移量
     config.wait_frame = 15 # 每一帧推理完成后的休眠帧数，每一帧33ms, 已废弃
     config.sleep_time = 0.6 # 每一帧推理完成后的休眠时间，单位为秒
     config.history_frame = False # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
