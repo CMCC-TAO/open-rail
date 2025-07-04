@@ -209,8 +209,8 @@ class VLAClient():
                 with self.show_thread_lock:
                     # if len(self.ydata0) < 200:
                         # show raw action chunk
-                    self.ydata0.append(action[0])
-                    self.ydata1.append(action[1])
+                    self.ydata0.append(action[14])
+                    self.ydata1.append(action[15])
                     self.xdata.append(len(self.ydata0))
                     # print(f'step: {len(self.ydata0)}')
             # print(f'action: {action}')

@@ -3,17 +3,20 @@ from conf.config import get_server_config
 from conf.config import ModelType
 from server.core.vla_server import VLAServer
 from server.core.zmq_server import ZMQServer
-from server.models.gr00t import ModelVLA as GR00T
-from server.models.act import ModelVLA as ACT
-from server.models.rdt import ModelVLA as RDT
 
 def get_model(model_type: ModelType):
     if model_type == ModelType.ACT:
+        from server.models.act import ModelVLA as ACT
         return ACT()
     elif model_type == ModelType.GR00T:
+        from server.models.gr00t import ModelVLA as GR00T
         return GR00T()
     elif model_type == ModelType.RDT:
+        from server.models.rdt import ModelVLA as RDT
         return RDT()
+    elif model_type == ModelType.SMOLVLA:
+        from server.models.smolvla import ModelVLA as SMOLVLA
+        return SMOLVLA()
     else:
         raise ValueError("Invalid model type")
 

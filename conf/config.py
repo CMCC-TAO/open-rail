@@ -6,6 +6,7 @@ class ModelType(str, Enum):
     ACT = 'act'
     GR00T = 'gr00t'
     RDT = 'rdt'
+    SMOLVLA = 'smolvla'
 
 class RobotType(str, Enum):
     A2D = 'a2d'
@@ -46,7 +47,7 @@ def get_observer_config():
     config = ConfigDict()
     config.camera_names = ['head', 'hand_left', 'hand_right'] # Cameras used to get observations
     config.proprio_names = ['arm', 'gripper', 'head', 'waist']
-    config.fps = 36 # Observation period to get robot observations, in milliseconds [ms]
+    config.fps = 30 # Observation period to get robot observations, in milliseconds [ms]
     return config
 
 def get_trajectory_config():
@@ -85,14 +86,14 @@ def get_client_config():
     config.fitting_time_step = period # 轨迹拟合的时间步长，单位为毫秒
     config.fitting_deg = 4 #多项式拟合的阶数
     config.search_action = True # 是否前向搜索平滑动作
-    config.search_length = 75 # 前向搜索的长度
+    config.search_length = 100 # 前向搜索的长度
     config.smooth_action = False # 是否平滑动作
     config.smooth_length = 150 # 平滑动作的长度
     config.smooth_base = 0.0 # 平滑动作的基础值，基础值约小表示约平滑
     config.smooth_ratio = 0.75 # 平滑动作的比例，推荐0.5
-    config.gripper_offset = 50 # 夹爪向前偏移量
+    config.gripper_offset = 5 # 夹爪向前偏移量
     config.wait_frame = 15 # 每一帧推理完成后的休眠帧数，每一帧33ms, 已废弃
-    config.sleep_time = 0.6 # 每一帧推理完成后的休眠时间，单位为秒
+    config.sleep_time = 0.0 # 每一帧推理完成后的休眠时间，单位为秒
     config.history_frame = False # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
     config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
@@ -121,5 +122,5 @@ def get_server_config():
     # MAIN_CLIENT_ID = 'ZROBOT'
     config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
     # config.model = ModelType.ACT
-    config.model = ModelType.GR00T
+    config.model = ModelType.SMOLVLA
     return config
