@@ -6,7 +6,6 @@ from conf.config import get_client_config
 from conf.config import RobotType
 from client.robots.a2d import RobotA2D
 from client.robots.base import RobotBase
-# from client.robots.mock_a2d import RobotA2DMock
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
@@ -16,6 +15,7 @@ def get_robot(config: ConfigDict):
     if config.robot == RobotType.A2D:
         return RobotA2D(config.observer, config.controller)
     elif config.robot == RobotType.MOCK:
+        from client.robots.mock_a2d import RobotA2DMock
         repo_id = 'task_39_only1'
         root = '/home/robot/Music/task_39_only1'
         return RobotA2DMock(config.observer, config.controller, repo_id, root)
