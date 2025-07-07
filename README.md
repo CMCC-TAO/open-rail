@@ -1,9 +1,29 @@
 # VLA大模型推理框架
 * 开发者： 赵永生、赵磊、文宣章
-* 使用者： 赵永生、赵磊、文宣章、高晗。。。
+* 使用者： 赵磊、文宣章、高晗
 
 ## 1. 框架概述
 xxxx
+
+### 1.1 框架文件结构
+
+```
+.
+├── a2d_sdk
+├── a2d_sdk_1.1.3
+├── client
+├── conf
+├── go_to_ready.py
+├── log
+├── output
+├── README.md
+├── run_client.py
+├── run_server.py
+├── samples
+├── scripts
+├── server
+└── tools
+```
 
 ## 2. 框架使用
 
