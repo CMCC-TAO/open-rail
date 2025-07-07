@@ -1,5 +1,8 @@
 import copy
 import math
+import sys
+import os
+import select
 import cv2
 import time
 import queue
@@ -9,27 +12,40 @@ from matplotlib  import pyplot as plt
 from matplotlib.animation import FuncAnimation
 from ml_collections import ConfigDict
 
+from concurrent.futures import ThreadPoolExecutor
+
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
 from ..robots.a2d import RobotA2D
-from ..robots.mock_a2d import RobotA2DMock
+# from ..robots.mock_a2d import RobotA2DMock
 from ..utils import misc
+from ..utils import vis
 from ..utils.util import run_time_decorator
 from ..utils.multi_thread_timer import MultiThreadTimer
 from .zmq_client import ZMQClient
 from .trajectory_generator import TrajectoryGenerator
 from .realtime_data_manager import RealtimeDataManager
 
+try:
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'tools'))
+    from reset_robot import robot_a2d
+except ImportError:
+    print('导入tools模块出错')
+
 # VLA客户端
 class VLAClient():
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: RobotA2D | RobotA2DMock):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: RobotA2D):
         self.config = config
         self.config.observer.period = 1.0 / self.config.observer.fps
         self.rdm = rdm
         self.traj_generator = traj_generator
         self.zmq_client = zmq_client
         self.robot = robot
+        self.current_idx = 0
         self.running = False
+        self.is_running_action = True
+        self.language = self.config.language
+        self.preprocess_func = (getattr(misc, self.config.preprocess) if self.config.preprocess != 'none' else None)
 
         self.observe_thread = threading.Thread(target=self.observeThreadFun, daemon=True)
         # self.inference_thread = None
@@ -71,6 +87,10 @@ class VLAClient():
             # self.action_queue = queue.Queue(maxsize=1000)
         # self.set_receive_callback(self.receive_callback)
         # self.server_received_buffer = deque(maxlen=10)
+
+        self.vis_zmq = vis.ZmqPlotClient()
+        self.vis_chunk_idx = 0
+        self.vis_global_step = 0
 
     def observeThreadFun(self):
         print('观测线程已启动...')
@@ -151,6 +171,9 @@ class VLAClient():
         #     self.infer_flag = False
     @run_time_decorator
     def inferenceStepThreadFun(self):
+        if not self.is_running_action:
+            return
+        
         # getObserveData函数是线程安全的，不需要加锁
         data = self.rdm.getObserveData(num_samples = 1 if self.config.history_frame == False else 2)
         if data is not None:
@@ -198,6 +221,32 @@ class VLAClient():
         #     self.infer_flag = False
 
     def controlThreadFun(self):
+        if not self.is_running_action:
+            return
+
+        # 检查是否有输入可用，超时：0.001s
+        if self.current_idx % 20 == 0 and select.select([sys.stdin,], [], [], 0.001)[0]:
+            user_input = sys.stdin.readline().strip()
+            if user_input == '':
+                self.is_running_action = False
+                cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\n')
+                self.is_running_action = True
+                if cmd == 'l':
+                    self.is_running_action = False
+                    language = input('请输入新的语言指令，按Enter键确认：')
+                    self.is_running_action = True
+                    self.language = language.strip()
+                    print(f"语言指令已修改为: {self.language}")
+                elif cmd == 'r':
+                    self.is_running_action = False
+                    robot_a2d.main(robot=self.robot.robot)
+                    input('机器人复位完成，程序暂停，按Enter键继续...')
+                    self.is_running_action = True
+                    # self.initialize() # 状态已不在原来的位置，需要初始化，重新获取动作块
+        self.current_idx += 1
+        if self.current_idx > 100000:
+            self.current_idx = 0
+
         # print(f'[{time.time()}]控制线程已启动...')
         action = self.rdm.getActionFitted()
         # action, timestamp = self.rdm.popActionData()
@@ -206,12 +255,15 @@ class VLAClient():
             # print(f'[{time.time()}]控制线程已启动...')
             self.robot.controlRobot(action)
             if self.config.show_data:
-                with self.show_thread_lock:
-                    # if len(self.ydata0) < 200:
-                        # show raw action chunk
-                    self.ydata0.append(action[14])
-                    self.ydata1.append(action[15])
-                    self.xdata.append(len(self.ydata0))
+                self.vis_action_state(action)
+
+            # if self.config.show_data:
+            #     with self.show_thread_lock:
+            #         # if len(self.ydata0) < 200:
+            #             # show raw action chunk
+            #         self.ydata0.append(action[14])
+            #         self.ydata1.append(action[15])
+            #         self.xdata.append(len(self.ydata0))
                     # print(f'step: {len(self.ydata0)}')
             # print(f'action: {action}')
         # while self.running:
@@ -388,29 +440,47 @@ class VLAClient():
         #         continue
             # 获取当前时间戳
 
+    def _process_image(self, key, value):
+        ext = '.png' if 'depth.' in key else '.jpg'
+        processed = self.preprocess_func(value) if self.preprocess_func else value
+        encoded = cv2.imencode(ext, processed)[1]
+        return key, processed, encoded
+
+    def _thread_process_image(self, obs):
+        cam_items = [(key, value) for key, value in obs.items() if 'cam.' in key]
+        # 使用线程池并行处理所有摄像头
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(self._process_image, key, value) for key, value in cam_items]
+            results = [future.result() for future in futures] # 等待所有任务完成
+        obs_cams, processed_imgs = {}, {}
+        for key, processed, encoded in results:
+            obs_cams[key] = encoded
+            if self.config.show_img:
+                processed_imgs[key] = processed
+                if 'depth.' in key:
+                    img_depth_norm = cv2.normalize(processed, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                    img_show = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
+                else:
+                    img_show = cv2.cvtColor(processed, cv2.COLOR_RGB2BGR)
+                cv2.imshow(key, img_show)
+                cv2.waitKey(1)
+        return obs_cams
+
     @run_time_decorator
     def processData(self, frame):
         loc_timestamp = time.perf_counter()
-        # start_time = time.time()
-        # img_head = misc.crop_and_resize(frame['obs.cam.head'])
-        # img_hand_left = misc.crop_and_resize(frame['obs.cam.hand_left'])
-        # img_hand_right = misc.crop_and_resize(frame['obs.cam.hand_right'])
-        img_head = misc.pad_and_resize(frame['obs.cam.head'])
-        img_hand_left = misc.pad_and_resize(frame['obs.cam.hand_left'])
-        img_hand_right = misc.pad_and_resize(frame['obs.cam.hand_right'])
+        obs_cams = self._thread_process_image(frame)
         # if frame['obs.state'][-1] is None:
         #     frame['obs.state'][-1] = 0.0
         data = {
-            'type': 'vla',
+            'type': 'vla_obs',
             'img_keys': ['cam.head', 'cam.hand_left', 'cam.hand_right'],
             'ref_timestamp': frame['ref_timestamp'],
             'loc_timestamp': loc_timestamp,
             'obs': {
-                'cam.head': cv2.imencode('.jpg', img_head)[1],
-                'cam.hand_left': cv2.imencode('.jpg', img_hand_left)[1],
-                'cam.hand_right': cv2.imencode('.jpg', img_hand_right)[1],
+                **obs_cams,
                 'state': frame['obs.state'],
-                'annotation.human.action.task_description': ['pick bottle into box'],
+                'language': [self.language],
             },
         }
         end_time = time.time()
@@ -445,7 +515,7 @@ class VLAClient():
     @run_time_decorator
     def processActionNew(self, action):
         # timestamp_chunk的逻辑发生了变化，首帧是观测数据的时间戳ref_timestamp, 后续帧是相对时间
-        # {'type': 'action', 'pred_action': array([[-1.0059779 ,  0.58745086,  0.32646954, -1.2613511 ,  0.7208374 ,
+        # {'type': 'vla_action', 'pred_action': array([[-1.0059779 ,  0.58745086,  0.32646954, -1.2613511 ,  0.7208374 ,
         #  1.4398973 , -0.1548205 ,  1.0740726 , -0.6103424 , -0.28125978,
         #  1.2830431 , -0.72958744, -1.4945612 ,  0.18649821,  0.00195312,
         #  0.        ],], dtype=float32), 'ref_timestamp': 1745389475305775776}
@@ -453,7 +523,7 @@ class VLAClient():
         action_chunk = []
         timestamp_chunk = []
         action_type = action['type']
-        if action_type == 'action':
+        if action_type == 'vla_action':
             pred_action = action['pred_action']
             ref_timestamp = action['ref_timestamp']
             loc_timestamp = action['loc_timestamp']
@@ -717,6 +787,44 @@ class VLAClient():
     #         self.inference_count += 1
     #     else:
     #         print("没有观测数据，跳过推理")
+
+    def vis_action_state(self, action):
+        current_state = self.robot.get_obs_only_state()
+        line_data = []
+        for joint_idx, value in enumerate(action):
+            # if joint_idx != 10:
+            #     continue
+            # joint_idx = 0
+            if joint_idx >= current_state.shape[0]:
+                continue
+            line_data.append({
+                'subplot': joint_idx,
+                'y': [value],
+                'x': [self.vis_global_step],
+                'line_idx': 0,
+                'line_props': {
+                    'show_line': True,
+                    'color': 'purple',
+                    'marker': 'o',
+                    'markersize': 1,
+                    'label': 'action'
+                }
+            })
+            line_data.append({
+                'subplot': joint_idx,
+                'y': [current_state[joint_idx]],
+                'x': [self.vis_global_step],
+                'line_idx': 1,
+                'line_props': {
+                    'show_line': True,
+                    'color': 'orange',
+                    'marker': 'o',
+                    'markersize': 1,
+                    'label': 'state'
+                }
+            })
+        self.vis_zmq.send({'line_data': line_data})
+        self.vis_global_step += 1
 
 if __name__ == "__main__":
     pass

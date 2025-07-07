@@ -6,7 +6,7 @@ from conf.config import get_client_config
 from conf.config import RobotType
 from client.robots.a2d import RobotA2D
 from client.robots.base import RobotBase
-from client.robots.mock_a2d import RobotA2DMock
+# from client.robots.mock_a2d import RobotA2DMock
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator

@@ -2,34 +2,46 @@ import os
 import time
 import numpy as np
 import torch
+import pickle
 import sys
-# sys.path.append('/home/robot/Music/ACT_code_checkpoint/act')
+# 获取当前脚本文件的路径
+cur_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 构造相对路径：从 run.py 定位到 ../server/models/act
+act_path = os.path.abspath(os.path.join(cur_dir, '..', 'act'))
+print(act_path)
+# 添加到 sys.path
+sys.path.append(act_path)
+from policy import ACTPolicy,DPolicy
 from einops import rearrange
 import argparse
 import time
 from omegaconf import OmegaConf
 import matplotlib.pyplot as plt
-#from process_utils.process_utils import initialize_model_and_tokenizer, encode_text
+# from lerobot.common.datasets.utils import load_stats,load_command_dict
+# from lerobot.common.policies.normalize import Normalize, Unnormalize
+from lerobot_utils.data_utils import load_stats,load_command_dict
+from lerobot_utils.normalize import Normalize, Unnormalize
+
 import cv2
 from pathlib import Path
 from torch.utils.data import Subset
-from .lerobot_utils.data_utils import load_stats,load_command_dict
-from .lerobot_utils.normalize import Normalize, Unnormalize
-from .policy import ACTPolicy,DPolicy
 torch.set_printoptions(precision=6, sci_mode=False)  
 
 
 
 class ModelVLA:
-    def __init__(self, args=None):
-        if args is None:
-            args = {
-                'ckpt_dir':'/home/robot/Music/ACT_code_checkpoint/save_model/pick_bottle/data_349',
-                'policy_class':'ACT',
-                'chunk_size':60,
-                'task_name':'pick_bread',
-                'use_language':False
-            }
+    def __init__(self, model_path=None):
+        if model_path is None:
+            model_path = '/hy0505/tangjy/act/save_model_bottle_minmax_154_39/policy_step_1999_seed_0.ckpt'
+        args = {
+            'ckpt_dir':model_path,
+            'policy_class':'ACT',
+            'chunk_size':64,
+            'task_name':'pick_bread',
+            'use_language':False
+        }
+        
         self.config = self.get_config(args)
         self.set_seed(self.config['seed'])
         #print(self.config)
@@ -37,9 +49,9 @@ class ModelVLA:
         self.stats = {}
         self.state_dim = self.config['state_dim']
         self.camera_names = self.config['camera_names']
-        self.root = Path(self.config['ckpt_dir'])
+        self.root = Path(os.path.dirname(self.config['ckpt_dir']))
         self.normalize = True
-        self.arm_only = False
+        self.arm_only = True
         self.load_model()
         print("self.state_dim",self.state_dim)
         if self.state_dim == 22 and self.normalize:
@@ -74,11 +86,11 @@ class ModelVLA:
         )
 
     def load_model(self):
-        ckpt_dir = self.config['ckpt_dir']
+        ckpt_path = self.config['ckpt_dir']
         #policy_config = self.config['policy_config']
 
         # 加载模型
-        ckpt_path = os.path.join(ckpt_dir, f'policy_best.ckpt')
+        #ckpt_path = os.path.join(ckpt_dir, f'policy_step_999_seed_0.ckpt')
         print("ckpt path",ckpt_path)
         if self.config["policy_class"] == "ACT":
             self.policy = ACTPolicy(self.config)
@@ -89,7 +101,14 @@ class ModelVLA:
         self.policy.cuda()
         self.policy.eval()
         print(f'Loaded model: {ckpt_path}')
-        self.stats = load_stats(self.root)
+        #self.stats = load_stats(self.root)
+        pkl_path = self.root/'dataset_stats.pkl'
+
+        # 加载文件
+        with open(pkl_path, 'rb') as f:
+            self.stats = pickle.load(f)
+            #print("self.stats",self.stats)
+                
 
     def set_seed(self, seed):
             torch.manual_seed(seed)
@@ -155,33 +174,29 @@ class ModelVLA:
             # output_path = "./"+cam_name+'.png'  # 保存路径和文件名
             # cv2.imwrite(output_path, observations[f'images/{cam_name}'])
 
-            curr_image = rearrange(observations[cam_name], 'h w c -> c h w')
+            curr_image = rearrange(observations[cam_name], 'b h w c -> b c h w')
             curr_images.append(curr_image)
 
 
-        curr_image = np.stack(curr_images, axis=0)
-        curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(dim=0)
+        curr_image = np.stack(curr_images, axis=1)
+        curr_image = torch.from_numpy(curr_image / 255.0).float().cuda()
         return curr_image
 
-    def infer(self, data):
-        print(f'data keys: {data.keys()}')
+    def infer(self, sequence):
+        data = sequence[0]
         obs = data['obs'].copy()
-        print(f'obs keys: {obs.keys()}')
         obs['state'] = obs['state'][None]
-        image_shape = obs['cam.head'].shape
-        print(f'image shape: {image_shape}')
-        state_shape = obs['state'].shape
-        print(f'state shape: {state_shape}')
+        obs["cam.head"] = obs["cam.head"][None]
+        obs["cam.hand_left"] = obs["cam.hand_left"][None]
+        obs["cam.hand_right"] = obs["cam.hand_right"][None]
+        aaa = time.time()
+        print(obs.keys())
 
         with torch.inference_mode():
             
             obs['observation.state'] = torch.tensor(obs['state'],dtype=torch.float32)
 
             obs = self.normalize_inputs(obs)
-            if not self.arm_only :
-                obs['observation.state'][:,8:] = torch.tensor([0.726373, -0.437754, -0.721693, 0.638622,
-    0.711874, -0.632738, -0.671046, 0.000000, -0.379791, -0.378923,
-    0.286311, 0.293441])
 
             if self.config["use_language"]:
                 command_embediing  = self.command_dict.get(instruction)
@@ -195,6 +210,7 @@ class ModelVLA:
                 # if len(expected_image_keys) > 0:
                 #     curr_image = torch.stack([obs[k] for k in expected_image_keys], dim=-4).cuda().squeeze(0)
                 # print(curr_image.shape)
+                #print(obs['cam.head'].shape, obs['state'].shape)
                 curr_image = self.get_image(obs, expected_image_keys)
             else:
                 curr_image = self.get_image(obs, self.camera_names)
@@ -207,36 +223,33 @@ class ModelVLA:
             if self.arm_only:
                 # print("arm only")
                 # print(obs['observation.state'].shape)
-                qpos = obs['observation.state'][:,0:16].cuda()
+                #qpos = obs['observation.state'][:,0:16].cuda()
+                qpos = obs['observation.state'].cuda()
             else:
                 qpos = obs['observation.state'].cuda()
-            
-            start_time = time.time()
             pre_data = self.policy(qpos, curr_image,command_embedding=command_embedding)
                         #print("len data",len(data))
             if len(pre_data )== 2:
                 all_actions ,action_done = pre_data 
         
             action_done = action_done.squeeze(0).cpu().numpy()
-            #print("action shape",all_actions.shape)
-            if self.arm_only:
-                head_waist = torch.randn(6)
-                head_waist = head_waist.unsqueeze(0).unsqueeze(0).repeat(1, 60, 1).cuda()
-                all_actions = torch.cat((all_actions,head_waist),dim=2)
+            print("action shape",all_actions.shape)
+            # if self.arm_only:
+            #     head_waist = torch.randn(6)
+            #     head_waist = head_waist.unsqueeze(0).unsqueeze(0).repeat(1, 60, 1).cuda()
+            #     all_actions = torch.cat((all_actions,head_waist),dim=2)
             predicted_action = self.unnormalize_outputs({"action": all_actions.cpu()[0]})["action"].numpy()[:,0:16]
 
             #predicted_action = self.policy.get_action(obs)
-            end_time = time.time()
-            print(f'infer time: {(end_time - start_time) * 1000: .02f} ms')
-            print(f'predicted_action shape: {predicted_action.shape}')
-            return {"type": "action", "pred_action": predicted_action, 'obs_state': obs['state'], "ref_timestamp": data["ref_timestamp"]}
+            print(time.time() - aaa, obs.keys())
+            print('predicted_action', predicted_action.shape)
+            return {"type": "vla_action", "pred_action": predicted_action, 'obs_state': obs['state'], "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp']}
 
     def test_policy(self, obs):
         aaa = time.time()
-        result = self.infer([obs])
+        self.infer([obs])
         bbb = time.time()
         print(f"time cost {bbb-aaa}")
-        return result
         #return {"type": "action", "data": predicted_action}
 
 
@@ -244,17 +257,16 @@ if __name__ == "__main__":
     import time
 
     obs = {
-        "head": np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
-        "left_arm": np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
-        "right_arm": np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
+        "video.cam_top_head": np.random.randint(0, 256, (1, 480, 640, 3), dtype=np.uint8),
+        "video.cam_left_wrist": np.random.randint(0, 256, (1, 480, 640, 3), dtype=np.uint8),
+        "video.cam_right_wrist": np.random.randint(0, 256, (1, 480, 640, 3), dtype=np.uint8),
         # "state.left_arm": np.random.rand(1, 7),
         # "state.right_arm": np.random.rand(1, 7),
         # "state.left_hand": np.random.rand(1, 1),
         # "state.right_hand": np.random.rand(1, 1),
-        "ref_timestamp": time.clock_gettime_ns(time.CLOCK_MONOTONIC),
         "state": np.random.rand(1, 20),
         "annotation.human.action.task_description": ["do your thing!"],
     }
     model = ModelVLA()
-    result = model.test_policy(obs)
-    print(result)
+    while True:
+        result = model.test_policy(obs)

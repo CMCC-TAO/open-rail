@@ -82,13 +82,14 @@ class RobotA2D():
         # print(f'ref_timestamp: {ref_timestamp}, fps: {fps}')
         # print(ref_timestamp)
         result['ref_timestamp'] = ref_timestamp
-        result['obs.cam.head'] = image
+        result['cam.head'] = image
 
         for camera in self.observer_config.camera_names:
             if camera != 'head':
                 image, timestamp = self.camera.get_image_nearest(camera, ref_timestamp)
                 # TODO: check time offset between the current camera and head camera using abs(timestamp - ref_timestamp)
-                result[f'obs.cam.{camera}'] = image
+                # TODO: 相机名称映射
+                result[f'cam.{camera}'] = image
 
         joint_states = []
         for proprio in self.observer_config.proprio_names:
@@ -107,6 +108,15 @@ class RobotA2D():
 
     # def get_obs_buffer(self):
     #     return self.obs_buffer
+
+    def get_obs_only_state(self):
+        # 这里的arm_states等为protobuf格式，需要转为list
+        arm_states, timestamp = self.robot.arm_joint_states()
+        gripper_states, timestamp = self.robot.gripper_states()
+        vmin, vmax = 35, 120
+        gripper_states = (np.array(list(gripper_states)) - vmin) / (vmax - vmin) # norm
+        # gripper_states = np.array(list(gripper_states)) * (vmax - vmin) + vmin # re-norm
+        return np.array(list(arm_states) + list(gripper_states))
 
     def close(self):
         self.camera.close()

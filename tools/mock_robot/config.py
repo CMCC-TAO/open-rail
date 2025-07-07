@@ -5,15 +5,7 @@ from ml_collections import ConfigDict
 class ModelType(str, Enum):
     ACT = 'act'
     GR00T = 'gr00t'
-    GR00T_N1_5 = 'gr00t_n1_5'
-    RDT = 'rdt'
-    SMOLVLA = 'smolvla'
 
-class RobotType(str, Enum):
-    A2D = 'a2d'
-    MOCK = 'mock'
-
-period = 5
 def get_realtime_data_manager_config():
     """Generate config for RealtimeDataManager
 
@@ -35,7 +27,7 @@ def get_controller_config():
     """
     config = ConfigDict()
     config.wait_step = 4 # Time delay for robot controller, in milliseconds [ms]
-    config.period = period # Control period to control robot, in milliseconds [ms]
+    config.control_period = 50 # Control period to control robot, in milliseconds [ms]
     config.strategy = 'step' # Control strategy, choices = ('Step', 'realtime', 'fusion)
     return config
 
@@ -48,7 +40,7 @@ def get_observer_config():
     config = ConfigDict()
     config.camera_names = ['head', 'hand_left', 'hand_right'] # Cameras used to get observations
     config.proprio_names = ['arm', 'gripper', 'head', 'waist']
-    config.fps = 30 # Observation period to get robot observations, in milliseconds [ms]
+    config.observe_period = 15 # Observation period to get robot observations, in milliseconds [ms]
     return config
 
 def get_trajectory_config():
@@ -74,33 +66,14 @@ def get_client_config():
         ConfigDict: Configuration for Client.
     """
     config = ConfigDict()
-    config.robot = RobotType.A2D
     config.rdm = get_realtime_data_manager_config()
     config.traj = get_trajectory_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
-    config.show_data = False # True to show data, 先启动utils/vis.py
-    config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
-    config.fitting_num_samples = 64
-    config.fitting_time_step = period # 轨迹拟合的时间步长，单位为毫秒
-    config.fitting_deg = 4 #多项式拟合的阶数
-    config.search_action = True # 是否前向搜索平滑动作
-    config.search_length = 100 # 前向搜索的长度
-    config.smooth_action = False # 是否平滑动作
-    config.smooth_length = 150 # 平滑动作的长度
-    config.smooth_base = 0.0 # 平滑动作的基础值，基础值约小表示约平滑
-    config.smooth_ratio = 0.75 # 平滑动作的比例，推荐0.5
-    config.gripper_offset = 5 # 夹爪向前偏移量
-    config.wait_frame = 15 # 每一帧推理完成后的休眠帧数，每一帧33ms, 已废弃
-    config.sleep_time = 0.0 # 每一帧推理完成后的休眠时间，单位为秒
-    config.history_frame = False # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
-    config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
-    # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
-
-    config.preprocess = 'pad_and_resize'
-    config.language = 'pick bottle into box'
+    config.show_data = True # True to show data, False to not show data
+    config.traj_strategy = 'curve_fitting' # Trajectory strategy, choices = ('curve_fitting', 'interpolation')
     return config
 
 def get_zmq_config():
@@ -125,6 +98,6 @@ def get_server_config():
     config.zmq = get_zmq_config()
     # MAIN_CLIENT_ID = 'ZROBOT'
     config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
-    # config.model = ModelType.ACT
-    config.model = ModelType.GR00T
+    config.model = ModelType.ACT
     return config
+    

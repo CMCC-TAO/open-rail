@@ -55,24 +55,21 @@ class VLAServer:
             if isinstance(data, list):
                 # TODO: 并行化处理
                 for data_item in data:
-                    img_keys = data_item['img_keys']
-                    # for img_key in img_keys:
-                    #     data['obs'][img_key] = cv2.imdecode(data['obs'][img_key], cv2.IMREAD_COLOR)
-                    # 提交推理任务到线程池
-                    futures = [self.image_decode_executor.submit(self.image_decode, img_key, data_item) for img_key in img_keys]
-                    # 等待所有任务完成并获取结果
-                    results = [future.result() for future in futures]
-
+                    cam_keys = [key for key in data_item['obs'] if 'cam.' in key]
+                    images_data = [(key, data_item['obs'][key]) for key in cam_keys]
+                    with ThreadPoolExecutor() as executor:
+                        decoded_images = list(executor.map(lambda d: cv2.imdecode(d[1], cv2.IMREAD_ANYDEPTH if 'depth.' in d[0] else cv2.IMREAD_COLOR), images_data))
+                    for key, img in zip(cam_keys, decoded_images):
+                        data_item['obs'][key] = img
             else:
-                img_keys = data['img_keys']
-                # for img_key in img_keys:
-                #     data['obs'][img_key] = cv2.imdecode(data['obs'][img_key], cv2.IMREAD_COLOR)
-                # 提交推理任务到线程池
-                futures = [self.image_decode_executor.submit(self.image_decode, img_key, data) for img_key in img_keys]
-                # 等待所有任务完成并获取结果
-                results = [future.result() for future in futures]
-                keys = data['obs'].keys()
-                print(f'data[obs] keys: {keys}')
+                # 使用线程池并行解码图像
+                cam_keys = [key for key in data['obs'] if 'cam.' in key]
+                images_data = [(key, data['obs'][key]) for key in cam_keys]
+                with ThreadPoolExecutor() as executor:
+                    decoded_images = list(executor.map(lambda d: cv2.imdecode(d[1], cv2.IMREAD_ANYDEPTH if 'depth.' in d[0] else cv2.IMREAD_COLOR), images_data))
+                for key, img in zip(cam_keys, decoded_images):
+                    data['obs'][key] = img
+                print(f'data[obs] keys: {data.keys()}')
             # future.add_done_callback(self._inference_callback)
             end_time = time.time()
             # 计算并打印运行时间
@@ -88,7 +85,7 @@ class VLAServer:
             # cv2.imwrite('hand_right.jpg', data['obs']['cam.hand_right'])
             # cv2.waitKey(1)
             # 提交推理任务到线程池
-            future = self.executor.submit(self.model.infer, data)
+            future = self.executor.submit(self.model.infer, data if isinstance(data, list) else [data])
             future.add_done_callback(self.inference_callback)
         except Exception as e:
             print(f"处理推理队列时出错: {e}")
