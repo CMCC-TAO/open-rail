@@ -1,7 +1,0 @@
-#提供请求文本信息进行语音播放的服务
-#服务名:  /voice/tts/test
-std_msgs/Header     header
-string tts_text      # 文本内容
-string requester     #请求方
----
-uint32 result   # 0: success 

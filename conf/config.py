@@ -101,6 +101,7 @@ def get_client_config():
 
     config.preprocess = 'pad_and_resize'
     config.language = 'pick bottle into box'
+    config.show_img = False
     return config
 
 def get_zmq_config():

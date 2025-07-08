@@ -1,6 +1,0 @@
-# /hal/loc/relocalize  #重定位
-std_msgs/Header header
-int32 relocalization_mode       # 重定位类型，暂时只支持手动重定位  1:手动重定位
-float32 x         
-float32 y
-float32 theta

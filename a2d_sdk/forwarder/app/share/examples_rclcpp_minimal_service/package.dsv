@@ -1,4 +1,0 @@
-source;share/examples_rclcpp_minimal_service/local_setup.bash
-source;share/examples_rclcpp_minimal_service/local_setup.dsv
-source;share/examples_rclcpp_minimal_service/local_setup.sh
-source;share/examples_rclcpp_minimal_service/local_setup.zsh

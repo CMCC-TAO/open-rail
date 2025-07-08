@@ -1,4 +1,0 @@
-source;share/spdlog_vendor/local_setup.bash
-source;share/spdlog_vendor/local_setup.dsv
-source;share/spdlog_vendor/local_setup.sh
-source;share/spdlog_vendor/local_setup.zsh

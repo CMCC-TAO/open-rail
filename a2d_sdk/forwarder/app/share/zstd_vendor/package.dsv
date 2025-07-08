@@ -1,4 +1,0 @@
-source;share/zstd_vendor/local_setup.bash
-source;share/zstd_vendor/local_setup.dsv
-source;share/zstd_vendor/local_setup.sh
-source;share/zstd_vendor/local_setup.zsh

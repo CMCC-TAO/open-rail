@@ -1,6 +1,0 @@
----
-string device_sn          # 设备SN号
-string software_version   # 软件版本号
-string hardware_date      # 硬件生产日期
-string default_ip         # 默认IP地址
-uint16 default_port       # 默认端口号

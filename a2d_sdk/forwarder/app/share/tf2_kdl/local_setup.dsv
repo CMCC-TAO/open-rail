@@ -1,3 +1,0 @@
-source;share/tf2_kdl/environment/ament_prefix_path.sh
-source;share/tf2_kdl/environment/path.sh
-source;share/tf2_kdl/environment/pythonpath.sh

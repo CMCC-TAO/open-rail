@@ -1,5 +1,0 @@
-mode: HYBRID_DEPLOY
-hybrid_deploy_config {
-  use_cosine_sdk: true
-  camera_model: "camera_preprocess_71"
-}

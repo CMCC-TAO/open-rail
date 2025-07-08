@@ -1,4 +1,0 @@
-source;share/libstatistics_collector/local_setup.bash
-source;share/libstatistics_collector/local_setup.dsv
-source;share/libstatistics_collector/local_setup.sh
-source;share/libstatistics_collector/local_setup.zsh

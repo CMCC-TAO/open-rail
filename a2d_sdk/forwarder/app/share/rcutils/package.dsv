@@ -1,4 +1,0 @@
-source;share/rcutils/local_setup.bash
-source;share/rcutils/local_setup.dsv
-source;share/rcutils/local_setup.sh
-source;share/rcutils/local_setup.zsh

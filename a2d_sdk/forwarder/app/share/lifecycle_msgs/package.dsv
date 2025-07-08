@@ -1,4 +1,0 @@
-source;share/lifecycle_msgs/local_setup.bash
-source;share/lifecycle_msgs/local_setup.dsv
-source;share/lifecycle_msgs/local_setup.sh
-source;share/lifecycle_msgs/local_setup.zsh

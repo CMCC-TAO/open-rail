@@ -1,3 +1,0 @@
-source;share/urdf/environment/ament_prefix_path.sh
-source;share/urdf/environment/library_path.sh
-source;share/urdf/environment/path.sh

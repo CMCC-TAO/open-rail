@@ -1,3 +1,0 @@
-source;share/rosbag2_compression/environment/ament_prefix_path.sh
-source;share/rosbag2_compression/environment/library_path.sh
-source;share/rosbag2_compression/environment/path.sh
