@@ -19,7 +19,7 @@ from ..utils.multi_thread_timer import MultiThreadTimer
 from .zmq_client import ZMQClient
 from .trajectory_generator import TrajectoryGenerator
 from .realtime_data_manager import RealtimeDataManager
-
+from .save_lerobot import LeRobotDatasetWriter
 # VLA客户端
 class VLAClient():
     def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: RobotA2D | RobotA2DMock):
@@ -47,7 +47,11 @@ class VLAClient():
         self.infer_flag = False
         self.wait_frame_count = 0
         self.infer_thread_lock = threading.Lock()
-        
+        self.record = False if len(config.record.save_path)==0 else True
+
+        if self.record:
+            print('正在保存数据...')
+            self.DataWriter = LeRobotDatasetWriter(save_config=config.record)
         if config.show_data:
             # 创建画布和折线图
             self.fig, self.axs = plt.subplots(2, 1, figsize=(10, 4))
@@ -76,6 +80,23 @@ class VLAClient():
         print('观测线程已启动...')
         while self.running:
             observations = self.robot.retrieveObservation()
+            if self.record and observations is not None:
+                record_obs= {'type':'obs',
+                      "loc_timestamp":self.rdm.getCurrentTime(),
+                      'obs': {
+                            ## resize image
+                            # 'cam.head': misc.pad_and_resize(observations['obs.cam.head'].copy()),
+                            # 'cam.hand_left': misc.pad_and_resize(observations['obs.cam.hand_left'].copy()),
+                            # 'cam.hand_right': misc.pad_and_resize(observations['obs.cam.hand_right'].copy()),
+                            'cam.head': observations['obs.cam.head'].copy(),
+                            'cam.hand_left': observations['obs.cam.hand_left'].copy(),
+                            'cam.hand_right': observations['obs.cam.hand_right'].copy(),
+                            'state': observations['obs.state'].copy(),
+                            'annotation.human.action.task_description': ['pick bottle into box'],
+                        }
+                      }
+
+                self.DataWriter.get_obs(record_obs)
             if observations is not None:
                 # print(observations.keys())
                 # print(observations['ref_timestamp'])
@@ -204,6 +225,12 @@ class VLAClient():
         if action is not None:
             # pass
             # print(f'[{time.time()}]控制线程已启动...')
+            if self.record:
+                action_dict = {
+                    "action": action,
+                    "loc_timestamp": self.rdm.getCurrentTime(),
+                }
+                self.DataWriter.get_action(action_dict)
             self.robot.controlRobot(action)
             if self.config.show_data:
                 with self.show_thread_lock:
@@ -507,6 +534,8 @@ class VLAClient():
         # self.interpolate_thread.join(timeout=1.0)
         # self.control_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
+        if self.record:
+            self.DataWriter.close()
         self.zmq_client.close()
         self.traj_generator.close()
         print('推理框架客户端已关闭。')
