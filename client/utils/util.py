@@ -8,6 +8,6 @@ def run_time_decorator(func):
         result = func(*args, **kwargs)  # Call the function
         end_time = time.time()  # Record the end time
         elapsed_time = end_time - start_time  # Calculate the elapsed time
-        print(f"Function {func.__name__} called and took {elapsed_time*1000:.4f} milliseconds to execute.")
+        # print(f"Function {func.__name__} called and took {elapsed_time*1000:.4f} milliseconds to execute.")
         return result
     return wrapper

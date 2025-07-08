@@ -5,6 +5,7 @@ from ml_collections import ConfigDict
 class ModelType(str, Enum):
     ACT = 'act'
     GR00T = 'gr00t'
+    GR00T_N1_5 = 'gr00t_n1_5'
     RDT = 'rdt'
     SMOLVLA = 'smolvla'
 
@@ -82,6 +83,7 @@ def get_client_config():
     config.zmq = get_zmq_config()
     config.record = get_record_data_config() # record data config
     config.show_data = False # True to show data, False to not show data
+    config.show_img = True # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 64
     config.fitting_time_step = period # 轨迹拟合的时间步长，单位为毫秒
@@ -98,6 +100,9 @@ def get_client_config():
     config.history_frame = False # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
     config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
+
+    config.preprocess = 'pad_and_resize'
+    config.language = 'pick bottle into box'
     return config
 
 def get_zmq_config():
@@ -124,7 +129,7 @@ def get_server_config():
     config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
     # config.model = ModelType.ACT
     # config.model = ModelType.SMOLVLA
-    config.model = ModelType.GR00T
+    config.model = ModelType.GR00T_N1_5
     return config
 
 def get_record_data_config():

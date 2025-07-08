@@ -187,7 +187,8 @@ class LeRobotDatasetWriter:
             os.makedirs(self.save_video_path, exist_ok=True)
             print(f"{self.save_meta_path} not exists, create it")
             return
-
+        elif len(os.listdir(self.save_meta_path)) == 0:
+            return
         required_files = ['info.json', 'episodes.jsonl', 'tasks.jsonl']
         missing_files = []
 
@@ -197,7 +198,7 @@ class LeRobotDatasetWriter:
                 missing_files.append(filename)
 
         if missing_files:
-            print(f"缺少以下必要文件: {', '.join(missing_files)}")
+            print(f"{self.save_meta_path}缺少以下必要文件: {', '.join(missing_files)}")
             assert False, "缺少必要文件"
             return
 

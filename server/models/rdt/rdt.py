@@ -1,120 +1,106 @@
 import os
+import sys
+sys.path.append('/home/gaohan/Code/VLA/zhaolei/zl/server/models/rdt/rdt_train_a2d')
+
 import time
+import yaml
 import numpy as np
 import torch
-import gr00t
-from gr00t.model.policy import Gr00tPolicy
-from gr00t.data.schema import EmbodimentTag
-from gr00t.experiment.data_config import DATA_CONFIG_MAP
+from PIL import Image as PImage
+
+from scripts.agilex_model import create_model
 
 class ModelVLA:
-    def __init__(self):
-        # MODEL_PATH = "/home/robot/Downloads/checkpoint-60000"
-        MODEL_PATH = "/home/robot/Downloads/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000"
-        # MODEL_PATH = "/home/robot/Downloads/pickbottle_10xx_chunk_size_64_20250503_143309_b6/checkpoint-60000"
-        # EMBODIMENT_TAG = "gr1"
-        EMBODIMENT_TAG = EmbodimentTag.NEW_EMBODIMENT
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    def __init__(self, model_path=None):
+        with open("/home/gaohan/Code/VLA/zhaolei/zl/server/models/rdt/rdt_train_a2d/configs/base.yaml", "r") as f:
+            config = yaml.safe_load(f)
 
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        data_config = DATA_CONFIG_MAP["a2d_arms_only"]
-        modality_config = data_config.modality_config()
-        modality_transform = data_config.transform()
+        if model_path is None:
+            model_path = '/media/gaohan/Elements1/rdt1Bft-a2d-pnpstd-aftAgiBot/'
 
-        self.policy = Gr00tPolicy(
-            model_path=MODEL_PATH,
-            embodiment_tag=EMBODIMENT_TAG,
-            modality_config=modality_config,
-            modality_transform=modality_transform,
-            device=device,
-            denoising_steps=4,
+        vision_encoder_name_or_path = '/media/gaohan/Elements1/weights/siglip-so400m-patch14-384'
+        self.lang_embd_path = "/media/gaohan/Elements1/weights/lang_embds/place_bottle.pt"
+
+        self.policy = create_model(
+            args=config,
+            dtype=torch.bfloat16,
+            pretrained=model_path,
+            pretrained_vision_encoder_name_or_path=vision_encoder_name_or_path,
+            control_frequency=30,
         )
-        print(self.policy.model)
+        print(self.policy)
 
-        modality_config = self.policy.modality_config
-        print(modality_config.keys())
-        for key, value in modality_config.items():
-            if isinstance(value, np.ndarray):
-                print(key, value.shape)
-            else:
-                print(key, value)
+    def infer(self, sequence):
+        obs_curr = sequence[0]['obs'].copy()
+        obs_prev = sequence[1]['obs'].copy()
 
-    def infer(self, data):
-        # data 是一个list，[currt_frame, history_frame]
-        print(f'data frames: {len(data)}')
-        # TODO:实现RDT模型推理
-        data = data[0]
-        print(f'data keys: {data.keys()}')
-        obs = data['obs'].copy()
-        print(f'obs keys: {obs.keys()}')
-        obs['state'] = obs['state'][None]
-        image_shape = obs['cam.head'].shape
-        print(f'image shape: {image_shape}')
-        state_shape = obs['state'].shape
-        print(f'state shape: {state_shape}')
-        inp_obs = {
-            "video.cam_right_high": obs['cam.head'][None],
-            "video.cam_left_wrist": obs['cam.hand_left'][None],
-            "video.cam_right_wrist": obs['cam.hand_right'][None],
-            "state.left_arm": obs['state'][:, 0:7],
-            "state.right_arm": obs['state'][:, 7:14],
-            "state.left_hand": obs['state'][:, 14:15],
-            "state.right_hand": obs['state'][:, 15:16],
-            # "state": np.random.rand(1, 20),
-            "annotation.human.action.task_description": obs['annotation.human.action.task_description'],
-        }
-        start_time = time.time()
-        predicted_action = self.policy.get_action(inp_obs)
-        end_time = time.time()
-        print(f'infer time: {(end_time - start_time) * 1000: .02f} ms')
-        predicted_action = np.concatenate([
-            v.reshape(-1, 1) if v.ndim == 1 else v 
-            for v in predicted_action.values()
-        ], axis=1)
-        print(f'predicted_action shape: {predicted_action.shape}')
-        return {
-            "type": "action",
-            "pred_action": predicted_action,
-            'obs_state': obs['state'],
-            "ref_timestamp": data["ref_timestamp"],
-            'loc_timestamp': data['loc_timestamp']
-            }
+        obs_curr['state'] = obs_curr['state'][None]
+        obs_prev['state'] = obs_prev['state'][None]
 
-    def test_policy(self, obs):
-        obs = obs.copy()
-        obs['state'] = obs['state'][None]
-        obs['state.left_arm'] = obs['state'][:, 0:7]
-        obs['state.right_arm'] = obs['state'][:, 7:14]
-        obs['state.left_hand'] = obs['state'][:, 14:15]
-        obs['state.right_hand'] = obs['state'][:, 15:16]
-        # del obs['state']
-        aaa = time.time()
-        predicted_action = self.policy.get_action(obs)
-        print(time.time() - aaa, obs.keys())
-        for key, value in predicted_action.items():
-            print(key, value.shape)
-        predicted_action = np.concatenate([
-            v.reshape(-1, 1) if v.ndim == 1 else v 
-            for v in predicted_action.values()
-        ], axis=1)
-        print('predicted_action', predicted_action.shape)
-        return {"type": "action", "action": predicted_action}
+        visual_obs = [
+            obs_prev["cam.head"],
+            obs_prev["cam.hand_right"],
+            obs_prev["cam.hand_left"],
 
+            obs_curr["cam.head"],
+            obs_curr["cam.hand_right"],
+            obs_curr["cam.hand_left"],
+        ]
+	
+        print(obs_curr["state"].shape)
+	
+        state = np.concatenate(
+            [
+                obs_curr["state"][:, 0:7], obs_curr['state'][:, 14:15],
+                obs_curr['state'][:, 7:14], obs_curr['state'][:, 15:16]
+            ],
+            axis=-1
+        )
+
+
+        time1 = time.time()
+
+        _predicted_action = self.policy.step(
+            proprio=torch.from_numpy(state),
+            images=[
+                PImage.fromarray(arr) if arr is not None else None
+                for arr in visual_obs
+            ],
+            text_embeds=torch.load(self.lang_embd_path)["embeddings"]
+        )[0].cpu().numpy()  # (chunk_size, 7+1+7+1)
+
+        predicted_action = np.concatenate(
+            [
+                _predicted_action[:, :7], _predicted_action[:, 8:15],
+                _predicted_action[:, 7:8], _predicted_action[:, 15:16]
+            ],
+            axis=1
+        )  # (chunk_size, 7+7+1+1)
+
+        print(time.time() - time1, 'action shape:', predicted_action.shape)
+        return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": sequence[0]["ref_timestamp"], 'loc_timestamp': sequence[0]['loc_timestamp']}
 
 if __name__ == "__main__":
-    import time
-
-    obs = {
-        "video.cam_right_high": np.random.randint(0, 256, (1, 480, 640, 3), dtype=np.uint8),
-        "video.cam_left_wrist": np.random.randint(0, 256, (1, 480, 640, 3), dtype=np.uint8),
-        "video.cam_right_wrist": np.random.randint(0, 256, (1, 480, 640, 3), dtype=np.uint8),
-        # "state.left_arm": np.random.rand(1, 7),
-        # "state.right_arm": np.random.rand(1, 7),
-        # "state.left_hand": np.random.rand(1, 1),
-        # "state.right_hand": np.random.rand(1, 1),
-        "state": np.random.rand(20,),
-        "annotation.human.action.task_description": ["do your thing!"],
-    }
+    # 其它vla模型参照下面的代码，测试通过即可
     model = ModelVLA()
+    obs = {
+        'cam.head': np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
+        'cam.hand_left': np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
+        'cam.hand_right': np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
+        'cam.depth.head': np.random.randint(0, 2**16, (480, 640), dtype=np.uint16),
+        'state': np.random.rand(20,),
+        'language': ['pick bottle into the box'],
+    }
+    return_key = ['type', 'pred_action', 'ref_timestamp']
     while True:
-        result = model.test_policy(obs)
+        result = model.infer([{'obs': obs, 'ref_timestamp': []}, {'obs': obs, 'ref_timestamp': []}])
+        # check result
+        for key in return_key:
+            if key not in result:
+                raise ValueError(f'result key错误，未找到{key}')
+        if result[return_key[0]] != 'vla_action':
+            raise ValueError(f"result.{return_key[0]}错误，应为vla_action，实际为{result[return_key[0]]}")
+        if not isinstance(result[return_key[1]], np.ndarray):
+            raise ValueError(f"result.{return_key[1]}类型错误，应为ndarray，实际为{type(result[return_key[1]])}")
+        if not isinstance(result[return_key[2]], list):
+            raise ValueError(f"result.{return_key[0]}类型错误，应为list，实际为{type(result[return_key[2]])}")

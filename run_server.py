@@ -9,8 +9,11 @@ def get_model(model_type: ModelType):
         from server.models.act import ModelVLA as ACT
         return ACT()
     elif model_type == ModelType.GR00T:
-        from server.models.gr00t import ModelVLA as GR00T
+        from server.models.gr00t.gr00t_n1 import ModelVLA as GR00T
         return GR00T()
+    elif model_type == ModelType.GR00T_N1_5:
+        from server.models.gr00t.gr00t_n1_5 import ModelVLA as GR00T_N1_5
+        return GR00T_N1_5()
     elif model_type == ModelType.RDT:
         from server.models.rdt import ModelVLA as RDT
         return RDT()
