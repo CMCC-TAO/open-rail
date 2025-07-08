@@ -11,7 +11,7 @@ class ModelVLA:
     def __init__(self, model_path=None):
         if model_path is None:
             # model_path = '/home/gaohan/Code/VLA/models/GR00TN1.5/pickbottle_184_1000_20250630_161111_n4_b64_s60000/checkpoint-60000'
-            model_path = '/media/gaohan/zl/models/offset/checkpoint-60000'
+            model_path = '/home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/N1.5_pickbottle_184_1000_20250630_161111_n4_b64_s60000/checkpoint-60000'
         # embodiment_tag = EmbodimentTag.NEW_EMBODIMENT
         embodiment_tag = 'a2d'
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -27,6 +27,7 @@ class ModelVLA:
             device=device,
             denoising_steps=4,
         )
+        self.policy.model.action_horizon=64
         print(self.policy.model)
 
         modality_config = self.policy.modality_config
