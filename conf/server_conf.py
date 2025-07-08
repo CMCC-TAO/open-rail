@@ -1,6 +1,6 @@
 from enum import Enum
 from ml_collections import ConfigDict
-from conf.zmq_config import get_zmq_config
+from conf.zmq_conf import get_zmq_config
 
 # 定义模型类型的枚举类
 class ModelType(str, Enum):

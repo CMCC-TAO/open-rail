@@ -1,6 +1,6 @@
 import time
-from conf.config import get_server_config
-from conf.config import ModelType
+from conf.server_conf import get_server_config, ModelType
+# from conf.config import ModelType
 from server.core.vla_server import VLAServer
 from server.core.zmq_server import ZMQServer
 

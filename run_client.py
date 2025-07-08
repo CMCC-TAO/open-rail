@@ -2,8 +2,7 @@ import time
 import matplotlib
 from ml_collections import ConfigDict
 from client.core import zmq_client
-from conf.config import get_client_config
-from conf.config import RobotType
+from conf.client_conf import get_client_config, RobotType
 from client.robots.a2d import RobotA2D
 from client.robots.base import RobotBase
 from client.core.vla_client import VLAClient

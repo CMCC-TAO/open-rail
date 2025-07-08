@@ -5,6 +5,7 @@ from conf.control_conf import get_controller_config
 from conf.observe_conf import get_observer_config
 from conf.zmq_conf import get_zmq_config
 from conf.save_conf import get_record_data_config
+from conf.traj_conf import get_traj_config
 
 
 # 定义模型类型的枚举类
@@ -28,7 +29,7 @@ def get_client_config():
     config = ConfigDict()
     config.robot = RobotType.A2D
     config.rdm = get_rdm_config()
-    # config.traj = get_trajectory_config()
+    config.traj = get_traj_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
