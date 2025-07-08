@@ -43,7 +43,6 @@ class LeRobotDatasetWriter:
         self.record_queue = Queue()
         self.action_list = deque(maxlen=10)
         self.action_time = deque(maxlen=10)
-        self.shared_data.action_align = self.manager.list()
         self.shared_data.task_info = self.manager.Value('s', '')
         self.shared_data.total_frames = self.manager.Value('i', 0)
         self.shared_data.counter = self.manager.Value('i', 0)
@@ -111,39 +110,24 @@ class LeRobotDatasetWriter:
             assert self.action_time[-1] < timestamp, \
             f"action 时间戳不递增: 上一个={self.obs_time[-1]}, 当前={timestamp}"
         self.action_list.append(action)
-
+        self.action_time.append(timestamp)
 
     def write(self):
         """
-        设置另一个线程用来写入数据，当self.shared_data.start_write_time有数据时，则开始写入数据
+        设置另一个线程用来写入数据，当self.record_queue有数据时，则开始写入数据
         """
         # 写入meta.json
-        print("waiting for start_write_time")
-        # exit()
-        # assert True , \
-        #     f"outt——————"
-        # while not self.shared_data.start_write_time:
-        #     time.sleep(0.01)
+        print("waiting for record_queue")
+        
         frame_index = 0
         try:
             while not self.stop:
-                # if not self.shared_data.state:
-                #     # print("warning!! no shared_data.state in self.shared_data.state")
-                #     continue
-                # if len(self.shared_data.state)== 0 or len(self.shared_data.action_align)==0:
-                #     continue
-                print('___________waiting for data')
-                # time.sleep(0.02)
+               
                 if not self.record_queue:
-                    # time.sleep(0.01)
-                    # print('___________waiting for data')
+
                     continue
                 tmp_list = self.record_queue.get()
                 current_save_state,action= tmp_list[0],tmp_list[1]
-                # with self.lock:
-                #     tmp_list = self.record_queue.get()
-                #     current_save_state,action= tmp_list[0],tmp_list[1]
-                    # action = self.shared_data.action_align.pop(0)
                 self.shared_data.task_info.value = current_save_state['annotation.human.action.task_description']
                 
                 ##写入数据
@@ -163,7 +147,7 @@ class LeRobotDatasetWriter:
                 self.shared_data.parquet_list.append(record)
                 frame_index+=1
                 self.shared_data.total_frames.value +=1
-                print('写入成功 ——————————————————')
+                # print('写入成功 ——————————————————')
         
         except KeyboardInterrupt:
             print("子进程检测到键盘中断，准备退出...")

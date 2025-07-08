@@ -8,6 +8,7 @@ def get_record_data_config():
     config = ConfigDict(allow_dotted_keys=True)
 
     # 基础路径和版本信息
+    config.enable = True ## True to record data, False to not record data
     config.save_path = "./output/test" ## 保存路径 如果保存路径为空，则不保存数据
     config.info = ConfigDict(allow_dotted_keys=True)
     config.info.codebase_version = "v2.0" ## lerobot数据集版本
