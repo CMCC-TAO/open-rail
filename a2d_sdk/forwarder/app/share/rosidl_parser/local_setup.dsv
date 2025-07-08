@@ -1,3 +1,0 @@
-source;share/rosidl_parser/environment/ament_prefix_path.sh
-source;share/rosidl_parser/environment/path.sh
-source;share/rosidl_parser/environment/pythonpath.sh

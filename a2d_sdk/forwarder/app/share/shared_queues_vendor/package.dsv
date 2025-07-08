@@ -1,4 +1,0 @@
-source;share/shared_queues_vendor/local_setup.bash
-source;share/shared_queues_vendor/local_setup.dsv
-source;share/shared_queues_vendor/local_setup.sh
-source;share/shared_queues_vendor/local_setup.zsh

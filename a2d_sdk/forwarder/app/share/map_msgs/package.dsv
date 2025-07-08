@@ -1,4 +1,0 @@
-source;share/map_msgs/local_setup.bash
-source;share/map_msgs/local_setup.dsv
-source;share/map_msgs/local_setup.sh
-source;share/map_msgs/local_setup.zsh

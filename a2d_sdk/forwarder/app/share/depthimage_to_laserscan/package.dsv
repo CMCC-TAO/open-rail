@@ -1,4 +1,0 @@
-source;share/depthimage_to_laserscan/local_setup.bash
-source;share/depthimage_to_laserscan/local_setup.dsv
-source;share/depthimage_to_laserscan/local_setup.sh
-source;share/depthimage_to_laserscan/local_setup.zsh

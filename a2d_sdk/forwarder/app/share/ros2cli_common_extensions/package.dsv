@@ -1,4 +1,0 @@
-source;share/ros2cli_common_extensions/local_setup.bash
-source;share/ros2cli_common_extensions/local_setup.dsv
-source;share/ros2cli_common_extensions/local_setup.sh
-source;share/ros2cli_common_extensions/local_setup.zsh

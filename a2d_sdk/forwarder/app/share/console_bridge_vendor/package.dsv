@@ -1,4 +1,0 @@
-source;share/console_bridge_vendor/local_setup.bash
-source;share/console_bridge_vendor/local_setup.dsv
-source;share/console_bridge_vendor/local_setup.sh
-source;share/console_bridge_vendor/local_setup.zsh

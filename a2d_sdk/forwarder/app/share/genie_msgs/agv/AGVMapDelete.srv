@@ -1,6 +1,0 @@
-# /hal/map/remove_map
-#根据map 列表获取的地图，选择一个可以进行删除
-std_msgs/Header header
-int32 map_id         # map id
----
-int32 error_code

@@ -1,5 +1,0 @@
-std_msgs/Header     header
-uint32              body_part       # 1.头部 2.腰部
-int32               joint_flag
-float32[]           joint_states    # 关节初始化位置
-bool                block           # true: sync, false: async

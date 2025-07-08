@@ -1,4 +1,0 @@
-source;share/examples_rclcpp_minimal_composition/local_setup.bash
-source;share/examples_rclcpp_minimal_composition/local_setup.dsv
-source;share/examples_rclcpp_minimal_composition/local_setup.sh
-source;share/examples_rclcpp_minimal_composition/local_setup.zsh

@@ -1,1 +1,0 @@
-pybind11_vendor;rosbag2_compression;rosbag2_cpp;rosbag2_storage;rosbag2_transport;rpyutils;ament_lint_auto;ament_lint_common;python3-pytest;rcl_interfaces;rclpy;rosbag2_storage_default_plugins;rosidl_runtime_py;std_msgs

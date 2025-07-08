@@ -27,7 +27,7 @@ from .trajectory_generator import TrajectoryGenerator
 from .realtime_data_manager import RealtimeDataManager
 
 try:
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'tools'))
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
     from reset_robot import robot_a2d
 except ImportError:
     print('导入tools模块出错')

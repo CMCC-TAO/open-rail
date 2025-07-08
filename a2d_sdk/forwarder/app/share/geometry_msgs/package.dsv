@@ -1,4 +1,0 @@
-source;share/geometry_msgs/local_setup.bash
-source;share/geometry_msgs/local_setup.dsv
-source;share/geometry_msgs/local_setup.sh
-source;share/geometry_msgs/local_setup.zsh

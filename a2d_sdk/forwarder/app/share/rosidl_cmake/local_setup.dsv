@@ -1,3 +1,0 @@
-source;share/rosidl_cmake/environment/ament_prefix_path.sh
-source;share/rosidl_cmake/environment/path.sh
-source;share/rosidl_cmake/environment/pythonpath.sh
