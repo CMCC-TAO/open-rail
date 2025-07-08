@@ -123,7 +123,7 @@ class VLAClient():
                 # print(observations['ref_timestamp'])
                 # print(observations['obs.state'])
                 data = self.processData(observations)
-                self.rdm.addObserveData(data)
+                self.rdm.add_observe_data(data)
                 # with self.infer_thread_lock:
                 #     # infer_flag == False，表示当前没有推理任务，可以开始推理
                 #     if self.infer_flag == False:
@@ -145,11 +145,11 @@ class VLAClient():
     @run_time_decorator
     def inferenceFirstThreadFun(self):
         # getObserveData函数是线程安全的，不需要加锁
-        data = self.rdm.getObserveData(num_samples = 1 if self.config.history_frame == False else 2)
+        data = self.rdm.pop_observe_data(num_samples = 1 if self.config.history_frame == False else 2)
         if data is not None:
             # 首次推理需要记录开始推理的时间戳，用于更新控制时间戳
-            self.rdm.setInferTimeMarker()
-            self.rdm.addInferCount()
+            self.rdm.set_infer_time_marker()
+            self.rdm.add_infer_count()
             # 首先发送数据进行推理,然后阻塞等待推理结果
             self.zmq_client.sendMessage(data)
             result = self.zmq_client.recvMessage()
@@ -159,25 +159,25 @@ class VLAClient():
             # print(f'当前动作时间戳: {ref_timestamp}')
             # 获取当前数据的时间戳,更新时间戳
             action_chunk, timestamp_chunk, loc_timestamp = self.processActionNew(action_data) #loc_timestamp是接收到观测数据的本机时间戳
-            self.rdm.setObserveTimeMarker(loc_timestamp)
+            self.rdm.set_observe_time_marker(loc_timestamp)
             # print(timestamp_chunk)
             # addActionData函数是线程安全的，不需要加锁
-            self.rdm.setInitObserveTimestamp(timestamp=timestamp_chunk[0])
-            self.rdm.updateActionChunk(action_chunk, timestamp_chunk)
+            self.rdm.set_init_observe_timestamp(timestamp=timestamp_chunk[0])
+            self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
             # 记录轨迹拟合的时间戳
-            self.rdm.setTrajTimeMarker()
+            self.rdm.set_traj_time_marker()
             action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self.trajFittingFirst(num_samples=self.config.fitting_num_samples)
 
             # 记录控制的时间戳
             # TODO: 应该在此处开启控制线程
-            self.rdm.setControlTimeMarker()
-            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted)
+            self.rdm.set_control_time_marker()
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted)
             # self.rdm.setInitControlTime()
 
             # 统计平均推理时间和平均轨迹拟合时间
-            self.rdm.setAvgInferTime()
-            self.rdm.setAvgTrajTime()
+            self.rdm.compute_avg_infer_time()
+            self.rdm.compute_avg_traj_time()
             # if self.config.show_data:
             #     with self.show_thread_lock:
             #         self.action_chunk = [action[0] for action in action_chunk]
@@ -197,11 +197,11 @@ class VLAClient():
             return
         
         # getObserveData函数是线程安全的，不需要加锁
-        data = self.rdm.getObserveData(num_samples = 1 if self.config.history_frame == False else 2)
+        data = self.rdm.pop_observe_data(num_samples = 1 if self.config.history_frame == False else 2)
         if data is not None:
             # 记录开始推理的时间戳
-            self.rdm.setInferTimeMarker()
-            self.rdm.addInferCount()
+            self.rdm.set_infer_time_marker()
+            self.rdm.add_infer_count()
             # 首先发送数据进行推理,然后阻塞等待推理结果
             self.zmq_client.sendMessage(data)
             result = self.zmq_client.recvMessage()
@@ -211,23 +211,23 @@ class VLAClient():
             # print(f'当前动作时间戳: {ref_timestamp}')
             # 获取当前数据的时间戳,更新时间戳
             action_chunk, timestamp_chunk, loc_timestamp = self.processActionNew(action_data) #loc_timestamp是接收到观测数据的本机时间戳
-            self.rdm.setObserveTimeMarker(loc_timestamp)
+            self.rdm.set_observe_time_marker(loc_timestamp)
             # print(timestamp_chunk)
             # addActionData函数是线程安全的，不需要加锁
-            self.rdm.updateActionChunk(action_chunk, timestamp_chunk)
+            self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
             # 记录轨迹拟合的时间戳
-            self.rdm.setTrajTimeMarker()
+            self.rdm.set_traj_time_marker()
             action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self.trajFittingFirst(num_samples=self.config.fitting_num_samples)
 
             # # 记录控制的时间戳
-            self.rdm.setControlTimeMarker()
+            self.rdm.set_control_time_marker()
             
-            self.rdm.updateActionChunkFitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
 
             # 统计平均推理时间和平均轨迹拟合时间
-            self.rdm.setAvgInferTime()
-            self.rdm.setAvgTrajTime()
+            self.rdm.compute_avg_infer_time()
+            self.rdm.compute_avg_traj_time()
             # if self.config.show_data:
             #     with self.show_thread_lock:
             #         self.action_chunk = [action[0] for action in action_chunk]
@@ -270,7 +270,7 @@ class VLAClient():
             self.current_idx = 0
 
         # print(f'[{time.time()}]控制线程已启动...')
-        action = self.rdm.getActionFitted()
+        action = self.rdm.get_action_fitted()
         # action, timestamp = self.rdm.popActionData()
         if action is not None:
             # pass
@@ -427,7 +427,7 @@ class VLAClient():
     #         # 获取当前时间戳
     @run_time_decorator
     def trajFittingFirst(self, num_samples):
-        timestamps, action_chunk = self.rdm.popActionChunk(time_offset=0.0, num_samples=num_samples) #轨迹拟合需要10ms左右的时间
+        timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0, num_samples=num_samples) #轨迹拟合需要10ms左右的时间
         print(f'timestamps for fitting: {timestamps}')
         # start_time = np.amin(timestamps)
         # end_time = np.amax(timestamps)
