@@ -10,7 +10,7 @@ from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
-
+import traceback
 def get_robot(config: ConfigDict):
     if config.robot == RobotType.A2D:
         return RobotA2D(config.observer, config.controller)
@@ -38,6 +38,8 @@ if __name__ == "__main__":
         vla_client.run()
     except KeyboardInterrupt:
         print("程序被中断")
+    except Exception as e:
+        print(f"发生异常: {str(e)}\n堆栈信息:\n{traceback.format_exc()}")
     finally:
         # pass
         vla_client.close()

@@ -203,7 +203,7 @@ class RealtimeDataManager():
         
         # print(f'init_control_timestamp: {self.init_control_timestamp}, init_observe_timestamp: {self.init_observe_timestamp}')
         rounded = [round(x, 4) for x in self.timestamp_chunks]
-        print(f'timestamp_chunks: {rounded}')
+        # print(f'timestamp_chunks: {rounded}')
     @run_time_decorator
     def fusionActionChunks(self, action_chunk, timestamp_chunk):
         candidate_index = 0
@@ -450,7 +450,7 @@ class RealtimeDataManager():
             # self.action_chunk_index = 30
             # 解决本部分耗时问题
             # target_chunk_index += 0
-            print(f'action_chunk_index: {target_chunk_index}')
+            # print(f'action_chunk_index: {target_chunk_index}')
 
             if smooth_action:
                 # base_ratio = 0.1
@@ -484,10 +484,10 @@ class RealtimeDataManager():
             # print(f'action_chunk_fitted: {self.action_chunk_fitted[:, -1]}')
     def searchSmoothAction(self, currt_action, currt_vel, candidate_action_chunk, search_length):
         valid_joints = [index for index, value in enumerate(abs(currt_vel) > 5e-3) if value]
-        print(f'valid_joints: {valid_joints}')
+        # print(f'valid_joints: {valid_joints}')
         currt_action = currt_action[valid_joints]
         currt_vel = currt_vel[valid_joints]
-        print(f'currt_vel: {currt_vel}')
+        # print(f'currt_vel: {currt_vel}')
         target_index = 0
         valid_joint_num = len(valid_joints)
         qualified_joint_num = 0
@@ -495,13 +495,13 @@ class RealtimeDataManager():
             candidate_action = candidate_action_chunk[valid_joints, candidate_index]
             action_diff = candidate_action - currt_action
             # print(f'currt_vel: {currt_vel}')
-            print(f'candidate action diff: {action_diff}')
+            # print(f'candidate action diff: {action_diff}')
             qualified_count = 0
             for index in range(valid_joint_num):
                 # v = 0.0 是夹爪的速度，不考虑夹爪的情况；当速度很小时，默认手臂静止，不考虑该种情况
                 if action_diff[index] * currt_vel[index] > 0.0:
                     qualified_count += 1
-            print(f'candidate_index: {candidate_index}, qualified count: {qualified_count}')
+            # print(f'candidate_index: {candidate_index}, qualified count: {qualified_count}')
             if qualified_count == valid_joint_num:
                 target_index = candidate_index
                 qualified_joint_num = qualified_count

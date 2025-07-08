@@ -12,6 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pandas as pd
 import threading
+from multiprocessing import Process, Manager,Queue
 # 初始化固定长度队列
 MAX_LEN = 900 
 class LeRobotDatasetWriter:
@@ -34,31 +35,42 @@ class LeRobotDatasetWriter:
         for key in self.config["info"]['features'].keys():
             if "cam" in key:
                 self.camera_name_list.append(key)
-        
+        self.manager = Manager()
+        self.shared_data = self.manager.Namespace()
         self.obs_time = deque(maxlen=MAX_LEN)
-        self.state = deque(maxlen=MAX_LEN)
+        self.lock = self.manager.Lock()
+        self.shared_data.state = self.manager.list()
+        self.record_queue = Queue()
         self.action_list = deque(maxlen=10)
         self.action_time = deque(maxlen=10)
-        self.action_align = deque(maxlen=MAX_LEN)
-        self.start_write_time = None
+        self.shared_data.action_align = self.manager.list()
+        self.shared_data.task_info = self.manager.Value('s', '')
+        self.shared_data.total_frames = self.manager.Value('i', 0)
+        self.shared_data.counter = self.manager.Value('i', 0)
+        self.shared_data.length = self.manager.Value('i', 0)
+        self.shared_data.parquet_list = self.manager.list()
+        self.shared_data.start_write_time = None
         self.stop = False
         # 创建视频写入字典
         self.init_parquet_content()
-        self.total_frames = self.config['info']['total_frames']
-        self.counter = self.config['info']['total_episodes']
+        self.shared_data.total_frames.value = self.config['info']['total_frames']
+        self.shared_data.counter.value = self.config['info']['total_episodes']
         
-        self.episode_chunk = self.counter // self.config.info.chunks_size
-        self.parquet_savepath = os.path.join(self.save_path,self.config.info.data_path.format(episode_chunk=self.episode_chunk,episode_index=self.counter))
+        self.episode_chunk = self.shared_data.counter.value // self.config.info.chunks_size
+        self.parquet_savepath = os.path.join(self.save_path,self.config.info.data_path.format(episode_chunk=self.episode_chunk,episode_index=self.shared_data.counter.value))
         os.makedirs(os.path.dirname(self.parquet_savepath), exist_ok=True)
         self.save_video_path = os.path.join(self.save_path,'videos',f'chunk-{self.episode_chunk:03d}')
         self.save_video_path_list = []
         self.videos_writer = self.gener_video_write_dict()
         self.parquet_writer = pq.ParquetWriter(self.parquet_savepath, self.schema)
         self.parquet_list= []
-        self.state_in_action_index= 0
-        self.writer_thread = threading.Thread(target=self.write, daemon=True)
-        self.writer_thread.start()
-    def get_obs(self, obs_data):
+        # self.shared_data.state_in_action_index= 0
+        self.writer_thread = Process(target=self.write, daemon=True)
+        try:
+            self.writer_thread.start()
+        except Exception as e:
+            print(f"启动 writer_thread 失败: {e}")
+    def add_obs(self, obs_data):
         """
         处理观测数据，包括相机图像、机器人状态和时间帧。
         :param obs_data: 包含以下键的字典：
@@ -66,21 +78,24 @@ class LeRobotDatasetWriter:
                     'loc_timestamp': int,
                     'obs': {
                         **obs_cams,
-                        'state': numpyarray,
+                        'shared_data.state': numpyarray,
                         'annotation.human.task_description': string,
                     },
         """
         timestamp = obs_data['loc_timestamp']
-        robot_state = obs_data['obs']
+        state = obs_data['obs']
         obs_type = obs_data["type"]
         if len(self.obs_time)>0:
             assert self.obs_time[-1] < timestamp, \
             f"obs 时间戳不递增: 上一个={self.obs_time[-1]}, 当前={timestamp}"
-        if self.start_write_time:
+        if self.shared_data.start_write_time:
             self.obs_time.append(timestamp)
-            self.state.append(robot_state)
-            self.action_align.append(self.action_list.pop())
-    def get_action(self, action_data):
+            with self.lock:
+                self.record_queue.put([state,self.action_list.pop()])
+                # self.shared_data.state.append(state)
+                # self.shared_data.action_align.append(self.action_list.pop())
+                print(f"写入成功: {timestamp}")
+    def add_action(self, action_data):
         """
         处理动作数据。
         :param action_data: 包含以下键的字典：
@@ -90,8 +105,8 @@ class LeRobotDatasetWriter:
         timestamp = action_data['loc_timestamp']
         action = action_data['action']
         # obs_type = action_data["type"]
-        if len(self.action_list)==0 and not self.start_write_time:
-            self.start_write_time = timestamp
+        if len(self.action_list)==0 and not self.shared_data.start_write_time:
+            self.shared_data.start_write_time = True
         if len(self.action_time)>0:
             assert self.action_time[-1] < timestamp, \
             f"action 时间戳不递增: 上一个={self.obs_time[-1]}, 当前={timestamp}"
@@ -100,57 +115,79 @@ class LeRobotDatasetWriter:
 
     def write(self):
         """
-        设置另一个线程用来写入数据，当self.start_write_time有数据时，则开始写入数据
+        设置另一个线程用来写入数据，当self.shared_data.start_write_time有数据时，则开始写入数据
         """
         # 写入meta.json
         print("waiting for start_write_time")
-        while not self.start_write_time:
-            time.sleep(0.1)
+        # exit()
+        # assert True , \
+        #     f"outt——————"
+        # while not self.shared_data.start_write_time:
+        #     time.sleep(0.01)
         frame_index = 0
-        while not self.stop:
-            if not self.state:
-                # print("warning!! no state in self.state")
-                continue
-            current_save_state = self.state.popleft()
-            state_time = self.obs_time.popleft()
-            self.task_info = current_save_state['annotation.human.action.task_description']
-            # aciton_index = self.find_closest_action(state_time,self.state_in_action_index)
-            # if aciton_index == -1:
-            #     continue
-            # self.state_in_action_index = aciton_index
-            # action = self.action_list[aciton_index]
-            action = self.action_align.popleft()
-            ##写入数据
-            ##写入图片
-            for camera_name in self.camera_name_list:
-                self.videos_writer[camera_name].write(current_save_state[camera_name])
-            ##写入parquet文件
-            record = {
-                'observation.state': current_save_state['state'].tolist(),
-                'action': action.tolist(),
-                'episode_index': self.counter,
-                'frame_index': frame_index,
-                'index': self.total_frames,
-                'task_index': 0,
-                'timestamp': 1/30 * frame_index,
-            }
-            self.parquet_list.append(record)
-            frame_index+=1
-            self.total_frames+=1
-        self.counter += 1
-        self.length = frame_index 
-        self.total_frames -=1
-        ## 根据self.start_write_time 去找最近的obs时间戳来开始存储数据
+        try:
+            while not self.stop:
+                # if not self.shared_data.state:
+                #     # print("warning!! no shared_data.state in self.shared_data.state")
+                #     continue
+                # if len(self.shared_data.state)== 0 or len(self.shared_data.action_align)==0:
+                #     continue
+                print('___________waiting for data')
+                # time.sleep(0.02)
+                if not self.record_queue:
+                    # time.sleep(0.01)
+                    # print('___________waiting for data')
+                    continue
+                tmp_list = self.record_queue.get()
+                current_save_state,action= tmp_list[0],tmp_list[1]
+                # with self.lock:
+                #     tmp_list = self.record_queue.get()
+                #     current_save_state,action= tmp_list[0],tmp_list[1]
+                    # action = self.shared_data.action_align.pop(0)
+                self.shared_data.task_info.value = current_save_state['annotation.human.action.task_description']
+                
+                ##写入数据
+                ##写入图片
+                for camera_name in self.camera_name_list:
+                    self.videos_writer[camera_name].write(current_save_state[camera_name])
+                ##写入parquet文件
+                record = {
+                    'observation.state': current_save_state['state'].tolist(),
+                    'action': action.tolist(),
+                    'episode_index': self.shared_data.counter.value,
+                    'frame_index': frame_index,
+                    'index': self.shared_data.total_frames.value,
+                    'task_index': 0,
+                    'timestamp': 1/30 * frame_index,
+                }
+                self.shared_data.parquet_list.append(record)
+                frame_index+=1
+                self.shared_data.total_frames.value +=1
+                print('写入成功 ——————————————————')
+        
+        except KeyboardInterrupt:
+            print("子进程检测到键盘中断，准备退出...")
+        except Exception as e:
+            print(f"写入线程异常退出: {e}")
+        finally:
+            self.release_writers()
+            self.shared_data.counter.value += 1
+            self.shared_data.length.value = frame_index 
+            self.shared_data.total_frames.value -=1
+        ## 根据self.shared_data.start_write_time 去找最近的obs时间戳来开始存储数据
 
     def close(self):
         self.stop = True
-        self.release_writers()
+        # self.release_writers()
+        
+        if self.writer_thread.is_alive():
+            self.writer_thread.join(timeout=1.0)  # 设置超时时间避免卡住
         # 释放资源
         while True:
             user_input = input("请输入 yes 保存数据，no 不保存: ").strip().lower()
             if user_input == 'yes':
                 print("视频已保存至：{}".format(self.save_video_path))
-                df = pd.DataFrame(self.parquet_list)
+                df = pd.DataFrame(list(self.shared_data.parquet_list))
                 table = pa.Table.from_pandas(df, schema=self.schema)
                 ## 写入parquet
                 self.parquet_writer.write_table(table)
@@ -213,7 +250,7 @@ class LeRobotDatasetWriter:
     
     def gener_video_write_dict(self):
 
-        filename = f"{'episode'}_{self.counter:06d}.{'mp4'}"
+        filename = f"{'episode'}_{self.shared_data.counter.value:06d}.{'mp4'}"
         video_write_dict = {}
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         for camera_name in self.camera_name_list:
@@ -255,7 +292,7 @@ class LeRobotDatasetWriter:
     def write_meta_files(self):
         info_file_path = os.path.join(self.save_meta_path, 'info.json')
         self.config['info']["total_episodes"] += 1
-        self.config['info']["total_frames"] = self.total_frames
+        self.config['info']["total_frames"] = self.shared_data.total_frames.value
         self.config['info']["total_videos"] += len(self.camera_name_list)
         self.config['info']["splits"]== {"test": f"0:{self.config['info']['total_episodes']+1}"}
         with open(info_file_path, 'w') as f:
@@ -267,8 +304,8 @@ class LeRobotDatasetWriter:
         episodes_file_path = os.path.join(self.save_meta_path, 'episodes.jsonl')
         episodes_content = {
             "episode_index": self.config['info']["total_episodes"],
-            "tasks": self.task_info,
-            "length": self.length  
+            "tasks": self.shared_data.task_info.value,
+            "length": self.shared_data.length.value 
         }
         with open(episodes_file_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(episodes_content, ensure_ascii=False) + '\n')
@@ -278,7 +315,7 @@ class LeRobotDatasetWriter:
         tasks_file_path = os.path.join(self.save_meta_path, 'tasks.jsonl')
         tasks_content = {
             "task_index": 0,
-            "tasks": self.task_info
+            "tasks": self.shared_data.task_info.value
         }
         with open(tasks_file_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(tasks_content, ensure_ascii=False) + '\n')
@@ -303,7 +340,7 @@ def generate_mock_observation(timestamp, frame_index):
         "loc_timestamp": timestamp,
         "obs": {
             **obs_cams,
-            "state": state,
+            "shared_data.state": state,
             "annotation.human.action.task_description": f"test_task_{frame_index}"
         }
     }
