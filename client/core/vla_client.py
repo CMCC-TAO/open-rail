@@ -26,11 +26,11 @@ from .zmq_client import ZMQClient
 from .trajectory_generator import TrajectoryGenerator
 from .realtime_data_manager import RealtimeDataManager
 
-# try:
-#     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
-#     from reset_robot import robot_a2d
-# except ImportError:
-#     print('导入tools模块出错')
+try:
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
+    from reset_robot import robot_a2d
+except ImportError:
+    print('导入tools模块出错')
 
 from .save_lerobot import LeRobotDatasetWriter
 # VLA客户端
@@ -64,10 +64,11 @@ class VLAClient():
         self.infer_flag = False
         self.wait_frame_count = 0
         self.infer_thread_lock = threading.Lock()
-        self.record = False if len(config.record.save_path)==0 else True
+        self.record = config.record.enable
 
         if self.record:
-            print('正在保存数据...')
+            self.obs_executor = ThreadPoolExecutor(max_workers=2)
+            self.record_executor = ThreadPoolExecutor(max_workers=4)
             self.DataWriter = LeRobotDatasetWriter(save_config=config.record)
         if config.show_data:
             # 创建画布和折线图
@@ -97,13 +98,9 @@ class VLAClient():
         self.vis_chunk_idx = 0
         self.vis_global_step = 0
 
-    def observeThreadFun(self):
-        print('观测线程已启动...')
-        while self.running:
-            observations = self.robot.retrieveObservation()
-            if self.record and observations is not None:
-                record_obs= {'type':'obs',
-                      "loc_timestamp":self.rdm.getCurrentTime(),
+    def async_write_obs(self,observations):
+        record_obs= {'type':'obs',
+                      "loc_timestamp":time.perf_counter(),
                       'obs': {
                             ## resize image
                             # 'cam.head': misc.pad_and_resize(observations['obs.cam.head'].copy()),
@@ -116,8 +113,25 @@ class VLAClient():
                             'annotation.human.action.task_description': ['pick bottle into box'],
                         }
                       }
+        self.DataWriter.add_obs(record_obs)
 
-                self.DataWriter.get_obs(record_obs)
+    def async_write_action(self,action):
+        action_dict = {
+                    "action": action,
+                    "loc_timestamp": time.perf_counter(),
+                }
+        self.DataWriter.add_action(action_dict)
+    def observeThreadFun(self):
+        print('观测线程已启动...')
+        while self.running:
+            if not self.is_running_action:
+                time.sleep(0.001)
+                continue
+            observations = self.robot.retrieveObservation()
+            # timestamp = time.time()
+            if self.record and observations is not None:
+                self.obs_executor.submit(self.async_write_obs, observations)
+            # print(f'send observation using {(time.time() - timestamp)*1000:.2f}ms')
             if observations is not None:
                 # print(observations.keys())
                 # print(observations['ref_timestamp'])
@@ -186,7 +200,8 @@ class VLAClient():
             #         self.action_queue.put(action[0])
             # self.inference_count += 1
         else:
-            print("No observe data, skip inference.")
+            time11 =1 
+            # print("No observe data, skip inference.")
         
         # 推理结束后将正在推理标记设置为False，便于开启下一次推理
         # with self.infer_thread_lock:
@@ -275,12 +290,10 @@ class VLAClient():
         if action is not None:
             # pass
             # print(f'[{time.time()}]控制线程已启动...')
-            if self.record:
-                action_dict = {
-                    "action": action,
-                    "loc_timestamp": self.rdm.getCurrentTime(),
-                }
-                self.DataWriter.get_action(action_dict)
+            # timestamp = time.perf_counter()
+            if self.record and self.is_running_action and self.running:
+                self.record_executor.submit(self.async_write_action, action)
+            # print(f'send action using {(time.perf_counter() - timestamp)*1000:.2f}ms')
             self.robot.controlRobot(action)
             if self.config.show_data:
                 self.vis_action_state(action)
@@ -428,7 +441,7 @@ class VLAClient():
     @run_time_decorator
     def trajFittingFirst(self, num_samples):
         timestamps, action_chunk = self.rdm.popActionChunk(time_offset=0.0, num_samples=num_samples) #轨迹拟合需要10ms左右的时间
-        print(f'timestamps for fitting: {timestamps}')
+        # print(f'timestamps for fitting: {timestamps}')
         # start_time = np.amin(timestamps)
         # end_time = np.amax(timestamps)
         start_time = timestamps[0]
@@ -599,6 +612,7 @@ class VLAClient():
     def close(self):
         with self.thread_lock:
             self.running = False
+        print('推理框架客户端开始关闭。')
         # plt.close()
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
@@ -606,6 +620,9 @@ class VLAClient():
         # self.control_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
         if self.record:
+            time.sleep(1)
+            self.obs_executor.shutdown(wait=True)
+            self.record_executor.shutdown(wait=True)
             self.DataWriter.close()
         self.zmq_client.close()
         self.traj_generator.close()
