@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
-from ..robots.a2d import RobotA2D
+from ..robots.a2d.a2d import RobotA2D
 # from ..robots.mock_a2d import RobotA2DMock
 from ..utils import misc
 from ..utils import vis
@@ -26,11 +26,11 @@ from .zmq_client import ZMQClient
 from .trajectory_generator import TrajectoryGenerator
 from .realtime_data_manager import RealtimeDataManager
 
-try:
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
-    from reset_robot import robot_a2d
-except ImportError:
-    print('导入tools模块出错')
+# try:
+#     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
+#     from reset_robot import robot_a2d
+# except ImportError:
+#     print('导入tools模块出错')
 
 from .save_lerobot import LeRobotDatasetWriter
 # VLA客户端
