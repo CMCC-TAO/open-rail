@@ -4,7 +4,7 @@ from ml_collections import ConfigDict
 from client.core import zmq_client
 from conf.config import get_client_config
 from conf.config import RobotType
-from client.robots.a2d import RobotA2D
+from client.robots.a2d.a2d import RobotA2D
 from client.robots.base import RobotBase
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
@@ -28,6 +28,9 @@ if __name__ == "__main__":
         matplotlib.use('Agg')
     # print(config)
     zmq_client = ZMQClient(config.zmq)
+
+    # import subprocess
+    # subprocess.run("source robots/a2d/a2d_sdk/env.zsh", shell=True) # 无效
 
     robot = get_robot(config=config)
     rdm = RealtimeDataManager(config.rdm)

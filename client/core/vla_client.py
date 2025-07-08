@@ -16,7 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
-from ..robots.a2d import RobotA2D
+from ..robots.a2d.a2d import RobotA2D
 # from ..robots.mock_a2d import RobotA2DMock
 from ..utils import misc
 from ..utils import vis

@@ -32,13 +32,12 @@ xxxx
 
 ### 2.2 Client
 客户端主要负责从机器人获取观测数据和机器人本体状态数据，将数据发送给服务端，并接收服务端返回的推理结果，将结果发送给机器人。
-* 设置A2D环境
-```
-cd a2d_sdk
-source env.zsh
-python robot_service.py -s -c ./conf/hybrid_deploy_depth53.pbtxt
-cd ..
-```
+
+#### 机器人准备
+
+按照机器人的说明准备好机器人环境。新增机器人可以按照示例增加，并在配置文件里配置好机器人。当前已支持的机器人列表如下:
+
+- A2D：智源A2D机器人。[*文档*](client/robots/a2d/README.md)
 
 * 运行客户端
 需要先配置lerobot环境

@@ -124,3 +124,5 @@ demo_data/gr00t-gr1-apple-to-shelf/
 tmp/
 output/
 a2d_sdk*/
+camera.txt
+hal.txt
