@@ -5,7 +5,9 @@ import threading
 import matplotlib.pyplot as plt
 import numpy as np
 
-from warnings import deprecated
+# warnings已无deprecated，deprecated库测试时无网未安装
+# from warnings import deprecated
+# from deprecated import deprecated
 from collections import deque
 from ml_collections import ConfigDict
 from sympy import O
@@ -242,7 +244,7 @@ class RealtimeDataManager():
         rounded = [round(x, 4) for x in self.timestamp_chunks]
         # print(f'timestamp_chunks: {rounded}')
     @run_time_decorator
-    @deprecated("This method is deprecated. Use 'update_action_chunk_raw' instead.")
+    # @deprecated("This method is deprecated. Use 'update_action_chunk_raw' instead.")
     def fusionActionChunks(self, action_chunk, timestamp_chunk):
         candidate_index = 0
         for index in range(len(timestamp_chunk)):
@@ -261,7 +263,7 @@ class RealtimeDataManager():
                 self.action_chunks.append(action_chunk[candidate_index + index])
                 self.timestamp_chunks.append(timestamp_chunk[candidate_index + index])
         
-    @deprecated("This method is deprecated. Use 'update_action_chunk_raw' instead.")
+    # @deprecated("This method is deprecated. Use 'update_action_chunk_raw' instead.")
     def popActionData(self, num_samples=32):
         # 确保线程安全
         with self.action_thread_lock:
@@ -408,7 +410,7 @@ class RealtimeDataManager():
 
     #     # timestamps是相对于当前ActionChunk的起始时间的，需要返回assign_time_offset，用于上一帧时间数据的对齐
     #     return np.array(timestamps), np.array(self.toJointChunk(action_chunks)), assign_time_offset, total_time_offset
-    @deprecated("Never use this function")
+    # @deprecated("Never use this function")
     def getCurrentTime(self):
         # 使用with语句获取锁，保证线程安全
         with self.polynomial_thread_lock:
@@ -419,7 +421,7 @@ class RealtimeDataManager():
             else:
                 return self.timestamps_fitted[self.action_chunk_index]
         # return time.time() - self.init_control_time
-    @deprecated("Never use this function")
+    # @deprecated("Never use this function")
     def getFutureTime(self, index_offset=0):
         # 使用with语句获取锁，保证线程安全
         with self.polynomial_thread_lock:
@@ -431,7 +433,7 @@ class RealtimeDataManager():
                 length = len(self.timestamps_fitted)
                 return self.timestamps_fitted[min(length - 1, self.action_chunk_index + index_offset)]
         # return time.time() - self.init_control_time
-    @deprecated("Never use this function")
+    # @deprecated("Never use this function")
     def getFittedActionChunk(self, index_offset=0, num_samples=20):
         # 获取未来动作块
         with self.polynomial_thread_lock:
@@ -449,7 +451,7 @@ class RealtimeDataManager():
                 return self.timestamps_fitted[start_index:end_index], self.action_chunk_fitted[:, start_index:end_index]
                 # return copy.deepcopy(self.timestamps_fitted[start_index:end_index]), copy.deepcopy(self.action_chunk_fitted[:, start_index:end_index])
 
-    @deprecated("Never use this function")
+    # @deprecated("Never use this function")
     def getFutureActionChunkIndex(self):
         with self.polynomial_thread__lock:
             if self.actionChunkIndex is None or not len(self.timestamps) > 0:
@@ -584,7 +586,7 @@ class RealtimeDataManager():
                     qualified_joint_num = qualified_count
         print(f'target_index: {target_index}, qualified dim: {qualified_joint_num}')
         return target_index
-    @deprecated("Never use this function")
+    # @deprecated("Never use this function")
     def smoothActionTrajOLD(self, currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length=15):
         action_dim = len(currt_action)
         max_accs = np.array([max_acc] * len(currt_action))
@@ -631,7 +633,7 @@ class RealtimeDataManager():
             # print(f'action_chunk_index: {self.action_chunk_index}, joint_0: {action[0]}, joint_1: {action[1]}')
             return self.action_chunk_fitted[:, self.action_chunk_index]
     
-    @deprecated("Never use this function")
+    # @deprecated("Never use this function")
     def getActionChunk(self):
         # 确保线程安全
         with self.action_thread_lock:
