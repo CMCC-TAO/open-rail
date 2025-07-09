@@ -22,5 +22,5 @@ def get_server_config():
     config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
     # config.model = ModelType.ACT
     # config.model = ModelType.SMOLVLA
-    config.model = ModelType.GR00T
+    config.model = ModelType.GR00T_N1_5
     return config

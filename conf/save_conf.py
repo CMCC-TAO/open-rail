@@ -1,5 +1,5 @@
 from ml_collections import ConfigDict
-def get_record_data_config():
+def get_record_data_config()-> ConfigDict:
     """Generate config for recording data, compatible with save_config.json structure.
 
     Returns:
@@ -7,14 +7,14 @@ def get_record_data_config():
     """
     config = ConfigDict(allow_dotted_keys=True)
 
-    # 基础路径和版本信息
+    # Base path and version info
     config.enable = True ## True to record data, False to not record data
-    config.save_path = "./output/test" ## 保存路径 如果保存路径为空，则不保存数据
+    config.save_path = "./data/output/test" # Save root directory.
     config.info = ConfigDict(allow_dotted_keys=True)
-    config.info.codebase_version = "v2.0" ## lerobot数据集版本
-    config.info.robot_type = "a2d" ## 输入机器人类型
+    config.info.codebase_version = "v2.0" #  # Version of the dataset (e.g., lerobot)
+    config.info.robot_type = "a2d"  # Type of robot used
 
-    # 数据统计信息（初始为0）
+    # Data statistics (initialized to 0)）
     config.info.total_episodes = 0
     config.info.total_frames = 0
     config.info.total_tasks = 0
@@ -23,22 +23,22 @@ def get_record_data_config():
     config.info.chunks_size = 1000
     config.info.fps = 30
 
-    # 数据划分
+    # Dataset splits
     config.info.splits = {'valid': '0:100'}
 
-    # 路径模板
+    # Path templates
     config.info.data_path = "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet"
     config.info.video_path = "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
 
-    # Features 定义
+    # Image feature definitions
     config.info.features = ConfigDict(allow_dotted_keys=True)
 
+    # Image features from cameras
+    config.info.features['cam.head'] = generate_image_feature_config()
+    config.info.features['cam.hand_left'] = generate_image_feature_config(width=848,height=480)
+    config.info.features['cam.hand_right'] = generate_image_feature_config(width=848,height=480)
 
-    config.info.features['cam.head'] = generate_image_feature_config()()
-    config.info.features['cam.hand_left'] = generate_image_feature_config(width=848,height=480)()
-    config.info.features['cam.hand_right'] = generate_image_feature_config(width=848,height=480)()
-
-    # 非视频特征
+    # Other features
     config.info.features['observation.state'] = ConfigDict({
         "dtype": "float32",
         "shape": [20]
@@ -75,8 +75,24 @@ def get_record_data_config():
 
     return config
 
-def generate_image_feature_config(width=1280,height=720,fps=30.0):
-    # 视频相关参数统一定义
+def generate_image_feature_config(width: int = 1280, height: int = 720, fps: float = 30.0) -> ConfigDict:
+    """
+    Generates a ConfigDict object representing image/video feature specifications.
+
+    Args:
+        width (int): Width of the video frame. Default is 1280.
+        height (int): Height of the video frame. Default is 720.
+        fps (float): Frames per second of the video. Default is 30.0.
+
+    Returns:
+        ConfigDict: A configuration dictionary containing:
+            - dtype: Data type (e.g., 'video')
+            - shape: Shape of the frame [height, width, channels]
+            - names: Dimension names ['height', 'width', 'channel']
+            - video_info: ConfigDict containing video encoding parameters
+            - info: ConfigDict with additional metadata such as resolution and codec
+    """
+    # Common video metadata definitions
     video_info_common = {
         "video.fps": fps,
         "video.codec": "av1",
@@ -96,11 +112,11 @@ def generate_image_feature_config(width=1280,height=720,fps=30.0):
         "has_audio": False
     }
 
-    image_feature = lambda: ConfigDict({
+    # 直接构造并返回 ConfigDict 对象
+    return ConfigDict({
         "dtype": "video",
         "shape": [height, width, 3],
         "names": ["height", "width", "channel"],
-        "video_info": ConfigDict(video_info_common,allow_dotted_keys=True),
-        "info": ConfigDict(info_common,allow_dotted_keys=True)
+        "video_info": ConfigDict(video_info_common, allow_dotted_keys=True),
+        "info": ConfigDict(info_common, allow_dotted_keys=True)
     })
-    return image_feature
