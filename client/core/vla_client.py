@@ -446,7 +446,7 @@ class VLAClient():
         # end_time = np.amax(timestamps)
         start_time = timestamps[0]
         end_time = timestamps[-1]
-        action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self.traj_generator.trajFitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=self.config.fitting_deg, time_step=self.config.fitting_time_step/1000)
+        action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self.traj_generator.traj_fitting(timestamps=timestamps, action_chunk=action_chunk, start_time=start_time, end_time=end_time, deg=self.config.fitting_deg, time_step=self.config.fitting_time_step/1000)
         # print(f'action_chunk_fitted shape: {action_chunk_fitted.shape}')
         # action_chunk_fitted shape: (16, 1548)
         #TODO: 根据time_step 计算出offset
@@ -625,7 +625,7 @@ class VLAClient():
             self.record_executor.shutdown(wait=True)
             self.DataWriter.close()
         self.zmq_client.close()
-        self.traj_generator.close()
+        # self.traj_generator.close()
         print('推理框架客户端已关闭。')
 
     def updateVisualization(self, frame):
