@@ -155,8 +155,20 @@ class LeRobotDatasetWriter:
 
     def write(self):
         """
-        Starts a separate thread to write data to disk. 
-        When there is data in self.record_queue, it starts writing.
+        Main loop for the writer process responsible for writing data to disk.
+
+        Continuously pulls data from the shared queue and writes it to video files and Parquet file buffer.
+        The loop runs until `self.shared_data.stop` is set to True. Each iteration processes one observation-action pair:
+            - Appends new language instructions to the episode task list
+            - Assigns a unique task index based on instruction text
+            - Writes camera images to corresponding video files
+            - Constructs a record dictionary and appends it to the shared Parquet buffer
+
+        Frame index is incremented with each successful write.
+
+        Raises:
+            KeyboardInterrupt: If user interrupts execution via keyboard (e.g., Ctrl+C)
+            Exception: Any other exception during writing will terminate the thread
         """
         # Wait until the first data arrives
         print("waiting for record_queue")
@@ -219,7 +231,24 @@ class LeRobotDatasetWriter:
             print("Writing thread exited.")
 
     def end_write(self):
+        """
+        Finalizes the data writing process based on user confirmation.
 
+        Prompts the user to choose whether to save ('y') or discard ('n') the collected data.
+        If saving:
+            - Saves the video files
+            - Converts buffered Parquet data to a DataFrame and writes it to disk
+            - Updates metadata files (info.json, episodes.jsonl, tasks.jsonl)
+        If discarding:
+            - Deletes any partially written video files
+            - Deletes the Parquet file if it exists
+
+        The method blocks until valid user input is received. It ensures proper cleanup of resources
+        and maintains data consistency based on user decision.
+        
+        Raises:
+            ValueError: If invalid input is provided repeatedly
+        """
         while True:
             user_input = input("Please enter 'y' to save data, or 'n' to discard: ").strip().lower()
             
@@ -249,6 +278,17 @@ class LeRobotDatasetWriter:
             else:
                 print("Invalid input. Please try again.")
     def close(self):
+        """
+        Gracefully shuts down the writer and finalizes data writing.
+
+        This method signals the writer thread to stop by setting the 'stop' flag,
+        releases all video writers, increments the episode counter, updates the total
+        number of frames, and triggers the finalization process (`end_write`) to save
+        all buffered data to disk.
+
+        Should be called when ending data collection to ensure all data is flushed
+        and resources are properly released.
+        """
         self.shared_data.stop.value = True
         self.release_writers()
         self.counter += 1
@@ -309,6 +349,9 @@ class LeRobotDatasetWriter:
         task_file_path = os.path.join(self.save_meta_path, 'tasks.jsonl')
         self.from_file_update_task_languages(task_file_path)
     def from_file_update_dataset_info(self,file_path: str) -> None:
+        """
+        Updates the dataset info using the provided JSON file.
+        """
         # Open the specified JSON file and load its contents
         with open(file_path, 'r') as file:
             data = json.loads(file.read())
@@ -317,7 +360,7 @@ class LeRobotDatasetWriter:
         self.config["info"] = ConfigDict(data, allow_dotted_keys=True)
 
         # Print a success message indicating that the meta files have updated the config
-        print("update self.config ifo success")
+        print("update self.config info success")
     
     def from_file_update_task_languages(self,file_path: str) -> None:
         """
