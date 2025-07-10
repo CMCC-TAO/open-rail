@@ -31,9 +31,9 @@ torch.set_printoptions(precision=6, sci_mode=False)
 
 
 class ModelVLA:
-    def __init__(self, model_path=None):
-        if model_path is None:
-            model_path = '/hy0505/tangjy/act/save_model_bottle_minmax_154_39/policy_step_1999_seed_0.ckpt'
+    def __init__(self, config):
+        self.cfg = config
+        model_path = self.cfg['model_path']
         args = {
             'ckpt_dir':model_path,
             'policy_class':'ACT',
@@ -197,6 +197,8 @@ class ModelVLA:
             obs['observation.state'] = torch.tensor(obs['state'],dtype=torch.float32)
 
             obs = self.normalize_inputs(obs)
+            print(obs['observation.state'])
+            # exit()
 
             if self.config["use_language"]:
                 command_embediing  = self.command_dict.get(instruction)

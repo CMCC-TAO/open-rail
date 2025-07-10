@@ -269,17 +269,17 @@ class TrajectoryGenerator():
 
         return self.traj_fitted, self.vel_fitted, self.timestamps_fitted
     
-    @run_time_decorator
-    def toJointChunk(self, action_chunk):
-        joint_chunks = []
-        action_dim = len(action_chunk[0])
-        for index in range(action_dim):
-            joint_chunks.append([])
+    # @run_time_decorator
+    # def toJointChunk(self, action_chunk):
+    #     joint_chunks = []
+    #     action_dim = len(action_chunk[0])
+    #     for index in range(action_dim):
+    #         joint_chunks.append([])
         
-        for action in action_chunk:
-            for index in range(action_dim):
-                joint_chunks[index].append(action[index])
-        return joint_chunks
+    #     for action in action_chunk:
+    #         for index in range(action_dim):
+    #             joint_chunks[index].append(action[index])
+    #     return joint_chunks
     
     def run(self):
         with self.thread_lock:
@@ -306,8 +306,8 @@ class TrajectoryGenerator():
 if __name__ == '__main__':
     import sys
     sys.path.append('/home/robot/Gits/jupyter/vla_infer')
-    from conf.config import get_trajectory_config
-    config = get_trajectory_config()
+    from conf.traj_conf import get_traj_config
+    config = get_traj_config()
     traj_generator = TrajectoryGenerator(config=config)
     try:
         while True:

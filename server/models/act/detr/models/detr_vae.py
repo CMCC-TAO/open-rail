@@ -33,7 +33,7 @@ def get_sinusoid_encoding_table(n_position, d_hid):
 
 
 class TaskCompletionNetwork(nn.Module):
-    def __init__(self, input_dim, dropout_rate=0.1):
+    def __init__(self, input_dim, dropout_rate=0.3):
         super(TaskCompletionNetwork, self).__init__()
 
         # 只有一层映射
@@ -73,6 +73,7 @@ class DETRVAE(nn.Module):
             use_film=False,
             use_is_done = True,
             use_history = False,
+            arms_only = True,
     ):
         """ Initializes the model.
         Parameters:
@@ -84,6 +85,9 @@ class DETRVAE(nn.Module):
             aux_loss: True if auxiliary decoding losses (loss at each decoder layer) are to be used.
         """
         super().__init__()
+        self.arms_only = arms_only
+        if self.arms_only:
+            print("only use arms as input")
         self.num_queries = num_queries
         self.camera_names = camera_names
         self.transformer = transformer
@@ -110,7 +114,10 @@ class DETRVAE(nn.Module):
             self.input_proj = nn.Conv2d(backbones[0].num_channels, hidden_dim, kernel_size=1)
             self.backbones = nn.ModuleList(backbones)
             if state_dim == 22:
-                self.input_proj_robot_state = nn.Linear(state_dim-2, hidden_dim)
+                if self.arms_only:
+                    self.input_proj_robot_state = nn.Linear(16, hidden_dim) 
+                else:
+                    self.input_proj_robot_state = nn.Linear(state_dim-2, hidden_dim) 
             else:
                 self.input_proj_robot_state = nn.Linear(state_dim, hidden_dim)
         else:
@@ -125,7 +132,10 @@ class DETRVAE(nn.Module):
         self.cls_embed = nn.Embedding(1, hidden_dim) # extra cls token embedding
         self.encoder_action_proj = nn.Linear(state_dim, hidden_dim) # project action to embedding
         if state_dim ==22:
-            self.encoder_joint_proj = nn.Linear(state_dim-2, hidden_dim)
+            if self.arms_only:
+                self.encoder_joint_proj = nn.Linear(16, hidden_dim)
+            else:
+                self.encoder_joint_proj = nn.Linear(state_dim-2, hidden_dim)
         else:
             self.encoder_joint_proj = nn.Linear(state_dim, hidden_dim)  # project qpos to embedding
         self.latent_proj = nn.Linear(hidden_dim, self.latent_dim*2) # project hidden state to latent std, var
@@ -145,14 +155,13 @@ class DETRVAE(nn.Module):
         env_state: None
         actions: batch, seq, action_dim
         """
-        # if self.is_done and actions is not None:
-        #     actions = actions[:, :, :-1]
-            #print(actions.shape)
+        if self.arms_only:
+            qpos = qpos[:,0:-4]
         is_training = actions is not None # train or val
         bs, _ = qpos.shape
         #command_embedding = None
         # Project the command embedding to the required dimension
-        if command_embedding is not None and self.use_language:
+        if command_embedding is not None:
             if self.use_language:
                 command_embedding_proj = self.lang_embed_proj(command_embedding)
             else:
@@ -221,9 +230,7 @@ class DETRVAE(nn.Module):
                             image[:, cam_id], command_embedding
                         )
                     else:
-                        print("shape",image[:, cam_id].shape)
                         features, pos = self.backbones[cam_id](image[:, cam_id])
-
                         #features, pos = self.backbones[cam_id]( torch.cat([image[:, cam_id],image[:, cam_id]], axis=3))
                     features = features[0] # take the last layer feature
                     pos = pos[0]  ## 图像的位置序列
@@ -363,7 +370,7 @@ def build_encoder(args):
 def build(args):
     #state_dim = 14 # TODO hardcode
     #state_dim = 2*(7+1)
-    #state_dim = (7+2)
+    state_dim = (7+2)
     #agibot
     state_dim = 22
     ## if is_done
