@@ -3,12 +3,9 @@ import torch.nn as nn
 from torch.nn import functional as F
 import torchvision.transforms as transforms
 
-from .detr.main import build_ACT_model_and_optimizer, build_CNNMLP_model_and_optimizer,build_diffusion_optimizer
-from .detr.models.diffusion.configuration_diffusion import DiffusionConfig
-from .detr.models.diffusion.modeling_diffusion import DiffusionPolicy
-#from detr.factory import _policy_cfg_from_hydra_cfg
-# import IPython
-# e = IPython.embed
+from detr.main import build_ACT_model_and_optimizer, build_CNNMLP_model_and_optimizer,build_diffusion_optimizer
+import IPython
+e = IPython.embed
 
 
 class FocalLoss(nn.Module):
@@ -138,6 +135,9 @@ class ACTPolicy(nn.Module):
         return self.optimizer
 
 
+from detr.models.diffusion.configuration_diffusion import DiffusionConfig
+from detr.models.diffusion.modeling_diffusion import DiffusionPolicy
+#from detr.factory import _policy_cfg_from_hydra_cfg
 
 
 class  DPolicy(nn.Module):
