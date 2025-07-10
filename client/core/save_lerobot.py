@@ -41,9 +41,20 @@ class LeRobotDatasetWriter:
         self.save_path = self.config["save_path"]
         self.save_meta_path = os.path.join(self.save_path, 'meta')
 
+        # Shared data manager for multiprocessing
+        self.manager = Manager()
+        self.shared_data = self.manager.Namespace()
+        # Shared state and counters
+        self.shared_data.start_write_time = self.manager.Value('b', False)
+        self.shared_data.stop = self.manager.Value('b', False)
+        self.shared_data.episode_parquet_list = self.manager.list()
         # Task and language information storage
-        self.task_language_dict = {}
-        self.episode_task_list = []
+        self.shared_data.episode_task_list = self.manager.list()
+        self.shared_data.task_language_dict = self.manager.dict()
+        self.lock = self.manager.Lock()
+
+        # Shared Queue
+        self.record_queue = Queue()
         
 
         # Check directory and update config if necessary
@@ -58,17 +69,8 @@ class LeRobotDatasetWriter:
             if "cam" in key:
                 self.camera_name_list.append(key)
 
-        # Shared data manager for multiprocessing
-        self.manager = Manager()
-        self.shared_data = self.manager.Namespace()
-        # Shared state and counters
-        self.shared_data.start_write_time = self.manager.Value('b', False)
-        self.shared_data.stop = self.manager.Value('b', False)
-        self.shared_data.episode_parquet_list = self.manager.list()
-        self.lock = self.manager.Lock()
-        # Shared Queue
-        self.record_queue = Queue()
-
+        self.action_shape = self.config["info"]["features"]["action"]['shape'][0]
+        self.state_shape = self.config["info"]["features"]["observation.state"]['shape'][0]
         # Time obs deques
         self.obs_time = deque(maxlen=MAX_LEN)
 
@@ -90,7 +92,7 @@ class LeRobotDatasetWriter:
         # Video writing setup
         self.save_video_path = os.path.join(self.save_path, 'videos', f'chunk-{self.episode_chunk:03d}')
         self.save_video_path_list = []
-        self.videos_writer = self.gener_video_write_dict()
+        
 
         # Writer process initialization
         self.writer_thread = Process(target=self.write, daemon=True)
@@ -121,7 +123,12 @@ class LeRobotDatasetWriter:
         if len(self.obs_time) > 0:
             assert self.obs_time[-1] < timestamp, \
                 f"Observation timestamp is not increasing: previous={self.obs_time[-1]}, current={timestamp}"
-        
+        #check state shape 
+        if state['obs.state'].shape[0] != self.state_shape:
+            print(f"obs shape {state['obs.state'].shape[0]} is not correct,config shape is {self.state_shape} , add 0 to the action")
+            assert state['obs.state'].shape[0] <= self.state_shape, \
+            f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
+            action = np.concatenate([action, np.zeros(self.state_shape-state['obs.state'].shape[0])], axis=0)
         if self.shared_data.start_write_time.value:
             self.obs_time.append(timestamp)
             with self.lock:
@@ -150,6 +157,12 @@ class LeRobotDatasetWriter:
             assert self.action_time[-1] < timestamp, \
                 f"Action timestamp is not increasing: previous={self.action_time[-1]}, current={timestamp}"
 
+        #check action shape 
+        if action.shape[0]!= self.action_shape:
+            print(f"Action shape {action.shape[0]} is not correct,config shape is {self.action_shape} , add 0 to the action")
+            assert action.shape[0] <= self.action_shape,\
+            f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}"
+            action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)
         self.action_list.append(action)
         self.action_time.append(timestamp)
 
@@ -172,7 +185,7 @@ class LeRobotDatasetWriter:
         """
         # Wait until the first data arrives
         print("waiting for record_queue")
-        
+        self.videos_writer = self.gener_video_write_dict()
         frame_index = 0
         try:
             while not self.shared_data.stop.value:
@@ -181,25 +194,34 @@ class LeRobotDatasetWriter:
                     continue
                 
                 # Get state and action data from queue
-                one_step_state_and_action_list = self.record_queue.get()
+                with self.lock:
+                    if self.record_queue.empty():
+                        continue
+                    one_step_state_and_action_list = self.record_queue.get(timeout=0.5)
                 step_state, step_action = one_step_state_and_action_list[0], one_step_state_and_action_list[1]
                 step_language = step_state['language_instruction']
                 
                 # Track new language instructions per episode
-                if step_language not in self.episode_task_list:
-                    self.episode_task_list.append(step_language)
+                if step_language not in self.shared_data.episode_task_list:
+                    self.shared_data.episode_task_list.append(step_language)
                 
                 # Assign task index based on unique language instruction
-                if step_language not in self.task_language_dict.keys():
-                    step_task_index = len(self.task_language_dict.keys())
-                    self.task_language_dict[step_language] = step_task_index
+                if step_language not in self.shared_data.task_language_dict.keys():
+                    step_task_index = len(self.shared_data.task_language_dict.keys())
+                    self.shared_data.task_language_dict[step_language] = step_task_index
                 else:
-                    step_task_index = self.task_language_dict[step_language]
+                    step_task_index = self.shared_data.task_language_dict[step_language]
                 
                 # Write image frames to video files
                 for camera_name in self.camera_name_list:
+                    start_time= time.perf_counter()
+                    if self.camera_shape_dict[camera_name] != step_state[camera_name].shape:
+                        print(f'{camera_name} shape mismatch')
+                        print(f"{camera_name} current shape :{step_state[camera_name].shape}")
+                        print(f"{camera_name} save MP4 shape :{self.camera_shape_dict[camera_name]}")
+                    # print(f"check using time : {(time.perf_counter()-start_time)*1000} ms")
                     self.videos_writer[camera_name].write(step_state[camera_name])
-                
+                    # print(f"{camera_name} shape :{step_state[camera_name].shape}")
                 # Construct record dictionary for Parquet file
                 record = {
                     'observation.state': step_state['obs.state'].tolist(),
@@ -222,13 +244,15 @@ class LeRobotDatasetWriter:
         
         except KeyboardInterrupt:
             print("Child process detected keyboard interrupt, preparing to exit...")
-
+            self.release_writers()
         
         except Exception as e:
             print(f"Writing thread exited with exception: {e}")
+            self.release_writers()
         
         finally:
             print("Writing thread exited.")
+            self.release_writers()
 
     def end_write(self):
         """
@@ -290,7 +314,7 @@ class LeRobotDatasetWriter:
         and resources are properly released.
         """
         self.shared_data.stop.value = True
-        self.release_writers()
+        time.sleep(1)
         self.counter += 1
         self.episode_length = len(self.shared_data.episode_parquet_list) 
         self.total_frames += len(self.shared_data.episode_parquet_list)
@@ -370,9 +394,10 @@ class LeRobotDatasetWriter:
             for line in file:
                 data = json.loads(line)
                 task_index = data['task_index']
-                task_name = data['tasks'][0]  
-                if task_name not in self.task_language_dict:
-                    self.task_language_dict[task_name] = task_index
+                task_name = data['tasks'] 
+                if task_name not in self.shared_data.task_language_dict:
+                    self.shared_data.task_language_dict[task_name] = task_index
+            print(self.shared_data.task_language_dict)
     def gener_video_write_dict(self) -> Dict[str, Any]:
         """
         Generates video writers for each camera stream.
@@ -385,12 +410,14 @@ class LeRobotDatasetWriter:
         filename = f"{'episode'}_{self.counter:06d}.{'mp4'}"
         video_write_dict = {}
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        self.camera_shape_dict = {}
         for camera_name in self.camera_name_list:
             shape_list = self.config['info']["features"][camera_name]["shape"]
             height, width = shape_list[0],shape_list[1]
             os.makedirs(os.path.join(self.save_video_path, camera_name), exist_ok=True)
             video_path = os.path.join(self.save_video_path, camera_name, filename)
             self.save_video_path_list.append(video_path)
+            self.camera_shape_dict[camera_name] = tuple(shape_list)
             video_write_dict[camera_name] = cv2.VideoWriter(video_path, fourcc, 30.0, (width, height))
         return video_write_dict
     
@@ -441,7 +468,7 @@ class LeRobotDatasetWriter:
         episodes_file_path = os.path.join(self.save_meta_path, 'episodes.jsonl')
         episodes_content = {
             "episode_index": self.config['info']["total_episodes"],
-            "tasks": self.episode_task_list,
+            "tasks": list(self.shared_data.episode_task_list),
             "length": self.episode_length
         }
 
@@ -452,11 +479,11 @@ class LeRobotDatasetWriter:
 
         # Write tasks.jsonl file
         tasks_file_path = os.path.join(self.save_meta_path, 'tasks.jsonl')
-
+        print(self.shared_data.task_language_dict)
         with open(tasks_file_path, 'w', encoding='utf-8') as f:
-            for task_language in self.task_language_dict:
+            for task_language in self.shared_data.task_language_dict.keys():
                 tasks_content = {
-                    "task_index": self.task_language_dict[task_language],
+                    "task_index": self.shared_data.task_language_dict[task_language],
                     "tasks": task_language
                 }
                 f.write(json.dumps(tasks_content, ensure_ascii=False) + '\n')
@@ -470,9 +497,9 @@ def generate_mock_observation():
         dict: A dictionary containing simulated observation data.
     """
     state = np.random.rand(20).astype(np.float32)  # 20-dimensional state
-    image1 = (np.random.rand(480, 640, 3) * 255).astype(np.uint8)  # RGB image
-    image2 = (np.random.rand(480, 640, 3) * 255).astype(np.uint8)
-    image3 = (np.random.rand(480, 640, 3) * 255).astype(np.uint8)
+    image1 = (np.random.rand(720, 1280, 3) * 255).astype(np.uint8)  # RGB image
+    image2 = (np.random.rand(480, 848, 3) * 255).astype(np.uint8)
+    image3 = (np.random.rand(480, 848, 3) * 255).astype(np.uint8)
 
     return {
         "cam.head": image1,
@@ -496,22 +523,23 @@ if __name__ == "__main__":
     import sys
     print(f"Current working directory: {os.getcwd()}")
     sys.path.append('/home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer')
-    from conf.config import get_client_config
+    from conf.client_conf import get_client_config
 
-    save_dir = "/home/rm/wxz/EmbodiedAI/lerobot/vla_infer/tools/test/1"
+    save_dir = "/home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test"
     config = get_client_config()
 
     # Initialize writer
-    writer = LeRobotDatasetWriter(save_config=config.record)
+    writer = LeRobotDatasetWriter(config.record)
 
     print("Starting to simulate data writing...")
 
     start_time = time.time()
-
+    languege_instruction = 'test ok'
     # Simulate writing 100 observations and 200 actions (higher action frequency)
     for i in range(100):
         obs_data = generate_mock_observation()  # ~30Hz
-        languege_instruction = 'test ok'
+        if i >50:
+            languege_instruction = 'test 50'
         writer.add_obs(obs_data,languege_instruction,start_time + i * 0.033)
 
         # Insert multiple actions per observation (~200Hz)
