@@ -8,11 +8,9 @@ from gr00t.data.schema import EmbodimentTag
 from gr00t.experiment.data_config import DATA_CONFIG_MAP
 
 class ModelVLA:
-    def __init__(self, model_path=None):
-        if model_path is None:
-            # model_path = '/home/gaohan/Code/VLA/models/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000'
-            model_path = "/home/robot/Downloads/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000"
-            # model_path = '/media/gaohan/zl/models/offset/checkpoint-60000'
+    def __init__(self, config):
+        self.cfg = config
+        model_path = self.cfg['model_path']
         embodiment_tag = EmbodimentTag.NEW_EMBODIMENT
         # embodiment_tag = 'a2d'
         device = "cuda" if torch.cuda.is_available() else "cpu"

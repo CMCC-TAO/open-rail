@@ -6,9 +6,11 @@ from ml_collections import ConfigDict
 # from utils import misc
 from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
+from ..base_robot import RobotBase
 
-class RobotA2D():
+class RobotA2D(RobotBase):
     def __init__(self, observer_config: ConfigDict, controller_config: ConfigDict):
+        super().__init__()
         # self.name_cameras = ['head', 'hand_left', 'hand_right']
         self.observer_config = observer_config
         self.controller_config = controller_config
