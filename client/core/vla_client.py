@@ -16,15 +16,16 @@ from concurrent.futures import ThreadPoolExecutor
 
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
-from ..robots.a2d.a2d import RobotA2D
+from client.robots.a2d import RobotA2D
 # from ..robots.mock_a2d import RobotA2DMock
-from ..utils import misc
-from ..utils import vis
-from ..utils.util import run_time_decorator
-from ..utils.multi_thread_timer import MultiThreadTimer
-from .zmq_client import ZMQClient
-from .trajectory_generator import TrajectoryGenerator
-from .realtime_data_manager import RealtimeDataManager
+from client.utils import misc
+from client.utils import vis
+from client.utils.util import run_time_decorator
+from client.utils.multi_thread_timer import MultiThreadTimer
+from client.core.zmq_client import ZMQClient
+from client.core.trajectory_generator import TrajectoryGenerator
+from client.core.realtime_data_manager import RealtimeDataManager
+from client.core.save_lerobot import LeRobotDatasetWriter
 
 # try:
 #     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
@@ -32,7 +33,6 @@ from .realtime_data_manager import RealtimeDataManager
 # except ImportError:
 #     print('导入tools模块出错')
 
-from .save_lerobot import LeRobotDatasetWriter
 # VLA客户端
 class VLAClient():
     def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: RobotA2D):
@@ -48,12 +48,12 @@ class VLAClient():
         self.language = self.config.language
         self.preprocess_func = (getattr(misc, self.config.preprocess) if self.config.preprocess != 'none' else None)
 
-        self.observe_thread = threading.Thread(target=self.observeThreadFun, daemon=True)
+        self.observe_thread = threading.Thread(target=self.observe_thread_fun, daemon=True)
         # self.inference_thread = None
-        self.inference_thread = threading.Thread(target=self.inferenceThreadFun, daemon=True)
-        self.interpolate_thread = None
+        self.inference_thread = threading.Thread(target=self.inference_thread_fun, daemon=True)
+        # self.interpolate_thread = None
         # self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
-        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self.controlThreadFun)
+        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self.control_thread_fun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
@@ -121,8 +121,9 @@ class VLAClient():
                     "loc_timestamp": time.perf_counter(),
                 }
         self.DataWriter.add_action(action_dict)
-    def observeThreadFun(self):
-        print('观测线程已启动...')
+
+    def observe_thread_fun(self):
+        # print('观测线程已启动...')
         while self.running:
             if not self.is_running_action:
                 time.sleep(0.001)
@@ -257,7 +258,7 @@ class VLAClient():
         # with self.infer_thread_lock:
         #     self.infer_flag = False
 
-    def controlThreadFun(self):
+    def control_thread_fun(self):
         if not self.is_running_action:
             return
 
@@ -713,8 +714,8 @@ class VLAClient():
 
         # ani = FuncAnimation(fig, update_plot, frames=range(16), blit=True, interval=50)
 
-    def inferenceThreadFun(self):
-        print('推理线程已启动...')
+    def inference_thread_fun(self):
+        # print('推理线程已启动...')
         while self.running:
             # 第一次推理
             if self.rdm.infer_count == 0:

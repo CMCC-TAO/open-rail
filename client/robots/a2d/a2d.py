@@ -132,7 +132,7 @@ if __name__ == '__main__':
     print(current_dir)
     # 将当前目录添加到 sys.path
     sys.path.append(current_dir)
-    from conf.config import get_client_config
+    from conf.client_conf import get_client_config
     config = get_client_config()
     robot = RobotA2D(config.observer, config.controller)
     try:
