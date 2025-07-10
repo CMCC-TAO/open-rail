@@ -13,7 +13,7 @@ except:
     pass
 
 '''
-# 不同模型需修改代码TODO处的obs映射
+# 不同模型需修改代码TODO处的模型路径和obs映射
 python vis_eval.py \
 --model_path /hy0505/checkpoints/gr00t_finetune/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000 \
 --gt_root /hy0505/dataset/A2d_zyhy_data/gr00t/task_158284_depth_test/task_158284_test \
@@ -29,8 +29,9 @@ python vis_eval.py \
 def main(args):
     # 添加项目根目录到系统路径
     sys.path.append(str(Path(__file__).resolve().parents[2]))
-    from server.models.gr00t import vla_model
-    model = vla_model.ModelVLA(args.model_path) # 模型
+    # TODO: 修改模型路径
+    from server.models.gr00t import gr00t_n1_5
+    model = gr00t_n1_5.ModelVLA({'model_path': args.model_path}) # 模型
 
     parquet_file = f'{args.gt_root}/data/chunk-{str(args.chunk_id).zfill(3)}/episode_{str(args.episode_id).zfill(6)}.parquet'
     print(f"加载gt数据: {parquet_file}...")

@@ -11,18 +11,16 @@ from PIL import Image as PImage
 from scripts.agilex_model import create_model
 
 class ModelVLA:
-    def __init__(self, model_path=None):
-        with open("/home/gaohan/Code/VLA/zhaolei/zl/server/models/rdt/rdt_train_a2d/configs/base.yaml", "r") as f:
-            config = yaml.safe_load(f)
-
-        if model_path is None:
-            model_path = '/media/gaohan/Elements1/rdt1Bft-a2d-pnpstd-aftAgiBot/'
-
-        vision_encoder_name_or_path = '/media/gaohan/Elements1/weights/siglip-so400m-patch14-384'
-        self.lang_embd_path = "/media/gaohan/Elements1/weights/lang_embds/place_bottle.pt"
+    def __init__(self, config):
+        self.cfg = config
+        model_path = self.cfg['model_path']
+        with open(self.cfg['config_path'], "r") as f:
+            rdt_config = yaml.safe_load(f)
+        vision_encoder_name_or_path = self.cfg['vision_encoder_name_or_path']
+        self.lang_embd_path = self.cfg['lang_embd_path']
 
         self.policy = create_model(
-            args=config,
+            args=rdt_config,
             dtype=torch.bfloat16,
             pretrained=model_path,
             pretrained_vision_encoder_name_or_path=vision_encoder_name_or_path,

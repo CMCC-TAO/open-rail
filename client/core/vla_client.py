@@ -42,7 +42,6 @@ class VLAClient():
         self.traj_generator = traj_generator
         self.zmq_client = zmq_client
         self.robot = robot
-        self.current_idx = 0
         self.running = False
         self.is_running_action = True
         self.language = self.config.language
@@ -261,29 +260,6 @@ class VLAClient():
     def control_thread_fun(self):
         if not self.is_running_action:
             return
-
-        # 检查是否有输入可用，超时：0.001s
-        if self.current_idx % 20 == 0 and select.select([sys.stdin,], [], [], 0.001)[0]:
-            user_input = sys.stdin.readline().strip()
-            if user_input == '':
-                self.is_running_action = False
-                cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\n')
-                self.is_running_action = True
-                if cmd == 'l':
-                    self.is_running_action = False
-                    language = input('请输入新的语言指令，按Enter键确认：')
-                    self.is_running_action = True
-                    self.language = language.strip()
-                    print(f"语言指令已修改为: {self.language}")
-                elif cmd == 'r':
-                    self.is_running_action = False
-                    robot_a2d.main(robot=self.robot.robot)
-                    input('机器人复位完成，程序暂停，按Enter键继续...')
-                    self.is_running_action = True
-                    # self.initialize() # 状态已不在原来的位置，需要初始化，重新获取动作块
-        self.current_idx += 1
-        if self.current_idx > 100000:
-            self.current_idx = 0
 
         # print(f'[{time.time()}]控制线程已启动...')
         action = self.rdm.get_action_fitted()
@@ -594,7 +570,7 @@ class VLAClient():
         if self.config.show_data:
             self.showActionChunk()
         # 等待线程结束
-        self.observe_thread.join()
+        # self.observe_thread.join()
         # self.inference_thread.join()
         # self.control_thread.join()
         print('推理框架客户端已启动。')
