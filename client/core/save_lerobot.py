@@ -5,7 +5,6 @@ import json
 import cv2
 import json
 import time
-import bisect
 from ml_collections import ConfigDict
 from collections import deque
 import pyarrow as pa
@@ -13,203 +12,345 @@ import pyarrow.parquet as pq
 import pandas as pd
 import threading
 from multiprocessing import Process, Manager,Queue
+from typing import Any, Dict, List, Optional, Union
 # 初始化固定长度队列
 MAX_LEN = 900 
 class LeRobotDatasetWriter:
-    def __init__(self, save_config):
-        """
-        初始化数据存储目录，并创建相关文件夹。
-        :param save_dir: 保存数据集的根目录
-        """
-        # with open(save_config, 'r') as f:
-        #     self.config = json.load(f)
-        self.config = save_config
-        self.save_path = self.config["save_path"]
-        
-        self.save_meta_path = os.path.join(self.save_path,'meta')
+    """
+    A class to manage writing robotic observation and action data to disk in a structured format.
 
-        # 检查保存目录下是否有meta文件
-        self.checkdir_and_update_config()
-        # 返回info下面字典所有的key
-        self.camera_name_list= []
-        for key in self.config["info"]['features'].keys():
-            if "cam" in key:
-                self.camera_name_list.append(key)
+    This class handles the synchronization, storage, and serialization of high-frequency robot sensor data,
+    including images, states, actions, and associated metadata. It supports multiprocessing for efficient I/O
+    operations and writes data into Parquet files along with corresponding video recordings.
+    """
+
+    def __init__(self, record_config:ConfigDict) -> None:
+        """
+        Initializes the LeRobotDatasetWriter instance with the given configuration.
+
+        Sets up directories, loads or initializes metadata, prepares video writers, and starts
+        the writer process for asynchronous disk writing.
+
+        Args:
+            record_config (dict): Configuration dictionary.
+                                For more information, see ./conf/save_conf.py
+        """
+
+        # Configuration and path setup
+        self.config = record_config
+        self.save_path = self.config["save_path"]
+        self.save_meta_path = os.path.join(self.save_path, 'meta')
+
+        # Shared data manager for multiprocessing
         self.manager = Manager()
         self.shared_data = self.manager.Namespace()
-        self.obs_time = deque(maxlen=MAX_LEN)
+        # Shared state and counters
+        self.shared_data.start_write_time = self.manager.Value('b', False)
+        self.shared_data.stop = self.manager.Value('b', False)
+        self.shared_data.episode_parquet_list = self.manager.list()
+        # Task and language information storage
+        self.shared_data.episode_task_list = self.manager.list()
+        self.shared_data.task_language_dict = self.manager.dict()
         self.lock = self.manager.Lock()
-        self.shared_data.state = self.manager.list()
+
+        # Shared Queue
         self.record_queue = Queue()
+        
+
+        # Check directory and update config if necessary
+        self.checkdir_and_update_config()
+        # compute episode_chunk
+        self.total_frames = self.config['info']['total_frames']
+        self.counter = self.config['info']['total_episodes']
+        self.episode_chunk = self.counter // self.config.info.chunks_size
+        # Extract camera-related keys from features in the config
+        self.camera_name_list = []
+        for key in self.config["info"]["features"].keys():
+            if "cam" in key:
+                self.camera_name_list.append(key)
+
+        self.action_shape = self.config["info"]["features"]["action"]['shape'][0]
+        self.state_shape = self.config["info"]["features"]["observation.state"]['shape'][0]
+        # Time obs deques
+        self.obs_time = deque(maxlen=MAX_LEN)
+
+        # Action recording queues
         self.action_list = deque(maxlen=10)
         self.action_time = deque(maxlen=10)
-        self.shared_data.task_info = self.manager.Value('s', '')
-        self.shared_data.total_frames = self.manager.Value('i', 0)
-        self.shared_data.counter = self.manager.Value('i', 0)
-        self.shared_data.length = self.manager.Value('i', 0)
-        self.shared_data.parquet_list = self.manager.list()
-        self.shared_data.start_write_time = None
-        self.stop = False
-        # 创建视频写入字典
+
+        # Parquet file writing setup
+        # Initialize parquet content : self.schema
         self.init_parquet_content()
-        self.shared_data.total_frames.value = self.config['info']['total_frames']
-        self.shared_data.counter.value = self.config['info']['total_episodes']
-        
-        self.episode_chunk = self.shared_data.counter.value // self.config.info.chunks_size
-        self.parquet_savepath = os.path.join(self.save_path,self.config.info.data_path.format(episode_chunk=self.episode_chunk,episode_index=self.shared_data.counter.value))
+        self.parquet_savepath = os.path.join(
+            self.save_path,
+            self.config.info.data_path.format(episode_chunk=self.episode_chunk, episode_index=self.counter)
+        )
         os.makedirs(os.path.dirname(self.parquet_savepath), exist_ok=True)
-        self.save_video_path = os.path.join(self.save_path,'videos',f'chunk-{self.episode_chunk:03d}')
-        self.save_video_path_list = []
-        self.videos_writer = self.gener_video_write_dict()
         self.parquet_writer = pq.ParquetWriter(self.parquet_savepath, self.schema)
-        self.parquet_list= []
-        # self.shared_data.state_in_action_index= 0
+
+
+        # Video writing setup
+        self.save_video_path = os.path.join(self.save_path, 'videos', f'chunk-{self.episode_chunk:03d}')
+        self.save_video_path_list = []
+        
+
+        # Writer process initialization
         self.writer_thread = Process(target=self.write, daemon=True)
         try:
             self.writer_thread.start()
         except Exception as e:
-            print(f"启动 writer_thread 失败: {e}")
-    def add_obs(self, obs_data):
+            print(f"Failed to start writer_thread: {e}")
+
+    def add_obs(self, state: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float) -> None:
         """
-        处理观测数据，包括相机图像、机器人状态和时间帧。
-        :param obs_data: 包含以下键的字典：
-                    'type': string,
-                    'loc_timestamp': int,
-                    'obs': {
-                        **obs_cams,
-                        'shared_data.state': numpyarray,
-                        'annotation.human.task_description': string,
-                    },
+        Process and store observation data including camera images, robot state, and time frame.
+
+        Args:
+            state (Dict[str, np.ndarray]): Dictionary containing observation data with the following keys:
+                - 'cam.head': np.ndarray
+                - 'cam.hand_left': np.ndarray
+                - 'cam.hand_right': np.ndarray
+                - 'loc_timestamp': int
+                - 'obs.state': np.ndarray
+            language_instruction (str): Natural language instruction associated with the observation.
+            timestamp (int): Timestamp of the current observation.
+
+        Raises:
+            AssertionError: If the provided timestamp is not greater than the last recorded timestamp.
         """
-        timestamp = obs_data['loc_timestamp']
-        state = obs_data['obs']
-        obs_type = obs_data["type"]
-        if len(self.obs_time)>0:
+        state['language_instruction'] = language_instruction
+        # Check if the timestamp is greater than the last recorded timestamp
+        if len(self.obs_time) > 0:
             assert self.obs_time[-1] < timestamp, \
-            f"obs 时间戳不递增: 上一个={self.obs_time[-1]}, 当前={timestamp}"
-        if self.shared_data.start_write_time:
+                f"Observation timestamp is not increasing: previous={self.obs_time[-1]}, current={timestamp}"
+        #check state shape 
+        if state['obs.state'].shape[0] != self.state_shape:
+            print(f"obs shape {state['obs.state'].shape[0]} is not correct,config shape is {self.state_shape} , add 0 to the action")
+            assert state['obs.state'].shape[0] <= self.state_shape, \
+            f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
+            action = np.concatenate([action, np.zeros(self.state_shape-state['obs.state'].shape[0])], axis=0)
+        if self.shared_data.start_write_time.value:
             self.obs_time.append(timestamp)
             with self.lock:
-                self.record_queue.put([state,self.action_list.pop()])
-                # self.shared_data.state.append(state)
-                # self.shared_data.action_align.append(self.action_list.pop())
-                print(f"写入成功: {timestamp}")
-    def add_action(self, action_data):
+                if not self.action_list:
+                    # Handle case where action_list is empty, avoiding pop() error
+                    print("Action list is empty. No action to pop.")
+                    return
+                self.record_queue.put([state, self.action_list.pop()])
+                # print(f"Write successful: {timestamp}")
+
+    def add_action(self, action: np.ndarray, timestamp: int | float) -> None:
         """
-        处理动作数据。
-        :param action_data: 包含以下键的字典：
-                            - 'action': 动作值（例如关节力矩或目标位置）
-                            - 'timestamp': 时间帧
+        Process and store the action data along with its timestamp.
+
+        Args:
+            action (np.ndarray): The action data to be stored, typically representing joint torques or target positions.
+            timestamp (int): The timestamp associated with this action.
+
+        Raises:
+            AssertionError: If the provided timestamp is not strictly increasing compared to the last recorded one.
         """
-        timestamp = action_data['loc_timestamp']
-        action = action_data['action']
-        # obs_type = action_data["type"]
-        if len(self.action_list)==0 and not self.shared_data.start_write_time:
-            self.shared_data.start_write_time = True
-        if len(self.action_time)>0:
+        if len(self.action_list) == 0 and not self.shared_data.start_write_time.value:
+            self.shared_data.start_write_time.value = True
+
+        if len(self.action_time) > 0:
             assert self.action_time[-1] < timestamp, \
-            f"action 时间戳不递增: 上一个={self.obs_time[-1]}, 当前={timestamp}"
+                f"Action timestamp is not increasing: previous={self.action_time[-1]}, current={timestamp}"
+
+        #check action shape 
+        if action.shape[0]!= self.action_shape:
+            print(f"Action shape {action.shape[0]} is not correct,config shape is {self.action_shape} , add 0 to the action")
+            assert action.shape[0] <= self.action_shape,\
+            f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}"
+            action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)
         self.action_list.append(action)
         self.action_time.append(timestamp)
 
     def write(self):
         """
-        设置另一个线程用来写入数据，当self.record_queue有数据时，则开始写入数据
+        Main loop for the writer process responsible for writing data to disk.
+
+        Continuously pulls data from the shared queue and writes it to video files and Parquet file buffer.
+        The loop runs until `self.shared_data.stop` is set to True. Each iteration processes one observation-action pair:
+            - Appends new language instructions to the episode task list
+            - Assigns a unique task index based on instruction text
+            - Writes camera images to corresponding video files
+            - Constructs a record dictionary and appends it to the shared Parquet buffer
+
+        Frame index is incremented with each successful write.
+
+        Raises:
+            KeyboardInterrupt: If user interrupts execution via keyboard (e.g., Ctrl+C)
+            Exception: Any other exception during writing will terminate the thread
         """
-        # 写入meta.json
+        # Wait until the first data arrives
         print("waiting for record_queue")
-        
+        self.videos_writer = self.gener_video_write_dict()
         frame_index = 0
         try:
-            while not self.stop:
-               
-                if not self.record_queue:
-
+            while not self.shared_data.stop.value:
+                # Skip if queue is empty
+                if not self.shared_data.start_write_time.value:
                     continue
-                tmp_list = self.record_queue.get()
-                current_save_state,action= tmp_list[0],tmp_list[1]
-                self.shared_data.task_info.value = current_save_state['annotation.human.action.task_description']
                 
-                ##写入数据
-                ##写入图片
+                # Get state and action data from queue
+                with self.lock:
+                    if self.record_queue.empty():
+                        continue
+                    one_step_state_and_action_list = self.record_queue.get(timeout=0.5)
+                step_state, step_action = one_step_state_and_action_list[0], one_step_state_and_action_list[1]
+                step_language = step_state['language_instruction']
+                
+                # Track new language instructions per episode
+                if step_language not in self.shared_data.episode_task_list:
+                    self.shared_data.episode_task_list.append(step_language)
+                
+                # Assign task index based on unique language instruction
+                if step_language not in self.shared_data.task_language_dict.keys():
+                    step_task_index = len(self.shared_data.task_language_dict.keys())
+                    self.shared_data.task_language_dict[step_language] = step_task_index
+                else:
+                    step_task_index = self.shared_data.task_language_dict[step_language]
+                
+                # Write image frames to video files
                 for camera_name in self.camera_name_list:
-                    self.videos_writer[camera_name].write(current_save_state[camera_name])
-                ##写入parquet文件
+                    start_time= time.perf_counter()
+                    if self.camera_shape_dict[camera_name] != step_state[camera_name].shape:
+                        print(f'{camera_name} shape mismatch')
+                        print(f"{camera_name} current shape :{step_state[camera_name].shape}")
+                        print(f"{camera_name} save MP4 shape :{self.camera_shape_dict[camera_name]}")
+                    # print(f"check using time : {(time.perf_counter()-start_time)*1000} ms")
+                    self.videos_writer[camera_name].write(step_state[camera_name])
+                    # print(f"{camera_name} shape :{step_state[camera_name].shape}")
+                # Construct record dictionary for Parquet file
                 record = {
-                    'observation.state': current_save_state['state'].tolist(),
-                    'action': action.tolist(),
-                    'episode_index': self.shared_data.counter.value,
+                    'observation.state': step_state['obs.state'].tolist(),
+                    'action': step_action.tolist(),
+                    'episode_index': self.counter,
                     'frame_index': frame_index,
-                    'index': self.shared_data.total_frames.value,
-                    'task_index': 0,
-                    'timestamp': 1/30 * frame_index,
+                    'index': self.total_frames+frame_index+1,
+                    'task_index': step_task_index,
+                    'timestamp': 1/30 * frame_index,  # Fixed frame rate assumption
                 }
-                self.shared_data.parquet_list.append(record)
-                frame_index+=1
-                self.shared_data.total_frames.value +=1
-                # print('写入成功 ——————————————————')
+                with self.lock:
+                    self.shared_data.episode_parquet_list.append(record)
+                
+                # Update counters
+                frame_index += 1
+                # print('Write successful ——————————————————')
+            
+            print('write process stopped!!! ')
+
         
         except KeyboardInterrupt:
-            print("子进程检测到键盘中断，准备退出...")
-        except Exception as e:
-            print(f"写入线程异常退出: {e}")
-        finally:
+            print("Child process detected keyboard interrupt, preparing to exit...")
             self.release_writers()
-            self.shared_data.counter.value += 1
-            self.shared_data.length.value = frame_index 
-            self.shared_data.total_frames.value -=1
-        ## 根据self.shared_data.start_write_time 去找最近的obs时间戳来开始存储数据
-
-    def close(self):
-        self.stop = True
-        # self.release_writers()
         
-        if self.writer_thread.is_alive():
-            self.writer_thread.join(timeout=1.0)  # 设置超时时间避免卡住
-        # 释放资源
+        except Exception as e:
+            print(f"Writing thread exited with exception: {e}")
+            self.release_writers()
+        
+        finally:
+            print("Writing thread exited.")
+            self.release_writers()
+
+    def end_write(self):
+        """
+        Finalizes the data writing process based on user confirmation.
+
+        Prompts the user to choose whether to save ('y') or discard ('n') the collected data.
+        If saving:
+            - Saves the video files
+            - Converts buffered Parquet data to a DataFrame and writes it to disk
+            - Updates metadata files (info.json, episodes.jsonl, tasks.jsonl)
+        If discarding:
+            - Deletes any partially written video files
+            - Deletes the Parquet file if it exists
+
+        The method blocks until valid user input is received. It ensures proper cleanup of resources
+        and maintains data consistency based on user decision.
+        
+        Raises:
+            ValueError: If invalid input is provided repeatedly
+        """
         while True:
-            user_input = input("请输入 yes 保存数据，no 不保存: ").strip().lower()
-            if user_input == 'yes':
-                print("视频已保存至：{}".format(self.save_video_path))
-                df = pd.DataFrame(list(self.shared_data.parquet_list))
+            user_input = input("Please enter 'y' to save data, or 'n' to discard: ").strip().lower()
+            
+            if user_input == 'y':
+                print("Video has been saved to: {}".format(self.save_video_path))
+                
+                df = pd.DataFrame(list(self.shared_data.episode_parquet_list))
                 table = pa.Table.from_pandas(df, schema=self.schema)
-                ## 写入parquet
+                # Write to parquet file
                 self.parquet_writer.write_table(table)
-                print(f"写入parquet文件成功，保存路径为: {self.parquet_savepath}")
+                
+                print(f"Successfully wrote Parquet file to: {self.parquet_savepath}")
                 self.parquet_writer.close()
-
+                # Write meta files
                 self.write_meta_files()
-
                 break
-            elif user_input == 'no':
+                
+            elif user_input == 'n':
                 for path in self.save_video_path_list:
                     if os.path.exists(path):
                         os.remove(path)
                 if os.path.exists(self.parquet_savepath):
                     os.remove(self.parquet_savepath)
-                print("已删除刚保存的视频文件。")
+                print("Saved video files have been deleted.")
                 break
-                # 直接退出
+                
             else:
-                # 其他输入，提示重新输入
-                print("输入无效，请重新输入。")
-        
+                print("Invalid input. Please try again.")
+    def close(self):
+        """
+        Gracefully shuts down the writer and finalizes data writing.
 
+        This method signals the writer thread to stop by setting the 'stop' flag,
+        releases all video writers, increments the episode counter, updates the total
+        number of frames, and triggers the finalization process (`end_write`) to save
+        all buffered data to disk.
+
+        Should be called when ending data collection to ensure all data is flushed
+        and resources are properly released.
+        """
+        self.shared_data.stop.value = True
+        time.sleep(1)
+        self.counter += 1
+        self.episode_length = len(self.shared_data.episode_parquet_list) 
+        self.total_frames += len(self.shared_data.episode_parquet_list)
+        self.end_write()
     def checkdir_and_update_config(self):
         """
-        检查 self.save_meta_path 是否存在，若存在且包含 info.json、episodes.jsonl、tasks.jsonl，
-        则用 info.json 的内容更新 self.config['info']
+        Checks whether the directory `self.save_meta_path` exists.
+
+        If it does not exist, creates the directory along with related data and video paths.
+        If it exists but is empty, returns early.
+        If it exists and contains required files (info.json, episodes.jsonl, tasks.jsonl),
+        updates the configuration using these files. Otherwise, raises an error due to missing files.
+
+        Raises:
+            AssertionError: If any of the required files are missing in the existing directory.
         """
-        if  not os.path.exists(self.save_meta_path):
-            self.save_data_path = os.path.join(self.save_path,'data','chunk-000')
-            self.save_video_path = os.path.join(self.save_path,'videos','chunk-000')
+        
+        # Case 1: Directory does not exist
+        if not os.path.exists(self.save_meta_path):
+            # Set up default subdirectory paths
+            self.save_data_path = os.path.join(self.save_path, 'data', 'chunk-000')
+            self.save_video_path = os.path.join(self.save_path, 'videos', 'chunk-000')
+
+            # Create directories
             os.makedirs(self.save_meta_path, exist_ok=True)
             os.makedirs(self.save_data_path, exist_ok=True)
             os.makedirs(self.save_video_path, exist_ok=True)
+
             print(f"{self.save_meta_path} not exists, create it")
             return
+
+        # Case 2: Directory exists but is empty
         elif len(os.listdir(self.save_meta_path)) == 0:
             return
+
+        # Check for required files
         required_files = ['info.json', 'episodes.jsonl', 'tasks.jsonl']
         missing_files = []
 
@@ -218,35 +359,74 @@ class LeRobotDatasetWriter:
             if not os.path.exists(file_path):
                 missing_files.append(filename)
 
+        # Raise error if any required file is missing
         if missing_files:
-            print(f"{self.save_meta_path}缺少以下必要文件: {', '.join(missing_files)}")
-            assert False, "缺少必要文件"
+            print(f"{self.save_meta_path} is missing the following required files: {', '.join(missing_files)}")
+            assert False, "Missing required files"
             return
 
-        # 读取 info.json 并更新 self.config['info']
-        file_path = os.path.join(self.save_meta_path, 'info.json')
+        # Load info.json and update dataset info
+        info_file_path = os.path.join(self.save_meta_path, 'info.json')
+        self.from_file_update_dataset_info(info_file_path)
+
+        # Load tasks.jsonl and update task languages
+        task_file_path = os.path.join(self.save_meta_path, 'tasks.jsonl')
+        self.from_file_update_task_languages(task_file_path)
+    def from_file_update_dataset_info(self,file_path: str) -> None:
+        """
+        Updates the dataset info using the provided JSON file.
+        """
+        # Open the specified JSON file and load its contents
         with open(file_path, 'r') as file:
             data = json.loads(file.read())
-        # print(f"data type: {type(data)}, content: {data}")
-        self.config["info"] = ConfigDict(data,allow_dotted_keys=True)
+        
+        # Update the dataset info in the config using the loaded JSON data
+        self.config["info"] = ConfigDict(data, allow_dotted_keys=True)
 
-        print("已成功用 meta files更新 self.config")
+        # Print a success message indicating that the meta files have updated the config
+        print("update self.config info success")
     
-    def gener_video_write_dict(self):
+    def from_file_update_task_languages(self,file_path: str) -> None:
+        """
+        Updates the task-language mapping using the provided JSONL file.
+        """
+        with open(file_path, 'r') as file:
+            for line in file:
+                data = json.loads(line)
+                task_index = data['task_index']
+                task_name = data['tasks'] 
+                if task_name not in self.shared_data.task_language_dict:
+                    self.shared_data.task_language_dict[task_name] = task_index
+            print(self.shared_data.task_language_dict)
+    def gener_video_write_dict(self) -> Dict[str, Any]:
+        """
+        Generates video writers for each camera stream.
 
-        filename = f"{'episode'}_{self.shared_data.counter.value:06d}.{'mp4'}"
+        Creates OpenCV VideoWriter objects for each camera specified in the configuration.
+
+        Returns:
+            dict: A dictionary mapping camera names to their respective VideoWriter objects.
+        """
+        filename = f"{'episode'}_{self.counter:06d}.{'mp4'}"
         video_write_dict = {}
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        self.camera_shape_dict = {}
         for camera_name in self.camera_name_list:
             shape_list = self.config['info']["features"][camera_name]["shape"]
             height, width = shape_list[0],shape_list[1]
             os.makedirs(os.path.join(self.save_video_path, camera_name), exist_ok=True)
             video_path = os.path.join(self.save_video_path, camera_name, filename)
             self.save_video_path_list.append(video_path)
+            self.camera_shape_dict[camera_name] = tuple(shape_list)
             video_write_dict[camera_name] = cv2.VideoWriter(video_path, fourcc, 30.0, (width, height))
         return video_write_dict
     
     def init_parquet_content(self):
+        """
+        Initializes the schema for the Parquet file.
+
+        Defines the structure of the Parquet table including observation, action, timestamps, and metadata.
+        """
         self.schema = pa.schema([
         ('observation.state', pa.list_(pa.float32())),  # NumPy array -> list[float]
         ('action', pa.list_(pa.float32())),              # NumPy array -> list[float]
@@ -256,127 +436,126 @@ class LeRobotDatasetWriter:
         ('task_index', pa.int32()),
         ('timestamp', pa.float64())
          ])
-    def find_closest_obs_index(self, target_time):
-        # 使用二分查找快速找到最接近的 obs 起始位置
-        times = [obs['timestamp'] for obs in self.obs_list]
-        idx = bisect.bisect_left(times, target_time)
-        return idx if idx < len(times) else -1
-
-    def find_closest_action(self, target_time, start_idx=0,tolerance=0.01):
-        # 在 action 列表中从指定位置开始查找最接近的时间戳
-        for i in range(start_idx, len(self.action_time)):
-            if self.action_time[i] >= target_time:
-                return i
-        return -1
     def release_writers(self):
+        """
+        Initializes the schema for the Parquet file.
+
+        Defines the structure of the Parquet table including observation, action, timestamps, and metadata.
+        """
         for writer in self.videos_writer.values():
             writer.release()
         print("All video writers released.")
     
     def write_meta_files(self):
+        """
+        Writes metadata files including info.json, episodes.jsonl, and tasks.jsonl.
+
+        These files contain global dataset statistics, per-episode information, and task mappings respectively.
+        """
+        # Write info.json file
         info_file_path = os.path.join(self.save_meta_path, 'info.json')
-        self.config['info']["total_episodes"] += 1
-        self.config['info']["total_frames"] = self.shared_data.total_frames.value
+        self.config['info']["total_episodes"] = self.counter
+        self.config['info']["total_frames"] = self.total_frames
         self.config['info']["total_videos"] += len(self.camera_name_list)
-        self.config['info']["splits"]== {"test": f"0:{self.config['info']['total_episodes']+1}"}
+        self.config['info']["splits"] = {"test": f"0:{self.counter - 1}"}
+
         with open(info_file_path, 'w') as f:
             json.dump(self.config['info'].to_dict(), f, indent=2, default=str)
 
-        print(f"info.json 已写入: {info_file_path}")
+        print(f"info.json has been written to: {info_file_path}")
 
-        # 写入 episodes.jsonl
+        # Write episodes.jsonl file
         episodes_file_path = os.path.join(self.save_meta_path, 'episodes.jsonl')
         episodes_content = {
             "episode_index": self.config['info']["total_episodes"],
-            "tasks": self.shared_data.task_info.value,
-            "length": self.shared_data.length.value 
+            "tasks": list(self.shared_data.episode_task_list),
+            "length": self.episode_length
         }
+
         with open(episodes_file_path, 'a', encoding='utf-8') as f:
             f.write(json.dumps(episodes_content, ensure_ascii=False) + '\n')
-        print(f"episodes.jsonl 已写入: {episodes_file_path}")
 
-        # 写入 tasks.jsonl
+        print(f"episodes.jsonl has been written to: {episodes_file_path}")
+
+        # Write tasks.jsonl file
         tasks_file_path = os.path.join(self.save_meta_path, 'tasks.jsonl')
-        tasks_content = {
-            "task_index": 0,
-            "tasks": self.shared_data.task_info.value
-        }
-        with open(tasks_file_path, 'a', encoding='utf-8') as f:
-            f.write(json.dumps(tasks_content, ensure_ascii=False) + '\n')
-        print(f"tasks.jsonl 已写入: {tasks_file_path}")
+        print(self.shared_data.task_language_dict)
+        with open(tasks_file_path, 'w', encoding='utf-8') as f:
+            for task_language in self.shared_data.task_language_dict.keys():
+                tasks_content = {
+                    "task_index": self.shared_data.task_language_dict[task_language],
+                    "tasks": task_language
+                }
+                f.write(json.dumps(tasks_content, ensure_ascii=False) + '\n')
 
-def generate_mock_observation(timestamp, frame_index):
+        print(f"tasks.jsonl has been written to: {tasks_file_path}")
+# Mock observation data generator
+def generate_mock_observation():
     """
-    模拟 obs_data 输入
+    Simulates an observation data input.
+    Returns:
+        dict: A dictionary containing simulated observation data.
     """
-    state = np.random.rand(20).astype(np.float32)  # 7维状态
-    image1 = (np.random.rand(480, 640, 3) * 255).astype(np.uint8)  # 240x320 RGB 图像
-    image2 = (np.random.rand(480, 640, 3) * 255).astype(np.uint8)  # 240x320 RGB 图像
-    image3 = (np.random.rand(480, 640, 3) * 255).astype(np.uint8)  # 240x320 RGB 图像
-    obs_cams = {
+    state = np.random.rand(20).astype(np.float32)  # 20-dimensional state
+    image1 = (np.random.rand(720, 1280, 3) * 255).astype(np.uint8)  # RGB image
+    image2 = (np.random.rand(480, 848, 3) * 255).astype(np.uint8)
+    image3 = (np.random.rand(480, 848, 3) * 255).astype(np.uint8)
+
+    return {
         "cam.head": image1,
         "cam.hand_left": image2,
-        "cam.hand_right": image3
-    }
+        "cam.hand_right": image3,
+        'obs.state': state    }
 
-    return {
-        "type": "observation",
-        "loc_timestamp": timestamp,
-        "obs": {
-            **obs_cams,
-            "shared_data.state": state,
-            "annotation.human.action.task_description": f"test_task_{frame_index}"
-        }
-    }
-def generate_mock_action(timestamp):
+
+# Mock action data generator
+def generate_mock_action():
     """
-    模拟 action_data 输入
+    Simulates an action data input.
+    Returns:
+        dict: A dictionary containing simulated action data.
     """
-    action = np.random.rand(20).astype(np.float32)  # 7维动作
-    return {
-        "type": "action",
-        "loc_timestamp": timestamp,
-        "action": action
-    }
+    action = np.random.rand(20).astype(np.float32)  # 20-dimensional action
+    return action
 
 
 if __name__ == "__main__":
-    print(f"当前工作路径: {os.getcwd()}")
     import sys
-    # project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    # print(f"项目根目录: {project_root}")
+    print(f"Current working directory: {os.getcwd()}")
     sys.path.append('/home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer')
-    from conf.config import get_client_config
-    save_dir = "/home/rm/wxz/EmbodiedAI/lerobot/vla_infer/tools/test/1"
-    # config = create_mock_config(save_dir)
+    from conf.client_conf import get_client_config
+
+    save_dir = "/home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test"
     config = get_client_config()
-    # 初始化 writer
-    writer = LeRobotDatasetWriter(save_config=config.record)
-    
-    print("开始模拟数据写入...")
+
+    # Initialize writer
+    writer = LeRobotDatasetWriter(config.record)
+
+    print("Starting to simulate data writing...")
 
     start_time = time.time()
-
-    # 模拟写入 100 帧 obs 和 200 个 action（action 频率更高）
+    languege_instruction = 'test ok'
+    # Simulate writing 100 observations and 200 actions (higher action frequency)
     for i in range(100):
-        obs_data = generate_mock_observation(start_time + i * 0.033, i)  # 约 30Hz
-        writer.get_obs(obs_data)
+        obs_data = generate_mock_observation()  # ~30Hz
+        if i >50:
+            languege_instruction = 'test 50'
+        writer.add_obs(obs_data,languege_instruction,start_time + i * 0.033)
 
-        # 每帧都插入多个 action（约 200Hz）
+        # Insert multiple actions per observation (~200Hz)
         for j in range(2):
-            action_data = generate_mock_action(start_time + i * 0.033 + j * 0.005)
-            writer.get_action(action_data)
+            action_data = generate_mock_action()
+            writer.add_action(action_data,start_time + i * 0.033 + j * 0.005)
 
-    print("等待写入完成...")
-    time.sleep(2)  # 给线程时间处理剩余数据
+    print("Waiting for write operations to complete...")
+    time.sleep(2)  # Allow thread time to process remaining data
     writer.close()
 
-    print("测试完成，检查输出文件：")
-    print(f"- 视频文件路径: {os.path.join(save_dir, 'videos')}")
-    print(f"- Parquet 文件路径: {os.path.join(save_dir, 'data')}")
-    print(f"- Meta 文件路径: {os.path.join(save_dir, 'meta')}")
+    print("Test completed. Check output files:")
+    print(f"- Video files path: {os.path.join(save_dir, 'videos')}")
+    print(f"- Parquet file path: {os.path.join(save_dir, 'data')}")
+    print(f"- Meta file path: {os.path.join(save_dir, 'meta')}")
 
-    assert os.path.exists(os.path.join(save_dir, 'meta', 'info.json')), "info.json 未生成"
-    assert os.path.exists(os.path.join(save_dir, 'meta', 'episodes.jsonl')), "episodes.jsonl 未生成"
-    # assert os.path.exists(os.path.join(save_dir, 'data','chunk-000', 'episode_000000.parquet')), "Parquet 文件未生成"
-    print("✅ 所有文件验证通过！")
+    assert os.path.exists(os.path.join(save_dir, 'meta', 'info.json')), "info.json not generated"
+    assert os.path.exists(os.path.join(save_dir, 'meta', 'episodes.jsonl')), "episodes.jsonl not generated"
+    print("✅ All files verified successfully!")

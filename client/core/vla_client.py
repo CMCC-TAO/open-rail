@@ -57,12 +57,15 @@ class VLAClient():
         self.infer_flag = False
         self.wait_frame_count = 0
         self.infer_thread_lock = threading.Lock()
+        # record variables
         self.record = config.record.enable
 
         if self.record:
+            # Initialize thread pool executors for concurrent observation and recording tasks
             self.obs_executor = ThreadPoolExecutor(max_workers=2)
             self.record_executor = ThreadPoolExecutor(max_workers=4)
-            self.DataWriter = LeRobotDatasetWriter(save_config=config.record)
+            # Initialize the dataset writer with the provided recording configuration
+            self.dataset_write = LeRobotDatasetWriter(record_config=config.record)
         if config.show_data:
             # 创建画布和折线图
             self.fig, self.axs = plt.subplots(2, 1, figsize=(10, 4))
@@ -92,43 +95,33 @@ class VLAClient():
         self.vis_global_step = 0
 
     def async_write_obs(self,observations):
-        record_obs= {'type':'obs',
-                      "loc_timestamp":time.perf_counter(),
-                      'obs': {
-                            ## resize image
-                            # 'cam.head': misc.pad_and_resize(observations['obs.cam.head'].copy()),
-                            # 'cam.hand_left': misc.pad_and_resize(observations['obs.cam.hand_left'].copy()),
-                            # 'cam.hand_right': misc.pad_and_resize(observations['obs.cam.hand_right'].copy()),
-                            'cam.head': observations['cam.head'].copy(),
-                            'cam.hand_left': observations['cam.hand_left'].copy(),
-                            'cam.hand_right': observations['cam.hand_right'].copy(),
-                            'state': observations['obs.state'].copy(),
-                            'annotation.human.action.task_description': ['pick bottle into box'],
-                        }
-                      }
-        self.DataWriter.add_obs(record_obs)
+        """
+        Asynchronously writes observation data into the dataset.
 
+        Args:
+            observations (dict):A dictionary containing observation with the following keys:
+                - 'cam.*': np.ndarray,
+                - 'obs.state': np.ndarray
+        """
+        self.dataset_write.add_obs(observations,self.language,time.perf_counter())
     def async_write_action(self,action):
-        action_dict = {
-                    "action": action,
-                    "loc_timestamp": time.perf_counter(),
-                }
-        self.DataWriter.add_action(action_dict)
+        """
+        Asynchronously writes action data into the dataset.
+
+        Args:
+            action (np.ndarray): A dictionary containing action data from the environment.
+        """
+        self.dataset_write.add_action(action,time.perf_counter())
     def observeThreadFun(self):
-        print('观测线程已启动...')
+        # print('观测线程已启动...')
         while self.running:
             if not self.is_running_action:
                 time.sleep(0.001)
                 continue
             observations = self.robot.retrieveObservation()
-            # timestamp = time.time()
-            if self.record and observations is not None:
-                self.obs_executor.submit(self.async_write_obs, observations)
-            # print(f'send observation using {(time.time() - timestamp)*1000:.2f}ms')
             if observations is not None:
-                # print(observations.keys())
-                # print(observations['ref_timestamp'])
-                # print(observations['obs.state'])
+                if self.record:
+                    self.obs_executor.submit(self.async_write_obs, observations)
                 data = self.processData(observations)
                 self.rdm.add_observe_data(data)
                 # with self.infer_thread_lock:
@@ -588,13 +581,17 @@ class VLAClient():
         self.inference_thread.join(timeout=1.0)
         # self.interpolate_thread.join(timeout=1.0)
         # self.control_thread.join(timeout=1.0)
+        ## ADD stop to exit
+        self.control_thread_timer.stop()
         self.control_thread_timer.join(timeout=1.0)
         if self.record:
             time.sleep(1)
             self.obs_executor.shutdown(wait=True)
             self.record_executor.shutdown(wait=True)
-            self.DataWriter.close()
+            self.dataset_write.writer_thread.join(timeout=1.0)
+            self.dataset_write.close()
         self.zmq_client.close()
+        self.vis_zmq.stop()
         # self.traj_generator.close()
         print('推理框架客户端已关闭。')
 
