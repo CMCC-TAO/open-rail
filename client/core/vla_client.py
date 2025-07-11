@@ -464,7 +464,7 @@ class VLAClient():
             tuple(str, np.ndarray, np.ndarray): Raw image key, preprocessed image and encoded image.
         """
         ext = '.png' if 'depth.' in key else '.jpg'
-        img_processed = self._preprocess_func(value) if self.preprocess_func else value
+        img_processed = self._preprocess_func(value) if self._preprocess_func else value
         img_encoded = cv2.imencode(ext, img_processed)[1]
         return key, img_processed, img_encoded
 
@@ -595,8 +595,8 @@ class VLAClient():
         # self.interpolate_thread.start()
         # self.control_thread.start()
         self.control_thread_timer.start()
-        if self.config.show_data:
-            self._show_action_chunk()
+        # if self.config.show_data:
+        #     self._show_action_chunk()
         # 等待线程结束
         # self.observe_thread.join()
         # self.inference_thread.join()

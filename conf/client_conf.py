@@ -35,8 +35,8 @@ def get_client_config():
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
     config.record = get_record_data_config() # record data config
-    config.show_data = False # True to show data, False to not show data
-    config.show_img = True # True to show data, False to not show data
+    config.show_data = True # True to show data, False to not show data
+    config.show_img = False # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 64
     config.fitting_time_step = 5 # 轨迹拟合的时间步长，单位为毫秒
@@ -49,12 +49,11 @@ def get_client_config():
     config.smooth_ratio = 0.75 # 平滑动作的比例，推荐0.5
     config.gripper_offset = 5 # 夹爪向前偏移量
     config.wait_frame = 15 # 每一帧推理完成后的休眠帧数，每一帧33ms, 已废弃
-    config.sleep_time = 0.0 # 每一帧推理完成后的休眠时间，单位为秒
+    config.sleep_time = 0.4 # 每一帧推理完成后的休眠时间，单位为秒
     config.history_frame = False # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
     config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
 
     config.preprocess = 'pad_and_resize'
     config.language = 'pick bottle into box'
-    config.show_img = False
     return config
