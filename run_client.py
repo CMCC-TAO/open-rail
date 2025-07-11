@@ -42,29 +42,29 @@ if __name__ == "__main__":
         vla_client.run()
         while True:
             time.sleep(0.1)
-            # 检查是否有输入可用，超时：0.001s
+            # Check if input is available, timeout: 0.001s
             if select.select([sys.stdin,], [], [], 0.001)[0]:
                 user_input = sys.stdin.readline().strip()
                 if user_input == '':
                     vla_client.is_running_action = False
-                    cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\n')
+                    cmd = input('Program paused, please enter command, press Enter to continue:\nr: Reset robot\nl: Modify language instruction\n')
                     vla_client.is_running_action = True
                     if cmd == 'l':
                         vla_client.is_running_action = False
-                        language = input('请输入新的语言指令，按Enter键确认：')
+                        language = input('Please enter new language instruction, press Enter to confirm: ')
                         vla_client.is_running_action = True
                         vla_client.language = language.strip()
-                        print(f"语言指令已修改为: {vla_client.language}")
+                        print(f"Language instruction has been modified to: {vla_client.language}")
                     elif cmd == 'r':
                         vla_client.is_running_action = False
                         robot.reset_robot(target_pose='default')
-                        input('机器人复位完成，程序暂停，按Enter键继续...')
+                        input('Robot reset completed, program paused, press Enter to continue...')
                         vla_client.is_running_action = True
-                        # self.initialize() # 状态已不在原来的位置，需要初始化，重新获取动作块
+                        # self.initialize()  # state is not in original position, need to initialize and re-acquire action blocks
     except KeyboardInterrupt:
-        print("程序被中断")
+        print("Program interrupted")
     except Exception as e:
-        print(f"发生异常: {str(e)}\n堆栈信息:\n{traceback.format_exc()}")
+        print(f"Exception occurred: {str(e)}\nStack trace:\n{traceback.format_exc()}")
     finally:
         # pass
         vla_client.close()

@@ -9,25 +9,25 @@ class RobotBase():
 
     def controlRobot(self, action):
         """
-        控制机器人执行动作
+        Control robot to execute action
         Args:
-            action: action array，顺序同obs['state']
+            action: action array, order same as obs['state']
         """
         raise NotImplementedError('controlRobot is not implemented')
 
     def retrieveObservation(self):
         """
-        获取机器人当前obs
+        Get current observation from robot
         Returns:
-            obs: 机器人当前obs，obs['state']为当前pose
+            obs: current robot observation, obs['state'] is current pose
         """
         raise NotImplementedError('retrieveObservation is not implemented')
 
     def reset_robot(self, target_pose='default'):
         """
-        重置机器人到指定姿态
+        Reset robot to specified pose
         Args:
-            target_pose: 目标姿态，'default'表示默认姿态，'zero'表示零位姿态，格式: [7左臂+7右臂+2夹爪+2头部+2腰部+2轮子]
+            target_pose: target pose, 'default' means default pose, 'zero' means zero pose, format: [7 left arm + 7 right arm + 2 gripper + 2 head + 2 waist + 2 wheels]
         """
         if target_pose == 'default':
             target_pose = np.array([-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
@@ -39,54 +39,54 @@ class RobotBase():
         current_obs = self.retrieveObservation()
         current_positions = current_obs['obs.state'][:14]
         target_positions = target_pose[:14]
-        # 计算关节位置差异
+        # Calculate joint position differences
         dis = np.abs(current_positions - target_positions)
-        mask = dis > np.deg2rad(0.01)  # 决定是否使用插值策略
-        # 如果差异很小，直接移动到目标位置
+        mask = dis > np.deg2rad(0.01)  # Decide whether to use interpolation strategy
+        # If difference is small, move directly to target position
         if not np.any(mask):
             target_pose[:14] = target_positions
             self.controlRobot(target_pose)
             time.sleep(0.01)
             return
-        # 否则规划
+        # Otherwise plan trajectory
         trajs = self._ruckig_planning(current_positions, target_positions)
         for i, traj in enumerate(trajs):
-            print(f"执行轨迹点 {i}: {traj}")
+            print(f"Executing trajectory point {i}: {traj}")
             target_pose[:14] = traj
             self.controlRobot(target_pose)
             time.sleep(0.01)
     
     def _ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):
         """
-        使用Ruckig进行轨迹规划
+        Trajectory planning using Ruckig
         Args:
-            current_pose: 当前关节pose
-            target_pose: 目标关节pose
-            dof: 自由度
-            interval: 间隔
+            current_pose: current joint pose
+            target_pose: target joint pose
+            dof: degrees of freedom
+            interval: time interval
         Returns:
-            轨迹点列表
+            list of trajectory points
         """
         rk = ruckig.Ruckig(dof, interval)
         rk_input = ruckig.InputParameter(dof)
         rk_output = ruckig.OutputParameter(dof)
         
-        # 设置当前状态
+        # Set current state
         rk_input.current_position = current_pose
         rk_input.current_velocity = [0.0] * dof
         rk_input.current_acceleration = [0.0] * dof
         
-        # 设置目标状态
+        # Set target state
         rk_input.target_position = target_pose
         rk_input.target_velocity = [0.0] * dof
         rk_input.target_acceleration = [0.0] * dof
         
-        # 设置运动约束
+        # Set motion constraints
         rk_input.max_velocity = [2.0] * dof
         rk_input.max_acceleration = [1.0] * dof
         rk_input.max_jerk = [5.0] * dof
         
-        # 生成轨迹
+        # Generate trajectory
         trajs = []
         while rk.update(rk_input, rk_output) == ruckig.Result.Working:
             trajs.append(rk_output.new_position)
