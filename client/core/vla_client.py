@@ -68,6 +68,7 @@ class VLAClient():
             self.record_executor = ThreadPoolExecutor(max_workers=4)
             # Initialize the dataset writer with the provided recording configuration
             self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
+
         if config.show_data:
             # 创建画布和折线图
             self.fig, self.axs = plt.subplots(2, 1, figsize=(10, 4))
