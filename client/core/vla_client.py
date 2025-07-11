@@ -48,7 +48,7 @@ class VLAClient():
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         # self.interpolate_thread = None
         # self.control_thread = threading.Thread(target=self.controlThreadFun, daemon=True)
-        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self.control_thread_fun)
+        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
@@ -60,14 +60,14 @@ class VLAClient():
         self.wait_frame_count = 0
         self.infer_thread_lock = threading.Lock()
         # record variables
-        self.record = config.record.enable
+        # self.record = config.record.switch
 
-        if self.record:
+        if self.config.record.switch:
             # Initialize thread pool executors for concurrent observation and recording tasks
             self.obs_executor = ThreadPoolExecutor(max_workers=2)
             self.record_executor = ThreadPoolExecutor(max_workers=4)
             # Initialize the dataset writer with the provided recording configuration
-            self.dataset_write = LeRobotDatasetWriter(record_config=config.record)
+            self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
         if config.show_data:
             # 创建画布和折线图
             self.fig, self.axs = plt.subplots(2, 1, figsize=(10, 4))
@@ -251,7 +251,7 @@ class VLAClient():
         # with self.infer_thread_lock:
         #     self.infer_flag = False
 
-    def control_thread_fun(self):
+    def _control_thread_fun(self):
         if not self.is_running_action:
             return
 
@@ -262,7 +262,7 @@ class VLAClient():
             # pass
             # print(f'[{time.time()}]控制线程已启动...')
             # timestamp = time.perf_counter()
-            if self.record and self.is_running_action and self.running:
+            if self.config.record.switch and self.is_running_action and self.running:
                 self.record_executor.submit(self.async_write_action, action)
             # print(f'send action using {(time.perf_counter() - timestamp)*1000:.2f}ms')
             self.robot.controlRobot(action)
@@ -625,7 +625,7 @@ class VLAClient():
         ## ADD stop to exit
         self.control_thread_timer.stop()
         self.control_thread_timer.join(timeout=1.0)
-        if self.record:
+        if self.config.record.switch:
             time.sleep(1)
             self.obs_executor.shutdown(wait=True)
             self.record_executor.shutdown(wait=True)
