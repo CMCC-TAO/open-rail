@@ -1,11 +1,5 @@
-import copy
-import math
-import sys
-import os
-import select
 import cv2
 import time
-import queue
 import threading
 import numpy as np
 from matplotlib  import pyplot as plt
@@ -45,7 +39,9 @@ class VLAClient():
         self.running = False
         self.is_running_action = True
         self.language = self.config.language
-        self.preprocess_func = (getattr(misc, self.config.preprocess) if self.config.preprocess != 'none' else None)
+        
+        # Define image preprocess function, i.e. pad and resize
+        self._preprocess_func = (getattr(misc, self.config.preprocess) if self.config.preprocess != 'none' else None)
 
         self.observe_thread = threading.Thread(target=self.observe_thread_fun, daemon=True)
         # self.inference_thread = None
@@ -136,7 +132,7 @@ class VLAClient():
                 # print(observations.keys())
                 # print(observations['ref_timestamp'])
                 # print(observations['obs.state'])
-                data = self.processData(observations)
+                data = self._process_data(observations)
                 self.rdm.add_observe_data(data)
                 # with self.infer_thread_lock:
                 #     # infer_flag == False，表示当前没有推理任务，可以开始推理
@@ -157,7 +153,9 @@ class VLAClient():
             time.sleep(0.001)  # 控制循环频率
     
     @run_time_decorator
-    def inferenceFirstThreadFun(self):
+    def inference_first(self):
+        """Fist inference step, which is different with other inference steps.
+        """
         # getObserveData函数是线程安全的，不需要加锁
         data = self.rdm.pop_observe_data(num_samples = 1 if self.config.history_frame == False else 2)
         if data is not None:
@@ -172,7 +170,7 @@ class VLAClient():
             # ref_timestamp = action_data['ref_timestamp']
             # print(f'当前动作时间戳: {ref_timestamp}')
             # 获取当前数据的时间戳,更新时间戳
-            action_chunk, timestamp_chunk, loc_timestamp = self.processActionNew(action_data) #loc_timestamp是接收到观测数据的本机时间戳
+            action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data) #loc_timestamp是接收到观测数据的本机时间戳
             self.rdm.set_observe_time_marker(loc_timestamp)
             # print(timestamp_chunk)
             # addActionData函数是线程安全的，不需要加锁
@@ -181,7 +179,7 @@ class VLAClient():
 
             # 记录轨迹拟合的时间戳
             self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self.trajFittingFirst(num_samples=self.config.fitting_num_samples)
+            action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
 
             # 记录控制的时间戳
             # TODO: 应该在此处开启控制线程
@@ -207,7 +205,9 @@ class VLAClient():
         # with self.infer_thread_lock:
         #     self.infer_flag = False
     @run_time_decorator
-    def inferenceStepThreadFun(self):
+    def inference_step(self):
+        """Regular inference step, which is different with the first inference step.
+        """
         if not self.is_running_action:
             return
         
@@ -225,7 +225,7 @@ class VLAClient():
             # ref_timestamp = action_data['ref_timestamp']
             # print(f'当前动作时间戳: {ref_timestamp}')
             # 获取当前数据的时间戳,更新时间戳
-            action_chunk, timestamp_chunk, loc_timestamp = self.processActionNew(action_data) #loc_timestamp是接收到观测数据的本机时间戳
+            action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data) #loc_timestamp是接收到观测数据的本机时间戳
             self.rdm.set_observe_time_marker(loc_timestamp)
             # print(timestamp_chunk)
             # addActionData函数是线程安全的，不需要加锁
@@ -233,7 +233,7 @@ class VLAClient():
 
             # 记录轨迹拟合的时间戳
             self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self.trajFittingFirst(num_samples=self.config.fitting_num_samples)
+            action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
 
             # # 记录控制的时间戳
             self.rdm.set_control_time_marker()
@@ -416,7 +416,7 @@ class VLAClient():
     #     #         continue
     #         # 获取当前时间戳
     @run_time_decorator
-    def trajFittingFirst(self, num_samples):
+    def _traj_fitting(self, num_samples):
         timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0, num_samples=num_samples) #轨迹拟合需要10ms左右的时间
         print(f'timestamps for fitting: {timestamps}')
         # start_time = np.amin(timestamps)
@@ -459,20 +459,37 @@ class VLAClient():
             # 获取当前时间戳
 
     def _process_image(self, key, value):
-        ext = '.png' if 'depth.' in key else '.jpg'
-        processed = self.preprocess_func(value) if self.preprocess_func else value
-        encoded = cv2.imencode(ext, processed)[1]
-        return key, processed, encoded
+        """Process image data by padding, resize and encoding.
 
-    def _thread_process_image(self, obs):
-        cam_items = [(key, value) for key, value in obs.items() if 'cam.' in key]
+        Args:
+            key (str): Image key.
+            value (np.ndarray): Image data.
+
+        Returns:
+            tuple(str, np.ndarray, np.ndarray): Raw image key, preprocessed image and encoded image.
+        """
+        ext = '.png' if 'depth.' in key else '.jpg'
+        img_processed = self._preprocess_func(value) if self.preprocess_func else value
+        img_encoded = cv2.imencode(ext, img_processed)[1]
+        return key, img_processed, img_encoded
+
+    def _thread_process_image(self, frame):
+        """Process multiple images in threads.
+
+        Args:
+            frame (dict): A dictionary containing observation data, including image data, proprioception state data.
+
+        Returns:
+            dict: The encoded images with key and values.
+        """
+        cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
         # 使用线程池并行处理所有摄像头
         with ThreadPoolExecutor() as executor:
             futures = [executor.submit(self._process_image, key, value) for key, value in cam_items]
             results = [future.result() for future in futures] # 等待所有任务完成
-        obs_cams, processed_imgs = {}, {}
+        encoded_imgs, processed_imgs = {}, {}
         for key, processed, encoded in results:
-            obs_cams[key] = encoded
+            encoded_imgs[key] = encoded
             if self.config.show_img:
                 processed_imgs[key] = processed
                 if 'depth.' in key:
@@ -482,12 +499,20 @@ class VLAClient():
                     img_show = cv2.cvtColor(processed, cv2.COLOR_RGB2BGR)
                 cv2.imshow(key, img_show)
                 cv2.waitKey(1)
-        return obs_cams
+        return encoded_imgs
 
     @run_time_decorator
-    def processData(self, frame):
+    def _process_data(self, frame):
+        """Process observation data by adding local timestamp, encoding images and adding task name.
+
+        Args:
+            frame (dict): A dictionary containing observation data, including image data, proprioception state data.
+
+        Returns:
+            dict: The processed data by encoding images and adding local timestamp.
+        """
         loc_timestamp = time.perf_counter()
-        obs_cams = self._thread_process_image(frame)
+        encoded_imgs = self._thread_process_image(frame)
         # if frame['obs.state'][-1] is None:
         #     frame['obs.state'][-1] = 0.0
         data = {
@@ -496,42 +521,50 @@ class VLAClient():
             'ref_timestamp': frame['ref_timestamp'],
             'loc_timestamp': loc_timestamp,
             'obs': {
-                **obs_cams,
+                **encoded_imgs,
                 'state': frame['obs.state'],
                 'language': [self.language],
             },
         }
-        end_time = time.time()
+        # end_time = time.time()
         # 计算并打印运行时间
         # elapsed_time = (end_time - start_time) * 1000
         # print(f"图像编码时间: {elapsed_time} ms")
         return data
-    @run_time_decorator
-    def processAction(self, action):
-        # {'type': 'action', 'pred_action': array([[-1.0059779 ,  0.58745086,  0.32646954, -1.2613511 ,  0.7208374 ,
-        #  1.4398973 , -0.1548205 ,  1.0740726 , -0.6103424 , -0.28125978,
-        #  1.2830431 , -0.72958744, -1.4945612 ,  0.18649821,  0.00195312,
-        #  0.        ],], dtype=float32), 'ref_timestamp': 1745389475305775776}
-        # 将传入的消息msg添加到buffer列表中
-        action_chunk = []
-        timestamp_chunk = []
-        action_type = action['type']
-        if action_type == 'action':
-            pred_action = action['pred_action']
-            ref_timestamp = action['ref_timestamp']
-            for index, action in enumerate(pred_action):
-                timestamp =  ref_timestamp + self.config.observer.period * index * 1e9 # observer.period单位是秒，需要转换成纳秒，即*1e9
-                action_chunk.append(action)
-                timestamp_chunk.append(timestamp)
+    # @run_time_decorator
+    # def processAction(self, action):
+    #     # {'type': 'action', 'pred_action': array([[-1.0059779 ,  0.58745086,  0.32646954, -1.2613511 ,  0.7208374 ,
+    #     #  1.4398973 , -0.1548205 ,  1.0740726 , -0.6103424 , -0.28125978,
+    #     #  1.2830431 , -0.72958744, -1.4945612 ,  0.18649821,  0.00195312,
+    #     #  0.        ],], dtype=float32), 'ref_timestamp': 1745389475305775776}
+    #     # 将传入的消息msg添加到buffer列表中
+    #     action_chunk = []
+    #     timestamp_chunk = []
+    #     action_type = action['type']
+    #     if action_type == 'action':
+    #         pred_action = action['pred_action']
+    #         ref_timestamp = action['ref_timestamp']
+    #         for index, action in enumerate(pred_action):
+    #             timestamp =  ref_timestamp + self.config.observer.period * index * 1e9 # observer.period单位是秒，需要转换成纳秒，即*1e9
+    #             action_chunk.append(action)
+    #             timestamp_chunk.append(timestamp)
             
-            return action_chunk, timestamp_chunk
-            # print(type(pred_action))
-            # print(ref_timestamp)
-        else:
-            print(f'数据类型出错: {action_type}')
-            return None, None
+    #         return action_chunk, timestamp_chunk
+    #         # print(type(pred_action))
+    #         # print(ref_timestamp)
+    #     else:
+    #         print(f'数据类型出错: {action_type}')
+    #         return None, None
     @run_time_decorator
-    def processActionNew(self, action):
+    def _process_action_chunk(self, action):
+        """Process an action chunk by generating reference timestamp chunk and passing local timestamp.
+
+        Args:
+            action (dict): The inference result from vla_server. It is a dictionary with keys i.e. type, pred_action, ref_timestamp, loc_timestamps.
+
+        Returns:
+            tuple(list, list, int): The predicted action chunk, reference timestamp chunk and local timestamp.
+        """
         # timestamp_chunk的逻辑发生了变化，首帧是观测数据的时间戳ref_timestamp, 后续帧是相对时间
         # {'type': 'vla_action', 'pred_action': array([[-1.0059779 ,  0.58745086,  0.32646954, -1.2613511 ,  0.7208374 ,
         #  1.4398973 , -0.1548205 ,  1.0740726 , -0.6103424 , -0.28125978,
@@ -568,7 +601,7 @@ class VLAClient():
         # self.control_thread.start()
         self.control_thread_timer.start()
         if self.config.show_data:
-            self.showActionChunk()
+            self._show_action_chunk()
         # 等待线程结束
         # self.observe_thread.join()
         # self.inference_thread.join()
@@ -605,7 +638,7 @@ class VLAClient():
         # self.traj_generator.close()
         print('推理框架客户端已关闭。')
 
-    def updateVisualization(self, frame):
+    def update_visualization(self, frame):
         # 更新图表数据
         # print(f'updateVisualization: {frame}')
         # print(f'self.xdata: {self.xdata}')
@@ -645,11 +678,11 @@ class VLAClient():
         # self.ax.relim()          # 重新计算数据范围
         # self.ax.autoscale_view() # 自动缩放Y轴
         # return self.line,
-    def showActionChunk(self):
+    def _show_action_chunk(self):
         # 创建动画对象
         ani = FuncAnimation(
             fig=self.fig,
-            func=self.updateVisualization,
+            func=self.update_visualization,
             # init_func=init,
             frames=None,        # 无限循环
             interval=30,        # 更新间隔50ms（约20帧/秒）
@@ -695,13 +728,13 @@ class VLAClient():
         while self.running:
             # 第一次推理
             if self.rdm.infer_count == 0:
-                self.inferenceFirstThreadFun()
+                self.inference_first()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
                 time.sleep(self.config.sleep_time)
                 # char = input("Press 'q' to quit: ")
             # 第二次推理
             elif self.rdm.infer_count < 10000:
-                self.inferenceStepThreadFun()
+                self.inference_step()
                 # self.inferenceFirstThreadFun()
                 # char = input("Press 'q' to quit: ")
                 # char = input("Press 'q' to quit: ")
