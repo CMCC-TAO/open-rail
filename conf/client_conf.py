@@ -27,7 +27,7 @@ def get_client_config():
         ConfigDict: Configuration for Client.
     """
     config = ConfigDict()
-    config.robot = RobotType.A2D
+    config.robot = RobotType.MOCK
     config.rdm = get_rdm_config()
     config.traj = get_traj_config()
     config.controller = get_controller_config()
@@ -36,7 +36,7 @@ def get_client_config():
     config.zmq = get_zmq_config()
     config.record = get_record_data_config() # record data config
     config.show_data = False # True to show data, False to not show data
-    config.show_img = True # True to show data, False to not show data
+    config.show_img = False # True to show data, False to not show data
     config.traj_strategy = 'fitting' # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 64
     config.fitting_time_step = 5 # 轨迹拟合的时间步长，单位为毫秒
@@ -56,5 +56,4 @@ def get_client_config():
 
     config.preprocess = 'pad_and_resize'
     config.language = 'pick bottle into box'
-    config.show_img = False
     return config

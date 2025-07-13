@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
-from client.robots.a2d import RobotA2D
+# from client.robots.a2d import RobotA2D
 # from ..robots.mock_a2d import RobotA2DMock
 from client.utils import misc
 from client.utils import vis
@@ -29,7 +29,7 @@ from client.core.save_lerobot import LeRobotDatasetWriter
 
 # VLA客户端
 class VLAClient():
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: RobotA2D):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: None):
         self.config = config
         self.config.observer.period = 1.0 / self.config.observer.fps
         self.rdm = rdm
@@ -464,7 +464,7 @@ class VLAClient():
             tuple(str, np.ndarray, np.ndarray): Raw image key, preprocessed image and encoded image.
         """
         ext = '.png' if 'depth.' in key else '.jpg'
-        img_processed = self._preprocess_func(value) if self.preprocess_func else value
+        img_processed = self._preprocess_func(value) if self._preprocess_func else value
         img_encoded = cv2.imencode(ext, img_processed)[1]
         return key, img_processed, img_encoded
 

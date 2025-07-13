@@ -3,7 +3,6 @@ import matplotlib
 from ml_collections import ConfigDict
 from client.core import zmq_client
 from conf.client_conf import get_client_config, RobotType
-from client.robots.a2d.a2d import RobotA2D
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
@@ -14,6 +13,7 @@ import sys
 
 def get_robot(config: ConfigDict):
     if config.robot == RobotType.A2D:
+        from client.robots.a2d.a2d import RobotA2D
         return RobotA2D(config.observer, config.controller)
     elif config.robot == RobotType.MOCK:
         from client.robots.mock_a2d import RobotA2DMock

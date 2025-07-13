@@ -6,7 +6,7 @@ import numpy as np
 # from collections import deque
 from pprint import pprint
 from ml_collections import ConfigDict
-from lerobot.common.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
+from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
 # from utils import misc
 
 class RobotA2DMock():
@@ -16,7 +16,8 @@ class RobotA2DMock():
         self.controller_config = controller_config
         self.dataset = LeRobotDataset(repo_id=repo_id if repo_id is not None else 'task_39_only1',
                                 root=root if root is not None else '/home/robot/Music/task_39_only1',
-                                local_files_only=True)
+                                # local_files_only=True
+                                )
         self.dataloader = iter(torch.utils.data.DataLoader(
             self.dataset,
             num_workers=1,
@@ -100,13 +101,13 @@ class RobotA2DMock():
         # print(ref_timestamp)
         result['ref_timestamp'] = ref_timestamp
         # print(f'ref_timestamp: {ref_timestamp}, state: {data["observation.state"].cpu().numpy()[0][:5]}')
-        result['obs.cam.head'] = image
+        result['cam.head'] = image
 
         for camera in self.observer_config.camera_names:
             if camera != 'head':
                 image = (data[f'observation.images.{camera}'][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8)
                 # TODO: check time offset between the current camera and head camera using abs(timestamp - ref_timestamp)
-                result[f'obs.cam.{camera}'] = image
+                result[f'cam.{camera}'] = image
 
         # joint_states = []
         # for proprio in self.observer_config.proprio_names:
@@ -143,7 +144,7 @@ class RobotA2DMock():
 if __name__ == '__main__':
     import sys
     sys.path.append('/home/robot/Gits/jupyter/vla_infer')
-    from conf.config import get_client_config
+    from conf.client_conf import get_client_config
     config = get_client_config()
     repo_id = 'task_39_only1'
     root = '/home/robot/Music/task_39_only1'
