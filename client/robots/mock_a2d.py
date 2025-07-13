@@ -54,7 +54,8 @@ class RobotA2DMock():
 
     def controlRobot(self, action):
         if random.random() < 0.001:
-            print(f'Mock control robot...')
+            pass
+            # print(f'Mock control robot...')
         # self.robot.move_arm(action[0:14].tolist())
         # self.robot.move_gripper(action[14:16].tolist())
         # action = data['pred_action']
