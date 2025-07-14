@@ -6,27 +6,17 @@ import sys
 import logging
 from ml_collections import ConfigDict
 from client.core import zmq_client
-from conf.client_conf import get_client_config, RobotType
+from conf.client_conf import get_client_config
 from conf.logging_conf import LOGGING_CONFIG
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
+import importlib
+import yaml
 from rich.live import Live
 from client.utils.util import command_prompt, create_layout
 
-def get_robot(config: ConfigDict):
-    if config.robot == RobotType.A2D:
-        from client.robots.a2d.a2d import RobotA2D
-        return RobotA2D(config.observer, config.controller)
-    elif config.robot == RobotType.MOCK:
-        from client.robots.mock_a2d import RobotA2DMock
-        repo_id = 'task_39_only1'
-        root = '/home/robot/Music/task_39_only1'
-        return RobotA2DMock(config.observer, config.controller, repo_id, root)
-    else:
-        raise ValueError(f'Invalid Robot Type: {config.robot}')
-    
 if __name__ == "__main__":
     # 初始化日志配置    
     logging.config.dictConfig(LOGGING_CONFIG)
@@ -39,10 +29,12 @@ if __name__ == "__main__":
     # print(config)
     zmq_client = ZMQClient(config.zmq)
 
-    # import subprocess
-    # subprocess.run("source robots/a2d/a2d_sdk/env.zsh", shell=True) # 无效
+    with open('./conf/robots_conf.yaml', 'r') as file:
+        robots_config = yaml.safe_load(file)
+    target_robot_name = robots_config['robots']['target']
+    body_robot = importlib.import_module(f'client.robots.{target_robot_name}.body_robot')
+    robot = body_robot.RobotBody(robots_config)
 
-    robot = get_robot(config=config)
     rdm = RealtimeDataManager(config.rdm)
     traj_generator = TrajectoryGenerator(config=config.traj)
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)

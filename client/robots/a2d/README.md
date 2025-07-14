@@ -1,17 +1,31 @@
-### 安装A2D SDK
+# A2D Robot
 
-确认PC与A2D的网络连接后。执行以下命令，部署GDK环境。
+## Overview
+
+The A2D Robot is a humanoid robot implementation that provides real-time control and observation capabilities. This module interfaces with the A2D SDK to control the robot's arm movements, gripper operations, and multi-camera vision system.
+
+## Installation
+
+### 1. Install A2D SDK
+
+After confirming network connection between PC and A2D robot, execute the following command to deploy the GDK environment:
 
 ```bash
 curl -sSL http://10.42.0.101:8849/install.sh | bash
 ```
 
-注意，拉取安装完sdk后请执行：
+### 2. Setup SDK Environment
+
+After SDK installation, execute the following commands:
 
 ```bash
 cd a2d_sdk
 source env.sh
-# 切换SDK工作模式
-# python3 robot_service.py -s -c ./conf/hybrid_deploy_depth53.pbtxt # 旧版
+# Switch SDK working mode
+# python3 robot_service.py -s -c ./conf/hybrid_deploy_depth53.pbtxt # old
 python3 robot_service.py -s -c ./conf/copilot.pbtxt
 ```
+
+## Configuration
+
+The A2D robot is configured through the `robots_conf.yaml` file.

@@ -7,22 +7,22 @@ class RobotBase():
     def __init__(self):
         self.robot = None
 
-    def controlRobot(self, action):
+    def control_robot(self, action):
         """
         Control robot to execute action
         Args:
             action: action array, order same as obs['state']
         """
-        raise NotImplementedError('controlRobot is not implemented')
+        raise NotImplementedError('control_robot is not implemented')
 
-    def retrieveObservation(self):
+    def retrieve_observation(self):
         """
         Get current observation from robot
         Returns:
             obs: current robot observation, obs['state'] is current pose
         """
-        raise NotImplementedError('retrieveObservation is not implemented')
-
+        raise NotImplementedError('retrieve_observation is not implemented')
+    
     def reset_robot(self, target_pose='default'):
         """
         Reset robot to specified pose
@@ -36,7 +36,7 @@ class RobotBase():
         elif isinstance(target_pose, list):
             target_pose = np.array(target_pose)
         
-        current_obs = self.retrieveObservation()
+        current_obs = self.retrieve_observation()
         current_positions = current_obs['obs.state'][:14]
         target_positions = target_pose[:14]
         # Calculate joint position differences
@@ -45,7 +45,7 @@ class RobotBase():
         # If difference is small, move directly to target position
         if not np.any(mask):
             target_pose[:14] = target_positions
-            self.controlRobot(target_pose)
+            self.control_robot(target_pose)
             time.sleep(0.01)
             return
         # Otherwise plan trajectory
@@ -53,7 +53,7 @@ class RobotBase():
         for i, traj in enumerate(trajs):
             print(f"Executing trajectory point {i}: {traj}")
             target_pose[:14] = traj
-            self.controlRobot(target_pose)
+            self.control_robot(target_pose)
             time.sleep(0.01)
     
     def _ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):

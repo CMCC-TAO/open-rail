@@ -344,7 +344,7 @@ if __name__ == '__main__':
     traj_generator = TrajectoryGenerator(config=config)
     # try:
     #     while True:
-    #         # result = robot.retrieveObservation()
+    #         # result = robot.retrieve_observation()
     #         # print(result.keys())
     #         time.sleep(1.0)  # 控制循环频率
     # except KeyboardInterrupt:

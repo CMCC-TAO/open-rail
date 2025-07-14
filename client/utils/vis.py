@@ -20,7 +20,7 @@ class PlotConfig:
     client_address: str = "tcp://localhost:58585"  # ZMQ binding address
     
     # Basic chart configuration
-    max_points: int = 1000  # Maximum number of data points to display in chart
+    max_points: int = 2000  # Maximum number of data points to display in chart
     auto_scroll: bool = True  # Enable auto-scrolling display
     scroll_window: int = 300  # Scroll window size (number of data points to display)
     title: str = "RT Data"  # Chart title
@@ -69,6 +69,23 @@ class PlotConfig:
     # Data export configuration
     export_data: bool = False  # Enable data export functionality
     export_path: str = './data_export'  # Data export path
+    
+    def update_from_args(self, args):
+        """Update configuration from argparse arguments.
+        
+        Args:
+            args: argparse.Namespace object containing parsed arguments
+        """
+        if hasattr(args, 'num_subplots') and args.num_subplots is not None:
+            self.num_subplots = args.num_subplots
+        if hasattr(args, 'num_cols') and args.num_cols is not None:
+            self.num_cols = args.num_cols
+        if hasattr(args, 'auto_adjust_ylim') and args.auto_adjust_ylim is not None:
+            self.auto_adjust_ylim = args.auto_adjust_ylim
+        if hasattr(args, 'y_lim') and args.y_lim is not None:
+            self.y_lim = tuple(args.y_lim)
+        if hasattr(args, 'scroll_window') and args.scroll_window is not None:
+            self.scroll_window = args.scroll_window
 
 class RealtimePlot:
     def __init__(self, config: PlotConfig):
@@ -138,7 +155,7 @@ class RealtimePlot:
             if self.cfg.subplot_titles and i < len(self.cfg.subplot_titles):
                 title = self.cfg.subplot_titles[i]
             else:
-                title = f"plot {i+1}"
+                title = f"joint {i}"
             ax.set_title(title, fontsize=self.cfg.font_size + 2)
             
             # Set axis labels
@@ -771,13 +788,18 @@ class ZmqPlotClient:
     def __del__(self):
         self.stop()
 
-def start_server():
-    """Start ZMQ plot server with default configuration.
+def start_server(config=None):
+    """Start ZMQ plot server with configuration.
+    
+    Args:
+        config: PlotConfig instance, if None creates default configuration
     
     This function creates and starts a ZmqPlotServer instance
     that listens for incoming plot data via ZMQ.
     """
-    server = ZmqPlotServer(config=PlotConfig())
+    if config is None:
+        config = PlotConfig()
+    server = ZmqPlotServer(config=config)
     server.start()
     try:
         while True:
@@ -864,10 +886,32 @@ def test_client():
         print("Program ended")
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Real-time plotting visualization tool")
     parser.add_argument("--test", action="store_true", help="Test mode")
+    
+    # Plot configuration arguments
+    parser.add_argument("--num_subplots", type=int, help="Number of subplots (default: 2)")
+    parser.add_argument("--num_cols", type=int, help="Number of columns (default: 2)")
+    parser.add_argument("--auto_adjust_ylim", action="store_true", help="Enable auto adjust Y-axis limits")
+    parser.add_argument("--no_auto_adjust_ylim", action="store_true", help="Disable auto adjust Y-axis limits")
+    parser.add_argument("--y_lim", type=float, nargs=2, metavar=('MIN', 'MAX'), help="Y-axis limits (min max), e.g., --y_lim -1.0 1.0")
+    parser.add_argument("--scroll_window", type=int, help="Scroll window size (number of data points to display, default: 300)")
+    
     args = parser.parse_args()
+    
     if args.test:
         test_client()
     else:
-        start_server()
+        # Create configuration and update from arguments
+        config = PlotConfig()
+        
+        # Handle auto_adjust_ylim boolean flags
+        if args.auto_adjust_ylim:
+            args.auto_adjust_ylim = True
+        elif args.no_auto_adjust_ylim:
+            args.auto_adjust_ylim = False
+        else:
+            args.auto_adjust_ylim = None
+        
+        config.update_from_args(args)
+        start_server(config)

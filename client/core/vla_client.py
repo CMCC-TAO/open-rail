@@ -125,7 +125,7 @@ class VLAClient():
             if not self.is_running_action:
                 time.sleep(0.001)
                 continue
-            observations = self.robot.retrieveObservation()
+            observations = self.robot.retrieve_observation()
             if observations is not None:
                 # print(observations.keys())
                 # print(observations['ref_timestamp'])
@@ -270,7 +270,7 @@ class VLAClient():
             if self.config.record.switch and self.is_running_action and self.running:
                 self.record_executor.submit(self.async_write_action, action)
             # print(f'send action using {(time.perf_counter() - timestamp)*1000:.2f}ms')
-            self.robot.controlRobot(action)
+            self.robot.control_robot(action)
             if self.config.show_data:
                 self.vis_action_state(action)
 
@@ -293,7 +293,7 @@ class VLAClient():
         #         # print(action['ref_timestamp'])
         #         # print(action['pred_action'])
         #         # for action in action_chunk:
-        #         self.robot.controlRobot(action_chunk)
+        #         self.robot.control_robot(action_chunk)
         #         end_time = time.time()
         #         time_diff = end_time - start_time
         #         if time_diff < self.config.controller.control_period/1000:
@@ -496,8 +496,10 @@ class VLAClient():
                     img_show = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
                 else:
                     img_show = cv2.cvtColor(processed, cv2.COLOR_RGB2BGR)
-                cv2.imshow(key, img_show)
-                cv2.waitKey(1)
+                # 线程内无法显示
+                cv2.imwrite(f'{key}.png', img_show)
+                # cv2.imshow(key, img_show)
+                # cv2.waitKey(1)
         return encoded_imgs
 
     @run_time_decorator
