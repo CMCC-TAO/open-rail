@@ -1,6 +1,7 @@
 import cv2
 import time
 import threading
+import logging
 import numpy as np
 from matplotlib  import pyplot as plt
 from matplotlib.animation import FuncAnimation
@@ -10,16 +11,16 @@ from concurrent.futures import ThreadPoolExecutor
 
 # from core.obs_robot import RobotObs
 # from core.action_robot import RobotAction
-from client.robots.a2d import RobotA2D
+# from client.robots.a2d import RobotA2D
 # from ..robots.mock_a2d import RobotA2DMock
-from client.utils import misc
-from client.utils import vis
-from client.utils.util import run_time_decorator
+from client.utils import misc, vis
+from client.utils.util import run_time_decorator, command_prompt
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.save_lerobot import LeRobotDatasetWriter
+# from rich.live import Live
 
 # try:
 #     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'scripts'))
@@ -29,7 +30,9 @@ from client.core.save_lerobot import LeRobotDatasetWriter
 
 # VLA客户端
 class VLAClient():
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: RobotA2D):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: None):
+        self.logger = logging.getLogger(__name__)
+        # self.live =  Live(command_prompt(), auto_refresh=False, screen=False)
         self.config = config
         self.config.observer.period = 1.0 / self.config.observer.fps
         self.rdm = rdm
@@ -246,7 +249,8 @@ class VLAClient():
             #         self.action_queue.put(action[0])
             # self.inference_count += 1
         else:
-            print("没有观测数据，跳过推理")
+            # print("没有观测数据，跳过推理")
+            self.logger.warning("No observe data, skip inference.")
         
         # 推理结束后将正在推理标记设置为False，便于开启下一次推理
         # with self.infer_thread_lock:
@@ -413,7 +417,7 @@ class VLAClient():
     @run_time_decorator
     def _traj_fitting(self, num_samples):
         timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0, num_samples=num_samples) #轨迹拟合需要10ms左右的时间
-        print(f'timestamps for fitting: {timestamps}')
+        self.logger.debug(f'timestamps for fitting: {timestamps[::10]}')
         # start_time = np.amin(timestamps)
         # end_time = np.amax(timestamps)
         start_time = timestamps[0]
@@ -582,7 +586,7 @@ class VLAClient():
             # print(type(pred_action))
             # print(ref_timestamp)
         else:
-            print(f'数据类型出错: {action_type}')
+            self.logger.error(f'wrong action type: {action_type}')
             return None, None, None
 
     def run(self):
@@ -601,7 +605,8 @@ class VLAClient():
         # self.observe_thread.join()
         # self.inference_thread.join()
         # self.control_thread.join()
-        print('推理框架客户端已启动。')
+        # print('推理框架客户端已启动。')
+        self.logger.info('Inference client started.')
     
     
     def stop(self):
@@ -612,12 +617,13 @@ class VLAClient():
         # self.interpolate_thread.join(timeout=1.0)
         # self.control_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
-        print('推理框架客户端已关闭。')
+        # print('推理框架客户端已关闭。')
+        self.logger.info('Inference client stopped.')
 
     def close(self):
         with self.thread_lock:
             self.running = False
-        print('推理框架客户端开始关闭。')
+        # print('推理框架客户端开始关闭。')
         # plt.close()
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
@@ -634,8 +640,9 @@ class VLAClient():
             self.dataset_write.close()
         self.zmq_client.close()
         self.vis_zmq.stop()
+        self.logger.info('Inference client closed.')
         # self.traj_generator.close()
-        print('推理框架客户端已关闭。')
+        # print('推理框架客户端已关闭。')
 
     def _update_visualization(self, frame):
         # 更新图表数据
@@ -738,6 +745,12 @@ class VLAClient():
                 # char = input("Press 'q' to quit: ")
                 # char = input("Press 'q' to quit: ")
                 time.sleep(self.config.sleep_time)
+            # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
+            symbol = '=' * 10
+            # print(f'\r{symbol}VLA Inference Framework{symbol}Inference count: {self.rdm.infer_count}, average infer time: {self.rdm.avg_infer_time:.4f}s, average traj time: {self.rdm.avg_traj_time:.4f}s', end='', flush=True)
+            # command_prompt()
+            # with self.live:
+            #     self.live.update(command_prompt())
                 # char = input("Press 'q' to quit: ") 
             #     print(f'wait time: {self.config.controller.time_delay/1000}')
             #     time.sleep(self.config.controller.time_delay/1000)

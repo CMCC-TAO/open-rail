@@ -4,17 +4,19 @@ import math
 import threading
 import matplotlib.pyplot as plt
 import numpy as np
+import logging
 
 # warnings已无deprecated，deprecated库测试时无网未安装
 # from warnings import deprecated
 # from deprecated import deprecated
 from collections import deque
 from ml_collections import ConfigDict
-from sympy import O
+# from sympy import O
 
 from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index
 class RealtimeDataManager():
     def __init__(self, rdm_config: ConfigDict):
+        self.logger = logging.getLogger(__name__)
         self.rdm_config = rdm_config
         self.observe_buffer = deque(maxlen=rdm_config.max_len)
         # self.control_action_buffer = deque(maxlen=rdm_config.control_max_len)
@@ -109,7 +111,7 @@ class RealtimeDataManager():
         # self.last_infer_time = self.currt_infer_time
         currt_infer_time = self.start_traj_marker - self.start_infer_marker
         self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count
-        print(f'avg infer time: {self.avg_infer_time}')
+        self.logger.debug(f'avg infer time: {self.avg_infer_time}')
 
     def compute_avg_traj_time(self):
         """Compute the average trajectory fitting time. The average trajectory fitting time is used to set the offset of the action chunk.
@@ -117,7 +119,7 @@ class RealtimeDataManager():
         # self.last_traj_time = self.currt_traj_time
         currt_traj_time = self.start_ctrl_marker - self.start_traj_marker
         self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count
-        print(f'avg traj time: {self.avg_traj_time}')
+        self.logger.debug(f'avg traj time: {self.avg_traj_time}')
     
     # def getAvgInferTime(self):
     #     return self.avg_infer_time
@@ -344,7 +346,7 @@ class RealtimeDataManager():
         # currt_time = self.getCurrentTime()
         currt_time = 0.0
         target_time = currt_time + time_offset
-        print(f'currt_time: {currt_time}, target_time: {target_time}')
+        self.logger.debug(f'currt_time: {currt_time}, target_time: {target_time}')
         # 找到首帧有效数据的index
         valid_index = None
         for index, timestamp in enumerate(self.timestamp_chunks):
@@ -500,7 +502,7 @@ class RealtimeDataManager():
             # currt_timestamp = self.timestamps_fitted[self.action_chunk_index]
             target_chunk_index = 0
             time_offset = self.start_ctrl_marker - self.observe_marker
-            print(f'total inference time: {time_offset} s')
+            self.logger.debug(f'total inference time: {time_offset} s')
             # action = self.action_chunk_fitted[:, self.action_chunk_index]
             # self.action_chunk_index = self.getClosestIndex(timestamps_fitted, currt_timestamp)
             # print(f'currt_timestamp: {currt_timestamp}, timestamps_fitted: {timestamps_fitted[::5]}')
@@ -584,7 +586,7 @@ class RealtimeDataManager():
                 if qualified_count > qualified_joint_num:
                     target_index = candidate_index
                     qualified_joint_num = qualified_count
-        print(f'target_index: {target_index}, qualified dim: {qualified_joint_num}')
+        self.logger.debug(f'target_index: {target_index}, qualified dim: {qualified_joint_num}')
         return target_index
     # @deprecated("Never use this function")
     def smoothActionTrajOLD(self, currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length=15):
