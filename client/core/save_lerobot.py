@@ -24,7 +24,7 @@ class LeRobotDatasetWriter:
     operations and writes data into Parquet files along with corresponding video recordings.
     """
 
-    def __init__(self, record_config:ConfigDict) -> None:
+    def __init__(self, record_config: ConfigDict) -> None:
         """
         Initializes the LeRobotDatasetWriter instance with the given configuration.
 
@@ -125,7 +125,7 @@ class LeRobotDatasetWriter:
                 f"Observation timestamp is not increasing: previous={self.obs_time[-1]}, current={timestamp}"
         #check state shape 
         if state['obs.state'].shape[0] != self.state_shape:
-            print(f"obs shape {state['obs.state'].shape[0]} is not correct,config shape is {self.state_shape} , add 0 to the action")
+            print(f"obs shape {state['obs.state'].shape[0]} is not correct, config shape is {self.state_shape} , add 0 to the action")
             assert state['obs.state'].shape[0] <= self.state_shape, \
             f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
             action = np.concatenate([action, np.zeros(self.state_shape-state['obs.state'].shape[0])], axis=0)
@@ -159,7 +159,7 @@ class LeRobotDatasetWriter:
 
         #check action shape 
         if action.shape[0]!= self.action_shape:
-            print(f"Action shape {action.shape[0]} is not correct,config shape is {self.action_shape} , add 0 to the action")
+            print(f"Action shape {action.shape[0]} is not correct, config shape is {self.action_shape} , add 0 to the action")
             assert action.shape[0] <= self.action_shape,\
             f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}"
             action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)

@@ -1,6 +1,10 @@
 import time
+import logging
 from functools import wraps
+from rich.layout import Layout
+from rich.panel import Panel
 
+logger = logging.getLogger(__name__)
 def run_time_decorator(func):
     """Decorator to measure the execution time of a function.
 
@@ -15,9 +19,9 @@ def run_time_decorator(func):
         start_time = time.perf_counter()  # Record the start time
         result = func(*args, **kwargs)  # Call the function
         end_time = time.perf_counter()  # Record the end time
-        # elapsed_time = end_time - start_time  # Calculate the elapsed time
+        elapsed_time = end_time - start_time  # Calculate the elapsed time
         # 不要取消注释，打印太多数据，影响调试
-        # print(f"Function {func.__name__} called and took {elapsed_time*1000:.4f} milliseconds to execute.")
+        logger.info(f"Function {func.__name__} called and took {elapsed_time*1000:.4f} milliseconds to execute.")
         return result
     return wrapper
 
@@ -60,3 +64,44 @@ def get_closest_index(candidates, target):
     # 找到最小差值的索引
     closest_index = differences.index(min(differences))
     return closest_index
+
+def command_prompt(info: dict):
+    from rich.table import Table
+    # from rich.console import Console
+
+    # console = Console()
+    table = Table(title="VLA Inference Framework")
+
+    # table.add_column("ID", justify="right", style="cyan", no_wrap=True)
+    table.add_column("key", style="magenta")
+    table.add_column("value", style="green")
+
+    for key, value in info.items():
+        table.add_row(key, str(value))
+
+    # table.add_row("1", "张三", "在线")
+    # table.add_row("2", "李四", "离线")
+    # table.add_row("3", "王五", "[bold red]异常[/bold red]")
+
+    # console.print(table)
+    return table
+
+    # print(f'Press Enter to input command: ', end='\n', flush=True)
+    # print(f'\treset: make the robot go to the initial position', end='\n', flush=True)
+    # print(f'\t save: save the current data as a new episode', end='\n', flush=True)
+    # print(f'\t  run: continue to inference and control', end='\n', flush=True)
+    # print(f'\t exit: exit the program', end='\n', flush=True)
+
+def create_layout(info: dict):
+    layout = Layout(name='VLA Inference Framework')
+    # panels = []
+    print_info = ''
+    for key, value in info.items():
+        # panels.append(Layout(Panel(f'{key}: {value}', title=''))),
+        print_info += f'{key}: {value}\n'
+    layout.split_column(
+        Layout(Panel(print_info, title='VLA Client Info')),
+        Layout(Panel('Press Enter to input command: \n\treset: make the robot go to the initial position\n\t save: save the current data as a new episode\n\t  run: continue to inference and control\n\t exit: exit the program', title='Command Prompt'))
+        # *panels,
+    )
+    return layout

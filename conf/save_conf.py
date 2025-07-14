@@ -8,7 +8,7 @@ def get_record_data_config()-> ConfigDict:
     config = ConfigDict(allow_dotted_keys=True)
 
     # Base path and version info
-    config.enable = False ## True to record data, False to not record data
+    config.switch = False ## True to record data, False to not record data
     config.save_path = "./data/output/test" # Save root directory.
     config.info = ConfigDict(allow_dotted_keys=True)
     config.info.codebase_version = "v2.0" #  # Version of the dataset (e.g., lerobot)
