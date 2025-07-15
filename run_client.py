@@ -51,20 +51,24 @@ if __name__ == "__main__":
                 if select.select([sys.stdin,], [], [], 0.001)[0]:
                     user_input = sys.stdin.readline().strip()
                     if user_input == '':
-                        vla_client.is_running_action = False
-                        cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\n')
-                        vla_client.is_running_action = True
-                        if cmd == 'l':
+                        live.stop()
+                        try:
                             vla_client.is_running_action = False
-                            language = input('请输入新的语言指令，按Enter键确认：')
+                            cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\n')
                             vla_client.is_running_action = True
-                            vla_client.language = language.strip()
-                            print(f"语言指令已修改为: {vla_client.language}")
-                        elif cmd == 'r':
-                            vla_client.is_running_action = False
-                            robot.reset_robot(target_pose='default')
-                            input('机器人复位完成，程序暂停，按Enter键继续...')
-                            vla_client.is_running_action = True
+                            if cmd == 'l':
+                                vla_client.is_running_action = False
+                                language = input('请输入新的语言指令，按Enter键确认：')
+                                vla_client.is_running_action = True
+                                vla_client.language = language.strip()
+                                print(f"语言指令已修改为: {vla_client.language}")
+                            elif cmd == 'r':
+                                vla_client.is_running_action = False
+                                robot.reset_robot(target_pose='default')
+                                input('机器人复位完成，程序暂停，按Enter键继续...')
+                                vla_client.is_running_action = True
+                        finally:
+                            live.start()
                 live.update(create_layout(info))
         # while True:
         #     time.sleep(0.1)

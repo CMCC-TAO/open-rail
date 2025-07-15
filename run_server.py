@@ -34,7 +34,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['act', 'gr00t', 'gr00t_n1_5', 'rdt', 'smolvla'],
+    parser.add_argument('--model_type', type=str, choices=['act', 'gr00t_n1', 'gr00t_n1_5', 'rdt', 'smolvla'],
                        help='Model type')
     parser.add_argument('--model_path', type=str, help='Model path')
     
