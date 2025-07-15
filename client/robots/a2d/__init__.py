@@ -1,1 +1,1 @@
-from .a2d import RobotA2D
+from .body_robot import RobotBody

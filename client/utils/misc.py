@@ -4,31 +4,34 @@ from scipy.ndimage import gaussian_filter1d
 from scipy.interpolate import CubicSpline
 from scipy.signal import savgol_filter
 import time
+import yaml
+import re
+from pathlib import Path
 
 def crop_and_resize(img, target_height=480, target_width=640):
-        h, w = img.shape[:2]
-        target_ratio = target_width / target_height
-        current_ratio = w / h
+    h, w = img.shape[:2]
+    target_ratio = target_width / target_height
+    current_ratio = w / h
 
-        # 计算需要裁剪的边
-        if current_ratio > target_ratio:
-            # 裁剪宽度（长边是宽度）
-            new_width = int(h * target_ratio)  # 按目标比例计算新宽度
-            delta = w - new_width
-            left = delta // 2
-            right = delta - left
-            cropped = img[:, left:w - right]  # 高度不变，裁剪左右
-        else:
-            # 裁剪高度（长边是高度）
-            new_height = int(w / target_ratio)  # 按目标比例计算新高度
-            delta = h - new_height
-            top = delta // 2
-            bottom = delta - top
-            cropped = img[top:h - bottom, :]  # 宽度不变，裁剪上下
+    # 计算需要裁剪的边
+    if current_ratio > target_ratio:
+        # 裁剪宽度（长边是宽度）
+        new_width = int(h * target_ratio)  # 按目标比例计算新宽度
+        delta = w - new_width
+        left = delta // 2
+        right = delta - left
+        cropped = img[:, left:w - right]  # 高度不变，裁剪左右
+    else:
+        # 裁剪高度（长边是高度）
+        new_height = int(w / target_ratio)  # 按目标比例计算新高度
+        delta = h - new_height
+        top = delta // 2
+        bottom = delta - top
+        cropped = img[top:h - bottom, :]  # 宽度不变，裁剪上下
 
-        # 缩放至目标尺寸（使用INTER_AREA插值适用于缩小图像）
-        resized = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_AREA)
-        return resized
+    # 缩放至目标尺寸（使用INTER_AREA插值适用于缩小图像）
+    resized = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_AREA)
+    return resized
 
 def pad_and_resize(img, target_height=480, target_width=640, pad_color=(0, 0, 0)):
     h, w = img.shape[:2]
@@ -55,6 +58,33 @@ def pad_and_resize(img, target_height=480, target_width=640, pad_color=(0, 0, 0)
     resized = cv2.resize(padded, (target_width, target_height), interpolation=cv2.INTER_AREA)
     return resized
 
+def resize(img, target_height=480, target_width=640):
+    return cv2.resize(img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+
+def preprocess_yaml(file_path, base_dir=None):
+    """解析包含!include的YAML文件"""
+    if base_dir is None:
+        base_dir = Path(file_path).parent
+        
+    with open(file_path, 'r') as f:
+        content = f.read()
+    
+    # 查找所有!include指令
+    includes = re.findall(r"!include\s+['\"](.+?)['\"]", content)
+    
+    # 递归处理包含文件
+    parsed_includes = {}
+    for inc in set(includes):
+        inc_path = base_dir / inc
+        parsed_includes[inc] = preprocess_yaml(inc_path, base_dir)
+    
+    # 替换为YAML安全表示
+    for path, data in parsed_includes.items():
+        include_tag = f"!include '{path}'"
+        yaml_data = yaml.dump(data, default_flow_style=False)
+        content = content.replace(include_tag, yaml_data)
+    
+    return yaml.safe_load(content)
 
 class RobotSmoother:
     def __init__(self, robot_interface):
