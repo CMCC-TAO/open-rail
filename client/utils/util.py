@@ -4,6 +4,8 @@ from functools import wraps
 from rich.layout import Layout
 from rich.panel import Panel
 from rich.table import Table
+from rich.columns import Columns
+from rich.console import Group
 
 logger = logging.getLogger(__name__)
 def run_time_decorator(func):
@@ -94,29 +96,47 @@ def command_prompt(info: dict):
     # print(f'\t exit: exit the program', end='\n', flush=True)
 
 def create_layout(info: dict):
-    layout = Layout(name='VLA Inference Framework')
+    row_layout = Layout()
+    col_layout = Layout()
     # panels = []
     print_info = ''
     for key, value in info.items():
+        if key in ['infer_count', 'avg_infer_time', 'avg_traj_time']:
         # panels.append(Layout(Panel(f'{key}: {value}', title=''))),
-        print_info += f'{key}: {value}\n'
+            print_info += f'{key:>15}: {value}\n'
     debug_info = info.get('debug_info', None) 
 
-    table = Table(title="Metrics")
-    table.add_column("Param")
-    table.add_column("Value")
-    table.add_column("Param")
-    table.add_column("Value")
-    table.add_row('fps', '30', 'period', '5ms')
-    layout.split_column(
-        Layout(Panel(table, title='VLA Client', title_align='center', subtitle='Key Parameters', subtitle_align='right'), ratio=1),
-        Layout(Panel(print_info, subtitle='Inference Statistics', subtitle_align='right'), ratio=1),
-        Layout(Panel(f'STATUS\n\t Left--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\n\tRight--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\nCOMMAND\n\t Left--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\n\tRight--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]', subtitle='Robot Status', subtitle_align='right'), ratio=1),
-        Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right'), ratio=1),
-        Layout(Panel('Press Enter to input command: \n\treset: make the robot go to the initial position\n\t save: save the current data as a new episode\n\t  run: continue to inference and control\n\t exit: exit the program', subtitle='Command Prompt', subtitle_align='right'), ratio=1),
+    # table = Table(title="Metrics")
+    # table.add_column("Param")
+    # table.add_column("Value")
+    # table.add_column("Param")
+    # table.add_column("Value")
+    # table.add_row('fps', '30', 'period', '5ms')
+    key_param_panels = [
+        Panel(print_info, subtitle='', subtitle_align='center'),
+        Panel(print_info, subtitle='', subtitle_align='center'),
+        Panel(print_info, subtitle='', subtitle_align='center'),
+    ]
+
+    key_param_columns = Columns(key_param_panels, title='VLA Client', equal=True, expand=True)
+    col_layout.split_row(
+        # Layout(key_param_columns, ratio=1),
+        Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
+        Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
+        Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
+    )
+    cmd_text = info.get('cmd_key', '')
+    row_layout.split_column(
+    # group = Group(
+        col_layout,
+        Layout(Panel(print_info, subtitle='Inference Stats', subtitle_align='right', height=8)),
+        Layout(Panel(f'STATUS\n\t Left--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\n\tRight--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\nCOMMAND\n\t Left--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\n\tRight--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]', subtitle='Robot Status', subtitle_align='right', height=9)),
+        Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right', height=8)),
+        Layout(Panel(f'Please input command and press Enter to execute: {cmd_text}\n\treset: make the robot go to the initial position\n\t save: save the current data as a new episode\n\t  run: continue to inference and control\n\t exit: exit the program', subtitle='Command Prompt', subtitle_align='right', height=8)),
+        # fit=False
         # *panels,
     )
-    return layout
+    return Panel(row_layout, title='VLA Client', title_align='center', height=44)
 
 # title="Status",
 #     subtitle="Updated: now",
