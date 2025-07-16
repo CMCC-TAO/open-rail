@@ -15,6 +15,8 @@ from multiprocessing import Process, Manager,Queue
 from typing import Any, Dict, List, Optional, Union
 import copy
 import logging
+from io import StringIO
+from concurrent.futures import ThreadPoolExecutor
 # 初始化固定长度队列
 MAX_LEN = 900 
 class LeRobotDatasetWriter:
@@ -105,6 +107,8 @@ class LeRobotDatasetWriter:
         os.makedirs(os.path.dirname(self.parquet_savepath), exist_ok=True)
         self.parquet_writer = pq.ParquetWriter(self.parquet_savepath, self.schema)
 
+        self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
+        self.record_action_executor = ThreadPoolExecutor(max_workers=4)
 
         # Video writing setup
         self.save_video_path = os.path.join(self.save_path, 'videos', f'chunk-{self.episode_chunk:03d}')
@@ -117,7 +121,27 @@ class LeRobotDatasetWriter:
             self.writer_thread.start()
         except Exception as e:
             self.logger.error(f"Failed to start writer_thread: {e}")
+    def async_write_obs(self,observations: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float):
+        """
+        Asynchronously writes observation data into the dataset.
 
+        Args:
+            observations (dict):A dictionary containing observation with the following keys:
+                - 'cam.*': np.ndarray,
+                - 'obs.state': np.ndarray
+            language (str): The language instruction associated with the observation.
+            time_now (int | float): The current timestamp.
+        """
+        self.record_obs_executor.submit(self.add_obs, observations, language_instruction,timestamp)
+
+    def async_write_action(self,action: np.ndarray, timestamp: int | float) -> None:
+        """
+        Asynchronously writes action data into the dataset.
+
+        Args:
+            action (np.ndarray): A dictionary containing action data from the environment.
+        """
+        self.record_action_executor.submit(self.add_action, action, timestamp)
     def add_obs(self, state: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
@@ -344,7 +368,8 @@ class LeRobotDatasetWriter:
         self.shared_data.stop.value = True
         time.sleep(1)
         # print(f"[Main] Writer alive? {self.writer_thread.is_alive()}")
-
+        self.record_obs_executor.shutdown(wait=True)
+        self.record_action_executor.shutdown(wait=True)
         if self.writer_thread.is_alive():
             self.writer_thread.join(timeout=2)
             if self.writer_thread.is_alive():

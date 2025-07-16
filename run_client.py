@@ -49,49 +49,52 @@ if __name__ == "__main__":
     
     try:
         vla_client.run()
-        # with Live(create_layout({}), refresh_per_second=4) as live:
-        while True:
-            time.sleep(0.1)
-            info = {}
-            info['infer_count'] = vla_client.rdm.infer_count
-            info['avg_infer_time'] = f'{vla_client.rdm.avg_infer_time: .4f}s'
-            info['avg_traj_time'] = f'{vla_client.rdm.avg_traj_time: .4f}s'
-            if select.select([sys.stdin,], [], [], 0.001)[0]:
-                user_input = sys.stdin.readline().strip()
-                if user_input == '':
-                    vla_client.is_running_action = False
-                    if vla_client.config.record.switch :
-                        cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\ns：保存当前数据为一个eposide\nd：舍弃数据重新开始记录\n')
-                    else :
-                        cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\n')
-                    vla_client.is_running_action = True
-                    if cmd == 'l':
-                        vla_client.is_running_action = False
-                        language = input('请输入新的语言指令，按Enter键确认：')
-                        vla_client.is_running_action = True
-                        vla_client.language = language.strip()
-                        print(f"语言指令已修改为: {vla_client.language}")
-                    elif cmd == 'r':
-                        vla_client.is_running_action = False
-                        robot.reset_robot(target_pose='default')
-                        input('机器人复位完成，程序暂停，按Enter键继续...')
-                        vla_client.is_running_action = True
-                    elif cmd == 's' and vla_client.config.record.switch:
-                        vla_client.is_running_action = False
-                        vla_client.dataset_write.save_writed_data()
-                        
-                        input('机器人数据保存完成，程序暂停，按Enter键重新开始记录...')
-                        vla_client.is_running_action = True
-                        # print("data saved")
-                    elif cmd == 'd' and vla_client.config.record.switch:
-                        vla_client.is_running_action = False
-                        vla_client.dataset_write.abandon_record_data()
-                       
-                        print("data abandoned")
-                        input('记录数据已删除，程序暂停，按Enter键重新开始记录...')
-                        vla_client.is_running_action = True
-
-                # live.update(create_layout(info))
+        with Live(create_layout({}), refresh_per_second=4) as live:
+            while True:
+                time.sleep(0.1)
+                info = {}
+                info['infer_count'] = vla_client.rdm.infer_count
+                info['avg_infer_time'] = f'{vla_client.rdm.avg_infer_time: .4f}s'
+                info['avg_traj_time'] = f'{vla_client.rdm.avg_traj_time: .4f}s'
+                if select.select([sys.stdin,], [], [], 0.001)[0]:
+                    user_input = sys.stdin.readline().strip()
+                    if user_input == '':
+                        try:
+                            live.stop()
+                            vla_client.is_running_action = False
+                            if vla_client.config.record.switch :
+                                cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\ns：保存当前数据为一个eposide\nd：舍弃数据重新开始记录\n')
+                            else :
+                                cmd = input('程序暂停，请输入指令，按Enter键继续：\nr：复位机器人\nl：修改语言指令\n')
+                            vla_client.is_running_action = True
+                            if cmd == 'l':
+                                vla_client.is_running_action = False
+                                language = input('请输入新的语言指令，按Enter键确认：')
+                                vla_client.is_running_action = True
+                                vla_client.language = language.strip()
+                                print(f"语言指令已修改为: {vla_client.language}")
+                            elif cmd == 'r':
+                                vla_client.is_running_action = False
+                                robot.reset_robot(target_pose='default')
+                                input('机器人复位完成，程序暂停，按Enter键继续...')
+                                vla_client.is_running_action = True
+                            elif cmd == 's' and vla_client.config.record.switch:
+                                vla_client.is_running_action = False
+                                vla_client.dataset_write.save_writed_data()
+                                
+                                input('机器人数据保存完成，程序暂停，按Enter键重新开始记录...')
+                                vla_client.is_running_action = True
+                                # print("data saved")
+                            elif cmd == 'd' and vla_client.config.record.switch:
+                                vla_client.is_running_action = False
+                                vla_client.dataset_write.abandon_record_data()
+                            
+                                print("data abandoned")
+                                input('记录数据已删除，程序暂停，按Enter键重新开始记录...')
+                                vla_client.is_running_action = True
+                        finally:
+                            live.start()
+                    live.update(create_layout(info))
         # while True:
         #     time.sleep(0.1)
         #     # 检查是否有输入可用，超时：0.001s

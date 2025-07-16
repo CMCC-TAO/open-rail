@@ -66,9 +66,6 @@ class VLAClient():
         # self.record = config.record.switch
 
         if self.config.record.switch:
-            # Initialize thread pool executors for concurrent observation and recording tasks
-            self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
-            self.record_action_executor = ThreadPoolExecutor(max_workers=4)
             # Initialize the dataset writer with the provided recording configuration
             self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
 
@@ -100,26 +97,6 @@ class VLAClient():
         self.vis_chunk_idx = 0
         self.vis_global_step = 0
 
-    def async_write_obs(self,observations):
-        """
-        Asynchronously writes observation data into the dataset.
-
-        Args:
-            observations (dict):A dictionary containing observation with the following keys:
-                - 'cam.*': np.ndarray,
-                - 'obs.state': np.ndarray
-        """
-        self.dataset_write.add_obs(observations,self.language,time.perf_counter())
-
-    def async_write_action(self,action):
-        """
-        Asynchronously writes action data into the dataset.
-
-        Args:
-            action (np.ndarray): A dictionary containing action data from the environment.
-        """
-        self.dataset_write.add_action(action,time.perf_counter())
-    
     def _observe_thread_fun(self):
         # print('观测线程已启动...')
         while self.running:
@@ -132,7 +109,7 @@ class VLAClient():
                 # print(observations['ref_timestamp'])
                 # print(observations['obs.state'])
                 if self.config.record.switch :
-                    self.record_obs_executor.submit(self.async_write_obs, observations)
+                    self.dataset_write.async_write_obs(observations,self.language,time.perf_counter())
                 data = self._process_data(observations)
                 self.rdm.add_observe_data(data)
                 # with self.infer_thread_lock:
@@ -271,7 +248,7 @@ class VLAClient():
             # print(f'[{time.time()}]控制线程已启动...')
             # timestamp = time.perf_counter()
             if self.config.record.switch and self.is_running_action and self.running:
-                self.record_action_executor.submit(self.async_write_action, action)
+                self.dataset_write.async_write_action(action, time.perf_counter())
             # print(f'send action using {(time.perf_counter() - timestamp)*1000:.2f}ms')
             self.robot.controlRobot(action)
             if self.config.show_data:
@@ -528,6 +505,7 @@ class VLAClient():
                 'language': [self.language],
             },
         }
+        # print('aaaaaaaaaaaaaa', data['obs']['language'])
         # end_time = time.time()
         # 计算并打印运行时间
         # elapsed_time = (end_time - start_time) * 1000
@@ -637,8 +615,6 @@ class VLAClient():
         self.control_thread_timer.join(timeout=1.0)
         if self.config.record.switch:
             time.sleep(1)
-            self.record_obs_executor.shutdown(wait=True)
-            self.record_action_executor.shutdown(wait=True)
             self.dataset_write.writer_thread.join(timeout=1.0)
             self.dataset_write.close()
         self.zmq_client.close()
