@@ -48,6 +48,8 @@ if __name__ == "__main__":
                 info['infer_count'] = vla_client.rdm.infer_count
                 info['avg_infer_time'] = f'{vla_client.rdm.avg_infer_time: .4f}s'
                 info['avg_traj_time'] = f'{vla_client.rdm.avg_traj_time: .4f}s'
+                info['task_info'] = 'Pick the bottle to the black box.'
+                info['debug_info'] = vla_client.debug_info
                 if select.select([sys.stdin,], [], [], 0.001)[0]:
                     user_input = sys.stdin.readline().strip()
                     if user_input == '':

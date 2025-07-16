@@ -3,6 +3,7 @@ import logging
 from functools import wraps
 from rich.layout import Layout
 from rich.panel import Panel
+from rich.table import Table
 
 logger = logging.getLogger(__name__)
 def run_time_decorator(func):
@@ -99,9 +100,28 @@ def create_layout(info: dict):
     for key, value in info.items():
         # panels.append(Layout(Panel(f'{key}: {value}', title=''))),
         print_info += f'{key}: {value}\n'
+    debug_info = info.get('debug_info', None) 
+
+    table = Table(title="Metrics")
+    table.add_column("Param")
+    table.add_column("Value")
+    table.add_column("Param")
+    table.add_column("Value")
+    table.add_row('fps', '30', 'period', '5ms')
     layout.split_column(
-        Layout(Panel(print_info, title='VLA Client Info')),
-        Layout(Panel('Press Enter to input command: \n\treset: make the robot go to the initial position\n\t save: save the current data as a new episode\n\t  run: continue to inference and control\n\t exit: exit the program', title='Command Prompt'))
+        Layout(Panel(table, title='VLA Client', title_align='center', subtitle='Key Parameters', subtitle_align='right'), ratio=1),
+        Layout(Panel(print_info, subtitle='Inference Statistics', subtitle_align='right'), ratio=1),
+        Layout(Panel(f'STATUS\n\t Left--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\n\tRight--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\nCOMMAND\n\t Left--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]\n\tRight--Arm: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], Gripper: [0.0]', subtitle='Robot Status', subtitle_align='right'), ratio=1),
+        Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right'), ratio=1),
+        Layout(Panel('Press Enter to input command: \n\treset: make the robot go to the initial position\n\t save: save the current data as a new episode\n\t  run: continue to inference and control\n\t exit: exit the program', subtitle='Command Prompt', subtitle_align='right'), ratio=1),
         # *panels,
     )
     return layout
+
+# title="Status",
+#     subtitle="Updated: now",
+#     title_align="left",
+#     subtitle_align="right",
+#     border_style="bold cyan",
+#     box=box.ROUNDED,
+#     padding=(1, 2)
