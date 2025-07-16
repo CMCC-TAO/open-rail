@@ -1,5 +1,5 @@
 robots:
-  target: 'a2d' # 文件夹名也需要与此一致
+  target: 'mock' # 文件夹名也需要与此一致
   a2d:
     camera:
       ref: 'cam.head' # 参考该相机时间戳

@@ -3,6 +3,7 @@ import torch
 import cv2
 import random
 import lerobot
+import logging
 import numpy as np
 from pprint import pprint
 from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
@@ -16,6 +17,7 @@ class RobotBody(RobotBase):
             config (dict): Configuration dictionary containing mock robot settings
         """
         super().__init__()
+        self.logger = logging.getLogger(__name__)
         self.cfg, self.ori_cfg = config['robots']['mock'], config
         self.dataset = LeRobotDataset(repo_id=self.cfg['repo_id'], root=self.cfg['root'])
         self.dataloader = iter(torch.utils.data.DataLoader(
@@ -25,10 +27,10 @@ class RobotBody(RobotBase):
             shuffle=False,
         ))
         # And see how many frames you have:
-        print(f"Selected episodes: {self.dataset.episodes}")
-        print(f"Number of episodes selected: {self.dataset.num_episodes}")
-        print(f"Number of frames selected: {self.dataset.num_frames}")
-        print(f"Dataset fps: {self.dataset.meta.fps}")
+        self.logger.info(f"Selected episodes: {self.dataset.episodes}")
+        self.logger.info(f"Number of episodes selected: {self.dataset.num_episodes}")
+        self.logger.info(f"Number of frames selected: {self.dataset.num_frames}")
+        self.logger.info(f"Dataset fps: {self.dataset.meta.fps}")
         self.init_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
         self.currt_index = 0
         self.period = 1.0 / self.dataset.meta.fps # in seconds
@@ -62,7 +64,7 @@ class RobotBody(RobotBase):
         start_time = time.time()
         result = {}
         if self.currt_index >= self.dataset.num_frames:
-            print(f'End of dataset, currt_index: {self.currt_index}, num_frames: {self.dataset.num_frames}')
+            self.logger.info(f'End of dataset, currt_index: {self.currt_index}, num_frames: {self.dataset.num_frames}')
             self.dataloader = iter(torch.utils.data.DataLoader(
                 self.dataset,
                 num_workers=1,
@@ -89,9 +91,10 @@ class RobotBody(RobotBase):
         result['ref_timestamp'] = ref_timestamp
         result[cam_ref] = image
         for key, value in cam_names.items():
+            self.logger.debug(f'mock robot camera key: {key}, value: {value}')
             if key == cam_ref:
                 continue
-            image = (data[key][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8)
+            image = (data[value][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8)
             result[key] = image
     
         result[f'obs.state'] = data["observation.state"][0].cpu().numpy()
@@ -109,7 +112,7 @@ class RobotBody(RobotBase):
         
         This method performs cleanup for the mock robot simulation.
         """
-        print('Close mock robot...')
+        self.logger.info('Close mock robot...')
 
 if __name__ == '__main__':
     import yaml
