@@ -53,12 +53,14 @@ class RobotBody(RobotBase):
             self.currt_timestamp = ref_timestamp
 
         result['ref_timestamp'] = ref_timestamp
-        result[cam_ref] = image
+        result[f'cam.{cam_ref}'] = image
         for key, value in cam_names.items():
             if key == cam_ref:
                 continue
             image, timestamp = self.camera.get_image_nearest(value, ref_timestamp)
-            result[key] = image
+            if key == 'depth_head':
+                key = 'depth.head'
+            result[f'cam.{key}'] = image
 
         joint_states = []
         for proprio in self.cfg['proprio_names']:
@@ -92,9 +94,8 @@ class RobotBody(RobotBase):
         print('close robot')
 
 if __name__ == '__main__':
-    import yaml
-    with open('../../../conf/robots_conf.yaml', 'r') as file:
-        config = yaml.safe_load(file)
+    from conf.robots_conf import get_robots_config
+    config = get_robots_config()
     robot = RobotBody(config)
     try:
         while True:

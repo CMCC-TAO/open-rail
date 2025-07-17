@@ -1,8 +1,7 @@
 import time
 import argparse
-from conf.model_conf import ModelType
+from conf.models_conf import ModelType
 from conf.server_conf import get_server_config
-# from conf.config import ModelType
 from server.core.vla_server import VLAServer
 from server.core.zmq_server import ZMQServer
 
@@ -52,16 +51,16 @@ def override_config_with_args(config, args):
     """
     # Override model type
     if args.model_type:
-        config.model.type = ModelType(args.model_type)
+        config.models.type = ModelType(args.model_type)
     
     # Override model path
     if args.model_path:
-        if config.model.type == ModelType.GR00T_N1 or config.model.type == ModelType.GR00T_N1_5:
-            config.model.gr00t.model_path = args.model_path
-        elif config.model.type == ModelType.ACT:
-            config.model.act.model_path = args.model_path
-        elif config.model.type == ModelType.RDT:
-            config.model.rdt.model_path = args.model_path
+        if config.models.type == ModelType.GR00T_N1 or config.models.type == ModelType.GR00T_N1_5:
+            config.models.gr00t.model_path = args.model_path
+        elif config.models.type == ModelType.ACT:
+            config.models.act.model_path = args.model_path
+        elif config.models.type == ModelType.RDT:
+            config.models.rdt.model_path = args.model_path
     
     return config
 
@@ -72,7 +71,7 @@ if __name__ == "__main__":
     config = override_config_with_args(config, args)
     
     zmq_server = ZMQServer(config.zmq)
-    model = get_model(config.model)
+    model = get_model(config.models)
     vla_server = VLAServer(config, zmq_server, model)
     
     try:

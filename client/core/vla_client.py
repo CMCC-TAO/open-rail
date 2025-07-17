@@ -41,7 +41,7 @@ class VLAClient():
         self.robot = robot
         self.running = False
         self.is_running_action = True
-        self.language = self.config.language
+        self.language = self.config.language[0]
         
         # Define image preprocess function, i.e. pad and resize
         self._preprocess_func = (getattr(misc, self.config.preprocess) if self.config.preprocess != 'none' else None)
@@ -100,8 +100,11 @@ class VLAClient():
         self.vis_chunk_idx = 0
         self.vis_global_step = 0
         self.debug_info = 'The debug information or trace information will be displayed here.'
+        
+        self.info_current_action = [0.0] * 16  # 左arm 7 + 右arm 7 + 左夹爪1 + 右夹爪1
+        self.info_current_state = [0.0] * 16   # 与action相同的格式
 
-    def async_write_obs(self,observations):
+    def async_write_obs(self, observations):
         """
         Asynchronously writes observation data into the dataset.
 
@@ -110,16 +113,16 @@ class VLAClient():
                 - 'cam.*': np.ndarray,
                 - 'obs.state': np.ndarray
         """
-        self.dataset_write.add_obs(observations,self.language,time.perf_counter())
+        self.dataset_write.add_obs(observations, self.language, time.perf_counter())
 
-    def async_write_action(self,action):
+    def async_write_action(self, action):
         """
         Asynchronously writes action data into the dataset.
 
         Args:
             action (np.ndarray): A dictionary containing action data from the environment.
         """
-        self.dataset_write.add_action(action,time.perf_counter())
+        self.dataset_write.add_action(action, time.perf_counter())
     
     def _observe_thread_fun(self):
         # print('观测线程已启动...')
@@ -268,6 +271,7 @@ class VLAClient():
         action = self.rdm.get_action_fitted()
         # action, timestamp = self.rdm.popActionData()
         if action is not None:
+            self.info_current_action = action.tolist() if hasattr(action, 'tolist') else list(action)
             # pass
             # print(f'[{time.time()}]控制线程已启动...')
             # timestamp = time.perf_counter()
@@ -520,9 +524,11 @@ class VLAClient():
         encoded_imgs = self._thread_process_image(frame)
         # if frame['obs.state'][-1] is None:
         #     frame['obs.state'][-1] = 0.0
+        if 'obs.state' in frame and frame['obs.state'] is not None:
+            self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
+        
         data = {
             'type': 'vla_obs',
-            'img_keys': ['cam.head', 'cam.hand_left', 'cam.hand_right'],
             'ref_timestamp': frame['ref_timestamp'],
             'loc_timestamp': loc_timestamp,
             'obs': {
