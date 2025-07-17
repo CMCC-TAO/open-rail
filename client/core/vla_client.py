@@ -99,6 +99,7 @@ class VLAClient():
         self.vis_zmq = vis.ZmqPlotClient()
         self.vis_chunk_idx = 0
         self.vis_global_step = 0
+        self.debug_info = 'The debug information or trace information will be displayed here.'
 
     def async_write_obs(self,observations):
         """
