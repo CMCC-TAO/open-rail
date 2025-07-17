@@ -65,6 +65,8 @@ class LeRobotDatasetWriter:
         self.shared_data.counter = self.manager.Value('i', 0)
         self.shared_data.start_write_time = self.manager.Value('b', False)
         self.shared_data.stop = self.manager.Value('b', False)
+        self.shared_data.close = self.manager.Value('b', False)
+        self.shared_data.init_write = self.manager.Value('b', True)
         self.shared_data.episode_parquet_list = self.manager.list()
         self.shared_data.save_video_path_list = self.manager.list()
         # Task and language information storage
@@ -178,7 +180,7 @@ class LeRobotDatasetWriter:
                     self.logger.warning("Action list is empty. No action to pop.")
                     return
                 self.record_queue.put([state, self.action_list.pop()])
-                # print(f"Write successful: {timestamp}")
+                print(f"Write successful: {timestamp}")
 
     def add_action(self, action: np.ndarray, timestamp: int | float) -> None:
         """
@@ -226,66 +228,72 @@ class LeRobotDatasetWriter:
         """
         # Wait until the first data arrives
         self.logger.info("waiting for record_queue")
-        self.videos_writer = self.gener_video_write_dict()
-        # copy task dict
-        self.shared_data.last_task_language_dict = self.copy_shared_data_dict(self.shared_data.task_language_dict)
-        frame_index = 0
+
         try:
-            while not self.shared_data.stop.value:
-                # Skip if queue is empty
-                if not self.shared_data.start_write_time.value:
-                    time.sleep(0.01)
-                    continue
-                
-                # Get state and action data from queue
-                with self.lock:
-                    if self.record_queue.empty():
+            while not self.shared_data.close.value:
+                time.sleep(0.1)
+                while not self.shared_data.stop.value:
+                    if self.shared_data.init_write.value:
+                        self.logger.info("init_write")
+                        self.videos_writer = self.gener_video_write_dict()
+                        # copy task dict
+                        self.shared_data.last_task_language_dict = self.copy_shared_data_dict(self.shared_data.task_language_dict)
+                        frame_index = 0
+                        self.shared_data.init_write.value = False
+                    # Skip if queue is empty
+                    if not self.shared_data.start_write_time.value:
                         time.sleep(0.01)
                         continue
-                    one_step_state_and_action_list = self.record_queue.get(timeout=0.5)
-                # self.logger.info(f"Get one step state and action from queue")
-                step_state, step_action = one_step_state_and_action_list[0], one_step_state_and_action_list[1]
-                step_language = step_state['language_instruction']
+                    # print(111)
+                    # Get state and action data from queue
+                    with self.lock:
+                        if self.record_queue.empty():
+                            time.sleep(0.01)
+                            continue
+                        one_step_state_and_action_list = self.record_queue.get(timeout=0.5)
+                    # self.logger.info(f"Get one step state and action from queue")
+                    step_state, step_action = one_step_state_and_action_list[0], one_step_state_and_action_list[1]
+                    step_language = step_state['language_instruction']
+                    
+                    # Track new language instructions per episode
+                    if step_language not in self.shared_data.episode_task_list:
+                        self.shared_data.episode_task_list.append(step_language)
+                    
+                    # Assign task index based on unique language instruction
+                    if step_language not in self.shared_data.task_language_dict.keys():
+                        step_task_index = len(self.shared_data.task_language_dict.keys())
+                        self.shared_data.task_language_dict[step_language] = step_task_index
+                    else:
+                        step_task_index = self.shared_data.task_language_dict[step_language]
+                    
+                    # Write image frames to video files
+                    for camera_name in self.camera_name_list:
+                        start_time= time.perf_counter()
+                        if self.camera_shape_dict[camera_name] != step_state[camera_name].shape:
+                            self.logger.warning(f'{camera_name} shape mismatch')
+                            self.logger.warning(f"{camera_name} current shape :{step_state[camera_name].shape}")
+                            self.logger.warning(f"{camera_name} save MP4 shape :{self.camera_shape_dict[camera_name]}")
+                        # print(f"check using time : {(time.perf_counter()-start_time)*1000} ms")
+                        self.videos_writer[camera_name].write(step_state[camera_name])
+                        # print(f"{camera_name} shape :{step_state[camera_name].shape}")
+                    # Construct record dictionary for Parquet file
+                    record = {
+                        'observation.state': step_state['obs.state'].tolist(),
+                        'action': step_action.tolist(),
+                        'episode_index': self.shared_data.counter.value,
+                        'frame_index': frame_index,
+                        'index': self.total_frames+frame_index+1,
+                        'task_index': step_task_index,
+                        'timestamp': 1/30 * frame_index,  # Fixed frame rate assumption
+                    }
+                    with self.lock:
+                        self.shared_data.episode_parquet_list.append(record)
+                    
+                    # Update counters
+                    frame_index += 1
+                    # print('Write successful ——————————————————')
                 
-                # Track new language instructions per episode
-                if step_language not in self.shared_data.episode_task_list:
-                    self.shared_data.episode_task_list.append(step_language)
-                
-                # Assign task index based on unique language instruction
-                if step_language not in self.shared_data.task_language_dict.keys():
-                    step_task_index = len(self.shared_data.task_language_dict.keys())
-                    self.shared_data.task_language_dict[step_language] = step_task_index
-                else:
-                    step_task_index = self.shared_data.task_language_dict[step_language]
-                
-                # Write image frames to video files
-                for camera_name in self.camera_name_list:
-                    start_time= time.perf_counter()
-                    if self.camera_shape_dict[camera_name] != step_state[camera_name].shape:
-                        self.logger.warning(f'{camera_name} shape mismatch')
-                        self.logger.warning(f"{camera_name} current shape :{step_state[camera_name].shape}")
-                        self.logger.warning(f"{camera_name} save MP4 shape :{self.camera_shape_dict[camera_name]}")
-                    # print(f"check using time : {(time.perf_counter()-start_time)*1000} ms")
-                    self.videos_writer[camera_name].write(step_state[camera_name])
-                    # print(f"{camera_name} shape :{step_state[camera_name].shape}")
-                # Construct record dictionary for Parquet file
-                record = {
-                    'observation.state': step_state['obs.state'].tolist(),
-                    'action': step_action.tolist(),
-                    'episode_index': self.shared_data.counter.value,
-                    'frame_index': frame_index,
-                    'index': self.total_frames+frame_index+1,
-                    'task_index': step_task_index,
-                    'timestamp': 1/30 * frame_index,  # Fixed frame rate assumption
-                }
-                with self.lock:
-                    self.shared_data.episode_parquet_list.append(record)
-                
-                # Update counters
-                frame_index += 1
-                # print('Write successful ——————————————————')
-            
-            self.logger.info('write process stopped!!! ')
+                    # self.logger.info('write process stopped!!! ')
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
         
         except KeyboardInterrupt:
@@ -334,7 +342,8 @@ class LeRobotDatasetWriter:
         and resources are properly released.
         """
         self.shared_data.stop.value = True
-        time.sleep(1)
+        self.shared_data.close.value = True
+        # time.sleep(1)
         # print(f"[Main] Writer alive? {self.writer_thread.is_alive()}")
         self.record_obs_executor.shutdown(wait=True)
         self.record_action_executor.shutdown(wait=True)
@@ -344,10 +353,6 @@ class LeRobotDatasetWriter:
                 self.logger.warning("Writer thread still alive after timeout, terminating...")
                 self.writer_thread.terminate()
                 self.writer_thread.join()
-
-        # self.shared_data.counter.value += 1
-        self.episode_length = len(self.shared_data.episode_parquet_list)
-        self.total_frames += len(self.shared_data.episode_parquet_list)
 
         self.end_write()
 
@@ -376,10 +381,11 @@ class LeRobotDatasetWriter:
         """
         # stop record
         self.shared_data.stop.value = True
-        time.sleep(1)
-        self.writer_thread.join(timeout=1)
-        ## The relevant variables increase
 
+        time.sleep(1)
+        # self.writer_thread.join(timeout=1)
+        ## The relevant variables increase
+        # self.logger.info(f"LAST writer_thread IS alive: {self.writer_thread.is_alive()}")
         self.episode_length = len(self.shared_data.episode_parquet_list) 
         self.total_frames += len(self.shared_data.episode_parquet_list)
         # Write to parquet file
@@ -387,6 +393,8 @@ class LeRobotDatasetWriter:
         # Write meta files
         self.write_meta_files()
         # clean record data
+        self.clean_record_data()
+        self.logger.info("Abandon the current recording data and start a new one.")
         self.clean_record_data()
         self.shared_data.counter.value += 1
         ### new write data
@@ -397,21 +405,24 @@ class LeRobotDatasetWriter:
         )
         self.parquet_writer = pq.ParquetWriter(self.parquet_savepath, self.schema)
         # Writer process initialization
-        self.shared_data.stop.value = False
+        
         self.shared_data.save_video_path_list = self.manager.list()
-        self.writer_thread = Process(target=self.write, daemon=True)
-        try:
-            self.writer_thread.start()
-        except Exception as e:
-            self.logger.error(f"Failed to start writer_thread: {e}")
-        time.sleep(0.5)
+        self.shared_data.init_write.value = True
+        self.shared_data.stop.value = False
+        # print("111233")
+        # self.writer_thread = Process(target=self.write, daemon=True)
+        # try:
+        #     self.writer_thread.start()
+        # except Exception as e:
+        #     self.logger.error(f"Failed to start writer_thread: {e}")
+        # time.sleep(0.5)
     def abandon_record_data(self):
         """
         Abandon the current recording data and start a new one.
         """
         self.shared_data.stop.value = True
-        
-        self.writer_thread.join(timeout=1)
+        time.sleep(1)
+        # self.writer_thread.join(timeout=1)
         # print("Abandon the current recording data and start a new one.")
         # clean record data
         self.logger.info("Abandon the current recording data and start a new one.")
@@ -427,30 +438,36 @@ class LeRobotDatasetWriter:
         )
         self.parquet_writer = pq.ParquetWriter(self.parquet_savepath, self.schema)
         # Writer process initialization
+        self.shared_data.init_write.value = True
         self.shared_data.stop.value = False
-        self.shared_data.save_video_path_list = self.manager.list()
-        # print("self.shared_data.counter.value",self.shared_data.counter.value)
-        self.writer_thread = Process(target=self.write, daemon=True)
-        try:
-            self.writer_thread.start()
-        except Exception as e:
-            self.logger.error(f"Failed to start writer_thread: {e}")
-        time.sleep(0.5)
+        
 
     def clean_record_data(self):
         """ 
         Clean up the record data.
         """
-        self.shared_data.episode_parquet_list = self.manager.list()
+        del self.shared_data.save_video_path_list[:]
+        del self.shared_data.episode_parquet_list[:]
+                # clean episode task list
+        del self.shared_data.episode_task_list[:]
         self.obs_time.clear()
         self.action_list.clear()
         self.action_time.clear()
-        # clean episode task list
-        self.shared_data.episode_task_list = self.manager.list()
+
         ## clean queue
-        self.record_queue = Queue()
+        self.clear_record_queue()
         self.logger.info("cleaning data finished")
 
+    def clear_record_queue(self):
+        """
+        clear record queue
+        """
+        while not self.record_queue.empty():
+            try:
+                self.record_queue.get_nowait()
+            except Queue.Empty:
+                break
+        self.logger.info("record_queue clear")
     def checkdir_and_update_config(self):
         """
         Checks whether the directory `self.save_meta_path` exists.

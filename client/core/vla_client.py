@@ -624,7 +624,7 @@ class VLAClient():
         self.control_thread_timer.join(timeout=1.0)
         if self.config.record.switch:
             time.sleep(1)
-            self.dataset_write.writer_thread.join(timeout=1.0)
+            # self.dataset_write.writer_thread.join(timeout=1.0)
             self.dataset_write.close()
         self.zmq_client.close()
         self.vis_zmq.stop()
