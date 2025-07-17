@@ -41,7 +41,11 @@ def get_client_config():
     config.history_frame = False # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
     config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
-
     config.preprocess = 'pad_and_resize'
-    config.language = ['pick bottle into box']
+    # 语言指令及cmd备选，默认0
+    config.language = [
+        'pick bottle into box',
+        'pour milk into the box',
+        'put the sandwich in the microwave',
+    ]
     return config

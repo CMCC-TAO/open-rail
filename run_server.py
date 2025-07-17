@@ -51,7 +51,7 @@ def override_config_with_args(config, args):
     """
     # Override model type
     if args.model_type:
-        config.model.type = ModelType(args.model_type)
+        config.models.type = ModelType(args.model_type)
     
     # Override model path
     if args.model_path:
