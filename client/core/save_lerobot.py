@@ -180,7 +180,7 @@ class LeRobotDatasetWriter:
                     self.logger.warning("Action list is empty. No action to pop.")
                     return
                 self.record_queue.put([state, self.action_list.pop()])
-                print(f"Write successful: {timestamp}")
+                # print(f"Write successful: {timestamp}")
 
     def add_action(self, action: np.ndarray, timestamp: int | float) -> None:
         """
