@@ -29,12 +29,7 @@ def get_rdt_config():
     config.lang_embd_path = '/media/gaohan/Elements1/weights/lang_embds/place_bottle.pt'
     return config
 
-def get_model_config():
-    """Generate config for Client
-
-    Returns:
-        ConfigDict: Configuration for Client.
-    """
+def get_models_config():
     config = ConfigDict()
     config.type = ModelType.GR00T_N1
     config.gr00t = get_gr00t_config()

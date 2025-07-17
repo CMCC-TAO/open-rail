@@ -9,7 +9,5 @@ def get_observer_config():
         ConfigDict: Configuration for Observer.
     """
     config = ConfigDict()
-    config.camera_names = ['head', 'hand_left', 'hand_right'] # Cameras used to get observations
-    config.proprio_names = ['arm', 'gripper', 'head', 'waist']
     config.fps = 30 # Observation period to get robot observations, in milliseconds [ms]
     return config

@@ -7,15 +7,24 @@ import logging
 from ml_collections import ConfigDict
 from client.core import zmq_client
 from conf.client_conf import get_client_config
+from conf.robots_conf import RobotType
 from conf.logging_conf import LOGGING_CONFIG
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
-import importlib
-import yaml
 from rich.live import Live
-from client.utils.util import command_prompt, create_layout
+from client.utils.util import create_layout
+
+def get_robot(config: ConfigDict):
+    if config.robots.type == RobotType.A2D:
+        from client.robots.a2d.body_robot import RobotBody
+        return RobotBody(config)
+    elif config.robots.type == RobotType.MOCK:
+        from client.robots.mock.body_robot import RobotBody
+        return RobotBody(config)
+    else:
+        raise ValueError(f'Invalid Robot Type: {config.robots.type}')
 
 if __name__ == "__main__":
     # 初始化日志配置    
@@ -28,13 +37,8 @@ if __name__ == "__main__":
         matplotlib.use('Agg')
     # print(config)
     zmq_client = ZMQClient(config.zmq)
-
-    with open('./conf/robots_conf.yaml', 'r') as file:
-        robots_config = yaml.safe_load(file)
-    target_robot_name = robots_config['robots']['target']
-    body_robot = importlib.import_module(f'client.robots.{target_robot_name}.body_robot')
-    robot = body_robot.RobotBody(robots_config)
-
+    
+    robot = get_robot(config)
     rdm = RealtimeDataManager(config.rdm)
     traj_generator = TrajectoryGenerator(config=config.traj)
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)

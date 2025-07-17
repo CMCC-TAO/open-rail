@@ -41,7 +41,7 @@ class VLAClient():
         self.robot = robot
         self.running = False
         self.is_running_action = True
-        self.language = self.config.language
+        self.language = self.config.language[0]
         
         # Define image preprocess function, i.e. pad and resize
         self._preprocess_func = (getattr(misc, self.config.preprocess) if self.config.preprocess != 'none' else None)
@@ -109,7 +109,7 @@ class VLAClient():
                 - 'cam.*': np.ndarray,
                 - 'obs.state': np.ndarray
         """
-        self.dataset_write.add_obs(observations,self.language,time.perf_counter())
+        self.dataset_write.add_obs(observations, self.language, time.perf_counter())
 
     def async_write_action(self,action):
         """
@@ -118,7 +118,7 @@ class VLAClient():
         Args:
             action (np.ndarray): A dictionary containing action data from the environment.
         """
-        self.dataset_write.add_action(action,time.perf_counter())
+        self.dataset_write.add_action(action, time.perf_counter())
     
     def _observe_thread_fun(self):
         # print('观测线程已启动...')
