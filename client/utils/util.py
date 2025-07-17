@@ -107,6 +107,9 @@ def create_layout(info: dict):
     config_info = ''
     for key, value in info.get('config_info', {}).items():
         config_info += f'{key:>25}: {value}\n'
+    ctrl_info = ''
+    for key, value in info.get('ctrl_info', {}).items():
+        ctrl_info += f'{key:>25}: {value}\n'
     debug_info = info.get('debug_info', None) 
 
     # table = Table(title="Metrics")
@@ -124,21 +127,21 @@ def create_layout(info: dict):
     key_param_columns = Columns(key_param_panels, title='VLA Client', equal=True, expand=True)
     col_layout.split_row(
         # Layout(key_param_columns, ratio=1),
-        Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
+        Layout(Panel(ctrl_info, subtitle='', subtitle_align='center', height=8)),
         Layout(Panel(config_info, subtitle='', subtitle_align='center', height=8)),
-        Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
+        # Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
     )
     cmd_text = info.get('cmd_key', '')
     
     # 获取当前状态和提示信息
-    cmd_current_state = info.get('cmd_current_state', 'normal')
+    cmd_current_state = info.get('data_info', {}).get('cmd_current_state', 'normal')
     prompt_text = ''
     
-    default_prompt_text = f'Please input command and press Enter to execute: {cmd_text}\n\treset: reset robot to initial position\n\tlanguage: modify language instruction\n\tsave: save current data\n\tdelete: delete current data\n\tquit: exit program'
+    default_prompt_text = f'Please input command and press Enter to execute: {cmd_text}\n\treset: reset robot to initial position\n\tlang: modify language instruction\n\tsave: save current data\n\tdelete: delete current data\n\tquit: exit program'
     if cmd_current_state == 'waiting_command':
         prompt_text = default_prompt_text
     elif cmd_current_state == 'waiting_language':
-        preset_languages = info.get('preset_languages', [])
+        preset_languages = info.get('data_info', {}).get('preset_languages', [])
         preset_list = ''
         if preset_languages:
             preset_list = '\n\tPreset Instructions:'
@@ -146,11 +149,11 @@ def create_layout(info: dict):
                 preset_list += f'\n\t  {i}. {lang}'
         prompt_text = f'Please input new language instruction and press Enter: {cmd_text}{preset_list}\n\tEnter number (1-{len(preset_languages)}) for preset or type custom instruction'
     elif cmd_current_state == 'waiting_continue':
-        prompt_text = f'Robot reset completed, press any key + Enter to continue: {cmd_text}'
+        prompt_text = f'Robot reset completed, press "con" + Enter to continue: {cmd_text}'
     elif cmd_current_state == 'waiting_save':
-        prompt_text = f'Data saved successfully. Press any key + Enter to continue: {cmd_text}'
+        prompt_text = f'Data saved successfully. Press "con" + Enter to continue: {cmd_text}'
     elif cmd_current_state == 'waiting_delete':
-        prompt_text = f'Data deleted successfully. Press any + Enter to continue: {cmd_text}'
+        prompt_text = f'Data deleted successfully. Press "con" + Enter to continue: {cmd_text}'
     elif cmd_current_state == 'paused':
         prompt_text = default_prompt_text
     else:

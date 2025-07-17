@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument('--fps', type=int, help='observer fps')
     parser.add_argument('--sleep_time', type=float, help='infer sleep time')
     parser.add_argument('--show_data', action='store_true', help='显示数据')
+    parser.add_argument('--record', action='store_true', help='启用记录模式')
     return parser.parse_args()
 
 def override_config_with_args(config, args):
@@ -44,30 +45,37 @@ def override_config_with_args(config, args):
         config.sleep_time = args.sleep_time
     if args.show_data:
         config.show_data = True
+    if args.record:
+        config.record.switch = True
     return config
 
 def key_thread():
-    global cmd_text
-    while True:
-        key = readchar.readkey()
-        if key == readchar.key.ENTER:
-            # 保存当前命令到last_cmd
-            if cmd_text != '' and cmd_text != '|':
-                key_thread.last_cmd = cmd_text
-            cmd_text = ''
-        elif key == readchar.key.BACKSPACE:
-            if cmd_text == '':
-                cmd_text = '|'
-            else:
-                cmd_text = cmd_text[:-1]
+    global cmd_text, exit_flag
+    while not exit_flag:
+        try:
+            key = readchar.readkey()
+            if key == readchar.key.ENTER:
+                # 保存当前命令到last_cmd
+                if cmd_text != '' and cmd_text != '|':
+                    key_thread.last_cmd = cmd_text
+                cmd_text = ''
+            elif key == readchar.key.BACKSPACE:
                 if cmd_text == '':
                     cmd_text = '|'
-        else:
-            if cmd_text == '|':
-                cmd_text = key
+                else:
+                    cmd_text = cmd_text[:-1]
+                    if cmd_text == '':
+                        cmd_text = '|'
             else:
-                cmd_text = cmd_text + key
-        # time.sleep(0.05)
+                if cmd_text == '|':
+                    cmd_text = key
+                else:
+                    cmd_text = cmd_text + key
+        except KeyboardInterrupt:
+            break
+        except Exception as e:
+            print(f"键盘输入线程异常: {e}")
+            time.sleep(0.1)
 
 if __name__ == "__main__":
     args = parse_args()
@@ -91,13 +99,15 @@ if __name__ == "__main__":
     traj_generator = TrajectoryGenerator(config=config.traj)
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
     
-    cmd_text = ''
+    cmd_text, exit_flag = '', False
     cmd_current_state = 'normal'  # 状态管理：normal, waiting_command, waiting_language, waiting_continue, waiting_save, waiting_delete, paused
     
     live = None
+    key_thread_obj = None
     try:
         vla_client.run()
-
+        key_thread_obj = threading.Thread(target=key_thread, daemon=False)
+        key_thread_obj.start()
         
         # 根据debug模式决定是否启用Live界面
         if not args.debug:
@@ -106,8 +116,7 @@ if __name__ == "__main__":
             key_thread_obj = threading.Thread(target=key_thread, daemon=True)
             key_thread_obj.start()
         else:
-            print("调试模式已启用，Live界面已关闭")
-            print("可用命令: reset, language, save, delete, quit")
+            print("调试模式已启用，可用命令: reset, language, save, delete, quit")
             
         while True:
             time.sleep(0.1)
@@ -115,17 +124,24 @@ if __name__ == "__main__":
             info['infer_count'] = vla_client.rdm.infer_count
             info['avg_infer_time'] = f'{vla_client.rdm.avg_infer_time: .4f}s'
             info['avg_traj_time'] = f'{vla_client.rdm.avg_traj_time: .4f}s'
-            info['task_info'] = vla_client.language
-            info['config_info'] = {
-                'is_running_action': vla_client.is_running_action,
-                'language': vla_client.language,
-                'record': vla_client.config.record.switch,
-            }
             info['debug_info'] = vla_client.debug_info
-            info['cmd_current_state'] = cmd_current_state
             info['robot_current_action'] = vla_client.info_current_action
             info['robot_current_state'] = vla_client.info_current_state
-            info['preset_languages'] = vla_client.config.language
+            info['config_info'] = {
+                'record': config.record.switch,
+                'fps': config.observer.fps,
+                'sleep_time': config.sleep_time,
+            }
+            info['ctrl_info'] = {
+                'language': vla_client.language,
+                'is_running_action': vla_client.is_running_action,
+                'cmd_current_state': cmd_current_state,
+            }
+            # 只用来传递参数，不显示
+            info['data_info'] = {
+                'cmd_current_state': cmd_current_state,
+                'preset_languages': vla_client.config.language,
+            }
             
             if not args.debug:
                 if cmd_text == '':
@@ -232,20 +248,28 @@ if __name__ == "__main__":
                         vla_client.is_running_action = True
                         cmd_current_state = 'normal'
 
-                    if vla_client.rdm.infer_count % 10 == 0:  # 每10次推理输出一次状态
-                        print(f"\rinfer_count: {info['infer_count']}, avg_infer_time: {info['avg_infer_time']}, "
-                            f"avg_traj_time: {info['avg_traj_time']}, task_info: {info['task_info']}, "
-                            f"cmd_current_state: {info['cmd_current_state']}, cmd_key: {info['cmd_key']}", end="")
-                except KeyboardInterrupt:
-                    logger.error('用户中断调试模式')
-                    break
+            if live is not None:
+                live.update(create_layout(info))
+            elif args.debug:
+                print(f"infer_count: {info['infer_count']}, avg_infer_time: {info['avg_infer_time']}, "
+                        f"avg_traj_time: {info['avg_traj_time']}, task_info: {info['ctrl_info']['language']}, "
+                        f"cmd_current_state: {info['ctrl_info']['cmd_current_state']}, cmd_key: {info['cmd_key']}")
     except KeyboardInterrupt:
         logger.error('程序被中断')
     except Exception as e:
         logger.error(f'发生异常: {str(e)}\n堆栈信息:\n{traceback.format_exc()}')
     finally:
+        # 设置退出标志，让键盘线程退出
+        exit_flag = True
         # 防止ctrl+c停不掉live
         if live is not None:
             live.stop()
+        # 等待键盘线程结束
+        if key_thread_obj is not None and key_thread_obj.is_alive():
+            try:
+                key_thread_obj.join(timeout=1.0)
+            except Exception as e:
+                print(f"等待键盘线程退出时出错: {e}")
+        
         vla_client.close()
         robot.close()
