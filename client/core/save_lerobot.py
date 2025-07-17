@@ -302,48 +302,16 @@ class LeRobotDatasetWriter:
 
     def end_write(self):
         """
-        Finalizes the data writing process based on user confirmation.
-
-        Prompts the user to choose whether to save ('y') or discard ('n') the collected data.
-        If saving:
-            - Saves the video files
-            - Converts buffered Parquet data to a DataFrame and writes it to disk
-            - Updates metadata files (info.json, episodes.jsonl, tasks.jsonl)
-        If discarding:
-            - Deletes any partially written video files
-            - Deletes the Parquet file if it exists
-
-        The method blocks until valid user input is received. It ensures proper cleanup of resources
-        and maintains data consistency based on user decision.
-        
-        Raises:
-            ValueError: If invalid input is provided repeatedly
+        - Deletes any partially written video files
+        - Deletes the Parquet file if it exists
         """
-        while True:
-            user_input = input("Please enter 'y' to save data, or 'n' to discard: ").strip().lower()
-            
-            if user_input == 'y':
-                self.logger.info("Video has been saved to: {}".format(self.save_video_path))
-                
-                # Write to parquet file
-                self.write_parquet_file()
-                # Write meta files
-                self.write_meta_files()
-                break
-                
-            elif user_input == 'n':
-                for path in self.shared_data.save_video_path_list:
-                    print(f"path {path}")
-                    if os.path.exists(path):
-                        print(f"删除文件 {path}")
-                        os.remove(path)
-                if os.path.exists(self.parquet_savepath):
-                    os.remove(self.parquet_savepath)
-                self.logger.info("Saved video files have been deleted.")
-                break
-                
-            else:
-                self.logger.warning("Invalid input. Please try again.")
+        for path in self.shared_data.save_video_path_list:
+            print(f"path {path}")
+            if os.path.exists(path):
+                print(f"删除文件 {path}")
+                os.remove(path)
+        if os.path.exists(self.parquet_savepath):
+            os.remove(self.parquet_savepath)
     
     def copy_shared_data_dict(self,input_dict):
         """
