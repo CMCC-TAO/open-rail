@@ -3,6 +3,9 @@ import logging
 from functools import wraps
 from rich.layout import Layout
 from rich.panel import Panel
+from rich.table import Table
+from rich.columns import Columns
+from rich.console import Group
 
 logger = logging.getLogger(__name__)
 def run_time_decorator(func):
@@ -93,15 +96,101 @@ def command_prompt(info: dict):
     # print(f'\t exit: exit the program', end='\n', flush=True)
 
 def create_layout(info: dict):
-    layout = Layout(name='VLA Inference Framework')
+    row_layout = Layout()
+    col_layout = Layout()
     # panels = []
     print_info = ''
     for key, value in info.items():
+        if key in ['infer_count', 'avg_infer_time', 'avg_traj_time']:
         # panels.append(Layout(Panel(f'{key}: {value}', title=''))),
-        print_info += f'{key}: {value}\n'
-    layout.split_column(
-        Layout(Panel(print_info, title='VLA Client Info')),
-        Layout(Panel('Press Enter to input command: \n\treset: make the robot go to the initial position\n\t save: save the current data as a new episode\n\t  run: continue to inference and control\n\t exit: exit the program', title='Command Prompt'))
+            print_info += f'{key:>15}: {value}\n'
+    config_info = ''
+    for key, value in info.get('config_info', {}).items():
+        config_info += f'{key:>25}: {value}\n'
+    debug_info = info.get('debug_info', None) 
+
+    # table = Table(title="Metrics")
+    # table.add_column("Param")
+    # table.add_column("Value")
+    # table.add_column("Param")
+    # table.add_column("Value")
+    # table.add_row('fps', '30', 'period', '5ms')
+    key_param_panels = [
+        Panel(print_info, subtitle='', subtitle_align='center'),
+        Panel(print_info, subtitle='', subtitle_align='center'),
+        Panel(print_info, subtitle='', subtitle_align='center'),
+    ]
+
+    key_param_columns = Columns(key_param_panels, title='VLA Client', equal=True, expand=True)
+    col_layout.split_row(
+        # Layout(key_param_columns, ratio=1),
+        Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
+        Layout(Panel(config_info, subtitle='', subtitle_align='center', height=8)),
+        Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
+    )
+    cmd_text = info.get('cmd_key', '')
+    
+    # 获取当前状态和提示信息
+    cmd_current_state = info.get('cmd_current_state', 'normal')
+    prompt_text = ''
+    
+    default_prompt_text = f'Please input command and press Enter to execute: {cmd_text}\n\treset: reset robot to initial position\n\tlanguage: modify language instruction\n\tsave: save current data\n\tdelete: delete current data\n\tquit: exit program'
+    if cmd_current_state == 'waiting_command':
+        prompt_text = default_prompt_text
+    elif cmd_current_state == 'waiting_language':
+        preset_languages = info.get('preset_languages', [])
+        preset_list = ''
+        if preset_languages:
+            preset_list = '\n\tPreset Instructions:'
+            for i, lang in enumerate(preset_languages, 1):
+                preset_list += f'\n\t  {i}. {lang}'
+        prompt_text = f'Please input new language instruction and press Enter: {cmd_text}{preset_list}\n\tEnter number (1-{len(preset_languages)}) for preset or type custom instruction'
+    elif cmd_current_state == 'waiting_continue':
+        prompt_text = f'Robot reset completed, press any key + Enter to continue: {cmd_text}'
+    elif cmd_current_state == 'waiting_save':
+        prompt_text = f'Data saved successfully. Press any key + Enter to continue: {cmd_text}'
+    elif cmd_current_state == 'waiting_delete':
+        prompt_text = f'Data deleted successfully. Press any + Enter to continue: {cmd_text}'
+    elif cmd_current_state == 'paused':
+        prompt_text = default_prompt_text
+    else:
+        prompt_text = default_prompt_text
+    
+    # 获取机器人状态和命令数据
+    robot_current_state = info.get('robot_current_state', [0.0] * 16)
+    robot_current_action = info.get('robot_current_action', [0.0] * 16)
+    
+    # 格式化状态和命令显示
+    def format_robot_data(data, label):
+        if len(data) >= 16:
+            left_arm = [f'{x:.3f}' for x in data[:7]]
+            right_arm = [f'{x:.3f}' for x in data[7:14]]
+            left_gripper = f'{data[14]:.3f}' if len(data) > 14 else '0.000'
+            right_gripper = f'{data[15]:.3f}' if len(data) > 15 else '0.000'
+            return f"{label}\n\t Left--Arm: [{', '.join(left_arm)}], Gripper: [{left_gripper}]\n\tRight--Arm: [{', '.join(right_arm)}], Gripper: [{right_gripper}]"
+        else:
+            return f'{label}\n\tData not available or incomplete'
+    
+    status_text = format_robot_data(robot_current_state, 'STATUS')
+    command_text = format_robot_data(robot_current_action, 'COMMAND')
+    robot_status_text = f'{status_text}\n{command_text}'
+    
+    row_layout.split_column(
+    # group = Group(
+        col_layout,
+        Layout(Panel(print_info, subtitle='Inference Stats', subtitle_align='right', height=8)),
+        Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=9)),
+        Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right', height=8)),
+        Layout(Panel(prompt_text, subtitle='Command Prompt', subtitle_align='right', height=8)),
+        # fit=False
         # *panels,
     )
-    return layout
+    return Panel(row_layout, title='VLA Client', title_align='center', height=44)
+
+# title="Status",
+#     subtitle="Updated: now",
+#     title_align="left",
+#     subtitle_align="right",
+#     border_style="bold cyan",
+#     box=box.ROUNDED,
+#     padding=(1, 2)

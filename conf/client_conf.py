@@ -6,19 +6,7 @@ from conf.observe_conf import get_observer_config
 from conf.zmq_conf import get_zmq_config
 from conf.save_conf import get_record_data_config
 from conf.traj_conf import get_traj_config
-
-
-# 定义模型类型的枚举类
-class ModelType(str, Enum):
-    ACT = 'act'
-    GR00T = 'gr00t'
-    GR00T_N1_5 = 'gr00t_n1_5'
-    RDT = 'rdt'
-    SMOLVLA = 'smolvla'
-
-class RobotType(str, Enum):
-    A2D = 'a2d'
-    MOCK = 'mock'
+from conf.robots_conf import get_robots_config
 
 def get_client_config():
     """Generate config for Client
@@ -27,11 +15,11 @@ def get_client_config():
         ConfigDict: Configuration for Client.
     """
     config = ConfigDict()
-    config.robot = RobotType.A2D
     config.rdm = get_rdm_config()
     config.traj = get_traj_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
+    config.robots = get_robots_config()
     # config.zmq_addr = 'tcp://172.18.12.24:5566'  # server address and port
     config.zmq = get_zmq_config()
     config.record = get_record_data_config() # record data config
@@ -53,7 +41,11 @@ def get_client_config():
     config.history_frame = False # 是否使用历史帧，True表示使用历史帧，False表示不使用历史帧
     config.chunk_strategy = 'latest' # Action Chunk Strategy, choices = ('fusion', 'latest')
     # config.chunk_strategy = 'fusion' # Action Chunk Strategy, choices = ('fusion', 'latest')
-
     config.preprocess = 'pad_and_resize'
-    config.language = 'pick bottle into box'
+    # 语言指令及cmd备选，默认0
+    config.language = [
+        'pick bottle into box',
+        'pour milk into the box',
+        'put the sandwich in the microwave',
+    ]
     return config

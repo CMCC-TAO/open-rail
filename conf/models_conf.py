@@ -4,7 +4,7 @@ from ml_collections import ConfigDict
 # 定义模型类型的枚举类
 class ModelType(str, Enum):
     ACT = 'act'
-    GR00T = 'gr00t'
+    GR00T_N1 = 'gr00t_n1'
     GR00T_N1_5 = 'gr00t_n1_5'
     RDT = 'rdt'
     SMOLVLA = 'smolvla'
@@ -29,14 +29,9 @@ def get_rdt_config():
     config.lang_embd_path = '/media/gaohan/Elements1/weights/lang_embds/place_bottle.pt'
     return config
 
-def get_model_config():
-    """Generate config for Client
-
-    Returns:
-        ConfigDict: Configuration for Client.
-    """
+def get_models_config():
     config = ConfigDict()
-    config.type = ModelType.GR00T
+    config.type = ModelType.GR00T_N1
     config.gr00t = get_gr00t_config()
     config.act = get_act_config()
     config.rdt = get_rdt_config()
