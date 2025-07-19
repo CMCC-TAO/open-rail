@@ -103,6 +103,7 @@ class VLAClient():
         
         self.info_current_action = [0.0] * 16  # 左arm 7 + 右arm 7 + 左夹爪1 + 右夹爪1
         self.info_current_state = [0.0] * 16   # 与action相同的格式
+        self.info_obs, self.info_act = {}, {}
 
     def async_write_obs(self, observations):
         """
@@ -278,6 +279,7 @@ class VLAClient():
             if self.config.record.switch and self.is_running_action and self.running:
                 self.record_action_executor.submit(self.async_write_action, action)
             # print(f'send action using {(time.perf_counter() - timestamp)*1000:.2f}ms')
+            self.info_act['action'] = action.shape
             self.robot.control_robot(action)
             if self.config.show_data:
                 self.vis_action_state(action)
@@ -497,6 +499,7 @@ class VLAClient():
         encoded_imgs, processed_imgs = {}, {}
         for key, processed, encoded in results:
             encoded_imgs[key] = encoded
+            self.info_obs[key] = processed.shape
             if self.config.show_img:
                 processed_imgs[key] = processed
                 if 'depth.' in key:
@@ -527,6 +530,7 @@ class VLAClient():
         if 'obs.state' in frame and frame['obs.state'] is not None:
             self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
         
+        self.info_obs['state'] = frame['obs.state'].shape
         data = {
             'type': 'vla_obs',
             'ref_timestamp': frame['ref_timestamp'],
@@ -586,6 +590,13 @@ class VLAClient():
         timestamp_chunk = []
         action_type = action['type']
         if action_type == 'vla_action':
+            # 根据进度按顺序切换语言指令
+            if 'ext' in action and 'prob_progress' in action['ext']:
+                prob_progress = action['ext']['prob_progress']
+                self.info_action['prob_progress'] = prob_progress
+                if prob_progress >= self.config.thre_prob_progress:
+                    self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
+
             pred_action = action['pred_action']
             ref_timestamp = action['ref_timestamp']
             loc_timestamp = action['loc_timestamp']

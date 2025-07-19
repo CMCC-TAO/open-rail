@@ -48,4 +48,5 @@ def get_client_config():
         'pour milk into the box',
         'put the sandwich in the microwave',
     ]
+    config.thre_prob_progress = 0.9 # 切换语言指令的概率阈值
     return config

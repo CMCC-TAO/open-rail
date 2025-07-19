@@ -36,6 +36,8 @@ def parse_args():
     parser.add_argument('--sleep_time', type=float, help='infer sleep time')
     parser.add_argument('--show_data', action='store_true', help='显示数据')
     parser.add_argument('--record', action='store_true', help='启用记录模式')
+    parser.add_argument('--robots_type', type=str, help='robots type')
+    parser.add_argument('--thre_prob_progress', type=float, help='切换语言指令的概率阈值')
     return parser.parse_args()
 
 def override_config_with_args(config, args):
@@ -47,6 +49,10 @@ def override_config_with_args(config, args):
         config.show_data = True
     if args.record:
         config.record.switch = True
+    if args.robots_type is not None:
+        config.robots.type = args.robots_type
+    if args.thre_prob_progress is not None:
+        config.thre_prob_progress = args.thre_prob_progress
     return config
 
 def key_thread():
@@ -129,11 +135,18 @@ if __name__ == "__main__":
                 'record': config.record.switch,
                 'fps': config.observer.fps,
                 'sleep_time': config.sleep_time,
+                'robots_type': config.robots.type,
+                'thre_prob_progress': config.thre_prob_progress
             }
             info['ctrl_info'] = {
                 'language': vla_client.language,
                 'is_running_action': vla_client.is_running_action,
                 'cmd_current_state': cmd_current_state,
+            }
+            info['obs_act_info'] = {
+                'preprocess': config.preprocess,
+                **vla_client.info_obs,
+                **vla_client.info_act,
             }
             # 只用来传递参数，不显示
             info['data_info'] = {
@@ -161,6 +174,7 @@ if __name__ == "__main__":
                     if cmd == 'reset':
                         vla_client.is_running_action = False
                         robot.reset_robot(target_pose='default')
+                        vla_client.inference_first() # TODO: 待测。
                         cmd_current_state = 'waiting_continue'
                     elif cmd == 'lang':
                         vla_client.is_running_action = False

@@ -110,6 +110,9 @@ def create_layout(info: dict):
     ctrl_info = ''
     for key, value in info.get('ctrl_info', {}).items():
         ctrl_info += f'{key:>25}: {value}\n'
+    obs_act_info = ''
+    for key, value in info.get('obs_act_info', {}).items():
+        obs_act_info += f'{key:>25}: {value}\n'
     debug_info = info.get('debug_info', None) 
 
     # table = Table(title="Metrics")
@@ -129,7 +132,7 @@ def create_layout(info: dict):
         # Layout(key_param_columns, ratio=1),
         Layout(Panel(ctrl_info, subtitle='', subtitle_align='center', height=8)),
         Layout(Panel(config_info, subtitle='', subtitle_align='center', height=8)),
-        # Layout(Panel(print_info, subtitle='', subtitle_align='center', height=8)),
+        Layout(Panel(obs_act_info, subtitle='', subtitle_align='center', height=8)),
     )
     cmd_text = info.get('cmd_key', '')
     

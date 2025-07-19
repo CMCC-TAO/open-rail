@@ -56,13 +56,17 @@ class ModelVLA:
             "annotation.human.task_description": obs['language'],
         }
         time1 = time.time()
+        ext_result = {}
         predicted_action = self.policy.get_action(inp_obs)
+        if isinstance(predicted_action, dict) and 'prob_progress' in predicted_action:
+            ext_result['prob_progress'] = predicted_action['prob_progress']
+            del predicted_action['prob_progress']
         predicted_action = np.concatenate([
             v.reshape(-1, 1) if v.ndim == 1 else v 
             for v in predicted_action.values()
         ], axis=1)
         print(time.time() - time1, 'action shape:', predicted_action.shape)
-        return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp']}
+        return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp'], 'ext': ext_result}
 
 if __name__ == "__main__":
     # 其它vla模型参照下面的代码，测试通过即可
