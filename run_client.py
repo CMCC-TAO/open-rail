@@ -119,11 +119,9 @@ if __name__ == "__main__":
         if not args.debug:
             live = Live(create_layout({}), refresh_per_second=4)
             live.start()
-            key_thread_obj = threading.Thread(target=key_thread, daemon=True)
-            key_thread_obj.start()
         else:
             print("调试模式已启用，可用命令: reset, language, save, delete, quit")
-            
+        
         while True:
             time.sleep(0.1)
             info = {}
@@ -156,70 +154,23 @@ if __name__ == "__main__":
                 'preset_languages': vla_client.config.language,
             }
             
-            if not args.debug:
-                if cmd_text == '':
-                    cmd_text = '|'
-                elif cmd_text == '|':
-                    cmd_text = ''
-                info['cmd_key'] = cmd_text
+            if cmd_text == '':
+                cmd_text = '|'
+            elif cmd_text == '|':
+                cmd_text = ''
+            info['cmd_key'] = cmd_text
+            
+            # 检查是否开始输入时暂停
+            if cmd_current_state == 'normal' and cmd_text != '|' and cmd_text != '':
+                vla_client.is_running_action = False
+                cmd_current_state = 'paused'
+            
+            # 检查是否有新命令
+            if hasattr(key_thread, 'last_cmd'):
+                cmd = key_thread.last_cmd
+                delattr(key_thread, 'last_cmd')
                 
-                # 检查是否开始输入时暂停
-                if cmd_current_state == 'normal' and cmd_text != '|' and cmd_text != '':
-                    vla_client.is_running_action = False
-                    cmd_current_state = 'paused'
-                
-                # 检查是否有新命令
-                if hasattr(key_thread, 'last_cmd'):
-                    cmd = key_thread.last_cmd
-                    delattr(key_thread, 'last_cmd')
-                    
-                    if cmd_current_state in ['normal', 'paused']:
-                        if cmd == 'reset':
-                            vla_client.is_running_action = False
-                            robot.reset_robot(target_pose='default')
-                            cmd_current_state = 'waiting_continue'
-                        elif cmd == 'lang':
-                            vla_client.is_running_action = False
-                            cmd_current_state = 'waiting_language'
-                        elif cmd == 'save' and vla_client.config.record.switch:
-                            vla_client.is_running_action = False
-                            vla_client.dataset_write.save_writed_data()
-                            cmd_current_state = 'waiting_save'
-                        elif cmd == 'delete' and vla_client.config.record.switch:
-                            vla_client.is_running_action = False
-                            vla_client.dataset_write.abandon_record_data()
-                            cmd_current_state = 'waiting_delete'
-                        elif cmd == 'quit':
-                            break
-                        else:
-                            # 其他输入或空输入，恢复运行
-                            vla_client.is_running_action = True
-                            cmd_current_state = 'normal'
-                    elif cmd_current_state == 'waiting_language':
-                        if cmd.strip():  # 有输入新的语言指令
-                            if cmd.strip().isdigit():
-                                index = int(cmd.strip()) - 1
-                                if 0 <= index < len(vla_client.config.language):
-                                    vla_client.language = vla_client.config.language[index]
-                                    logger.info(f"language instruction has been set to preset #{cmd.strip()}: {vla_client.language}")
-                                else:
-                                    logger.warning(f"Invalid preset number: {cmd.strip()}. Please enter a number between 1 and {len(vla_client.config.language)}")
-                            else:
-                                # 直接输入自定义语言指令
-                                vla_client.language = cmd.strip()
-                                logger.info(f"language instruction has been modified to: {vla_client.language}")
-                        vla_client.is_running_action = True
-                        cmd_current_state = 'normal'
-                    elif cmd_current_state in ['waiting_save', 'waiting_delete', 'waiting_continue']:
-                        # 不需要进一步反馈处理的都继续程序
-                        vla_client.is_running_action = True
-                        cmd_current_state = 'normal'
-                if live is not None:
-                    live.update(create_layout(info))
-            else:
-                try:
-                    print("Please input command and press Enter to execute:\n\tnone: stop\n\treset: reset robot to initial position\n\tlang(language): modify language instruction\n\tsave: save current data\n\tdelete: delete current data\n\tquit: exit program")
-                    cmd = input("Please input command: ").strip()
+                if cmd_current_state in ['normal', 'paused']:
                     if cmd == 'reset':
                         vla_client.is_running_action = False
                         robot.reset_robot(target_pose='default')
@@ -228,22 +179,6 @@ if __name__ == "__main__":
                     elif cmd == 'lang':
                         vla_client.is_running_action = False
                         cmd_current_state = 'waiting_language'
-                        for index in range(len(vla_client.config.language)):
-                            print(f"input {index} to change language to {vla_client.config.language[index]}")
-                        print(f"if you input other string,language instruction will modified")
-                        # print(vla_client.config.language)
-                        language = input("Please input language: ").strip()
-                        if language.isdigit():
-                            index = int(language)
-                            if 0 <= index < len(vla_client.config.language):
-                                vla_client.language = vla_client.config.language[index]
-                                logger.info(f"language instruction has been set to preset #{language}: {vla_client.language}")
-                            else:
-                                logger.warning(f"Invalid preset number: {language}. Please enter a number between 1 and {len(vla_client.config.language)}")
-                        else:
-                            # 直接输入自定义语言指令
-                            vla_client.language = language
-                            logger.info(f"language instruction has been modified to: {vla_client.language}")
                     elif cmd == 'save' and vla_client.config.record.switch:
                         vla_client.is_running_action = False
                         vla_client.dataset_write.save_writed_data()
@@ -254,13 +189,29 @@ if __name__ == "__main__":
                         cmd_current_state = 'waiting_delete'
                     elif cmd == 'quit':
                         break
-                    elif cmd == '':
-                        vla_client.is_running_action = False
-                        cmd_current_state = 'normal'
                     else:
                         # 其他输入或空输入，恢复运行
                         vla_client.is_running_action = True
                         cmd_current_state = 'normal'
+                elif cmd_current_state == 'waiting_language':
+                    if cmd.strip():  # 有输入新的语言指令
+                        if cmd.strip().isdigit():
+                            index = int(cmd.strip()) - 1
+                            if 0 <= index < len(vla_client.config.language):
+                                vla_client.language = vla_client.config.language[index]
+                                logger.info(f"language instruction has been set to preset #{cmd.strip()}: {vla_client.language}")
+                            else:
+                                logger.warning(f"Invalid preset number: {cmd.strip()}. Please enter a number between 1 and {len(vla_client.config.language)}")
+                        else:
+                            # 直接输入自定义语言指令
+                            vla_client.language = cmd.strip()
+                            logger.info(f"language instruction has been modified to: {vla_client.language}")
+                    vla_client.is_running_action = True
+                    cmd_current_state = 'normal'
+                elif cmd_current_state in ['waiting_save', 'waiting_delete', 'waiting_continue']:
+                    # 不需要进一步反馈处理的都继续程序
+                    vla_client.is_running_action = True
+                    cmd_current_state = 'normal'
 
             if live is not None:
                 live.update(create_layout(info))

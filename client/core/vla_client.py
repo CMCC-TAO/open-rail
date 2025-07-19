@@ -571,7 +571,7 @@ class VLAClient():
             # 根据进度按顺序切换语言指令
             if 'ext' in action and 'prob_progress' in action['ext']:
                 prob_progress = action['ext']['prob_progress']
-                self.info_action['prob_progress'] = prob_progress
+                self.info_act['prob_progress'] = prob_progress
                 if prob_progress >= self.config.thre_prob_progress:
                     self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
 
