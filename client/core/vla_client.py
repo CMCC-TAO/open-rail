@@ -139,6 +139,11 @@ class VLAClient():
     def inference_first(self):
         """Fist inference step, which is different with other inference steps.
         """
+        # reset后，obs变化，需要重新获取obs推理
+        observations = self.robot.retrieve_observation()
+        if observations is not None:
+            data = self._process_data(observations)
+            self.rdm.add_observe_data(data)
         # getObserveData函数是线程安全的，不需要加锁
         data = self.rdm.pop_observe_data(num_samples = 1 if self.config.history_frame == False else 2)
         if data is not None:

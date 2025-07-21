@@ -174,7 +174,7 @@ if __name__ == "__main__":
                     if cmd == 'reset':
                         vla_client.is_running_action = False
                         robot.reset_robot(target_pose='default')
-                        vla_client.inference_first() # TODO: 待测。
+                        vla_client.inference_first() # obs已变化，需要初始化
                         cmd_current_state = 'waiting_continue'
                     elif cmd == 'lang':
                         vla_client.is_running_action = False

@@ -185,13 +185,13 @@ def create_layout(info: dict):
     # group = Group(
         col_layout,
         Layout(Panel(print_info, subtitle='Inference Stats', subtitle_align='right', height=8)),
-        Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=9)),
+        Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=8)),
         Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right', height=8)),
-        Layout(Panel(prompt_text, subtitle='Command Prompt', subtitle_align='right', height=8)),
+        Layout(Panel(prompt_text, subtitle='Command Prompt', subtitle_align='right', height=10)),
         # fit=False
         # *panels,
     )
-    return Panel(row_layout, title='VLA Client', title_align='center', height=44)
+    return Panel(row_layout, title='VLA Client', title_align='center', height=48)
 
 # title="Status",
 #     subtitle="Updated: now",
