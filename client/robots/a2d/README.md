@@ -8,6 +8,8 @@ The A2D Robot is a humanoid robot implementation that provides real-time control
 
 ### 1. Install A2D SDK
 
+Set your local ip as 10.42.0.48.
+
 After confirming network connection between PC and A2D robot, execute the following command to deploy the GDK environment:
 
 ```bash

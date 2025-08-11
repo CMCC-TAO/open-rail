@@ -33,7 +33,7 @@ def crop_and_resize(img, target_height=480, target_width=640):
     resized = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_AREA)
     return resized
 
-def pad_and_resize(img, target_height=480, target_width=640, pad_color=(0, 0, 0)):
+def pad_and_resize(img, target_height=640, target_width=640, pad_color=(0, 0, 0)):
     h, w = img.shape[:2]
     target_ratio = target_width / target_height
     current_ratio = w / h

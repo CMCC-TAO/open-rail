@@ -45,8 +45,8 @@ def get_client_config():
     # 语言指令及cmd备选，默认0
     config.language = [
         'pick bottle into box',
-        'pour milk into the box',
-        'put the sandwich in the microwave',
+        'take the sandwitch out from the oven',
+        'open the microwave, put the sandwish in it and close the door',
     ]
     config.thre_prob_progress = 0.9 # 切换语言指令的概率阈值
     return config
