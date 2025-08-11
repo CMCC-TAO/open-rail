@@ -5,7 +5,6 @@ import traceback
 import select
 import sys
 import logging
-import readchar
 import argparse
 from ml_collections import ConfigDict
 from client.core import zmq_client
@@ -17,6 +16,7 @@ from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
 from rich.live import Live
+from rich.console import Console
 from client.utils.util import create_layout
 
 def get_robot(config: ConfigDict):
@@ -86,38 +86,59 @@ def override_config_with_args(config, args):
         config.preprocess_size = args.preprocess_size
     return config
 
-def key_thread():
-    """Handle keyboard input in a separate thread
+def handle_user_input(vla_client, robot, live):
+    """Handle user input
     
-    This function runs in a separate thread to capture keyboard input
-    and manage command text input for the VLA client interface.
+    This function handles interactive command input when user presses Enter.
+    It provides a menu-driven interface for robot control commands.
     """
-    global cmd_text, exit_flag
-    while not exit_flag:
-        try:
-            key = readchar.readkey()
-            if key == readchar.key.ENTER:
-                # Save current command to last_cmd
-                if cmd_text != '' and cmd_text != '|':
-                    key_thread.last_cmd = cmd_text
-                cmd_text = ''
-            elif key == readchar.key.BACKSPACE:
-                if cmd_text == '':
-                    cmd_text = '|'
+    if live is not None:
+        live.stop()
+    
+    try:
+        vla_client.is_running_action = False
+        cmd = input('Program paused, please enter command, press Enter to continue:\nr: Reset robot\nl: Modify language instruction\ns: Save data (if recording enabled)\nd: Delete data (if recording enabled)\nq: Quit\n')
+        
+        if cmd == 'l':
+            # Show preset language options
+            print("Available preset language instructions:")
+            for i, lang in enumerate(vla_client.config.language, 1):
+                print(f"{i}: {lang}")
+            
+            language_input = input('Please enter new language instruction or preset number, press Enter to confirm: ')
+            if language_input.strip().isdigit():
+                index = int(language_input.strip()) - 1
+                if 0 <= index < len(vla_client.config.language):
+                    vla_client.language = vla_client.config.language[index]
+                    print(f"Language instruction has been set to preset #{language_input.strip()}: {vla_client.language}")
                 else:
-                    cmd_text = cmd_text[:-1]
-                    if cmd_text == '':
-                        cmd_text = '|'
+                    print(f"Invalid preset number: {language_input.strip()}. Please enter a number between 1 and {len(vla_client.config.language)}")
             else:
-                if cmd_text == '|':
-                    cmd_text = key
-                else:
-                    cmd_text = cmd_text + key
-        except KeyboardInterrupt:
-            break
-        except Exception as e:
-            print(f"Keyboard input thread exception: {e}")
-            time.sleep(0.1)
+                vla_client.language = language_input.strip()
+                print(f"Language instruction has been modified to: {vla_client.language}")
+                
+        elif cmd == 'r':
+            robot.reset_robot(target_pose='default')
+            vla_client.inference_first()
+            input('Robot reset completed, program paused, press Enter to continue...')
+            
+        elif cmd == 's' and vla_client.config.record.switch:
+            vla_client.dataset_write.save_writed_data()
+            input('Data saved, press Enter to continue...')
+            
+        elif cmd == 'd' and vla_client.config.record.switch:
+            vla_client.dataset_write.abandon_record_data()
+            input('Data deleted, press Enter to continue...')
+            
+        elif cmd == 'q':
+            return False  # Signal to quit
+            
+        vla_client.is_running_action = True
+        return True  # Continue running
+        
+    finally:
+        if live is not None:
+            live.start()
 
 if __name__ == "__main__":
     args = parse_args()
@@ -139,22 +160,17 @@ if __name__ == "__main__":
     traj_generator = TrajectoryGenerator(config=config.traj)
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
     
-    cmd_text, exit_flag = '', False
-    cmd_current_state = 'normal'  # State management: normal, waiting_command, waiting_language, waiting_continue, waiting_save, waiting_delete, paused
-    
     live = None
-    key_thread_obj = None
+    console = Console()
     try:
         vla_client.run()
-        key_thread_obj = threading.Thread(target=key_thread, daemon=False)
-        key_thread_obj.start()
         
-        # 根据debug模式决定是否启用Live界面
         if not args.debug:
-            live = Live(create_layout({}), refresh_per_second=4)
+            terminal_size = console.size
+            live = Live(create_layout({}, terminal_size), refresh_per_second=4)
             live.start()
         else:
-            print("Debug mode enabled, available commands: reset, language, save, delete, quit")
+            print("Debug mode enabled, press Enter to show commands")
         
         while True:
             time.sleep(0.1)
@@ -175,100 +191,36 @@ if __name__ == "__main__":
             info['ctrl_info'] = {
                 'language': vla_client.language,
                 'is_running_action': vla_client.is_running_action,
-                'cmd_current_state': cmd_current_state,
             }
             info['obs_act_info'] = {
                 'preprocess': config.preprocess,
                 **vla_client.info_obs,
                 **vla_client.info_act,
             }
-            # 只用来传递参数，不显示
-            info['data_info'] = {
-                'cmd_current_state': cmd_current_state,
-                'preset_languages': vla_client.config.language,
-            }
-            
-            if cmd_text == '':
-                cmd_text = '|'
-            elif cmd_text == '|':
-                cmd_text = ''
-            info['cmd_key'] = cmd_text
-            
-            # 检查是否开始输入时暂停
-            if cmd_current_state == 'normal' and cmd_text != '|' and cmd_text != '':
-                vla_client.is_running_action = False
-                cmd_current_state = 'paused'
-            
-            # 检查是否有新命令
-            if hasattr(key_thread, 'last_cmd'):
-                cmd = key_thread.last_cmd
-                delattr(key_thread, 'last_cmd')
-                
-                if cmd_current_state in ['normal', 'paused']:
-                    if cmd == 'reset':
-                        vla_client.is_running_action = False
-                        robot.reset_robot(target_pose='default')
-                        vla_client.inference_first() # Observation has changed, need to initialize
-                        cmd_current_state = 'waiting_continue'
-                    elif cmd == 'lang':
-                        vla_client.is_running_action = False
-                        cmd_current_state = 'waiting_language'
-                    elif cmd == 'save' and vla_client.config.record.switch:
-                        vla_client.is_running_action = False
-                        vla_client.dataset_write.save_writed_data()
-                        cmd_current_state = 'waiting_save'
-                    elif cmd == 'delete' and vla_client.config.record.switch:
-                        vla_client.is_running_action = False
-                        vla_client.dataset_write.abandon_record_data()
-                        cmd_current_state = 'waiting_delete'
-                    elif cmd == 'quit':
-                        break
-                    else:
-                        # 其他输入或空输入，恢复运行
-                        vla_client.is_running_action = True
-                        cmd_current_state = 'normal'
-                elif cmd_current_state == 'waiting_language':
-                    if cmd.strip():  # New language instruction input
-                        if cmd.strip().isdigit():
-                            index = int(cmd.strip()) - 1
-                            if 0 <= index < len(vla_client.config.language):
-                                vla_client.language = vla_client.config.language[index]
-                                logger.info(f"language instruction has been set to preset #{cmd.strip()}: {vla_client.language}")
-                            else:
-                                logger.warning(f"Invalid preset number: {cmd.strip()}. Please enter a number between 1 and {len(vla_client.config.language)}")
-                        else:
-                            # Custom language instruction
-                            vla_client.language = cmd.strip()
-                            logger.info(f"language instruction has been modified to: {vla_client.language}")
-                    vla_client.is_running_action = True
-                    cmd_current_state = 'normal'
-                elif cmd_current_state in ['waiting_save', 'waiting_delete', 'waiting_continue']:
-                    # 不需要进一步反馈处理的都继续程序
-                    vla_client.is_running_action = True
-                    cmd_current_state = 'normal'
 
             if live is not None:
-                live.update(create_layout(info))
+                terminal_size = console.size
+                live.update(create_layout(info, terminal_size))
             elif args.debug:
                 print(f"infer_count: {info['infer_count']}, avg_infer_time: {info['avg_infer_time']}, "
-                        f"avg_traj_time: {info['avg_traj_time']}, task_info: {info['ctrl_info']['language']}, "
-                        f"cmd_current_state: {info['ctrl_info']['cmd_current_state']}, cmd_key: {info['cmd_key']}")
+                        f"avg_traj_time: {info['avg_traj_time']}, task_info: {info['ctrl_info']['language']}")
+
+            # Check for user input using select
+            if select.select([sys.stdin,], [], [], 0.001)[0]:
+                user_input = sys.stdin.readline().strip()
+                if user_input == '':
+                    # Handle interactive command input
+                    if not handle_user_input(vla_client, robot, live):
+                        break  # Quit if user chose to quit
+
     except KeyboardInterrupt:
         logger.error('Program interrupted')
     except Exception as e:
         logger.error(f'Exception occurred: {str(e)}\nStack trace:\n{traceback.format_exc()}')
     finally:
-        # Set exit flag
-        exit_flag = True
         # Stop Live interface
         if live is not None:
             live.stop()
-        # Wait for keyboard thread to exit
-        if key_thread_obj is not None and key_thread_obj.is_alive():
-            try:
-                key_thread_obj.join(timeout=1.0)
-            except Exception as e:
-                print(f"Error waiting for keyboard thread to exit: {e}")
         
         vla_client.close()
         robot.close()

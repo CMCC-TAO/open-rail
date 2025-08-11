@@ -88,7 +88,7 @@ def command_prompt(info: dict):
 
     return table
 
-def create_layout(info: dict):
+def create_layout(info: dict, terminal_size=None):
     """Create a rich layout for displaying VLA client information.
     
     Args:
@@ -96,87 +96,44 @@ def create_layout(info: dict):
                     - config_info: Configuration parameters
                     - ctrl_info: Control information
                     - obs_act_info: Observation and action information
-                    - data_info: Data state information
                     - robot_current_state: Current robot state
                     - robot_current_action: Current robot action
                     - debug_info: Debug information
-                    - cmd_key: Current command key input
+        terminal_size: Rich Console size object containing width and height,
+                      used for dynamic layout sizing. If None, uses fixed heights.
                     
     Returns:
-        Panel: Rich panel containing the complete layout
+        Panel: Rich panel containing the complete layout with adaptive sizing
     """
     row_layout = Layout()
     col_layout = Layout()
     print_info = ''
     for key, value in info.items():
         if key in ['infer_count', 'avg_infer_time', 'avg_traj_time']:
-
-            print_info += f'{key:>15}: {value}\n'
+            print_info += f'{key:>1}: {value}\n'
     config_info = ''
     for key, value in info.get('config_info', {}).items():
-        config_info += f'{key:>25}: {value}\n'
+        config_info += f'{key:>1}: {value}\n'
     ctrl_info = ''
     for key, value in info.get('ctrl_info', {}).items():
-        ctrl_info += f'{key:>25}: {value}\n'
+        ctrl_info += f'{key:>1}: {value}\n'
     obs_act_info = ''
     for key, value in info.get('obs_act_info', {}).items():
-        obs_act_info += f'{key:>25}: {value}\n'
+        obs_act_info += f'{key:>1}: {value}\n'
     debug_info = info.get('debug_info', None) 
-
-
-    key_param_panels = [
-        Panel(print_info, subtitle='', subtitle_align='center'),
-        Panel(print_info, subtitle='', subtitle_align='center'),
-        Panel(print_info, subtitle='', subtitle_align='center'),
-    ]
-
-    key_param_columns = Columns(key_param_panels, title='VLA Client', equal=True, expand=True)
-    col_layout.split_row(
-
-        Layout(Panel(ctrl_info, subtitle='', subtitle_align='center', height=8)),
-        Layout(Panel(config_info, subtitle='', subtitle_align='center', height=8)),
-        Layout(Panel(obs_act_info, subtitle='', subtitle_align='center', height=8)),
-    )
-    cmd_text = info.get('cmd_key', '')
-    
-    # Get current state and prompt information
-    cmd_current_state = info.get('data_info', {}).get('cmd_current_state', 'normal')
-    prompt_text = ''
-    
-    default_prompt_text = f'Please input command and press Enter to execute: {cmd_text}\n\treset: reset robot to initial position\n\tlang: modify language instruction\n\tsave: save current data\n\tdelete: delete current data\n\tquit: exit program'
-    if cmd_current_state == 'waiting_command':
-        prompt_text = default_prompt_text
-    elif cmd_current_state == 'waiting_language':
-        preset_languages = info.get('data_info', {}).get('preset_languages', [])
-        preset_list = ''
-        if preset_languages:
-            preset_list = '\n\tPreset Instructions:'
-            for i, lang in enumerate(preset_languages, 1):
-                preset_list += f'\n\t  {i}. {lang}'
-        prompt_text = f'Please input new language instruction and press Enter: {cmd_text}{preset_list}\n\tEnter number (1-{len(preset_languages)}) for preset or type custom instruction'
-    elif cmd_current_state == 'waiting_continue':
-        prompt_text = f'Robot reset completed, press "con" + Enter to continue: {cmd_text}'
-    elif cmd_current_state == 'waiting_save':
-        prompt_text = f'Data saved successfully. Press "con" + Enter to continue: {cmd_text}'
-    elif cmd_current_state == 'waiting_delete':
-        prompt_text = f'Data deleted successfully. Press "con" + Enter to continue: {cmd_text}'
-    elif cmd_current_state == 'paused':
-        prompt_text = default_prompt_text
-    else:
-        prompt_text = default_prompt_text
-    
     # Get robot status and command data
     robot_current_state = info.get('robot_current_state', [0.0] * 16)
     robot_current_action = info.get('robot_current_action', [0.0] * 16)
     
-    # Format status and command display
+    # Format status and command display with terminal width awareness
     def format_robot_data(data, label):
         if len(data) >= 16:
             left_arm = [f'{x:.3f}' for x in data[:7]]
             right_arm = [f'{x:.3f}' for x in data[7:14]]
             left_gripper = f'{data[14]:.3f}' if len(data) > 14 else '0.000'
             right_gripper = f'{data[15]:.3f}' if len(data) > 15 else '0.000'
-            return f"{label}\n\t Left--Arm: [{', '.join(left_arm)}], Gripper: [{left_gripper}]\n\tRight--Arm: [{', '.join(right_arm)}], Gripper: [{right_gripper}]"
+            
+            return f"{label}\n L-Arm: [{', '.join(left_arm)}], L-Grip: [{left_gripper}]\n R-Arm: [{', '.join(right_arm)}], R-Grip: [{right_gripper}]"
         else:
             return f'{label}\n\tData not available or incomplete'
     
@@ -184,11 +141,52 @@ def create_layout(info: dict):
     command_text = format_robot_data(robot_current_action, 'COMMAND')
     robot_status_text = f'{status_text}\n{command_text}'
     
+    # Calculate dynamic heights based on terminal size
+    print(terminal_size)
+    if terminal_size is not None:
+        terminal_height = terminal_size.height
+        
+        # Special handling for very small terminals
+        if terminal_size.height < 20 or terminal_size.width < 60:
+            # Minimal layout for small terminals
+            col_height = 4
+            stats_height = 4
+            robot_height = 4
+            debug_height = 3
+            command_height = 2
+            total_panel_height = min(terminal_height - 1, 15)
+        else:
+            # Reserve space for title, borders, and padding (approximately 10 lines)
+            remaining_height = max(terminal_height - 10, 20)
+            
+            # Distribute remaining height proportionally
+            col_height = max(int(remaining_height * 0.25), 6)
+            stats_height = max(int(remaining_height * 0.25), 6)
+            robot_height = max(int(remaining_height * 0.25), 6)
+            debug_height = max(int(remaining_height * 0.2), 5)
+            command_height = max(int(remaining_height * 0.1), 3)
+            
+            # Adjust total height to fit terminal
+            total_panel_height = min(terminal_height - 1, terminal_height)
+    else:
+        # Fallback to fixed heights if terminal_size is not available
+        col_height = 8
+        stats_height = 8
+        robot_height = 8
+        debug_height = 8
+        command_height = 3
+        total_panel_height = 48
+    
+    col_layout.split_row(
+        Layout(Panel(ctrl_info, subtitle='', subtitle_align='center', height=col_height)),
+        Layout(Panel(config_info, subtitle='', subtitle_align='center', height=col_height)),
+        Layout(Panel(obs_act_info, subtitle='', subtitle_align='center', height=col_height)),
+    )
     row_layout.split_column(
         col_layout,
-        Layout(Panel(print_info, subtitle='Inference Stats', subtitle_align='right', height=8)),
-        Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=8)),
-        Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right', height=8)),
-        Layout(Panel(prompt_text, subtitle='Command Prompt', subtitle_align='right', height=10)),
+        Layout(Panel(print_info, subtitle='Inference Stats', subtitle_align='right', height=stats_height)),
+        Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=robot_height)),
+        Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right', height=debug_height)),
+        Layout(Panel('Press Enter for commands', subtitle='Command', subtitle_align='right', height=command_height)),
     )
-    return Panel(row_layout, title='VLA Client', title_align='center', height=48)
+    return Panel(row_layout, title='VLA Client', title_align='center', height=total_panel_height)
