@@ -6,20 +6,30 @@ class RobotType(str, Enum):
     MOCK = 'mock'
 
 def get_a2d_config():
+    """Generate configuration for A2D robot.
+    
+    Returns:
+        ConfigDict: Configuration dictionary containing camera settings,
+                   proprioception names, and gripper frequency for A2D robot.
+    """
     config = ConfigDict()
     config.camera = ConfigDict()
     config.camera.ref = 'head'
-    # ConfigDict不能使用带点的key，change 'cam.head' to 'head'
+    # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
     config.camera.names = {'head': 'head',
                            'hand_left': 'hand_left',
-                           'hand_right': 'hand_right',
-                           # depth_head: 'head_depth'
-                           }
+                           'hand_right': 'hand_right'}
     config.proprio_names = ['arm', 'gripper', 'head', 'waist']
     config.gripper_freq = 40
     return config
 
 def get_mock_config():
+    """Generate configuration for mock robot (simulation/testing).
+    
+    Returns:
+        ConfigDict: Configuration dictionary containing camera mappings,
+                   data root path, and repository ID for mock robot.
+    """
     config = ConfigDict()
     config.camera = ConfigDict()
     config.camera.ref = 'head'
@@ -31,6 +41,18 @@ def get_mock_config():
     return config
 
 def get_robots_config():
+    """Generate configuration for all supported robot types.
+    
+    This function creates a comprehensive configuration dictionary that includes
+    settings for all supported robot types and specifies which robot type
+    to use by default.
+    
+    Returns:
+        ConfigDict: Configuration dictionary containing:
+            - type: Default robot type to use
+            - a2d: A2D robot configuration
+            - mock: Mock robot configuration for testing
+    """
     config = ConfigDict()
     config.type = RobotType.A2D
     config.a2d = get_a2d_config()

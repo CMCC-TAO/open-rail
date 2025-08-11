@@ -23,7 +23,7 @@ def run_time_decorator(func):
         result = func(*args, **kwargs)  # Call the function
         end_time = time.perf_counter()  # Record the end time
         elapsed_time = end_time - start_time  # Calculate the elapsed time
-        # 不要取消注释，打印太多数据，影响调试
+        # Do not uncomment, too much data output affects debugging
         logger.info(f"Function {func.__name__} called and took {elapsed_time*1000:.4f} milliseconds to execute.")
         return result
     return wrapper
@@ -37,19 +37,19 @@ def action_chunk_2_joint_chunk(action_chunk):
     Returns:
         list: The converted joint chunk with format [joint_1_chunk, joint_2_chunk, ..., joint_n_chunk]
     """
-    # 创建一个空列表，用于存储关节块
+    # Create an empty list to store joint chunks
     joint_chunks = []
-    # 获取动作块的维度
+    # Get the dimension of the action chunk
     action_dim = len(action_chunk[0])
-    # 遍历动作块的维度，创建一个空列表，用于存储每个关节块
+    # Iterate through action chunk dimensions, create empty list for each joint chunk
     for index in range(action_dim):
         joint_chunks.append([])
     
-    # 遍历动作块，将每个动作的每个维度添加到对应的关节块中
+    # Iterate through action chunk, add each dimension of each action to corresponding joint chunk
     for action in action_chunk:
         for index in range(action_dim):
             joint_chunks[index].append(action[index])
-    # 返回关节块
+    # Return joint chunks
     return joint_chunks
 
 def get_closest_index(candidates, target):
@@ -62,47 +62,55 @@ def get_closest_index(candidates, target):
     Returns:
         int: The index of the closest element.
     """
-    # 计算每个元素与目标值的差值的绝对值
+    # Calculate the absolute difference between each element and the target value
     differences = [abs(candidate - target) for candidate in candidates]
-    # 找到最小差值的索引
+    # Find the index of the minimum difference
     closest_index = differences.index(min(differences))
     return closest_index
 
 def command_prompt(info: dict):
+    """Create a command prompt table for VLA inference framework.
+    
+    Args:
+        info (dict): Dictionary containing information to display in the table
+        
+    Returns:
+        Table: Rich table object with the information
+    """
     from rich.table import Table
-    # from rich.console import Console
 
-    # console = Console()
     table = Table(title="VLA Inference Framework")
-
-    # table.add_column("ID", justify="right", style="cyan", no_wrap=True)
     table.add_column("key", style="magenta")
     table.add_column("value", style="green")
 
     for key, value in info.items():
         table.add_row(key, str(value))
 
-    # table.add_row("1", "张三", "在线")
-    # table.add_row("2", "李四", "离线")
-    # table.add_row("3", "王五", "[bold red]异常[/bold red]")
-
-    # console.print(table)
     return table
 
-    # print(f'Press Enter to input command: ', end='\n', flush=True)
-    # print(f'\treset: make the robot go to the initial position', end='\n', flush=True)
-    # print(f'\t save: save the current data as a new episode', end='\n', flush=True)
-    # print(f'\t  run: continue to inference and control', end='\n', flush=True)
-    # print(f'\t exit: exit the program', end='\n', flush=True)
-
 def create_layout(info: dict):
+    """Create a rich layout for displaying VLA client information.
+    
+    Args:
+        info (dict): Dictionary containing various information sections including:
+                    - config_info: Configuration parameters
+                    - ctrl_info: Control information
+                    - obs_act_info: Observation and action information
+                    - data_info: Data state information
+                    - robot_current_state: Current robot state
+                    - robot_current_action: Current robot action
+                    - debug_info: Debug information
+                    - cmd_key: Current command key input
+                    
+    Returns:
+        Panel: Rich panel containing the complete layout
+    """
     row_layout = Layout()
     col_layout = Layout()
-    # panels = []
     print_info = ''
     for key, value in info.items():
         if key in ['infer_count', 'avg_infer_time', 'avg_traj_time']:
-        # panels.append(Layout(Panel(f'{key}: {value}', title=''))),
+
             print_info += f'{key:>15}: {value}\n'
     config_info = ''
     for key, value in info.get('config_info', {}).items():
@@ -115,12 +123,7 @@ def create_layout(info: dict):
         obs_act_info += f'{key:>25}: {value}\n'
     debug_info = info.get('debug_info', None) 
 
-    # table = Table(title="Metrics")
-    # table.add_column("Param")
-    # table.add_column("Value")
-    # table.add_column("Param")
-    # table.add_column("Value")
-    # table.add_row('fps', '30', 'period', '5ms')
+
     key_param_panels = [
         Panel(print_info, subtitle='', subtitle_align='center'),
         Panel(print_info, subtitle='', subtitle_align='center'),
@@ -129,14 +132,14 @@ def create_layout(info: dict):
 
     key_param_columns = Columns(key_param_panels, title='VLA Client', equal=True, expand=True)
     col_layout.split_row(
-        # Layout(key_param_columns, ratio=1),
+
         Layout(Panel(ctrl_info, subtitle='', subtitle_align='center', height=8)),
         Layout(Panel(config_info, subtitle='', subtitle_align='center', height=8)),
         Layout(Panel(obs_act_info, subtitle='', subtitle_align='center', height=8)),
     )
     cmd_text = info.get('cmd_key', '')
     
-    # 获取当前状态和提示信息
+    # Get current state and prompt information
     cmd_current_state = info.get('data_info', {}).get('cmd_current_state', 'normal')
     prompt_text = ''
     
@@ -162,11 +165,11 @@ def create_layout(info: dict):
     else:
         prompt_text = default_prompt_text
     
-    # 获取机器人状态和命令数据
+    # Get robot status and command data
     robot_current_state = info.get('robot_current_state', [0.0] * 16)
     robot_current_action = info.get('robot_current_action', [0.0] * 16)
     
-    # 格式化状态和命令显示
+    # Format status and command display
     def format_robot_data(data, label):
         if len(data) >= 16:
             left_arm = [f'{x:.3f}' for x in data[:7]]
@@ -182,21 +185,10 @@ def create_layout(info: dict):
     robot_status_text = f'{status_text}\n{command_text}'
     
     row_layout.split_column(
-    # group = Group(
         col_layout,
         Layout(Panel(print_info, subtitle='Inference Stats', subtitle_align='right', height=8)),
         Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=8)),
         Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right', height=8)),
         Layout(Panel(prompt_text, subtitle='Command Prompt', subtitle_align='right', height=10)),
-        # fit=False
-        # *panels,
     )
     return Panel(row_layout, title='VLA Client', title_align='center', height=48)
-
-# title="Status",
-#     subtitle="Updated: now",
-#     title_align="left",
-#     subtitle_align="right",
-#     border_style="bold cyan",
-#     box=box.ROUNDED,
-#     padding=(1, 2)

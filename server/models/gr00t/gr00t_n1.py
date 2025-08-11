@@ -8,7 +8,18 @@ from gr00t.data.schema import EmbodimentTag
 from gr00t.experiment.data_config import DATA_CONFIG_MAP
 
 class ModelVLA:
+    """GR00T N1 Vision-Language-Action Model
+    
+    This class implements the GR00T N1 policy for robotic manipulation tasks,
+    providing inference capabilities for vision-language-action models.
+    """
+    
     def __init__(self, config):
+        """Initialize the GR00T N1 VLA model with configuration
+        
+        Args:
+            config: Dictionary containing model configuration parameters
+        """
         self.cfg = config
         model_path = self.cfg['model_path']
         embodiment_tag = EmbodimentTag.NEW_EMBODIMENT
@@ -37,6 +48,14 @@ class ModelVLA:
                 print(key, value)
 
     def infer(self, sequence):
+        """Perform inference on input sequence data
+        
+        Args:
+            sequence: List containing observation data and metadata
+            
+        Returns:
+            dict: Inference result containing predicted actions and timestamps
+        """
         data = sequence[0]
         obs = data['obs'].copy()
         obs['state'] = obs['state'][None]

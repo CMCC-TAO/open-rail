@@ -1,20 +1,20 @@
-# 机器人状态恢复
+# Robot State Recovery
 
-恢复机器人状态到初始位置。
+Restore robot state to initial position.
 
-## 前提条件
+## Prerequisites
 
-Terminal需要先执行过`source env.sh`。
+Terminal needs to execute `source env.sh` first.
 
-## 使用方法
+## Usage
 
 ```bash
 python robot_a2d.py
 ```
 
-## 注意事项
+## Notes
 
-暂无
+None
 
 ```
 Contributors: Wen Xuanzhang

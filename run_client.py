@@ -20,6 +20,17 @@ from rich.live import Live
 from client.utils.util import create_layout
 
 def get_robot(config: ConfigDict):
+    """Create and return a robot instance based on configuration
+    
+    Args:
+        config: Configuration object containing robot type and settings
+        
+    Returns:
+        RobotBody: Robot instance for the specified type
+        
+    Raises:
+        ValueError: If robot type is not supported
+    """
     if config.robots.type == RobotType.A2D:
         from client.robots.a2d.body_robot import RobotBody
         return RobotBody(config)
@@ -30,17 +41,31 @@ def get_robot(config: ConfigDict):
         raise ValueError(f'Invalid Robot Type: {config.robots.type}')
 
 def parse_args():
+    """Parse command line arguments for VLA Client
+    
+    Returns:
+        argparse.Namespace: Parsed command line arguments
+    """
     parser = argparse.ArgumentParser(description='VLA Client')
-    parser.add_argument('--debug', action='store_true', help='启用调试模式，关闭Live界面')
-    parser.add_argument('--fps', type=int, help='observer fps')
-    parser.add_argument('--sleep_time', type=float, help='infer sleep time')
-    parser.add_argument('--show_data', action='store_true', help='显示数据')
-    parser.add_argument('--record', action='store_true', help='启用记录模式')
-    parser.add_argument('--robots_type', type=str, help='robots type')
-    parser.add_argument('--thre_prob_progress', type=float, help='切换语言指令的概率阈值')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
+    parser.add_argument('--fps', type=int, help='Observer FPS')
+    parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
+    parser.add_argument('--show_data', action='store_true', help='Show data visualization')
+    parser.add_argument('--record', action='store_true', help='Enable recording mode')
+    parser.add_argument('--robots_type', type=str, help='Robot type')
+    parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
     return parser.parse_args()
 
 def override_config_with_args(config, args):
+    """Override configuration with command line arguments
+    
+    Args:
+        config: Original configuration object
+        args: Command line arguments
+        
+    Returns:
+        config: Updated configuration object
+    """
     if args.fps is not None:
         config.observer.fps = args.fps
     if args.sleep_time is not None:
@@ -56,12 +81,17 @@ def override_config_with_args(config, args):
     return config
 
 def key_thread():
+    """Handle keyboard input in a separate thread
+    
+    This function runs in a separate thread to capture keyboard input
+    and manage command text input for the VLA client interface.
+    """
     global cmd_text, exit_flag
     while not exit_flag:
         try:
             key = readchar.readkey()
             if key == readchar.key.ENTER:
-                # 保存当前命令到last_cmd
+                # Save current command to last_cmd
                 if cmd_text != '' and cmd_text != '|':
                     key_thread.last_cmd = cmd_text
                 cmd_text = ''
@@ -80,18 +110,16 @@ def key_thread():
         except KeyboardInterrupt:
             break
         except Exception as e:
-            print(f"键盘输入线程异常: {e}")
+            print(f"Keyboard input thread exception: {e}")
             time.sleep(0.1)
 
 if __name__ == "__main__":
     args = parse_args()
-    # 初始化日志配置    
+    # Initialize logging configuration    
     logging.config.dictConfig(LOGGING_CONFIG)
     logger = logging.getLogger(__name__)
-    # logger.info("This is a info level log")
-    # logger.debug("This is a debug level log")
     
-    # 获取配置并应用命令行参数
+    # Get configuration and apply command line arguments
     config = get_client_config()
     config = override_config_with_args(config, args)
     
@@ -106,7 +134,7 @@ if __name__ == "__main__":
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
     
     cmd_text, exit_flag = '', False
-    cmd_current_state = 'normal'  # 状态管理：normal, waiting_command, waiting_language, waiting_continue, waiting_save, waiting_delete, paused
+    cmd_current_state = 'normal'  # State management: normal, waiting_command, waiting_language, waiting_continue, waiting_save, waiting_delete, paused
     
     live = None
     key_thread_obj = None
@@ -120,7 +148,7 @@ if __name__ == "__main__":
             live = Live(create_layout({}), refresh_per_second=4)
             live.start()
         else:
-            print("调试模式已启用，可用命令: reset, language, save, delete, quit")
+            print("Debug mode enabled, available commands: reset, language, save, delete, quit")
         
         while True:
             time.sleep(0.1)
@@ -174,7 +202,7 @@ if __name__ == "__main__":
                     if cmd == 'reset':
                         vla_client.is_running_action = False
                         robot.reset_robot(target_pose='default')
-                        vla_client.inference_first() # obs已变化，需要初始化
+                        vla_client.inference_first() # Observation has changed, need to initialize
                         cmd_current_state = 'waiting_continue'
                     elif cmd == 'lang':
                         vla_client.is_running_action = False
@@ -194,7 +222,7 @@ if __name__ == "__main__":
                         vla_client.is_running_action = True
                         cmd_current_state = 'normal'
                 elif cmd_current_state == 'waiting_language':
-                    if cmd.strip():  # 有输入新的语言指令
+                    if cmd.strip():  # New language instruction input
                         if cmd.strip().isdigit():
                             index = int(cmd.strip()) - 1
                             if 0 <= index < len(vla_client.config.language):
@@ -203,7 +231,7 @@ if __name__ == "__main__":
                             else:
                                 logger.warning(f"Invalid preset number: {cmd.strip()}. Please enter a number between 1 and {len(vla_client.config.language)}")
                         else:
-                            # 直接输入自定义语言指令
+                            # Custom language instruction
                             vla_client.language = cmd.strip()
                             logger.info(f"language instruction has been modified to: {vla_client.language}")
                     vla_client.is_running_action = True
@@ -220,21 +248,21 @@ if __name__ == "__main__":
                         f"avg_traj_time: {info['avg_traj_time']}, task_info: {info['ctrl_info']['language']}, "
                         f"cmd_current_state: {info['ctrl_info']['cmd_current_state']}, cmd_key: {info['cmd_key']}")
     except KeyboardInterrupt:
-        logger.error('程序被中断')
+        logger.error('Program interrupted')
     except Exception as e:
-        logger.error(f'发生异常: {str(e)}\n堆栈信息:\n{traceback.format_exc()}')
+        logger.error(f'Exception occurred: {str(e)}\nStack trace:\n{traceback.format_exc()}')
     finally:
-        # 设置退出标志，让键盘线程退出
+        # Set exit flag
         exit_flag = True
-        # 防止ctrl+c停不掉live
+        # Stop Live interface
         if live is not None:
             live.stop()
-        # 等待键盘线程结束
+        # Wait for keyboard thread to exit
         if key_thread_obj is not None and key_thread_obj.is_alive():
             try:
                 key_thread_obj.join(timeout=1.0)
             except Exception as e:
-                print(f"等待键盘线程退出时出错: {e}")
+                print(f"Error waiting for keyboard thread to exit: {e}")
         
         vla_client.close()
         robot.close()

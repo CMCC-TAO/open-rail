@@ -4,54 +4,74 @@ import pickle
 from ml_collections import ConfigDict
 
 class ZMQServer():
+    """ZMQ Server for handling client-server communication
+    
+    This server uses ZMQ ROUTER socket pattern to handle multiple clients
+    and manage bidirectional communication for VLA inference requests.
+    """
+    
     def __init__(self, config: ConfigDict):
-        # 初始化ZMQ客户端，传入配置字典
+        """Initialize ZMQ Server
+        
+        Args:
+            config: Configuration dictionary containing server settings
+        """
+        # Initialize ZMQ server with configuration dictionary
         self.config = config
         self.context = zmq.Context()
-        # 创建ROUTER套接字，除了ROUTER还有很多其他模式，比如PAIR一对一模式
+        # Create ROUTER socket for handling multiple clients
         self.router = self.context.socket(zmq.ROUTER)
-        # self.router.setsockopt(zmq.SNDTIMEO, 5000)  # 5秒超时
-        self.router.setsockopt(zmq.SNDHWM, 1)  # 设置发送缓冲区为1条消息
+        self.router.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
         self.router.bind(config.server_addr)
-        self.client_id = None # 客户端标识 TODO： 支持多客户端并发请求
-        print(f'ZMQ服务端已启动，连接地址为: {config.server_addr}')
+        self.client_id = None  # Client identifier for current connection
+        print(f'ZMQ server started, listening on: {config.server_addr}')
 
     def recvMessage(self):
+        """Receive message from client
+        
+        Returns:
+            dict: Message containing 'data' and 'meta' fields, or None if error
+        """
         try:
-            # 接收消息（阻塞），ROUTER套接字接收消息时会包含发送者的标识和多部分消息
+            # Receive message (blocking), ROUTER socket includes sender identity and multipart message
             parts = self.router.recv_multipart()
-            self.client_id = parts[0] # 0是客户端标识
+            self.client_id = parts[0]  # Client identifier
             message = {}
             if len(parts) >= 2:
-                message['data'] = pickle.loads(parts[1]) # 1是二进制数据
-                message['meta'] = json.loads(parts[2].decode('utf8')) # 2是元数据JSON
-            # print(f"收到消息: {message_obj.keys()}")
+                message['data'] = pickle.loads(parts[1])  # Binary data
+                message['meta'] = json.loads(parts[2].decode('utf8'))  # Metadata JSON
                 return message
             else:
-                print("返回数据有问题")
+                print("Invalid message format received")
                 return None
         except Exception as e:
-            print(f"接收消息时出错: {e}")
+            print(f"Error receiving message: {e}")
             import traceback
             traceback.print_exc()
             return None
     
     def sendMessage(self, data, meta={}):
+        """Send message to client
+        
+        Args:
+            data: Data to send (will be pickled)
+            meta: Metadata dictionary (will be JSON encoded)
+        """
         try:
-            # client_id = self.client_identities.get(Config.MAIN_CLIENT_ID)
             if self.client_id is None:
-                print("未找到client标识，无法发送消息")
+                print("Client ID not found, cannot send message")
                 return
-            # 图像send前需编码：_, img_encoded = cv2.imencode('.jpg', data), 收到需要解码: img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            data = pickle.dumps(data) # data字典转为字节流
+            # Convert data dictionary to byte stream
+            data = pickle.dumps(data)
             meta = json.dumps(meta).encode('utf8')
-            self.router.send_multipart([self.client_id, data, meta], flags=zmq.NOBLOCK) # 非阻塞发送
+            self.router.send_multipart([self.client_id, data, meta], flags=zmq.NOBLOCK)  # Non-blocking send
         except Exception as e:
-            print(f"发送消息时出错: {e}")
+            print(f"Error sending message: {e}")
             import traceback
             traceback.print_exc()
     
     def close(self):
+        """Close ZMQ server and cleanup resources"""
         self.router.close()
         self.context.term()
-        print(f'ZMQ服务端已关闭，连接地址为: {self.config.client_addr}')
+        print(f'ZMQ server closed, address was: {self.config.server_addr}')

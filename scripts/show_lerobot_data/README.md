@@ -1,20 +1,20 @@
-# 数据集可视视化工具
+# Dataset Visualization Tool
 
-本工具用于check保存的lerobot数据集，并且能可视化预测动作数据与真实数据之间的差异
+This tool is used to check saved lerobot datasets and visualize the differences between predicted action data and ground truth data.
 
-## 功能特点
+## Features
 
-- 支持lerobot格式的dataset，但无需依赖lerobot，且评估速度更快
-- 可视化展示每个关节维度的预测值与真实值对比，以及当前帧的language
-- 分区域显示不同的维度，可视化更舒适
+- Supports lerobot format datasets without requiring lerobot dependency, with faster evaluation speed
+- Visualizes comparison between predicted and actual values for each joint dimension, along with current frame language
+- Regional display of different dimensions for more comfortable visualization
 
-## 前提条件
+## Prerequisites
 
-- 环境：python3.8+，conda环境
+- Environment: python3.8+, conda environment
 ```bash
 pip install opencv-python pandas pyarrow numpy matplotlib
 ```
-- 数据结构：
+- Data structure:
 ```bash
 .
 ├── data
@@ -37,7 +37,7 @@ pip install opencv-python pandas pyarrow numpy matplotlib
             ├── episode_000000.mp4
             └── .........
 ```
-## 使用方法
+## Usage
 
 ```bash
 python3 show_data.py \
@@ -46,25 +46,25 @@ python3 show_data.py \
 --chunk-id 0
 ```
 
-参数说明
+Parameter description
 ```bash
 python show_data.py -h
 ```
 
-## 注意事项
+## Notes
 
-暂无
+None
 
-## 输出示例
+## Output Example
 
 ```
-成功打开 /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.hand_left/episode_000002.mp4, 帧数: 1127
-成功打开 /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.head/episode_000002.mp4, 帧数: 1127
-成功打开 /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.hand_right/episode_000002.mp4, 帧数: 1127
+Successfully opened /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.hand_left/episode_000002.mp4, frame count: 1127
+Successfully opened /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.head/episode_000002.mp4, frame count: 1127
+Successfully opened /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.hand_right/episode_000002.mp4, frame count: 1127
 min frame_count : 1127
 20
-task_index： 1
-更新 0，耗时：149.24235800572205 ms
+task_index: 1
+Update 0, time cost: 149.24235800572205 ms
 ```
 
 ![example_1](./example_1.png)

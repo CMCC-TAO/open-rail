@@ -8,52 +8,68 @@ from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 from collections import deque
 from .zmq_server import ZMQServer
-# from .models.gr00t import vla_model
-# from ..models.gr00t import ModelVLA as GR00T
-# from ..models.act import ModelVLA as ACT
 class VLAServer:
+    """VLA (Vision-Language-Action) Server for handling inference requests
+    
+    This server manages the inference pipeline for VLA models, including:
+    - Receiving data from ZMQ clients
+    - Decoding image data in parallel
+    - Running model inference
+    - Sending results back to clients
+    """
+    
     def __init__(self, config: ConfigDict, zmq_server: ZMQServer,  model= None):
+        """Initialize VLA Server
+        
+        Args:
+            config: Configuration dictionary containing server settings
+            zmq_server: ZMQ server instance for communication
+            model: VLA model instance for inference
+        """
         self.config = config
         self.zmq_server = zmq_server
         self.model = model
 
-        # self.sequence_manager = SequenceManager()
         self.running = False
         self.last_inference_time = 0
         
-        # 创建线程池用于处理推理任务
+        # Create thread pool for handling inference tasks
         self.executor = ThreadPoolExecutor(max_workers=config.max_workers)
-        # 创建线程池用于并行解码图像数据
+        # Create thread pool for parallel image decoding
         self.image_decode_executor = ThreadPoolExecutor(max_workers=3)
-        # 创建推理任务队列，避免重复提交相同的推理任务
-        # self.inference_queue = queue.Queue()
-        # self.inference_in_progress = False
-        # 创建锁来保护inference_in_progress变量
+        # Create lock to protect shared variables
         self.thread_lock = threading.Lock()
-        
-        # # 启动推理任务处理线程
-        # self.inference_thread = threading.Thread(target=self._process_inference_queue)
-        # self.inference_thread.daemon = True
-        # self.inference_thread.start()
         
         self.receive_thread = threading.Thread(target=self.recvThreadFun, daemon=True)
 
     def run(self):
-        # 启动接收线程
+        """Start the VLA server and begin processing requests"""
+        # Start receiving thread
         self.running = True
         self.receive_thread.start()
-        # 等待线程结束
+        # Wait for thread to finish
         self.receive_thread.join()
     
     def image_decode(self, key, data):
+        """Decode image data for a specific observation key
+        
+        Args:
+            key: The observation key (e.g., 'cam.head')
+            data: Data dictionary containing encoded image
+        """
         data['obs'][key] = cv2.imdecode(data['obs'][key], cv2.IMREAD_COLOR)
     
     def inference(self, data):
+        """Process inference request with image decoding and model inference
+        
+        Args:
+            data: Input data containing observations and other information
+        """
         try:
-            # 解码图像数据，TODO： 1. 多线程解码，提升效率; 2. 支持多帧数据
+            # Decode image data with parallel processing
             start_time = time.time()
             if isinstance(data, list):
-                # TODO: 并行化处理
+                # Process multiple data items
                 for data_item in data:
                     cam_keys = [key for key in data_item['obs'] if 'cam.' in key]
                     images_data = [(key, data_item['obs'][key]) for key in cam_keys]
@@ -62,7 +78,7 @@ class VLAServer:
                     for key, img in zip(cam_keys, decoded_images):
                         data_item['obs'][key] = img
             else:
-                # 使用线程池并行解码图像
+                # Use thread pool for parallel image decoding
                 cam_keys = [key for key in data['obs'] if 'cam.' in key]
                 images_data = [(key, data['obs'][key]) for key in cam_keys]
                 with ThreadPoolExecutor() as executor:
@@ -70,39 +86,37 @@ class VLAServer:
                 for key, img in zip(cam_keys, decoded_images):
                     data['obs'][key] = img
                 print(f'data[obs] keys: {data.keys()}')
-            # future.add_done_callback(self._inference_callback)
+            
             end_time = time.time()
-            # 计算并打印运行时间
+            # Calculate and print execution time
             elapsed_time = (end_time - start_time) * 1000
-            print(f"图像解码时间: {elapsed_time} ms")
+            print(f"Image decoding time: {elapsed_time} ms")
 
-            # cv2.imshow('head', data['obs']['cam.head'])
-            # cv2.imshow('hand_left', data['obs']['cam.hand_left'])
-            # cv2.imshow('hand_right', data['obs']['cam.hand_right'])
-            # cv2.waitKey(1)
-            # cv2.imwrite('head.jpg', data['obs']['cam.head'])
-            # cv2.imwrite('hand_left.jpg', data['obs']['cam.hand_left'])
-            # cv2.imwrite('hand_right.jpg', data['obs']['cam.hand_right'])
-            # cv2.waitKey(1)
-            # 提交推理任务到线程池
+            # Submit inference task to thread pool
             future = self.executor.submit(self.model.infer, data if isinstance(data, list) else [data])
             future.add_done_callback(self.inference_callback)
         except Exception as e:
-            print(f"处理推理队列时出错: {e}")
+            print(f"Error processing inference queue: {e}")
             import traceback
             traceback.print_exc()
     
     def inference_callback(self, future):
+        """Callback function for handling inference results
+        
+        Args:
+            future: Future object containing inference results
+        """
         try:
-            result = future.result() # 获取线程结果
+            result = future.result()  # Get thread result
             print(result)
             self.zmq_server.sendMessage(result)
         except Exception as e:
-            print(f"推理回调时出错: {e}")
+            print(f"Error in inference callback: {e}")
             import traceback
             traceback.print_exc()
     
     def recvThreadFun(self):
+        """Main receiving thread function for processing incoming messages"""
         print('Start to receive data and infer...')
         while self.running:
             message = self.zmq_server.recvMessage()
@@ -110,23 +124,9 @@ class VLAServer:
         print('Stop to receive data...')
     
     def close(self):
-        # 关闭线程
+        """Close the VLA server and cleanup resources"""
+        # Stop threads
         with self.thread_lock:
             self.running = False
         self.executor.shutdown(wait=False)
         self.zmq_server.close()
-
-
-# if __name__ == "__main__":
-#     message_handler = VLAServer()
-#     # receive_thread = threading.Thread(target=message_handler.receive_messages)
-#     # receive_thread.daemon = True
-#     # receive_thread.start()
-#     # print(f"原神server: {Config.ZMQ_ADDR}, 已启动...")
-#     try:
-#         while True:
-#             time.sleep(1)
-#     except KeyboardInterrupt:
-#         print("程序被中断")
-#     finally:
-#         message_handler.close()

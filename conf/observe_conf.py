@@ -1,13 +1,15 @@
 from ml_collections import ConfigDict
 
-# 定义模型类型的枚举类
-
 def get_observer_config():
-    """Generate config for Observer
+    """Generate configuration for the observation system.
+    
+    This function creates configuration settings for the robot observation system,
+    including frame rate and other observation-related parameters.
 
     Returns:
-        ConfigDict: Configuration for Observer.
+        ConfigDict: Configuration dictionary for the Observer containing:
+            - fps: Frames per second for observation data collection
     """
     config = ConfigDict()
-    config.fps = 30 # Observation period to get robot observations, in milliseconds [ms]
+    config.fps = 30  # Frames per second for robot observation data collection
     return config

@@ -81,7 +81,6 @@ class RobotBody(RobotBase):
         gripper_states, timestamp = self.robot.gripper_states()
         vmin, vmax = 35, 120
         gripper_states = (np.array(list(gripper_states)) - vmin) / (vmax - vmin) # normalize
-        # gripper_states = np.array(list(gripper_states)) * (vmax - vmin) + vmin # re-normalize
         return np.array(list(arm_states) + list(gripper_states))
 
     def close(self):
@@ -112,6 +111,5 @@ if __name__ == '__main__':
                     img_show = cv2.cvtColor(value, cv2.COLOR_RGB2BGR)
                 cv2.imshow(key, img_show)
                 cv2.waitKey(1)
-            # time.sleep(0.001)  # Control loop frequency
     except KeyboardInterrupt:
         robot.close()

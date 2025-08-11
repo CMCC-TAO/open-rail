@@ -13,7 +13,7 @@ except:
     pass
 
 '''
-# 不同模型需修改代码TODO处的模型路径和obs映射
+# Different models need to modify model path and obs mapping at TODO locations in the code
 python vis_eval.py \
 --model_path /hy0505/checkpoints/gr00t_finetune/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000 \
 --gt_root /hy0505/dataset/A2d_zyhy_data/gr00t/task_158284_depth_test/task_158284_test \
@@ -27,32 +27,37 @@ python vis_eval.py \
 --note ''
 '''
 def main(args):
-    # 添加项目根目录到系统路径
+    """Main function for VLA model evaluation.
+    
+    Args:
+        args: Command line arguments containing model path, data paths, and evaluation parameters.
+    """
+    # Add project root directory to system path
     sys.path.append(str(Path(__file__).resolve().parents[2]))
-    # TODO: 修改模型路径
+    # TODO: Modify model path
     from server.models.gr00t import gr00t_n1_5
-    model = gr00t_n1_5.ModelVLA({'model_path': args.model_path}) # 模型
+    model = gr00t_n1_5.ModelVLA({'model_path': args.model_path})  # model
 
     parquet_file = f'{args.gt_root}/data/chunk-{str(args.chunk_id).zfill(3)}/episode_{str(args.episode_id).zfill(6)}.parquet'
-    print(f"加载gt数据: {parquet_file}...")
+    print(f"Loading gt data: {parquet_file}...")
     df_gt = pd.read_parquet(parquet_file, columns=['action', 'observation.state'])
     if df_gt is None:
-        print(f"加载gt数据失败, 请检查文件路径: {parquet_file}")
+        print(f"Failed to load gt data, please check file path: {parquet_file}")
         return
     depth_array = None
     depth_file = f'{args.gt_root}/videos/chunk-{str(args.chunk_id).zfill(3)}/observation.images.cam_top_depth/episode_{str(args.episode_id).zfill(6)}.zarr'
     try:
-        print(f"加载depth数据: {depth_file}...")
+        print(f"Loading depth data: {depth_file}...")
         depth_array = zarr.open_array(depth_file, mode='r')
     except:
-        print(f"加载depth数据失败, 请检查文件路径: {depth_file}")
-    # 获取cam数据
+        print(f"Failed to load depth data, please check file path: {depth_file}")
+    # Get cam data
     cam_frames = {}
     cameras = ['top_head', 'hand_left', 'hand_right']
     for name in cameras:
         cam_frames[name] = []
         video_path = f'{args.gt_root}/videos/chunk-{str(args.chunk_id).zfill(3)}/observation.images.{name}/episode_{str(args.episode_id).zfill(6)}.mp4'
-        print(f"加载cam.{name}数据: {video_path}...")
+        print(f"Loading cam.{name} data: {video_path}...")
         capture = cv2.VideoCapture(video_path)
         while True:
             ret, frame = capture.read()
@@ -60,7 +65,7 @@ def main(args):
                 break
             cam_frames[name].append(frame)
         capture.release()
-    print(f"gt数据长度: {len(df_gt)}, cam长度: {len(cam_frames['top_head'])}")
+    print(f"gt data length: {len(df_gt)}, cam length: {len(cam_frames['top_head'])}")
 
     dt_length = min(len(df_gt), args.dt_length) if args.dt_length > 0 else len(df_gt)
     joint_dim = args.joint_dim
@@ -84,7 +89,7 @@ def main(args):
             y_state_vals[joint_idx].append(state_val)
             x_gt_vals[joint_idx].append(ind)
         if ind % args.lookahead_idx == 0:
-            # TODO: 不同模型修改此处obs映射，其与vla_model.py中__main__的obs一致
+            # TODO: Different models modify obs mapping here, consistent with obs in __main__ of vla_model.py
             obs = {
                 'cam.head': cam_frames[cameras[0]][ind], # (480, 640, 3)
                 'cam.hand_left': cam_frames[cameras[1]][ind], # (480, 640, 3)
@@ -96,7 +101,7 @@ def main(args):
             }
             result = model.infer([{'obs': obs, 'ref_timestamp': []}])
             chunk_size = result['pred_action'].shape[0]
-            assert args.lookahead_idx <= chunk_size, f"lookahead_idx({args.lookahead_idx})需要小于等于chunk_size({chunk_size})"
+            assert args.lookahead_idx <= chunk_size, f"lookahead_idx({args.lookahead_idx}) must be less than or equal to chunk_size({chunk_size})"
             for joint_idx in range(joint_dim):
                 for i in range(args.lookahead_idx):
                     y_pred_vals[joint_idx].append(float(result['pred_action'][i, joint_idx]))
@@ -115,7 +120,7 @@ def main(args):
     elif max_cols == 1:
         axes = np.array([[ax] for ax in axes])
 
-    # 绘制每个关节的子图
+    # Draw subplot for each joint
     for joint_idx in range(joint_dim):
         row_idx = joint_idx // max_cols
         col_idx = joint_idx % max_cols
@@ -138,7 +143,7 @@ def main(args):
                 marker='o', markersize=8,
                 linestyle='', label='trans_point')
 
-        # y_pred_vals和y_action_vals的MSE
+        # MSE between y_pred_vals and y_action_vals
         mse = np.mean((np.array(y_pred_vals[joint_idx])[:dt_length] - np.array(y_action_vals[joint_idx])[:dt_length])**2)
         ax.text(0.01, 0.95, f'MSE: {mse:.3e}', transform=ax.transAxes, fontsize=12, verticalalignment='top')
         ax.set_title(f'joint {joint_idx}')
@@ -147,14 +152,14 @@ def main(args):
         ax.legend()
         ax.grid(True)
     
-    # 依据关节ID，分开计算MSE等
+    # Calculate MSE separately based on joint ID
     str_mse = ''
     splits_ids = args.split_ids.split(',')
     for split_id in splits_ids:
         start_id, end_id = split_id.split('-')
         start_id, end_id = int(start_id), int(end_id)
         if start_id < 0 or end_id > joint_dim:
-            print(f'ERROR: 关节ID超出范围: {start_id}-{end_id}')
+            print(f'ERROR: Joint ID out of range: {start_id}-{end_id}')
             continue
         mean_mse = np.mean([np.mean((np.array(y_pred_vals[joint_idx])[:dt_length] - np.array(y_action_vals[joint_idx])[:dt_length])**2) for joint_idx in range(start_id, end_id)])
         str_mse += f'{start_id}-{end_id}: {mean_mse:.3e}, '
@@ -164,32 +169,32 @@ def main(args):
     str_info = f"VLA EVAL ({parquet_file.replace(args.gt_root, '')}) \nLEN: {dt_length}, Mean MSE: [{str_mse}], Lookahead/Chunk: {args.lookahead_idx}/{chunk_size}\nLanguage: '{args.language}'{args_note}"
     fig.suptitle(str_info, fontsize=16)
     print(str_info)
-    # 隐藏多余的子图
+    # Hide extra subplots
     for joint_idx in range(joint_dim, rows * max_cols):
         row_idx = joint_idx // max_cols
         col_idx = joint_idx % max_cols
         fig.delaxes(axes[row_idx, col_idx])
-    # 为标题留出空间
+    # Leave space for title
     plt.tight_layout(rect=(0, 0, 1, 0.98))
-    # 保存显示图表
+    # Save and display chart
     img_name = 'img_vis_eval'
     if args.note != '':
         img_name = f'{img_name}_{args.note}'
     plt.savefig(f'{img_name}.png', dpi=100, bbox_inches='tight')
-    print(f'EVAL图表已保存至: {os.getcwd()}/{img_name}.png')
+    print(f'EVAL chart saved to: {os.getcwd()}/{img_name}.png')
     # plt.show()
     
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="VLA模型离线评估可视化工具")
-    parser.add_argument("--model_path", type=str, required=True, help="模型路径")
-    parser.add_argument("--lookahead_idx", type=int, default=16, help="预取lookahead_idx，可以设置为chunk_size")
-    parser.add_argument("--gt_root", type=str, required=True, help="gt数据根目录")
-    parser.add_argument("--episode_id", type=int, default=0, help="轨迹id")
-    parser.add_argument("--chunk_id", type=int, default=0, help="chunk id")
-    parser.add_argument("--joint_dim", type=int, default=16, help="关节维度")
-    parser.add_argument("--dt_length", type=int, default=-1, help="可视化frame的长度，-1时：可视化该轨迹全部数据长度")
-    parser.add_argument("--split_ids", type=str, default='0-7,7-14,14-15', help="依据关节ID，分开计算MSE等")
-    parser.add_argument("--language", type=str, default='pick bottle into the box', help="自定义语言指令")
-    parser.add_argument("--note", type=str, default='', help="自定义备注，会显示在图像及文件名上")
+    parser = argparse.ArgumentParser(description="VLA model offline evaluation visualization tool")
+    parser.add_argument("--model_path", type=str, required=True, help="Model path")
+    parser.add_argument("--lookahead_idx", type=int, default=16, help="Lookahead index, can be set to chunk_size")
+    parser.add_argument("--gt_root", type=str, required=True, help="Ground truth data root directory")
+    parser.add_argument("--episode_id", type=int, default=0, help="Trajectory ID")
+    parser.add_argument("--chunk_id", type=int, default=0, help="Chunk ID")
+    parser.add_argument("--joint_dim", type=int, default=16, help="Joint dimension")
+    parser.add_argument("--dt_length", type=int, default=-1, help="Visualization frame length, -1: visualize full trajectory data length")
+    parser.add_argument("--split_ids", type=str, default='0-7,7-14,14-15', help="Split MSE calculation based on joint IDs")
+    parser.add_argument("--language", type=str, default='pick bottle into the box', help="Custom language instruction")
+    parser.add_argument("--note", type=str, default='', help="Custom note, will be displayed on image and filename")
     args = parser.parse_args()
     main(args)

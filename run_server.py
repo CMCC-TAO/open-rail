@@ -6,6 +6,17 @@ from server.core.vla_server import VLAServer
 from server.core.zmq_server import ZMQServer
 
 def get_model(config):
+    """Create and return a VLA model instance based on configuration
+    
+    Args:
+        config: Configuration object containing model type and settings
+        
+    Returns:
+        ModelVLA: VLA model instance for the specified type
+        
+    Raises:
+        ValueError: If model type is not supported
+    """
     if config.type == ModelType.ACT:
         from server.models.act import ModelVLA as ACT
         return ACT(config.act)
@@ -25,7 +36,7 @@ def get_model(config):
         raise ValueError("Invalid model type")
 
 def parse_args():
-    """Parse command line arguments (simplified version)
+    """Parse command line arguments for VLA Server
     
     Returns:
         argparse.Namespace: Parsed command line arguments
@@ -34,8 +45,8 @@ def parse_args():
     
     # Keep only the most commonly used parameters
     parser.add_argument('--model_type', type=str, choices=['act', 'gr00t_n1', 'gr00t_n1_5', 'rdt', 'smolvla'],
-                       help='Model type')
-    parser.add_argument('--model_path', type=str, help='Model path')
+                       help='Model type to use for inference')
+    parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     
     return parser.parse_args()
 
@@ -65,17 +76,24 @@ def override_config_with_args(config, args):
     return config
 
 if __name__ == "__main__":
+    """Main entry point for VLA Server
+    
+    This script initializes and runs the VLA server with the specified
+    configuration and model type.
+    """
     args = parse_args()
     # Get default configuration
     config = get_server_config()
     config = override_config_with_args(config, args)
     
+    # Initialize server components
     zmq_server = ZMQServer(config.zmq)
     model = get_model(config.models)
     vla_server = VLAServer(config, zmq_server, model)
     
     try:
         # Run server
+        print(f"Starting VLA Server with model type: {config.models.type}")
         vla_server.run()
     except KeyboardInterrupt:
         print("Program interrupted")

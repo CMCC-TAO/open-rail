@@ -6,21 +6,45 @@ import rclpy
 import numpy as np
 from geometry_msgs.msg import TwistStamped
 import time
-import time
 import numpy as np
 import ruckig
 from a2d_sdk.robot import RobotDds
 from scipy.interpolate import CubicSpline
 
 class RobotController_direct():
+    """Direct robot controller for A2D robot.
+    
+    This class provides direct control interface for A2D robot with trajectory planning capabilities.
+    
+    Attributes:
+        robot: RobotDds instance for robot communication
+        dof (int): Degrees of freedom (14 for A2D robot)
+        interval (float): Control interval in seconds
+    """
+    
     def __init__(self, simulation=False, robot=None):
+        """Initialize the robot controller.
+        
+        Args:
+            simulation (bool): Whether running in simulation mode
+            robot: Existing robot instance, creates new one if None
+        """
         self.robot = RobotDds() if robot is None else robot
         self.dof = 14
         self.interval = 0.01
         # Wait for robot to initialize
         time.sleep(1)
 
-    def rucking_planing(self,current_pose,target_pose):
+    def rucking_planing(self, current_pose, target_pose):
+        """Generate trajectory using Ruckig trajectory planner.
+        
+        Args:
+            current_pose: Current joint positions
+            target_pose: Target joint positions
+            
+        Returns:
+            list: Generated trajectory points
+        """
         # Setup ruckig trajectory planner
         rk = ruckig.Ruckig(self.dof, self.interval)
         rk_input = ruckig.InputParameter(self.dof)
@@ -50,16 +74,25 @@ class RobotController_direct():
             rk_output.pass_to_input(rk_input)
         return trajs
 
-    def third_order_interpolation(self,current_pose,target_pose):
+    def third_order_interpolation(self, current_pose, target_pose):
+        """Generate third-order polynomial interpolation trajectory.
+        
+        Args:
+            current_pose: Current joint positions
+            target_pose: Target joint positions
+            
+        Returns:
+            list: Interpolated trajectory points
+        """
         current = np.array(current_pose, dtype=np.float16)
         target = np.array(target_pose, dtype=np.float16)
         
     
         deltas = np.abs(target - current)
         mask = deltas > np.deg2rad(1)
-        # print('mask',mask)
+        # print('mask', mask)
         max_velocity = 0.785  # rad/s
-        # 计算插值时间
+        # Calculate interpolation time
         if np.any(mask):
             T_i = (3 * deltas[mask]) / (2 * max_velocity)
             T_total = np.max(T_i)
@@ -69,18 +102,18 @@ class RobotController_direct():
             # self.send_cmd(target.tolist(), neck_trans)
             return
         # print(T_total)
-        # 预分配数组
+        # Pre-allocate arrays
         num_steps = int(T_total / 0.01) + 1
         time_points = np.linspace(0, T_total, num_steps + 1)
         coeff_a2 = 3 * (target - current) / (T_total ** 2 + 1e-9)
         coeff_a3 = -2 * (target - current) / (T_total ** 3 + 1e-9)
         
-        # 广播计算
+        # Broadcast calculation
         t_matrix = time_points[:, np.newaxis]  # 转换为列向量
         theta = current + coeff_a2 * t_matrix**2 + coeff_a3 * t_matrix**3
         # print(num_steps)
         # print(f'get interpolation time:{(time.time()-starttime)*1000} ms ')
-        # 应用掩码处理不需要插值的关节
+        # Apply mask to handle joints that don't need interpolation
         theta[:, ~mask] = target[~mask]
         return theta.tolist()
 
@@ -98,13 +131,11 @@ class RobotController_direct():
             raise Exception("Failed to get arm joint states")
 
         dis=np.abs(np.array(current_positions) - np.array(target_positions))
-        mask = dis>np.deg2rad(0.01)  #决定是否使用插值策略
+        mask = dis>np.deg2rad(0.01)  # Determine whether to use interpolation strategy
         if not np.any(mask):
             self.robot.move_arm(target_positions)
             time.sleep(0.03)
-            return 
-            # print('dis exit!!!')
-            # print(f'dis {dis}')
+            return
         
         trajs = self.rucking_planing(current_positions,target_positions)
       
@@ -124,15 +155,22 @@ class RobotController_direct():
 
 
     def translate_rag_todeg(self,joints_list):
+        """Convert joint values from radians to degrees and meters to centimeters
+        
+        Args:
+            joints_list: List of joint values where first 3 are in radians and last is in meters
+            
+        Returns:
+            List with first 3 elements converted to degrees and last element to centimeters
+        """
         joint_list_3 = [round(joints_list[i] / 3.1415 * 180, 4) for i in range(3)]
         
-        # 将最后一个元素从米转换为厘米，并保留4位小数
+        # Convert last element from meters to centimeters with 4 decimal places
         joints_list[-1] = round(joints_list[-1] * 100, 4)
         
-        # 合并前3个元素（角度）和最后一个元素（厘米）
+        # Combine first 3 elements (angles) and last element (centimeters)
         joints_list = joint_list_3 + [joints_list[-1]]
             
-        # print("转换后的列表:", joints_list)
         return joints_list
   
 
@@ -200,35 +238,14 @@ def cubicspline_chunk(P):
     return P_interp
 
 def main(args=None, robot=None):
-    np.set_printoptions(suppress=True,precision=4)
+    """Main function to reset robot to default position.
+    
+    Args:
+        args: Command line arguments (unused)
+        robot: Existing robot instance
+    """
+    np.set_printoptions(suppress=True, precision=4)
     robot_controller = RobotController_direct(robot=robot)
-    arm_joints = np.zeros(14, dtype=np.float64)
-    # data = np.load('./test/data_pick_bread_action_224.npy')
-    # data = np.load('/home/tjy/CODE/agirobot/test/1.npy')[:-1]
-    # # data = np.load('/home/tjy/CODE/agirobot/test/1.npy')[:29]
-    # print(len(data))
-    # print(len(data[0]))
-    # # print(data[0])
-    # # print(data[-1] - data[0])
-    # robot_controller.send_cmd(data[0])
-    # # data_new = cubicspline_chunk(data)
-    # # print(len(data_new))
-    # time.sleep(2)
-    # # robot_controller.send_cmd(data[-1],neck_trans=True)
-    # # robot_controller.send_cmd(data[-1],neck_trans=True)
-    # for i in range(1,len(data)):
-    #     robot_controller.send_cmd(data[i])
-    #     # robot_controller.robot.move_arm(data_new[i][:14])
-    #     time.sleep(3)
-    #     print(f'send {data[i][:14]}' )
-    # for i in range(1,len(data)):
-    #     starttime = time.time()
-    #     data[i][-1] = data[i][-1] * 100
-    #     print(f"SEND {data[i]}")
-    #     robot_controller.send_cmd(data[i],neck_trans=False)
-    #     usingtime = (time.time() - starttime)*1000
-    #     print(f'one step using {usingtime} ms')
-        # time.sleep(0.03)
     arm_joints = np.array([-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869,
                             1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873])
     gripper = np.array([0, 0])
@@ -237,13 +254,7 @@ def main(args=None, robot=None):
     weel_joints = np.array([0.0, 0.0])
     joint_list = np.concatenate((arm_joints, gripper, head_joints, waist_joints, weel_joints))
     robot_controller.send_cmd(joint_list)
-    # # robot_controller.robot.shutdown()
-    # while True:
-    #     robot_controller.send_cmd(joint_list)
-    #     # print('send')
-    #     time.sleep(0.01)
-    # robot_controller.robot.destroy_node()
-    # rclpy.shutdown()
+    # Robot shutdown and cleanup would go here if needed
 
 if __name__ == '__main__':
     main()

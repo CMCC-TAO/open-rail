@@ -2,12 +2,19 @@ import threading
 import time
 
 class MultiThreadTimer:
+    """Multi-threaded timer that executes callbacks at specified intervals.
+    
+    This timer runs callbacks in separate threads to avoid blocking the main timer loop.
+    """
+    
     def __init__(self, interval, callback, *args, **kwargs):
-        """
-        :param interval: 每次调用的时间间隔（毫秒）
-        :param callback: 回调函数，将在新线程中运行
-        :param args: 回调函数的位置参数
-        :param kwargs: 回调函数的关键字参数
+        """Initialize the multi-thread timer.
+        
+        Args:
+            interval (float): Time interval between calls (milliseconds)
+            callback (callable): Callback function to run in new thread
+            *args: Positional arguments for the callback function
+            **kwargs: Keyword arguments for the callback function
         """
         self.interval = interval
         self.callback = callback
@@ -20,7 +27,7 @@ class MultiThreadTimer:
     def _run(self):
         while not self._stop_event.is_set():
             start_time = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-            # 在一个新线程中启动回调函数
+            # Start callback function in a new thread
             t = threading.Thread(target=self.callback, args=self.args, kwargs=self.kwargs)
             t.start()
             end_time = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
@@ -28,27 +35,34 @@ class MultiThreadTimer:
             time.sleep(max(0.0, self.interval/1000.0 - elapsed_time/1e9))
 
     def start(self):
+        """Start the timer."""
         self._thread.start()
     
     def join(self, timeout=None):
+        """Wait for the timer thread to complete.
+        
+        Args:
+            timeout (float, optional): Maximum time to wait in seconds
+        """
         self._thread.join(timeout=timeout)
 
     def stop(self):
+        """Stop the timer and wait for completion."""
         self._stop_event.set()
         self._thread.join()
 
-# 示例函数
+# Example function
 def my_task():
-    # print(f"[{time.strftime('%X')}] 任务执行中...")
-    print(f"[{time.time()}] 任务执行中...")
+    """Example task function for demonstration."""
+    print(f"[{time.time()}] Task executing...")
 
 if __name__ == "__main__":
-    # 使用多线程定时器
+    # Use multi-thread timer
     timer = MultiThreadTimer(1, my_task)
     timer.start()
 
-    # 运行 10 秒后停止
+    # Stop after running for 10 seconds
     # time.sleep(10)
     # timer.stop()
     timer.join()
-    print("定时器已停止")
+    print("Timer stopped")

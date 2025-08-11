@@ -44,16 +44,6 @@ class RobotBody(RobotBase):
         """
         if random.random() < 0.001:
             pass
-            # print(f'Mock control robot...')
-        # self.robot.move_arm(action[0:14].tolist())
-        # self.robot.move_gripper(action[14:16].tolist())
-        # action = data['pred_action']
-        # obs_state = data['obs_state']
-        # # action = misc.smooth_each_dim_with_spline(np.concatenate([action[0], action[-1]], axis=0), num_smooth_points=50, s=0.05)
-        # for i, act in enumerate(action):
-        #     self.robot.move_arm(action[i, 0:14].tolist())
-        #     self.robot.move_gripper(action[i, 14:16].tolist())
-        #     time.sleep(0.01)
 
     def retrieve_observation(self):
         """Retrieve observation data from the LeRobot dataset for simulation.
@@ -72,21 +62,12 @@ class RobotBody(RobotBase):
                 shuffle=False,
             ))
             self.currt_index = 0
-            # self.currt_index = self.dataset.num_frames - 1
-            # return None
-        # data = self.dataset[self.currt_index]
+        
         self.currt_index += 1
         data = next(self.dataloader)
-        # print(batch['observation.state'])
-        # data_keys(['observation.images.top_head', 'observation.images.hand_left', 'observation.images.hand_right', 'observation.state', 'action', 'episode_index', 'frame_index', 'index', 'task_index', 'timestamp'])
-        # print(data.keys())
-        # print(data['observation.images.top_head'].permute(1, 2, 0).shape)
-        # print(data["observation.state"].cpu().numpy())
-        # print(data["timestamp"].cpu().numpy())
         
         cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
         image, ref_timestamp = (data[cam_names[cam_ref]][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-        # print(image.dtype)
 
         result['ref_timestamp'] = ref_timestamp
         result[f'cam.{cam_ref}'] = image
@@ -103,10 +84,8 @@ class RobotBody(RobotBase):
         end_time = time.time()
         if end_time-start_time < self.period:
             sleep_time = self.period - (end_time - start_time)
-            # print(f'sleep time: {sleep_time}')
             time.sleep(sleep_time)
         end_time = time.time()
-        # print(f'get obs time: {(end_time - start_time)*1000} ms, end_time: {end_time}')
         return result
 
     def close(self):
@@ -135,6 +114,5 @@ if __name__ == '__main__':
                     img_show = cv2.cvtColor(value, cv2.COLOR_RGB2BGR)
                 cv2.imshow(key, img_show)
                 cv2.waitKey(1)
-            # time.sleep(0.001)  # Control loop frequency
     except KeyboardInterrupt:
         robot.close()

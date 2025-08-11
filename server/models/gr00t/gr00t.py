@@ -8,8 +8,14 @@ from gr00t.data.schema import EmbodimentTag
 from gr00t.experiment.data_config import DATA_CONFIG_MAP
 
 class ModelVLA:
+    """GR00T Vision-Language-Action Model
+    
+    This class implements the GR00T policy for robotic manipulation tasks,
+    providing inference capabilities for vision-language-action models.
+    """
+    
     def __init__(self):
-        # MODEL_PATH = "/home/robot/Downloads/checkpoint-60000"
+        """Initialize the GR00T VLA model with default configuration"""
         MODEL_PATH = "/home/robot/Downloads/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000"
         # MODEL_PATH = "/home/robot/Downloads/pickbottle_10xx_chunk_size_64_20250503_143309_b6/checkpoint-60000"
         # EMBODIMENT_TAG = "gr1"
@@ -40,6 +46,14 @@ class ModelVLA:
                 print(key, value)
 
     def infer(self, data):
+        """Perform inference on input data
+        
+        Args:
+            data: Dictionary containing observation data and metadata
+            
+        Returns:
+            dict: Inference result containing predicted actions and timestamps
+        """
         print(f'data keys: {data.keys()}')
         obs = data['obs'].copy()
         print(f'obs keys: {obs.keys()}')
@@ -77,16 +91,24 @@ class ModelVLA:
             }
 
     def test_policy(self, obs):
+        """Test the policy with given observations
+        
+        Args:
+            obs: Dictionary containing observation data
+            
+        Returns:
+            dict: Test result containing action predictions
+        """
         obs = obs.copy()
         obs['state'] = obs['state'][None]
         obs['state.left_arm'] = obs['state'][:, 0:7]
         obs['state.right_arm'] = obs['state'][:, 7:14]
         obs['state.left_hand'] = obs['state'][:, 14:15]
         obs['state.right_hand'] = obs['state'][:, 15:16]
-        # del obs['state']
-        aaa = time.time()
+        
+        start_time = time.time()
         predicted_action = self.policy.get_action(obs)
-        print(time.time() - aaa, obs.keys())
+        print(time.time() - start_time, obs.keys())
         for key, value in predicted_action.items():
             print(key, value.shape)
         predicted_action = np.concatenate([

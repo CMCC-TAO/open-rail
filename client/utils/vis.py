@@ -12,8 +12,7 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib import cm
 from typing import List, Tuple, Optional, Union, Dict, Any
 
-# plt.rcParams['font.sans-serif'] = ['Noto Sans CJK SC', 'SimHei']  # Set default font to SimHei
-# plt.rcParams['axes.unicode_minus'] = False    # Fix negative sign display issue
+
 
 class PlotConfig:
     server_address: str = "tcp://*:58585"  # ZMQ binding address
@@ -811,6 +810,11 @@ def start_server(config=None):
         print("Program ended")
 
 def test_client():
+    """Test client function for sending sample data to the plot server.
+    
+    Generates sine and cosine wave data and sends it to the visualization server
+    for testing purposes.
+    """
     context = zmq.Context()
     socket = context.socket(zmq.PAIR)
     socket.connect('tcp://localhost:58585')
@@ -820,7 +824,7 @@ def test_client():
     print("Starting to send data...")
     
     try:
-        # 生成正弦波和余弦波数据
+        # Generate sine and cosine wave data
         t = 0
         while True:
             # Multi-subplot data format example - line data
@@ -832,7 +836,7 @@ def test_client():
                         'x': [t, t + 10],
                         'line_idx': 0,
                         "line_props": {
-                            "show_line": True,  # 不显示线条，只显示点
+                            "show_line": True,  # Show lines, set to False to show only points
                             "color": "red",
                             "marker": "o",
                             "markersize": 5,

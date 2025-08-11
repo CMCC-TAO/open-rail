@@ -1,61 +1,133 @@
-# VLA大模型推理框架
-* 开发者： 赵永生、赵磊、文宣章
-* 使用者： 赵磊、文宣章、高晗
+# VLA Large Model Inference Framework
 
-## 1. 框架概述
-xxxx
+* **Developers:** Zhao Yongsheng, Zhao Lei, Wen Xuanzhang
+* **Users:** Zhao Lei, Wen Xuanzhang, Gao Han
 
-### 1.1 框架文件结构
+## 1. Framework Overview
+
+This is a comprehensive Vision-Language-Action (VLA) inference framework designed for robotic manipulation tasks. The framework provides a client-server architecture that enables real-time robot control using various VLA models including ACT, GR00T, RDT, and SmolVLA.
+
+### 1.1 Architecture
+
+The framework uses a client-server architecture with ZMQ for communication:
+
+```
+┌─────────────┐    ZMQ     ┌─────────────┐
+│   Client    │ ◄────────► │   Server    │
+│             │            │             │
+│ ┌─────────┐ │            │ ┌─────────┐ │
+│ │ Robot   │ │            │ │ VLA     │ │
+│ │ Control │ │            │ │ Model   │ │
+│ └─────────┘ │            │ └─────────┘ │
+│             │            │             │
+│ ┌─────────┐ │            │ ┌─────────┐ │
+│ │ Data    │ │            │ │Inference│ │
+│ │ Manager │ │            │ │ Engine  │ │
+│ └─────────┘ │            │ └─────────┘ │
+└─────────────┘            └─────────────┘
+```
+
+### 1.2 Framework Structure
 
 ```
 .
-├── a2d_sdk
-├── a2d_sdk_1.1.3
-├── client
-├── conf
-├── go_to_ready.py
-├── log
-├── output
-├── README.md
-├── run_client.py
-├── run_server.py
-├── samples
-├── scripts
-├── server
-└── tools
+├── client/                 # Client-side components
+│   ├── core/              # Core client functionality
+│   ├── robots/            # Robot implementations
+│   └── utils/             # Utility functions
+├── conf/                  # Configuration files
+├── data/                  # Data storage
+├── scripts/               # Utility scripts
+├── server/                # Server-side components
+│   ├── core/              # Core server functionality
+│   └── models/            # VLA model implementations
+├── run_client.py          # Client entry point
+├── run_server.py          # Server entry point
+└── README.md              # This file
 ```
 
-## 2. 框架使用
+## 2. Framework Usage
 
-### 2.1 Config
-框架所有配置项在conf/config.py中定义，具体请看源码。
+### 2.1 Configuration
+
+All framework configuration items are defined in the `conf/` directory. Each component has its own configuration file:
+
+- `client_conf.py` - Client configuration
+- `server_conf.py` - Server configuration  
+- `models_conf.py` - Model configuration
+- `robots_conf.py` - Robot configuration
+- `zmq_conf.py` - ZMQ communication configuration
 
 ### 2.2 Client
-客户端主要负责从机器人获取观测数据和机器人本体状态数据，将数据发送给服务端，并接收服务端返回的推理结果，将结果发送给机器人。
 
-#### 机器人准备
+The client is responsible for:
+- Obtaining observation data and robot state from the robot
+- Sending data to the server
+- Receiving inference results from the server
+- Sending control commands to the robot
 
-按照机器人的说明准备好机器人环境。新增机器人可以按照示例增加，并在配置文件里配置好机器人。当前已支持的机器人列表如下:
+#### Supported Robots
 
-- A2D：智源A2D机器人。[*文档*](client/robots/a2d/README.md)
+Currently supported robots:
 
-* 运行客户端
-需要先配置lerobot环境
-* 设置lerobot环境
-```
-conda activate lerobot
-```
+- **A2D Robot**: A2D humanoid robot - [Documentation](client/robots/a2d/README.md)
+- **Mock Robot**: Simulation robot for testing
 
-```
-python run_client.py
-```
+#### Running the Client
+
+1. **Run Client**
+   ```bash
+   python run_client.py
+   ```
+
+2. **Client Command Line Options**
+   ```bash
+   python run_client.py --help
+   ```
 
 ### 2.3 Server
-* 设置gr00t环境
-```
-conda activate gr00t
-```
-* 运行客户端
-```
-python run_server.py
-```
+
+The server handles VLA model inference and provides results to clients.
+
+#### Supported Models
+
+- **ACT**: Action Chunking with Transformers
+- **GR00T N1**: NVIDIA GR00T N1 model
+- **GR00T N1.5**: NVIDIA GR00T N1.5 model - [Documentation](server/models/gr00t/README.md)
+- **RDT**: Robotic Diffusion Transformer
+- **SmolVLA**: Small Vision-Language-Action model
+
+#### Running the Server
+
+1. **Setup Model Environment**
+   ```bash
+   # For GR00T models
+   conda activate gr00t
+   
+   # For other models, use appropriate environment
+   ```
+
+2. **Run Server**
+   ```bash
+   python run_server.py
+   ```
+
+3. **Server Command Line Options**
+   ```bash
+   python run_server.py --help
+   ```
+   
+   Available options:
+   - `--model_type`: Specify model type (act, gr00t_n1, gr00t_n1_5, rdt, smolvla)
+   - `--model_path`: Path to model checkpoint
+
+## 3. Additional Resources
+
+### 3.1 Scripts
+
+Utility scripts are available in the `scripts/` directory:
+
+- **Data Visualization**: [LeRobot Data Viewer](scripts/show_lerobot_data/README.md)
+- **Evaluation Tools**: [VLA Evaluation](scripts/vla_eval/README.md)
+- **Robot Reset**: [A2D Robot Reset](scripts/reset_robot/README.md)
+
