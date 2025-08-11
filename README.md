@@ -91,11 +91,11 @@ The server handles VLA model inference and provides results to clients.
 
 #### Supported Models
 
-- **ACT**: Action Chunking with Transformers
-- **GR00T N1**: NVIDIA GR00T N1 model
-- **GR00T N1.5**: NVIDIA GR00T N1.5 model - [Documentation](server/models/gr00t/README.md)
-- **RDT**: Robotic Diffusion Transformer
-- **SmolVLA**: Small Vision-Language-Action model
+- **ACT**
+- **GR00T N1**
+- **GR00T N1.5** - [Documentation](server/models/gr00t/README.md)
+- **RDT**
+- **SmolVLA**
 
 #### Running the Server
 

@@ -52,6 +52,7 @@ def get_client_config():
     config.history_frame = False  # Enable/disable historical frame usage
     config.chunk_strategy = 'latest'  # Action chunk strategy, choices = ('fusion', 'latest')
     config.preprocess = 'pad_and_resize'
+    config.preprocess_size = [640, 640] # [height, width]
     # Language instruction options, default index 0
     config.language = [
         'pick bottle into box',

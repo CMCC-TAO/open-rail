@@ -48,12 +48,14 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description='VLA Client')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
-    parser.add_argument('--fps', type=int, help='Observer FPS')
+    parser.add_argument('--fps', type=int, help='FPS')
     parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
     parser.add_argument('--show_data', action='store_true', help='Show data visualization')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, help='Robot type')
     parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
+    parser.add_argument('--preprocess', type=str, choices=['crop_and_resize', 'pad_and_resize', 'resize', 'none'], help='Image preprocessing method')
+    parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')
     return parser.parse_args()
 
 def override_config_with_args(config, args):
@@ -78,6 +80,10 @@ def override_config_with_args(config, args):
         config.robots.type = args.robots_type
     if args.thre_prob_progress is not None:
         config.thre_prob_progress = args.thre_prob_progress
+    if args.preprocess is not None:
+        config.preprocess = args.preprocess
+    if args.preprocess_size is not None:
+        config.preprocess_size = args.preprocess_size
     return config
 
 def key_thread():

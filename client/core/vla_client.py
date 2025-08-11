@@ -48,9 +48,15 @@ class VLAClient():
         self.running = False
         self.is_running_action = True
         self.language = self.config.language[0]
+        self.allow_language_switch = True  # Flag to control automatic language switching
         
-        # Define image preprocess function, i.e. pad and resize
-        self._preprocess_func = (getattr(misc, self.config.preprocess) if self.config.preprocess != 'none' else None)
+        # Define image preprocess function
+        if self.config.preprocess != 'none':
+            preprocess_func = getattr(misc, self.config.preprocess)
+            height, width = self.config.preprocess_size
+            self._preprocess_func = lambda img: preprocess_func(img, target_height=height, target_width=width)
+        else:
+            self._preprocess_func = None
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
@@ -125,6 +131,10 @@ class VLAClient():
         - Initializes trajectory fitting and control timestamps
         - Sets up the fitted action chunk for control
         """
+        # Save current language state and disable automatic language switching during reset
+        saved_language = self.language
+        self.allow_language_switch = False
+        
         # Wait for observation changes after reset, then retrieve fresh obs for inference
         time.sleep(1.5)
         observations = self.robot.retrieve_observation()
@@ -163,6 +173,11 @@ class VLAClient():
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
             self.rdm.compute_avg_traj_time()
+            
+        # Restore language state and re-enable automatic language switching
+        self.language = saved_language
+        self.allow_language_switch = True
+    
     @run_time_decorator
     def inference_step(self):
         """Regular inference step for continuous VLA inference.
@@ -377,7 +392,7 @@ class VLAClient():
             if 'ext' in action and 'prob_progress' in action['ext']:
                 prob_progress = action['ext']['prob_progress']
                 self.info_act['prob_progress'] = prob_progress
-                if prob_progress >= self.config.thre_prob_progress:
+                if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
                     self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
 
             pred_action = action['pred_action']
