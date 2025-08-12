@@ -142,7 +142,6 @@ def create_layout(info: dict, terminal_size=None):
     robot_status_text = f'{status_text}\n{command_text}'
     
     # Calculate dynamic heights based on terminal size
-    print(terminal_size)
     if terminal_size is not None:
         terminal_height = terminal_size.height
         
@@ -152,22 +151,22 @@ def create_layout(info: dict, terminal_size=None):
             col_height = 4
             stats_height = 4
             robot_height = 4
-            debug_height = 3
+            debug_height = 4
             command_height = 2
             total_panel_height = min(terminal_height - 1, 15)
         else:
-            # Reserve space for title, borders, and padding (approximately 10 lines)
-            remaining_height = max(terminal_height - 10, 20)
+            # Reserve space for title, borders, and padding (approximately 2 lines)
+            remaining_height = max(terminal_height - 2, 20)
             
             # Distribute remaining height proportionally
             col_height = max(int(remaining_height * 0.25), 6)
             stats_height = max(int(remaining_height * 0.25), 6)
             robot_height = max(int(remaining_height * 0.25), 6)
-            debug_height = max(int(remaining_height * 0.2), 5)
-            command_height = max(int(remaining_height * 0.1), 3)
+            debug_height = max(int(remaining_height * 0.25), 5)
+            # command_height = max(int(remaining_height * 0.1), 0)
             
             # Adjust total height to fit terminal
-            total_panel_height = min(terminal_height - 1, terminal_height)
+            total_panel_height = min(terminal_height - 0, terminal_height)
     else:
         # Fallback to fixed heights if terminal_size is not available
         col_height = 8
@@ -187,6 +186,6 @@ def create_layout(info: dict, terminal_size=None):
         Layout(Panel(print_info, subtitle='Inference Stats', subtitle_align='right', height=stats_height)),
         Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=robot_height)),
         Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right', height=debug_height)),
-        Layout(Panel('Press Enter for commands', subtitle='Command', subtitle_align='right', height=command_height)),
+        # Layout(Panel('Press Enter for commands', subtitle='Command', subtitle_align='right', height=command_height)),
     )
-    return Panel(row_layout, title='VLA Client', title_align='center', height=total_panel_height)
+    return Panel(row_layout, title='VLA Client (Press Enter for commands)', title_align='center', height=total_panel_height)

@@ -51,7 +51,8 @@ class RobotBase():
         # Otherwise plan trajectory
         trajs = self._ruckig_planning(current_positions, target_positions)
         for i, traj in enumerate(trajs):
-            print(f"Executing trajectory point {i}: {traj}")
+            # print(f"Executing trajectory point {i}: {traj}")
+            print(f'\r{i}', end='')
             target_pose[:14] = traj
             self.control_robot(target_pose)
             time.sleep(0.01)

@@ -97,7 +97,7 @@ def handle_user_input(vla_client, robot, live):
     
     try:
         vla_client.is_running_action = False
-        cmd = input('Program paused, please enter command, press Enter to continue:\nr: Reset robot\nl: Modify language instruction\ns: Save data (if recording enabled)\nd: Delete data (if recording enabled)\nq: Quit\n')
+        cmd = input('\nProgram paused, please enter command, press Enter to continue:\nr: Reset robot\nl: Modify language instruction\ns: Save data (if recording enabled)\nd: Delete data (if recording enabled)\nq: Quit\n')
         
         if cmd == 'l':
             # Show preset language options
@@ -120,7 +120,7 @@ def handle_user_input(vla_client, robot, live):
         elif cmd == 'r':
             robot.reset_robot(target_pose='default')
             vla_client.inference_first()
-            input('Robot reset completed, program paused, press Enter to continue...')
+            input('\nRobot reset completed, program paused, press Enter to continue...')
             
         elif cmd == 's' and vla_client.config.record.switch:
             vla_client.dataset_write.save_writed_data()
@@ -202,8 +202,8 @@ if __name__ == "__main__":
                 terminal_size = console.size
                 live.update(create_layout(info, terminal_size))
             elif args.debug:
-                print(f"infer_count: {info['infer_count']}, avg_infer_time: {info['avg_infer_time']}, "
-                        f"avg_traj_time: {info['avg_traj_time']}, task_info: {info['ctrl_info']['language']}")
+                print(f"\rinfer_count: {info['infer_count']}, avg_infer_time: {info['avg_infer_time']}, "
+                        f"avg_traj_time: {info['avg_traj_time']}, task_info: {info['ctrl_info']['language']}", end='')
 
             # Check for user input using select
             if select.select([sys.stdin,], [], [], 0.001)[0]:

@@ -55,9 +55,20 @@ def get_client_config():
     config.preprocess_size = [640, 640] # [height, width]
     # Language instruction options, default index 0
     config.language = [
-        'pick bottle into box',
-        'pour milk into the box',
-        'put the sandwich in the microwave',
+        # '',
+        'open the microwave door, put the sandwish into it, and close the microwave door',
+        'take the sandwitch out from the oven'
+        # 'grasp the oven handle and gently pull to open the oven door',
+        'pick the bottle into the basket',
+        # 'carefully place the prepared sandwich onto the oven tray inside the cavity',
+        # 'close the oven door securely by pushing it until it latches',
+        # 'locate and press the start button to initiate the heating process',
+        # 'wait patiently while the oven heats the sandwich to the desired temperature',
+        # 'pick the bottle into the basket',
+        # # 'open the oven door again with caution after the heating is complete',
+        # 'remove the heated sandwich from the oven and place it neatly on a plate',
+        # 'gently push the oven door shut to return it to a closed position',
+        # 'reset the arm posture and hand configuration to the default idle gesture'
     ]
     config.thre_prob_progress = 0.9  # Probability threshold for switching language instructions
     return config
