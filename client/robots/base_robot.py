@@ -6,6 +6,7 @@ import ruckig
 class RobotBase():
     def __init__(self):
         self.robot = None
+        self.current_state = np.zeros(20)
 
     def control_robot(self, action):
         """

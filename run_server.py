@@ -1,9 +1,14 @@
 import time
 import argparse
+import threading
+from datetime import datetime
 from conf.models_conf import ModelType
 from conf.server_conf import get_server_config
 from server.core.vla_server import VLAServer
 from server.core.zmq_server import ZMQServer
+from rich.live import Live
+from rich.console import Console
+from server.utils.util import create_layout
 
 def get_model(config):
     """Create and return a VLA model instance based on configuration
@@ -47,6 +52,7 @@ def parse_args():
     parser.add_argument('--model_type', type=str, choices=['act', 'gr00t_n1', 'gr00t_n1_5', 'rdt', 'smolvla'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
     return parser.parse_args()
 
@@ -92,10 +98,49 @@ if __name__ == "__main__":
     vla_server = VLAServer(config, zmq_server, model)
     
     try:
-        # Run server
+        # Start server in a separate thread
+        server_thread = threading.Thread(target=vla_server.run, daemon=True)
+        server_thread.start()
         print(f"Starting VLA Server with model type: {config.models.type}")
-        vla_server.run()
+        
+        console = Console()
+        start_time = time.time()
+        live = None
+        
+        if not args.debug:
+            # Rich Live display mode
+            live = Live(console=console, refresh_per_second=4)
+            live.start()
+        else:
+            print("Debug mode enabled")
+        
+        # Main display loop
+        while getattr(vla_server, 'running', True):
+            try:
+                time.sleep(0.1)
+                info = {'config': config, 'vla_server': vla_server, 'model': model, 'start_time': start_time}
+                
+                if live is not None:
+                    # Update live display
+                    layout = create_layout(info, console.size)
+                    live.update(layout)
+                elif args.debug:
+                    # Debug mode: print simple status
+                    uptime = time.time() - start_time
+                    print(f"Uptime: {uptime:.1f}s, Infer count: {getattr(vla_server, 'infer_count', 0)}, "
+                          f"Avg infer time: {getattr(vla_server, 'avg_inference_time', 0):.4f}s")
+                    
+            except Exception as e:
+                if live is not None:
+                    console.print(f"Display error: {e}")
+                else:
+                    print(f"\nDisplay error: {e}")
+                time.sleep(1)
     except KeyboardInterrupt:
-        print("Program interrupted")
+        print("\nProgram interrupted")
     finally:
+        # Stop Live interface if it was started
+        if live is not None:
+            live.stop()
         vla_server.close()
+        print("Server shutdown complete")

@@ -16,7 +16,8 @@ class RobotBody(RobotBase):
         self.cfg, self.ori_cfg = config['robots']['a2d'], config
         self.camera= Camera(list(self.cfg['camera']['names'].values()))
         self.robot = Robot()
-        self.currt_timestamp = 0
+        self.current_state = np.zeros(20)
+        self.current_timestamp = 0
         self.gripper_count = 0
         self.gripper_cmd = [0.0, 0.0]
         time.sleep(1)
@@ -47,10 +48,10 @@ class RobotBody(RobotBase):
         result = {}
         cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
         image, ref_timestamp = self.camera.get_latest_image(cam_names[cam_ref])
-        if self.currt_timestamp == ref_timestamp:
+        if self.current_timestamp == ref_timestamp:
             return None
         else:
-            self.currt_timestamp = ref_timestamp
+            self.current_timestamp = ref_timestamp
 
         result['ref_timestamp'] = ref_timestamp
         result[f'cam.{cam_ref}'] = image
@@ -67,21 +68,9 @@ class RobotBody(RobotBase):
             joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
             currt_joint_states, timestamp = joint_states_nearest_fun(ref_timestamp)
             joint_states.extend(currt_joint_states)
-        result[f'obs.state'] = np.array(joint_states)
+        result['obs.state'] = np.array(joint_states)
+        self.current_state = result['obs.state']
         return result
-
-    def get_obs_only_state(self):
-        """Get only the robot state (joint positions) without camera data.
-        
-        Returns:
-            np.ndarray: Combined array of normalized arm and gripper joint states
-        """
-        # Convert protobuf format arm_states to list
-        arm_states, timestamp = self.robot.arm_joint_states()
-        gripper_states, timestamp = self.robot.gripper_states()
-        vmin, vmax = 35, 120
-        gripper_states = (np.array(list(gripper_states)) - vmin) / (vmax - vmin) # normalize
-        return np.array(list(arm_states) + list(gripper_states))
 
     def close(self):
         """Close and shutdown the robot and camera connections.

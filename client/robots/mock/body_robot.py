@@ -2,12 +2,15 @@ import time
 import torch
 import cv2
 import random
-import lerobot
 import logging
 import numpy as np
 from pprint import pprint
-from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
 from ..base_robot import RobotBase
+
+try:
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
+except ImportError:
+    pass
 
 class RobotBody(RobotBase):
     def __init__(self, config):
@@ -19,22 +22,26 @@ class RobotBody(RobotBase):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.cfg, self.ori_cfg = config['robots']['mock'], config
-        self.dataset = LeRobotDataset(repo_id=self.cfg['repo_id'], root=self.cfg['root'])
-        self.dataloader = iter(torch.utils.data.DataLoader(
-            self.dataset,
-            num_workers=1,
-            batch_size=1,
-            shuffle=False,
-        ))
-        # And see how many frames you have:
-        self.logger.info(f"Selected episodes: {self.dataset.episodes}")
-        self.logger.info(f"Number of episodes selected: {self.dataset.num_episodes}")
-        self.logger.info(f"Number of frames selected: {self.dataset.num_frames}")
-        self.logger.info(f"Dataset fps: {self.dataset.meta.fps}")
-        self.init_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-        self.currt_index = 0
-        self.period = 1.0 / self.dataset.meta.fps # in seconds
-        time.sleep(1)
+        self.current_state = np.zeros(20)
+        try:
+            self.dataset = LeRobotDataset(repo_id=self.cfg['repo_id'], root=self.cfg['root'])
+            self.dataloader = iter(torch.utils.data.DataLoader(
+                self.dataset,
+                num_workers=1,
+                batch_size=1,
+                shuffle=False,
+            ))
+            # And see how many frames you have:
+            self.logger.info(f"Selected episodes: {self.dataset.episodes}")
+            self.logger.info(f"Number of episodes selected: {self.dataset.num_episodes}")
+            self.logger.info(f"Number of frames selected: {self.dataset.num_frames}")
+            self.logger.info(f"Dataset fps: {self.dataset.meta.fps}")
+            self.init_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+            self.currt_index = 0
+            self.period = 1.0 / self.dataset.meta.fps # in seconds
+            time.sleep(1)
+        except Exception as e:
+            self.dataset = None
 
     def control_robot(self, action):
         """Mock robot control function that simulates robot movement.
@@ -51,6 +58,25 @@ class RobotBody(RobotBase):
         Returns:
             dict: Dictionary containing camera images, joint states, and timestamp from dataset
         """
+        # Use random data if dataset is not available
+        if self.dataset is None:
+            result = {}
+            cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
+            image, ref_timestamp = np.random.randint(0, 256, (640, 640, 3), dtype=np.uint8), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+            result['ref_timestamp'] = ref_timestamp
+            result[f'cam.{cam_ref}'] = image
+            for key, value in cam_names.items():
+                if key == cam_ref:
+                    continue
+                image = np.random.randint(0, 256, (640, 640, 3), dtype=np.uint8)
+                if key == 'depth_head':
+                    key = 'depth.head'
+                    image = np.random.randint(0, 2**16, (640, 640), dtype=np.uint16)
+                result[f'cam.{key}'] = image
+            result['obs.state'] = np.random.rand(20,)
+            self.current_state = result['obs.state']
+            return result
+
         start_time = time.time()
         result = {}
         if self.currt_index >= self.dataset.num_frames:
@@ -80,7 +106,8 @@ class RobotBody(RobotBase):
                 key = 'depth.head'
             result[f'cam.{key}'] = image
     
-        result[f'obs.state'] = data["observation.state"][0].cpu().numpy()
+        result['obs.state'] = data["observation.state"][0].cpu().numpy()
+        self.current_state = result['obs.state']
         end_time = time.time()
         if end_time-start_time < self.period:
             sleep_time = self.period - (end_time - start_time)

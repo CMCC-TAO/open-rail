@@ -459,3 +459,21 @@ class RealtimeDataManager():
             return self.observe_buffer.popleft()
         else:
             return None
+    
+    def clear_action_data(self):
+        """Clear all action-related data to ensure fresh action retrieval.
+        
+        This method resets action chunks, fitted trajectories, and related indices
+        to ensure that subsequent get_action_fitted() calls return the most recent actions.
+        """
+        with self.action_thread_lock:
+            self.action_chunks = []
+            self.timestamp_chunks = []
+        
+        with self.polynomial_thread_lock:
+            self.action_chunk_fitted = None
+            self.vel_chunk_fitted = None
+            self.timestamps_fitted = None
+            self.action_chunk_index = None
+            
+        self.logger.debug("Action data cleared for fresh inference")

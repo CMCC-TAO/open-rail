@@ -75,29 +75,16 @@ class VLAClient():
             # Initialize the dataset writer with the provided recording configuration
             self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
 
-        if config.show_data:
-            # Create canvas and line plots for visualization
-            self.fig, self.axs = plt.subplots(2, 1, figsize=(10, 4))
-            self.line = self.axs[0].plot([], [], 'b-', lw=1)
-            self.line = self.axs[1].plot([], [], 'r-', lw=1)
-            self.axs[0].set_ylabel('Joint Value')
-            self.axs[0].set_xlabel('Time Step')
-            self.axs[0].set_title('Predicted Action Chunk')
-            self.axs[1].set_ylabel('Joint Value')
-            self.axs[1].set_xlabel('Time Step')
-            self.xdata = []
-            self.ydata0 = []
-            self.ydata1 = []
-
-        self.vis_zmq = vis.ZmqPlotClient()
-        self.vis_chunk_idx = 0
-        self.vis_global_step = 0
-        self.debug_info = 'The debug information or trace information will be displayed here.'
+        if self.config.show_data:
+            self.vis_zmq = vis.ZmqPlotClient()
+            self.vis_chunk_idx = 0
+            self.vis_global_step = 0
         
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.info_current_action = [0.0] * 16
         self.info_current_state = [0.0] * 16
         self.info_obs, self.info_act = {}, {}
+        self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
 
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
@@ -136,11 +123,13 @@ class VLAClient():
         self.allow_language_switch = False
         
         # Wait for observation changes after reset, then retrieve fresh obs for inference
-        time.sleep(1.5)
         observations = self.robot.retrieve_observation()
         if observations is not None:
             data = self._process_data(observations)
             self.rdm.add_observe_data(data)
+            # Clear action data to ensure fresh action retrieval
+            self.rdm.clear_action_data()
+        time.sleep(1.5)
         
         # Get observation data (thread-safe function, no lock needed)
         data = self.rdm.pop_observe_data(num_samples = 1 if self.config.history_frame == False else 2)
@@ -313,10 +302,10 @@ class VLAClient():
             dict: The encoded images with key and values.
         """
         cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
-        # 使用线程池并行处理所有摄像头
+        # Use thread pool to parallel process all cameras
         with ThreadPoolExecutor() as executor:
             futures = [executor.submit(self._process_image, key, value) for key, value in cam_items]
-            results = [future.result() for future in futures] # 等待所有任务完成
+            results = [future.result() for future in futures] # Wait for all tasks to complete
         encoded_imgs, processed_imgs = {}, {}
         for key, processed, encoded in results:
             encoded_imgs[key] = encoded
@@ -328,7 +317,7 @@ class VLAClient():
                     img_show = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
                 else:
                     img_show = cv2.cvtColor(processed, cv2.COLOR_RGB2BGR)
-                # 线程内无法显示
+                # Thread cannot display images
                 cv2.imwrite(f'{key}.png', img_show)
                 # cv2.imshow(key, img_show)
                 # cv2.waitKey(1)
@@ -466,77 +455,19 @@ class VLAClient():
             self.dataset_write.close()
         
         self.zmq_client.close()
-        self.vis_zmq.stop()
+        if self.config.show_data:
+            self.vis_zmq.stop()
         self.logger.info('Inference client closed.')
 
-    def _update_visualization(self, frame):
-        """Update visualization with current frame data.
-        
-        This method updates the real-time visualization plots with the latest
-        action and state data for monitoring and debugging purposes.
-        
-        Args:
-            frame: Current frame data for visualization
-            
-        Returns:
-            list: Updated plot lines for the visualization
-        """
-        if len(self.xdata) > 0:
-            x_min= min(self.xdata[:])
-            x_max= max(self.xdata[:])
-            y0_min= min(self.ydata0[:])
-            y0_max= max(self.ydata0[:])
-            y1_min= min(self.ydata1[:])
-            y1_max= max(self.ydata1[:])
-        else:
-            x_min = 0.0
-            x_max = 0.5
-            y0_min = -1.0
-            y0_max = 1.0
-            y1_min = -1.0
-            y1_max = 1.0
-        self.axs[0].set_xlim(x_min, x_max)
-        self.axs[0].set_ylim(y0_min, y0_max)
-        self.axs[1].set_xlim(x_min, x_max)
-        self.axs[1].set_ylim(y1_min, y1_max)
-
-        lines = self.axs[0].plot(self.xdata[:], self.ydata0[:], 'b-', lw=1) + self.axs[1].plot(self.xdata[:], self.ydata1[:], 'r-', lw=1)
-        print(self.ydata0)
-        return lines
-    
-    def _show_action_chunk(self):
-        """Display action chunk visualization.
-        
-        This method sets up real-time visualization of action chunks using
-        matplotlib animation for debugging and monitoring purposes. It creates
-        an animated plot that continuously updates with the latest action data.
-        """
-        ani = FuncAnimation(
-            fig=self.fig,
-            func=self._update_visualization,
-            frames=None,        # 无限循环
-            interval=30,        # 更新间隔30ms
-            blit=True,          # 优化渲染性能
-            cache_frame_data=False
-        )
-
-        plt.show()
-
     def _inference_thread_fun(self):
-        # print('推理线程已启动...')
         while self.running:
-            # 第一次推理
             if self.rdm.infer_count == 0:
                 self.inference_first()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
                 time.sleep(self.config.sleep_time)
-                # char = input("Press 'q' to quit: ")
-            # 第二次推理
-            elif self.rdm.infer_count < 10000:
+            else:
                 self.inference_step()
                 # self.inferenceFirstThreadFun()
-                # char = input("Press 'q' to quit: ")
-                # char = input("Press 'q' to quit: ")
                 time.sleep(self.config.sleep_time)
             # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
             symbol = '=' * 10
@@ -552,7 +483,7 @@ class VLAClient():
         Args:
             action: Predicted action values for robot joints
         """
-        current_state = self.robot.get_obs_only_state()
+        current_state = self.robot.current_state
         line_data = []
         
         for joint_idx, value in enumerate(action):
