@@ -97,7 +97,7 @@ def handle_user_input(vla_client, robot, live):
     
     try:
         vla_client.is_running_action = False
-        cmd = input('\nProgram paused, please enter command, press Enter to continue:\nr: Reset robot\nl: Modify language instruction\ns: Save data (if recording enabled)\nd: Delete data (if recording enabled)\nq: Quit\n')
+        cmd = input('\nProgram paused, please enter command, press Enter to continue:\nr: reset robot\nc: control robot\nl: modify language instruction\ns: save data (if recording enabled)\nd: delete data (if recording enabled)\nq: quit\n')
         
         if cmd == 'l':
             # Show preset language options
@@ -105,7 +105,7 @@ def handle_user_input(vla_client, robot, live):
             for i, lang in enumerate(vla_client.config.language, 1):
                 print(f"{i}: {lang}")
             
-            language_input = input(f'Current language: "{vla_client.language}". \nPlease enter new language instruction or preset number, press Enter to confirm: ')
+            language_input = input(f'#Current language: "{vla_client.language}". \nPlease enter new language instruction or preset number, press Enter to confirm: ')
             if language_input.strip().isdigit():
                 index = int(language_input.strip()) - 1
                 if 0 <= index < len(vla_client.config.language):
@@ -118,18 +118,62 @@ def handle_user_input(vla_client, robot, live):
                 print(f"Language instruction has been modified to: {vla_client.language}")
             time.sleep(1.5)
         elif cmd == 'r':
-            robot.reset_robot(target_pose='default')
+            robot.reset_robot(mode='default')
             vla_client.inference_first()
             input('\nRobot reset completed, program paused, press Enter to continue...')
-            
+        elif cmd == 'c':
+            print("Control robot cmd:\n1. open gripper\n2. close gripper\n3. control gripper\n4. control head\n5. control waist\n6. control wheel")
+            cmd = input("Please input cmd number: ")
+            if cmd == '1':
+                robot.execute_action({'gripper': [0, 0]})
+            elif cmd == '2':
+                robot.execute_action({'gripper': [1, 1]})
+            elif cmd == '3':
+                gripper_pos = input("Please input gripper position (left right, e.g.: 0.5 0.5): ")
+                gripper_pos = [float(x) for x in gripper_pos.split()]
+                if len(gripper_pos) > 0:
+                    print(f'gripper_pos: {gripper_pos}')
+                    robot.execute_action({'gripper': gripper_pos})
+            elif cmd == '4':
+                head_pos = input("Please input head position (yaw pitch, e.g.: 0.0 0.436): ")
+                head_pos = [float(x) for x in head_pos.split()]
+                if len(head_pos) > 0:
+                    print(f'head_pos: {head_pos}')
+                    robot.execute_action({'head': head_pos})
+            elif cmd == '5':
+                waist_pos = input("Please input waist position (pitch_rad height_cm, e.g.: 0.297 20.0): ")
+                waist_pos = [float(x) for x in waist_pos.split()]
+                if len(waist_pos) > 0:
+                    print(f'waist_pos: {waist_pos}')
+                    robot.execute_action({'waist': waist_pos})
+            elif cmd == '6':
+                print("Control wheel move. w: forward, s: backward, a: left, d: right, Enter: stop, q: exit wheel control")
+                while True:
+                    wheel_cmd = input()
+                    if wheel_cmd == 'w':
+                        wheel_pos = [0.1, 0]
+                    elif wheel_cmd == 's':
+                        wheel_pos = [-0.1, 0]
+                    elif wheel_cmd == 'a':
+                        wheel_pos = [0, 0.1]
+                    elif wheel_cmd == 'd':
+                        wheel_pos = [0, -0.1]
+                    elif wheel_cmd == '':
+                        wheel_pos = [0, 0]
+                    elif wheel_cmd == 'q':
+                        break
+                    print(f'send cmd: {wheel_pos}')
+                    robot.execute_action({'wheel': wheel_pos})
+            else:
+                print("Invalid cmd number")
+            vla_client.inference_first()
+            input('\nRobot control completed, program paused, press Enter to continue...')
         elif cmd == 's' and vla_client.config.record.switch:
             vla_client.dataset_write.save_writed_data()
             input('Data saved, press Enter to continue...')
-            
         elif cmd == 'd' and vla_client.config.record.switch:
             vla_client.dataset_write.abandon_record_data()
             input('Data deleted, press Enter to continue...')
-            
         elif cmd == 'q':
             return False  # Signal to quit
             

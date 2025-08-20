@@ -28,15 +28,41 @@ class RobotBody(RobotBase):
         Args:
             action (array-like): Action array containing arm commands (0:14) and gripper commands (14:16)
         """
-        self.robot.move_arm(action[0:14].tolist())
+        self.execute_action({'arm': action[0:14].tolist()})
         # Count gripper value changes and send gripper command when accumulated changes reach threshold
         new_gripper_cmd = action[14:16]
         if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
             self.gripper_count += 1
         if self.gripper_count > self.cfg['gripper_freq']:
-            self.robot.move_gripper(new_gripper_cmd.tolist())
+            self.execute_action({'gripper': new_gripper_cmd.tolist()})
             self.gripper_cmd = new_gripper_cmd
             self.gripper_count = 0
+    
+    def execute_action(self, data):
+        """Execute action interface without strategy.
+        
+        Args:
+            data (dict): Dictionary containing arm and gripper commands
+        """
+        if 'arm' in data:
+            self.robot.move_arm(data['arm'])
+        if 'gripper' in data:
+            self.robot.move_gripper(data['gripper'])
+        if 'head' in data:
+            self.robot.move_head(data['head'])
+        if 'waist' in data:
+            self.robot.move_waist(data['waist'])
+        if 'wheel' in data:
+            self.robot.move_wheel(data['wheel'])
+    
+    def reset_robot(self, mode='default'):
+        """Reset the robot to its default position.
+        """
+        if mode == 'default':
+            target_pose = np.array(self.cfg['reset_robot_pos'])
+        elif mode == 'zero':
+            target_pose = np.array([0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
+        super().reset_robot(target_pose=target_pose)
 
     def retrieve_observation(self):
         """Retrieve current observation data including camera images and joint states.

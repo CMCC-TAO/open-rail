@@ -43,14 +43,19 @@ class RobotBody(RobotBase):
         except Exception as e:
             self.dataset = None
 
-    def control_robot(self, action):
-        """Mock robot control function that simulates robot movement.
+    def execute_action(self, action):
+        """Execute the given action on the mock robot.
         
         Args:
-            action (array-like): Action array containing robot commands (currently unused in mock)
+            action (dict): Dictionary containing action commands for robot joints and gripper
         """
-        if random.random() < 0.001:
-            pass
+        pass
+
+    def reset_robot(self, mode='zero'):
+        """Reset the robot to its default position.
+        """
+        target_pose = np.array([0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
+        super().reset_robot(target_pose=target_pose)
 
     def retrieve_observation(self):
         """Retrieve observation data from the LeRobot dataset for simulation.

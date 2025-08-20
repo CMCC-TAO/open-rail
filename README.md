@@ -11,21 +11,7 @@ This is a comprehensive Vision-Language-Action (VLA) inference framework designe
 
 The framework uses a client-server architecture with ZMQ for communication:
 
-```
-┌─────────────┐    ZMQ     ┌─────────────┐
-│   Client    │ ◄────────► │   Server    │
-│             │            │             │
-│ ┌─────────┐ │            │ ┌─────────┐ │
-│ │ Robot   │ │            │ │ VLA     │ │
-│ │ Control │ │            │ │ Model   │ │
-│ └─────────┘ │            │ └─────────┘ │
-│             │            │             │
-│ ┌─────────┐ │            │ ┌─────────┐ │
-│ │ Data    │ │            │ │Inference│ │
-│ │ Manager │ │            │ │ Engine  │ │
-│ └─────────┘ │            │ └─────────┘ │
-└─────────────┘            └─────────────┘
-```
+![framework](data/media/framework.png)
 
 ### 1.2 Framework Structure
 
