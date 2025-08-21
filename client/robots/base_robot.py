@@ -64,9 +64,9 @@ class RobotBase():
             self.execute_action({'arm': traj})
             time.sleep(0.01)
 
-        self.execute_action({'gripper': target_positions[14:16].tolist()})
-        self.execute_action({'head': target_positions[16:18].tolist()})
-        self.execute_action({'waist': target_positions[18:20].tolist()})
+        self.execute_action({'gripper': target_pose[14:16].tolist()})
+        self.execute_action({'head': target_pose[16:18].tolist()})
+        self.execute_action({'waist': target_pose[18:20].tolist()})
     
     def _ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):
         """

@@ -53,7 +53,7 @@ class RobotBody(RobotBase):
         if 'waist' in data:
             self.robot.move_waist(data['waist'])
         if 'wheel' in data:
-            self.robot.move_wheel(data['wheel'])
+            self.robot.move_wheel(data['wheel'][0], data['wheel'][1])
     
     def reset_robot(self, mode='default'):
         """Reset the robot to its default position.

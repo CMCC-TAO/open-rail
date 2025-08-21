@@ -86,6 +86,16 @@ def override_config_with_args(config, args):
         config.preprocess_size = args.preprocess_size
     return config
 
+# global variable
+wheel_thread_running = False
+wheel_pos = [0, 0]
+
+def wheel_control_loop(robot):
+    global wheel_thread_running, wheel_pos
+    while wheel_thread_running:
+        robot.execute_action({'wheel': wheel_pos})
+        time.sleep(0.05)
+
 def handle_user_input(vla_client, robot, live):
     """Handle user input
     
@@ -147,7 +157,15 @@ def handle_user_input(vla_client, robot, live):
                     print(f'waist_pos: {waist_pos}')
                     robot.execute_action({'waist': waist_pos})
             elif cmd == '6':
-                print("Control wheel move. w: forward, s: backward, a: left, d: right, Enter: stop, q: exit wheel control")
+                global wheel_thread_running, wheel_pos
+                
+                wheel_thread_running = True
+                wheel_pos = [0, 0]
+                wheel_thread = threading.Thread(target=wheel_control_loop, args=(robot,))
+                wheel_thread.daemon = True
+                wheel_thread.start()
+                
+                print("Wheel control thread started. w: forward, s: backward, a: left, d: right, Enter: stop, q: exit wheel control")
                 while True:
                     wheel_cmd = input()
                     if wheel_cmd == 'w':
@@ -161,9 +179,11 @@ def handle_user_input(vla_client, robot, live):
                     elif wheel_cmd == '':
                         wheel_pos = [0, 0]
                     elif wheel_cmd == 'q':
+                        wheel_thread_running = False
+                        wheel_thread.join(timeout=1.0)
+                        print("Wheel control thread stopped.")
                         break
                     print(f'send cmd: {wheel_pos}')
-                    robot.execute_action({'wheel': wheel_pos})
             else:
                 print("Invalid cmd number")
             vla_client.inference_first()
