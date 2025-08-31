@@ -3,14 +3,12 @@ import time
 import threading
 import logging
 import numpy as np
-from matplotlib  import pyplot as plt
-from matplotlib.animation import FuncAnimation
 from ml_collections import ConfigDict
 
 from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc, vis
-from client.utils.util import run_time_decorator, command_prompt
+from client.utils.util import run_time_decorator
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
@@ -132,7 +130,7 @@ class VLAClient():
         time.sleep(1.5)
         
         # Get observation data (thread-safe function, no lock needed)
-        data = self.rdm.pop_observe_data(num_samples = 1 if self.config.history_frame == False else 2)
+        data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.history_frame else 2)
         if data is not None:
             # Record inference start timestamp for control timestamp updates
             self.rdm.set_infer_time_marker()
@@ -182,7 +180,7 @@ class VLAClient():
             return
         
         # Get observation data (thread-safe function, no lock needed)
-        data = self.rdm.pop_observe_data(num_samples = 1 if self.config.history_frame == False else 2)
+        data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.history_frame else 2)
         if data is not None:
             # Record inference start timestamp
             self.rdm.set_infer_time_marker()
@@ -207,7 +205,17 @@ class VLAClient():
             # Record control timestamp
             self.rdm.set_control_time_marker()
             
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
+            # Get prob_progress from action data if available
+            prob_progress = None
+            if 'ext' in action_data and 'prob_progress' in action_data['ext']:
+                prob_progress = action_data['ext']['prob_progress']
+                # Check if prob_progress length > 1 to enable alignment processing
+                if not (isinstance(prob_progress, np.ndarray) and len(prob_progress) > 1):
+                    self.info_act['current_prob_progress'] = prob_progress
+                    if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
+                        self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
+                    prob_progress = None
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -232,6 +240,11 @@ class VLAClient():
         if action is not None:
             self.info_current_action = action.tolist() if hasattr(action, 'tolist') else list(action)
             
+            # Only use alignment processing if prob_progress array length > 1
+            prob_progress = self.rdm.get_prob_progress()
+            if prob_progress is not None:
+                self.info_act['current_prob_progress'] = prob_progress
+
             if self.config.record.switch and self.is_running_action and self.running:
                 self.dataset_write.async_write_action(action, time.perf_counter())
             
@@ -377,12 +390,6 @@ class VLAClient():
         action_type = action['type']
         
         if action_type == 'vla_action':
-            # Handle language instruction switching based on progress
-            if 'ext' in action and 'prob_progress' in action['ext']:
-                prob_progress = action['ext']['prob_progress']
-                self.info_act['prob_progress'] = prob_progress
-                if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
-                    self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
 
             pred_action = action['pred_action']
             ref_timestamp = action['ref_timestamp']

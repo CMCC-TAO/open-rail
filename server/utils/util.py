@@ -38,7 +38,7 @@ def create_layout(info, terminal_size=None):
             return f"{label} {formatted.shape}\n{data_str}"
         else:
             return f'{label}\n\tData not available or incomplete'
-    pred_text = format_robot_data(vla_server.act_info.get('pred_action', np.zeros((16, 16))), 'PRED_ACTION_CHUNK')
+    pred_text = format_robot_data(vla_server.act_info.get('pred_action', np.zeros((1, 1))), 'PRED_ACTION_CHUNK')
     
     # Calculate current time and uptime
     current_time = time.time()

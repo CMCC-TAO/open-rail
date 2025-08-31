@@ -126,68 +126,74 @@ def handle_user_input(vla_client, robot, live):
             else:
                 vla_client.language = language_input.strip()
                 print(f"Language instruction has been modified to: {vla_client.language}")
-            time.sleep(1.5)
+            ys_cmd = input('Whether to reset the robot? (y/n): ')
+            if ys_cmd == 'y':
+                robot.reset_robot(mode='default')
+                vla_client.inference_first()
         elif cmd == 'r':
             robot.reset_robot(mode='default')
             vla_client.inference_first()
             input('\nRobot reset completed, program paused, press Enter to continue...')
         elif cmd == 'c':
-            print("Control robot cmd:\n1. open gripper\n2. close gripper\n3. control gripper\n4. control head\n5. control waist\n6. control wheel")
-            cmd = input("Please input cmd number: ")
-            if cmd == '1':
-                robot.execute_action({'gripper': [0, 0]})
-            elif cmd == '2':
-                robot.execute_action({'gripper': [1, 1]})
-            elif cmd == '3':
-                gripper_pos = input("Please input gripper position (left right, e.g.: 0.5 0.5): ")
-                gripper_pos = [float(x) for x in gripper_pos.split()]
-                if len(gripper_pos) > 0:
-                    print(f'gripper_pos: {gripper_pos}')
-                    robot.execute_action({'gripper': gripper_pos})
-            elif cmd == '4':
-                head_pos = input("Please input head position (yaw pitch, e.g.: 0.0 0.436): ")
-                head_pos = [float(x) for x in head_pos.split()]
-                if len(head_pos) > 0:
-                    print(f'head_pos: {head_pos}')
-                    robot.execute_action({'head': head_pos})
-            elif cmd == '5':
-                waist_pos = input("Please input waist position (pitch_rad height_cm, e.g.: 0.297 20.0): ")
-                waist_pos = [float(x) for x in waist_pos.split()]
-                if len(waist_pos) > 0:
-                    print(f'waist_pos: {waist_pos}')
-                    robot.execute_action({'waist': waist_pos})
-            elif cmd == '6':
-                global wheel_thread_running, wheel_pos
-                
-                wheel_thread_running = True
-                wheel_pos = [0, 0]
-                wheel_thread = threading.Thread(target=wheel_control_loop, args=(robot,))
-                wheel_thread.daemon = True
-                wheel_thread.start()
-                
-                print("Wheel control thread started. w: forward, s: backward, a: left, d: right, Enter: stop, q: exit wheel control")
-                while True:
-                    wheel_cmd = input()
-                    if wheel_cmd == 'w':
-                        wheel_pos = [0.1, 0]
-                    elif wheel_cmd == 's':
-                        wheel_pos = [-0.1, 0]
-                    elif wheel_cmd == 'a':
-                        wheel_pos = [0, 0.1]
-                    elif wheel_cmd == 'd':
-                        wheel_pos = [0, -0.1]
-                    elif wheel_cmd == '':
-                        wheel_pos = [0, 0]
-                    elif wheel_cmd == 'q':
-                        wheel_thread_running = False
-                        wheel_thread.join(timeout=1.0)
-                        print("Wheel control thread stopped.")
-                        break
-                    print(f'send cmd: {wheel_pos}')
-            else:
-                print("Invalid cmd number")
+            print("Control robot cmd:\n1. open gripper\n2. close gripper\n3. control gripper\n4. control head\n5. control waist\n6. control wheel\nq. quit control robot")
+            while True:
+                cmd = input("Please input new control robot cmd number: ")
+                if cmd == 'q':
+                    break
+                elif cmd == '1':
+                    robot.execute_action({'gripper': [0.0, 0.0]})
+                elif cmd == '2':
+                    robot.execute_action({'gripper': [1.0, 1.0]})
+                elif cmd == '3':
+                    gripper_pos = input("Please input gripper position (left right, e.g.: 0.5 0.5): ")
+                    gripper_pos = [float(x) for x in gripper_pos.split()]
+                    if len(gripper_pos) > 0:
+                        print(f'gripper_pos: {gripper_pos}')
+                        robot.execute_action({'gripper': gripper_pos})
+                elif cmd == '4':
+                    head_pos = input("Please input head position (yaw pitch, e.g.: 0.0 0.436): ")
+                    head_pos = [float(x) for x in head_pos.split()]
+                    if len(head_pos) > 0:
+                        print(f'head_pos: {head_pos}')
+                        robot.execute_action({'head': head_pos})
+                elif cmd == '5':
+                    waist_pos = input("Please input waist position (pitch_rad height_cm, e.g.: 0.297 20.0): ")
+                    waist_pos = [float(x) for x in waist_pos.split()]
+                    if len(waist_pos) > 0:
+                        print(f'waist_pos: {waist_pos}')
+                        robot.execute_action({'waist': waist_pos})
+                elif cmd == '6':
+                    global wheel_thread_running, wheel_pos
+                    
+                    wheel_thread_running = True
+                    wheel_pos = [0, 0]
+                    wheel_thread = threading.Thread(target=wheel_control_loop, args=(robot,))
+                    wheel_thread.daemon = True
+                    wheel_thread.start()
+                    
+                    print("Wheel control thread started. w: forward, s: backward, a: left, d: right, Enter: stop, q: quit wheel control")
+                    while True:
+                        wheel_cmd = input()
+                        if wheel_cmd == 'w':
+                            wheel_pos = [0.1, 0.]
+                        elif wheel_cmd == 's':
+                            wheel_pos = [-0.1, 0]
+                        elif wheel_cmd == 'a':
+                            wheel_pos = [0, 0.1]
+                        elif wheel_cmd == 'd':
+                            wheel_pos = [0, -0.1]
+                        elif wheel_cmd == '':
+                            wheel_pos = [0, 0]
+                        elif wheel_cmd == 'q':
+                            wheel_thread_running = False
+                            wheel_thread.join(timeout=1.0)
+                            print("Wheel control thread stopped.")
+                            break
+                        print(f'send cmd: {wheel_pos}')
+                else:
+                    print("Invalid cmd number")
+                print('Control robot cmd completed!')
             vla_client.inference_first()
-            input('\nRobot control completed, program paused, press Enter to continue...')
         elif cmd == 's' and vla_client.config.record.switch:
             vla_client.dataset_write.save_writed_data()
             input('Data saved, press Enter to continue...')

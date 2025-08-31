@@ -38,6 +38,7 @@ class RealtimeDataManager():
         self.vel_chunk_fitted = None
         self.timestamps_fitted = None
         self.action_chunk_index = None
+        self.prob_progress = None
 
         # For visualization purposes
         self.action_chunk_last = None
@@ -274,6 +275,7 @@ class RealtimeDataManager():
                                 action_chunk_fitted,
                                 vel_chunk_fitted,
                                 timestamps_fitted,
+                                prob_progress=None,
                                 search_action = False,
                                 search_length = 20,
                                 smooth_action = False,
@@ -287,6 +289,7 @@ class RealtimeDataManager():
             action_chunk_fitted (_type_): _description_
             vel_chunk_fitted (_type_): _description_
             timestamps_fitted (_type_): _description_
+            prob_progress (np.array, optional): Array of prob_progress values aligned with action chunk. Defaults to None.
             search_action (bool, optional): True to search the start index for new fitted action chunk. Defaults to False.
             search_length (int, optional): Search length. Defaults to 20.
             smooth_action (bool, optional): True to smooth the action between the old action chunk and new action chunk. Defaults to False.
@@ -302,6 +305,7 @@ class RealtimeDataManager():
                 self.action_chunk_fitted = action_chunk_fitted
                 self.vel_chunk_fitted = vel_chunk_fitted
                 self.timestamps_fitted = timestamps_fitted
+                self.prob_progress = prob_progress
         else: # update action chunk fitted secondly;
             # Calculate time offset from observation to trajectory fitting completion
             target_chunk_index = 0
@@ -337,6 +341,7 @@ class RealtimeDataManager():
                 self.action_chunk_fitted = action_chunk_fitted
                 self.vel_chunk_fitted = vel_chunk_fitted
                 self.timestamps_fitted = timestamps_fitted
+                self.prob_progress = prob_progress
                 # Apply gripper offset to compensate for gripper response delay
                 self.action_chunk_fitted[14:, :-gripper_offset] = action_chunk_fitted[14:, gripper_offset:]
 
@@ -421,6 +426,19 @@ class RealtimeDataManager():
                 return None
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
             return self.action_chunk_fitted[:, self.action_chunk_index]
+    
+    def get_prob_progress(self):
+        """Get the current prob_progress value indexed by action_chunk_index.
+
+        Returns:
+            float: The current prob_progress value, or None if not available.
+        """
+        with self.polynomial_thread_lock:
+            if self.action_chunk_index is None or self.prob_progress is None:
+                return None
+            # Ensure index is within bounds
+            index = min(self.action_chunk_index, len(self.prob_progress) - 1)
+            return self.prob_progress[index]
     
     def getActionChunk(self):
         """Get a copy of the current action chunks.
