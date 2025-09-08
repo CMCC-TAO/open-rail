@@ -54,14 +54,22 @@ class RobotBody(RobotBase):
             self.robot.move_waist(data['waist'])
         if 'wheel' in data:
             self.robot.move_wheel(data['wheel'][0], data['wheel'][1])
+        if 'hand' in data:
+            if len(data['hand']) < 6:
+                self.robot.move_hand_as_gripper(data['hand'])
+            else:
+                self.robot.move_hand(data['hand'])
     
-    def reset_robot(self, mode='default'):
+    def reset_robot(self, target_pose=None, mode='default'):
         """Reset the robot to its default position.
         """
-        if mode == 'default':
-            target_pose = np.array(self.cfg['reset_robot_pos'])
-        elif mode == 'zero':
-            target_pose = np.array([0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
+        if target_pose is None:
+            if mode == 'default':
+                target_pose = np.array(self.cfg['reset_robot_pos'])
+            elif mode == 'zero':
+                target_pose = np.array([0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
+        else:
+            target_pose = np.array(target_pose)
         super().reset_robot(target_pose=target_pose)
 
     def retrieve_observation(self):

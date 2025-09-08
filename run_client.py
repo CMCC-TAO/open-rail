@@ -18,6 +18,7 @@ from client.core.realtime_data_manager import RealtimeDataManager
 from rich.live import Live
 from rich.console import Console
 from client.utils.util import create_layout
+from extra.dispatch.client import DispatchClient
 
 def get_robot(config: ConfigDict):
     """Create and return a robot instance based on configuration
@@ -229,6 +230,11 @@ if __name__ == "__main__":
     rdm = RealtimeDataManager(config.rdm)
     traj_generator = TrajectoryGenerator(config=config.traj)
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
+
+    # extra
+    dispatch_client = DispatchClient(vla_client, robot)
+    dispatch_client.start()
+    dispatch_client.mock_task()
     
     live = None
     console = Console()

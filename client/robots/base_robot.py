@@ -2,6 +2,7 @@ import time
 import cv2
 import numpy as np
 import ruckig
+import pandas as pd
 
 class RobotBase():
     def __init__(self):
@@ -64,9 +65,15 @@ class RobotBase():
             self.execute_action({'arm': traj})
             time.sleep(0.01)
 
-        self.execute_action({'gripper': target_pose[14:16].tolist()})
-        self.execute_action({'head': target_pose[16:18].tolist()})
-        self.execute_action({'waist': target_pose[18:20].tolist()})
+        # TODO: 优化区分灵巧手和夹爪
+        if target_pose.shape[0] < 25:
+            self.execute_action({'hand': target_pose[14:16].tolist()})
+            self.execute_action({'head': target_pose[16:18].tolist()})
+            self.execute_action({'waist': target_pose[18:20].tolist()})
+        else:
+            self.execute_action({'hand': target_pose[14:26].tolist()})
+            self.execute_action({'head': target_pose[26:28].tolist()})
+            self.execute_action({'waist': target_pose[28:30].tolist()})
     
     def _ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):
         """
@@ -105,6 +112,45 @@ class RobotBase():
             rk_output.pass_to_input(rk_input)
         
         return trajs
-    
+
+    def load_action_data(self, parquet_path, key="action"):
+        """ read specific data from parquet file
+
+        Args:
+            parquet_path: the parquet file path 
+            key: key of data, for example, action, observation.state
+        """
+        # read parquet file
+        df = pd.read_parquet(parquet_path)
+        data = df[key].tolist()
+        # process data of dexterous hand to gripper format
+        processed_data = []
+        for idx, ele in enumerate(data):
+            data_temp = np.zeros(20)
+            data_temp[:14] = ele[:14]
+            left_hand = ele[15:19].mean()
+            if left_hand > 0.1:
+                left_hand = 1.0
+            right_hand = ele[20:23].mean()
+            if right_hand < 0.1:
+                right_hand = 0
+            data_temp[14] = left_hand
+            data_temp[15] = right_hand
+            processed_data.append(data_temp)
+        return processed_data
+
+    def replay_trajectories(self, parquet_path):
+        try:
+            trajs = self.load_action_data(parquet_path=parquet_path)
+            for idx, traj in enumerate(trajs):
+                self.execute_action({'arm': traj[0:14].tolist()})
+                if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
+                    traj[14] = 1.0
+                    traj[15] = 1.0
+                self.execute_action({'hand': traj[14:16].tolist()})
+                time.sleep(0.05)
+        except Exception as e:
+            print(f"Replay {parquet_path} failed, error: {e}")
+
     def close(self):
         pass

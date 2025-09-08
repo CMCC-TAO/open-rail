@@ -55,6 +55,8 @@ def get_client_config():
     config.preprocess_size = [640, 640] # [height, width]
     # Language instruction options, default index 0
     config.language = [
+        'Use the left arm to grasp the teapot of green tea first, and then carefully pour the green tea into the cup.',
+        'Use the right arm to grasp the teapot of black tea first, and then carefully pour the black tea into the cup.',
         'pick the bottle into the basket',
         'open the microwave door, put the sandwish into it, and close the microwave door',
         'take the sandwitch out from the oven',

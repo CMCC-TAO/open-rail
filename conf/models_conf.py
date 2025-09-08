@@ -57,7 +57,7 @@ def get_models_config():
             - rdt: RDT model configuration
     """
     config = ConfigDict()
-    config.type = ModelType.GR00T_N1
+    config.type = ModelType.GR00T_N1_5
     config.gr00t = get_gr00t_config()
     config.act = get_act_config()
     config.rdt = get_rdt_config()

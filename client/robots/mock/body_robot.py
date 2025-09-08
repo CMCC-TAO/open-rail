@@ -51,7 +51,7 @@ class RobotBody(RobotBase):
         """
         pass
 
-    def reset_robot(self, mode='zero'):
+    def reset_robot(self, target_pose=None, mode='zero'):
         """Reset the robot to its default position.
         """
         target_pose = np.array([0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
