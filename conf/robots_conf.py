@@ -14,12 +14,13 @@ def get_a2d_config():
     """
     config = ConfigDict()
     config.camera = ConfigDict()
+    config.hand_type = 'gripper' # 'gripper' or 'hand'
     config.camera.ref = 'head'
     # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
     config.camera.names = {'head': 'head',
-                           'hand_left': 'hand_left',
-                           'hand_right': 'hand_right'}
-    config.proprio_names = ['arm', 'gripper', 'head', 'waist']
+                           'hand_left': 'hand_left' if config.hand_type == 'gripper' else 'hand_left_fisheye',
+                           'hand_right': 'hand_right' if config.hand_type == 'gripper' else 'hand_right_fisheye'}
+    config.proprio_names = ['arm', config.hand_type, 'head', 'waist']
     config.gripper_freq = 40
     config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0]
     return config

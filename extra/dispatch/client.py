@@ -99,6 +99,7 @@ class DispatchClient:
             self.vla_client.is_running_action = False
             time.sleep(0.1)
             self.robot.reset_robot(target_pose=self.config.reset_pose[key])
+            time.sleep(self.config.reset_sleep)
             self.vla_client.inference_first()
 
         if 'replay:' not in self.config.language[key]:

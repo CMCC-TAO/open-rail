@@ -8,6 +8,7 @@ def get_robotB_config():
     config.robot_name = "ARM_B"
     config.required_stable_count = 20
     config.thre_stability_ratio = 0.004
+    config.reset_sleep = 0.0
     config.reset_pose = {
         "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 22.0] + [0.0, 0.0],
         "pick_custardbun": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 22.0] + [0.0, 0.0],
@@ -37,6 +38,7 @@ def get_robotC_config():
     config.robot_name = "ARM_C"
     config.required_stable_count = 20
     config.thre_stability_ratio = 0.004
+    config.reset_sleep = 0.0
     config.reset_pose = {
         "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "pour_water_greentea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
@@ -66,6 +68,7 @@ def get_robotD_config():
     config.robot_name = "ARM_D"
     config.required_stable_count = 20
     config.thre_stability_ratio = 0.004
+    config.reset_sleep = 2.0
     config.reset_pose = {
         "default": [-1.0738, 0.6108, 0.2796, -1.2836, 0.7301, 1.4947, -0.1875, 1.0743, -0.611 , -0.2796, 1.2839, -0.7304, -1.4953, 0.1876] + [0.0, 0.0] + [0.2094, 0.4363] + [0.0, 27.0] + [0.0, 0.0],
         "pick_apple": [-1.0738, 0.6108, 0.2796, -1.2836, 0.7301, 1.4947, -0.1875, 1.0743, -0.611 , -0.2796, 1.2839, -0.7304, -1.4953, 0.1876] + [0.0, 0.0] + [0.2094, 0.4363] + [0.0, 52.0] + [0.0, 0.0],
@@ -78,15 +81,15 @@ def get_robotD_config():
         "close_door": [-1.0738, 0.6108, 0.2796, -1.2836, 0.7301, 1.4947, -0.1875, 1.0743, -0.611 , -0.2796, 1.2839, -0.7304, -1.4953, 0.1876] + [0.0, 0.0] + [0.2094, 0.4363] + [0.0, 27.0] + [0.0, 0.0],
     }
     config.thre_progress_finish = {
-        "default": 0.94,
-        "pick_apple": 0.94,
-        "pick_orange": 0.94,
-        "pick_peach": 0.94,
-        "place_apple": 0.94,
-        "place_orange": 0.94,
-        "place_peach": 0.94,
-        "open_door": 0.94,
-        "close_door": 0.94,
+        "default": 0.8,
+        "pick_apple": 0.8,
+        "pick_orange": 0.8,
+        "pick_peach": 0.8,
+        "place_apple": 0.8,
+        "place_orange": 0.8,
+        "place_peach": 0.8,
+        "open_door": 0.8,
+        "close_door": 0.8,
     }
     config.language = {
         "default": "",

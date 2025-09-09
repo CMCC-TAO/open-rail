@@ -34,7 +34,7 @@ class RobotBody(RobotBase):
         if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
             self.gripper_count += 1
         if self.gripper_count > self.cfg['gripper_freq']:
-            self.execute_action({'gripper': new_gripper_cmd.tolist()})
+            self.execute_action({self.cfg['hand_type']: new_gripper_cmd.tolist()})
             self.gripper_cmd = new_gripper_cmd
             self.gripper_count = 0
     
