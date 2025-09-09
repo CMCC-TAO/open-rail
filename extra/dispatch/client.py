@@ -1,4 +1,6 @@
 import time
+from collections import deque
+import numpy as np
 from extra.dispatch.conf import get_dispatch_config
 from extra.dispatch.zmq import DispatchZMQClient
 
@@ -16,6 +18,21 @@ class DispatchClient:
             reconnect_interval=2.0,
             receive_timeout=30.0  # 30秒未收到消息触发重连
         )
+        
+        # 稳定性检测变量
+        self.stable_count = 0  # 连续满足条件的计数
+        self.required_stable_count = 5  # 需要连续满足条件的次数
+        self.stability_window = deque(maxlen=10)  # 滑动窗口存储最近的progress值
+        self.thre_stability_ratio = 0.01
+        
+        # 滤波相关配置
+        self.enable_progress_filtering = False  # 是否启用进度值滤波
+        self.progress_history = deque(maxlen=10)  # 存储历史进度值用于滤波
+        
+        # 重复值检测配置
+        self.last_progress_value = None  # 上次的进度值
+        self.skip_duplicate_values = True  # 是否跳过重复值
+        self.duplicate_tolerance = 1e-6  # 重复值容忍度（浮点数比较）
 
     def start(self):
         self.client.set_task_handler(self.handle_task)
@@ -30,6 +47,46 @@ class DispatchClient:
     def handle_connection(self, connected):
         """连接状态回调"""
         status = "connected" if connected else "disconnected"
+
+    def smooth_progress(self, values, process_variance=1e-5, measurement_variance=1e-2):
+        """
+        使用卡尔曼滤波对进度序列进行平滑处理
+
+        参数:
+            values: list/ndarray/deque，进度值序列 (0~1)
+            process_variance: float，过程噪声方差 Q
+            measurement_variance: float，测量噪声方差 R
+
+        返回:
+            smoothed: ndarray，平滑后的结果
+        """
+        if isinstance(values, deque):
+            values = list(values)
+        values = np.array(values, dtype=float)
+
+        n = len(values)
+        smoothed = np.zeros(n)
+
+        # 初始化
+        x_est = values[0]  # 初始状态估计
+        P = 1.0            # 初始估计协方差
+
+        Q = process_variance
+        R = measurement_variance
+
+        for i in range(n):
+            # 预测步骤
+            x_pred = x_est
+            P_pred = P + Q
+
+            # 更新步骤
+            K = P_pred / (P_pred + R)  # 卡尔曼增益
+            x_est = x_pred + K * (values[i] - x_pred)
+            P = (1 - K) * P_pred
+
+            smoothed[i] = x_est
+
+        return smoothed
 
     # 设置回调函数
     def handle_task(self, task_data):
@@ -53,7 +110,8 @@ class DispatchClient:
             print(f'\n语言指令：{self.config.language[key]}\n')
             self.vla_client.language = self.config.language[key]
             self.vla_client.is_running_action = True
-            # self.vla_client.inference_first()
+            self.vla_client.info_act['current_prob_progress'] = 0.0 # 避免还是上次任务的值
+            # time.sleep(1.0) # 需等待current_prob_progress更新，避免还是上次任务的值
         else:
             print(f'\n播放轨迹：{self.config.language[key]}\n')
             self.vla_client.is_running_action = False
@@ -61,14 +119,68 @@ class DispatchClient:
             path_replay = self.config.language[key].split(':')[-1]
             self.robot.replay_trajectories(path_replay)
 
+        # 重置稳定性检测变量
+        self.stable_count = 0
+        self.stability_window.clear()
+        
+        # 重置重复值检测变量
+        self.last_progress_value = None
+        
         while True:
             time.sleep(0.05)
             if 'replay:' not in self.config.language[key]:
                 thre_finish = self.config.thre_progress_finish[key]
                 if 'current_prob_progress' in self.vla_client.info_act:
-                    print('current_prob_progress: ', self.vla_client.info_act['current_prob_progress'])
-                if 'current_prob_progress' in self.vla_client.info_act and self.vla_client.info_act['current_prob_progress'] > thre_finish:
-                    break
+                    raw_progress = self.vla_client.info_act['current_prob_progress']
+                    
+                    # 重复值检测
+                    if self.skip_duplicate_values and self.last_progress_value is not None:
+                        if abs(raw_progress - self.last_progress_value) < self.duplicate_tolerance:
+                            # 跳过重复值，继续下一次循环
+                            continue
+                    self.last_progress_value = raw_progress
+                    
+                    # 滤波处理选项
+                    if self.enable_progress_filtering:
+                        # 添加到历史记录
+                        self.progress_history.append(raw_progress)
+                        
+                        # 如果历史数据足够，进行滤波
+                        if len(self.progress_history) >= 3:
+                            smoothed_values = self.smooth_progress(self.progress_history)
+                            current_progress = smoothed_values[-1]  # 使用最新的滤波值
+                            print(f'current_prob_progress: {raw_progress:.4f} -> filtered: {current_progress:.4f}')
+                        else:
+                            current_progress = raw_progress
+                            print(f'current_prob_progress: {current_progress:.4f} (no filtering, insufficient data)')
+                    else:
+                        current_progress = raw_progress
+                        print('current_prob_progress: ', current_progress)
+                    
+                    # 更新滑动窗口（deque自动维护maxlen）
+                    self.stability_window.append(current_progress)
+                    # 检查当前值是否大于阈值
+                    if current_progress > thre_finish:
+                        self.stable_count += 1
+                        print(f'稳定计数: {self.stable_count}/{self.required_stable_count}')
+                        
+                        # 额外的稳定性检查：滑动窗口内的方差检查
+                        if len(self.stability_window) >= 3:
+                            recent_values = list(self.stability_window)[-3:]  # 转换为list进行切片
+                            window_std = np.std(recent_values)  # 最近3个值的标准差
+                            window_mean = np.mean(recent_values)  # 最近3个值的平均值
+                            stability_ratio = window_std / (window_mean + 1e-6)  # 避免除零
+                            print(f'稳定性指标 - 标准差: {window_std:.4f}, 变异系数: {stability_ratio:.4f}')
+                            
+                            # 当连续满足条件且变异系数小于0.1时认为稳定
+                            if self.stable_count >= self.required_stable_count and stability_ratio < self.thre_stability_ratio:
+                                print('✅ 检测到稳定的高进度值，任务即将完成')
+                                break
+                    else:
+                        # 重置计数器
+                        if self.stable_count > 0:
+                            print('进度值下降，重置稳定计数')
+                        self.stable_count = 0
             else:
                 print('replay轨迹执行完毕')
                 break

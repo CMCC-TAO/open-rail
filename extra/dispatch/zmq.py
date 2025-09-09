@@ -13,7 +13,7 @@ import socket
 # 配置日志
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("DispatchClient")
+logger = logging.getLogger("DispatchZMQClient")
 
 class RobotState(Enum):
     DISCONNECTED = 0
@@ -56,6 +56,7 @@ class DispatchZMQClient:
         self.state = RobotState.DISCONNECTED
         self.identity = f"{robot_type}_{uuid.uuid4().hex[:8]}"
         self.is_running = False
+        self.processing_task = False  # 任务处理标志
         
         # 连接健康度监测 - 基于接收消息的时间
         self.last_received_message = time.time()
@@ -67,6 +68,7 @@ class DispatchZMQClient:
         # 线程和锁
         self.state_lock = threading.RLock()
         self.socket_lock = threading.Lock()  # 套接字访问锁
+        self.processing_lock = threading.Lock() # 任务处理锁
         self.listen_thread = None
         self.heartbeat_thread = None
         self.reconnect_thread = None
@@ -476,38 +478,36 @@ class DispatchZMQClient:
             item = task_data.get("item", "")
             
             logger.info(f"Received task: id={task_id}, action={action}, item={item}")
-            
-            # 调用任务处理回调
-            response = None
-            if self.task_handler:
-                try:
-                    response = self.task_handler(task_data)
-                except Exception as e:
-                    logger.error(f"Task handler error: {e}")
-                    response = {
-                        "message": f"Task handler error: {e}"
-                    }
-            
-            # 如果没有响应，创建默认响应
-            if response is None:
-                response = {"message": "Receive task successfully"}
-            
+
+            # 创建默认响应
+            response = {}
             # 添加必要的元数据 (与C++服务器格式匹配)
             response.update({
                 "version": "1.0",
                 "type": "response",
                 "robot_type": self.robot_type,
                 "task_id": task_id,
-                "source": "robot"
+                "source": "robot",
+                "message": "Receive task successfully"
             })
             
             # 发送响应
             self.send_response(response)
+
+            # 调用任务处理回调
+            response = None
+            if self.task_handler:
+                try:
+                    self.task_handler(task_data)
+                except Exception as e:
+                    logger.error(f"Task handler error: {e}")
+            else:
+                logger.warning("No task handler registered")
             
         except Exception as e:
             logger.error(f"Error processing task: {e}")
             
-            # 发送错误响应
+            # 发送错误状态
             error_response = {
                 "version": "1.0",
                 "type": "error",
@@ -555,7 +555,7 @@ class DispatchZMQClient:
         """重连循环 - 基于接收消息超时触发重连"""
         logger.info("Reconnect loop started")
         reconnect_attempts = 0
-        max_reconnect_attempts = 10
+        max_reconnect_attempts = 30
 
         while self.is_running:
             try:
@@ -568,6 +568,13 @@ class DispatchZMQClient:
 
                 # 检查是否需要重连：长时间未收到任何消息
                 if current_state == RobotState.CONNECTED:
+                    # 如果正在处理任务，跳过重连检查
+                    with self.processing_lock:
+                        if self.processing_task:
+                            logger.debug("Skipping reconnect check - task in progress")
+                            time.sleep(1.0)
+                            continue
+
                     current_time = time.time()
                     time_since_last_received = current_time - self.last_received_message
                     

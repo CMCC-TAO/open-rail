@@ -116,8 +116,8 @@ class VLAClient():
         - Initializes trajectory fitting and control timestamps
         - Sets up the fitted action chunk for control
         """
-        # Save current language state and disable automatic language switching during reset
-        saved_language = self.language
+        # Disable automatic language switching during reset (but don't save/restore language)
+        # saved_language = self.language
         self.allow_language_switch = False
         
         # Wait for observation changes after reset, then retrieve fresh obs for inference
@@ -161,8 +161,8 @@ class VLAClient():
             self.rdm.compute_avg_infer_time()
             self.rdm.compute_avg_traj_time()
             
-        # Restore language state and re-enable automatic language switching
-        self.language = saved_language
+        # Re-enable automatic language switching
+        # self.language = saved_language
         self.allow_language_switch = True
     
     @run_time_decorator

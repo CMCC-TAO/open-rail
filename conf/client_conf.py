@@ -70,5 +70,5 @@ def get_client_config():
         # 'gently push the oven door shut to return it to a closed position',
         # 'reset the arm posture and hand configuration to the default idle gesture'
     ]
-    config.thre_prob_progress = 0.9  # Probability threshold for switching language instructions
+    config.thre_prob_progress = 9.9  # Probability threshold for switching language instructions
     return config
