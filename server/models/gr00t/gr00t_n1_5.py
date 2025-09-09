@@ -76,6 +76,7 @@ class ModelVLA:
         time1 = time.time()
         ext_result = {}
         predicted_action = self.policy.get_action(inp_obs)
+        # predicted_action['prob_progress'] = np.random.rand(64,)
         if isinstance(predicted_action, dict) and 'prob_progress' in predicted_action:
             ext_result['prob_progress'] = predicted_action['prob_progress']
             del predicted_action['prob_progress']

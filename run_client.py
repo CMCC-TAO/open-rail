@@ -234,7 +234,6 @@ if __name__ == "__main__":
     # extra
     dispatch_client = DispatchClient(vla_client, robot)
     dispatch_client.start()
-    dispatch_client.mock_task()
     
     live = None
     console = Console()
@@ -247,7 +246,8 @@ if __name__ == "__main__":
             live.start()
         else:
             print("Debug mode enabled, press Enter to show commands")
-        
+            dispatch_client.mock_task()
+
         while True:
             time.sleep(0.1)
             info = {'config': config, 'vla_client': vla_client}

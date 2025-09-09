@@ -67,7 +67,7 @@ class RobotBase():
 
         # TODO: 优化区分灵巧手和夹爪
         if target_pose.shape[0] < 25:
-            self.execute_action({'hand': target_pose[14:16].tolist()})
+            self.execute_action({'gripper': target_pose[14:16].tolist()})
             self.execute_action({'head': target_pose[16:18].tolist()})
             self.execute_action({'waist': target_pose[18:20].tolist()})
         else:

@@ -1,3 +1,5 @@
+# TODO: 考虑移到调度系统服务端
+
 from ml_collections import ConfigDict
 
 # 点心
@@ -5,18 +7,18 @@ def get_robotB_config():
     config = ConfigDict()
     config.robot_name = "ARM_B"
     config.reset_pose = {
-        "default": [0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
-        "pick_custardbun": [0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
-        "pick_shrimpdumpling": [0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "pick_custardbun": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "pick_shrimpdumpling": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "place_custardbun": None, # None表示不复位
         "place_shrimpdumpling": None,
     }
     config.thre_progress_finish = {
-        "default": 0.9,
-        "pick_custardbun": 0.9,
-        "pick_shrimpdumpling": 0.9,
-        "place_custardbun": 0.9,
-        "place_shrimpdumpling": 0.9,
+        "default": 1.04,
+        "pick_custardbun": 1.04,
+        "pick_shrimpdumpling": 1.04,
+        "place_custardbun": 1.04,
+        "place_shrimpdumpling": 1.04,
     }
     config.language = {
         "default": "",
@@ -32,18 +34,18 @@ def get_robotC_config():
     config = ConfigDict()
     config.robot_name = "ARM_C"
     config.reset_pose = {
-        "default": [0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
-        "pour_water_greentea": [0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
-        "pour_water_blacktea": [0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
-        "place_greentea": [0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
-        "place_blacktea": [0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "pour_water_greentea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "pour_water_blacktea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "place_greentea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "place_blacktea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
     }
     config.thre_progress_finish = {
-        "default": 0.9,
-        "pour_water_greentea": 0.9,
-        "pour_water_blacktea": 0.9,
-        "place_greentea": 0.9,
-        "place_blacktea": 0.9,
+        "default": 1.04,
+        "pour_water_greentea": 1.04,
+        "pour_water_blacktea": 1.04,
+        "place_greentea": 1.04,
+        "place_blacktea": 1.04,
     }
     config.language = {
         "default": "",
@@ -70,15 +72,15 @@ def get_robotD_config():
         "close_door": [-1.0738, 0.6108, 0.2796, -1.2836, 0.7301, 1.4947, -0.1875, 1.0743, -0.611 , -0.2796, 1.2839, -0.7304, -1.4953, 0.1876] + [0.0, 0.0] + [0.2094, 0.4363] + [0.0, 27.0] + [0.0, 0.0],
     }
     config.thre_progress_finish = {
-        "default": 0.9,
-        "pick_apple": 0.9,
-        "pick_orange": 0.9,
-        "pick_peach": 0.9,
-        "place_apple": 0.9,
-        "place_orange": 0.9,
-        "place_peach": 0.9,
-        "open_door": 0.9,
-        "close_door": 0.9,
+        "default": 1.04,
+        "pick_apple": 1.04,
+        "pick_orange": 1.04,
+        "pick_peach": 1.04,
+        "place_apple": 1.04,
+        "place_orange": 1.04,
+        "place_peach": 1.04,
+        "open_door": 1.04,
+        "close_door": 1.04,
     }
     config.language = {
         "default": "",
@@ -94,7 +96,7 @@ def get_robotD_config():
     return config
 
 def get_dispatch_config():
-    target = 'robotD'
+    target = 'robotB'
     config = ConfigDict()
     config.server_task_address = "tcp://192.168.1.122:5555"
     config.server_response_address = "tcp://192.168.1.122:5556"

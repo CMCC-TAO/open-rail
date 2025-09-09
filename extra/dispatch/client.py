@@ -22,9 +22,10 @@ class DispatchClient:
         self.client.start()
         
         # 程序启动：先恢复默认姿态，再暂停程序
-        self.robot.reset_robot(target_pose=self.config.reset_pose['default'])
-        self.vla_client.inference_first()
+        self.vla_client.language = self.config.language['default']
         self.vla_client.is_running_action = False
+        time.sleep(0.1)
+        self.robot.reset_robot(target_pose=self.config.reset_pose['default'])
 
     def handle_connection(self, connected):
         """连接状态回调"""
@@ -33,7 +34,7 @@ class DispatchClient:
     # 设置回调函数
     def handle_task(self, task_data):
         """处理任务回调"""
-        print('\naaaaa', task_data)
+        print('\n当前机器人配置：', self.config.robot_name, '\ntask_data: ', task_data)
 
         target_object = task_data['target_object']
         if target_object != '':
@@ -42,60 +43,71 @@ class DispatchClient:
         self.client.send_status_update(task_data['task_id'], 'pending')
 
         if self.config.reset_pose[key] is not None:
-            print(f'\n复位机器人：{key}')
+            print(f'\n复位机器人：{key}\n')
+            self.vla_client.is_running_action = False
+            time.sleep(0.1)
             self.robot.reset_robot(target_pose=self.config.reset_pose[key])
             self.vla_client.inference_first()
 
         if 'replay:' not in self.config.language[key]:
-            print(f'\n语言指令：{self.config.language[key]}')
+            print(f'\n语言指令：{self.config.language[key]}\n')
             self.vla_client.language = self.config.language[key]
             self.vla_client.is_running_action = True
+            # self.vla_client.inference_first()
         else:
-            print(f'\n播放轨迹：{self.config.language[key]}')
+            print(f'\n播放轨迹：{self.config.language[key]}\n')
+            self.vla_client.is_running_action = False
+            time.sleep(0.1)
             path_replay = self.config.language[key].split(':')[-1]
             self.robot.replay_trajectories(path_replay)
 
         while True:
-            if 'replay:' in self.config.language[key]:
+            time.sleep(0.05)
+            if 'replay:' not in self.config.language[key]:
+                thre_finish = self.config.thre_progress_finish[key]
+                if 'current_prob_progress' in self.vla_client.info_act:
+                    print('current_prob_progress: ', self.vla_client.info_act['current_prob_progress'])
+                if 'current_prob_progress' in self.vla_client.info_act and self.vla_client.info_act['current_prob_progress'] > thre_finish:
+                    break
+            else:
                 print('replay轨迹执行完毕')
                 break
-            else:
-                # thre_finish = self.config.thre_progress_finish[key]
-                # if 'current_prob_progress' in self.vla_client.info_act and self.vla_client.info_act['current_prob_progress'] > thre_finish:
-                #     break
 
-                time.sleep(3)
-                print('VLA任务进度执行完毕')
-                break
-            time.sleep(0.05)
-        
         self.client.send_status_update(task_data['task_id'], 'completed')
+        print(f'\n任务完成，暂停：{key}\n')
+        self.vla_client.is_running_action = False
+        time.sleep(0.1)
+        # if self.config.reset_pose[key] is not None:
+        #     self.robot.reset_robot(target_pose=self.config.reset_pose[key])
+        #     self.vla_client.inference_first()
         return {"success": True, "message": "Task completed"}
 
     def mock_task(self):
-        # result = self.handle_task({
-        #     "version": "1.0",
-        #     "type": "task",
-        #     "robot_type": "ARM_B",
-        #     "task_id": "ARM_B_1640995200123",
-        #     "skill_type": "pick",
-        #     "target_object": "shrimpdumpling",
-        #     "target_location": "",
-        #     "source": "service"
-        # })
-        # print('任务B1执行结果：', result)
-        # if result['success']:
-        #     result = self.handle_task({
-        #         "version": "1.0",
-        #         "type": "task",
-        #         "robot_type": "ARM_B",
-        #         "task_id": "ARM_B_1640995200123",
-        #         "skill_type": "place",
-        #         "target_object": "shrimpdumpling",
-        #         "target_location": "",
-        #         "source": "service"
-        #     })
-        #     print('任务B2执行结果：', result)
+        result = self.handle_task({
+            "version": "1.0",
+            "type": "task",
+            "robot_type": "ARM_B",
+            "task_id": "ARM_B_1640995200123",
+            "skill_type": "pick",
+            "target_object": "shrimpdumpling",
+            "target_location": "",
+            "source": "service"
+        })
+        print('任务B1执行结果：', result)
+        input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+        self.vla_client.is_running_action = True
+        if result['success']:
+            result = self.handle_task({
+                "version": "1.0",
+                "type": "task",
+                "robot_type": "ARM_B",
+                "task_id": "ARM_B_1640995200123",
+                "skill_type": "place",
+                "target_object": "shrimpdumpling",
+                "target_location": "",
+                "source": "service"
+            })
+            print('任务B2执行结果：', result)
 
         # result = self.handle_task({
         #     "version": "1.0",
@@ -108,6 +120,8 @@ class DispatchClient:
         #     "source": "service"
         # })
         # print('任务C1执行结果：', result)
+        # input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+        # self.vla_client.is_running_action = True
         # if result['success']:
         #     result = self.handle_task({
         #         "version": "1.0",
@@ -121,50 +135,52 @@ class DispatchClient:
         #     })
         #     print('任务C2执行结果：', result)
 
-        result = self.handle_task({
-            "version": "1.0",
-            "type": "task",
-            "robot_type": "ARM_D",
-            "task_id": "ARM_D_1640995200123",
-            "skill_type": "open_door",
-            "target_object": "",
-            "target_location": "",
-            "source": "service"
-        })
-        print('任务D1执行结果：', result)
-        if result['success']:
-            result = self.handle_task({
-                "version": "1.0",
-                "type": "task",
-                "robot_type": "ARM_D",
-                "task_id": "ARM_D_1640995200123",
-                "skill_type": "pick",
-                "target_object": "apple",
-                "target_location": "",
-                "source": "service"
-            })
-            print('任务D2执行结果：', result)
-            if result['success']:
-                result = self.handle_task({
-                    "version": "1.0",
-                    "type": "task",
-                    "robot_type": "ARM_D",
-                    "task_id": "ARM_D_1640995200123",
-                    "skill_type": "place",
-                    "target_object": "apple",
-                    "target_location": "",
-                    "source": "service"
-                })
-                print('任务D3执行结果：', result)
-                if result['success']:
-                    result = self.handle_task({
-                        "version": "1.0",
-                        "type": "task",
-                        "robot_type": "ARM_D",
-                        "task_id": "ARM_D_1640995200123",
-                        "skill_type": "close_door",
-                        "target_object": "",
-                        "target_location": "",
-                        "source": "service"
-                    })
-                    print('任务D3执行结果：', result)
+        # result = self.handle_task({
+        #     "version": "1.0",
+        #     "type": "task",
+        #     "robot_type": "ARM_D",
+        #     "task_id": "ARM_D_1640995200123",
+        #     "skill_type": "open_door",
+        #     "target_object": "",
+        #     "target_location": "",
+        #     "source": "service"
+        # })
+        # print('任务D1执行结果：', result)
+        # if result['success']:
+        #     result = self.handle_task({
+        #         "version": "1.0",
+        #         "type": "task",
+        #         "robot_type": "ARM_D",
+        #         "task_id": "ARM_D_1640995200123",
+        #         "skill_type": "pick",
+        #         "target_object": "apple",
+        #         "target_location": "",
+        #         "source": "service"
+        #     })
+        #     print('任务D2执行结果：', result)
+        #     input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+        #     self.vla_client.is_running_action = True
+        #     if result['success']:
+        #         result = self.handle_task({
+        #             "version": "1.0",
+        #             "type": "task",
+        #             "robot_type": "ARM_D",
+        #             "task_id": "ARM_D_1640995200123",
+        #             "skill_type": "place",
+        #             "target_object": "apple",
+        #             "target_location": "",
+        #             "source": "service"
+        #         })
+        #         print('任务D3执行结果：', result)
+        #         if result['success']:
+        #             result = self.handle_task({
+        #                 "version": "1.0",
+        #                 "type": "task",
+        #                 "robot_type": "ARM_D",
+        #                 "task_id": "ARM_D_1640995200123",
+        #                 "skill_type": "close_door",
+        #                 "target_object": "",
+        #                 "target_location": "",
+        #                 "source": "service"
+        #             })
+        #             print('任务D3执行结果：', result)
