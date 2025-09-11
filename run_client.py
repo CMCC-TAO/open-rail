@@ -57,6 +57,7 @@ def parse_args():
     parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
     parser.add_argument('--preprocess', type=str, choices=['crop_and_resize', 'pad_and_resize', 'resize', 'none'], help='Image preprocessing method')
     parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')
+    parser.add_argument('--extra_dispatch', action='store_true', help='Enable extra dispatch')
     return parser.parse_args()
 
 def override_config_with_args(config, args):
@@ -232,8 +233,9 @@ if __name__ == "__main__":
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
 
     # extra
-    dispatch_client = DispatchClient(vla_client, robot)
-    dispatch_client.start()
+    if args.extra_dispatch:
+        dispatch_client = DispatchClient(vla_client, robot)
+        dispatch_client.start()
     
     live = None
     console = Console()
@@ -246,7 +248,8 @@ if __name__ == "__main__":
             live.start()
         else:
             print("Debug mode enabled, press Enter to show commands")
-            dispatch_client.mock_task()
+            # if args.extra_dispatch:
+            #     dispatch_client.mock_task()
 
         while True:
             time.sleep(0.1)

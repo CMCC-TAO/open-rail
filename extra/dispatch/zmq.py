@@ -11,7 +11,7 @@ import uuid
 import socket
 
 # 配置日志
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("DispatchZMQClient")
 
@@ -267,7 +267,7 @@ class DispatchZMQClient:
                 socket.send(b"", zmq.SNDMORE)
                 socket.send(message_str.encode('utf-8'))
 
-                logger.info(f"SENT -> {message_str}")
+                logger.debug(f"SENT -> {message_str}")
                 return True
 
             except zmq.ZMQError as e:
@@ -329,7 +329,7 @@ class DispatchZMQClient:
                     if len(frames[0]) == 0:  # 检查是否是空分隔符
                         try:
                             message_str = frames[1].decode('utf-8')
-                            logger.info(f"RECEIVED <- {message_str}")
+                            logger.debug(f"RECEIVED <- {message_str}")
                             # 更新最后接收消息时间
                             self.last_received_message = time.time()
                             return json.loads(message_str)
@@ -344,7 +344,7 @@ class DispatchZMQClient:
                     # 单帧消息（可能是其他模式或简化格式）
                     try:
                         message_str = frames[0].decode('utf-8')
-                        logger.info(f"RECEIVED <- {message_str}")
+                        logger.debug(f"RECEIVED <- {message_str}")
                         # 更新最后接收消息时间
                         self.last_received_message = time.time()
                         return json.loads(message_str)
@@ -356,7 +356,7 @@ class DispatchZMQClient:
                     # 如果收到3帧，可能是其他情况，尝试解析最后一帧
                     try:
                         message_str = frames[-1].decode('utf-8')
-                        logger.info(f"RECEIVED <- {message_str}")
+                        logger.debug(f"RECEIVED <- {message_str}")
                         logger.warning(f"Unexpected {len(frames)} frames received, using last frame")
                         # 更新最后接收消息时间
                         self.last_received_message = time.time()
@@ -435,7 +435,7 @@ class DispatchZMQClient:
                 current_state = self._get_current_state()
                 if current_state != RobotState.CONNECTED:
                     logger.debug(f"Not connected, current state: {current_state.name}")
-                    time.sleep(0.2)
+                    time.sleep(0.5)
                     continue
                 
                 # 接收消息
@@ -443,7 +443,9 @@ class DispatchZMQClient:
                 if message:
                     # 处理消息
                     self._handle_message(message)
-                
+                else:
+                    time.sleep(0.01)  # 10ms休眠
+
             except Exception as e:
                 logger.error(f"Error in listen loop: {e}")
                 time.sleep(0.1)
@@ -455,15 +457,26 @@ class DispatchZMQClient:
             task_id = message.get("task_id", "")
             source = message.get("source", "")
             
-            logger.info(f"Processing message - type: {msg_type}, task_id: {task_id}, source: {source}")
+            logger.debug(f"Receive message - type: {msg_type}, task_id: {task_id}, source: {source}")
             
             if msg_type == "heartbeat_ack":
                 # 心跳响应
-                logger.info("Heartbeat acknowledged")
+                logger.debug("Heartbeat acknowledged")
                 
             elif msg_type == "task" and source == "service":
+                logger.info(f"Receive message - type: {msg_type}, task_id: {task_id}, source: {source}")
+                with self.processing_lock:
+                    if self.processing_task:
+                        logger.warning("Already processing a task, skipping this one")
+                        return
                 # 处理任务
-                self._handle_task(message)
+                task_thread = threading.Thread(
+                    target=self._handle_task,
+                    args=(message,),
+                    daemon=True,
+                    name=f"TaskHandler-{task_id}"
+                )
+                task_thread.start()
             else:
                 logger.warning(f"Unknown message type: {msg_type}")
                 
@@ -473,11 +486,14 @@ class DispatchZMQClient:
     def _handle_task(self, task_data: Dict[str, Any]):
         """处理任务 (与C++服务器任务格式匹配)"""
         try:
+            with self.processing_lock:
+                self.processing_task = True
+
             task_id = task_data.get("task_id")
             action = task_data.get("action", "")
             item = task_data.get("item", "")
             
-            logger.info(f"Received task: id={task_id}, action={action}, item={item}")
+            logger.debug(f"Received task: id={task_id}, action={action}, item={item}")
 
             # 创建默认响应
             response = {}
@@ -503,7 +519,13 @@ class DispatchZMQClient:
                     logger.error(f"Task handler error: {e}")
             else:
                 logger.warning("No task handler registered")
-            
+
+            with self.processing_lock:
+                self.processing_task = False
+            status = "completed"
+            # self.send_status_update(task_id, status)
+            logger.info("Processing task flag cleared")
+
         except Exception as e:
             logger.error(f"Error processing task: {e}")
             
@@ -569,11 +591,12 @@ class DispatchZMQClient:
                 # 检查是否需要重连：长时间未收到任何消息
                 if current_state == RobotState.CONNECTED:
                     # 如果正在处理任务，跳过重连检查
-                    with self.processing_lock:
-                        if self.processing_task:
-                            logger.debug("Skipping reconnect check - task in progress")
-                            time.sleep(1.0)
-                            continue
+
+                    if self.processing_task:
+                        logger.debug("Skipping reconnect check - task in progress")
+                        self.last_received_message = time.time()
+                        time.sleep(1.0)
+                        continue
 
                     current_time = time.time()
                     time_since_last_received = current_time - self.last_received_message
@@ -629,7 +652,7 @@ class DispatchZMQClient:
                 
         return self._send_message(self.response_socket, response_data)
 
-    def send_status_update(self, task_id: str, status: str, progress: int = 0) -> bool:
+    def send_status_update(self, task_id: str, status: str) -> bool:
         """发送状态更新 (与C++服务器格式匹配)"""
         status_data = {
             "version": "1.0",
