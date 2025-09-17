@@ -164,14 +164,15 @@ class DispatchClient:
                 print('replay轨迹执行完毕')
                 break
 
-        self.client.send_status_update(task_data['task_id'], 'completed')
+        # self.client.send_status_update(task_data['task_id'], 'completed')
         print(f'\n任务完成，暂停：{key}\n')
         self.vla_client.is_running_action = False
         time.sleep(0.1)
         # if self.config.reset_pose[key] is not None:
         #     self.robot.reset_robot(target_pose=self.config.reset_pose[key])
         #     self.vla_client.inference_first()
-        return {"success": True, "message": "Task completed"}
+        # return {"success": True, "message": "Task completed"}
+        return 1
 
     def mock_task(self):
         result = self.handle_task({

@@ -51,6 +51,7 @@ def parse_args():
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     parser.add_argument('--fps', type=int, help='FPS')
     parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
+    parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
     parser.add_argument('--show_data', action='store_true', help='Show data visualization')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
@@ -74,6 +75,8 @@ def override_config_with_args(config, args):
         config.observer.fps = args.fps
     if args.sleep_time is not None:
         config.sleep_time = args.sleep_time
+    if args.gripper_offset is not None:
+        config.gripper_offset = args.gripper_offset
     if args.show_data:
         config.show_data = True
     if args.record:

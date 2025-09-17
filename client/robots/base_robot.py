@@ -65,7 +65,7 @@ class RobotBase():
             self.execute_action({'arm': traj})
             time.sleep(0.01)
 
-        if self.cfg['hand_type'] == 'gripper':
+        if 'gripper' in self.cfg['hand_type']:
             self.execute_action({'gripper': target_pose[14:16].tolist()})
             self.execute_action({'head': target_pose[16:18].tolist()})
             self.execute_action({'waist': target_pose[18:20].tolist()})
