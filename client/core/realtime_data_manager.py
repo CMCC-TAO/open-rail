@@ -365,6 +365,9 @@ class RealtimeDataManager():
         qualified_joint_num = 0
         
         for candidate_index in range(0, search_length, 5):
+            # add boundary check, ensure candidate_index not out of range
+            if candidate_index >= candidate_action_chunk.shape[1]:
+                break
             candidate_action = candidate_action_chunk[valid_joints, candidate_index]
             action_diff = candidate_action - currt_action
             qualified_count = 0

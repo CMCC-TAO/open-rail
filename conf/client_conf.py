@@ -57,6 +57,8 @@ def get_client_config():
     config.language = [
         'Use the left arm to grasp the teapot of green tea first, and then carefully pour the green tea into the cup.',
         'Use the right arm to grasp the teapot of black tea first, and then carefully pour the black tea into the cup.',
+        'Place the green tea cup on the tray with left arm',
+        'Place the black tea cup on the tray with right arm',
         'pick the bottle into the basket',
         'open the microwave door, put the sandwish into it, and close the microwave door',
         'take the sandwitch out from the oven',

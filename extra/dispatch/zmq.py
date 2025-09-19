@@ -100,7 +100,7 @@ class DispatchZMQClient:
             except Exception as e:
                 logger.error(f"Connection handler error: {e}")
 
-    def set_task_handler(self, handler: Callable[[Dict[str, Any]], Optional[Dict[str, Any]]]):
+    def set_task_handler(self, handler: Callable[[Dict[str, Any]], int]):
         """设置任务处理回调函数"""
         self.task_handler = handler
         logger.info("Task handler set")
@@ -109,6 +109,11 @@ class DispatchZMQClient:
         """设置连接状态变化回调函数"""
         self.connection_handler = handler
         logger.info("Connection handler set")
+
+    def set_manual_command_handler(self, handler: Callable[[Dict[str, Any]], None]):
+        """设置处理手动发送命令回调函数"""
+        self.manual_command_handler = handler
+        logger.info("Manual command handler set")
 
     def _can_connect_to_address(self, address: str) -> bool:
         """检查是否可以连接到指定地址"""
@@ -549,7 +554,6 @@ class DispatchZMQClient:
                 logger.error(f"Error in reconnect loop: {e}")
                 time.sleep(self.reconnect_interval)
 
-
     def _handle_message(self, message: Dict[str, Any]):
         """处理接收到的服务器消息"""
         try:
@@ -578,6 +582,20 @@ class DispatchZMQClient:
                     name=f"TaskHandler-{task_id}"
                 )
                 task_thread.start()
+                
+            elif msg_type == "manual": 
+                logger.warning(f"Received manual control message : {message}")
+                if self.manual_command_handler:
+                    # 处理手动发送的任务
+                    manual_control_thread = threading.Thread(
+                        target=self.manual_command_handler,
+                        args=(message,),
+                        daemon=True,
+                        name=f"TaskHandler-{task_id}"
+                    )
+                    manual_control_thread.start()
+                else:
+                    logger.warning("Manual control handler not registered")
             else:
                 logger.warning(f"Unknown message type: {msg_type}")
                 

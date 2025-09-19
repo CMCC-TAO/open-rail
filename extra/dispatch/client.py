@@ -28,9 +28,12 @@ class DispatchClient:
         # 滤波相关配置
         self.enable_progress_filtering = True  # 是否启用进度值滤波
         self.progress_history = deque(maxlen=10)  # 存储历史进度值用于滤波
+
+        self.task_terminated = False  # 标志变量，用于控制 handle_task 的执行
         
     def start(self):
         self.client.set_task_handler(self.handle_task)
+        self.client.set_manual_command_handler(self.handle_manual_command)
         self.client.start()
         
         # 程序启动：先恢复默认姿态，再暂停程序
@@ -87,6 +90,7 @@ class DispatchClient:
     def handle_task(self, task_data):
         """处理任务回调"""
         print('\n当前机器人配置：', self.config.robot_name, '\ntask_data: ', task_data)
+        self.task_terminated = False
 
         target_object = task_data['target_object']
         if target_object != '':
@@ -121,6 +125,11 @@ class DispatchClient:
         self.stability_window.clear()
         
         while True:
+            if self.task_terminated:
+                print('收到手动指令，终止任务执行')
+                self.vla_client.is_running_action = False
+                return 500
+            
             time.sleep(0.05) # 禁止修改
             if 'replay:' not in self.config.language[key]:
                 thre_finish = self.config.thre_progress_finish[key]
@@ -173,6 +182,17 @@ class DispatchClient:
         #     self.vla_client.inference_first()
         # return {"success": True, "message": "Task completed"}
         return 1
+
+    def handle_manual_command(self, command):
+        """处理手动指令回调"""
+        print(f'收到手动指令: {command}')
+        self.task_terminated = True
+        if command['skill_type'] == 'pause':
+            self.vla_client.is_running_action = False
+        elif command['skill_type'] == 'reset':
+            self.vla_client.is_running_action = False
+            time.sleep(0.1)
+            self.robot.reset_robot(target_pose=self.config.reset_pose['default'])
 
     def mock_task(self):
         result = self.handle_task({
