@@ -34,6 +34,7 @@ def get_mock_config():
     """
     config = ConfigDict()
     config.camera = ConfigDict()
+    config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
     config.camera.ref = 'head'
     config.camera.names = {'head': 'observation.images.top_head',
                            'hand_left': 'observation.images.hand_left',

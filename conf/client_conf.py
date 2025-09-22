@@ -42,13 +42,13 @@ def get_client_config():
     config.fitting_time_step = 5  # Time step for trajectory fitting in milliseconds
     config.fitting_deg = 4  # Polynomial fitting degree
     config.search_action = True  # Enable forward search for smooth actions
-    config.search_length = 100  # Forward search length
-    config.smooth_action = False  # Enable action smoothing
+    config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
+    config.smooth_action = False  # Enable action smoothing (Beta)
     config.smooth_length = 150  # Action smoothing length
     config.smooth_base = 0.0  # Base value for action smoothing, smaller values mean more smoothing
     config.smooth_ratio = 0.75  # Action smoothing ratio, recommended 0.5
-    config.gripper_offset = 5  # Gripper forward offset
-    config.sleep_time = 0.4  # Sleep time after each inference frame in seconds
+    config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
+    config.sleep_time = 0.4  # Sleep time after each inference frame in seconds. Note: robot to hesitate, increase it.
     config.history_frame = False  # Enable/disable historical frame usage
     config.chunk_strategy = 'latest'  # Action chunk strategy, choices = ('fusion', 'latest')
     config.preprocess = 'pad_and_resize'
@@ -59,6 +59,10 @@ def get_client_config():
         'Use the right arm to grasp the teapot of black tea first, and then carefully pour the black tea into the cup.',
         'Place the green tea cup on the tray with left arm',
         'Place the black tea cup on the tray with right arm',
+        '[PRIMARY_ARM=LEFT] Use the left gripper to pick up the topmost steamer on the left',
+        '[PRIMARY_ARM=RIGHT] Use the right gripper to pick up the topmost steamer on the right',
+        '[PRIMARY_ARM=LEFT] Use the left gripper to place the topmost steamer on the plate',
+        '[PRIMARY_ARM=RIGHT] Use the right gripper to place the topmost steamer on the plate',
         'pick the bottle into the basket',
         'open the microwave door, put the sandwish into it, and close the microwave door',
         'take the sandwitch out from the oven',
@@ -67,10 +71,6 @@ def get_client_config():
         'close the oven door securely by pushing it until it latches',
         'locate and press the start button to initiate the heating process',
         'wait patiently while the oven heats the sandwich to the desired temperature',
-        # 'open the oven door again with caution after the heating is complete',
-        # 'remove the heated sandwich from the oven and place it neatly on a plate',
-        # 'gently push the oven door shut to return it to a closed position',
-        # 'reset the arm posture and hand configuration to the default idle gesture'
     ]
     config.thre_prob_progress = 9.9  # Probability threshold for switching language instructions
     return config

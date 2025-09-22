@@ -52,13 +52,14 @@ def parse_args():
     parser.add_argument('--fps', type=int, help='FPS')
     parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
+    parser.add_argument('--search_length', type=int, help='Forward search length')
     parser.add_argument('--show_data', action='store_true', help='Show data visualization')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
     parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
     parser.add_argument('--preprocess', type=str, choices=['crop_and_resize', 'pad_and_resize', 'resize', 'none'], help='Image preprocessing method')
     parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')
-    parser.add_argument('--extra_dispatch', action='store_true', help='Enable extra dispatch')
+    parser.add_argument('--extra_dispatch_mode', type=int, default=0, choices=[0, 1, 2], help='0: disable extra dispatch, 1: enable extra dispatch, 2: mock extra dispatch (need modify extra/dispatch/client.py mock_task)')
     return parser.parse_args()
 
 def override_config_with_args(config, args):
@@ -207,8 +208,11 @@ def handle_user_input(vla_client, robot, live):
             input('Data deleted, press Enter to continue...')
         elif cmd == 'q':
             return False  # Signal to quit
-            
-        vla_client.is_running_action = True
+        
+        if args.extra_dispatch_mode != 0:
+            vla_client.is_running_action = False
+        else:
+            vla_client.is_running_action = True
         return True  # Continue running
         
     finally:
@@ -236,7 +240,7 @@ if __name__ == "__main__":
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
 
     # extra
-    if args.extra_dispatch:
+    if args.extra_dispatch_mode != 0:
         dispatch_client = DispatchClient(vla_client, robot)
         dispatch_client.start()
     
@@ -251,8 +255,10 @@ if __name__ == "__main__":
             live.start()
         else:
             print("Debug mode enabled, press Enter to show commands")
-            # if args.extra_dispatch:
-            #     dispatch_client.mock_task()
+            if args.extra_dispatch_mode == 2:
+                mock_task_thread = threading.Thread(target=dispatch_client.mock_task)
+                mock_task_thread.daemon = True
+                mock_task_thread.start()
 
         while True:
             time.sleep(0.1)
