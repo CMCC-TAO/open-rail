@@ -474,7 +474,7 @@ class RealtimeDataManager():
                                 smooth_length = 20,
                                 smooth_base = 0.1,
                                 smooth_ratio = 0.5,
-                                gripper_offset = 25):
+                                gripper_offset = 40):
         """Update action chunk with the new fitted action chunk.
 
         Args:
