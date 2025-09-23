@@ -92,7 +92,7 @@ def override_config_with_args(config, args):
         config.preprocess_size = args.preprocess_size
     return config
 
-# global variable
+# TODO: global variable
 wheel_thread_running = False
 wheel_pos = [0, 0]
 

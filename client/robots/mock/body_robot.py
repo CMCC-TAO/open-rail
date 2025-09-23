@@ -39,7 +39,7 @@ class RobotBody(RobotBase):
             self.init_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
             self.currt_index = 0
             self.period = 1.0 / self.dataset.meta.fps # in seconds
-            time.sleep(1)
+            # time.sleep(1) # in real robot, this is the time to wait for the robot ready
         except Exception as e:
             self.dataset = None
 
