@@ -23,7 +23,7 @@ def run_time_decorator(func):
         result = func(*args, **kwargs)  # Call the function
         end_time = time.perf_counter()  # Record the end time
         elapsed_time = end_time - start_time  # Calculate the elapsed time
-        # 不要取消注释，打印太多数据，影响调试
+        # Do not uncomment, too much data output affects debugging
         logger.info(f"Function {func.__name__} called and took {elapsed_time*1000:.4f} milliseconds to execute.")
         return result
     return wrapper
@@ -37,19 +37,19 @@ def action_chunk_2_joint_chunk(action_chunk):
     Returns:
         list: The converted joint chunk with format [joint_1_chunk, joint_2_chunk, ..., joint_n_chunk]
     """
-    # 创建一个空列表，用于存储关节块
+    # Create an empty list to store joint chunks
     joint_chunks = []
-    # 获取动作块的维度
+    # Get the dimension of the action chunk
     action_dim = len(action_chunk[0])
-    # 遍历动作块的维度，创建一个空列表，用于存储每个关节块
+    # Iterate through action chunk dimensions, create empty list for each joint chunk
     for index in range(action_dim):
         joint_chunks.append([])
     
-    # 遍历动作块，将每个动作的每个维度添加到对应的关节块中
+    # Iterate through action chunk, add each dimension of each action to corresponding joint chunk
     for action in action_chunk:
         for index in range(action_dim):
             joint_chunks[index].append(action[index])
-    # 返回关节块
+    # Return joint chunks
     return joint_chunks
 
 def get_closest_index(candidates, target):
@@ -62,141 +62,147 @@ def get_closest_index(candidates, target):
     Returns:
         int: The index of the closest element.
     """
-    # 计算每个元素与目标值的差值的绝对值
+    # Calculate the absolute difference between each element and the target value
     differences = [abs(candidate - target) for candidate in candidates]
-    # 找到最小差值的索引
+    # Find the index of the minimum difference
     closest_index = differences.index(min(differences))
     return closest_index
 
 def command_prompt(info: dict):
+    """Create a command prompt table for VLA inference framework.
+    
+    Args:
+        info (dict): Dictionary containing information to display in the table
+        
+    Returns:
+        Table: Rich table object with the information
+    """
     from rich.table import Table
-    # from rich.console import Console
 
-    # console = Console()
     table = Table(title="VLA Inference Framework")
-
-    # table.add_column("ID", justify="right", style="cyan", no_wrap=True)
     table.add_column("key", style="magenta")
     table.add_column("value", style="green")
 
     for key, value in info.items():
         table.add_row(key, str(value))
 
-    # table.add_row("1", "张三", "在线")
-    # table.add_row("2", "李四", "离线")
-    # table.add_row("3", "王五", "[bold red]异常[/bold red]")
-
-    # console.print(table)
     return table
 
-    # print(f'Press Enter to input command: ', end='\n', flush=True)
-    # print(f'\treset: make the robot go to the initial position', end='\n', flush=True)
-    # print(f'\t save: save the current data as a new episode', end='\n', flush=True)
-    # print(f'\t  run: continue to inference and control', end='\n', flush=True)
-    # print(f'\t exit: exit the program', end='\n', flush=True)
-
-def create_layout(info: dict):
+def create_layout(info: dict, terminal_size=None):
+    """Create a rich layout for displaying VLA client information.
+    
+    Args:
+        info (dict): Dictionary containing various information sections.
+        terminal_size: Rich Console size object containing width and height,
+                      used for dynamic layout sizing. If None, uses fixed heights.
+                    
+    Returns:
+        Panel: Rich panel containing the complete layout with adaptive sizing
+    """
     row_layout = Layout()
-    col_layout = Layout()
-    # panels = []
-    print_info = ''
-    for key, value in info.items():
-        if key in ['infer_count', 'avg_infer_time', 'avg_traj_time']:
-        # panels.append(Layout(Panel(f'{key}: {value}', title=''))),
-            print_info += f'{key:>15}: {value}\n'
-    config_info = ''
-    for key, value in info.get('config_info', {}).items():
-        config_info += f'{key:>25}: {value}\n'
-    ctrl_info = ''
-    for key, value in info.get('ctrl_info', {}).items():
-        ctrl_info += f'{key:>25}: {value}\n'
-    obs_act_info = ''
-    for key, value in info.get('obs_act_info', {}).items():
-        obs_act_info += f'{key:>25}: {value}\n'
-    debug_info = info.get('debug_info', None) 
+    col_layout1, col_layout2 = Layout(), Layout()
+    config, vla_client = info.get('config', {}), info.get('vla_client', None)
+    if config is None or vla_client is None:
+        return row_layout
 
-    # table = Table(title="Metrics")
-    # table.add_column("Param")
-    # table.add_column("Value")
-    # table.add_column("Param")
-    # table.add_column("Value")
-    # table.add_row('fps', '30', 'period', '5ms')
-    key_param_panels = [
-        Panel(print_info, subtitle='', subtitle_align='center'),
-        Panel(print_info, subtitle='', subtitle_align='center'),
-        Panel(print_info, subtitle='', subtitle_align='center'),
-    ]
-
-    key_param_columns = Columns(key_param_panels, title='VLA Client', equal=True, expand=True)
-    col_layout.split_row(
-        # Layout(key_param_columns, ratio=1),
-        Layout(Panel(ctrl_info, subtitle='', subtitle_align='center', height=8)),
-        Layout(Panel(config_info, subtitle='', subtitle_align='center', height=8)),
-        Layout(Panel(obs_act_info, subtitle='', subtitle_align='center', height=8)),
-    )
-    cmd_text = info.get('cmd_key', '')
-    
-    # 获取当前状态和提示信息
-    cmd_current_state = info.get('data_info', {}).get('cmd_current_state', 'normal')
-    prompt_text = ''
-    
-    default_prompt_text = f'Please input command and press Enter to execute: {cmd_text}\n\treset: reset robot to initial position\n\tlang: modify language instruction\n\tsave: save current data\n\tdelete: delete current data\n\tquit: exit program'
-    if cmd_current_state == 'waiting_command':
-        prompt_text = default_prompt_text
-    elif cmd_current_state == 'waiting_language':
-        preset_languages = info.get('data_info', {}).get('preset_languages', [])
-        preset_list = ''
-        if preset_languages:
-            preset_list = '\n\tPreset Instructions:'
-            for i, lang in enumerate(preset_languages, 1):
-                preset_list += f'\n\t  {i}. {lang}'
-        prompt_text = f'Please input new language instruction and press Enter: {cmd_text}{preset_list}\n\tEnter number (1-{len(preset_languages)}) for preset or type custom instruction'
-    elif cmd_current_state == 'waiting_continue':
-        prompt_text = f'Robot reset completed, press "con" + Enter to continue: {cmd_text}'
-    elif cmd_current_state == 'waiting_save':
-        prompt_text = f'Data saved successfully. Press "con" + Enter to continue: {cmd_text}'
-    elif cmd_current_state == 'waiting_delete':
-        prompt_text = f'Data deleted successfully. Press "con" + Enter to continue: {cmd_text}'
-    elif cmd_current_state == 'paused':
-        prompt_text = default_prompt_text
-    else:
-        prompt_text = default_prompt_text
-    
-    # 获取机器人状态和命令数据
-    robot_current_state = info.get('robot_current_state', [0.0] * 16)
-    robot_current_action = info.get('robot_current_action', [0.0] * 16)
-    
-    # 格式化状态和命令显示
+    # Format status and command display with terminal width awareness
     def format_robot_data(data, label):
         if len(data) >= 16:
             left_arm = [f'{x:.3f}' for x in data[:7]]
             right_arm = [f'{x:.3f}' for x in data[7:14]]
             left_gripper = f'{data[14]:.3f}' if len(data) > 14 else '0.000'
             right_gripper = f'{data[15]:.3f}' if len(data) > 15 else '0.000'
-            return f"{label}\n\t Left--Arm: [{', '.join(left_arm)}], Gripper: [{left_gripper}]\n\tRight--Arm: [{', '.join(right_arm)}], Gripper: [{right_gripper}]"
+            
+            return f"{label}\n L-Arm: [{', '.join(left_arm)}], L-Grip: [{left_gripper}]\n R-Arm: [{', '.join(right_arm)}], R-Grip: [{right_gripper}]"
         else:
             return f'{label}\n\tData not available or incomplete'
     
-    status_text = format_robot_data(robot_current_state, 'STATUS')
-    command_text = format_robot_data(robot_current_action, 'COMMAND')
+    status_text = format_robot_data(vla_client.info_current_state, 'STATUS')
+    command_text = format_robot_data(vla_client.info_current_action, 'COMMAND')
     robot_status_text = f'{status_text}\n{command_text}'
     
-    row_layout.split_column(
-    # group = Group(
-        col_layout,
-        Layout(Panel(print_info, subtitle='Inference Stats', subtitle_align='right', height=8)),
-        Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=9)),
-        Layout(Panel(f'{debug_info}', subtitle='Debug Info', subtitle_align='right', height=8)),
-        Layout(Panel(prompt_text, subtitle='Command Prompt', subtitle_align='right', height=8)),
-        # fit=False
-        # *panels,
+    # Calculate dynamic heights based on terminal size
+    if terminal_size is not None:
+        terminal_height = terminal_size.height
+        
+        # Special handling for very small terminals
+        if terminal_size.height < 20 or terminal_size.width < 60:
+            # Minimal layout for small terminals
+            col_height = 4
+            stats_height = 4
+            robot_height = 4
+            debug_height = 4
+            command_height = 2
+            total_panel_height = min(terminal_height - 1, 15)
+        else:
+            # Reserve space for title, borders, and padding (approximately 2 lines)
+            remaining_height = max(terminal_height - 2, 20)
+            
+            # Distribute remaining height proportionally
+            col_height = max(int(remaining_height * 0.25), 6)
+            stats_height = max(int(remaining_height * 0.25), 6)
+            robot_height = max(int(remaining_height * 0.25), 6)
+            debug_height = max(int(remaining_height * 0.25), 5)
+            # command_height = max(int(remaining_height * 0.1), 0)
+            
+            # Adjust total height to fit terminal
+            total_panel_height = min(terminal_height - 0, terminal_height)
+    else:
+        # Fallback to fixed heights if terminal_size is not available
+        col_height = 8
+        stats_height = 8
+        robot_height = 8
+        debug_height = 8
+        command_height = 3
+        total_panel_height = 48
+    
+    col_layout1_info1 = (
+        f"language: {vla_client.language}\n"
+        f"record: {config.record.switch}\n"
+        f"robots_type: {config.robots.type}\n"
+        f"thre_prob_progress: {config.thre_prob_progress}\n"
     )
-    return Panel(row_layout, title='VLA Client', title_align='center', height=44)
+    col_layout1_info2 = (
+        f"fps: {config.observer.fps}\n"
+        f"sleep_time: {config.sleep_time}\n"
+        f"gripper_offset: {config.gripper_offset}\n"
+        f"history_frame: {config.history_frame}\n"
+    )
+    col_layout1_info3 = (
+        f"wait_step: {config.controller.wait_step}\n"
+        f"fps: {config.observer.fps}\n"
+        f"fit_num_samples: {config.fitting_num_samples}\n"
+        f"fit_time_step: {config.fitting_time_step}\n"
+    )
+    col_layout1.split_row(
+        Layout(Panel(col_layout1_info1, subtitle='', subtitle_align='center', height=col_height)),
+        Layout(Panel(col_layout1_info2, subtitle='', subtitle_align='center', height=col_height)),
+        Layout(Panel(col_layout1_info3, subtitle='', subtitle_align='center', height=col_height)),
+    )
+    
+    col_layout2_info1 = (
+        f"infer_count: {vla_client.rdm.infer_count}\n"
+        f"avg_infer_time: {vla_client.rdm.avg_infer_time: .4f}s\n"
+        f"avg_traj_time: {vla_client.rdm.avg_traj_time: .4f}s\n"
+    )
+    obs_act_info = {
+        "preprocess": config.preprocess,
+        **vla_client.info_obs,
+        **vla_client.info_act,
+    }
+    col_layout2_info2 = ''
+    for key, value in obs_act_info.items():
+        col_layout2_info2 += f'{key:>0}: {value}\n'
+    col_layout2.split_row(
+        Layout(Panel(col_layout2_info1, subtitle='', subtitle_align='center', height=col_height)),
+        Layout(Panel(col_layout2_info2, subtitle='', subtitle_align='center', height=col_height)),
+    )
 
-# title="Status",
-#     subtitle="Updated: now",
-#     title_align="left",
-#     subtitle_align="right",
-#     border_style="bold cyan",
-#     box=box.ROUNDED,
-#     padding=(1, 2)
+    row_layout.split_column(
+        col_layout1,
+        col_layout2,
+        Layout(Panel(robot_status_text, subtitle='Robot Status', subtitle_align='right', height=robot_height)),
+        Layout(Panel(f'{vla_client.debug_info}', subtitle='Debug Info', subtitle_align='right', height=debug_height)),
+        # Layout(Panel('Press Enter for commands', subtitle='Command', subtitle_align='right', height=command_height)),
+    )
+    return Panel(row_layout, title='VLA Client (Press Enter for Commands)', title_align='center', height=total_panel_height)

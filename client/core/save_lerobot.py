@@ -3,7 +3,6 @@ import numpy as np
 from PIL import Image
 import json
 import cv2
-import json
 import time
 from ml_collections import ConfigDict
 from collections import deque
@@ -17,7 +16,7 @@ import copy
 import logging
 from io import StringIO
 from concurrent.futures import ThreadPoolExecutor
-# 初始化固定长度队列
+# Initialize fixed-length queue
 MAX_LEN = 900 
 class LeRobotDatasetWriter:
     """
@@ -39,19 +38,19 @@ class LeRobotDatasetWriter:
             record_config (dict): Configuration dictionary.
                                 For more information, see ./conf/save_conf.py
         """
-        # define logger
+        # Define logger
         self.logger = logging.getLogger(__name__)
-        # 设置 logger 的日志级别为 INFO
+        # Set logger level to INFO
         self.logger.setLevel(logging.INFO)
 
-        # 创建一个 handler，用于将日志输出到控制台
+        # Create a handler for console output
         ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)  # 设置 handler 的日志级别为 INFO
-        # 定义日志格式并添加到 handler
+        ch.setLevel(logging.INFO)  # Set handler level to INFO
+        # Define log format and add to handler
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         ch.setFormatter(formatter)
 
-        # 将 handler 添加到 logger
+        # Add handler to logger
         self.logger.addHandler(ch)
         # Configuration and path setup
         self.config = record_config
@@ -316,7 +315,7 @@ class LeRobotDatasetWriter:
         for path in self.shared_data.save_video_path_list:
             print(f"path {path}")
             if os.path.exists(path):
-                print(f"删除文件 {path}")
+                print(f"Deleting file {path}")
                 os.remove(path)
         if os.path.exists(self.parquet_savepath):
             os.remove(self.parquet_savepath)
@@ -356,7 +355,7 @@ class LeRobotDatasetWriter:
 
         self.end_write()
 
-        # 清理资源
+        # Clean up resources
         if self.record_queue:
             self.record_queue.close()
             self.record_queue.join_thread()
@@ -548,7 +547,7 @@ class LeRobotDatasetWriter:
                 task_name = data['tasks'] 
                 if task_name not in self.shared_data.task_language_dict:
                     self.shared_data.task_language_dict[task_name] = task_index
-            # self.logger.info(self.shared_data.task_language_dict)
+
     def gener_video_write_dict(self) -> Dict[str, Any]:
         """
         Generates video writers for each camera stream.
@@ -734,4 +733,3 @@ if __name__ == "__main__":
     assert os.path.exists(os.path.join(save_dir, 'meta', 'info.json')), "info.json not generated"
     assert os.path.exists(os.path.join(save_dir, 'meta', 'episodes.jsonl')), "episodes.jsonl not generated"
     print("✅ All files verified successfully!")
-    # sys.exit(0)

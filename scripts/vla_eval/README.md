@@ -1,22 +1,22 @@
-# VLA模型离线评估工具
+# VLA Model Offline Evaluation Tool
 
-本工具用于离线评估VLA模型，通过可视化比较模型预测的动作数据和真实数据，帮助分析模型的预测准确性。
+This tool is used for offline evaluation of VLA models, helping analyze model prediction accuracy by visualizing comparisons between model-predicted action data and ground truth data.
 
-## 功能特点
+## Features
 
-- 支持lerobot格式的gt数据（parquet等），但无需依赖lerobot，且评估速度更快
-- 可视化展示每个关节维度的预测值与真实值对比，以及其MSE
-- 在每个lookahead_idx处标记红点，lookahead_idx可以设置为chunk_size
+- Supports lerobot format ground truth data (parquet, etc.), but does not require lerobot dependency, with faster evaluation speed
+- Visualizes comparison between predicted and actual values for each joint dimension, along with their MSE
+- Marks red dots at each lookahead_idx, which can be set to chunk_size
 
-## 前提条件
+## Prerequisites
 
-- 本可视化工具依赖：`vla_infer/server/models/<model_name>/vla_model.py`，不同模型的评估需要实现这个文件。
-- 不同模型的输入可能不一致，需要修改vis_eval.py中TODO处的obs映射。
+- This visualization tool depends on: `vla_infer/server/models/<model_name>/vla_model.py`, different models need to implement this file for evaluation.
+- Different models may have inconsistent inputs, requiring modification of obs mapping at TODO locations in vis_eval.py.
 
-## 使用方法
+## Usage
 
 ```bash
-# 不同模型需修改代码TODO处的obs映射
+# Different models need to modify obs mapping at TODO locations in the code
 python vis_eval.py \
 --model_path /hy0505/checkpoints/gr00t_finetune/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000 \
 --gt_root /hy0505/dataset/A2d_zyhy_data/gr00t/task_158284_depth_test/task_158284_test \
@@ -30,21 +30,21 @@ python vis_eval.py \
 --note ''
 ```
 
-参数说明
+Parameter description
 ```bash
 python vis_eval.py -h
 ```
 
-## 注意事项
+## Notes
 
-暂无
+None
 
-## 输出示例
+## Output Example
 
 ```
 0.05212831497192383 action shape: (64, 16)
-使用轨迹0长度：429，平均MSE: 0.00017928320901957972
-EVAL图表已保存至: ./img_vis_eval.png
+Using trajectory 0 length: 429, average MSE: 0.00017928320901957972
+EVAL chart saved to: ./img_vis_eval.png
 ```
 
 ![example_output](./example_output.jpg)

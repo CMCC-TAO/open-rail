@@ -42,6 +42,7 @@ pip-wheel-metadata/
 /*.iml
 pyrightconfig.json
 .ruff_cache/
+.rules
 
 # jupyter notebooks
 

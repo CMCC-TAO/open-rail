@@ -1,6 +1,6 @@
-本文档说明如何在将RDT模型集成到推理框架中使用。
+This document explains how to integrate the RDT model into the inference framework.
 
-1.克隆RDT的工程代码到推理框架工程的server路径下，并配置RDT需要的conda环境：
+1. Clone the RDT project code to the server path of the inference framework project and configure the conda environment required by RDT:
 
 ```bash
     # Clone this repo
@@ -25,14 +25,14 @@
     pip install -r requirements.txt
 ```
 
-2.修改RDT模型接口python文件中的模型和语言指令路径，语言指令生成的方式可以参考[RDT的官方文档](https://github.com/thu-ml/RoboticsDiffusionTransformer/blob/main/scripts/encode_lang_batch.py)，需要制定的路径包括：
+2. Modify the model and language instruction paths in the RDT model interface Python file. The language instruction generation method can refer to [RDT's official documentation](https://github.com/thu-ml/RoboticsDiffusionTransformer/blob/main/scripts/encode_lang_batch.py). The paths that need to be specified include:
 
-- RDT工程代码的根目录；
-- RDT模型文件的目录，通常是RDT官方工程训练时保存的checkpoint路径，需包含config.json和pytorch_model.bin两个文件；
-- SigLip视觉编码器的目录，参考[RDT的官方文档](https://github.com/thu-ml/RoboticsDiffusionTransformer/blob/main/scripts/encode_lang_batch.py)；
-- 语言指令特征文件的路径，格式为.pt文件；
+- Root directory of the RDT project code;
+- Directory of the RDT model files, usually the checkpoint path saved during training in the RDT official project, which should contain config.json and pytorch_model.bin files;
+- Directory of the SigLip vision encoder, refer to [RDT's official documentation](https://github.com/thu-ml/RoboticsDiffusionTransformer/blob/main/scripts/encode_lang_batch.py);
+- Path to the language instruction feature file, in .pt format;
 
-rdt.py中修改模型和语言指令的代码如下：
+The code to modify the model and language instructions in rdt.py is as follows:
 
 ```python
 # ...
