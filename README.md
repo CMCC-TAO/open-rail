@@ -1,8 +1,5 @@
 # VLA Large Model Inference Framework
 
-* **Developers:** Zhao Yongsheng, Zhao Lei, Wen Xuanzhang
-* **Users:** Zhao Lei, Wen Xuanzhang, Gao Han
-
 ## 1. Framework Overview
 
 This is a comprehensive Vision-Language-Action (VLA) inference framework designed for robotic manipulation tasks. The framework provides a client-server architecture that enables real-time robot control using various VLA models including ACT, GR00T, RDT, and SmolVLA.

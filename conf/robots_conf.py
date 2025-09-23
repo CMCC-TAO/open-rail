@@ -22,7 +22,7 @@ def get_a2d_config():
                            'hand_right': 'hand_right' if 'gripper' in config.hand_type else 'hand_right_fisheye'}
     config.proprio_names = ['arm', config.hand_type, 'head', 'waist']
     config.gripper_freq = 40
-    config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0]
+    config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0] # default pose (teleoperation default pose)
     return config
 
 def get_mock_config():

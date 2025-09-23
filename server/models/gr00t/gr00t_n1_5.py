@@ -22,7 +22,7 @@ class ModelVLA:
         """
         self.cfg = config
         model_path = self.cfg['model_path']
-        # model_path = '/home/gaohan/Code/VLA/models/GR00TN1.5/pickbottle_184_1000_20250630_161111_n4_b64_s60000/checkpoint-60000'
+        # model_path = '/path/to/model'
         # embodiment_tag = EmbodimentTag.NEW_EMBODIMENT
         embodiment_tag = 'a2d'
         device = "cuda" if torch.cuda.is_available() else "cpu"

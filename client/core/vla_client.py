@@ -103,7 +103,7 @@ class VLAClient():
                     self.dataset_write.async_write_obs(observations,self.language,time.perf_counter())
                 data = self._process_data(observations)
                 self.rdm.add_observe_data(data)
-            time.sleep(0.001)  # Control loop frequency
+            time.sleep(0.001)
     
     @run_time_decorator
     def inference_first(self):
@@ -127,7 +127,7 @@ class VLAClient():
             self.rdm.add_observe_data(data)
             # Clear action data to ensure fresh action retrieval
             self.rdm.clear_action_data()
-        time.sleep(1.5)
+        time.sleep(self.config.sleep_time_after_reset)
         
         # Get observation data (thread-safe function, no lock needed)
         data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.history_frame else 2)

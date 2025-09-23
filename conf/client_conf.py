@@ -55,22 +55,8 @@ def get_client_config():
     config.preprocess_size = [640, 640] # [height, width]
     # Language instruction options, default index 0
     config.language = [
-        'Use the left arm to grasp the teapot of green tea first, and then carefully pour the green tea into the cup.',
-        'Use the right arm to grasp the teapot of black tea first, and then carefully pour the black tea into the cup.',
-        'Place the green tea cup on the tray with left arm',
-        'Place the black tea cup on the tray with right arm',
-        '[PRIMARY_ARM=LEFT] Use the left gripper to pick up the topmost steamer on the left',
-        '[PRIMARY_ARM=RIGHT] Use the right gripper to pick up the topmost steamer on the right',
-        '[PRIMARY_ARM=LEFT] Use the left gripper to place the topmost steamer on the plate',
-        '[PRIMARY_ARM=RIGHT] Use the right gripper to place the topmost steamer on the plate',
         'pick the bottle into the basket',
-        'open the microwave door, put the sandwish into it, and close the microwave door',
-        'take the sandwitch out from the oven',
-        'grasp the oven handle and gently pull to open the oven door',
-        'carefully place the prepared sandwich onto the oven tray inside the cavity',
-        'close the oven door securely by pushing it until it latches',
-        'locate and press the start button to initiate the heating process',
-        'wait patiently while the oven heats the sandwich to the desired temperature',
     ]
     config.thre_prob_progress = 9.9  # Probability threshold for switching language instructions
+    config.sleep_time_after_reset = 2.0  # Sleep time after resetting the robot in seconds
     return config
