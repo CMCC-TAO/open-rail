@@ -2,12 +2,15 @@ import time
 import torch
 import cv2
 import random
-import lerobot
 import logging
 import numpy as np
 from pprint import pprint
-from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
 from ..base_robot import RobotBase
+
+try:
+    from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
+except ImportError:
+    pass
 
 class RobotBody(RobotBase):
     def __init__(self, config):
@@ -19,41 +22,39 @@ class RobotBody(RobotBase):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.cfg, self.ori_cfg = config['robots']['mock'], config
-        self.dataset = LeRobotDataset(repo_id=self.cfg['repo_id'], root=self.cfg['root'])
-        self.dataloader = iter(torch.utils.data.DataLoader(
-            self.dataset,
-            num_workers=1,
-            batch_size=1,
-            shuffle=False,
-        ))
-        # And see how many frames you have:
-        self.logger.info(f"Selected episodes: {self.dataset.episodes}")
-        self.logger.info(f"Number of episodes selected: {self.dataset.num_episodes}")
-        self.logger.info(f"Number of frames selected: {self.dataset.num_frames}")
-        self.logger.info(f"Dataset fps: {self.dataset.meta.fps}")
-        self.init_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-        self.currt_index = 0
-        self.period = 1.0 / self.dataset.meta.fps # in seconds
-        time.sleep(1)
+        self.current_state = np.zeros(20)
+        try:
+            self.dataset = LeRobotDataset(repo_id=self.cfg['repo_id'], root=self.cfg['root'])
+            self.dataloader = iter(torch.utils.data.DataLoader(
+                self.dataset,
+                num_workers=1,
+                batch_size=1,
+                shuffle=False,
+            ))
+            # And see how many frames you have:
+            self.logger.info(f"Selected episodes: {self.dataset.episodes}")
+            self.logger.info(f"Number of episodes selected: {self.dataset.num_episodes}")
+            self.logger.info(f"Number of frames selected: {self.dataset.num_frames}")
+            self.logger.info(f"Dataset fps: {self.dataset.meta.fps}")
+            self.init_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+            self.currt_index = 0
+            self.period = 1.0 / self.dataset.meta.fps # in seconds
+            # time.sleep(1) # in real robot, this is the time to wait for the robot ready
+        except Exception as e:
+            self.dataset = None
 
-    def control_robot(self, action):
-        """Mock robot control function that simulates robot movement.
+    def execute_action(self, action):
+        """Execute the given action on the mock robot.
         
         Args:
-            action (array-like): Action array containing robot commands (currently unused in mock)
+            action (dict): Dictionary containing action commands for robot joints and gripper
         """
-        if random.random() < 0.001:
-            pass
-            # print(f'Mock control robot...')
-        # self.robot.move_arm(action[0:14].tolist())
-        # self.robot.move_gripper(action[14:16].tolist())
-        # action = data['pred_action']
-        # obs_state = data['obs_state']
-        # # action = misc.smooth_each_dim_with_spline(np.concatenate([action[0], action[-1]], axis=0), num_smooth_points=50, s=0.05)
-        # for i, act in enumerate(action):
-        #     self.robot.move_arm(action[i, 0:14].tolist())
-        #     self.robot.move_gripper(action[i, 14:16].tolist())
-        #     time.sleep(0.01)
+        pass
+
+    def reset_robot(self, target_pose=None, mode='zero'):
+        """Reset the robot to its default position.
+        """
+        pass
 
     def retrieve_observation(self):
         """Retrieve observation data from the LeRobot dataset for simulation.
@@ -61,6 +62,25 @@ class RobotBody(RobotBase):
         Returns:
             dict: Dictionary containing camera images, joint states, and timestamp from dataset
         """
+        # Use random data if dataset is not available
+        if self.dataset is None:
+            result = {}
+            cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
+            image, ref_timestamp = np.random.randint(0, 256, (640, 640, 3), dtype=np.uint8), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+            result['ref_timestamp'] = ref_timestamp
+            result[f'cam.{cam_ref}'] = image
+            for key, value in cam_names.items():
+                if key == cam_ref:
+                    continue
+                image = np.random.randint(0, 256, (640, 640, 3), dtype=np.uint8)
+                if key == 'depth_head':
+                    key = 'depth.head'
+                    image = np.random.randint(0, 2**16, (640, 640), dtype=np.uint16)
+                result[f'cam.{key}'] = image
+            result['obs.state'] = np.random.rand(20,)
+            self.current_state = result['obs.state']
+            return result
+
         start_time = time.time()
         result = {}
         if self.currt_index >= self.dataset.num_frames:
@@ -72,21 +92,12 @@ class RobotBody(RobotBase):
                 shuffle=False,
             ))
             self.currt_index = 0
-            # self.currt_index = self.dataset.num_frames - 1
-            # return None
-        # data = self.dataset[self.currt_index]
+        
         self.currt_index += 1
         data = next(self.dataloader)
-        # print(batch['observation.state'])
-        # data_keys(['observation.images.top_head', 'observation.images.hand_left', 'observation.images.hand_right', 'observation.state', 'action', 'episode_index', 'frame_index', 'index', 'task_index', 'timestamp'])
-        # print(data.keys())
-        # print(data['observation.images.top_head'].permute(1, 2, 0).shape)
-        # print(data["observation.state"].cpu().numpy())
-        # print(data["timestamp"].cpu().numpy())
         
         cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
         image, ref_timestamp = (data[cam_names[cam_ref]][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-        # print(image.dtype)
 
         result['ref_timestamp'] = ref_timestamp
         result[f'cam.{cam_ref}'] = image
@@ -99,14 +110,13 @@ class RobotBody(RobotBase):
                 key = 'depth.head'
             result[f'cam.{key}'] = image
     
-        result[f'obs.state'] = data["observation.state"][0].cpu().numpy()
+        result['obs.state'] = data["observation.state"][0].cpu().numpy()
+        self.current_state = result['obs.state']
         end_time = time.time()
         if end_time-start_time < self.period:
             sleep_time = self.period - (end_time - start_time)
-            # print(f'sleep time: {sleep_time}')
             time.sleep(sleep_time)
         end_time = time.time()
-        # print(f'get obs time: {(end_time - start_time)*1000} ms, end_time: {end_time}')
         return result
 
     def close(self):
@@ -135,6 +145,5 @@ if __name__ == '__main__':
                     img_show = cv2.cvtColor(value, cv2.COLOR_RGB2BGR)
                 cv2.imshow(key, img_show)
                 cv2.waitKey(1)
-            # time.sleep(0.001)  # Control loop frequency
     except KeyboardInterrupt:
         robot.close()

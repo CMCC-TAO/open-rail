@@ -4,7 +4,7 @@ import pandas as pd
 import pyarrow.parquet as pq
 import numpy as np
 import matplotlib
-matplotlib.use('TkAgg')  # 必须放在导入 pyplot 之前
+matplotlib.use('TkAgg')  # Must be placed before importing pyplot
 import matplotlib.pyplot as plt
 from matplotlib import pyplot as plt
 from matplotlib.widgets import Slider, Button
@@ -44,7 +44,7 @@ class DatasetVisualizer:
             if not cap.isOpened():
                 print(f"can't open video path: {path}")
             else:
-                print(f"success open {path}, 帧数: {int(cap.get(cv2.CAP_PROP_FRAME_COUNT))}")
+                print(f"success open {path}, frame count: {int(cap.get(cv2.CAP_PROP_FRAME_COUNT))}")
                 cap.release()
         self.video_names = [path.split('/')[-2].split('.')[-1] for path in video_paths]
         self.parquet_data = pq.read_table(parquet_path).to_pandas()
@@ -60,22 +60,21 @@ class DatasetVisualizer:
         self.state_dim = min (self.state_dim,self.action_dim)
         # modify state_dim and action_dim
         self.fig = plt.figure(figsize=(15, 12))
-        self.gs = self.fig.add_gridspec(3, 2)  # 3行2列的网格布局
+        self.gs = self.fig.add_gridspec(3, 2)  # 3 rows, 2 columns grid layout
 
         # video show in top
-        self.ax_video = self.fig.add_subplot(self.gs[0, :])  # 跨越所有列
+        self.ax_video = self.fig.add_subplot(self.gs[0, :])  # span all columns
 
         # init four figures 
-        self.ax_chart1 = self.fig.add_subplot(self.gs[1, 0])  # 左上
-        self.ax_chart2 = self.fig.add_subplot(self.gs[1, 1])  # 右上
-        self.ax_chart3 = self.fig.add_subplot(self.gs[2, 0])  # 左下
-        self.ax_chart4 = self.fig.add_subplot(self.gs[2, 1])  # 右下
+        self.ax_chart1 = self.fig.add_subplot(self.gs[1, 0])  # top left
+        self.ax_chart2 = self.fig.add_subplot(self.gs[1, 1])  # top right
+        self.ax_chart3 = self.fig.add_subplot(self.gs[2, 0])  # bottom left
+        self.ax_chart4 = self.fig.add_subplot(self.gs[2, 1])  # bottom right
         self.state_bars_list = []
         self.action_bars_list = []
         self.state_texts_list=[]
         self.action_texts_list=[]
-        # # add slider and button
-        # plt.subplots_adjust(bottom=0.2, hspace=0.4, wspace=0.3)
+        # add slider and button
         
         # add slider
         ax_slider = plt.axes([0.2, 0.05, 0.6, 0.03])
@@ -171,14 +170,14 @@ class DatasetVisualizer:
             self.ax_video.axis('off')
             self.ax_video.set_title(f'Videos - Frame {self.current_frame} language: {task_content}')
         video_time = time.perf_counter()
-        # print(f"更新视频帧 {self.current_frame}，耗时：{(video_time - load_video_time)*1000} ms")
-        # === State 数据更新 ===
+        # print(f"Update video frame {self.current_frame}, time cost: {(video_time - load_video_time)*1000} ms")
+        # === State data update ===
         for i, config in enumerate(self.chart_configs):
             start_dim, end_dim = config['range']
             name = config['name']
             ax = getattr(self, f'ax_chart{i+1}')
 
-            # conpute dims
+            # compute dims
             if end_dim is None:
                 if start_dim < self.state_dim:
                     dims = range(start_dim, self.state_dim)
@@ -240,8 +239,8 @@ class DatasetVisualizer:
                     text.set_text(f'{value:.3f}')
                 # update ylim 
                 ax.set_ylim(min(np.min(state),np.min(action)) - 0.1, max(np.max(state),np.max(action))+ 0.1)
-        # print(f"更新state {self.current_frame}，耗时：{(time.perf_counter() - video_time)*1000} ms")
-        # print(f"更新 {self.current_frame}，耗时：{(time.perf_counter() - start_time)*1000} ms")
+        # print(f"Update state {self.current_frame}, time cost: {(time.perf_counter() - video_time)*1000} ms")
+        # print(f"Update {self.current_frame}, time cost: {(time.perf_counter() - start_time)*1000} ms")
         self.fig.canvas.draw_idle()
     
     def show(self):
@@ -354,13 +353,13 @@ class DatasetVisualizer:
             # plt.show()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="可视化数据集，支持指定路径和 episode ID")
+    parser = argparse.ArgumentParser(description="Visualize dataset, supports specifying path and episode ID")
     parser.add_argument("--data-path", type=str, default="/home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test",
-                        help="数据根目录路径")
+                        help="Data root directory path")
     parser.add_argument("--episode-id", type=int, default=2,
-                        help="要显示的 episode ID")
+                        help="Episode ID to display")
     parser.add_argument("--chunk-id", type=int, default=0,
-                        help="要显示的 chunk ID")
+                        help="Chunk ID to display")
 
     args = parser.parse_args()
 
@@ -377,10 +376,10 @@ if __name__ == "__main__":
     task_file_path = os.path.join(data_path, 'meta','tasks.jsonl')
     task_language_dict = {}
 
-    # 检查文件是否存在
+    # Check if files exist
     for file in video_files + [parquet_file]+ [task_file_path]:
         if not os.path.exists(file):
-            raise FileNotFoundError(f"文件 {file} 不存在")
+            raise FileNotFoundError(f"File {file} does not exist")
     with open(task_file_path, 'r') as file:
         for line in file:
             data = json.loads(line)

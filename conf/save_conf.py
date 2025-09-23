@@ -1,20 +1,28 @@
 from ml_collections import ConfigDict
-def get_record_data_config()-> ConfigDict:
-    """Generate config for recording data, compatible with save_config.json structure.
+def get_record_data_config() -> ConfigDict:
+    """Generate configuration for data recording system.
+    
+    This function creates a comprehensive configuration dictionary for recording
+    robot demonstration data, compatible with LeRobot dataset format. It includes
+    settings for data paths, video encoding, feature definitions, and metadata.
 
     Returns:
-        ConfigDict: Configuration for recording data.
+        ConfigDict: Configuration dictionary for data recording containing:
+            - switch: Enable/disable data recording
+            - save_path: Root directory for saved data
+            - info: Metadata including dataset version, robot type, statistics
+            - features: Data feature definitions for cameras, actions, states
     """
     config = ConfigDict(allow_dotted_keys=True)
 
     # Base path and version info
-    config.switch = False ## True to record data, False to not record data
-    config.save_path = "./data/output/test" # Save root directory.
+    config.switch = False  # Enable/disable data recording
+    config.save_path = "./data/output/test"  # Root directory for saved data
     config.info = ConfigDict(allow_dotted_keys=True)
-    config.info.codebase_version = "v2.0" #  # Version of the dataset (e.g., lerobot)
+    config.info.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
     config.info.robot_type = "a2d"  # Type of robot used
 
-    # Data statistics (initialized to 0)）
+    # Data statistics (initialized to 0)
     config.info.total_episodes = 0
     config.info.total_frames = 0
     config.info.total_tasks = 0
@@ -112,7 +120,7 @@ def generate_image_feature_config(width: int = 1280, height: int = 720, fps: flo
         "has_audio": False
     }
 
-    # 直接构造并返回 ConfigDict 对象
+    # Construct and return ConfigDict object
     return ConfigDict({
         "dtype": "video",
         "shape": [height, width, 3],

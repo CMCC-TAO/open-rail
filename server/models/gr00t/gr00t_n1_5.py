@@ -8,10 +8,21 @@ from gr00t.data.schema import EmbodimentTag
 from gr00t.experiment.data_config import DATA_CONFIG_MAP
 
 class ModelVLA:
+    """GR00T N1.5 Vision-Language-Action Model
+    
+    This class implements the GR00T N1.5 policy for robotic manipulation tasks,
+    providing inference capabilities for vision-language-action models.
+    """
+    
     def __init__(self, config):
+        """Initialize the GR00T N1.5 VLA model with configuration
+        
+        Args:
+            config: Dictionary containing model configuration parameters
+        """
         self.cfg = config
         model_path = self.cfg['model_path']
-        # model_path = '/home/gaohan/Code/VLA/models/GR00TN1.5/pickbottle_184_1000_20250630_161111_n4_b64_s60000/checkpoint-60000'
+        # model_path = '/path/to/model'
         # embodiment_tag = EmbodimentTag.NEW_EMBODIMENT
         embodiment_tag = 'a2d'
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -27,7 +38,6 @@ class ModelVLA:
             device=device,
             denoising_steps=4,
         )
-        self.policy.model.action_horizon=64
         print(self.policy.model)
 
         modality_config = self.policy.modality_config
@@ -39,6 +49,14 @@ class ModelVLA:
                 print(key, value)
 
     def infer(self, sequence):
+        """Perform inference on input sequence data
+        
+        Args:
+            sequence: List containing observation data and metadata
+            
+        Returns:
+            dict: Inference result containing predicted actions and timestamps
+        """
         data = sequence[0]
         obs = data['obs'].copy()
         obs['state'] = obs['state'][None]
@@ -58,6 +76,7 @@ class ModelVLA:
         time1 = time.time()
         ext_result = {}
         predicted_action = self.policy.get_action(inp_obs)
+        # predicted_action['prob_progress'] = np.random.rand(64,)
         if isinstance(predicted_action, dict) and 'prob_progress' in predicted_action:
             ext_result['prob_progress'] = predicted_action['prob_progress']
             del predicted_action['prob_progress']
@@ -69,8 +88,7 @@ class ModelVLA:
         return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp'], 'ext': ext_result}
 
 if __name__ == "__main__":
-    # 其它vla模型参照下面的代码，测试通过即可
-    model = ModelVLA()
+    model = ModelVLA({'model_path': ''})
     obs = {
         'cam.head': np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
         'cam.hand_left': np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
@@ -81,14 +99,14 @@ if __name__ == "__main__":
     }
     return_key = ['type', 'pred_action', 'ref_timestamp']
     while True:
-        result = model.infer([{'obs': obs, 'ref_timestamp': []}])
+        result = model.infer([{'obs': obs, 'ref_timestamp': [], 'loc_timestamp': []}])
         # check result
         for key in return_key:
             if key not in result:
-                raise ValueError(f'result key错误，未找到{key}')
+                raise ValueError(f'result key error, not found {key}')
         if result[return_key[0]] != 'vla_action':
-            raise ValueError(f"result.{return_key[0]}错误，应为vla_action，实际为{result[return_key[0]]}")
+            raise ValueError(f"result.{return_key[0]} error, should be vla_action, but got {result[return_key[0]]}")
         if not isinstance(result[return_key[1]], np.ndarray):
-            raise ValueError(f"result.{return_key[1]}类型错误，应为ndarray，实际为{type(result[return_key[1]])}")
+            raise ValueError(f"result.{return_key[1]} error, should be ndarray, but got {type(result[return_key[1]])}")
         if not isinstance(result[return_key[2]], list):
-            raise ValueError(f"result.{return_key[0]}类型错误，应为list，实际为{type(result[return_key[2]])}")
+            raise ValueError(f"result.{return_key[2]} error, should be list, but got {type(result[return_key[2]])}")

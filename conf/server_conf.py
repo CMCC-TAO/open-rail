@@ -4,14 +4,20 @@ from conf.zmq_conf import get_zmq_config
 from conf.models_conf import get_models_config
 
 def get_server_config():
-    """Generate config for Client
+    """Generate configuration for VLA inference server.
+    
+    This function creates configuration settings for the VLA inference server,
+    including ZMQ communication settings, worker thread configuration, and
+    model configurations.
 
     Returns:
-        ConfigDict: Configuration for Client.
+        ConfigDict: Configuration dictionary for the server containing:
+            - zmq: ZMQ communication configuration
+            - max_workers: Maximum number of inference worker threads
+            - models: Model configuration settings
     """
     config = ConfigDict()
     config.zmq = get_zmq_config()
-    # MAIN_CLIENT_ID = 'ZROBOT'
-    config.max_workers = 1  # 推理线程池最大工作线程数，1表示不支持并发推理
+    config.max_workers = 1  # Maximum inference worker threads, 1 means no concurrent inference support
     config.models = get_models_config()
     return config

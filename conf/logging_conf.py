@@ -1,7 +1,14 @@
+"""Logging configuration for VLA inference system.
+
+This module provides centralized logging configuration with both console and file
+handlers, supporting different log levels and formats for development and production.
+"""
+
 import logging
 import logging.config
 from pathlib import Path
 
+# Create logs directory relative to project root
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 
@@ -14,7 +21,6 @@ LOGGING_CONFIG = {
         },
         "verbose": {
             "format": "%(asctime)s - [%(levelname)s] - %(name)s - %(filename)s:%(lineno)d - %(message)s"
-            # "format": "%(asctime)s - [%(levelname)s] - %(name)s - line:%(lineno)d - %(message)s"
         },
     },
     "handlers": {

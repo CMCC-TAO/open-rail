@@ -1,15 +1,17 @@
 from ml_collections import ConfigDict
 
-# 定义模型类型的枚举类
 def get_rdm_config():
-    """Generate config for RealtimeDataManager
+    """Generate configuration for Real-time Data Manager.
+    
+    This function creates configuration settings for the real-time data management
+    system, including buffer sizes and data recording options.
 
     Returns:
-        ConfigDict: Configuration for RealtimeDataManager.
+        ConfigDict: Configuration dictionary for RealtimeDataManager containing:
+            - max_len: Maximum length of observation data sequence buffer
+            - record_data: Flag to enable/disable data recording
     """
     config = ConfigDict()
-    config.max_len = 100 # Max length of the sequence to store observe data
-    # config.control_max_len = 1000 # Max length of the sequence to store control data
-    config.record_data = False # True to record data, False to not record data
-    # config.show_data = False # True to show data, False to not show data
+    config.max_len = 100  # Maximum length of observation data sequence buffer
+    config.record_data = False  # Enable/disable data recording
     return config
