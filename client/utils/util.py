@@ -1,11 +1,10 @@
 import time
 import logging
+import os
+import importlib.util
 from functools import wraps
 from rich.layout import Layout
 from rich.panel import Panel
-from rich.table import Table
-from rich.columns import Columns
-from rich.console import Group
 
 logger = logging.getLogger(__name__)
 def run_time_decorator(func):
@@ -67,6 +66,102 @@ def get_closest_index(candidates, target):
     # Find the index of the minimum difference
     closest_index = differences.index(min(differences))
     return closest_index
+
+def load_user_config(user_conf_path):
+    """Load user configuration from specified file
+    
+    Args:
+        user_conf_path (str): Path to user configuration file
+        
+    Returns:
+        dict: User configuration dictionary, or None if loading fails
+    """
+    if not os.path.exists(user_conf_path):
+        print(f"Warning: User configuration file not found: {user_conf_path}")
+        return None
+    
+    try:
+        # Load the module dynamically
+        spec = importlib.util.spec_from_file_location("user_config", user_conf_path)
+        user_config_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(user_config_module)
+        
+        # Get the user configuration function
+        if hasattr(user_config_module, 'get_user_config'):
+            user_config = user_config_module.get_user_config()
+            print(f"Successfully loaded user configuration from: {user_conf_path}")
+            return user_config
+        else:
+            print(f"Warning: No 'get_user_config' function found in {user_conf_path}")
+            return None
+            
+    except Exception as e:
+        print(f"Error loading user configuration from {user_conf_path}: {e}")
+        return None
+
+def apply_user_config(config, user_config):
+    """Apply user configuration to the main config object with support for nested configurations
+    
+    Args:
+        config: Main configuration object (ConfigDict)
+        user_config (dict): User configuration dictionary
+        
+    Returns:
+        config: Updated configuration object
+    """
+    if user_config is None:
+        return config
+    
+    def _apply_nested_config(target_config, nested_config, path=""):
+        """Recursively apply nested configuration
+        
+        Args:
+            target_config: Target configuration object to update
+            nested_config: Nested configuration dictionary to apply
+            path: Current configuration path for logging
+        """
+        for key, value in nested_config.items():
+            current_path = f"{path}.{key}" if path else key
+            
+            if hasattr(target_config, key):
+                current_attr = getattr(target_config, key)
+                
+                # If both are dictionaries/ConfigDict, recursively apply
+                if isinstance(value, dict) and hasattr(current_attr, '__dict__'):
+                    print(f"Applying nested config at: {current_path}")
+                    _apply_nested_config(current_attr, value, current_path)
+                else:
+                    # Handle special cases for type conversion
+                    try:
+                        # For enum types, try to convert string to enum
+                        if hasattr(current_attr, '__class__') and hasattr(current_attr.__class__, '__bases__'):
+                            # Check if it's an enum type
+                            if any('Enum' in str(base) for base in current_attr.__class__.__bases__):
+                                if isinstance(value, str):
+                                    # Try to find the enum value
+                                    enum_class = current_attr.__class__
+                                    if hasattr(enum_class, value.upper()):
+                                        value = getattr(enum_class, value.upper())
+                                    elif hasattr(enum_class, value):
+                                        value = getattr(enum_class, value)
+                                    else:
+                                        # Try to find by value
+                                        for enum_item in enum_class:
+                                            if enum_item.value == value:
+                                                value = enum_item
+                                                break
+                        
+                        # Direct value assignment
+                        setattr(target_config, key, value)
+                        print(f"Applied user config: {current_path} = {value}")
+                    except Exception as e:
+                        print(f"Warning: Failed to apply config '{current_path}' = {value}: {e}")
+            else:
+                print(f"Warning: Unknown configuration key '{current_path}' in user config")
+    
+    _apply_nested_config(config, user_config)
+    
+    return config
 
 def command_prompt(info: dict):
     """Create a command prompt table for VLA inference framework.

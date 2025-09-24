@@ -17,7 +17,7 @@ from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
 from rich.live import Live
 from rich.console import Console
-from client.utils.util import create_layout
+from client.utils.util import create_layout, load_user_config, apply_user_config
 from extra.dispatch.client import DispatchClient
 
 def get_robot(config: ConfigDict):
@@ -59,6 +59,8 @@ def parse_args():
     parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
     parser.add_argument('--preprocess', type=str, choices=['crop_and_resize', 'pad_and_resize', 'resize', 'none'], help='Image preprocessing method')
     parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')
+    parser.add_argument('--language', nargs='+', type=str, help='Language instruction options')
+    parser.add_argument('--user_conf', type=str, help='Path to user configuration file')
     parser.add_argument('--extra_dispatch_mode', type=int, default=0, choices=[0, 1, 2], help='0: disable extra dispatch, 1: enable extra dispatch, 2: mock extra dispatch (need modify extra/dispatch/client.py mock_task)')
     return parser.parse_args()
 
@@ -90,6 +92,8 @@ def override_config_with_args(config, args):
         config.preprocess = args.preprocess
     if args.preprocess_size is not None:
         config.preprocess_size = args.preprocess_size
+    if args.language is not None:
+        config.language = args.language
     return config
 
 # TODO: global variable
@@ -227,6 +231,12 @@ if __name__ == "__main__":
     
     # Get configuration and apply command line arguments
     config = get_client_config()
+    
+    # Load and apply user configuration if provided
+    if args.user_conf:
+        user_config = load_user_config(args.user_conf)
+        config = apply_user_config(config, user_config)
+    
     config = override_config_with_args(config, args)
     
     if not config.show_data:
