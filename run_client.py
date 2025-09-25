@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')
     parser.add_argument('--language', nargs='+', type=str, help='Language instruction options')
     parser.add_argument('--user_conf', type=str, help='Path to user configuration file')
-    parser.add_argument('--extra_dispatch_mode', type=int, default=0, choices=[0, 1, 2], help='0: disable extra dispatch, 1: enable extra dispatch, 2: mock extra dispatch (need modify extra/dispatch/client.py mock_task)')
+    parser.add_argument('--extra_dispatch_mode', nargs='+', type=str, default=['0'], help='Extra dispatch mode and target robot. First param: 0=disable, 1=enable, 2=mock. Second param (optional): target robot (robotB, robotC, robotD, etc.). Example: --extra_dispatch_mode 2 robotB')
     return parser.parse_args()
 
 def override_config_with_args(config, args):
@@ -106,7 +106,7 @@ def wheel_control_loop(robot):
         robot.execute_action({'wheel': wheel_pos})
         time.sleep(0.05)
 
-def handle_user_input(vla_client, robot, live):
+def handle_user_input(vla_client, robot, live, args):
     """Handle user input
     
     This function handles interactive command input when user presses Enter.
@@ -213,7 +213,7 @@ def handle_user_input(vla_client, robot, live):
         elif cmd == 'q':
             return False  # Signal to quit
         
-        if args.extra_dispatch_mode != 0:
+        if args.extra_dispatch_mode[0] != '0':
             vla_client.is_running_action = False
         else:
             vla_client.is_running_action = True
@@ -250,8 +250,8 @@ if __name__ == "__main__":
     vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
 
     # extra
-    if args.extra_dispatch_mode != 0:
-        dispatch_client = DispatchClient(vla_client, robot)
+    if args.extra_dispatch_mode[0] != '0':
+        dispatch_client = DispatchClient(vla_client, robot, args)
         dispatch_client.start()
     
     live = None
@@ -265,7 +265,7 @@ if __name__ == "__main__":
             live.start()
         else:
             print("Debug mode enabled, press Enter to show commands")
-            if args.extra_dispatch_mode == 2:
+            if args.extra_dispatch_mode[0] == '2':
                 mock_task_thread = threading.Thread(target=dispatch_client.mock_task)
                 mock_task_thread.daemon = True
                 mock_task_thread.start()
@@ -286,7 +286,7 @@ if __name__ == "__main__":
                 user_input = sys.stdin.readline().strip()
                 if user_input == '':
                     # Handle interactive command input
-                    if not handle_user_input(vla_client, robot, live):
+                    if not handle_user_input(vla_client, robot, live, args):
                         break  # Quit if user chose to quit
 
     except KeyboardInterrupt:

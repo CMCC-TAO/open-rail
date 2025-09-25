@@ -16,6 +16,7 @@ def get_gr00t_config():
     """
     config = ConfigDict()
     config.model_path = '/path/to/model'
+    config.embodiment_tag = 'a2d'
     return config
 
 def get_act_config():

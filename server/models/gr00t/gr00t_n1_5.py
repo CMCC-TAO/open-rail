@@ -1,8 +1,8 @@
 import os
 import time
+import json
 import numpy as np
 import torch
-import gr00t
 from gr00t.model.policy import Gr00tPolicy
 from gr00t.data.schema import EmbodimentTag
 from gr00t.experiment.data_config import DATA_CONFIG_MAP
@@ -23,10 +23,27 @@ class ModelVLA:
         self.cfg = config
         model_path = self.cfg['model_path']
         # model_path = '/path/to/model'
-        # embodiment_tag = EmbodimentTag.NEW_EMBODIMENT
-        embodiment_tag = 'a2d'
+        meta_data_path = os.path.join(model_path, 'experiment_cfg/metadata.json') 
+        with open(meta_data_path, "r", encoding="utf-8") as f:
+            meta_data = json.load(f)
+        data_config_key = list(meta_data.keys())[0]
+        meta_data_state = meta_data[data_config_key]['modalities']['state']
+    
+        # configure state of observations
+        self.delta_indices = {}
+        start_index = 0
+        for key in meta_data_state.keys():
+            modality_shape = meta_data_state[key]['shape'][0]
+            end_index = int(start_index + modality_shape)
+            self.delta_indices[f'state.{key}'] = {}
+            self.delta_indices[f'state.{key}']['start_index'] = start_index
+            self.delta_indices[f'state.{key}']['end_index'] = end_index
+            start_index += modality_shape
+
+        # get data config and transforms
+        embodiment_tag = self.cfg['embodiment_tag']
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        data_config = DATA_CONFIG_MAP["a2d_arms_only"]
+        data_config = DATA_CONFIG_MAP[data_config_key]
         modality_config = data_config.modality_config()
         modality_transform = data_config.transform()
 
@@ -66,13 +83,18 @@ class ModelVLA:
             "video.cam_left_wrist": obs['cam.hand_left'][None],
             "video.cam_right_wrist": obs['cam.hand_right'][None],
             # "depth.cam_top":obs['cam.depth.head'][None],
-            "state.left_arm": obs['state'][:, 0:7],
-            "state.right_arm": obs['state'][:, 7:14],
-            "state.left_hand": obs['state'][:, 14:15],
-            "state.right_hand": obs['state'][:, 15:16],
+            # "state.left_arm": obs['state'][:, 0:7],
+            # "state.right_arm": obs['state'][:, 7:14],
+            # "state.left_hand": obs['state'][:, 14:15],
+            # "state.right_hand": obs['state'][:, 15:16],
             # "state": np.random.rand(1, 20),
             "annotation.human.task_description": obs['language'],
         }
+        for key in self.delta_indices.keys():
+            start_index = self.delta_indices[key]['start_index']
+            end_index = self.delta_indices[key]['end_index']
+            inp_obs[key] = obs['state'][:, start_index:end_index]
+
         time1 = time.time()
         ext_result = {}
         predicted_action = self.policy.get_action(inp_obs)
