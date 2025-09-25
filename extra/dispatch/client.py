@@ -5,11 +5,13 @@ from extra.dispatch.conf import get_dispatch_config
 from extra.dispatch.zmq import DispatchZMQClient
 
 class DispatchClient:
-    def __init__(self, vla_client, robot):
-        self.config_root = get_dispatch_config()
-        self.config = self.config_root.robot
+    def __init__(self, vla_client, robot, args):
         self.vla_client = vla_client
         self.robot = robot
+        self.args = args
+        self.dispatch_target = args.extra_dispatch_mode[1] if len(args.extra_dispatch_mode) >= 2 else 'robotC'
+        self.config_root = get_dispatch_config(target=self.dispatch_target)
+        self.config = self.config_root.robot
         self.client = DispatchZMQClient(
             robot_type=self.config.robot_name,
             server_task_address=self.config_root.server_task_address,
@@ -40,7 +42,7 @@ class DispatchClient:
         self.vla_client.language = self.config.language['default']
         self.vla_client.is_running_action = False
         time.sleep(0.1)
-        self.robot.reset_robot(target_pose=self.config.reset_pose['default'])
+        self.robot.reset_robot(target_pose=self.config.reset_pose_start['default'])
 
     def handle_connection(self, connected):
         """连接状态回调"""
@@ -99,12 +101,25 @@ class DispatchClient:
             target_object = f"_{task_data['target_object']}"
         key = f"{task_data['skill_type']}{target_object}"
         self.client.send_status_update(task_data['task_id'], 'pending')
+        
+        # TODO: 调度系统服务端暂时无法加入新的子任务，在此递归hack
+        if (key == 'pour_water_greentea' or key == 'pour_water_blacktea') and self.args.extra_dispatch_mode[0] != '2':
+            self.handle_task({
+                "version": "1.0",
+                "type": "task",
+                "robot_type": "ARM_C",
+                "task_id": "ARM_C_1640995200123",
+                "skill_type": "pick",
+                "target_object": 'cup' + target_object,
+                "target_location": "",
+                "source": "service"
+            })
 
-        if self.config.reset_pose[key] is not None:
+        if self.config.reset_pose_start[key] is not None:
             print(f'\n复位机器人：{key}\n')
             self.vla_client.is_running_action = False
             time.sleep(0.1)
-            self.robot.reset_robot(target_pose=self.config.reset_pose[key])
+            self.robot.reset_robot(target_pose=self.config.reset_pose_start[key])
             time.sleep(self.config.reset_sleep)
             self.vla_client.inference_first()
 
@@ -180,12 +195,13 @@ class DispatchClient:
                 break
 
         # self.client.send_status_update(task_data['task_id'], 'completed')
-        print(f'\n任务完成，暂停：{key}\n')
         self.vla_client.is_running_action = False
         time.sleep(0.1)
-        # if self.config.reset_pose[key] is not None:
-        #     self.robot.reset_robot(target_pose=self.config.reset_pose[key])
-        #     self.vla_client.inference_first()
+        if key in self.config.reset_pose_finish and self.config.reset_pose_finish[key] is not None:
+            self.robot.reset_robot(target_pose=self.config.reset_pose_finish[key])
+            time.sleep(self.config.reset_sleep)
+            self.vla_client.inference_first()
+        print(f'\n任务完成，暂停：{key}\n')
         # return {"success": True, "message": "Task completed"}
         return 1
 
@@ -207,116 +223,117 @@ class DispatchClient:
             input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
             self.vla_client.is_running_action = False
 
-            # 点心
-            # result = self.handle_task({
-            #     "version": "1.0",
-            #     "type": "task",
-            #     "robot_type": "ARM_B",
-            #     "task_id": "ARM_B_1640995200123",
-            #     "skill_type": "pick",
-            #     "target_object": "shrimpdumpling",
-            #     "target_location": "",
-            #     "source": "service"
-            # })
-            # print('任务B1执行结果：', result)
-            # input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-            # self.vla_client.is_running_action = True
-            # result = self.handle_task({
-            #     "version": "1.0",
-            #     "type": "task",
-            #     "robot_type": "ARM_B",
-            #     "task_id": "ARM_B_1640995200123",
-            #     "skill_type": "place",
-            #     "target_object": "shrimpdumpling",
-            #     "target_location": "",
-            #     "source": "service"
-            # })
-            # print('任务B2执行结果：', result)
-
-            # 倒茶
-            target_object = 'blacktea'
-            result = self.handle_task({
-                "version": "1.0",
-                "type": "task",
-                "robot_type": "ARM_C",
-                "task_id": "ARM_C_1640995200123",
-                "skill_type": "pick",
-                "target_object": 'cup_' + target_object,
-                "target_location": "",
-                "source": "service"
-            })
-            print('任务C1执行结果：', result)
-            input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-            self.vla_client.is_running_action = True
-            result = self.handle_task({
-                "version": "1.0",
-                "type": "task",
-                "robot_type": "ARM_C",
-                "task_id": "ARM_C_1640995200123",
-                "skill_type": "pour_water",
-                "target_object": target_object,
-                "target_location": "",
-                "source": "service"
-            })
-            print('任务C2执行结果：', result)
-            input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-            self.vla_client.is_running_action = True
-            result = self.handle_task({
-                "version": "1.0",
-                "type": "task",
-                "robot_type": "ARM_B",
-                "task_id": "ARM_B_1640995200123",
-                "skill_type": "place",
-                "target_object": target_object,
-                "target_location": "",
-                "source": "service"
-            })
-            print('任务C3执行结果：', result)
-
-            # # 冰箱
-            # result = self.handle_task({
-            #     "version": "1.0",
-            #     "type": "task",
-            #     "robot_type": "ARM_D",
-            #     "task_id": "ARM_D_1640995200123",
-            #     "skill_type": "open_door",
-            #     "target_object": "",
-            #     "target_location": "",
-            #     "source": "service"
-            # })
-            # print('任务D1执行结果：', result)
-            # result = self.handle_task({
-            #     "version": "1.0",
-            #     "type": "task",
-            #     "robot_type": "ARM_D",
-            #     "task_id": "ARM_D_1640995200123",
-            #     "skill_type": "pick",
-            #     "target_object": "apple",
-            #     "target_location": "",
-            #     "source": "service"
-            # })
-            # print('任务D2执行结果：', result)
-            # input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-            # self.vla_client.is_running_action = True
-            # result = self.handle_task({
-            #     "version": "1.0",
-            #     "type": "task",
-            #     "robot_type": "ARM_D",
-            #     "task_id": "ARM_D_1640995200123",
-            #     "skill_type": "place",
-            #     "target_object": "apple",
-            #     "target_location": "",
-            #     "source": "service"
-            # })
-            # print('任务D3执行结果：', result)
-            # result = self.handle_task({
-            #     "version": "1.0",
-            #     "type": "task",
-            #     "robot_type": "ARM_D",
-            #     "task_id": "ARM_D_1640995200123",
-            #     "skill_type": "close_door",
-            #     "target_object": "",
-            #     "target_location": "",
-            #     "source": "service"
-            # })
-            # print('任务D3执行结果：', result)
+            if self.dispatch_target == 'robotB':
+                # 点心
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_B",
+                    "task_id": "ARM_B_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": "shrimpdumpling",
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务B1执行结果：', result)
+                input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+                self.vla_client.is_running_action = True
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_B",
+                    "task_id": "ARM_B_1640995200123",
+                    "skill_type": "place",
+                    "target_object": "shrimpdumpling",
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务B2执行结果：', result)
+            elif self.dispatch_target == 'robotC':
+                # 倒茶
+                target_object = 'blacktea'
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_C",
+                    "task_id": "ARM_C_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": 'cup_' + target_object,
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务C1执行结果：', result)
+                input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+                self.vla_client.is_running_action = True
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_C",
+                    "task_id": "ARM_C_1640995200123",
+                    "skill_type": "pour_water",
+                    "target_object": target_object,
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务C2执行结果：', result)
+                input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+                self.vla_client.is_running_action = True
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_B",
+                    "task_id": "ARM_B_1640995200123",
+                    "skill_type": "place",
+                    "target_object": target_object,
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务C3执行结果：', result)
+            elif self.dispatch_target == 'robotD':
+                # 冰箱
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_D",
+                    "task_id": "ARM_D_1640995200123",
+                    "skill_type": "open_door",
+                    "target_object": "",
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务D1执行结果：', result)
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_D",
+                    "task_id": "ARM_D_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": "apple",
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务D2执行结果：', result)
+                input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+                self.vla_client.is_running_action = True
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_D",
+                    "task_id": "ARM_D_1640995200123",
+                    "skill_type": "place",
+                    "target_object": "apple",
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务D3执行结果：', result)
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_D",
+                    "task_id": "ARM_D_1640995200123",
+                    "skill_type": "close_door",
+                    "target_object": "",
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务D3执行结果：', result)

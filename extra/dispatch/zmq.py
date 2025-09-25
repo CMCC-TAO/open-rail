@@ -26,9 +26,9 @@ class DispatchZMQClient:
     def __init__(self, robot_type: str, 
                  server_task_address: str, 
                  server_response_address: str,
-                 heartbeat_interval: float = 3.0,
+                 heartbeat_interval: float = 5.0,
                  reconnect_interval: float = 5.0,
-                 receive_timeout: float = 20.0):  # 改为接收超时时间
+                 receive_timeout: float = 30.0):  # 改为接收超时时间
         """
         机器人 ZeroMQ 客户端
         
@@ -65,6 +65,7 @@ class DispatchZMQClient:
         # 回调函数
         self.task_handler = None
         self.connection_handler = None
+        self.manual_command_handler = None
         
         # 线程和锁
         self.task_socket_lock = threading.Lock()    # 任务socket专用锁
@@ -489,7 +490,7 @@ class DispatchZMQClient:
             监控连接状态并在需要时自动重连"""
         logger.info("Reconnect loop started")
         reconnect_attempts = 0
-        max_reconnect_attempts = 500
+        max_reconnect_attempts = 1000
 
         while self.is_running:
             try:
@@ -542,7 +543,7 @@ class DispatchZMQClient:
                             logger.error("Max reconnection attempts reached, giving up")
                             self._update_state(RobotState.DISCONNECTED)
                         else:
-                            wait_time = self.reconnect_interval + (reconnect_attempts / 10 )  # 增加重连间隔
+                            wait_time = self.reconnect_interval
                             logger.warning(f"Reconnection failed (attempt {reconnect_attempts}), retrying in {wait_time}s")
                             time.sleep(wait_time)
                             continue
