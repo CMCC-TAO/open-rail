@@ -44,7 +44,7 @@ def get_robotC_config():
     config = ConfigDict()
     config.robot_name = "ARM_C"
     config.required_stable_count = 20
-    config.thre_stability_ratio = 0.004
+    config.thre_stability_ratio = 0.01
     config.reset_sleep = 0.0
     config.reset_pose_start = {
         "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
@@ -137,23 +137,31 @@ def get_robotD_config():
     }
     return config
 
+# 面包
 def get_robotE_config():
     config = ConfigDict()
     config.robot_name = "ARM_E"
     config.required_stable_count = 20
-    config.thre_stability_ratio = 0.004
-    config.reset_sleep = 2.0
+    config.thre_stability_ratio = 0.03
+    config.reset_sleep = 0.0
     config.reset_pose_start = {
         "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "pick_bread": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "pick_toaster_to_plate": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "place_bread": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
     }
     config.reset_pose_finish = {}
     config.thre_progress_finish = {
         "default": 0.94,
+        "pick_bread": 0.94,
+        "pick_toaster_to_plate": 0.94,
+        "place_bread": 0.94,
     }
     config.language = {
         "default": "",
-        "pick_bread": "Grasp a piece of bread out of the freezer with the left hand, and put it into the toaster.",
-        "place_plate": "replay:PATH",
+        "pick_bread": "Pick up a piece of bread with right gripper from the rack and immediately put the bread into the green toaster. Then slowly push the orange toatser lever down. The bread may change its position along with the rack.",
+        "pick_toaster_to_plate": "replay:PATH",
+        "place_bread": "replay:PATH"
     }
     return config
 
