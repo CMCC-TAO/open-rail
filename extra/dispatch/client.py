@@ -100,20 +100,32 @@ class DispatchClient:
         if target_object != '':
             target_object = f"_{task_data['target_object']}"
         key = f"{task_data['skill_type']}{target_object}"
-        self.client.send_status_update(task_data['task_id'], 'pending')
+        # self.client.send_status_update(task_data['task_id'], 'pending')
         
         # TODO: 调度系统服务端暂时无法加入新的子任务，在此递归hack
-        if (key == 'pour_water_greentea' or key == 'pour_water_blacktea') and self.args.extra_dispatch_mode[0] != '2':
-            self.handle_task({
-                "version": "1.0",
-                "type": "task",
-                "robot_type": "ARM_C",
-                "task_id": "ARM_C_1640995200123",
-                "skill_type": "pick",
-                "target_object": 'cup' + target_object,
-                "target_location": "",
-                "source": "service"
-            })
+        if self.args.extra_dispatch_mode[0] != '2':
+            if key == 'pour_water_greentea' or key == 'pour_water_blacktea':
+                self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_C",
+                    "task_id": "ARM_C_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": 'cup' + target_object,
+                    "target_location": "",
+                    "source": "service"
+                })
+            elif key == 'place_bread':
+                self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_E",
+                    "task_id": "ARM_E_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": 'toaster_to_plate',
+                    "target_location": "",
+                    "source": "service"
+                })
 
         if self.config.reset_pose_start[key] is not None:
             print(f'\n复位机器人：{key}\n')
@@ -214,7 +226,7 @@ class DispatchClient:
         elif command['skill_type'] == 'reset':
             self.vla_client.is_running_action = False
             time.sleep(0.1)
-            self.robot.reset_robot(target_pose=self.config.reset_pose['default'])
+            self.robot.reset_robot(target_pose=self.config.reset_pose_start['default'])
         elif command['skill_type'] == 'complete':
             self.vla_client.is_running_action = False
 
@@ -337,3 +349,43 @@ class DispatchClient:
                     "source": "service"
                 })
                 print('任务D3执行结果：', result)
+            elif self.dispatch_target == 'robotE':
+                # 面包
+                target_object = 'blacktea'
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_E",
+                    "task_id": "ARM_E_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": 'bread',
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务E1执行结果：', result)
+                input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+                self.vla_client.is_running_action = True
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_E",
+                    "task_id": "ARM_E_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": 'toaster_to_plate',
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务E2执行结果：', result)
+                input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
+                self.vla_client.is_running_action = True
+                result = self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_B",
+                    "task_id": "ARM_B_1640995200123",
+                    "skill_type": "place",
+                    "target_object": 'bread',
+                    "target_location": "",
+                    "source": "service"
+                })
+                print('任务E3执行结果：', result)

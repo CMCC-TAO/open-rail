@@ -35,8 +35,7 @@ class RobotBody(RobotBase):
         if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
             self.gripper_count += 1
         if self.gripper_count > self.cfg['gripper_freq']:
-            exec_type = 'gripper' if 'gripper' in self.cfg['hand_type'] else 'hand'
-            self.execute_action({exec_type: new_gripper_cmd.tolist()})
+            self.execute_action({self.cfg['hand_type']: new_gripper_cmd.tolist()})
             self.gripper_cmd = new_gripper_cmd
             self.gripper_count = 0
     
@@ -50,6 +49,8 @@ class RobotBody(RobotBase):
             self.robot.move_arm(data['arm'])
         if 'gripper' in data:
             self.robot.move_gripper(data['gripper'])
+        if 'hand_as_gripper' in data:
+            self.robot.move_hand_as_gripper(data['hand_as_gripper'])
         if 'head' in data:
             self.robot.move_head(data['head'])
         if 'waist' in data:
@@ -57,10 +58,7 @@ class RobotBody(RobotBase):
         if 'wheel' in data:
             self.robot.move_wheel(data['wheel'][0], data['wheel'][1])
         if 'hand' in data:
-            if len(data['hand']) < 6:
-                self.robot.move_hand_as_gripper(data['hand'])
-            else:
-                self.robot.move_hand(data['hand'])
+            self.robot.move_hand(data['hand'])
     
     def reset_robot(self, target_pose=None, mode='default'):
         """Reset the robot to its default position.
@@ -96,7 +94,7 @@ class RobotBody(RobotBase):
             time.sleep(0.01)
 
         if 'gripper' in self.cfg['hand_type']:
-            self.execute_action({'gripper': target_pose[14:16].tolist()})
+            self.execute_action({self.cfg['hand_type']: target_pose[14:16].tolist()})
             self.execute_action({'head': target_pose[16:18].tolist()})
             self.execute_action({'waist': target_pose[18:20].tolist()})
         elif self.cfg['hand_type'] == 'hand':
@@ -160,37 +158,46 @@ class RobotBody(RobotBase):
         # process data of dexterous hand to gripper format
         processed_data = []
         for idx, ele in enumerate(data):
-            data_temp = np.zeros(20)
-            data_temp[:14] = ele[:14]
-            left_hand = ele[15:19].mean()
-            if left_hand > 0.1:
-                left_hand = 1.0
-            right_hand = ele[20:23].mean()
-            if right_hand < 0.1:
-                right_hand = 0
-            data_temp[14] = left_hand
-            data_temp[15] = right_hand
-            processed_data.append(data_temp)
+            if 'hand' in self.hand_type:
+                data_temp = np.zeros(20)
+                data_temp[:14] = ele[:14]
+                left_hand = ele[15:19].mean()
+                if left_hand > 0.1:
+                    left_hand = 1.0
+                right_hand = ele[20:23].mean()
+                if right_hand < 0.1:
+                    right_hand = 0
+                data_temp[14] = left_hand
+                data_temp[15] = right_hand
+                processed_data.append(data_temp)
+            else:
+                processed_data.append(ele)
         return processed_data
 
     def replay_trajectories(self, parquet_path):
         try:
             trajs = self.load_action_data(parquet_path=parquet_path)
+            accelerate = True
+            if "place" in parquet_path:
+                accelerate = False
             for idx, traj in enumerate(trajs):
-                self.execute_action({'arm': traj[0:14].tolist()})
-                if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
-                    traj[14] = 1.0
-                    traj[15] = 1.0
-                self.execute_action({'hand': traj[14:16].tolist()})
-                time.sleep(0.05)
+                if accelerate:
+                    if idx % 2 == 0:
+                        self.execute_action({'arm': traj[0:14].tolist()})
+                        if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
+                            traj[14] = 1.0
+                            traj[15] = 0.0
+                        self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
+                        time.sleep(0.05)
+                else:
+                    self.execute_action({'arm': traj[0:14].tolist()})
+                    if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
+                        traj[14] = 1.0
+                        traj[15] = 0.0
+                    self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
+                    time.sleep(0.05)
         except Exception as e:
             print(f"Replay {parquet_path} failed, error: {e}")
-
-    def wheel_control_loop(robot):
-        global wheel_thread_running, wheel_pos
-        while wheel_thread_running:
-            robot.execute_action({'wheel': wheel_pos})
-            time.sleep(0.05)
 
 if __name__ == '__main__':
     from conf.robots_conf import get_robots_config

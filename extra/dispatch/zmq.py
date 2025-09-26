@@ -575,6 +575,22 @@ class DispatchZMQClient:
                         logger.warning("Already processing a task, skipping this one")
                         return
                     self.processing_task = True
+
+                # 创建默认响应
+                response = {}
+                # 添加必要的元数据 (与C++服务器格式匹配)
+                response.update({
+                    "version": "1.0",
+                    "type": "response",
+                    "robot_type": self.robot_type,
+                    "task_id": task_id,
+                    "source": "robot",
+                    "message": "Receive task successfully"
+                })
+            
+                # 发送响应
+                self.send_response(response)
+
                 # 处理任务
                 task_thread = threading.Thread(
                     target=self._handle_task,
@@ -611,21 +627,6 @@ class DispatchZMQClient:
             item = task_data.get("item", "")
             
             logger.debug(f"Received task: id={task_id}, action={action}, item={item}")
-
-            # 创建默认响应
-            response = {}
-            # 添加必要的元数据 (与C++服务器格式匹配)
-            response.update({
-                "version": "1.0",
-                "type": "response",
-                "robot_type": self.robot_type,
-                "task_id": task_id,
-                "source": "robot",
-                "message": "Receive task successfully"
-            })
-            
-            # 发送响应
-            self.send_response(response)
 
             # 调用任务处理回调
             if self.task_handler:
