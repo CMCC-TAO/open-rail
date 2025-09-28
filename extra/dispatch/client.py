@@ -23,9 +23,7 @@ class DispatchClient:
         
         # 稳定性检测变量
         self.stable_count = 0  # 连续满足条件的计数
-        self.required_stable_count = self.config.required_stable_count  # 需要连续满足条件的次数
         self.stability_window = deque(maxlen=50)  # 滑动窗口存储最近的progress值
-        self.thre_stability_ratio = self.config.thre_stability_ratio
         
         # 滤波相关配置
         self.enable_progress_filtering = True  # 是否启用进度值滤波
@@ -102,7 +100,7 @@ class DispatchClient:
         key = f"{task_data['skill_type']}{target_object}"
         # self.client.send_status_update(task_data['task_id'], 'pending')
         
-        # TODO: 调度系统服务端暂时无法加入新的子任务，在此递归hack
+        # TODO: 调度系统服务端暂时无法加入新的子任务，在此递归hack, 合并在调度命令任务前
         if self.args.extra_dispatch_mode[0] != '2':
             if key == 'pour_water_greentea' or key == 'pour_water_blacktea':
                 self.handle_task({
@@ -115,24 +113,13 @@ class DispatchClient:
                     "target_location": "",
                     "source": "service"
                 })
-            elif key == 'place_bread':
-                self.handle_task({
-                    "version": "1.0",
-                    "type": "task",
-                    "robot_type": "ARM_E",
-                    "task_id": "ARM_E_1640995200123",
-                    "skill_type": "pick",
-                    "target_object": 'toaster_to_plate',
-                    "target_location": "",
-                    "source": "service"
-                })
 
         if self.config.reset_pose_start[key] is not None:
             print(f'\n复位机器人：{key}\n')
             self.vla_client.is_running_action = False
             time.sleep(0.1)
             self.robot.reset_robot(target_pose=self.config.reset_pose_start[key])
-            time.sleep(self.config.reset_sleep)
+            time.sleep(self.config.sleep_reset_pose[key][0])
             self.vla_client.inference_first()
 
         if 'replay:' not in self.config.language[key]:
@@ -165,7 +152,7 @@ class DispatchClient:
             
             time.sleep(0.05) # 禁止修改
             if 'replay:' not in self.config.language[key]:
-                thre_finish = self.config.thre_progress_finish[key]
+                thre_finish = self.config.thre_progress[key][0]
                 if 'current_prob_progress' in self.vla_client.info_act:
                     raw_progress = self.vla_client.info_act['current_prob_progress']
                     
@@ -185,7 +172,7 @@ class DispatchClient:
                     self.stability_window.append(current_progress)
                     if current_progress > thre_finish:
                         self.stable_count += 1
-                        print(f'\r稳定计数: {self.stable_count}/{self.required_stable_count}', end='')
+                        print(f'\r稳定计数: {self.stable_count}/{self.config.thre_progress[key][1]}', end='')
                         
                         # 滑动窗口内的方差检查
                         if len(self.stability_window) >= 3:
@@ -195,7 +182,7 @@ class DispatchClient:
                             stability_ratio = window_std / (window_mean + 1e-6)
                             print(f'稳定性指标 - 标准差: {window_std:.4f}, 变异系数: {stability_ratio:.4f}')
 
-                            if self.stable_count >= self.required_stable_count and stability_ratio < self.thre_stability_ratio:
+                            if self.stable_count >= self.config.thre_progress[key][1] and stability_ratio < self.config.thre_progress[key][2]:
                                 print('✅ 检测到稳定的进度值，任务完成')
                                 break
                     else:
@@ -211,9 +198,23 @@ class DispatchClient:
         time.sleep(0.1)
         if key in self.config.reset_pose_finish and self.config.reset_pose_finish[key] is not None:
             self.robot.reset_robot(target_pose=self.config.reset_pose_finish[key])
-            time.sleep(self.config.reset_sleep)
+            time.sleep(self.config.sleep_reset_pose[key][1])
             self.vla_client.inference_first()
         print(f'\n任务完成，暂停：{key}\n')
+
+        # TODO: 调度系统服务端暂时无法加入新的子任务，在此递归hack, 合并在调度命令任务后
+        if self.args.extra_dispatch_mode[0] != '2':
+            if key == 'pick_bread':
+                self.handle_task({
+                    "version": "1.0",
+                    "type": "task",
+                    "robot_type": "ARM_E",
+                    "task_id": "ARM_E_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": 'toaster_to_plate',
+                    "target_location": "",
+                    "source": "service"
+                })
         # return {"success": True, "message": "Task completed"}
         return 1
 
@@ -351,13 +352,12 @@ class DispatchClient:
                 print('任务D3执行结果：', result)
             elif self.dispatch_target == 'robotE':
                 # 面包
-                target_object = 'blacktea'
                 result = self.handle_task({
                     "version": "1.0",
                     "type": "task",
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
-                    "skill_type": "pick",
+                    "skill_type": "place",
                     "target_object": 'bread',
                     "target_location": "",
                     "source": "service"
@@ -371,7 +371,7 @@ class DispatchClient:
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
                     "skill_type": "pick",
-                    "target_object": 'toaster_to_plate',
+                    "target_object": 'bread',
                     "target_location": "",
                     "source": "service"
                 })
@@ -381,10 +381,10 @@ class DispatchClient:
                 result = self.handle_task({
                     "version": "1.0",
                     "type": "task",
-                    "robot_type": "ARM_B",
-                    "task_id": "ARM_B_1640995200123",
-                    "skill_type": "place",
-                    "target_object": 'bread',
+                    "robot_type": "ARM_E",
+                    "task_id": "ARM_E_1640995200123",
+                    "skill_type": "pick",
+                    "target_object": 'toaster_to_plate',
                     "target_location": "",
                     "source": "service"
                 })

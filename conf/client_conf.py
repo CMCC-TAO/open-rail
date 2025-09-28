@@ -58,5 +58,4 @@ def get_client_config():
         'default language instruction',
     ]
     config.thre_prob_progress = 9.9  # Probability threshold for switching language instructions
-    config.sleep_time_after_reset = 2.0  # Sleep time after resetting the robot in seconds
     return config
