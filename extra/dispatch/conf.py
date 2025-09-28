@@ -6,9 +6,6 @@ from ml_collections import ConfigDict
 def get_robotB_config():
     config = ConfigDict()
     config.robot_name = "ARM_B"
-    config.required_stable_count = 20
-    config.thre_stability_ratio = 0.004
-    config.reset_sleep = 0.0
     config.reset_pose_start = {
         "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 22.0] + [0.0, 0.0],
         "pick_custardbun": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 22.0] + [0.0, 0.0],
@@ -23,12 +20,19 @@ def get_robotB_config():
         "place_custardbun": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 22.0] + [0.0, 0.0],
         "place_shrimpdumpling": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 22.0] + [0.0, 0.0],
     }
-    config.thre_progress_finish = {
-        "default": 0.94,
-        "pick_custardbun": 0.94,
-        "pick_shrimpdumpling": 0.94,
-        "place_custardbun": 0.94,
-        "place_shrimpdumpling": 0.94,
+    config.sleep_reset_pose = {
+        "default": [0.0, 0.0],
+        "pick_custardbun": [0.0, 0.0],
+        "pick_shrimpdumpling": [0.0, 0.0],
+        "place_custardbun": [0.0, 0.0],
+        "place_shrimpdumpling": [0.0, 0.0],
+    }
+    config.thre_progress = {
+        "default": [0.94, 20, 0.05],
+        "pick_custardbun": [0.94, 20, 0.05],
+        "pick_shrimpdumpling": [0.94, 20, 0.05],
+        "place_custardbun": [0.94, 20, 0.05],
+        "place_shrimpdumpling": [0.94, 20, 0.05],
     }
     config.language = {
         "default": "",
@@ -43,9 +47,7 @@ def get_robotB_config():
 def get_robotC_config():
     config = ConfigDict()
     config.robot_name = "ARM_C"
-    config.required_stable_count = 20
-    config.thre_stability_ratio = 0.01
-    config.reset_sleep = 0.0
+    # 子任务开始前的复位姿态, None表示不复位
     config.reset_pose_start = {
         "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "pick_cup_greentea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.436, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
@@ -55,24 +57,37 @@ def get_robotC_config():
         "place_greentea": None,
         "place_blacktea": None,
     }
+    # 子任务结束后的复位姿态
     config.reset_pose_finish = {
         "default": None,
         "pick_cup_greentea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "pick_cup_blacktea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "pour_water_greentea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "pour_water_blacktea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
-        "place_greentea": None,
-        "place_blacktea": None,
+        "place_greentea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "place_blacktea": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
     }
-    config.thre_progress_finish = {
-        "default": 0.94,
-        "pick_cup_greentea": 0.94,
-        "pick_cup_blacktea": 0.94,
-        "pour_water_greentea": 0.94,
-        "pour_water_blacktea": 0.94,
-        "place_greentea": 0.94,
-        "place_blacktea": 0.94,
+    # 子任务复位后的sleep时间：[0]reset_pose_start, [1]reset_pose_finish
+    config.sleep_reset_pose = {
+        "default": [0.0, 0.0],
+        "pick_cup_greentea": [2.0, 2.0],
+        "pick_cup_blacktea": [2.0, 2.0],
+        "pour_water_greentea": [0.0, 0.0],
+        "pour_water_blacktea": [0.0, 0.0],
+        "place_greentea": [0.0, 0.0],
+        "place_blacktea": [0.0, 0.0],
     }
+    # 进度预测相关，3个条件都满足才会结束。[0]开始稳定性检测阈值, [1]稳定性计数, [2]变异系数阈值
+    config.thre_progress = {
+        "default": [0.94, 20, 0.01],
+        "pick_cup_greentea": [0.94, 20, 0.06],
+        "pick_cup_blacktea": [0.94, 20, 0.06],
+        "pour_water_greentea": [0.94, 20, 0.04],
+        "pour_water_blacktea": [0.94, 20, 0.04],
+        "place_greentea": [0.9, 20, 0.07],
+        "place_blacktea": [0.9, 20, 0.07],
+    }
+    # 子任务语言指令，replay:PATH表示进行轨迹播放
     config.language = {
         "default": "",
         "pick_cup_greentea": "[PLACE_CUP_ON_TABLE_LEFT] [LEFT_ARM] Using the left arm, place the cup onto the table.",
@@ -88,9 +103,6 @@ def get_robotC_config():
 def get_robotD_config():
     config = ConfigDict()
     config.robot_name = "ARM_D"
-    config.required_stable_count = 20
-    config.thre_stability_ratio = 0.004
-    config.reset_sleep = 2.0
     config.reset_pose_start = {
         "default": [-1.0738, 0.6108, 0.2796, -1.2836, 0.7301, 1.4947, -0.1875, 1.0743, -0.611 , -0.2796, 1.2839, -0.7304, -1.4953, 0.1876] + [0.0, 0.0] + [0.2094, 0.4363] + [0.0, 27.0] + [0.0, 0.0],
         "pick_apple": [-1.0738, 0.6108, 0.2796, -1.2836, 0.7301, 1.4947, -0.1875, 1.0743, -0.611 , -0.2796, 1.2839, -0.7304, -1.4953, 0.1876] + [0.0, 0.0] + [0.2094, 0.4363] + [0.0, 52.0] + [0.0, 0.0],
@@ -113,16 +125,27 @@ def get_robotD_config():
         "open_door": None,
         "close_door": None,
     }
-    config.thre_progress_finish = {
-        "default": 0.8,
-        "pick_apple": 0.8,
-        "pick_orange": 0.8,
-        "pick_peach": 0.8,
-        "place_apple": 0.8,
-        "place_orange": 0.8,
-        "place_peach": 0.8,
-        "open_door": 0.8,
-        "close_door": 0.8,
+    config.sleep_reset_pose = {
+        "default": [0.0, 0.0],
+        "pick_apple": [0.0, 2.0],
+        "pick_orange": [0.0, 2.0],
+        "pick_peach": [0.0, 2.0],
+        "place_apple": [0.0, 0.0],
+        "place_orange": [0.0, 0.0],
+        "place_peach": [0.0, 0.0],
+        "open_door": [0.0, 0.0],
+        "close_door": [0.0, 0.0],
+    }
+    config.thre_progress = {
+        "default": [0.94, 20, 0.03],
+        "pick_apple": [0.94, 20, 0.03],
+        "pick_orange": [0.94, 20, 0.03],
+        "pick_peach": [0.94, 20, 0.03],
+        "place_apple": [0.94, 20, 0.03],
+        "place_orange": [0.94, 20, 0.03],
+        "place_peach": [0.94, 20, 0.03],
+        "open_door": [0.94, 20, 0.03],
+        "close_door": [0.94, 20, 0.03],
     }
     config.language = {
         "default": "",
@@ -141,21 +164,29 @@ def get_robotD_config():
 def get_robotE_config():
     config = ConfigDict()
     config.robot_name = "ARM_E"
-    config.required_stable_count = 20
-    config.thre_stability_ratio = 0.03
-    config.reset_sleep = 0.0
     config.reset_pose_start = {
         "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "pick_bread": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "pick_toaster_to_plate": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "place_bread": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
     }
-    config.reset_pose_finish = {}
-    config.thre_progress_finish = {
-        "default": 0.94,
-        "pick_bread": 0.94,
-        "pick_toaster_to_plate": 0.94,
-        "place_bread": 0.94,
+    config.reset_pose_finish = {
+        "default": None,
+        "pick_bread": None,
+        "pick_toaster_to_plate": None,
+        "place_bread": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+    }
+    config.sleep_reset_pose = {
+        "default": [0.0, 0.0],
+        "pick_bread": [0.0, 0.0],
+        "pick_toaster_to_plate": [0.0, 0.0],
+        "place_bread": [0.0, 0.0],
+    }
+    config.thre_progress = {
+        "default": [0.94, 20, 0.03],
+        "pick_bread": [0.94, 20, 0.03],
+        "pick_toaster_to_plate": [0.94, 20, 0.03],
+        "place_bread": [0.94, 20, 0.03],
     }
     config.language = {
         "default": "",

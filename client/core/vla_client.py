@@ -127,7 +127,7 @@ class VLAClient():
             self.rdm.add_observe_data(data)
             # Clear action data to ensure fresh action retrieval
             self.rdm.clear_action_data()
-        time.sleep(self.config.sleep_time_after_reset)
+        # time.sleep(self.config.sleep_time_after_reset)
         
         # Get observation data (thread-safe function, no lock needed)
         data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.history_frame else 2)

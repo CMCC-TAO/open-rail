@@ -106,7 +106,7 @@ def wheel_control_loop(robot):
         robot.execute_action({'wheel': wheel_pos})
         time.sleep(0.05)
 
-def handle_user_input(vla_client, robot, live, args):
+def handle_user_input(vla_client, robot, live):
     """Handle user input
     
     This function handles interactive command input when user presses Enter.
@@ -213,10 +213,7 @@ def handle_user_input(vla_client, robot, live, args):
         elif cmd == 'q':
             return False  # Signal to quit
         
-        if args.extra_dispatch_mode[0] != '0':
-            vla_client.is_running_action = False
-        else:
-            vla_client.is_running_action = True
+        vla_client.is_running_action = True
         return True  # Continue running
         
     finally:
@@ -286,7 +283,7 @@ if __name__ == "__main__":
                 user_input = sys.stdin.readline().strip()
                 if user_input == '':
                     # Handle interactive command input
-                    if not handle_user_input(vla_client, robot, live, args):
+                    if not handle_user_input(vla_client, robot, live):
                         break  # Quit if user chose to quit
 
     except KeyboardInterrupt:
