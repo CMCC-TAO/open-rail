@@ -623,10 +623,10 @@ class DispatchZMQClient:
         """处理具体任务（在新线程中执行）"""
         try:
             task_id = task_data.get("task_id")
-            action = task_data.get("action", "")
-            item = task_data.get("item", "")
+            skill_type = task_data.get("skill_type", "")
+            target_object = task_data.get("target_object", "")
             
-            logger.debug(f"Received task: id={task_id}, action={action}, item={item}")
+            logger.debug(f"Received task: id={task_id}, skill_type={skill_type}, target_object={target_object}")
 
             # 调用任务处理回调
             if self.task_handler:
@@ -645,7 +645,7 @@ class DispatchZMQClient:
                 status = "completed"
             else:
                 status = "failed"
-            self.send_status_update(task_id, status)
+            self.send_status_update(task_data, status)
             logger.info("Processing task flag cleared")
 
         except Exception as e:
@@ -675,13 +675,16 @@ class DispatchZMQClient:
 
         return self._send_message(response_data)
 
-    def send_status_update(self, task_id: str, status: str, progress: int = 0) -> bool:
+    def send_status_update(self, task_data: Dict[str, Any], status: str, progress: int = 0) -> bool:
         """发送任务状态更新"""
         status_data = {
             "version": "1.0",
             "type": "status",
             "robot_type": self.robot_type,
-            "task_id": task_id,
+            "task_id": task_data.get("task_id", ""),
+            "skill_type": task_data.get("skill_type", ""),
+            "target_object": task_data.get("target_object", ""),
+            "target_location": task_data.get("target_location", ""),
             "source": "robot",
             "status": status,
             "Progress": progress

@@ -166,33 +166,33 @@ def get_robotE_config():
     config.robot_name = "ARM_E"
     config.reset_pose_start = {
         "default": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
+        "pick_rack_to_toaster": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "pick_bread": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
-        "pick_toaster_to_plate": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
         "place_bread": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
     }
     config.reset_pose_finish = {
         "default": None,
+        "pick_rack_to_toaster": None,
         "pick_bread": None,
-        "pick_toaster_to_plate": None,
         "place_bread": [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
     }
     config.sleep_reset_pose = {
         "default": [0.0, 0.0],
+        "pick_rack_to_toaster": [0.0, 0.0],
         "pick_bread": [0.0, 0.0],
-        "pick_toaster_to_plate": [0.0, 0.0],
         "place_bread": [0.0, 0.0],
     }
     config.thre_progress = {
         "default": [0.94, 20, 0.03],
-        "pick_bread": [0.94, 20, 0.03],
-        "pick_toaster_to_plate": [0.94, 20, 0.03],
-        "place_bread": [0.94, 20, 0.03],
+        "pick_rack_to_toaster": [0.94, 20, 0.03],
+        "pick_bread": [0.94, 20, 0.05],
+        "place_bread": [0.94, 20, 0.05],
     }
     config.language = {
         "default": "",
-        "pick_bread": "Pick up a piece of bread with right gripper from the rack and immediately put the bread into the green toaster. Then slowly push the orange toatser lever down. The bread may change its position along with the rack.",
-        "pick_toaster_to_plate": "replay:PATH",
-        "place_bread": "replay:PATH"
+        "pick_rack_to_toaster": "[PICK_BREAD_INTO_TOASTER] [RIGHT_ARM] With right gripper, pick up the bread and put it into the green toaster. Then push the orange lever down.",
+        "pick_bread": "[PICK_BREAD_INTO_PLATE] [LEFT_ARM] With left gripper, pick up the bread from the conveyor and place it on the orange plate on the left.",
+        "place_bread": "[PICK_PLATE_ONTO_TRAY] [LEFT_ARM] Pick up the orange plate containing bread on the left and place it on the tray in front.",
     }
     return config
 
