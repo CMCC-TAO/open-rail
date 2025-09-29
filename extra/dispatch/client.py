@@ -204,14 +204,16 @@ class DispatchClient:
 
         # TODO: 调度系统服务端暂时无法加入新的子任务，在此递归hack, 合并在调度命令任务后
         if self.args.extra_dispatch_mode[0] != '2':
-            if key == 'pick_bread':
+            if key == 'place_bread':
+                self.client.send_status_update(task_data, 'completed')
+                time.sleep(7.)
                 self.handle_task({
                     "version": "1.0",
                     "type": "task",
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
                     "skill_type": "pick",
-                    "target_object": 'toaster_to_plate',
+                    "target_object": 'rack_to_toaster',
                     "target_location": "",
                     "source": "service"
                 })
@@ -357,7 +359,7 @@ class DispatchClient:
                     "type": "task",
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
-                    "skill_type": "place",
+                    "skill_type": "pick",
                     "target_object": 'bread',
                     "target_location": "",
                     "source": "service"
@@ -370,7 +372,7 @@ class DispatchClient:
                     "type": "task",
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
-                    "skill_type": "pick",
+                    "skill_type": "place",
                     "target_object": 'bread',
                     "target_location": "",
                     "source": "service"
@@ -384,7 +386,7 @@ class DispatchClient:
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
                     "skill_type": "pick",
-                    "target_object": 'toaster_to_plate',
+                    "target_object": 'rack_to_toaster',
                     "target_location": "",
                     "source": "service"
                 })

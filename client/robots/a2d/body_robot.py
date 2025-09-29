@@ -109,32 +109,36 @@ class RobotBody(RobotBase):
             dict or None: Dictionary containing camera images, joint states, and timestamp.
                          Returns None if no new data is available.
         """
-        result = {}
-        cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
-        image, ref_timestamp = self.camera.get_latest_image(cam_names[cam_ref])
-        if self.current_timestamp == ref_timestamp:
+        try:
+            result = {}
+            cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
+            image, ref_timestamp = self.camera.get_latest_image(cam_names[cam_ref])
+            if self.current_timestamp == ref_timestamp:
+                return None
+            else:
+                self.current_timestamp = ref_timestamp
+
+            result['ref_timestamp'] = ref_timestamp
+            result[f'cam.{cam_ref}'] = image
+            for key, value in cam_names.items():
+                if key == cam_ref:
+                    continue
+                image, timestamp = self.camera.get_image_nearest(value, ref_timestamp)
+                if key == 'depth_head':
+                    key = 'depth.head'
+                result[f'cam.{key}'] = image
+
+            joint_states = []
+            for proprio in self.cfg['proprio_names']:
+                joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
+                currt_joint_states, timestamp = joint_states_nearest_fun(ref_timestamp)
+                joint_states.extend(currt_joint_states)
+            result['obs.state'] = np.array(joint_states)
+            self.current_state = result['obs.state']
+            return result
+        except Exception as e:
+            print(e)
             return None
-        else:
-            self.current_timestamp = ref_timestamp
-
-        result['ref_timestamp'] = ref_timestamp
-        result[f'cam.{cam_ref}'] = image
-        for key, value in cam_names.items():
-            if key == cam_ref:
-                continue
-            image, timestamp = self.camera.get_image_nearest(value, ref_timestamp)
-            if key == 'depth_head':
-                key = 'depth.head'
-            result[f'cam.{key}'] = image
-
-        joint_states = []
-        for proprio in self.cfg['proprio_names']:
-            joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
-            currt_joint_states, timestamp = joint_states_nearest_fun(ref_timestamp)
-            joint_states.extend(currt_joint_states)
-        result['obs.state'] = np.array(joint_states)
-        self.current_state = result['obs.state']
-        return result
 
     def close(self):
         """Close and shutdown the robot and camera connections.
