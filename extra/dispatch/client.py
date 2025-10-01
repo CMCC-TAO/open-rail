@@ -130,15 +130,18 @@ class DispatchClient:
             time.sleep(1.0)
             self.vla_client.info_act['current_prob_progress'] = 0.0
         else:
+            self.client.send_status_update(task_data, 'executing', sub_skill=key, progress=0)
             print(f'\n播放轨迹：{self.config.language[key]}\n')
             self.vla_client.is_running_action = False
             time.sleep(0.1)
             path_replay = self.config.language[key].split(':')[-1]
             self.robot.replay_trajectories(path_replay)
+            self.client.send_status_update(task_data, 'executing', sub_skill=key, progress=100)
 
         # 重置稳定性检测变量
         self.stable_count = 0
         self.stability_window.clear()
+        while_count = 0
         
         while True:
             if self.manual_command:
@@ -151,6 +154,7 @@ class DispatchClient:
                     return 500  # 其他手动指令返回500表示任务被中断
             
             time.sleep(0.05) # 禁止修改
+            while_count += 1
             if 'replay:' not in self.config.language[key]:
                 thre_finish = self.config.thre_progress[key][0]
                 if 'current_prob_progress' in self.vla_client.info_act:
@@ -168,7 +172,9 @@ class DispatchClient:
                     else:
                         current_progress = raw_progress
                         print('\rcurrent_prob_progress: ', current_progress, end='')
-                    
+                    if while_count % 20 == 0:
+                        self.client.send_status_update(task_data, 'executing', sub_skill=key, progress=int(current_progress * 100))
+
                     self.stability_window.append(current_progress)
                     if current_progress > thre_finish:
                         self.stable_count += 1
@@ -201,6 +207,7 @@ class DispatchClient:
             time.sleep(self.config.sleep_reset_pose[key][1])
             self.vla_client.inference_first()
         print(f'\n任务完成，暂停：{key}\n')
+        self.client.send_status_update(task_data, 'executing', sub_skill=key, progress=100)
 
         # TODO: 调度系统服务端暂时无法加入新的子任务，在此递归hack, 合并在调度命令任务后
         if self.args.extra_dispatch_mode[0] != '2':
