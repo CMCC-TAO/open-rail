@@ -564,7 +564,7 @@ class DispatchZMQClient:
             
             logger.debug(f"Receive message - type: {msg_type}, task_id: {task_id}, source: {source}")
             
-            if msg_type == "heartbeat_ack":
+            if msg_type == "heartbeat":
                 # 心跳响应
                 logger.debug("Heartbeat acknowledged")
                 
@@ -675,7 +675,7 @@ class DispatchZMQClient:
 
         return self._send_message(response_data)
 
-    def send_status_update(self, task_data: Dict[str, Any], status: str, progress: int = 0) -> bool:
+    def send_status_update(self, task_data: Dict[str, Any], status: str, sub_skill: str = "", progress: int = 0) -> bool:
         """发送任务状态更新"""
         status_data = {
             "version": "1.0",
@@ -687,7 +687,8 @@ class DispatchZMQClient:
             "target_location": task_data.get("target_location", ""),
             "source": "robot",
             "status": status,
-            "Progress": progress
+            "sub_skill": sub_skill,
+            "progress": progress
         }
         
         return self.send_response(status_data)
