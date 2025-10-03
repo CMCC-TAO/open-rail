@@ -17,6 +17,7 @@ def get_gr00t_config():
     config = ConfigDict()
     config.model_path = '/path/to/model'
     config.embodiment_tag = 'a2d'
+    config.data_config_key = 'a2d_arms_only'
     return config
 
 def get_act_config():

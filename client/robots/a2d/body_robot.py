@@ -162,7 +162,7 @@ class RobotBody(RobotBase):
         # process data of dexterous hand to gripper format
         processed_data = []
         for idx, ele in enumerate(data):
-            if 'hand' in self.hand_type:
+            if 'hand' in self.cfg['hand_type']:
                 data_temp = np.zeros(20)
                 data_temp[:14] = ele[:14]
                 left_hand = ele[15:19].mean()
@@ -178,28 +178,45 @@ class RobotBody(RobotBase):
                 processed_data.append(ele)
         return processed_data
 
-    def replay_trajectories(self, parquet_path):
+    def default_replay_trajectories(self, parquet_path, accelerate:bool=True, accelerate_times: int=2):
+        trajs = self.load_action_data(parquet_path=parquet_path)
+        if not accelerate:
+            accelerate_times = 1
+        for idx, traj in enumerate(trajs):
+            if idx % accelerate_times == 0:
+                self.execute_action({'arm': traj[0:14].tolist()})
+                self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
+                time.sleep(0.05)
+
+    def replay_trajectories(self, parquet_path, use_default: bool=True, accelerate:bool=True, accelerate_times: int=2, exclude_path=['place']):
+        """replay trajectory based on teleoperation data"""
         try:
-            trajs = self.load_action_data(parquet_path=parquet_path)
-            accelerate = True
-            if "place" in parquet_path:
-                accelerate = False
-            for idx, traj in enumerate(trajs):
-                if accelerate:
-                    if idx % 2 == 0:
+            if 'hand' in self.cfg['hand_type']:
+                use_default = False
+
+            if use_default:
+                self.default_replay_trajectories(parquet_path=parquet_path, accelerate=accelerate, accelerate_times=accelerate_times)
+            else:
+                trajs = self.load_action_data(parquet_path=parquet_path)
+                for ele in exclude_path:
+                    if ele in parquet_path:
+                        accelerate = False
+                for idx, traj in enumerate(trajs):
+                    if accelerate:
+                        if idx % accelerate_times == 0:
+                            self.execute_action({'arm': traj[0:14].tolist()})
+                            if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
+                                traj[14] = 1.0
+                                traj[15] = 0.0
+                            self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
+                            time.sleep(0.05)
+                    else:
                         self.execute_action({'arm': traj[0:14].tolist()})
                         if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
                             traj[14] = 1.0
                             traj[15] = 0.0
                         self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
                         time.sleep(0.05)
-                else:
-                    self.execute_action({'arm': traj[0:14].tolist()})
-                    if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
-                        traj[14] = 1.0
-                        traj[15] = 0.0
-                    self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
-                    time.sleep(0.05)
         except Exception as e:
             print(f"Replay {parquet_path} failed, error: {e}")
 

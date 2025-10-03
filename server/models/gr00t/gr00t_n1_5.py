@@ -41,15 +41,14 @@ class ModelVLA:
             start_index += modality_shape
 
         # get data config and transforms
-        embodiment_tag = self.cfg['embodiment_tag']
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        data_config = DATA_CONFIG_MAP[data_config_key]
+        data_config = DATA_CONFIG_MAP[self.cfg['data_config_key']]
         modality_config = data_config.modality_config()
         modality_transform = data_config.transform()
 
         self.policy = Gr00tPolicy(
             model_path=model_path,
-            embodiment_tag=embodiment_tag,
+            embodiment_tag=self.cfg['embodiment_tag'],
             modality_config=modality_config,
             modality_transform=modality_transform,
             device=device,
