@@ -12,8 +12,6 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib import cm
 from typing import List, Tuple, Optional, Union, Dict, Any
 
-
-
 class PlotConfig:
     server_address: str = "tcp://*:58585"  # ZMQ binding address
     client_address: str = "tcp://localhost:58585"  # ZMQ binding address
@@ -25,7 +23,7 @@ class PlotConfig:
     title: str = "RT Data"  # Chart title
     y_label: str = "y"  # Y-axis label
     x_label: str = "x"  # X-axis label
-    num_subplots: int = 2  # Number of subplots
+    num_subplots: int = 4  # Number of subplots
     num_cols: int = 2 # Number of columns
     subplot_titles: Optional[List[str]] = None  # List of subplot titles, use default titles if not provided
     
