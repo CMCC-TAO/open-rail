@@ -199,7 +199,10 @@ class DispatchClient:
                 print('replay轨迹执行完毕')
                 break
 
-        # self.client.send_status_update(task_data['task_id'], 'completed')
+        # 针对特定任务，在执行reset_pose_finish，提前发送完毕消息，加速任务完成
+        if key in ['place_custardbun', 'place_shrimpdumpling', 'place_greentea', 'place_blacktea', 'place_bread']:
+            self.client.send_status_update(task_data, 'completed')
+
         self.vla_client.is_running_action = False
         time.sleep(0.1)
         if key in self.config.reset_pose_finish and self.config.reset_pose_finish[key] is not None:
@@ -213,7 +216,7 @@ class DispatchClient:
         if self.args.extra_dispatch_mode[0] != '2':
             if key == 'place_bread':
                 self.client.send_status_update(task_data, 'completed')
-                time.sleep(7.)
+                time.sleep(7.) # 等待钛虎离开
                 self.handle_task({
                     "version": "1.0",
                     "type": "task",
