@@ -326,6 +326,10 @@ class RealtimeDataManager():
                     currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
                 index_offset = self._search_smooth_action(currt_action, currt_vel, candidate_action_chunk, search_length)
                 target_chunk_index += index_offset
+            else:
+                if not smooth_action:
+                    # can NOT use with search_action at the same time
+                    action_chunk_fitted = self._transition_weighted(self.action_chunk_fitted[:, self.action_chunk_index:], action_chunk_fitted[:, target_chunk_index:], transition_length=self.action_chunk_index)
 
             if smooth_action:
                 if currt_action is None:
@@ -335,7 +339,7 @@ class RealtimeDataManager():
                 for index in range(smooth_length):
                     ratio = (1 - smooth_base) * math.pow(index / smooth_length, smooth_ratio)
                     action_chunk_fitted[:14, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_fitted[:14, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action[:14]
-                
+
             with self.polynomial_thread_lock:
                 self.action_chunk_index = target_chunk_index
                 self.action_chunk_fitted = action_chunk_fitted
@@ -344,6 +348,39 @@ class RealtimeDataManager():
                 self.prob_progress = prob_progress
                 # Apply gripper offset to compensate for gripper response delay
                 self.action_chunk_fitted[14:, :-gripper_offset] = action_chunk_fitted[14:, gripper_offset:]
+
+    def _transition_weighted(self, achunk, bchunk, transition_length=10, interpolation_method='linear'):
+        """Apply weighted transition between two action chunks.
+        
+        Args:
+            achunk (np.array): Current action chunk.
+            bchunk (np.array): New action chunk.
+            transition_length (int, optional): Length of transition. Defaults to 10.
+            interpolation_method (str, optional): Interpolation method ('linear' or 'exp'). Defaults to 'linear'.
+            
+        Returns:
+            np.array: Transitioned action chunk.
+        """
+        decay_rate=0.3 # exp decay_rate is smaller, is more like linear interpolation
+        if transition_length <= 0:
+            return bchunk
+        max_overlap = min(achunk.shape[1], bchunk.shape[1])
+        actual_transition_length = min(transition_length, max_overlap) # min: use transition_length length transition, max: use max_overlap length transition
+        if actual_transition_length <= 0:
+            return bchunk
+        cp_chunk = bchunk.copy()
+        
+        if interpolation_method == 'linear': # linear interpolation: weight from 0 (use current chunk) to 1 (use new chunk)
+            weights = np.linspace(0, 1, actual_transition_length)
+        elif interpolation_method == 'exp':
+            # exponential interpolation: weight = 1 - exp(-decay_rate * t)
+            t_values = np.linspace(0, 5, actual_transition_length)  # time range 0 to 5
+            weights = 1 - np.exp(-decay_rate * t_values)
+        for i in range(actual_transition_length):
+            current_frame = achunk[:14, i]
+            new_frame = bchunk[:14, i]
+            cp_chunk[:14, i] = (1 - weights[i]) * current_frame + weights[i] * new_frame
+        return cp_chunk
 
     def _search_smooth_action(self, currt_action, currt_vel, candidate_action_chunk, search_length):
         """Search for the best action index to ensure smooth transition.
