@@ -7,14 +7,14 @@ from ml_collections import ConfigDict
 
 from concurrent.futures import ThreadPoolExecutor
 
-from client.utils import misc, vis
+from client.utils import misc
 from client.utils.util import run_time_decorator
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.save_lerobot import LeRobotDatasetWriter
-
+from visual.websocket_server import VLAWebSocketServer
 
 class VLAClient():
     """VLA (Vision-Language-Action) Client for real-time robot control.
@@ -73,11 +73,13 @@ class VLAClient():
             # Initialize the dataset writer with the provided recording configuration
             self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
 
-        if self.config.show_data:
-            self.vis_zmq = vis.ZmqPlotClient()
-            self.vis_chunk_idx = 0
-            self.vis_global_step = 0
-        
+        # Create Visualization WebSocket server
+        self.websocket_server = VLAWebSocketServer()
+        self.vis_global_step = 0
+        self.vis_idx_count = 0
+        self.vis_origin_chunk_action = None
+        self.vis_ratio = (1.0 / self.config.observer.fps) / (self.config.fitting_time_step / 1000.0) # (64 - 1) * ratio -> 420
+
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.info_current_action = [0.0] * 16
         self.info_current_state = [0.0] * 16
@@ -120,13 +122,13 @@ class VLAClient():
         # saved_language = self.language
         self.allow_language_switch = False
         
+        # Clear action data to ensure fresh action retrieval
+        self.rdm.clear_action_data()
         # Wait for observation changes after reset, then retrieve fresh obs for inference
         observations = self.robot.retrieve_observation()
         if observations is not None:
             data = self._process_data(observations)
             self.rdm.add_observe_data(data)
-            # Clear action data to ensure fresh action retrieval
-            self.rdm.clear_action_data()
         # time.sleep(self.config.sleep_time_after_reset)
         
         # Get observation data (thread-safe function, no lock needed)
@@ -144,6 +146,8 @@ class VLAClient():
             # Get current data timestamp and update timestamps
             action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
             self.rdm.set_observe_time_marker(loc_timestamp)
+            self.vis_idx_count = 0
+            self.vis_origin_chunk_action = action_chunk
             
             # Add action data (thread-safe function, no lock needed)
             self.rdm.set_init_observe_timestamp(timestamp=timestamp_chunk[0])
@@ -155,7 +159,7 @@ class VLAClient():
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted)
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, chunk_trans_mode=self.config.chunk_trans_mode)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -194,6 +198,8 @@ class VLAClient():
             # Get current data timestamp and update timestamps
             action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
             self.rdm.set_observe_time_marker(loc_timestamp)
+            self.vis_idx_count = 0
+            self.vis_origin_chunk_action = action_chunk
             
             # Add action data (thread-safe function, no lock needed)
             self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
@@ -215,7 +221,7 @@ class VLAClient():
                     if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
                         self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
                     prob_progress = None
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset, chunk_trans_mode=self.config.chunk_trans_mode)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -251,8 +257,7 @@ class VLAClient():
             self.info_act['action'] = action.shape
             self.robot.control_robot(action)
             
-            if self.config.show_data:
-                self.vis_action_state(action)
+            self.vis_action_state(action)
 
     @run_time_decorator
     def _traj_fitting(self, num_samples):
@@ -302,6 +307,7 @@ class VLAClient():
         """
         ext = '.png' if 'depth.' in key else '.jpg'
         img_processed = self._preprocess_func(value) if self._preprocess_func else value
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
         img_encoded = cv2.imencode(ext, img_processed)[1]
         return key, img_processed, img_encoded
 
@@ -323,17 +329,9 @@ class VLAClient():
         for key, processed, encoded in results:
             encoded_imgs[key] = encoded
             self.info_obs[key] = processed.shape
-            if self.config.show_img:
-                processed_imgs[key] = processed
-                if 'depth.' in key:
-                    img_depth_norm = cv2.normalize(processed, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-                    img_show = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
-                else:
-                    img_show = cv2.cvtColor(processed, cv2.COLOR_RGB2BGR)
-                # Thread cannot display images
-                cv2.imwrite(f'{key}.png', img_show)
-                # cv2.imshow(key, img_show)
-                # cv2.waitKey(1)
+            processed_imgs[key] = processed
+        # Send images to visualization interface
+        self.websocket_server.update_image_data(processed_imgs)
         return encoded_imgs
 
     @run_time_decorator
@@ -421,6 +419,7 @@ class VLAClient():
         self.observe_thread.start()
         self.inference_thread.start()
         self.control_thread_timer.start()
+        self.websocket_server.run()
         
         self.logger.info('Inference client started.')
     
@@ -462,8 +461,8 @@ class VLAClient():
             self.dataset_write.close()
         
         self.zmq_client.close()
-        if self.config.show_data:
-            self.vis_zmq.stop()
+        self.websocket_server.stop_server()
+        
         self.logger.info('Inference client closed.')
 
     def _inference_thread_fun(self):
@@ -483,52 +482,31 @@ class VLAClient():
         """
         Visualize action and state data for debugging and monitoring.
         
-        This method creates visualization data comparing predicted actions
-        with current robot states for each joint, sending the data to
-        the visualization system via ZMQ.
-        
         Args:
             action: Predicted action values for robot joints
         """
-        current_state = self.robot.current_state
-        line_data = []
-        
-        for joint_idx, value in enumerate(action):
-            if joint_idx >= current_state.shape[0]:
-                continue
-                
-            # Add action data point
-            line_data.append({
-                'subplot': joint_idx,
-                'y': [value],
-                'x': [self.vis_global_step],
-                'line_idx': 0,
-                'line_props': {
-                    'show_line': True,
-                    'color': 'purple',
-                    'marker': 'o',
-                    'markersize': 1,
-                    'label': 'action'
-                }
+        list_data = [{
+                'tab': 'position',
+                'type': 'action',
+                'x': self.vis_global_step,
+                'joints_y': action.tolist()
+            }, {
+                'tab': 'position',
+                'type': 'state',
+                'x': self.vis_global_step,
+                'joints_y': self.robot.current_state.tolist()
+            }]
+        origin_idx = self.vis_idx_count // int(self.vis_ratio) + 4
+        if (self.vis_idx_count % int(self.vis_ratio) == 0 and origin_idx < len(self.vis_origin_chunk_action)):
+            list_data.append({
+                'tab': 'position',
+                'type': 'origin',
+                'x': self.vis_global_step,
+                'joints_y': self.vis_origin_chunk_action[origin_idx].tolist()
             })
-            
-            # Add current state data point
-            line_data.append({
-                'subplot': joint_idx,
-                'y': [current_state[joint_idx]],
-                'x': [self.vis_global_step],
-                'line_idx': 1,
-                'line_props': {
-                    'show_line': True,
-                    'color': 'orange',
-                    'marker': 'o',
-                    'markersize': 1,
-                    'label': 'state'
-                }
-            })
-            
-        self.vis_zmq.send({'line_data': line_data})
+        self.websocket_server.update_chart_data(list_data)
         self.vis_global_step += 1
-
+        self.vis_idx_count += 1
+        
 if __name__ == "__main__":
     pass

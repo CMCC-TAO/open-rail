@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VLA多关节可视化系统</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="vlib/all.min.css" rel="stylesheet">
+    <script src="vlib/chart.js"></script>
+    <script src="vlib/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script> -->
+</head>
+<body>
+    <!-- 侧边菜单栏 -->
+    <div id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <h3><i class="fas fa-robot"></i> 控制面板</h3>
+            <button id="closeSidebar" class="close-btn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <!-- Tab导航 -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="general">
+                <i class="fas fa-tachometer-alt"></i> 综合
+            </button>
+            <button class="tab-btn" data-tab="camera">
+                <i class="fas fa-video"></i> 摄像头
+            </button>
+            <button class="tab-btn" data-tab="chart">
+                <i class="fas fa-chart-line"></i> 图表
+            </button>
+            <button class="tab-btn" data-tab="settings">
+                <i class="fas fa-cog"></i> 设置
+            </button>
+        </div>
+        
+        <div class="sidebar-content">
+            <!-- 综合控制Tab -->
+            <div id="general-tab" class="tab-content active">
+                <!-- 快速控制 -->
+                <div class="control-section">
+                    <h4><i class="fas fa-bolt"></i> 快速控制</h4>
+                    <div class="control-group">
+                        <label class="switch">
+                            <input type="checkbox" id="showCameras" checked>
+                            <span class="slider"></span>
+                            <span class="switch-label">显示摄像头</span>
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label class="switch">
+                            <input type="checkbox" id="showCharts" checked>
+                            <span class="slider"></span>
+                            <span class="switch-label">显示图表</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 数据控制 -->
+                <div class="control-section">
+                    <h4><i class="fas fa-database"></i> 数据控制</h4>
+                    <div class="control-group">
+                        <button id="pauseChartsBtn" class="btn btn-warning">
+                            <i class="fas fa-pause"></i> 暂停图表
+                        </button>
+                    </div>
+                    <div class="control-group">
+                        <button id="clearDataBtn" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> 清除数据
+                        </button>
+                        <button id="exportDataBtn" class="btn btn-info">
+                            <i class="fas fa-download"></i> 导出数据
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 摄像头控制Tab -->
+            <div id="camera-tab" class="tab-content">
+                <div class="control-section">
+                    <h4><i class="fas fa-video"></i> 摄像头总控制</h4>
+                    <div class="control-group">
+                        <label class="switch">
+                            <input type="checkbox" id="showCamerasTab" checked>
+                            <span class="slider"></span>
+                            <span class="switch-label">显示所有摄像头</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h4><i class="fas fa-list"></i> 单独控制</h4>
+                    <div class="camera-controls">
+                        <div class="camera-item">
+                            <label class="switch">
+                                <input type="checkbox" class="camera-toggle" data-camera="0" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">摄像头 1</span>
+                            </label>
+                        </div>
+                        <div class="camera-item">
+                            <label class="switch">
+                                <input type="checkbox" class="camera-toggle" data-camera="1" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">摄像头 2</span>
+                            </label>
+                        </div>
+                        <div class="camera-item">
+                            <label class="switch">
+                                <input type="checkbox" class="camera-toggle" data-camera="2" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">摄像头 3</span>
+                            </label>
+                        </div>
+                        <div class="camera-item">
+                            <label class="switch">
+                                <input type="checkbox" class="camera-toggle" data-camera="3" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">摄像头 4</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 图表控制Tab -->
+            <div id="chart-tab" class="tab-content">
+                <div class="control-section">
+                    <h4><i class="fas fa-chart-line"></i> 图表总控制</h4>
+                    <div class="control-group">
+                        <label class="switch">
+                            <input type="checkbox" id="showChartsTab" checked>
+                            <span class="slider"></span>
+                            <span class="switch-label">显示所有图表</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="control-section">
+                    <h4><i class="fas fa-list"></i> 关节控制</h4>
+                    <div class="joint-controls">
+                        <div class="joint-item">
+                            <label class="switch">
+                                <input type="checkbox" class="joint-toggle" data-joint="Joint_1" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">关节 1</span>
+                            </label>
+                        </div>
+                        <div class="joint-item">
+                            <label class="switch">
+                                <input type="checkbox" class="joint-toggle" data-joint="Joint_2" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">关节 2</span>
+                            </label>
+                        </div>
+                        <div class="joint-item">
+                            <label class="switch">
+                                <input type="checkbox" class="joint-toggle" data-joint="Joint_3" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">关节 3</span>
+                            </label>
+                        </div>
+                        <div class="joint-item">
+                            <label class="switch">
+                                <input type="checkbox" class="joint-toggle" data-joint="Joint_4" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">关节 4</span>
+                            </label>
+                        </div>
+                        <div class="joint-item">
+                            <label class="switch">
+                                <input type="checkbox" class="joint-toggle" data-joint="Joint_5" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">关节 5</span>
+                            </label>
+                        </div>
+                        <div class="joint-item">
+                            <label class="switch">
+                                <input type="checkbox" class="joint-toggle" data-joint="Joint_6" checked>
+                                <span class="slider"></span>
+                                <span class="switch-label">关节 6</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 设置Tab -->
+            <div id="settings-tab" class="tab-content">
+                <!-- 主题控制 -->
+                <div class="control-section">
+                    <h4><i class="fas fa-palette"></i> 主题设置</h4>
+                    <div class="control-group">
+                        <label class="switch">
+                            <input type="checkbox" id="darkModeToggle">
+                            <span class="slider"></span>
+                            <span class="switch-label">深色模式</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 性能设置 -->
+                <div class="control-section">
+                    <h4><i class="fas fa-tachometer-alt"></i> 性能设置</h4>
+                    <div class="control-group">
+                        <label for="fpsLimit">FPS限制:</label>
+                        <select id="fpsLimit" class="form-select">
+                            <option value="15">15 FPS</option>
+                            <option value="30" selected>30 FPS</option>
+                            <option value="60">60 FPS</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label for="dataPoints">数据点数:</label>
+                        <select id="dataPoints" class="form-select">
+                            <option value="50">50 点</option>
+                            <option value="100" selected>100 点</option>
+                            <option value="200">200 点</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 显示设置 -->
+                <div class="control-section">
+                    <h4><i class="fas fa-eye"></i> 显示设置</h4>
+                    <div class="control-group">
+                        <label class="switch">
+                            <input type="checkbox" id="showLegend" checked>
+                            <span class="slider"></span>
+                            <span class="switch-label">显示图例</span>
+                        </label>
+                    </div>
+                    <div class="control-group">
+                        <label class="switch">
+                            <input type="checkbox" id="showGrid" checked>
+                            <span class="slider"></span>
+                            <span class="switch-label">显示网格</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div id="main-content" class="main-content">
+        <!-- 顶部导航栏 -->
+        <header class="header">
+            <div class="header-left">
+                <button id="menuToggle" class="menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h1><i class="fas fa-robot"></i> VLA多关节可视化系统</h1>
+            </div>
+            <div class="header-right">
+                <div class="connection-info">
+                    <span id="headerConnectionStatus">未连接</span>
+                    <div id="headerStatusDot" class="status-dot disconnected"></div>
+                </div>
+                <div class="fps-counter">
+                    <span>FPS: <span id="fpsCounter">0</span></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 摄像头区域 -->
+        <section id="camera-section" class="camera-section">
+            <div class="section-header">
+                <h2><i class="fas fa-video"></i> 实时摄像头数据流</h2>
+                <div class="section-controls">
+                    <button id="fullscreenCameras" class="btn btn-sm">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="camera-grid">
+                <div class="camera-container" data-camera="0">
+                    <div class="camera-header">
+                        <span class="camera-title">摄像头 1</span>
+                        <div class="camera-status">
+                            <div class="status-dot connected"></div>
+                        </div>
+                    </div>
+                    <div class="camera-frame">
+                        <img id="camera_0" class="camera-image" alt="摄像头 1">
+                    </div>
+                </div>
+                
+                <div class="camera-container" data-camera="1">
+                    <div class="camera-header">
+                        <span class="camera-title">摄像头 2</span>
+                        <div class="camera-status">
+                            <div class="status-dot connected"></div>
+                        </div>
+                    </div>
+                    <div class="camera-frame">
+                        <img id="camera_1" class="camera-image" alt="摄像头 2">
+                    </div>
+                </div>
+                
+                <div class="camera-container" data-camera="2">
+                    <div class="camera-header">
+                        <span class="camera-title">摄像头 3</span>
+                        <div class="camera-status">
+                            <div class="status-dot connected"></div>
+                        </div>
+                    </div>
+                    <div class="camera-frame">
+                        <img id="camera_2" class="camera-image" alt="摄像头 3">
+                    </div>
+                </div>
+                
+                <!-- <div class="camera-container" data-camera="3">
+                    <div class="camera-header">
+                        <span class="camera-title">摄像头 4</span>
+                        <div class="camera-status">
+                            <div class="status-dot connected"></div>
+                        </div>
+                    </div>
+                    <div class="camera-frame">
+                        <img id="camera_3" class="camera-image" alt="摄像头 4">
+                    </div>
+                </div> -->
+            </div>
+        </section>
+
+        <!-- 图表区域 -->
+        <section id="charts-section" class="charts-section">
+            <div class="section-header">
+                <h2><i class="fas fa-chart-line"></i> 实时关节数据曲线</h2>
+                <div class="section-controls">
+                    <button id="pauseCharts" class="btn btn-sm">
+                        <i class="fas fa-pause"></i> 暂停
+                    </button>
+                    <button id="fullscreenCharts" class="btn btn-sm">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 关节图表容器 -->
+            <div id="joint-charts-container" class="joint-charts-container">
+                <!-- 关节图表将通过JavaScript动态生成 -->
+            </div>
+        </section>
+    </div>
+
+    <!-- 遮罩层 -->
+    <div id="overlay" class="overlay"></div>
+
+    <!-- 通知容器 -->
+    <div id="notifications" class="notifications"></div>
+
+    <!-- JavaScript -->
+    <script src="app.js"></script>
+</body>
+</html>
