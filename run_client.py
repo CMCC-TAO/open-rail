@@ -1,6 +1,5 @@
 import threading
 import time
-import matplotlib
 import traceback
 import select
 import sys
@@ -52,8 +51,8 @@ def parse_args():
     parser.add_argument('--fps', type=int, help='FPS')
     parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
+    parser.add_argument('--chunk_trans_mode', type=str, choices=['search_action', 'poly'], help='Chunk translation mode')
     parser.add_argument('--search_length', type=int, help='Forward search length')
-    parser.add_argument('--show_data', action='store_true', help='Show data visualization')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
     parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
@@ -80,8 +79,10 @@ def override_config_with_args(config, args):
         config.sleep_time = args.sleep_time
     if args.gripper_offset is not None:
         config.gripper_offset = args.gripper_offset
-    if args.show_data:
-        config.show_data = True
+    if args.chunk_trans_mode is not None:
+        config.chunk_trans_mode = args.chunk_trans_mode
+    if args.search_length is not None:
+        config.search_length = args.search_length
     if args.record:
         config.record.switch = True
     if args.robots_type is not None:
@@ -212,6 +213,14 @@ def handle_user_input(vla_client, robot, live):
             input('Data deleted, press Enter to continue...')
         elif cmd == 'q':
             return False  # Signal to quit
+        # elif cmd == 'a':
+        #     vla_client.language = vla_client.config.language[2]
+        #     robot.reset_robot(mode='default')
+        #     vla_client.inference_first()
+        # elif cmd == 'b':
+        #     vla_client.language = vla_client.config.language[3]
+        #     robot.reset_robot(mode='default')
+        #     vla_client.inference_first()
         
         vla_client.is_running_action = True
         return True  # Continue running
@@ -235,10 +244,6 @@ if __name__ == "__main__":
         config = apply_user_config(config, user_config)
     
     config = override_config_with_args(config, args)
-    
-    if not config.show_data:
-        matplotlib.use('Agg')
-    # print(config)
     zmq_client = ZMQClient(config.zmq)
     
     robot = get_robot(config)
