@@ -74,11 +74,14 @@ class VLAClient():
             self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
 
         # Create Visualization WebSocket server
-        self.websocket_server = VLAWebSocketServer()
+        self.websocket_server = VLAWebSocketServer.get_instance()
         self.vis_global_step = 0
         self.vis_idx_count = 0
         self.vis_origin_chunk_action = None
         self.vis_ratio = (1.0 / self.config.observer.fps) / (self.config.fitting_time_step / 1000.0) # (64 - 1) * ratio -> 420
+        self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
+        self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
+        self.vis_prev_origin_idx = None
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.info_current_action = [0.0] * 16
@@ -496,14 +499,103 @@ class VLAClient():
                 'x': self.vis_global_step,
                 'joints_y': self.robot.current_state.tolist()
             }]
+        action_np = np.asarray(action)
+        state_np = np.asarray(self.robot.current_state)
+        dt_ctrl = self.config.controller.period / 1000.0
+
+        if self.vis_prev_action is None:
+            action_vel = np.zeros_like(action_np)
+            action_acc = np.zeros_like(action_np)
+        else:
+            action_vel = (action_np - self.vis_prev_action) / dt_ctrl
+            if self.vis_prev_action_vel is None:
+                action_acc = np.zeros_like(action_np)
+            else:
+                action_acc = (action_vel - self.vis_prev_action_vel) / dt_ctrl
+
+        if self.vis_prev_state is None:
+            state_vel = np.zeros_like(state_np)
+            state_acc = np.zeros_like(state_np)
+        else:
+            state_vel = (state_np - self.vis_prev_state) / dt_ctrl
+            if self.vis_prev_state_vel is None:
+                state_acc = np.zeros_like(state_np)
+            else:
+                state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
+
+        list_data.extend([
+            {
+                'tab': 'velocity',
+                'type': 'action',
+                'x': self.vis_global_step,
+                'joints_y': action_vel.tolist()
+            },
+            {
+                'tab': 'velocity',
+                'type': 'state',
+                'x': self.vis_global_step,
+                'joints_y': state_vel.tolist()
+            },
+            {
+                'tab': 'acceleration',
+                'type': 'action',
+                'x': self.vis_global_step,
+                'joints_y': action_acc.tolist()
+            },
+            {
+                'tab': 'acceleration',
+                'type': 'state',
+                'x': self.vis_global_step,
+                'joints_y': state_acc.tolist()
+            },
+        ])
+
         origin_idx = self.vis_idx_count // int(self.vis_ratio) + 4
         if (self.vis_idx_count % int(self.vis_ratio) == 0 and origin_idx < len(self.vis_origin_chunk_action)):
+            origin_np = np.asarray(self.vis_origin_chunk_action[origin_idx])
             list_data.append({
                 'tab': 'position',
                 'type': 'origin',
                 'x': self.vis_global_step,
-                'joints_y': self.vis_origin_chunk_action[origin_idx].tolist()
+                'joints_y': origin_np.tolist()
             })
+            if self.vis_prev_origin_idx is None:
+                dt_origin = self.config.observer.period
+            else:
+                delta_idx = origin_idx - self.vis_prev_origin_idx
+                dt_origin = max(delta_idx, 1) * (self.config.fitting_time_step / 1000.0)
+            if self.vis_prev_origin is None:
+                origin_vel = np.zeros_like(origin_np)
+                origin_acc = np.zeros_like(origin_np)
+            else:
+                origin_vel = (origin_np - self.vis_prev_origin) / dt_origin
+                if self.vis_prev_origin_vel is None:
+                    origin_acc = np.zeros_like(origin_np)
+                else:
+                    origin_acc = (origin_vel - self.vis_prev_origin_vel) / dt_origin
+
+            list_data.extend([
+                {
+                    'tab': 'velocity',
+                    'type': 'origin',
+                    'x': self.vis_global_step,
+                    'joints_y': origin_vel.tolist()
+                },
+                {
+                    'tab': 'acceleration',
+                    'type': 'origin',
+                    'x': self.vis_global_step,
+                    'joints_y': origin_acc.tolist()
+                }
+            ])
+            self.vis_prev_origin = origin_np
+            self.vis_prev_origin_vel = origin_vel
+            self.vis_prev_origin_idx = origin_idx
+
+        self.vis_prev_action = action_np
+        self.vis_prev_action_vel = action_vel
+        self.vis_prev_state = state_np
+        self.vis_prev_state_vel = state_vel
         self.websocket_server.update_chart_data(list_data)
         self.vis_global_step += 1
         self.vis_idx_count += 1

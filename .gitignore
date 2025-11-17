@@ -125,6 +125,7 @@ demo_data/gr00t-gr1-apple-to-shelf/
 tmp/
 output/
 a2d_sdk*/
+.trea/
 camera.txt
 hal.txt
 user_conf_*.py

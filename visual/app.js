@@ -19,7 +19,9 @@ class VLAVisualizationApp {
         this.chartUpdateInterval = 50; // 50ms更新一次图表，即20FPS
         this.pendingChartUpdate = false; // 标记是否有待更新的数据
         this.lastChartUpdateTime = 0;
-        this.x_left_bound = 0;
+        this.maxChartPoints = 1000;
+        this.xLeftBound = 0;
+        this.xRightBound = 0;
         
         // 相机数据优化相关属性
         this.latestCameraData = {}; // 存储最新的相机数据
@@ -93,6 +95,14 @@ class VLAVisualizationApp {
         // 显示控制
         document.getElementById('showCameras').addEventListener('change', (e) => this.toggleCameraSection(e.target.checked));
         document.getElementById('showCharts').addEventListener('change', (e) => this.toggleChartsSection(e.target.checked));
+        const showCamerasTabEl = document.getElementById('showCamerasTab');
+        if (showCamerasTabEl) {
+            showCamerasTabEl.addEventListener('change', (e) => this.toggleAllCameras(e.target.checked));
+        }
+        const showChartsTabEl = document.getElementById('showChartsTab');
+        if (showChartsTabEl) {
+            showChartsTabEl.addEventListener('change', (e) => this.toggleAllJoints(e.target.checked));
+        }
         
         // 使用事件委托处理动态生成的元素
         document.addEventListener('change', (e) => {
@@ -126,7 +136,11 @@ class VLAVisualizationApp {
         
         // 图表控制
         document.getElementById('pauseCharts').addEventListener('click', () => this.toggleChartsPause());
-        document.getElementById('clearDataBtn').addEventListener('click', () => this.clearData());
+        document.getElementById('clearDataBtn').addEventListener('click', () => {
+            if (confirm('确定要清除所有数据吗？')) {
+                this.clearData();
+            }
+        });
         document.getElementById('exportDataBtn').addEventListener('click', () => this.exportData());
         
         // 全屏控制
@@ -156,6 +170,7 @@ class VLAVisualizationApp {
                 
                 // 请求配置信息
                 this.sendMessage({ type: 'get_config' });
+                this.clearData();
             };
             
             this.websocket.onmessage = (event) => {
@@ -302,25 +317,26 @@ class VLAVisualizationApp {
         
         this.chartDataBuffer[tab][type].push(dataPoint);
 
-        if (type !== 'origin') {
-            this.x_left_bound = x;
-            this.chartDataBuffer[tab][type] = this.chartDataBuffer[tab][type].slice(-1500);
+        this.chartDataBuffer[tab][type] = this.chartDataBuffer[tab][type].slice(-this.maxChartPoints);
+
+        const tbuf = this.chartDataBuffer[tab];
+        const actionBuf = tbuf['action'];
+        const stateBuf = tbuf['state'];
+        const originBuf = tbuf['origin'];
+
+        const spanOf = (buf) => (buf && buf.length >= 2) ? (buf[buf.length - 1].x - buf[0].x) : 0;
+        const rightOf = (buf) => (buf && buf.length) ? buf[buf.length - 1].x : -Infinity;
+
+        const span = Math.max(spanOf(actionBuf), spanOf(stateBuf));
+        const right = Math.max(rightOf(actionBuf), rightOf(stateBuf), rightOf(originBuf));
+
+        if (Number.isFinite(right)) {
+            this.xRightBound = right;
+            if (span > 0) {
+                this.xLeftBound = right - span;
+            }
         }
-        if (type === 'origin') {
-            // && this.x_left_bound - this.chartDataBuffer[tab][type][0].x > 1500
-            // // 遍历所有origin数据点，找到第一个x大于等于x_left_bound的点
-            // let firstIndex = -1;
-            // for (let i = 0; i < this.chartDataBuffer[tab][type].length; i++) {
-            //     if (this.chartDataBuffer[tab][type][i].x >= this.x_left_bound) {
-            //         firstIndex = i;
-            //         break;
-            //     }
-            // }
-            // console.log('firstIndex:', firstIndex, 'len:', this.chartDataBuffer[tab][type].length);
-            // this.chartDataBuffer[tab][type] = this.chartDataBuffer[tab][type].slice(firstIndex);
-            this.chartDataBuffer[tab][type] = this.chartDataBuffer[tab][type].slice(-parseInt(1500 / (420 / 64)));
-        }
-        
+
         // 标记有待更新的数据，但不立即更新图表
         this.pendingChartUpdate = true;
     }
@@ -334,12 +350,12 @@ class VLAVisualizationApp {
         const units = { position: 'rad', velocity: 'rad/s', acceleration: 'rad/s²' };
         
         joints.forEach((joint, jointIndex) => {
-            // TODO: 只显示joint_1和joint_8
-            if (jointIndex !==0 && jointIndex !== 7) return;
-
             const jointDiv = document.createElement('div');
             jointDiv.className = 'joint-chart';
             jointDiv.dataset.joint = joint;
+            if (jointIndex !== 0 && jointIndex !== 7) {
+                jointDiv.classList.add('hidden');
+            }
             
             jointDiv.innerHTML = `
                 <div class="joint-header">
@@ -491,6 +507,13 @@ class VLAVisualizationApp {
         
         // 更新Y轴标题
         chart.options.scales.y.title.text = `${tabLabels[tab]} (${units[tab]})`;
+        if (Number.isFinite(this.xLeftBound) && Number.isFinite(this.xRightBound) && this.xRightBound > this.xLeftBound) {
+            chart.options.scales.x.min = this.xLeftBound;
+            chart.options.scales.x.max = this.xRightBound;
+        } else {
+            chart.options.scales.x.min = undefined;
+            chart.options.scales.x.max = undefined;
+        }
         
         chart.update('none');
     }
@@ -504,16 +527,24 @@ class VLAVisualizationApp {
         if (jointIndex === -1) return { labels: [], data: [] };
         
         const buffer = this.chartDataBuffer[tab][type];
+        const left = this.xLeftBound;
+        const right = this.xRightBound;
+        const visible = (Number.isFinite(left) && Number.isFinite(right) && right > left)
+            ? buffer.filter(point => point.x >= left && point.x <= right)
+            : buffer;
         return {
-            labels: buffer.map(point => point.x),
-            data: buffer.map(point => point.joints_y[jointIndex])
+            labels: visible.map(point => point.x),
+            data: visible.map(point => point.joints_y[jointIndex])
         };
     }
     
     updateChartsWithNewData() {
         // 更新所有可见的图表
         Object.keys(this.charts).forEach(joint => {
-            this.updateChartForJoint(joint);
+            const container = document.querySelector(`[data-joint="${joint}"]`);
+            if (container && container.offsetParent !== null && !container.classList.contains('hidden')) {
+                this.updateChartForJoint(joint);
+            }
         });
     }
     
@@ -688,10 +719,30 @@ class VLAVisualizationApp {
     }
     
     toggleJoint(joint, show) {
-        const container = document.querySelector(`[data-joint="${joint}"]`);
+        const norm = String(joint).toLowerCase();
+        const container = document.querySelector(`[data-joint="${norm}"]`);
         if (container) {
             container.classList.toggle('hidden', !show);
         }
+    }
+
+    toggleAllCameras(show) {
+        document.querySelectorAll('.camera-container').forEach(el => {
+            el.classList.toggle('hidden', !show);
+        });
+    }
+
+    toggleAllJoints(show) {
+        document.querySelectorAll('.joint-chart').forEach(el => {
+            el.classList.toggle('hidden', !show);
+        });
+        setTimeout(() => {
+            Object.values(this.charts).forEach(chart => {
+                if (chart && chart.canvas.offsetParent !== null) {
+                    chart.resize();
+                }
+            });
+        }, 100);
     }
     
     toggleDarkMode(enabled) {
@@ -735,18 +786,16 @@ class VLAVisualizationApp {
     }
     
     clearData() {
-        if (confirm('确定要清除所有数据吗？')) {
-            // 清空图表数据缓存
-            this.chartDataBuffer = {};
-            
-            // 清空所有图表
-            Object.values(this.charts).forEach(chart => {
-                chart.data.labels = [];
-                chart.data.datasets[0].data = [];
-                chart.update('none');
-            });
-            this.showNotification('数据已清除', 'success');
-        }
+        // 清空图表数据缓存
+        this.chartDataBuffer = {};
+        
+        // 清空所有图表
+        Object.values(this.charts).forEach(chart => {
+            chart.data.labels = [];
+            chart.data.datasets[0].data = [];
+            chart.update('none');
+        });
+        this.showNotification('数据已清除', 'success');
     }
     
     exportData() {

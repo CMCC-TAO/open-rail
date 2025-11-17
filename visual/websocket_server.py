@@ -12,13 +12,22 @@ import os
 
 
 class VLAWebSocketServer:
+    _instance = None
+    _lock = threading.Lock()
+    _initialized = False
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+        return cls._instance
+
     def __init__(self, host='localhost', port=8765):
-        """初始化WebSocket服务器
-        
-        Args:
-            host (str): 服务器主机地址
-            port (int): 服务器端口
-        """
+        if self.__class__._initialized:
+            return
+        self.__class__._initialized = True
+
         self.kill_port(port)
         self.host = host
         self.port = port
@@ -37,6 +46,10 @@ class VLAWebSocketServer:
         self.server = None
 
         self._run_http_server_thread()
+
+    @classmethod
+    def get_instance(cls, host='localhost', port=8765):
+        return cls(host=host, port=port)
 
     def kill_port(self, port):
         os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
@@ -320,16 +333,17 @@ class VLAWebSocketServer:
             print(f"WebSocket server error: {e}")
 
     def run(self):
-        # Start WebSocket server in a separate thread
+        if hasattr(self, 'websocket_thread') and self.websocket_thread and self.websocket_thread.is_alive():
+            return
         self.websocket_thread = threading.Thread(
-            target=self._run_loop_server, 
+            target=self._run_loop_server,
             daemon=True
         )
         self.websocket_thread.start()
 
 def main():
     """主函数 - 用于测试"""
-    server = VLAWebSocketServer()
+    server = VLAWebSocketServer.get_instance()
     
     try:
         asyncio.run(server.start_server())

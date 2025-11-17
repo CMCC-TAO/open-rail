@@ -143,48 +143,22 @@
                 <div class="control-section">
                     <h4><i class="fas fa-list"></i> 关节控制</h4>
                     <div class="joint-controls">
-                        <div class="joint-item">
-                            <label class="switch">
-                                <input type="checkbox" class="joint-toggle" data-joint="Joint_1" checked>
-                                <span class="slider"></span>
-                                <span class="switch-label">关节 1</span>
-                            </label>
-                        </div>
-                        <div class="joint-item">
-                            <label class="switch">
-                                <input type="checkbox" class="joint-toggle" data-joint="Joint_2" checked>
-                                <span class="slider"></span>
-                                <span class="switch-label">关节 2</span>
-                            </label>
-                        </div>
-                        <div class="joint-item">
-                            <label class="switch">
-                                <input type="checkbox" class="joint-toggle" data-joint="Joint_3" checked>
-                                <span class="slider"></span>
-                                <span class="switch-label">关节 3</span>
-                            </label>
-                        </div>
-                        <div class="joint-item">
-                            <label class="switch">
-                                <input type="checkbox" class="joint-toggle" data-joint="Joint_4" checked>
-                                <span class="slider"></span>
-                                <span class="switch-label">关节 4</span>
-                            </label>
-                        </div>
-                        <div class="joint-item">
-                            <label class="switch">
-                                <input type="checkbox" class="joint-toggle" data-joint="Joint_5" checked>
-                                <span class="slider"></span>
-                                <span class="switch-label">关节 5</span>
-                            </label>
-                        </div>
-                        <div class="joint-item">
-                            <label class="switch">
-                                <input type="checkbox" class="joint-toggle" data-joint="Joint_6" checked>
-                                <span class="slider"></span>
-                                <span class="switch-label">关节 6</span>
-                            </label>
-                        </div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_1" checked><span class="slider"></span><span class="switch-label">关节 1</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_2"><span class="slider"></span><span class="switch-label">关节 2</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_3"><span class="slider"></span><span class="switch-label">关节 3</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_4"><span class="slider"></span><span class="switch-label">关节 4</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_5"><span class="slider"></span><span class="switch-label">关节 5</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_6"><span class="slider"></span><span class="switch-label">关节 6</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_7"><span class="slider"></span><span class="switch-label">关节 7</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_8" checked><span class="slider"></span><span class="switch-label">关节 8</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_9"><span class="slider"></span><span class="switch-label">关节 9</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_10"><span class="slider"></span><span class="switch-label">关节 10</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_11"><span class="slider"></span><span class="switch-label">关节 11</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_12"><span class="slider"></span><span class="switch-label">关节 12</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_13"><span class="slider"></span><span class="switch-label">关节 13</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_14"><span class="slider"></span><span class="switch-label">关节 14</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_15"><span class="slider"></span><span class="switch-label">关节 15</span></label></div>
+                        <div class="joint-item"><label class="switch"><input type="checkbox" class="joint-toggle" data-joint="Joint_16"><span class="slider"></span><span class="switch-label">关节 16</span></label></div>
                     </div>
                 </div>
             </div>
@@ -257,6 +231,9 @@
                 <h1><i class="fas fa-robot"></i> VLA多关节可视化系统</h1>
             </div>
             <div class="header-right">
+                <button id="pauseCharts" class="btn btn-sm">
+                    <i class="fas fa-pause"></i> 暂停图表
+                </button>
                 <div class="connection-info">
                     <span id="headerConnectionStatus">未连接</span>
                     <div id="headerStatusDot" class="status-dot disconnected"></div>
@@ -333,9 +310,6 @@
             <div class="section-header">
                 <h2><i class="fas fa-chart-line"></i> 实时关节数据曲线</h2>
                 <div class="section-controls">
-                    <button id="pauseCharts" class="btn btn-sm">
-                        <i class="fas fa-pause"></i> 暂停
-                    </button>
                     <button id="fullscreenCharts" class="btn btn-sm">
                         <i class="fas fa-expand"></i>
                     </button>
