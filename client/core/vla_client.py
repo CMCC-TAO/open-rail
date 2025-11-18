@@ -158,11 +158,11 @@ class VLAClient():
 
             # Record trajectory fitting timestamp
             self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, chunk_trans_mode=self.config.chunk_trans_mode)
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, chunk_trans_mode=self.config.chunk_trans_mode)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -209,7 +209,7 @@ class VLAClient():
 
             # Record trajectory fitting timestamp
             self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
@@ -224,7 +224,7 @@ class VLAClient():
                     if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
                         self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
                     prob_progress = None
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset, chunk_trans_mode=self.config.chunk_trans_mode)
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset, chunk_trans_mode=self.config.chunk_trans_mode)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -284,7 +284,7 @@ class VLAClient():
         
         start_time = timestamps[0]
         end_time = timestamps[-1]
-        action_chunk_fitted, vel_chunk_fitted, timestamps_fitted = self.traj_generator.traj_fitting(
+        action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.traj_generator.traj_fitting(
             timestamps=timestamps, 
             action_chunk=action_chunk, 
             start_time=start_time, 
@@ -293,7 +293,7 @@ class VLAClient():
             time_step=self.config.fitting_time_step/1000
         )
         
-        return action_chunk_fitted, vel_chunk_fitted, timestamps_fitted
+        return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted
 
     def _process_image(self, key, value):
         """Process image data by padding, resize and encoding.

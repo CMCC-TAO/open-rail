@@ -39,7 +39,7 @@ def get_client_config():
     config.fitting_num_samples = 64
     config.fitting_time_step = 5  # Time step for trajectory fitting in milliseconds
     config.fitting_deg = 4  # Polynomial fitting degree
-    config.chunk_trans_mode = 'search_action'  # chunk transition mode, choices = ('search_action', 'poly')
+    config.chunk_trans_mode = 'search_action'  # chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity')
     config.search_action = True  # Enable forward search for smooth actions. NOTE: if False and smooth_action is False, use transition chunk
     config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
     config.smooth_action = False  # Enable action smoothing (Beta)

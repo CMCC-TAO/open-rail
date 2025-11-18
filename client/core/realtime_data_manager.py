@@ -36,6 +36,7 @@ class RealtimeDataManager():
         self.frame_count = 0
         self.action_chunk_fitted = None
         self.vel_chunk_fitted = None
+        self.acc_chunk_fitted = None
         self.timestamps_fitted = None
         self.action_chunk_index = None
         self.prob_progress = None
@@ -274,6 +275,7 @@ class RealtimeDataManager():
     def update_action_chunk_fitted(self,
                                 action_chunk_fitted,
                                 vel_chunk_fitted,
+                                acc_chunk_fitted,
                                 timestamps_fitted,
                                 prob_progress=None,
                                 search_action = False,
@@ -305,6 +307,7 @@ class RealtimeDataManager():
                 self.action_chunk_index = 0
                 self.action_chunk_fitted = action_chunk_fitted
                 self.vel_chunk_fitted = vel_chunk_fitted
+                self.acc_chunk_fitted = acc_chunk_fitted
                 self.timestamps_fitted = timestamps_fitted
                 self.prob_progress = prob_progress
         else: # update action chunk fitted secondly;
@@ -330,9 +333,22 @@ class RealtimeDataManager():
                 target_chunk_index += index_offset
             elif chunk_trans_mode == 'poly':
                 # can NOT use with search_action at the same time
-                action_chunk_fitted = self._smooth_chunk_transition(
+                action_chunk_fitted = self._poly_chunk_transition(
                     action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
                 )
+            elif chunk_trans_mode == 'smooth_velocity':
+                with self.polynomial_thread_lock:
+                    currt_action = self.action_chunk_fitted[:14, self.action_chunk_index].copy()
+                    currt_vel = self.vel_chunk_fitted[:14, self.action_chunk_index].copy()
+                    currt_acc = self.acc_chunk_fitted[:14, self.action_chunk_index].copy()
+                target_action_segment = action_chunk_fitted[:14, target_chunk_index:].copy()
+                delat_t = timestamps_fitted[1]
+                sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
+                action_chunk_fitted[:14, target_chunk_index:] = sim_action
+                vel_chunk_fitted[:14, target_chunk_index:] = sim_vel
+                acc_chunk_fitted[:14, target_chunk_index:] = sim_acc 
+            else:
+                pass
 
             if smooth_action:
                 if currt_action is None:
@@ -347,12 +363,13 @@ class RealtimeDataManager():
                 self.action_chunk_index = target_chunk_index
                 self.action_chunk_fitted = action_chunk_fitted
                 self.vel_chunk_fitted = vel_chunk_fitted
+                self.acc_chunk_fitted = acc_chunk_fitted
                 self.timestamps_fitted = timestamps_fitted
                 self.prob_progress = prob_progress
                 # Apply gripper offset to compensate for gripper response delay
                 self.action_chunk_fitted[14:, :-gripper_offset] = action_chunk_fitted[14:, gripper_offset:]
 
-    def _smooth_chunk_transition(self, new_action_chunk, new_vel_chunk, new_timestamps, target_index, current_index):
+    def _poly_chunk_transition(self, new_action_chunk, new_vel_chunk, new_timestamps, target_index, current_index):
         """Smooth transition across action chunks, ensuring continuity of position, velocity, and acceleration.
         
         Args:
@@ -454,6 +471,62 @@ class RealtimeDataManager():
                     smoothed_chunk[joint_idx, target_index + i] = smoothed_pos
         
         return smoothed_chunk
+
+    @staticmethod
+    def _smooth_velocity_transition(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
+        # max_vel=2.0, max_acc=4.0, kp=20.0, kd=6.0
+        # max_vel=2.0, max_acc=4.0, kp=30.0, kd=10.0
+        """
+        Simulate joint motion under velocity and acceleration constraints.
+
+        Args:
+            joint_seq: np.ndarray, target position sequence
+            init_pos: initial joint position
+            init_vel: initial joint velocity
+            init_acc: initial joint acceleration
+            max_vel: maximum allowed velocity
+            max_acc: maximum allowed acceleration
+            dt: simulation timestep
+            kp: proportional gain (position error term)
+            kd: damping gain (velocity feedback term)
+
+        Returns:
+            pos_seq, vel_seq, acc_seq: simulated smooth position, velocity, and acceleration sequences
+        """
+        pos = init_pos
+        vel = init_vel
+        acc = init_acc
+
+        pos_seq = np.zeros_like(joint_seq)
+        vel_seq = np.zeros_like(joint_seq)
+        acc_seq = np.zeros_like(joint_seq)
+
+        # dt = dt * 2
+
+        for i in range(joint_seq.shape[1]):
+            target = joint_seq[:, i]
+
+            # Compute position error
+            error = target - pos
+            
+            # PD controller to compute desired acceleration
+            acc = kp * error - kd * vel
+            
+            # Clip acceleration
+            acc = np.clip(acc, -max_acc, max_acc)
+            
+            # Update velocity
+            vel += acc * dt
+            vel = np.clip(vel, -max_vel, max_vel)
+            
+            # Update position
+            pos += vel * dt
+
+            pos_seq[:, i] = pos
+            vel_seq[:, i] = vel
+            acc_seq[:, i] = acc
+
+        return pos_seq, vel_seq, acc_seq
 
     def _search_smooth_action(self, currt_action, currt_vel, candidate_action_chunk, search_length):
         """Search for the best action index to ensure smooth transition.
@@ -605,6 +678,7 @@ class RealtimeDataManager():
             self.observe_buffer.clear()
             self.action_chunk_fitted = None
             self.vel_chunk_fitted = None
+            self.acc_chunk_fitted = None
             self.timestamps_fitted = None
             self.action_chunk_index = None
             

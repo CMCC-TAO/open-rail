@@ -28,12 +28,13 @@ class TrajectoryGenerator():
         self.traj = None
         self.traj_fitted = None
         self.vel_fitted = None
+        self.acc_fitted = None
         self.timestamps = None
         self.timestamps_fitted = None
         
         self.frame = 0
 
-    def _joint_traj_fitting(self, timestamps, joint_chunk, index, start_time, end_time, deg = 3, time_step = 0.001):
+    def _joint_traj_fitting(self, timestamps, joint_chunk, index, start_time, end_time, deg = 5, time_step = 0.001):
         """Fit a joint trajectory using polynomial fitting with deg parameter and return the fitted trajectory defined by start_time, end_time and time_step.
 
         Args:
@@ -54,16 +55,24 @@ class TrajectoryGenerator():
         coefficients = np.polyfit(timestamps, joint_chunk, deg=deg)
         # Calculate polynomial derivative coefficients
         derivative_coefficients = np.polyder(coefficients)
+        # Second derivative (acceleration)
+        second_derivative_coefficients = np.polyder(derivative_coefficients)
+
+        x = np.arange(start_time, end_time, time_step)
         
         # Calculate fitted joint angles using the polynomial
         polynomial = np.poly1d(coefficients)
-        x = np.arange(start_time, end_time, time_step)
         joint_chunk_fitted = polynomial(x)
         
         # Calculate joint velocities using the derivative
         derivative_polynomial = np.poly1d(derivative_coefficients)
         velocity_chunk_fitted = derivative_polynomial(x)
-        return index, joint_chunk_fitted, velocity_chunk_fitted
+
+        # Calculate joint acceleration using the second derivative
+        second_derivative_polynomial = np.poly1d(second_derivative_coefficients)
+        acceleration_chunk_fitted = second_derivative_polynomial(x)
+
+        return index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
     def _gripper_traj_fitting(self, timestamps, gripper_chunk, index, start_time, end_time, time_step = 0.001):
         """Fit a gripper trajectory using mean filtering and return the fitted trajectory defined by start_time, end_time and time_step.
@@ -111,7 +120,7 @@ class TrajectoryGenerator():
                 currt_index = min(length, currt_index + 1)
             gripper_chunk_fitted.append((gripper_chunk[max(currt_index - 1, 0)] + gripper_chunk[min(currt_index, length - 1)]) / 2.0)
 
-        return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted)  # Gripper velocity is not considered
+        return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted), np.zeros_like(gripper_chunk_fitted)  # Gripper velocity and acceleration are not considered
 
     @run_time_decorator
     def traj_fitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):
@@ -129,6 +138,7 @@ class TrajectoryGenerator():
             tuple: (fitted_trajectory, fitted_velocity, fitted_timestamps)
         """
         # Preprocess action data - convert from action dimension format to joint dimension format
+        # print(action_chunk.shape)
         joint_futures = [self.joint_fitting_executor.submit(self._joint_traj_fitting, timestamps, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(action_chunk[0:self.config.joint_dim, :])]
         gripper_futures = [self.gripper_fitting_executor.submit(self._gripper_traj_fitting, timestamps, np.array(joint_chunk), self.config.joint_dim+index, start_time, end_time, time_step) for index, joint_chunk in enumerate(action_chunk[self.config.joint_dim:, :])]
 
@@ -140,28 +150,32 @@ class TrajectoryGenerator():
         # Parse results - joint_results represent joint angle data, velocity_results represent joint velocity data
         final_joint_results = [None] * len(results)
         final_velocity_results = [None] * len(results)
+        final_acceleration_results = [None] * len(results)
         
-        for index, joint_chunk_fitted, velocity_chunk_fitted in results:
+        for index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted in results:
             final_joint_results[index] = joint_chunk_fitted
             final_velocity_results[index] = velocity_chunk_fitted
-        if self.traj_fitted is None:
-            self.traj_fitted = np.array(final_joint_results)
-            self.vel_fitted = np.array(final_velocity_results)
-            self.traj = action_chunk
-            self.timestamps_fitted = np.arange(start_time, end_time, time_step)
-            self.timestamps = timestamps
-        else:
-            traj_fitted_new = np.array(final_joint_results)
-            vel_fitted_new = np.array(final_velocity_results)
-            timestamps_fitted_new = np.arange(start_time, end_time, time_step)
+            final_acceleration_results[index] = acceleration_chunk_fitted
+        # if self.traj_fitted is None:
+        self.traj_fitted = np.array(final_joint_results)
+        self.vel_fitted = np.array(final_velocity_results)
+        self.acc_fitted = np.array(final_acceleration_results)
+        self.traj = action_chunk
+        self.timestamps_fitted = np.arange(start_time, end_time, time_step)
+        self.timestamps = timestamps
+        # else:
+        #     traj_fitted_new = np.array(final_joint_results)
+        #     vel_fitted_new = np.array(final_velocity_results)
+        #     acc_fitted_new = np.array(final_acceleration_results)
 
-            self.traj_fitted = traj_fitted_new
-            self.vel_fitted = vel_fitted_new
-            self.timestamps_fitted = timestamps_fitted_new
-            self.traj = action_chunk
-            self.timestamps = timestamps
+        #     self.traj_fitted = traj_fitted_new
+        #     self.vel_fitted = vel_fitted_new
+        #     self.acc_fitted = acc_fitted_new
+        #     self.timestamps_fitted = np.arange(start_time, end_time, time_step)
+        #     self.traj = action_chunk
+        #     self.timestamps = timestamps
 
-        return self.traj_fitted, self.vel_fitted, self.timestamps_fitted
+        return self.traj_fitted, self.vel_fitted, self.acc_fitted, self.timestamps_fitted
 
 if __name__ == '__main__':
     import os
