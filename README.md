@@ -108,7 +108,7 @@ The server handles VLA model inference and provides results to clients.
 
 ### 2.4 Auxiliary Tools
 
-#### 2.4.1 Real-time actions and robot states visualization
+#### 2.4.1 Web-based visualization
 
    When the following parameter is set as:
 
@@ -124,7 +124,7 @@ In the action curves figure：
    - **[Orange]** trajectories represent the robot's actual joint states.
 
 
-#### 2.4.2 Real-time actions and camera images visualization
+#### 2.4.2 QT-based visualization
  To enable action-camera visualization based on QT, first set:
 
    ```python
