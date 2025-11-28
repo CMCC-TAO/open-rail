@@ -1,5 +1,6 @@
 import threading
 import time
+import matplotlib
 import traceback
 import select
 import sys
@@ -51,8 +52,10 @@ def parse_args():
     parser.add_argument('--fps', type=int, help='FPS')
     parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
-    parser.add_argument('--chunk_trans_mode', type=str, choices=['search_action', 'poly'], help='Chunk translation mode')
     parser.add_argument('--search_length', type=int, help='Forward search length')
+    parser.add_argument('--chunk_trans_mode', type=str, choices=['search_action', 'poly', 'smooth_acceleration'], help='The emthod to bridge action chunks')
+    parser.add_argument('--show_action_state', action='store_true', help='Show action and state visualization')
+    parser.add_argument('--show_action_cams_qt', action='store_true', help='Show action and camera images visualization based on QT')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
     parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
@@ -81,8 +84,10 @@ def override_config_with_args(config, args):
         config.gripper_offset = args.gripper_offset
     if args.chunk_trans_mode is not None:
         config.chunk_trans_mode = args.chunk_trans_mode
-    if args.search_length is not None:
-        config.search_length = args.search_length
+    if args.show_action_state:
+        config.show_action_state = True
+    if args.show_action_cams_qt:
+        config.show_action_cams_qt = True
     if args.record:
         config.record.switch = True
     if args.robots_type is not None:
@@ -213,14 +218,6 @@ def handle_user_input(vla_client, robot, live):
             input('Data deleted, press Enter to continue...')
         elif cmd == 'q':
             return False  # Signal to quit
-        # elif cmd == 'a':
-        #     vla_client.language = vla_client.config.language[2]
-        #     robot.reset_robot(mode='default')
-        #     vla_client.inference_first()
-        # elif cmd == 'b':
-        #     vla_client.language = vla_client.config.language[3]
-        #     robot.reset_robot(mode='default')
-        #     vla_client.inference_first()
         
         vla_client.is_running_action = True
         return True  # Continue running
@@ -244,12 +241,17 @@ if __name__ == "__main__":
         config = apply_user_config(config, user_config)
     
     config = override_config_with_args(config, args)
-    zmq_client = ZMQClient(config.zmq)
+    
+    if not config.show_action_state:
+        matplotlib.use('Agg')
+    # print(config)
+    # The zmq client to communicate with VLA server
+    vla_zmq_client = ZMQClient(config.vla_zmq)
     
     robot = get_robot(config)
     rdm = RealtimeDataManager(config.rdm)
     traj_generator = TrajectoryGenerator(config=config.traj)
-    vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, zmq_client=zmq_client, robot=robot)
+    vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, vla_zmq_client=vla_zmq_client, robot=robot)
 
     # extra
     if args.extra_dispatch_mode[0] != '0':

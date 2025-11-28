@@ -18,11 +18,11 @@ def get_a2d_config():
     config.camera.ref = 'head'
     # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
     config.camera.names = {'head': 'head',
-                           'hand_left': 'hand_left_fisheye' if 'hand' in config.hand_type else 'hand_left',
-                           'hand_right': 'hand_right_fisheye' if 'hand' in config.hand_type else 'hand_right'}
-    config.proprio_names = ['arm', 'hand' if 'hand' in config.hand_type else 'gripper', 'head', 'waist']
+                           'hand_left': 'hand_left' if 'gripper' in config.hand_type else 'hand_left_fisheye',
+                           'hand_right': 'hand_right' if 'gripper' in config.hand_type else 'hand_right_fisheye'}
+    config.proprio_names = ['arm', config.hand_type, 'head', 'waist']
     config.gripper_freq = 40
-    config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0] # teleoperation default pose
+    config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0] # default pose (teleoperation default pose)
     return config
 
 def get_mock_config():
@@ -39,7 +39,7 @@ def get_mock_config():
     config.camera.names = {'head': 'observation.images.top_head',
                            'hand_left': 'observation.images.hand_left',
                            'hand_right': 'observation.images.hand_right'}
-    config.root = '/path/to/task_39_only1'
+    config.root = '/home/robot/Music/task_39_only1'
     config.repo_id = 'task_39_only1'
     return config
 

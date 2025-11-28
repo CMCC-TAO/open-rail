@@ -3,7 +3,7 @@ import argparse
 import threading
 from datetime import datetime
 from conf.models_conf import ModelType
-from conf.server_conf import get_server_config
+from conf.server_conf import get_vla_server_config
 from server.core.vla_server import VLAServer
 from server.core.zmq_server import ZMQServer
 from rich.live import Live
@@ -37,6 +37,9 @@ def get_model(config):
     elif config.type == ModelType.SMOLVLA:
         from server.models.smolvla import ModelVLA as SMOLVLA
         return SMOLVLA()
+    elif config.type == ModelType.GO1:
+        from server.models.go1 import ModelVLA as GO1
+        return GO1(config.go1)
     else:
         raise ValueError("Invalid model type")
 
@@ -49,7 +52,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['act', 'gr00t_n1', 'gr00t_n1_5', 'rdt', 'smolvla'],
+    parser.add_argument('--model_type', type=str, choices=['act', 'gr00t_n1', 'gr00t_n1_5', 'rdt', 'smolvla','go1'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
@@ -78,6 +81,8 @@ def override_config_with_args(config, args):
             config.models.act.model_path = args.model_path
         elif config.models.type == ModelType.RDT:
             config.models.rdt.model_path = args.model_path
+        elif config.models.type == ModelType.GO1:
+            config.models.go1.model_path = args.model_path
     
     return config
 
@@ -89,7 +94,7 @@ if __name__ == "__main__":
     """
     args = parse_args()
     # Get default configuration
-    config = get_server_config()
+    config = get_vla_server_config()
     config = override_config_with_args(config, args)
     
     # Initialize server components

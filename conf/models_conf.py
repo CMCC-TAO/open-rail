@@ -1,5 +1,6 @@
 from enum import Enum
 from ml_collections import ConfigDict
+import os
 
 class ModelType(str, Enum):
     ACT = 'act'
@@ -7,6 +8,7 @@ class ModelType(str, Enum):
     GR00T_N1_5 = 'gr00t_n1_5'
     RDT = 'rdt'
     SMOLVLA = 'smolvla'
+    GO1 = 'go1'
 
 def get_gr00t_config():
     """Generate configuration for GR00T model.
@@ -44,6 +46,14 @@ def get_rdt_config():
     config.lang_embd_path = '/path/to/lang_embds/place_bottle.pt'
     return config
 
+def get_go1_config():
+    cfg = ConfigDict()
+    cfg.model_path = "/path/to/model"      # 权重目录
+
+    cfg.exp_path   = "/path/to/exppath" #  能 import evaluate.deploy
+    cfg.data_stats_path = cfg.data_stats_path = os.path.join(cfg.model_path, "dataset_stats.json")                  
+    return cfg
+
 def get_models_config():
     """Generate configuration for all available VLA models.
     
@@ -63,4 +73,5 @@ def get_models_config():
     config.gr00t = get_gr00t_config()
     config.act = get_act_config()
     config.rdt = get_rdt_config()
+    config.go1 = get_go1_config()
     return config
