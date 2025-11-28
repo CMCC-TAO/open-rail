@@ -14,6 +14,6 @@ def get_controller_config():
     """
     config = ConfigDict()
     config.wait_step = 4  # Time delay for robot controller in milliseconds
-    config.period = 5  # Control period for robot control in milliseconds
+    config.period = 3.75   # Control period for robot control in milliseconds
     config.strategy = 'step'  # Control strategy, choices = ('step', 'realtime', 'fusion')
     return config

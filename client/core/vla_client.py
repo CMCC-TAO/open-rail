@@ -4,10 +4,11 @@ import threading
 import logging
 import numpy as np
 from ml_collections import ConfigDict
+from collections import deque
 
 from concurrent.futures import ThreadPoolExecutor
 
-from client.utils import misc
+from client.utils import misc, vis_action_state
 from client.utils.util import run_time_decorator
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
@@ -15,6 +16,7 @@ from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.save_lerobot import LeRobotDatasetWriter
 from visual.websocket_server import VLAWebSocketServer
+
 
 class VLAClient():
     """VLA (Vision-Language-Action) Client for real-time robot control.
@@ -26,7 +28,7 @@ class VLAClient():
     - Real-time robot control
     - Data recording for dataset creation
     """
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, zmq_client: ZMQClient, robot: None):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, vla_zmq_client: ZMQClient, robot: None):
         """Initialize the VLA Client.
         
         Args:
@@ -34,6 +36,7 @@ class VLAClient():
             rdm (RealtimeDataManager): Real-time data manager for handling observation and action data
             traj_generator (TrajectoryGenerator): Trajectory generator for action smoothing and fitting
             zmq_client (ZMQClient): ZMQ client for communication with VLA inference server
+            vis_action_cams_zmq_client (ZMQClient): ZMQ client for communication with camera-action visualization server
             robot: Robot interface for observation collection and action execution
         """
         self.logger = logging.getLogger(__name__)
@@ -41,10 +44,11 @@ class VLAClient():
         self.config.observer.period = 1.0 / self.config.observer.fps
         self.rdm = rdm
         self.traj_generator = traj_generator
-        self.zmq_client = zmq_client
+        self.vla_zmq = vla_zmq_client
         self.robot = robot
         self.running = False
         self.is_running_action = True
+        self.action_count = 0
         self.language = self.config.language[0]
         self.allow_language_switch = True  # Flag to control automatic language switching
         
@@ -62,6 +66,11 @@ class VLAClient():
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
+
+        # visualization buffer and thread lock
+        self.act_exe_fitted_buffer = deque(maxlen=self.config.vis_action_length)
+        self.act_exe_raw_buffer = deque(maxlen=self.config.vis_action_length)
+        self.vis_action_lock = threading.Lock()
         
         # Inference variables
         self.infer_count = 0
@@ -83,6 +92,17 @@ class VLAClient():
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
         self.vis_prev_origin_idx = None
 
+        # The zmq client to communicate with action-state visualization server
+        if self.config.show_action_state:
+            self.vis_action_state_zmq = vis_action_state.ZmqPlotClient()
+            self.vis_chunk_idx = 0
+            self.vis_global_step = 0
+
+        # The zmq client to communicate with action-camera visualization server
+        if self.config.show_action_cams_qt:
+            self.vis_action_cams_zmq = ZMQClient(config.vis_zmq)
+            self.vis_action_cams_thread = threading.Thread(target=self.send_action_cams_to_vis_server, daemon=True)
+        
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.info_current_action = [0.0] * 16
         self.info_current_state = [0.0] * 16
@@ -125,13 +145,13 @@ class VLAClient():
         # saved_language = self.language
         self.allow_language_switch = False
         
-        # Clear action data to ensure fresh action retrieval
-        self.rdm.clear_action_data()
         # Wait for observation changes after reset, then retrieve fresh obs for inference
         observations = self.robot.retrieve_observation()
         if observations is not None:
+            self.rdm.clear_action_data()
             data = self._process_data(observations)
             self.rdm.add_observe_data(data)
+            # Clear action data to ensure fresh action retrieval
         # time.sleep(self.config.sleep_time_after_reset)
         
         # Get observation data (thread-safe function, no lock needed)
@@ -142,8 +162,8 @@ class VLAClient():
             self.rdm.add_infer_count()
             
             # Send data for inference and wait for results
-            self.zmq_client.sendMessage(data)
-            result = self.zmq_client.recvMessage()
+            self.vla_zmq.sendMessage(data)
+            result = self.vla_zmq.recvMessage()
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
@@ -162,7 +182,7 @@ class VLAClient():
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, chunk_trans_mode=self.config.chunk_trans_mode)
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -194,8 +214,8 @@ class VLAClient():
             self.rdm.add_infer_count()
             
             # Send data for inference and wait for results
-            self.zmq_client.sendMessage(data)
-            result = self.zmq_client.recvMessage()
+            self.vla_zmq.sendMessage(data)
+            result = self.vla_zmq.recvMessage()
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
@@ -224,7 +244,7 @@ class VLAClient():
                     if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
                         self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
                     prob_progress = None
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, search_action=self.config.search_action, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset, chunk_trans_mode=self.config.chunk_trans_mode)
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, chunk_trans_mode=self.config.chunk_trans_mode, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -243,11 +263,22 @@ class VLAClient():
         - Update monitoring information
         """
         if not self.is_running_action:
+            self.action_count = 0
             return
+        
+        # self.action_count += 1
+        # if self.action_count < 300:
+        #     return
 
-        action = self.rdm.get_action_fitted()
-        if action is not None:
-            self.info_current_action = action.tolist() if hasattr(action, 'tolist') else list(action)
+        action_fitted, action_raw = self.rdm.get_action_fitted()
+
+        if action_fitted is not None:
+            with self.vis_action_lock:
+                if self.config.show_action_cams_qt:
+                    self.act_exe_fitted_buffer.append(action_fitted)
+                    self.act_exe_raw_buffer.append(action_raw)
+
+            self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
             # Only use alignment processing if prob_progress array length > 1
             prob_progress = self.rdm.get_prob_progress()
@@ -255,12 +286,12 @@ class VLAClient():
                 self.info_act['current_prob_progress'] = prob_progress
 
             if self.config.record.switch and self.is_running_action and self.running:
-                self.dataset_write.async_write_action(action, time.perf_counter())
+                self.dataset_write.async_write_action(action_fitted, time.perf_counter())
             
-            self.info_act['action'] = action.shape
-            self.robot.control_robot(action)
+            self.info_act['action'] = action_fitted.shape
+            self.robot.control_robot(action_fitted)
             
-            self.vis_action_state(action)
+            self.vis_action_state(action_fitted)
 
     @run_time_decorator
     def _traj_fitting(self, num_samples):
@@ -310,7 +341,6 @@ class VLAClient():
         """
         ext = '.png' if 'depth.' in key else '.jpg'
         img_processed = self._preprocess_func(value) if self._preprocess_func else value
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
         img_encoded = cv2.imencode(ext, img_processed)[1]
         return key, img_processed, img_encoded
 
@@ -331,10 +361,11 @@ class VLAClient():
         encoded_imgs, processed_imgs = {}, {}
         for key, processed, encoded in results:
             encoded_imgs[key] = encoded
-            self.info_obs[key] = processed.shape
             processed_imgs[key] = processed
+
         # Send images to visualization interface
         self.websocket_server.update_image_data(processed_imgs)
+
         return encoded_imgs
 
     @run_time_decorator
@@ -352,7 +383,7 @@ class VLAClient():
         
         if 'obs.state' in frame and frame['obs.state'] is not None:
             self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
-        
+
         self.info_obs['state'] = frame['obs.state'].shape
         data = {
             'type': 'vla_obs',
@@ -393,9 +424,15 @@ class VLAClient():
         if action_type == 'vla_action':
 
             pred_action = action['pred_action']
+            # pred_action = pred_action[:,0:16]
+            # # temp = pred_action.copy()
+            # # pred_action[:, 0:7] = temp[:, 7:14]
+            # # pred_action[:, 7:14] = temp[:, 0:7]
+            # # pred_action[:, 14] = temp[:, 15]
+            # # pred_action[:, 15] = temp[:, 14]
+            # # print(pred_action.shape)
             ref_timestamp = action['ref_timestamp']
             loc_timestamp = action['loc_timestamp']
-            
             # Generate action and timestamp chunks
             for index, action in enumerate(pred_action):
                 action_chunk.append(action)
@@ -423,6 +460,9 @@ class VLAClient():
         self.inference_thread.start()
         self.control_thread_timer.start()
         self.websocket_server.run()
+
+        if self.config.show_action_cams_qt:
+            self.vis_action_cams_thread.start()
         
         self.logger.info('Inference client started.')
     
@@ -437,6 +477,10 @@ class VLAClient():
             self.running = False
         self.observe_thread.join(timeout=1.0)
         self.control_thread_timer.join(timeout=1.0)
+
+        if self.config.show_action_cams_qt:
+            self.vis_action_cams_thread.join(timeout=1.0)
+
         self.logger.info('Inference client stopped.')
 
     def close(self):
@@ -454,6 +498,9 @@ class VLAClient():
         
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
+
+        if self.config.show_action_cams_qt:
+            self.vis_action_cams_thread.join(timeout=1.0)
         
         # Stop and join control thread timer
         self.control_thread_timer.stop()
@@ -463,13 +510,17 @@ class VLAClient():
             time.sleep(1)
             self.dataset_write.close()
         
-        self.zmq_client.close()
+        self.vla_zmq.close()
         self.websocket_server.stop_server()
-        
+
         self.logger.info('Inference client closed.')
 
     def _inference_thread_fun(self):
         while self.running:
+            if not self.is_running_action:
+                time.sleep(0.001)
+                continue
+
             if self.rdm.infer_count == 0:
                 self.inference_first()
                 # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
@@ -599,6 +650,34 @@ class VLAClient():
         self.websocket_server.update_chart_data(list_data)
         self.vis_global_step += 1
         self.vis_idx_count += 1
-        
+
+    def send_action_cams_to_vis_server(self):
+        """
+        This method sends actions and camera images to
+        the visualization system via ZMQ.
+        """
+        while self.running:
+
+            if self.config.show_action_cams_qt:
+
+                with self.vis_action_lock:
+                    current_actions_fitted = self.act_exe_fitted_buffer.copy()
+                    current_actions_raw = self.act_exe_raw_buffer.copy()
+                    # self.act_exe_fitted_buffer.clear()
+                    # self.act_exe_raw_buffer.clear()
+
+                data = self.rdm.read_observe_data()
+    
+                if data is not None:
+                    data['actions_fitted'] = current_actions_fitted
+                    data['actions_raw'] = current_actions_raw
+                    #============= sending to action-camera visualization server ================
+                    try:
+                        self.vis_action_cams_zmq.sendMessage(data)
+                    except zmq.Again:
+                        print("Send failed, action-camera visualization server probably offline")
+
+            time.sleep(0.02)
+
 if __name__ == "__main__":
     pass

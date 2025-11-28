@@ -4,8 +4,10 @@ import math
 import threading
 import numpy as np
 import logging
+import matplotlib.pyplot as plt
 from collections import deque
 from ml_collections import ConfigDict
+from concurrent.futures import ThreadPoolExecutor
 from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index
 
 class RealtimeDataManager():
@@ -40,6 +42,7 @@ class RealtimeDataManager():
         self.timestamps_fitted = None
         self.action_chunk_index = None
         self.prob_progress = None
+        self.old_buffer = None
 
         # For visualization purposes
         self.action_chunk_last = None
@@ -272,20 +275,77 @@ class RealtimeDataManager():
                 end_index = min(self.action_chunk_index + index_offset + num_samples, total_len)
                 return self.timestamps_fitted[start_index:end_index], self.action_chunk_fitted[:, start_index:end_index]
     
+    @staticmethod
+    def _smooth_velocity_transition(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
+        # max_vel=2.0, max_acc=4.0, kp=20.0, kd=6.0
+        # max_vel=2.0, max_acc=4.0, kp=30.0, kd=10.0
+        """
+        This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
+        Note: Under the same parameter settings, the robot's operation speed using this strategy is slower than 'search_action' and 'poly'. 
+        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/manage/eyyw2n63gaugbk36) for acceleration, or contact the developers for assistance.
+
+        Args:
+            joint_seq: np.ndarray, target position sequence
+            init_pos: initial joint position
+            init_vel: initial joint velocity
+            init_acc: initial joint acceleration
+            max_vel: maximum allowed velocity
+            max_acc: maximum allowed acceleration
+            dt: simulation timestep
+            kp: proportional gain (position error term)
+            kd: damping gain (velocity feedback term)
+
+        Returns:
+            pos_seq, vel_seq, acc_seq: simulated smooth position, velocity, and acceleration sequences
+        """
+        pos = init_pos
+        vel = init_vel
+        acc = init_acc
+
+        pos_seq = np.zeros_like(joint_seq)
+        vel_seq = np.zeros_like(joint_seq)
+        acc_seq = np.zeros_like(joint_seq)
+
+        # dt = dt * 2
+
+        for i in range(joint_seq.shape[1]):
+            target = joint_seq[:, i]
+
+            # Compute position error
+            error = target - pos
+            
+            # PD controller to compute desired acceleration
+            acc = kp * error - kd * vel
+            
+            # Clip acceleration
+            acc = np.clip(acc, -max_acc, max_acc)
+            
+            # Update velocity
+            vel += acc * dt
+            vel = np.clip(vel, -max_vel, max_vel)
+            
+            # Update position
+            pos += vel * dt
+
+            pos_seq[:, i] = pos
+            vel_seq[:, i] = vel
+            acc_seq[:, i] = acc
+
+        return pos_seq, vel_seq, acc_seq
+    
     def update_action_chunk_fitted(self,
                                 action_chunk_fitted,
                                 vel_chunk_fitted,
                                 acc_chunk_fitted,
                                 timestamps_fitted,
                                 prob_progress=None,
-                                search_action = False,
+                                chunk_trans_mode = None,
                                 search_length = 20,
                                 smooth_action = False,
                                 smooth_length = 20,
                                 smooth_base = 0.1,
                                 smooth_ratio = 0.5,
-                                gripper_offset = 40,
-                                chunk_trans_mode=None):
+                                gripper_offset = 40):
         """Update action chunk with the new fitted action chunk.
 
         Args:
@@ -310,6 +370,7 @@ class RealtimeDataManager():
                 self.acc_chunk_fitted = acc_chunk_fitted
                 self.timestamps_fitted = timestamps_fitted
                 self.prob_progress = prob_progress
+
         else: # update action chunk fitted secondly;
             # Calculate time offset from observation to trajectory fitting completion
             target_chunk_index = 0
@@ -349,7 +410,8 @@ class RealtimeDataManager():
                 acc_chunk_fitted[:14, target_chunk_index:] = sim_acc 
             else:
                 pass
-
+                
+            # weighted smoothing
             if smooth_action:
                 if currt_action is None:
                     with self.polynomial_thread_lock:
@@ -358,7 +420,7 @@ class RealtimeDataManager():
                 for index in range(smooth_length):
                     ratio = (1 - smooth_base) * math.pow(index / smooth_length, smooth_ratio)
                     action_chunk_fitted[:14, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_fitted[:14, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action[:14]
-            
+                    
             with self.polynomial_thread_lock:
                 self.action_chunk_index = target_chunk_index
                 self.action_chunk_fitted = action_chunk_fitted
@@ -367,7 +429,11 @@ class RealtimeDataManager():
                 self.timestamps_fitted = timestamps_fitted
                 self.prob_progress = prob_progress
                 # Apply gripper offset to compensate for gripper response delay
-                self.action_chunk_fitted[14:, :-gripper_offset] = action_chunk_fitted[14:, gripper_offset:]
+                if gripper_offset > 0:
+                    self.action_chunk_fitted[14:, :-gripper_offset] = action_chunk_fitted[14:, gripper_offset:]
+                else:
+                    chunk_length = self.action_chunk_fitted.shape[-1]
+                    self.action_chunk_fitted[14:, -gripper_offset:] = action_chunk_fitted[14:, :chunk_length + gripper_offset]
 
     def _poly_chunk_transition(self, new_action_chunk, new_vel_chunk, new_timestamps, target_index, current_index):
         """Smooth transition across action chunks, ensuring continuity of position, velocity, and acceleration.
@@ -472,62 +538,6 @@ class RealtimeDataManager():
         
         return smoothed_chunk
 
-    @staticmethod
-    def _smooth_velocity_transition(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
-        # max_vel=2.0, max_acc=4.0, kp=20.0, kd=6.0
-        # max_vel=2.0, max_acc=4.0, kp=30.0, kd=10.0
-        """
-        Simulate joint motion under velocity and acceleration constraints.
-
-        Args:
-            joint_seq: np.ndarray, target position sequence
-            init_pos: initial joint position
-            init_vel: initial joint velocity
-            init_acc: initial joint acceleration
-            max_vel: maximum allowed velocity
-            max_acc: maximum allowed acceleration
-            dt: simulation timestep
-            kp: proportional gain (position error term)
-            kd: damping gain (velocity feedback term)
-
-        Returns:
-            pos_seq, vel_seq, acc_seq: simulated smooth position, velocity, and acceleration sequences
-        """
-        pos = init_pos
-        vel = init_vel
-        acc = init_acc
-
-        pos_seq = np.zeros_like(joint_seq)
-        vel_seq = np.zeros_like(joint_seq)
-        acc_seq = np.zeros_like(joint_seq)
-
-        # dt = dt * 2
-
-        for i in range(joint_seq.shape[1]):
-            target = joint_seq[:, i]
-
-            # Compute position error
-            error = target - pos
-            
-            # PD controller to compute desired acceleration
-            acc = kp * error - kd * vel
-            
-            # Clip acceleration
-            acc = np.clip(acc, -max_acc, max_acc)
-            
-            # Update velocity
-            vel += acc * dt
-            vel = np.clip(vel, -max_vel, max_vel)
-            
-            # Update position
-            pos += vel * dt
-
-            pos_seq[:, i] = pos
-            vel_seq[:, i] = vel
-            acc_seq[:, i] = acc
-
-        return pos_seq, vel_seq, acc_seq
-
     def _search_smooth_action(self, currt_action, currt_vel, candidate_action_chunk, search_length):
         """Search for the best action index to ensure smooth transition.
         
@@ -602,16 +612,22 @@ class RealtimeDataManager():
         return candidate_action_chunk
     
     def get_action_fitted(self):
-        """Get the current action indexed by action_chunk_index.
+        """Get the current action (fitted and raw) indexed by action_chunk_index.
 
         Returns:
             np.array: The current action.
         """
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:
-                return None
+                return None, None
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
-            return self.action_chunk_fitted[:, self.action_chunk_index]
+            # print(self.action_chunk_fitted.shape, len(self.action_chunks), self.action_chunks[0].shape, "!"*50)
+            action_raw_index = int(self.action_chunk_index/(self.action_chunk_fitted.shape[1]/len(self.action_chunks)))
+            action_raw_index = min(action_raw_index, len(self.action_chunks)-1)
+            # print(action_raw_index)
+            action_raw = self.action_chunks[action_raw_index]
+            action_fitted = self.action_chunk_fitted[:, self.action_chunk_index]
+            return action_fitted, action_raw
     
     def get_prob_progress(self):
         """Get the current prob_progress value indexed by action_chunk_index.
@@ -649,6 +665,16 @@ class RealtimeDataManager():
         with self.observe_thread_lock:
             if len(self.observe_buffer) >= num_samples:
                 data = self.observe_buffer.pop() if num_samples == 1 else [self.observe_buffer.pop() for _ in range(num_samples)]
+                return data
+            else:
+                return None
+    
+    def read_observe_data(self):
+        """Read the latest observe data from the buffer.
+        """
+        with self.observe_thread_lock:
+            if len(self.observe_buffer) > 0:
+                data = self.observe_buffer[-1]
                 return data
             else:
                 return None
