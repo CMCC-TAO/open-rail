@@ -93,10 +93,10 @@ class VLAClient():
         self.vis_prev_origin_idx = None
 
         # The zmq client to communicate with action-state visualization server
-        if self.config.show_action_state:
-            self.vis_action_state_zmq = vis_action_state.ZmqPlotClient()
-            self.vis_chunk_idx = 0
-            self.vis_global_step = 0
+        # if self.config.show_action_state:
+        #    self.vis_action_state_zmq = vis_action_state.ZmqPlotClient()
+        #    self.vis_chunk_idx = 0
+        #    self.vis_global_step = 0
 
         # The zmq client to communicate with action-camera visualization server
         if self.config.show_action_cams_qt:
