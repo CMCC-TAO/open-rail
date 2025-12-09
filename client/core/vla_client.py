@@ -8,7 +8,7 @@ from collections import deque
 
 from concurrent.futures import ThreadPoolExecutor
 
-from client.utils import misc, vis_action_state
+from client.utils import misc, vis_action_state_matplotlib
 from client.utils.util import run_time_decorator
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
