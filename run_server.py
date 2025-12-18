@@ -36,7 +36,7 @@ def get_model(config):
         return RDT(config.rdt)
     elif config.type == ModelType.SMOLVLA:
         from server.models.smolvla import ModelVLA as SMOLVLA
-        return SMOLVLA()
+        return SMOLVLA(config.smolvla)
     elif config.type == ModelType.GO1:
         from server.models.go1 import ModelVLA as GO1
         return GO1(config.go1)
@@ -83,6 +83,8 @@ def override_config_with_args(config, args):
             config.models.rdt.model_path = args.model_path
         elif config.models.type == ModelType.GO1:
             config.models.go1.model_path = args.model_path
+        elif config.models.type == ModelType.SMOLVLA:
+            config.models.smolvla.model_path = args.model_path
     
     return config
 

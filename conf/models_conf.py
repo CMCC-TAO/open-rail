@@ -46,6 +46,18 @@ def get_rdt_config():
     config.lang_embd_path = '/path/to/lang_embds/place_bottle.pt'
     return config
 
+def get_smolvla_config():
+    """Generate configuration for RDT model.
+    
+    Returns:
+        ConfigDict: Configuration dictionary containing paths for RDT model,
+                   config file, vision encoder, and language embeddings.
+    """
+    config = ConfigDict()
+    config.model_path = '/path/to/model'
+    config.root_path = '/home/rm/wxz/EmbodiedAI/vla_infer_remote/vla_infer/model/checkpoint_5w5/055000/data'
+    return config
+
 def get_go1_config():
     cfg = ConfigDict()
     cfg.model_path = "/path/to/model"      # 权重目录
@@ -74,4 +86,5 @@ def get_models_config():
     config.act = get_act_config()
     config.rdt = get_rdt_config()
     config.go1 = get_go1_config()
+    config.smolvla = get_smolvla_config()
     return config
