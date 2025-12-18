@@ -53,7 +53,9 @@ The client is responsible for:
 
 Currently supported robots:
 
-- **A2D Robot**: A2D humanoid robot - [Documentation](client/robots/a2d/README.md)
+- **A2D-Gripper Robot**: A2D humanoid robot - [Documentation](client/robots/a2d/README.md)
+- **A2D-Hand Robot**: A2D humanoid robot
+- **Ti5-DualArm Robot**: A2D humanoid robot
 - **Mock Robot**: Simulation robot for testing
 
 #### Running the Client
@@ -80,6 +82,7 @@ The server handles VLA model inference and provides results to clients.
 - **RDT**
 - **SmolVLA**
 - **GO1**
+- **DualArmVLA**
 
 #### Running the Server
 
