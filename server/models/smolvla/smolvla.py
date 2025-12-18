@@ -2,39 +2,44 @@ import os
 import time
 import numpy as np
 import torch
-from lerobot.common.utils.utils import (
-    format_big_number,
-    get_safe_torch_device,
-    has_method,
-    init_logging,
-)
-from lerobot.common.utils.wandb_utils import WandBLogger
-from lerobot.configs import parser
-# from lerobot.configs.train import TrainPipelineConfig
-from lerobot.configs.inference import TrainPipelineConfig
+
 import logging
 import time
 from contextlib import nullcontext
 from pprint import pformat
 from typing import Any
-
-import torch
-from termcolor import colored
-from torch.amp import GradScaler
-from torch.optim import Optimizer
-
-from lerobot.common.datasets.factory import make_dataset
-from lerobot.common.datasets.sampler import EpisodeAwareSampler
-from lerobot.common.datasets.utils import cycle
-from lerobot.common.envs.factory import make_env
-from lerobot.common.optim.factory import make_optimizer_and_scheduler
-from lerobot.common.policies.factory import make_policy
-from lerobot.common.policies.pretrained import PreTrainedPolicy
-from lerobot.common.policies.utils import get_device_from_parameters
-from lerobot.common.utils.logging_utils import AverageMeter, MetricsTracker
-from lerobot.common.utils.random_utils import set_seed
 from lerobot.configs.default import DatasetConfig, EvalConfig, WandBConfig
-from lerobot.configs.default import DatasetConfig
+from lerobot.configs import parser
+from lerobot.configs.train import TrainPipelineConfig
+from lerobot.datasets.factory import make_dataset
+from lerobot.datasets.sampler import EpisodeAwareSampler
+from lerobot.datasets.utils import cycle
+from lerobot.envs.factory import make_env
+from lerobot.optim.factory import make_optimizer_and_scheduler
+from lerobot.policies.factory import make_policy
+from lerobot.policies.pretrained import PreTrainedPolicy
+from lerobot.policies.utils import get_device_from_parameters
+from lerobot.scripts.eval import eval_policy
+from lerobot.utils.logging_utils import AverageMeter, MetricsTracker
+from lerobot.utils.random_utils import set_seed
+from lerobot.utils.train_utils import (
+    get_step_checkpoint_dir,
+    get_step_identifier,
+    load_training_state,
+    save_checkpoint,
+    update_last_checkpoint,
+)
+from lerobot.utils.utils import (
+    format_big_number,
+    get_safe_torch_device,
+    has_method,
+    init_logging,
+)
+from lerobot.datasets.lerobot_dataset import (
+    LeRobotDataset,
+    LeRobotDatasetMetadata,
+    MultiLeRobotDataset,
+)
 import cv2
 from PIL import Image
 
@@ -42,7 +47,7 @@ import pandas as pd
 
 OBSCAMERANAME= ["observation.images.top_head","observation.images.hand_left","observation.images.hand_right"]
 
-def preprocess_image(img_origin,change_BGR_to_RGB=True, channel_first=True, dtype=np.float32):
+def preprocess_image(img_origin,change_BGR_to_RGB=False, channel_first=True, dtype=np.float32):
     # BGR to RGB
     if change_BGR_to_RGB:
         img_array = img_origin[..., ::-1]  
@@ -67,36 +72,42 @@ def preprocess_image(img_origin,change_BGR_to_RGB=True, channel_first=True, dtyp
     return tensor_img
 
 class ModelVLA:
-    def __init__(self):
+    def __init__(self,config):
         print('vla model start init')
-        model_path = '/home/robot/Downloads/lerobot/070000/pretrained_model'
+        path = config["model_path"]
+        dataset_root = config["root_path"]
+        if path is None:
+            model_path = '/home/rm/wxz/EmbodiedAI/vla_infer_remote/vla_infer/model/checkpoint_5w5/055000/pretrained_model'
+        else:
+            model_path = path
         cfg = TrainPipelineConfig(dataset = DatasetConfig(...))
-        from lerobot.common.utils.random_utils import set_seed
         ##设置随机数种子
         set_seed(cfg.seed)
         print('set seed',cfg.seed)
         #定义配置文件
         cfg.validate(model_path)
         print('set model path :' , model_path)
-        cfg.dataset.root="/home/robot/Downloads/lerobot/task_158284_depth_test/task_158284_test"
-        cfg.dataset.repo_id = "catch_box_440"
+
+        cfg.dataset.repo_id = "data"
         self.device = get_safe_torch_device(cfg.policy.device, log=True)
         torch.backends.cudnn.benchmark = True
         torch.backends.cuda.matmul.allow_tf32 = True
         logging.info("Creating dataset")
         #加载数据集
-        dataset = make_dataset(cfg)
-
+        # dataset = make_dataset(cfg)
+        dataset_meta = LeRobotDatasetMetadata(
+            cfg.dataset.repo_id, dataset_root, '1.2', force_cache_sync=False        )
+        logging.info("Creating! dataset")
         #加载模型
         self.policy = make_policy(
             cfg=cfg.policy,
-            ds_meta=dataset.meta
+            ds_meta=dataset_meta
         )
         print('policy load finished!!')
         print('policy load finished!!')
-        file_path = '/home/robot/Downloads/lerobot/task_158284_depth_test/task_158284_test/data/chunk-000/episode_000000.parquet'
-        df = pd.read_parquet(file_path)
-        self.init_state = df.iloc[0, 0]
+        # file_path = '/home/robot/Downloads/lerobot/task_158284_depth_test/task_158284_test/data/chunk-000/episode_000000.parquet'
+        # df = pd.read_parquet(file_path)
+        # self.init_state = df.iloc[0, 0]
         # self.policy.eval()
         self.policy.eval()
 
@@ -114,13 +125,14 @@ class ModelVLA:
         return output[None]  # 添加batch维度
 
 
-    def infer(self, data):
-        # data = sequence[0]
+    def infer(self, sequence):
+        data = sequence[0]
         obs = data['obs']
         # print(obs)
         obs['state'] = obs['state'][None]
         print(f"state: {obs['state']}")
-        only_left_state = self.gengerate_state(obs['state'])
+        only_left_state = obs['state']
+        # only_left_state = self.gengerate_state(obs['state'])
         # print('headimage_shape: ',torch.from_numpy(obs['cam.head'][None]).float().shape)
         # 确保 obs 中的数据已全部转为 PyTorch Tensor
         inp_obs = {
@@ -142,19 +154,21 @@ class ModelVLA:
             for k, v in inp_obs.items()
         }
         time1 = time.time()
-        predicted_action = self.policy.select_action(inp_obs)
+        predicted_action = self.policy.predict_action_chunk(inp_obs)
         predicted_action = predicted_action.detach().cpu().numpy().squeeze(0)
-        save_observation(inp_obs,predicted_action, "./output")  
+        print(predicted_action[0])
+        # save_observation(inp_obs,predicted_action, "./output")  s
         # print(f'predicted_action: {predicted_action}')
         # print('In infer, predicted_action 49 is: ', predicted_action[48])
         # print('In infer, predicted_action 50 is: ', predicted_action[49])
         # print(f'predicted_actionshape: {predicted_action.shape}')
         print(time.time() - time1, 'action shape:', predicted_action.shape)
         return {
-            "type": "action",
+            "type": "vla_action",
             "pred_action": predicted_action,
             "ref_timestamp": data["ref_timestamp"],
-            'loc_timestamp': data['loc_timestamp']
+            'loc_timestamp': data['loc_timestamp'],
+            'ext': {}
         }
 
 
@@ -190,7 +204,7 @@ def save_observation(observation,predicted_action, output_dir):
 if __name__ == "__main__":
     # 其它vla模型参照下面的代码，测试通过即可
     # model = ModelVLA('/home/zhangjian/zhangjian/lerobot/070000/pretrained_model')
-    model = ModelVLA('/home/zhangjian/zhangjian/lerobot/2025-07-02/left-hand-only/050000/pretrained_model')
+    model = ModelVLA('/home/rm/wxz/EmbodiedAI/vla_infer_remote/vla_infer/model/checkpoint_5w5/055000/pretrained_model')
     # model = ModelVLA('/home/rm/wxz/EmbodiedAI/lerobot/model/smol_vla/task_138_8w/pretrained_model')
     obs = {
         'cam.head': np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
@@ -201,7 +215,7 @@ if __name__ == "__main__":
     }
     return_key = ['type', 'pred_action', 'ref_timestamp']
     while True:
-        result = model.infer([{'obs': obs, 'ref_timestamp': []}])
+        result = model.infer({'obs': obs, 'ref_timestamp': [],'loc_timestamp': []})
         print ("result[pred_action] shape is: ", result["pred_action"].shape)
         # check result
         for key in return_key:
