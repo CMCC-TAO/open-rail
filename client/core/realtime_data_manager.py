@@ -339,7 +339,7 @@ class RealtimeDataManager():
                                 acc_chunk_fitted,
                                 timestamps_fitted,
                                 prob_progress=None,
-                                chunk_trans_mode = None,
+                                inter_chunk_mode = None,
                                 search_length = 20,
                                 smooth_action = False,
                                 smooth_length = 20,
@@ -384,7 +384,7 @@ class RealtimeDataManager():
             currt_action = None
             currt_vel = None
 
-            if chunk_trans_mode == 'search_action':
+            if inter_chunk_mode == 'action_align':
                 candidate_action_chunk = None
                 candidate_action_chunk = copy.deepcopy(action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
                 with self.polynomial_thread_lock:
@@ -392,12 +392,12 @@ class RealtimeDataManager():
                     currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
                 index_offset = self._search_smooth_action(currt_action, currt_vel, candidate_action_chunk, search_length)
                 target_chunk_index += index_offset
-            elif chunk_trans_mode == 'poly':
+            elif inter_chunk_mode == 'poly':
                 # can NOT use with search_action at the same time
                 action_chunk_fitted = self._poly_chunk_transition(
                     action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
                 )
-            elif chunk_trans_mode == 'smooth_velocity':
+            elif inter_chunk_mode == 'smooth_velocity':
                 with self.polynomial_thread_lock:
                     currt_action = self.action_chunk_fitted[:14, self.action_chunk_index].copy()
                     currt_vel = self.vel_chunk_fitted[:14, self.action_chunk_index].copy()
@@ -476,8 +476,8 @@ class RealtimeDataManager():
             new_acc = np.zeros_like(new_vel)
             
         # use quintic polynomial to smooth transition, ensuring position, velocity, and acceleration continuity
-        # transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
-        transition_length = new_action_chunk.shape[1] // 2
+        transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
+        # transition_length = new_action_chunk.shape[1] // 2
         # transition_length = current_index * 2
         # speed_diff = np.linalg.norm(current_vel - new_vel)
         # transition_length = min(max(50, int(speed_diff * 10)), 300)
@@ -488,13 +488,14 @@ class RealtimeDataManager():
             
         # compute smooth transition trajectory for each joint
         smoothed_chunk = new_action_chunk.copy()
+        end_index = target_index + transition_length - 1
         for joint_idx in range(min(14, new_action_chunk.shape[0])):  # only process first 14 joints
             # boundary conditions: starting point position, velocity, acceleration
             p0, v0, a0 = current_pos[joint_idx], current_vel[joint_idx], current_acc[joint_idx]
             # endpoint position, velocity, acceleration
-            pf = new_action_chunk[joint_idx, target_index + transition_length - 1]
-            vf = new_vel_chunk[joint_idx, target_index + transition_length - 1]
-            af = new_acc[joint_idx] if target_index + transition_length - 1 < len(new_acc) else 0.0
+            pf = new_action_chunk[joint_idx, end_index]
+            vf = new_vel_chunk[joint_idx, end_index]
+            af = new_acc[joint_idx] if end_index < len(new_acc) else 0.0
             
             # normalize transition time to [0,1]
             t_transition = np.linspace(0, 1, transition_length)

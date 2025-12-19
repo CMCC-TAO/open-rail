@@ -41,7 +41,6 @@ class VLAClient():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
-        self.config.observer.period = 1.0 / self.config.observer.fps
         self.rdm = rdm
         self.traj_generator = traj_generator
         self.vla_zmq = vla_zmq_client
@@ -62,6 +61,9 @@ class VLAClient():
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
+        self.config.observer.period = 1.0 / self.config.observer.fps
+        if self.config.intra_chunk_mode == 'raw':
+            self.config.observer.period *= 1000.0
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
         
         self.thread_lock = threading.Lock()
@@ -244,7 +246,7 @@ class VLAClient():
                     if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
                         self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
                     prob_progress = None
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, chunk_trans_mode=self.config.chunk_trans_mode, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
+            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, inter_chunk_mode=self.config.inter_chunk_mode, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -315,14 +317,21 @@ class VLAClient():
         
         start_time = timestamps[0]
         end_time = timestamps[-1]
-        action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.traj_generator.traj_fitting(
-            timestamps=timestamps, 
-            action_chunk=action_chunk, 
-            start_time=start_time, 
-            end_time=end_time, 
-            deg=self.config.fitting_deg, 
-            time_step=self.config.fitting_time_step/1000
-        )
+        
+        if self.config.intra_chunk_mode == 'raw':
+            action_chunk_fitted = action_chunk
+            vel_chunk_fitted = np.zeros_like(action_chunk)
+            acc_chunk_fitted = np.zeros_like(action_chunk)
+            timestamps_fitted = timestamps  # original sparse timestamps
+        else:  # fit mode (default)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.traj_generator.traj_fitting(
+                timestamps=timestamps, 
+                action_chunk=action_chunk, 
+                start_time=start_time, 
+                end_time=end_time, 
+                deg=self.config.fitting_deg, 
+                time_step=self.config.fitting_time_step/1000
+            )
         
         return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted
 
