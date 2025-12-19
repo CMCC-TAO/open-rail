@@ -53,7 +53,8 @@ def parse_args():
     parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
     parser.add_argument('--search_length', type=int, help='Forward search length')
-    parser.add_argument('--chunk_trans_mode', type=str, choices=['search_action', 'poly', 'smooth_velocity'], help='The emthod to bridge action chunks')
+    parser.add_argument('--intra_chunk_mode', type=str, choices=['raw', 'fit'], help='Intra-chunk processing mode: raw=direct execution with frame repetition, poly=polynomial fitting interpolation')
+    parser.add_argument('--inter_chunk_mode', type=str, choices=['action_align', 'poly', 'smooth_velocity'], help='The emthod to bridge action chunks')
     parser.add_argument('--show_action_cams_qt', action='store_true', help='Show action and camera images visualization based on QT')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
@@ -81,8 +82,10 @@ def override_config_with_args(config, args):
         config.sleep_time = args.sleep_time
     if args.gripper_offset is not None:
         config.gripper_offset = args.gripper_offset
-    if args.chunk_trans_mode is not None:
-        config.chunk_trans_mode = args.chunk_trans_mode
+    if args.intra_chunk_mode is not None:
+        config.intra_chunk_mode = args.intra_chunk_mode
+    if args.inter_chunk_mode is not None:
+        config.inter_chunk_mode = args.inter_chunk_mode
     if args.show_action_cams_qt:
         config.show_action_cams_qt = True
     if args.record:
