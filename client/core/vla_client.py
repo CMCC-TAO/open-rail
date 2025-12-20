@@ -1,5 +1,7 @@
 import cv2
+import os
 import time
+from datetime import datetime
 import threading
 import logging
 import numpy as np
@@ -72,6 +74,8 @@ class VLAClientAsync():
         # visualization buffer and thread lock
         self.act_exe_fitted_buffer = deque(maxlen=self.config.vis_action_length)
         self.act_exe_raw_buffer = deque(maxlen=self.config.vis_action_length)
+        self.vel_exe_fitted_buffer = deque(maxlen=self.config.vis_action_length)
+        self.acc_exe_fitted_buffer = deque(maxlen=self.config.vis_action_length)
         self.vis_action_lock = threading.Lock()
         
         # Inference variables
@@ -110,6 +114,20 @@ class VLAClientAsync():
         self.info_current_state = [0.0] * 16
         self.info_obs, self.info_act = {}, {}
         self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
+
+        # Record data (action, velocity, acceleration) thread
+        date_str = datetime.now().strftime("%Y%m%d%H%M%S")
+        out_dir = os.path.join("tmp", date_str)
+        os.makedirs(out_dir, exist_ok=True)
+        self.files = {
+            'action': open(os.path.join(out_dir, 'action.txt'), 'a'),
+            'velocity': open(os.path.join(out_dir, 'velocilty.txt'), 'a'),
+            'acceleration': open(os.path.join(out_dir, 'acceleration.txt'), 'a')
+        }
+        self.data_write_thread = threading.Thread(target=self._writer_thread)
+        self.act_write_buffer = deque(maxlen=1000)
+        self.vel_write_buffer = deque(maxlen=1000)
+        self.acc_write_buffer = deque(maxlen=1000)
 
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
@@ -275,10 +293,20 @@ class VLAClientAsync():
         action_fitted, action_raw, vel_fitted, acc_fitted = self.rdm.get_action_fitted()
 
         if action_fitted is not None:
+
+            self.robot.control_robot(action_fitted)
+
+            # tmp data buffer writing
+            self.act_write_buffer.append(action_fitted)
+            self.vel_write_buffer.append(vel_fitted)
+            self.acc_write_buffer.append(acc_fitted)
+
             with self.vis_action_lock:
                 if self.config.show_action_cams_qt:
                     self.act_exe_fitted_buffer.append(action_fitted)
                     self.act_exe_raw_buffer.append(action_raw)
+                    self.vel_exe_fitted_buffer.append(vel_fitted)
+                    self.acc_exe_fitted_buffer.append(acc_fitted)
 
             self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
@@ -291,7 +319,6 @@ class VLAClientAsync():
                 self.dataset_write.async_write_action(action_fitted, time.perf_counter())
             
             self.info_act['action'] = action_fitted.shape
-            self.robot.control_robot(action_fitted)
             
             self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw)
 
@@ -472,6 +499,8 @@ class VLAClientAsync():
 
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.start()
+
+        self.data_write_thread.start()
         
         self.logger.info('Inference client started.')
     
@@ -489,6 +518,8 @@ class VLAClientAsync():
 
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.join(timeout=1.0)
+
+        self.data_write_thread.join(timeout=1.0)
 
         self.logger.info('Inference client stopped.')
 
@@ -511,6 +542,8 @@ class VLAClientAsync():
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.join(timeout=1.0)
         
+        self.data_write_thread.join(timeout=1.0)
+        
         # Stop and join control thread timer
         self.control_thread_timer.stop()
         self.control_thread_timer.join(timeout=1.0)
@@ -521,6 +554,10 @@ class VLAClientAsync():
         
         self.vla_zmq.close()
         self.websocket_server.stop_server()
+
+        # close file IO writer
+        for f in self.files.values():
+            f.close()
 
         self.logger.info('Inference client closed.')
 
@@ -555,7 +592,7 @@ class VLAClientAsync():
                 'tab': 'position',
                 'type': 'action',
                 'x': self.vis_global_step,
-                'joints_y': action.tolist()
+                'joints_y': action_fitted.tolist()
             }, {
                 'tab': 'position',
                 'type': 'state',
@@ -685,6 +722,30 @@ class VLAClientAsync():
                         print("Send failed, action-camera visualization server probably offline")
 
             time.sleep(0.02)
+    def _writer_thread(self):
+        while self.running:
+            # print("_writer_thread")
+            if not self.act_write_buffer:
+                time.sleep(0.001)
+                continue
+            else:
+                af = self.act_write_buffer.popleft()
+                vf = self.vel_write_buffer.popleft()
+                ac = self.acc_write_buffer.popleft()
+
+            # Ensure they are numpy arrays
+            af = np.asarray(af)
+            vf = np.asarray(vf)
+            ac = np.asarray(ac)
+
+            # Flatten into a single line for writing to each file
+            line_af = ','.join(f'{x:.6f}' for x in af) + '\n'
+            line_vf = ','.join(f'{x:.6f}' for x in vf) + '\n'
+            line_ac = ','.join(f'{x:.6f}' for x in ac) + '\n'
+
+            self.files['action'].write(line_af)
+            self.files['velocity'].write(line_vf)
+            self.files['acceleration'].write(line_ac)
 
 if __name__ == "__main__":
     pass
