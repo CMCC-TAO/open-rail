@@ -11,7 +11,8 @@ from client.core import zmq_client
 from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
 from conf.logging_conf import LOGGING_CONFIG
-from client.core.vla_client import VLAClient
+from client.core.vla_client import VLAClientAsync
+from client.core.vla_client_sync import VLAClientSync
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
@@ -53,8 +54,9 @@ def parse_args():
     parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
     parser.add_argument('--search_length', type=int, help='Forward search length')
+    parser.add_argument('--sync_running_mode', action='store_true', help='Enable synchronous inference and execution')
     parser.add_argument('--intra_chunk_mode', type=str, choices=['raw', 'fit'], help='Intra-chunk processing mode: raw=direct execution with frame repetition, poly=polynomial fitting interpolation')
-    parser.add_argument('--inter_chunk_mode', type=str, choices=['action_align', 'poly', 'smooth_velocity'], help='The emthod to bridge action chunks')
+    parser.add_argument('--inter_chunk_mode', type=str, choices=['action_align', 'poly', 'smooth_velocity'], help='The method to bridge action chunks')
     parser.add_argument('--show_action_cams_qt', action='store_true', help='Show action and camera images visualization based on QT')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
@@ -88,6 +90,8 @@ def override_config_with_args(config, args):
         config.inter_chunk_mode = args.inter_chunk_mode
     if args.show_action_cams_qt:
         config.show_action_cams_qt = True
+    if args.sync_running_mode:
+        config.sync_running_mode = True
     if args.record:
         config.record.switch = True
     if args.robots_type is not None:
@@ -249,7 +253,11 @@ if __name__ == "__main__":
     robot = get_robot(config)
     rdm = RealtimeDataManager(config.rdm)
     traj_generator = TrajectoryGenerator(config=config.traj)
-    vla_client = VLAClient(config=config, rdm=rdm, traj_generator=traj_generator, vla_zmq_client=vla_zmq_client, robot=robot)
+    if config.sync_running_mode:
+        vla_client = VLAClientSync(config=config, rdm=rdm, traj_generator=traj_generator, vla_zmq_client=vla_zmq_client, robot=robot)
+    else:
+        vla_client = VLAClientAsync(config=config, rdm=rdm, traj_generator=traj_generator, vla_zmq_client=vla_zmq_client, robot=robot)
+
 
     # extra
     if args.extra_dispatch_mode[0] != '0':
