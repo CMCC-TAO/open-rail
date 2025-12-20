@@ -50,12 +50,15 @@ class RealtimeDataManager():
         self.isDraw = False
 
         # Timing markers for inference, trajectory fitting and control
-        self.start_infer_marker = None
-        self.start_traj_marker = None
-        self.start_ctrl_marker = None
+        self.start_infer_marker = 0.0
+        self.start_traj_marker = 0.0
+        self.start_ctrl_marker = 0.0
         self.avg_infer_time = 0.0
         self.avg_traj_time = 0.0
         self.infer_count = 0
+
+        # Syncchronous Runing Flag
+        self.sync_running = False
 
     def add_infer_count(self):
         """Add one to infer count for each inference step.
@@ -236,6 +239,18 @@ class RealtimeDataManager():
             else:
                 return self.timestamps_fitted[self.action_chunk_index]
                 
+    def getCurrentActionIndex(self):
+        """Get the current action index.
+        
+        Returns:
+            int: Current index or 0 if action_chunk_index is None.
+        """
+        with self.polynomial_thread_lock:
+            if self.action_chunk_index is None:
+                return 0
+            else:
+                return self.action_chunk_index
+                
     def getFutureTime(self, index_offset=0):
         """Get the future time based on the fitted timestamps with an index offset.
         
@@ -282,7 +297,7 @@ class RealtimeDataManager():
         """
         This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
         Note: Under the same parameter settings, the robot's operation speed using this strategy is slower than 'search_action' and 'poly'. 
-        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/manage/eyyw2n63gaugbk36) for acceleration, or contact the developers for assistance.
+        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
 
         Args:
             joint_seq: np.ndarray, target position sequence
@@ -362,7 +377,7 @@ class RealtimeDataManager():
             gripper_offset (int, optional): Gripper offset to adjust the delay of gripper response. Defaults to 25.
         """
         # update index firstly;
-        if self.action_chunk_index is None:
+        if self.action_chunk_index is None or self.sync_running::
             with self.polynomial_thread_lock:
                 self.action_chunk_index = 0
                 self.action_chunk_fitted = action_chunk_fitted
@@ -388,12 +403,15 @@ class RealtimeDataManager():
                 candidate_action_chunk = None
                 candidate_action_chunk = copy.deepcopy(action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
                 with self.polynomial_thread_lock:
-                    currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
-                    currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
+                    currt_action = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+                    currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
                 index_offset = self._search_smooth_action(currt_action, currt_vel, candidate_action_chunk, search_length)
                 target_chunk_index += index_offset
             elif inter_chunk_mode == 'poly':
                 # can NOT use with search_action at the same time
+                with self.polynomial_thread_lock:
+                    currt_action = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+                    currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
                 action_chunk_fitted = self._poly_chunk_transition(
                     action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
                 )
@@ -405,12 +423,25 @@ class RealtimeDataManager():
                 target_action_segment = action_chunk_fitted[:14, target_chunk_index:].copy()
                 delat_t = timestamps_fitted[1]
                 sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
+                # sim_action, sim_vel, sim_acc = _smooth_velocity_transition_numba(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
                 action_chunk_fitted[:14, target_chunk_index:] = sim_action
-                vel_chunk_fitted[:14, target_chunk_index:] = sim_vel
-                acc_chunk_fitted[:14, target_chunk_index:] = sim_acc 
+                # vel_chunk_fitted[:14, target_chunk_index:] = sim_vel
+                # acc_chunk_fitted[:14, target_chunk_index:] = sim_acc 
             else:
                 pass
-                
+            
+            # # calculate velocity and acceleration in a unified format
+            action_future = action_chunk_fitted[:14, target_chunk_index:].copy()
+            action_future_1 = np.concatenate((currt_action[:14, None], action_future[:14, :-1]), axis=1)
+            vel_future = (action_future - action_future_1) / timestamps_fitted[1]
+            
+            vel_future_1 = np.concatenate((currt_vel[:14, None], vel_future[:14, :-1]), axis=1)
+            acc_future = (vel_future - vel_future_1) / timestamps_fitted[1]
+
+            # # Update velocity and acceleration sequences
+            vel_chunk_fitted[:14, target_chunk_index:] = vel_future
+            acc_chunk_fitted[:14, target_chunk_index:] = acc_future 
+
             # weighted smoothing
             if smooth_action:
                 if currt_action is None:
@@ -628,7 +659,9 @@ class RealtimeDataManager():
             # print(action_raw_index)
             action_raw = self.action_chunks[action_raw_index]
             action_fitted = self.action_chunk_fitted[:, self.action_chunk_index]
-            return action_fitted, action_raw
+            vel_fitted = self.vel_chunk_fitted[:, self.action_chunk_index]
+            acc_fitted = self.acc_chunk_fitted[:, self.action_chunk_index]
+            return action_fitted, action_raw, vel_fitted, acc_fitted
     
     def get_prob_progress(self):
         """Get the current prob_progress value indexed by action_chunk_index.
