@@ -37,12 +37,13 @@ def get_client_config():
     config.vis_zmq = get_vis_zmq_config()
     config.vis_action_length = 1000
     config.record = get_record_data_config()  # Data recording configuration
-    config.show_action_cams_qt = False  # QT-based action-camera visualization. If set as True, then run /client/utils/vis_action_camera.py.py to launch the visualization server
+    config.show_action_cams_qt = False  # QT-based action-camera visualization. If set as True, run /client/utils/vis_action_camera.py.py to launch the visualization server
     config.show_img = False  # Enable/disable image display
     config.traj_strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 64
     config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
     config.fitting_deg = 4  # Polynomial fitting degree
+    config.sync_running_mode = False # Enable synchronous inference-execution mode. Defaults to False (asynchronous).
     config.intra_chunk_mode = 'fit'  # intra-chunk processing mode, choices = ('raw', 'fit')
     config.inter_chunk_mode = 'action_align'  # inter-chunk transition mode, choices = ('action_align', 'poly', 'smooth_velocity')
     config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
