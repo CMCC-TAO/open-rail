@@ -272,7 +272,7 @@ class VLAClientAsync():
         # if self.action_count < 300:
         #     return
 
-        action_fitted, action_raw = self.rdm.get_action_fitted()
+        action_fitted, action_raw, vel_fitted, acc_fitted = self.rdm.get_action_fitted()
 
         if action_fitted is not None:
             with self.vis_action_lock:
@@ -293,7 +293,7 @@ class VLAClientAsync():
             self.info_act['action'] = action_fitted.shape
             self.robot.control_robot(action_fitted)
             
-            self.vis_action_state(action_fitted)
+            self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw)
 
     @run_time_decorator
     def _traj_fitting(self, num_samples):
@@ -541,13 +541,16 @@ class VLAClientAsync():
             # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
             symbol = '=' * 10
 
-    def vis_action_state(self, action):
+    def vis_action_state(self, action_fitted, vel_fitted, acc_fitted, action_raw):
         """
         Visualize action and state data for debugging and monitoring.
         
         Args:
-            action: Predicted action values for robot joints
+            action_fitted: Predicted action values for robot joints
+            vel_fitted: Predicted velocity values (of action_fitted) for robot joints
+            aacc_fittedction: Predicted acceleration values (of action_fitted) for robot joints
         """
+        # # Update action_fitted velocity and acceleration ==================================================================
         list_data = [{
                 'tab': 'position',
                 'type': 'action',
@@ -559,19 +562,13 @@ class VLAClientAsync():
                 'x': self.vis_global_step,
                 'joints_y': self.robot.current_state.tolist()
             }]
-        action_np = np.asarray(action)
+        action_np = np.asarray(action_fitted)
+        action_vel = np.asarray(vel_fitted)
+        action_acc = np.asarray(acc_fitted)
+
+        # # Calculate robot state velocity and acceleration ==================================================================
         state_np = np.asarray(self.robot.current_state)
         dt_ctrl = self.config.controller.period / 1000.0
-
-        if self.vis_prev_action is None:
-            action_vel = np.zeros_like(action_np)
-            action_acc = np.zeros_like(action_np)
-        else:
-            action_vel = (action_np - self.vis_prev_action) / dt_ctrl
-            if self.vis_prev_action_vel is None:
-                action_acc = np.zeros_like(action_np)
-            else:
-                action_acc = (action_vel - self.vis_prev_action_vel) / dt_ctrl
 
         if self.vis_prev_state is None:
             state_vel = np.zeros_like(state_np)
@@ -610,9 +607,10 @@ class VLAClientAsync():
             },
         ])
 
+        # # Calculate action_raw velocity and acceleration ==================================================================
         origin_idx = self.vis_idx_count // int(self.vis_ratio) + 4
         if (self.vis_idx_count % int(self.vis_ratio) == 0 and origin_idx < len(self.vis_origin_chunk_action)):
-            origin_np = np.asarray(self.vis_origin_chunk_action[origin_idx])
+            origin_np = np.asarray(action_raw)
             list_data.append({
                 'tab': 'position',
                 'type': 'origin',

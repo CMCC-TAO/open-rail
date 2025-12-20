@@ -42,7 +42,7 @@ class VLAClientSync():
         self.config = config
         self.config.observer.period = 1.0 / 30  # The teleoperation imaging frequency is 30 fps
         self.rdm = rdm
-        if self.config.sync_running:
+        if self.config.sync_running_mode:
             self.rdm.sync_running = True
             self.action_length = None
         self.traj_generator = traj_generator
