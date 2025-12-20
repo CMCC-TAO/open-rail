@@ -485,7 +485,7 @@ class RealtimeDataManager():
             gripper_offset (int, optional): Gripper offset to adjust the delay of gripper response. Defaults to 25.
         """
         # update index firstly;
-        if self.action_chunk_index is None or self.sync_running::
+        if self.action_chunk_index is None or self.sync_running:
             with self.polynomial_thread_lock:
                 self.action_chunk_index = 0
                 self.action_chunk_fitted = action_chunk_fitted
@@ -759,7 +759,7 @@ class RealtimeDataManager():
         """
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:
-                return None, None
+                return None, None, None, None
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
             # print(self.action_chunk_fitted.shape, len(self.action_chunks), self.action_chunks[0].shape, "!"*50)
             action_raw_index = int(self.action_chunk_index/(self.action_chunk_fitted.shape[1]/len(self.action_chunks)))
