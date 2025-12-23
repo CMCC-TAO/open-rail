@@ -132,6 +132,10 @@ class RobotBody(RobotBase):
             for proprio in self.cfg['proprio_names']:
                 joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
                 currt_joint_states, timestamp = joint_states_nearest_fun(ref_timestamp)
+                if proprio == 'gripper':
+                    vmin, vmax = 35, 120
+                    currt_joint_states = list((np.array(list(currt_joint_states)) - vmin) / (vmax - vmin)) # norm
+                    # currt_joint_states = np.array(list(currt_joint_states)) * (vmax - vmin) + vmin # re-norm
                 joint_states.extend(currt_joint_states)
             result['obs.state'] = np.array(joint_states)
             self.current_state = result['obs.state']

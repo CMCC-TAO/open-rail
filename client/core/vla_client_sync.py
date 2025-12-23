@@ -10,7 +10,7 @@ from collections import deque
 
 from concurrent.futures import ThreadPoolExecutor
 
-from client.utils import misc, vis_action_state_matplotlib
+from client.utils import misc
 from client.utils.util import run_time_decorator
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
@@ -44,7 +44,7 @@ class VLAClientSync():
         self.config = config
         self.config.observer.period = 1.0 / 30  # The teleoperation imaging frequency is 30 fps
         self.rdm = rdm
-        if self.config.sync_running_mode:
+        if self.config.inter_chunk_mode == 'sync':
             self.rdm.sync_running = True
             self.action_length = None
         self.traj_generator = traj_generator
