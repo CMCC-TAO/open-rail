@@ -7,10 +7,11 @@ import logging
 import numpy as np
 from ml_collections import ConfigDict
 from collections import deque
+from scipy.interpolate import CubicSpline, interp1d
 
 from concurrent.futures import ThreadPoolExecutor
 
-from client.utils import misc, vis_action_state_matplotlib
+from client.utils import misc
 from client.utils.util import run_time_decorator
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
@@ -65,7 +66,7 @@ class VLAClientAsync():
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.config.observer.period = 1.0 / self.config.observer.fps
         if self.config.intra_chunk_mode == 'raw':
-            self.config.observer.period *= 1000.0
+            self.config.controller.period = self.config.observer.period * 1000.0
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
         
         self.thread_lock = threading.Lock()
@@ -97,12 +98,6 @@ class VLAClientAsync():
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
         self.vis_prev_origin_idx = None
-
-        # The zmq client to communicate with action-state visualization server
-        # if self.config.show_action_state:
-        #    self.vis_action_state_zmq = vis_action_state.ZmqPlotClient()
-        #    self.vis_chunk_idx = 0
-        #    self.vis_global_step = 0
 
         # The zmq client to communicate with action-camera visualization server
         if self.config.show_action_cams_qt:
@@ -350,6 +345,33 @@ class VLAClientAsync():
             vel_chunk_fitted = np.zeros_like(action_chunk)
             acc_chunk_fitted = np.zeros_like(action_chunk)
             timestamps_fitted = timestamps  # original sparse timestamps
+        elif self.config.intra_chunk_mode == 'raw_ipt':
+            # Use CubicSpline interpolation for sparse raw chunks
+            action_chunk = np.asarray(action_chunk)
+            timestamps = np.asarray(timestamps)
+            
+            # Create dense timestamps for interpolation
+            time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
+            timestamps_fitted = np.arange(start_time, end_time, time_step)
+            
+            # Interpolate each joint dimension using CubicSpline
+            n_joints = action_chunk.shape[0]
+            action_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+            vel_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+            acc_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+            
+            for j in range(n_joints):
+                # the last two joints are grippers, using zero-order hold interpolation (step-like).
+                if j >= n_joints - 2:
+                    interp_func = interp1d(timestamps, action_chunk[j], kind='previous', bounds_error=False, fill_value='extrapolate')
+                    action_chunk_fitted[j] = interp_func(timestamps_fitted)
+                    vel_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
+                    acc_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
+                    continue
+                cs = CubicSpline(timestamps, action_chunk[j])
+                action_chunk_fitted[j] = cs(timestamps_fitted)
+                vel_chunk_fitted[j] = cs(timestamps_fitted, 1)  # 1st derivative
+                acc_chunk_fitted[j] = cs(timestamps_fitted, 2)  # 2nd derivative
         else:  # fit mode (default)
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.traj_generator.traj_fitting(
                 timestamps=timestamps, 
@@ -357,9 +379,8 @@ class VLAClientAsync():
                 start_time=start_time, 
                 end_time=end_time, 
                 deg=self.config.fitting_deg, 
-                time_step=self.config.fitting_time_step/1000
+                time_step=self.config.fitting_time_step / 1000
             )
-        
         return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted
 
     def _process_image(self, key, value):

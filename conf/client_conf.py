@@ -43,9 +43,8 @@ def get_client_config():
     config.fitting_num_samples = 64
     config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
     config.fitting_deg = 4  # Polynomial fitting degree
-    config.sync_running_mode = False # Enable synchronous inference-execution mode. Defaults to False (asynchronous).
-    config.intra_chunk_mode = 'fit'  # intra-chunk processing mode, choices = ('raw', 'fit')
-    config.inter_chunk_mode = 'action_align'  # inter-chunk transition mode, choices = ('action_align', 'poly', 'smooth_velocity')
+    config.intra_chunk_mode = 'fit'  # intra-chunk processing mode, choices = ('raw', 'raw_ipt', 'fit')
+    config.inter_chunk_mode = 'search_action'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'sync')
     config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
     config.smooth_action = False  # Enable action smoothing (Beta)
     config.smooth_length = 150  # Action smoothing length

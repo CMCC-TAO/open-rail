@@ -507,7 +507,7 @@ class RealtimeDataManager():
             currt_action = None
             currt_vel = None
 
-            if inter_chunk_mode == 'action_align':
+            if inter_chunk_mode == 'search_action':
                 candidate_action_chunk = None
                 candidate_action_chunk = copy.deepcopy(action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
                 with self.polynomial_thread_lock:
@@ -615,8 +615,8 @@ class RealtimeDataManager():
             new_acc = np.zeros_like(new_vel)
             
         # use quintic polynomial to smooth transition, ensuring position, velocity, and acceleration continuity
-        transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
-        # transition_length = new_action_chunk.shape[1] // 2
+        # transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
+        transition_length = new_action_chunk.shape[1] // 2
         # transition_length = current_index * 2
         # speed_diff = np.linalg.norm(current_vel - new_vel)
         # transition_length = min(max(50, int(speed_diff * 10)), 300)
