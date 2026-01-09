@@ -535,6 +535,20 @@ class RealtimeDataManager():
                 action_chunk_fitted[:14, target_chunk_index:] = sim_action
                 # vel_chunk_fitted[:14, target_chunk_index:] = sim_vel
                 # acc_chunk_fitted[:14, target_chunk_index:] = sim_acc 
+            elif inter_chunk_mode == 'min_jerk':
+                with self.polynomial_thread_lock:
+                    currt_action = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+                    currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
+                action_chunk_fitted = self._min_jerk_chunk_transition(
+                    action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
+                )
+            elif inter_chunk_mode == 'bspline':
+                with self.polynomial_thread_lock:
+                    currt_action = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+                    currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
+                action_chunk_fitted = self._bspline_chunk_transition(
+                    action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
+                )
             else:
                 pass
             
@@ -678,6 +692,177 @@ class RealtimeDataManager():
         
         return smoothed_chunk
 
+    def _min_jerk_chunk_transition(self, new_action_chunk, new_vel_chunk, new_acc_chunk, new_timestamps, target_index, current_index):
+        """Minimum jerk trajectory minimizes the integral of jerk (time derivative of acceleration) over the entire trajectory:
+            J = ∫ (d³x/dt³)² dt
+        For boundary conditions [x0, v0, a0] → [xf, vf, af], the minimum jerk trajectory solution is a quintic polynomial:
+            x(t) = a0 + a1*t + a2*t² + a3*t³ + a4*t⁴ + a5*t⁵
+        
+        Compared to ordinary quintic polynomials, the minimum jerk version uses a closed-form solution (Flash & Hogan, 1985).
+        
+        Args:
+            new_action_chunk: New action trajectory [dof, T]
+            new_vel_chunk: New velocity trajectory [dof, T]  
+            new_acc_chunk: New acceleration trajectory [dof, T]
+            new_timestamps: Timestamp sequence
+            target_index: Target starting index of new trajectory
+            current_index: Current trajectory index
+            
+        Returns:
+            np.array: Smoothly transitioned action trajectory
+        """
+        if self.action_chunk_fitted is None or self.vel_chunk_fitted is None:
+            return new_action_chunk
+            
+        with self.polynomial_thread_lock:
+            current_pos = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+            current_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
+            current_acc = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else np.zeros_like(current_vel)
+        
+        # Get target state
+        target_pos = new_action_chunk[:, target_index].copy()
+        target_vel = new_vel_chunk[:, target_index].copy()
+        target_acc = new_acc_chunk[:, target_index].copy() if new_acc_chunk is not None else np.zeros_like(target_vel)
+        
+        # Adaptive transition length: based on velocity difference
+        vel_diff = np.linalg.norm(current_vel[:14] - target_vel[:14])
+        pos_diff = np.linalg.norm(current_pos[:14] - target_pos[:14])
+        
+        # Base transition length + velocity difference adjustment
+        base_transition = new_action_chunk.shape[1] // 4
+        adaptive_factor = min(2.0, 1.0 + vel_diff * 0.5 + pos_diff * 2.0)
+        transition_length = min(int(base_transition * adaptive_factor), new_action_chunk.shape[1] - target_index)
+        
+        if transition_length <= 1:
+            return new_action_chunk
+            
+        smoothed_chunk = new_action_chunk.copy()
+        
+        # Calculate transition time
+        dt = new_timestamps[1] - new_timestamps[0] if len(new_timestamps) > 1 else 0.005
+        T = transition_length * dt  # Total transition time
+        
+        # End state (end of transition region)
+        end_index = min(target_index + transition_length - 1, new_action_chunk.shape[1] - 1)
+        
+        for joint_idx in range(min(14, new_action_chunk.shape[0])):
+            # Boundary conditions
+            x0 = current_pos[joint_idx]
+            v0 = current_vel[joint_idx] * T  # Normalized velocity
+            a0 = current_acc[joint_idx] * T * T  # Normalized acceleration
+            
+            xf = new_action_chunk[joint_idx, end_index]
+            vf = new_vel_chunk[joint_idx, end_index] * T if end_index < new_vel_chunk.shape[1] else 0.0
+            af = (new_acc_chunk[joint_idx, end_index] * T * T) if (new_acc_chunk is not None and end_index < new_acc_chunk.shape[1]) else 0.0
+            
+            # Minimum jerk trajectory closed-form solution (Flash & Hogan, 1985)
+            for i in range(transition_length):
+                tau = i / (transition_length - 1) if transition_length > 1 else 1.0
+                tau2 = tau * tau
+                tau3 = tau2 * tau
+                tau4 = tau3 * tau
+                tau5 = tau4 * tau
+                
+                # Minimum jerk polynomial basis functions
+                h0 = 1 - 10*tau3 + 15*tau4 - 6*tau5  # Position basis function for x0
+                h1 = tau - 6*tau3 + 8*tau4 - 3*tau5  # Velocity basis function for v0
+                h2 = 0.5*tau2 - 1.5*tau3 + 1.5*tau4 - 0.5*tau5  # Acceleration basis function for a0
+                h3 = 10*tau3 - 15*tau4 + 6*tau5  # Position basis function for xf
+                h4 = -4*tau3 + 7*tau4 - 3*tau5  # Velocity basis function for vf
+                h5 = 0.5*tau3 - tau4 + 0.5*tau5  # Acceleration basis function for af
+                
+                smoothed_pos = h0*x0 + h1*v0 + h2*a0 + h3*xf + h4*vf + h5*af
+                
+                # Smooth blending with target trajectory (end gradient)
+                blend_start = 0.7  # Start blending at 70%
+                if tau > blend_start:
+                    blend_ratio = (tau - blend_start) / (1.0 - blend_start)
+                    target_pos_at_i = new_action_chunk[joint_idx, target_index + i] if (target_index + i) < new_action_chunk.shape[1] else xf
+                    smoothed_pos = (1 - blend_ratio) * smoothed_pos + blend_ratio * target_pos_at_i
+                
+                if target_index + i < smoothed_chunk.shape[1]:
+                    smoothed_chunk[joint_idx, target_index + i] = smoothed_pos
+        
+        return smoothed_chunk
+
+    def _bspline_chunk_transition(self, new_action_chunk, new_vel_chunk, new_timestamps, target_index, current_index, num_control_points=6):
+        """B-Spline is a parametric curve defined by control points and basis functions:
+            C(t) = Σ Ni,p(t) * Pi
+        Where Pi are control points, Ni,p(t) are p-th order B-Spline basis functions.
+        
+        Args:
+            new_action_chunk: New action trajectory
+            new_vel_chunk: New velocity trajectory
+            new_timestamps: Timestamp sequence
+            target_index: Starting index
+            current_index: Current index
+            num_control_points: Number of control points, more points = more precise but slower
+            
+        Returns:
+            np.array: Smoothly transitioned action trajectory
+        """
+        from scipy.interpolate import make_interp_spline
+        
+        if self.action_chunk_fitted is None:
+            return new_action_chunk
+            
+        with self.polynomial_thread_lock:
+            current_pos = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+            current_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
+        
+        transition_length = min(new_action_chunk.shape[1] // 3, new_action_chunk.shape[1] - target_index)
+        
+        if transition_length <= 3:
+            return new_action_chunk
+            
+        smoothed_chunk = new_action_chunk.copy()
+        dt = new_timestamps[1] - new_timestamps[0] if len(new_timestamps) > 1 else 0.005
+        
+        # Sample control point indices
+        control_indices = np.linspace(0, transition_length - 1, num_control_points).astype(int)
+        
+        for joint_idx in range(min(14, new_action_chunk.shape[0])):
+            # Build control points
+            control_points = []
+            control_times = []
+            
+            # Starting point (current state)
+            control_points.append(current_pos[joint_idx])
+            control_times.append(0.0)
+            
+            # Intermediate control points (sampled from target trajectory)
+            for i, idx in enumerate(control_indices[1:], 1):
+                actual_idx = min(target_index + idx, new_action_chunk.shape[1] - 1)
+                control_points.append(new_action_chunk[joint_idx, actual_idx])
+                control_times.append(idx * dt)
+            
+            control_points = np.array(control_points)
+            control_times = np.array(control_times)
+            
+            try:
+                # Cubic B-Spline interpolation, boundary conditions use current velocity
+                bc_type = ((1, current_vel[joint_idx]), (1, new_vel_chunk[joint_idx, min(target_index + transition_length - 1, new_vel_chunk.shape[1] - 1)]))
+                spline = make_interp_spline(control_times, control_points, k=3, bc_type=bc_type)
+                
+                # Sample in the transition interval
+                sample_times = np.linspace(0, control_times[-1], transition_length)
+                smoothed_positions = spline(sample_times)
+                
+                for i in range(transition_length):
+                    if target_index + i < smoothed_chunk.shape[1]:
+                        smoothed_chunk[joint_idx, target_index + i] = smoothed_positions[i]
+                        
+            except Exception as e:
+                # Fall back to linear interpolation when B-Spline fails
+                self.logger.warning(f"B-Spline failed for joint {joint_idx}: {e}, using linear interpolation")
+                for i in range(transition_length):
+                    t = i / (transition_length - 1) if transition_length > 1 else 1.0
+                    target_idx = min(target_index + transition_length - 1, new_action_chunk.shape[1] - 1)
+                    if target_index + i < smoothed_chunk.shape[1]:
+                        smoothed_chunk[joint_idx, target_index + i] = (1 - t) * current_pos[joint_idx] + t * new_action_chunk[joint_idx, target_idx]
+        
+        return smoothed_chunk
+
     def _search_smooth_action(self, currt_action, currt_vel, candidate_action_chunk, search_length):
         """Search for the best action index to ensure smooth transition.
         
@@ -722,35 +907,6 @@ class RealtimeDataManager():
         self.logger.debug(f'target_index: {target_index}, qualified dim: {qualified_joint_num}')
         return target_index
 
-    def smoothActionTrajOLD(self, currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length=15):
-        action_dim = len(currt_action)
-        max_accs = np.array([max_acc] * len(currt_action))
-        period = 0.005
-        
-        for index in range(smooth_length):
-            candidate_action = candidate_action_chunk[:, index]
-            action_diff = candidate_action - currt_action
-            acc_flag = np.array([1.0 if joint_diff > 0.0 else -1.0 for joint_diff in action_diff])
-            next_max_vel = currt_vel + acc_flag * max_accs * period
-            next_max_action = currt_action + currt_vel * period + 0.5 * acc_flag * max_accs * period * period
-            
-            for joint_index in range(action_dim):
-                if acc_flag[joint_index] == 1.0:
-                    if candidate_action[joint_index] > next_max_action[joint_index]:
-                        candidate_action[joint_index] = next_max_action[joint_index]
-                        currt_vel[joint_index] = next_max_vel[joint_index]
-                    else:
-                        currt_vel[joint_index] = (candidate_action[joint_index] - currt_action[joint_index]) / period
-                elif acc_flag[joint_index] == -1.0:
-                    if candidate_action[joint_index] < next_max_action[joint_index]:
-                        candidate_action[joint_index] = next_max_action[joint_index]
-                        currt_vel[joint_index] = next_max_vel[joint_index]
-                    else:
-                        currt_vel[joint_index] = (candidate_action[joint_index] - currt_action[joint_index]) / period
-                        
-            currt_action = candidate_action
-        return candidate_action_chunk
-    
     def get_action_fitted(self):
         """Get the current action (fitted and raw) indexed by action_chunk_index.
 

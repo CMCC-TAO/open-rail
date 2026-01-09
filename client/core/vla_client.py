@@ -67,6 +67,8 @@ class VLAClientAsync():
         self.config.observer.period = 1.0 / self.config.observer.fps
         if self.config.intra_chunk_mode == 'raw':
             self.config.controller.period = self.config.observer.period * 1000.0
+            self.config.inter_chunk_mode = 'search_action'
+            self.config.search_length = 1
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
         
         self.thread_lock = threading.Lock()
@@ -111,18 +113,19 @@ class VLAClientAsync():
         self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
 
         # Record data (action, velocity, acceleration) thread
-        date_str = datetime.now().strftime("%Y%m%d%H%M%S")
-        out_dir = os.path.join("tmp", date_str)
-        os.makedirs(out_dir, exist_ok=True)
-        self.files = {
-            'action': open(os.path.join(out_dir, 'action.txt'), 'a'),
-            'velocity': open(os.path.join(out_dir, 'velocilty.txt'), 'a'),
-            'acceleration': open(os.path.join(out_dir, 'acceleration.txt'), 'a')
-        }
-        self.data_write_thread = threading.Thread(target=self._writer_thread)
-        self.act_write_buffer = deque(maxlen=1000)
-        self.vel_write_buffer = deque(maxlen=1000)
-        self.acc_write_buffer = deque(maxlen=1000)
+        if self.config.record_exp_data:
+            date_str = datetime.now().strftime("%Y%m%d%H%M%S")
+            out_dir = os.path.join("tmp", date_str)
+            os.makedirs(out_dir, exist_ok=True)
+            self.files = {
+                'action': open(os.path.join(out_dir, 'action.txt'), 'a'),
+                'velocity': open(os.path.join(out_dir, 'velocilty.txt'), 'a'),
+                'acceleration': open(os.path.join(out_dir, 'acceleration.txt'), 'a')
+            }
+            self.data_write_thread = threading.Thread(target=self._writer_thread)
+            self.act_write_buffer = deque(maxlen=1000)
+            self.vel_write_buffer = deque(maxlen=1000)
+            self.acc_write_buffer = deque(maxlen=1000)
 
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
@@ -259,6 +262,13 @@ class VLAClientAsync():
                     if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
                         self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
                     prob_progress = None
+                else:
+                    # prob_progress: (64,), interplot prob_progress to (420,)
+                    original_len, target_len = len(prob_progress), action_chunk_fitted.shape[1]
+                    x_original, x_target = np.linspace(0, 1, original_len), np.linspace(0, 1, target_len)
+                    interp_func = interp1d(x_original, prob_progress, kind='linear', fill_value='extrapolate')
+                    prob_progress = interp_func(x_target)
+
             self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, inter_chunk_mode=self.config.inter_chunk_mode, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
 
             # Compute average inference and trajectory fitting times
@@ -292,9 +302,10 @@ class VLAClientAsync():
             self.robot.control_robot(action_fitted)
 
             # tmp data buffer writing
-            self.act_write_buffer.append(action_fitted)
-            self.vel_write_buffer.append(vel_fitted)
-            self.acc_write_buffer.append(acc_fitted)
+            if self.config.record_exp_data:
+                self.act_write_buffer.append(action_fitted)
+                self.vel_write_buffer.append(vel_fitted)
+                self.acc_write_buffer.append(acc_fitted)
 
             with self.vis_action_lock:
                 if self.config.show_action_cams_qt:
@@ -479,15 +490,7 @@ class VLAClientAsync():
         action_type = action['type']
         
         if action_type == 'vla_action':
-
             pred_action = action['pred_action']
-            # pred_action = pred_action[:,0:16]
-            # # temp = pred_action.copy()
-            # # pred_action[:, 0:7] = temp[:, 7:14]
-            # # pred_action[:, 7:14] = temp[:, 0:7]
-            # # pred_action[:, 14] = temp[:, 15]
-            # # pred_action[:, 15] = temp[:, 14]
-            # # print(pred_action.shape)
             ref_timestamp = action['ref_timestamp']
             loc_timestamp = action['loc_timestamp']
             # Generate action and timestamp chunks
@@ -521,7 +524,8 @@ class VLAClientAsync():
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.start()
 
-        self.data_write_thread.start()
+        if self.config.record_exp_data:
+            self.data_write_thread.start()
         
         self.logger.info('Inference client started.')
     
@@ -540,7 +544,8 @@ class VLAClientAsync():
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.join(timeout=1.0)
 
-        self.data_write_thread.join(timeout=1.0)
+        if self.config.record_exp_data:
+            self.data_write_thread.join(timeout=1.0)
 
         self.logger.info('Inference client stopped.')
 
@@ -563,7 +568,8 @@ class VLAClientAsync():
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.join(timeout=1.0)
         
-        self.data_write_thread.join(timeout=1.0)
+        if self.config.record_exp_data:
+            self.data_write_thread.join(timeout=1.0)
         
         # Stop and join control thread timer
         self.control_thread_timer.stop()
@@ -577,8 +583,9 @@ class VLAClientAsync():
         self.websocket_server.stop_server()
 
         # close file IO writer
-        for f in self.files.values():
-            f.close()
+        if self.config.record_exp_data:
+            for f in self.files.values():
+                f.close()
 
         self.logger.info('Inference client closed.')
 
@@ -606,28 +613,35 @@ class VLAClientAsync():
         Args:
             action_fitted: Predicted action values for robot joints
             vel_fitted: Predicted velocity values (of action_fitted) for robot joints
-            aacc_fittedction: Predicted acceleration values (of action_fitted) for robot joints
+            acc_fitted: Predicted acceleration values (of action_fitted) for robot joints
+            action_raw: Raw action values before fitting
         """
-        # # Update action_fitted velocity and acceleration ==================================================================
-        list_data = [{
-                'tab': 'position',
-                'type': 'action',
-                'x': self.vis_global_step,
-                'joints_y': action_fitted.tolist()
-            }, {
-                'tab': 'position',
-                'type': 'state',
-                'x': self.vis_global_step,
-                'joints_y': self.robot.current_state.tolist()
-            }]
+        # Convert to numpy arrays once (action_fitted/vel_fitted/acc_fitted are already numpy arrays)
         action_np = np.asarray(action_fitted)
         action_vel = np.asarray(vel_fitted)
         action_acc = np.asarray(acc_fitted)
-
-        # # Calculate robot state velocity and acceleration ==================================================================
         state_np = np.asarray(self.robot.current_state)
+        
+        # Control period in seconds
         dt_ctrl = self.config.controller.period / 1000.0
+        
+        # Build position data for action and state
+        list_data = [
+            {
+                'tab': 'position',
+                'type': 'action',
+                'x': self.vis_global_step,
+                'joints_y': action_np.tolist()
+            },
+            {
+                'tab': 'position',
+                'type': 'state',
+                'x': self.vis_global_step,
+                'joints_y': state_np.tolist()
+            }
+        ]
 
+        # Calculate robot state velocity and acceleration using finite difference
         if self.vis_prev_state is None:
             state_vel = np.zeros_like(state_np)
             state_acc = np.zeros_like(state_np)
@@ -638,6 +652,7 @@ class VLAClientAsync():
             else:
                 state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
 
+        # Add velocity and acceleration data for action and state
         list_data.extend([
             {
                 'tab': 'velocity',
@@ -665,7 +680,8 @@ class VLAClientAsync():
             },
         ])
 
-        # # Calculate action_raw velocity and acceleration ==================================================================
+        # Calculate origin (raw action) velocity and acceleration
+        # Origin data is sampled at observer frequency, so use observer.period for dt
         origin_idx = self.vis_idx_count // int(self.vis_ratio) + 4
         if (self.vis_idx_count % int(self.vis_ratio) == 0 and origin_idx < len(self.vis_origin_chunk_action)):
             origin_np = np.asarray(action_raw)
@@ -675,11 +691,11 @@ class VLAClientAsync():
                 'x': self.vis_global_step,
                 'joints_y': origin_np.tolist()
             })
-            if self.vis_prev_origin_idx is None:
-                dt_origin = self.config.observer.period
-            else:
-                delta_idx = origin_idx - self.vis_prev_origin_idx
-                dt_origin = max(delta_idx, 1) * (self.config.fitting_time_step / 1000.0)
+            
+            # Use observer period for origin velocity/acceleration calculation
+            # This is the actual time between consecutive origin samples
+            dt_origin = self.config.observer.period
+            
             if self.vis_prev_origin is None:
                 origin_vel = np.zeros_like(origin_np)
                 origin_acc = np.zeros_like(origin_np)
@@ -708,10 +724,12 @@ class VLAClientAsync():
             self.vis_prev_origin_vel = origin_vel
             self.vis_prev_origin_idx = origin_idx
 
+        # Update previous state for next iteration
         self.vis_prev_action = action_np
         self.vis_prev_action_vel = action_vel
         self.vis_prev_state = state_np
         self.vis_prev_state_vel = state_vel
+        
         self.websocket_server.update_chart_data(list_data)
         self.vis_global_step += 1
         self.vis_idx_count += 1

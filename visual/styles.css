@@ -7,19 +7,19 @@
     --warning-color: #f59e0b;
     --danger-color: #ef4444;
     --info-color: #06b6d4;
-    
+
     --bg-primary: #ffffff;
     --bg-secondary: #f8fafc;
     --bg-tertiary: #f1f5f9;
     --text-primary: #1e293b;
     --text-secondary: #64748b;
     --text-muted: #94a3b8;
-    
+
     --border-color: #e2e8f0;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-    
+
     --sidebar-width: 380px;
     --header-height: 70px;
     --border-radius: 8px;
@@ -34,11 +34,24 @@
     --text-primary: #f8fafc;
     --text-secondary: #cbd5e1;
     --text-muted: #64748b;
-    
+
     --border-color: #334155;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+}
+
+/* SVG icon styles */
+.icon {
+    width: 1em;
+    height: 1em;
+    vertical-align: -0.125em;
+    display: inline-block;
+}
+
+/* Dark mode: invert icon colors */
+[data-theme="dark"] .icon {
+    filter: invert(1);
 }
 
 * {
@@ -234,6 +247,9 @@ body {
 .btn-sm {
     padding: 0.5rem 0.75rem;
     font-size: 0.75rem;
+    border: 1px solid var(--border-color);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
 }
 
 .btn:disabled {
@@ -310,11 +326,11 @@ body {
     transition: var(--transition);
 }
 
-input:checked + .slider {
+input:checked+.slider {
     background-color: var(--primary-color);
 }
 
-input:checked + .slider:before {
+input:checked+.slider:before {
     transform: translateX(20px);
 }
 
@@ -543,8 +559,13 @@ input:checked + .slider:before {
 }
 
 @keyframes spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 /* 关节图表容器 */
@@ -579,6 +600,48 @@ input:checked + .slider:before {
 .joint-tabs {
     display: flex;
     gap: 5px;
+}
+
+/* Series visibility toggles */
+.series-toggles {
+    display: flex;
+    gap: 10px;
+    margin-left: 15px;
+}
+
+.series-toggle {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.series-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+}
+
+.series-toggle span {
+    font-weight: 500;
+}
+
+/* Color-coded labels */
+.series-toggle[data-series="origin"] span,
+.series-toggle:has(input[data-series="origin"]) span {
+    color: rgb(75, 192, 192);
+}
+
+.series-toggle[data-series="action"] span,
+.series-toggle:has(input[data-series="action"]) span {
+    color: rgb(255, 99, 132);
+}
+
+.series-toggle[data-series="state"] span,
+.series-toggle:has(input[data-series="state"]) span {
+    color: rgb(54, 162, 235);
 }
 
 .tab-button {
@@ -689,7 +752,7 @@ input:checked + .slider:before {
 /* 通知样式 */
 .notifications {
     position: fixed;
-    top: 1rem;
+    top: 5rem;
     right: 1rem;
     z-index: 2000;
     display: flex;
@@ -733,6 +796,7 @@ input:checked + .slider:before {
         transform: translateX(100%);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -744,33 +808,33 @@ input:checked + .slider:before {
     :root {
         --sidebar-width: 280px;
     }
-    
+
     .header {
         padding: 0 1rem;
     }
-    
+
     .header h1 {
         font-size: 1.25rem;
     }
-    
+
     .camera-section,
     .charts-section {
         padding: 1rem;
     }
-    
+
     .camera-grid {
         grid-template-columns: 1fr;
     }
-    
+
     .main-content.sidebar-open {
         margin-left: 0;
     }
-    
+
     .notifications {
         left: 1rem;
         right: 1rem;
     }
-    
+
     .notification {
         min-width: auto;
     }
@@ -780,11 +844,11 @@ input:checked + .slider:before {
     .header-right {
         gap: 1rem;
     }
-    
+
     .connection-info span {
         display: none;
     }
-    
+
     .section-header {
         flex-direction: column;
         align-items: flex-start;
@@ -821,8 +885,13 @@ input:checked + .slider:before {
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 .slide-up {
@@ -834,6 +903,7 @@ input:checked + .slider:before {
         transform: translateY(20px);
         opacity: 0;
     }
+
     to {
         transform: translateY(0);
         opacity: 1;

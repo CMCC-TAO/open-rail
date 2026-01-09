@@ -38,13 +38,14 @@ def get_client_config():
     config.vis_action_length = 1000
     config.record = get_record_data_config()  # Data recording configuration
     config.show_action_cams_qt = False  # QT-based action-camera visualization. If set as True, run /client/utils/vis_action_camera.py.py to launch the visualization server
+    config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     config.show_img = False  # Enable/disable image display
     config.traj_strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 64
     config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
     config.fitting_deg = 4  # Polynomial fitting degree
     config.intra_chunk_mode = 'fit'  # intra-chunk processing mode, choices = ('raw', 'raw_ipt', 'fit')
-    config.inter_chunk_mode = 'search_action'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'sync')
+    config.inter_chunk_mode = 'min_jerk'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync')
     config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
     config.smooth_action = False  # Enable action smoothing (Beta)
     config.smooth_length = 150  # Action smoothing length
