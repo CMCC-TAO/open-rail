@@ -1,5 +1,4 @@
 import time
-import torch
 import cv2
 import random
 import logging
@@ -8,6 +7,7 @@ from pprint import pprint
 from ..base_robot import RobotBase
 
 try:
+    import torch
     from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
 except ImportError:
     pass

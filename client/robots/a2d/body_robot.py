@@ -30,14 +30,26 @@ class RobotBody(RobotBase):
             action (array-like): Action array containing arm commands (0:14) and gripper commands (14:16)
         """
         self.execute_action({'arm': action[0:14].tolist()})
-        # Count gripper value changes and send gripper command when accumulated changes reach threshold
-        new_gripper_cmd = action[14:16]
-        if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
-            self.gripper_count += 1
-        if self.gripper_count > self.cfg['gripper_freq']:
-            self.execute_action({self.cfg['hand_type']: new_gripper_cmd.tolist()})
-            self.gripper_cmd = new_gripper_cmd
+
+        if self.gripper_count % self.cfg['gripper_freq'] == 0:
             self.gripper_count = 0
+            arr = np.clip(action[14:16], 0, 1)
+            gripper_optimized = True
+            if gripper_optimized:
+                gamma = 4
+                # adjusted = arr * gamma / (arr * gamma + (1 - arr) ** gamma)
+                adjusted = arr ** gamma / (arr ** gamma + (1 - arr) ** gamma)
+                arr = np.clip(adjusted, 0, 1)
+            self.execute_action({self.cfg['hand_type']: arr.tolist()})
+
+        # Count gripper value changes and send gripper command when accumulated changes reach threshold
+        # new_gripper_cmd = action[14:16]
+        # if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
+        #     self.gripper_count += 1
+        # if self.gripper_count > self.cfg['gripper_freq']:
+        #     self.execute_action({self.cfg['hand_type']: new_gripper_cmd.tolist()})
+        #     self.gripper_cmd = new_gripper_cmd
+        #     self.gripper_count = 0
     
     def execute_action(self, data):
         """Execute action interface without strategy.
