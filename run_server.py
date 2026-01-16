@@ -22,7 +22,10 @@ def get_model(config):
     Raises:
         ValueError: If model type is not supported
     """
-    if config.type == ModelType.ACT:
+    if config.type == ModelType.MOCK:
+        from server.models.mock.mock import ModelVLA as MOCK
+        return MOCK(config.mock)
+    elif config.type == ModelType.ACT:
         from server.models.act import ModelVLA as ACT
         return ACT(config.act)
     elif config.type == ModelType.GR00T_N1:
@@ -52,7 +55,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['act', 'gr00t_n1', 'gr00t_n1_5', 'rdt', 'smolvla','go1'],
+    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'rdt', 'smolvla','go1'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')

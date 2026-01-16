@@ -1,7 +1,11 @@
 import time
 import cv2
 import numpy as np
-import ruckig
+
+try:
+    import ruckig
+except ImportError:
+    pass
 
 class RobotBase():
     def __init__(self):

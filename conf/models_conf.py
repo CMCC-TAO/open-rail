@@ -3,12 +3,23 @@ from ml_collections import ConfigDict
 import os
 
 class ModelType(str, Enum):
+    MOCK = 'mock'
     ACT = 'act'
     GR00T_N1 = 'gr00t_n1'
     GR00T_N1_5 = 'gr00t_n1_5'
     RDT = 'rdt'
     SMOLVLA = 'smolvla'
     GO1 = 'go1'
+
+def get_mock_config():
+    """Generate configuration for MOCK model.
+    
+    Returns:
+        ConfigDict: Configuration dictionary containing model path for MOCK.
+    """
+    config = ConfigDict()
+    config.model_path = '/path/to/model'
+    return config
 
 def get_gr00t_config():
     """Generate configuration for GR00T model.
@@ -70,6 +81,7 @@ def get_models_config():
     """
     config = ConfigDict()
     config.type = ModelType.GR00T_N1_5
+    config.mock = get_mock_config()
     config.gr00t = get_gr00t_config()
     config.act = get_act_config()
     config.rdt = get_rdt_config()
