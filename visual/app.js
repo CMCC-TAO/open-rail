@@ -372,7 +372,7 @@ class VLAVisualizationApp {
     // 图表管理
     initializeCharts() {
         const container = document.getElementById('joint-charts-container');
-        const joints = ['joint_1', 'joint_2', 'joint_3', 'joint_4', 'joint_5', 'joint_6', 'joint_7', 'joint_8', 'joint_9', 'joint_10', 'joint_11', 'joint_12', 'joint_13', 'joint_14', 'joint_15', 'joint_16'];  // 16个关节
+        const joints = ['joint_1', 'joint_2', 'joint_3', 'joint_4', 'joint_5', 'joint_6', 'joint_7', 'joint_8', 'joint_9', 'joint_10', 'joint_11', 'joint_12', 'joint_13', 'joint_14', 'joint_15', 'joint_16', 'joint_17', 'joint_18'];  // 18个关节 (14 arm + 2 gripper + 2 head)
         const tabs = ['position', 'velocity', 'acceleration'];
         const tabLabels = { position: '位置', velocity: '速度', acceleration: '加速度' };
         const units = { position: 'rad', velocity: 'rad/s', acceleration: 'rad/s²' };
@@ -607,7 +607,7 @@ class VLAVisualizationApp {
             return { labels: [], data: [] };
         }
 
-        const jointIndex = ['joint_1', 'joint_2', 'joint_3', 'joint_4', 'joint_5', 'joint_6', 'joint_7', 'joint_8', 'joint_9', 'joint_10', 'joint_11', 'joint_12', 'joint_13', 'joint_14', 'joint_15', 'joint_16'].indexOf(joint);
+        const jointIndex = ['joint_1', 'joint_2', 'joint_3', 'joint_4', 'joint_5', 'joint_6', 'joint_7', 'joint_8', 'joint_9', 'joint_10', 'joint_11', 'joint_12', 'joint_13', 'joint_14', 'joint_15', 'joint_16', 'joint_17', 'joint_18'].indexOf(joint);
         if (jointIndex === -1) return { labels: [], data: [] };
 
         const buffer = this.chartDataBuffer[tab][type];

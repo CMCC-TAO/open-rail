@@ -23,6 +23,7 @@ class TrajectoryGenerator():
         # Create thread pools for parallel trajectory fitting
         self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers)
         self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers)
+        self.head_fitting_executor = ThreadPoolExecutor(max_workers=config.max_head_fitting_workers)
         
         # Initialize trajectory data storage
         self.traj = None
@@ -122,6 +123,50 @@ class TrajectoryGenerator():
 
         return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted), np.zeros_like(gripper_chunk_fitted)  # Gripper velocity and acceleration are not considered
 
+    def _head_traj_fitting(self, timestamps, head_chunk, index, start_time, end_time, time_step = 0.001):
+        """Fit a head trajectory using mean filtering and return the fitted trajectory.
+
+        Similar to gripper trajectory fitting, uses mean filtering to remove outliers
+        and linear interpolation for smooth trajectory generation.
+
+        Args:
+            timestamps (np.array): The timestamps of the head trajectory in seconds.
+            head_chunk (np.array): The head trajectory to be fitted.
+            index (int): The index of the head joint with respect to the full action.
+            start_time (float): The start time of the fitted trajectory in seconds.
+            end_time (float): The end time of the fitted trajectory in seconds.
+            time_step (float, optional): The time step to compute the fitted trajectory. Defaults to 0.001.
+
+        Returns:
+            tuple(int, np.array, np.array, np.array): The index, fitted trajectory, velocity (zeros), and acceleration (zeros).
+        """
+        # Remove outliers using mean filtering (same as gripper)
+        length = len(head_chunk)
+        window_size_half = self.config.filter_window_size
+        for currt_index in range(length):
+            if currt_index < window_size_half:
+                window_min = 0
+                window_max = min(length, window_size_half * 2 + 1)
+            elif currt_index >= length - window_size_half:
+                window_min = max(0, length - window_size_half * 2 - 1)
+                window_max = length
+            else:
+                window_min = currt_index - window_size_half
+                window_max = currt_index + window_size_half + 1
+            mean = np.mean(head_chunk[window_min:window_max])
+            head_chunk[currt_index] = mean
+        
+        # Interpolate the trajectory using linear interpolation
+        timestamp_fitted = np.arange(start_time, end_time, time_step)
+        head_chunk_fitted = []
+        currt_index = 0
+        for timestamp in timestamp_fitted:
+            if timestamp > timestamps[currt_index]:
+                currt_index = min(length, currt_index + 1)
+            head_chunk_fitted.append((head_chunk[max(currt_index - 1, 0)] + head_chunk[min(currt_index, length - 1)]) / 2.0)
+
+        return index, head_chunk_fitted, np.zeros_like(head_chunk_fitted), np.zeros_like(head_chunk_fitted)
+
     @run_time_decorator
     def traj_fitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):
         """Fit trajectories for both joints and grippers.
@@ -138,14 +183,21 @@ class TrajectoryGenerator():
             tuple: (fitted_trajectory, fitted_velocity, fitted_timestamps)
         """
         # Preprocess action data - convert from action dimension format to joint dimension format
-        # print(action_chunk.shape)
-        joint_futures = [self.joint_fitting_executor.submit(self._joint_traj_fitting, timestamps, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(action_chunk[0:self.config.joint_dim, :])]
-        gripper_futures = [self.gripper_fitting_executor.submit(self._gripper_traj_fitting, timestamps, np.array(joint_chunk), self.config.joint_dim+index, start_time, end_time, time_step) for index, joint_chunk in enumerate(action_chunk[self.config.joint_dim:, :])]
+        # Calculate dimension ranges
+        joint_start, joint_end = 0, self.config.joint_dim
+        gripper_start, gripper_end = joint_end, joint_end + self.config.gripper_dim
+        head_start, head_end = gripper_end, gripper_end + self.config.head_dim
+        
+        # Submit fitting tasks for joints, grippers, and head
+        joint_futures = [self.joint_fitting_executor.submit(self._joint_traj_fitting, timestamps, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(action_chunk[joint_start:joint_end, :])]
+        gripper_futures = [self.gripper_fitting_executor.submit(self._gripper_traj_fitting, timestamps, np.array(joint_chunk), gripper_start + index, start_time, end_time, time_step) for index, joint_chunk in enumerate(action_chunk[gripper_start:gripper_end, :])]
+        head_futures = [self.head_fitting_executor.submit(self._head_traj_fitting, timestamps, np.array(joint_chunk), head_start + index, start_time, end_time, time_step) for index, joint_chunk in enumerate(action_chunk[head_start:head_end, :])]
 
         # Wait for all tasks to complete and get results
-        gripper_results = [future.result() for future in gripper_futures]
         joint_results = [future.result() for future in joint_futures]
-        results = joint_results + gripper_results
+        gripper_results = [future.result() for future in gripper_futures]
+        head_results = [future.result() for future in head_futures]
+        results = joint_results + gripper_results + head_results
         
         # Parse results - joint_results represent joint angle data, velocity_results represent joint velocity data
         final_joint_results = [None] * len(results)

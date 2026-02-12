@@ -20,6 +20,8 @@ def get_traj_config():
     config.max_gripper_action_threshold = 0.95  # Maximum gripper action threshold, values above this are set to 1.0
     config.max_joint_fitting_workers = 14
     config.max_gripper_fitting_workers = 2
+    config.max_head_fitting_workers = 2
     config.joint_dim = 14  # Degrees of freedom for dual arms
     config.gripper_dim = 2  # Degrees of freedom for dual grippers
+    config.head_dim = 2  # Degrees of freedom for head
     return config

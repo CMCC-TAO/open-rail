@@ -7,6 +7,7 @@ class ModelType(str, Enum):
     ACT = 'act'
     GR00T_N1 = 'gr00t_n1'
     GR00T_N1_5 = 'gr00t_n1_5'
+    GR00T_N1_6 = 'gr00t_n1_6'
     RDT = 'rdt'
     SMOLVLA = 'smolvla'
     GO1 = 'go1'

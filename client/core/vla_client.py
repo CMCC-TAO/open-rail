@@ -371,9 +371,14 @@ class VLAClientAsync():
             vel_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
             acc_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
             
+            # Calculate dimension boundaries: arm [0:14], gripper [14:16], head [16:18]
+            joint_dim = self.config.traj.joint_dim if hasattr(self.config, 'traj') else 14
+            gripper_dim = self.config.traj.gripper_dim if hasattr(self.config, 'traj') else 2
+            non_arm_start = joint_dim  # Start of gripper/head dimensions
+            
             for j in range(n_joints):
-                # the last two joints are grippers, using zero-order hold interpolation (step-like).
-                if j >= n_joints - 2:
+                # Gripper and head dimensions use zero-order hold interpolation (step-like)
+                if j >= non_arm_start:
                     interp_func = interp1d(timestamps, action_chunk[j], kind='previous', bounds_error=False, fill_value='extrapolate')
                     action_chunk_fitted[j] = interp_func(timestamps_fitted)
                     vel_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
