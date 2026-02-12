@@ -80,10 +80,10 @@ def get_robotC_config():
     # 进度预测相关，3个条件都满足才会结束。[0]开始稳定性检测阈值, [1]稳定性计数, [2]变异系数阈值
     config.thre_progress = {
         "default": [0.94, 20, 0.01],
-        "pick_cup_greentea": [0.94, 20, 0.06],
-        "pick_cup_blacktea": [0.94, 20, 0.06],
-        "pour_water_greentea": [0.94, 20, 0.04],
-        "pour_water_blacktea": [0.94, 20, 0.04],
+        "pick_cup_greentea": [0.9, 20, 0.06],
+        "pick_cup_blacktea": [0.9, 20, 0.06],
+        "pour_water_greentea": [0.9, 20, 0.04],
+        "pour_water_blacktea": [0.9, 20, 0.04],
         "place_greentea": [0.9, 20, 0.07],
         "place_blacktea": [0.9, 20, 0.07],
     }
@@ -198,8 +198,8 @@ def get_robotE_config():
 
 def get_dispatch_config(target='robotC'):
     config = ConfigDict()
-    config.server_task_address = "tcp://192.168.0.89:5555"
-    config.server_response_address = "tcp://192.168.0.89:5556"
+    config.server_task_address = "tcp://192.168.0.188:5555"
+    config.server_response_address = "tcp://192.168.0.188:5556"
     if target == 'robotB':
         config.robot = get_robotB_config()
     elif target == 'robotC':

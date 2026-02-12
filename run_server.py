@@ -34,6 +34,9 @@ def get_model(config):
     elif config.type == ModelType.GR00T_N1_5:
         from server.models.gr00t.gr00t_n1_5 import ModelVLA as GR00T_N1_5
         return GR00T_N1_5(config.gr00t)
+    elif config.type == ModelType.GR00T_N1_6:
+        from server.models.gr00t.gr00t_n1_6 import ModelVLA as GR00T_N1_6
+        return GR00T_N1_6(config.gr00t)
     elif config.type == ModelType.RDT:
         from server.models.rdt import ModelVLA as RDT
         return RDT(config.rdt)
@@ -55,7 +58,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'rdt', 'smolvla','go1'],
+    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
@@ -78,7 +81,7 @@ def override_config_with_args(config, args):
     
     # Override model path
     if args.model_path:
-        if config.models.type == ModelType.GR00T_N1 or config.models.type == ModelType.GR00T_N1_5:
+        if config.models.type == ModelType.GR00T_N1 or config.models.type == ModelType.GR00T_N1_5 or config.models.type == ModelType.GR00T_N1_6:
             config.models.gr00t.model_path = args.model_path
         elif config.models.type == ModelType.ACT:
             config.models.act.model_path = args.model_path

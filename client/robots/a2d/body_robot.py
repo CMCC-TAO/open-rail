@@ -21,13 +21,14 @@ class RobotBody(RobotBase):
         self.current_timestamp = 0
         self.gripper_count = 0
         self.gripper_cmd = [0.0, 0.0]
+        self.head_count = 0
         time.sleep(1)
 
     def control_robot(self, action):
-        """Control the robot arm and gripper based on the given action.
+        """Control the robot arm, gripper, and head based on the given action.
         
         Args:
-            action (array-like): Action array containing arm commands (0:14) and gripper commands (14:16)
+            action (array-like): Action array containing arm commands (0:14), gripper commands (14:16), and head commands (16:18)
         """
         self.execute_action({'arm': action[0:14].tolist()})
 
@@ -41,6 +42,14 @@ class RobotBody(RobotBase):
                 adjusted = arr ** gamma / (arr ** gamma + (1 - arr) ** gamma)
                 arr = np.clip(adjusted, 0, 1)
             self.execute_action({self.cfg['hand_type']: arr.tolist()})
+        self.gripper_count += 1
+
+        if len(action) > 16:
+            if self.head_count % self.cfg.get('head_freq', 40) == 0:
+                self.head_count = 0
+                head_action = action[16:18]
+                self.execute_action({'head': head_action.tolist()})
+            self.head_count += 1
 
         # Count gripper value changes and send gripper command when accumulated changes reach threshold
         # new_gripper_cmd = action[14:16]

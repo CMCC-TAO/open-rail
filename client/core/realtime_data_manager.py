@@ -629,8 +629,8 @@ class RealtimeDataManager():
             new_acc = np.zeros_like(new_vel)
             
         # use quintic polynomial to smooth transition, ensuring position, velocity, and acceleration continuity
-        # transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
-        transition_length = new_action_chunk.shape[1] // 2
+        transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
+        # transition_length = new_action_chunk.shape[1] // 2
         # transition_length = current_index * 2
         # speed_diff = np.linalg.norm(current_vel - new_vel)
         # transition_length = min(max(50, int(speed_diff * 10)), 300)
@@ -724,14 +724,16 @@ class RealtimeDataManager():
         target_vel = new_vel_chunk[:, target_index].copy()
         target_acc = new_acc_chunk[:, target_index].copy() if new_acc_chunk is not None else np.zeros_like(target_vel)
         
-        # Adaptive transition length: based on velocity difference
-        vel_diff = np.linalg.norm(current_vel[:14] - target_vel[:14])
+        # Adaptive transition length: based on pos/vel/acc difference
         pos_diff = np.linalg.norm(current_pos[:14] - target_pos[:14])
+        vel_diff = np.linalg.norm(current_vel[:14] - target_vel[:14])
+        acc_diff = np.linalg.norm(current_acc[:14] - target_acc[:14])
         
-        # Base transition length + velocity difference adjustment
-        base_transition = new_action_chunk.shape[1] // 4
-        adaptive_factor = min(2.0, 1.0 + vel_diff * 0.5 + pos_diff * 2.0)
+        # Base transition length + pos/vel/acc difference adjustment
+        base_transition = new_action_chunk.shape[1] // 2
+        adaptive_factor = min(2.0, 0.5 + pos_diff * 2.0 + vel_diff * 1.5 + acc_diff * 0.3)
         transition_length = min(int(base_transition * adaptive_factor), new_action_chunk.shape[1] - target_index)
+        # print('\n', base_transition, adaptive_factor, transition_length)
         
         if transition_length <= 1:
             return new_action_chunk
