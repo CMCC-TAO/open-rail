@@ -5,6 +5,7 @@ import logging
 import numpy as np
 from pprint import pprint
 from ..base_robot import RobotBase
+from client.utils.util import run_time_decorator
 
 try:
     import torch
@@ -22,7 +23,9 @@ class RobotBody(RobotBase):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.cfg, self.ori_cfg = config['robots']['mock'], config
-        self.current_state = np.zeros(20)
+        self.action_layout = dict(self.cfg.get('action_layout', {}))
+        self.action_dim = max([v['end'] for v in self.action_layout.values()]) if self.action_layout else 20
+        self.current_state = np.zeros(self.action_dim)
         try:
             self.dataset = LeRobotDataset(repo_id=self.cfg['repo_id'], root=self.cfg['root'])
             self.dataloader = iter(torch.utils.data.DataLoader(
@@ -49,12 +52,15 @@ class RobotBody(RobotBase):
         Args:
             action (dict): Dictionary containing action commands for robot joints and gripper
         """
-        pass
+        return
 
     def reset_robot(self, target_pose=None, mode='zero'):
         """Reset the robot to its default position.
         """
-        pass
+        if target_pose is None:
+            if mode == 'zero':
+                target_pose = np.zeros(self.action_dim)
+        self.current_state = target_pose if target_pose is not None else self.current_state
 
     def retrieve_observation(self):
         """Retrieve observation data from the LeRobot dataset for simulation.
@@ -77,7 +83,7 @@ class RobotBody(RobotBase):
                     key = 'depth.head'
                     image = np.random.randint(0, 2**16, (640, 640), dtype=np.uint16)
                 result[f'cam.{key}'] = image
-            result['obs.state'] = np.random.rand(20,)
+            result['obs.state'] = np.random.rand(self.action_dim,)
             self.current_state = result['obs.state']
             return result
 
@@ -110,7 +116,10 @@ class RobotBody(RobotBase):
                 key = 'depth.head'
             result[f'cam.{key}'] = image
     
-        result['obs.state'] = data["observation.state"][0].cpu().numpy()
+        obs_state = data["observation.state"][0].cpu().numpy()
+        if obs_state.shape[0] != self.action_dim:
+            obs_state = obs_state[:self.action_dim] if obs_state.shape[0] > self.action_dim else np.pad(obs_state, (0, self.action_dim - obs_state.shape[0]))
+        result['obs.state'] = obs_state
         self.current_state = result['obs.state']
         end_time = time.time()
         if end_time-start_time < self.period:

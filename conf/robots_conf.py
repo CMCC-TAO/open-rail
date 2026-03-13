@@ -24,6 +24,12 @@ def get_a2d_config():
     config.gripper_freq = 40
     config.head_freq = 40
     config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0] # default pose (teleoperation default pose)
+    config.action_layout = {
+        'arm': {'start': 0, 'end': 14, 'policy': 'joint'},
+        'gripper': {'start': 14, 'end': 16, 'policy': 'gripper'},
+        # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
+        # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
+    }
     return config
 
 def get_mock_config():
@@ -40,6 +46,12 @@ def get_mock_config():
     config.camera.names = {'head': 'observation.images.top_head',
                            'hand_left': 'observation.images.hand_left',
                            'hand_right': 'observation.images.hand_right'}
+    config.action_layout = {
+        'arm': {'start': 0, 'end': 14, 'policy': 'joint'},
+        'gripper': {'start': 14, 'end': 16, 'policy': 'gripper'},
+        # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
+        # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
+    }
     config.root = '/home/robot/Music/task_39_only1'
     config.repo_id = 'task_39_only1'
     return config

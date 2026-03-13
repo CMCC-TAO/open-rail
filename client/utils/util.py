@@ -163,6 +163,16 @@ def apply_user_config(config, user_config):
     
     return config
 
+def get_action_layout_info(action_layout):
+    action_dim = max([v['end'] for v in action_layout.values()]) if action_layout else 0
+    joint_indices, step_indices = [], []
+    for v in action_layout.values():
+        if v['policy'] == 'joint':
+            joint_indices.extend(range(v['start'], v['end']))
+        elif v['policy'] == 'gripper':
+            step_indices.extend(range(v['start'], v['end']))
+    return action_dim, joint_indices, step_indices
+
 def command_prompt(info: dict):
     """Create a command prompt table for VLA inference framework.
     
