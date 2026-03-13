@@ -11,7 +11,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc
-from client.utils.util import run_time_decorator
+from client.utils.util import run_time_decorator, get_action_layout_info
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
@@ -50,6 +50,8 @@ class VLAClientSync():
         self.traj_generator = traj_generator
         self.vla_zmq = vla_zmq_client
         self.robot = robot
+        self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
+        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
         self.running = False
         self.is_running_action = True
         self.action_count = 0
@@ -110,8 +112,9 @@ class VLAClientSync():
             self.vis_action_cams_thread = threading.Thread(target=self.send_action_cams_to_vis_server, daemon=True)
         
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
-        self.info_current_action = [0.0] * 16
-        self.info_current_state = [0.0] * 16
+        action_dim = self.action_dim if self.action_dim > 0 else 16
+        self.info_current_action = [0.0] * action_dim
+        self.info_current_state = [0.0] * action_dim
         self.info_obs, self.info_act = {}, {}
         self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
 

@@ -12,7 +12,7 @@ from scipy.interpolate import CubicSpline, interp1d
 from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc
-from client.utils.util import run_time_decorator
+from client.utils.util import run_time_decorator, get_action_layout_info
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
@@ -48,6 +48,8 @@ class VLAClientAsync():
         self.traj_generator = traj_generator
         self.vla_zmq = vla_zmq_client
         self.robot = robot
+        self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
+        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
         self.running = False
         self.is_running_action = True
         self.action_count = 0
@@ -107,8 +109,9 @@ class VLAClientAsync():
             self.vis_action_cams_thread = threading.Thread(target=self.send_action_cams_to_vis_server, daemon=True)
         
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
-        self.info_current_action = [0.0] * 16
-        self.info_current_state = [0.0] * 16
+        action_dim = self.action_dim if self.action_dim > 0 else 16
+        self.info_current_action = [0.0] * action_dim
+        self.info_current_state = [0.0] * action_dim
         self.info_obs, self.info_act = {}, {}
         self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
 
@@ -371,14 +374,10 @@ class VLAClientAsync():
             vel_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
             acc_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
             
-            # Calculate dimension boundaries: arm [0:14], gripper [14:16], head [16:18]
-            joint_dim = self.config.traj.joint_dim if hasattr(self.config, 'traj') else 14
-            gripper_dim = self.config.traj.gripper_dim if hasattr(self.config, 'traj') else 2
-            non_arm_start = joint_dim  # Start of gripper/head dimensions
-            
+            step_index_set = set(self.step_indices)
             for j in range(n_joints):
                 # Gripper and head dimensions use zero-order hold interpolation (step-like)
-                if j >= non_arm_start:
+                if j in step_index_set:
                     interp_func = interp1d(timestamps, action_chunk[j], kind='previous', bounds_error=False, fill_value='extrapolate')
                     action_chunk_fitted[j] = interp_func(timestamps_fitted)
                     vel_chunk_fitted[j] = np.zeros(len(timestamps_fitted))

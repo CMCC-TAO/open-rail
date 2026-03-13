@@ -242,12 +242,15 @@ if __name__ == "__main__":
         config = apply_user_config(config, user_config)
     
     config = override_config_with_args(config, args)
-    
     # print(config)
     # The zmq client to communicate with VLA server
     vla_zmq_client = ZMQClient(config.vla_zmq)
     
     robot = get_robot(config)
+    robot_cfg = getattr(config.robots, config.robots.type.value, None)
+    if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
+        config.rdm.action_layout = robot_cfg.action_layout
+        config.traj.action_layout = robot_cfg.action_layout
     rdm = RealtimeDataManager(config.rdm)
     traj_generator = TrajectoryGenerator(config=config.traj)
     if config.inter_chunk_mode == 'sync':
