@@ -63,6 +63,6 @@ class ModelVLA:
         if isinstance(predicted_action, dict) and 'progress' in predicted_action:
             ext_result['progress'] = predicted_action['progress'].squeeze(0)
             del predicted_action['progress']
-        predicted_action = np.concatenate([v.squeeze(0) for v in predicted_action.values()], axis=1)
+        predicted_action = np.concatenate([v.squeeze(0) for v in predicted_action['action'].values()], axis=1)
         print(time.time() - time1, 'action shape:', predicted_action.shape)
         return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp'], 'ext': ext_result}
