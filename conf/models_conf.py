@@ -9,6 +9,9 @@ class ModelType(str, Enum):
     RDT = 'rdt'
     SMOLVLA = 'smolvla'
     GO1 = 'go1'
+    PI0 = 'pi0'
+    PI05 = 'pi05'
+    TAO = 'tao'
 
 def get_gr00t_config():
     """Generate configuration for GR00T model.
@@ -66,6 +69,44 @@ def get_go1_config():
     cfg.data_stats_path = cfg.data_stats_path = os.path.join(cfg.model_path, "dataset_stats.json")                  
     return cfg
 
+def get_pi0_config():
+    """Generate configuration for pi model.
+    
+    Returns:
+        ConfigDict: Configuration dictionary containing model path for pi.
+    """
+    config = ConfigDict()
+    config.config = 'pi0_a2d'
+    config.model_path = '/path/to/model'
+    config.is_hand = False
+    return config
+
+
+def get_pi05_config():
+    """Generate configuration for pi model.
+    
+    Returns:
+        ConfigDict: Configuration dictionary containing model path for pi.
+    """
+    config = ConfigDict()
+    config.config = 'pi05_a2d'
+    config.model_path = '/path/to/model'
+    config.is_hand = False
+    return config
+
+
+def get_tao_config():
+    """Generate configuration for TAO model.
+    
+    Returns:
+        ConfigDict: Configuration dictionary containing model path for TAO.
+    """
+    config = ConfigDict()
+    config.model_path = '/path/to/model'
+    config.embodiment_tag = 'a2d_gripper'
+
+    return config
+
 def get_models_config():
     """Generate configuration for all available VLA models.
     
@@ -87,4 +128,7 @@ def get_models_config():
     config.rdt = get_rdt_config()
     config.go1 = get_go1_config()
     config.smolvla = get_smolvla_config()
+    config.pi0 = get_pi0_config()
+    config.pi05 = get_pi05_config()
+    config.tao = get_tao_config()
     return config
