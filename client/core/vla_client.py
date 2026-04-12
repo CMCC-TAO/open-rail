@@ -167,7 +167,13 @@ class VLAClientAsync():
         self.allow_language_switch = False
         
         # Wait for observation changes after reset, then retrieve fresh obs for inference
-        observations = self.robot.retrieve_observation()
+        observations, cnt = None, 0
+        while observations is None or cnt < 3:
+            time.sleep(0.2)
+            self.rdm.clear_observe_data()
+            observations = self.robot.retrieve_observation()
+            cnt += 1
+
         if observations is not None:
             self.rdm.clear_action_data()
             data = self._process_data(observations)
