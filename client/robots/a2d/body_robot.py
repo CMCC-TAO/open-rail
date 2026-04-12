@@ -6,6 +6,7 @@ from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
 from ..base_robot import RobotBase
 
+
 class RobotBody(RobotBase):
     def __init__(self, config):
         """Initialize the A2D robot body with camera and robot instances.
@@ -15,29 +16,56 @@ class RobotBody(RobotBase):
         """
         super().__init__()
         self.cfg, self.ori_cfg = config['robots']['a2d'], config
+        self.action_layout = dict(self.cfg.get('action_layout', {}))
         self.camera= Camera(list(self.cfg['camera']['names'].values()))
         self.robot = Robot()
-        self.current_state = np.zeros(20)
+        self.current_state = np.zeros(max([v['end'] for v in self.action_layout.values()]) if self.action_layout else 0)
         self.current_timestamp = 0
         self.gripper_count = 0
         self.gripper_cmd = [0.0, 0.0]
+        self.head_count = 0
         time.sleep(1)
 
     def control_robot(self, action):
-        """Control the robot arm and gripper based on the given action.
+        """Control the robot arm, gripper, and head based on the given action.
         
         Args:
-            action (array-like): Action array containing arm commands (0:14) and gripper commands (14:16)
+            action (array-like): Action array containing arm commands (0:14), gripper commands (14:16), and head commands (16:18)
         """
-        self.execute_action({'arm': action[0:14].tolist()})
-        # Count gripper value changes and send gripper command when accumulated changes reach threshold
-        new_gripper_cmd = action[14:16]
-        if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
-            self.gripper_count += 1
-        if self.gripper_count > self.cfg['gripper_freq']:
-            self.execute_action({self.cfg['hand_type']: new_gripper_cmd.tolist()})
-            self.gripper_cmd = new_gripper_cmd
+        action = np.asarray(action)
+        segments = {name: action[v['start']:v['end']] for name, v in self.action_layout.items()}
+        if 'arm' in segments:
+            self.execute_action({'arm': segments['arm'].tolist()})
+
+        if 'gripper' in segments and self.gripper_count % self.cfg['gripper_freq'] == 0:
             self.gripper_count = 0
+            arr = np.clip(segments['gripper'], 0, 1)
+            gripper_optimized = True
+            if gripper_optimized:
+                gamma = 4
+                # adjusted = arr * gamma / (arr * gamma + (1 - arr) ** gamma)
+                adjusted = arr ** gamma / (arr ** gamma + (1 - arr) ** gamma)
+                arr = np.clip(adjusted, 0, 1)
+            self.execute_action({self.cfg['hand_type']: arr.tolist()})
+        self.gripper_count += 1
+
+        if 'head' in segments:
+            if self.head_count % self.cfg.get('head_freq', 40) == 0:
+                self.head_count = 0
+                head_action = segments['head']
+                self.execute_action({'head': head_action.tolist()})
+            self.head_count += 1
+        if 'waist' in segments:
+            self.execute_action({'waist': segments['waist'].tolist()})
+
+        # Count gripper value changes and send gripper command when accumulated changes reach threshold
+        # new_gripper_cmd = action[14:16]
+        # if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
+        #     self.gripper_count += 1
+        # if self.gripper_count > self.cfg['gripper_freq']:
+        #     self.execute_action({self.cfg['hand_type']: new_gripper_cmd.tolist()})
+        #     self.gripper_cmd = new_gripper_cmd
+        #     self.gripper_count = 0
     
     def execute_action(self, data):
         """Execute action interface without strategy.
@@ -67,22 +95,25 @@ class RobotBody(RobotBase):
             if mode == 'default':
                 target_pose = np.array(self.cfg['reset_robot_pos'])
             elif mode == 'zero':
-                target_pose = np.array([0] * 14 + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
+                arm_dim = self.action_layout['arm']['end'] - self.action_layout['arm']['start'] if 'arm' in self.action_layout else 14
+                target_pose = np.array([0] * arm_dim + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
             else:
                 print('[WARN] target_pose is None, can NOT execute reset_robot')
                 return
         else:
             target_pose = np.array(target_pose)
         
+        segments = {name: target_pose[v['start']:v['end']] for name, v in self.action_layout.items()}
         current_obs = self.retrieve_observation()
-        current_positions = current_obs['obs.state'][:14]
-        target_positions = target_pose[:14]
+        current_positions = current_obs['obs.state'][:len(segments.get('arm', []))]
+        target_positions = segments.get('arm', target_pose[:len(current_positions)])
         # Calculate joint position differences
         dis = np.abs(current_positions - target_positions)
         mask = dis > np.deg2rad(0.01)  # Decide whether to use interpolation strategy
         # If difference is small, move directly to target position
         if not np.any(mask):
-            self.execute_action({'arm': target_positions.tolist()})
+            if 'arm' in segments:
+                self.execute_action({'arm': target_positions.tolist()})
             time.sleep(0.01)
             return
         # Otherwise plan trajectory
@@ -93,14 +124,14 @@ class RobotBody(RobotBase):
             self.execute_action({'arm': traj})
             time.sleep(0.01)
 
-        if 'gripper' in self.cfg['hand_type']:
-            self.execute_action({self.cfg['hand_type']: target_pose[14:16].tolist()})
-            self.execute_action({'head': target_pose[16:18].tolist()})
-            self.execute_action({'waist': target_pose[18:20].tolist()})
-        elif self.cfg['hand_type'] == 'hand':
-            self.execute_action({'hand': target_pose[14:26].tolist()})
-            self.execute_action({'head': target_pose[26:28].tolist()})
-            self.execute_action({'waist': target_pose[28:30].tolist()})
+        if 'gripper' in self.cfg['hand_type'] and 'gripper' in segments:
+            self.execute_action({self.cfg['hand_type']: segments['gripper'].tolist()})
+        if 'hand' in segments:
+            self.execute_action({'hand': segments['hand'].tolist()})
+        if 'head' in segments:
+            self.execute_action({'head': segments['head'].tolist()})
+        if 'waist' in segments:
+            self.execute_action({'waist': segments['waist'].tolist()})
 
     def retrieve_observation(self):
         """Retrieve current observation data including camera images and joint states.
@@ -128,13 +159,18 @@ class RobotBody(RobotBase):
                     key = 'depth.head'
                 result[f'cam.{key}'] = image
 
-            joint_states = []
+            joint_states, gripper_start = [], 0
             for proprio in self.cfg['proprio_names']:
                 joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
                 currt_joint_states, timestamp = joint_states_nearest_fun(ref_timestamp)
+                if proprio == 'gripper':
+                    gripper_start = len(joint_states)
                 joint_states.extend(currt_joint_states)
             result['obs.state'] = np.array(joint_states)
-            self.current_state = result['obs.state']
+            self.current_state = result['obs.state'].copy()
+            vmin, vmax = 35, 120
+            self.current_state[gripper_start:gripper_start + 2] = (self.current_state[gripper_start:gripper_start + 2] - vmin) / (vmax - vmin) # norm
+            # currt_joint_states = np.array(list(currt_joint_states)) * (vmax - vmin) + vmin # re-norm
             return result
         except Exception as e:
             print(e)

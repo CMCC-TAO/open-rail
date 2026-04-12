@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from client.utils.util import run_time_decorator
+from client.utils.util import run_time_decorator, get_action_layout_info
 
 class TrajectoryGenerator():
     """Trajectory generator for robot motion planning and control.
@@ -20,6 +20,8 @@ class TrajectoryGenerator():
             config (ConfigDict): Configuration parameters for trajectory generation.
         """
         self.config = config
+        self.action_layout = dict(config.action_layout) if hasattr(config, 'action_layout') else {}
+        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
         # Create thread pools for parallel trajectory fitting
         self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers)
         self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers)
@@ -137,20 +139,26 @@ class TrajectoryGenerator():
         Returns:
             tuple: (fitted_trajectory, fitted_velocity, fitted_timestamps)
         """
-        # Preprocess action data - convert from action dimension format to joint dimension format
-        # print(action_chunk.shape)
-        joint_futures = [self.joint_fitting_executor.submit(self._joint_traj_fitting, timestamps, np.array(joint_chunk), index, start_time, end_time, deg, time_step) for index, joint_chunk in enumerate(action_chunk[0:self.config.joint_dim, :])]
-        gripper_futures = [self.gripper_fitting_executor.submit(self._gripper_traj_fitting, timestamps, np.array(joint_chunk), self.config.joint_dim+index, start_time, end_time, time_step) for index, joint_chunk in enumerate(action_chunk[self.config.joint_dim:, :])]
+        futures = []
+        for name, seg in self.action_layout.items():
+            for index in range(seg['start'], seg['end']):
+                joint_chunk = np.array(action_chunk[index, :])
+                if seg['policy'] == 'joint':
+                    futures.append(self.joint_fitting_executor.submit(
+                        self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
+                    ))
+                else:
+                    futures.append(self.gripper_fitting_executor.submit(
+                        self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
+                    ))
 
-        # Wait for all tasks to complete and get results
-        gripper_results = [future.result() for future in gripper_futures]
-        joint_results = [future.result() for future in joint_futures]
-        results = joint_results + gripper_results
+        results = [future.result() for future in futures]
         
         # Parse results - joint_results represent joint angle data, velocity_results represent joint velocity data
-        final_joint_results = [None] * len(results)
-        final_velocity_results = [None] * len(results)
-        final_acceleration_results = [None] * len(results)
+        action_dim = action_chunk.shape[0]
+        final_joint_results = [None] * action_dim
+        final_velocity_results = [None] * action_dim
+        final_acceleration_results = [None] * action_dim
         
         for index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted in results:
             final_joint_results[index] = joint_chunk_fitted

@@ -7,7 +7,6 @@ import logging
 import numpy as np
 from ml_collections import ConfigDict
 from collections import deque
-from scipy.interpolate import CubicSpline, interp1d
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -21,13 +20,12 @@ from client.core.save_lerobot import LeRobotDatasetWriter
 from visual.websocket_server import VLAWebSocketServer
 
 
-class VLAClientAsync():
-    """VLA (Vision-Language-Action) Client for real-time robot control.
+class VLAClientSync():
+    """VLA (Vision-Language-Action) Client [Synchronous Policy Inference] for real-time robot control.
     
     This class manages the complete pipeline for VLA-based robot control, including:
     - Observation data collection from robot sensors
     - Communication with VLA inference server
-    - Trajectory generation and fitting
     - Real-time robot control
     - Data recording for dataset creation
     """
@@ -44,7 +42,11 @@ class VLAClientAsync():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
+        self.config.observer.period = 1.0 / 30  # The teleoperation imaging frequency is 30 fps
         self.rdm = rdm
+        if self.config.inter_chunk_mode == 'sync':
+            self.rdm.sync_running = True
+            self.action_length = None
         self.traj_generator = traj_generator
         self.vla_zmq = vla_zmq_client
         self.robot = robot
@@ -66,12 +68,7 @@ class VLAClientAsync():
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
-        self.config.observer.period = 1.0 / self.config.observer.fps
-        if self.config.intra_chunk_mode == 'raw':
-            self.config.controller.period = self.config.observer.period * 1000.0
-            self.config.inter_chunk_mode = 'search_action'
-            self.config.search_length = 1
-        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
+        self.control_thread_timer = MultiThreadTimer((1.0/30)*1000, self._control_thread_fun)   # The teleoperation imaging frequency is 30 fps ( 33.33ms = 1s / 30fps)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
@@ -103,6 +100,12 @@ class VLAClientAsync():
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
         self.vis_prev_origin_idx = None
 
+        # The zmq client to communicate with action-state visualization server
+        # if self.config.show_action_state:
+        #    self.vis_action_state_zmq = vis_action_state.ZmqPlotClient()
+        #    self.vis_chunk_idx = 0
+        #    self.vis_global_step = 0
+
         # The zmq client to communicate with action-camera visualization server
         if self.config.show_action_cams_qt:
             self.vis_action_cams_zmq = ZMQClient(config.vis_zmq)
@@ -116,19 +119,18 @@ class VLAClientAsync():
         self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
 
         # Record data (action, velocity, acceleration) thread
-        if self.config.record_exp_data:
-            date_str = datetime.now().strftime("%Y%m%d%H%M%S")
-            out_dir = os.path.join("tmp", date_str)
-            os.makedirs(out_dir, exist_ok=True)
-            self.files = {
-                'action': open(os.path.join(out_dir, 'action.txt'), 'a'),
-                'velocity': open(os.path.join(out_dir, 'velocilty.txt'), 'a'),
-                'acceleration': open(os.path.join(out_dir, 'acceleration.txt'), 'a')
-            }
-            self.data_write_thread = threading.Thread(target=self._writer_thread)
-            self.act_write_buffer = deque(maxlen=1000)
-            self.vel_write_buffer = deque(maxlen=1000)
-            self.acc_write_buffer = deque(maxlen=1000)
+        date_str = datetime.now().strftime("%Y%m%d%H%M%S")
+        out_dir = os.path.join("tmp", date_str)
+        os.makedirs(out_dir, exist_ok=True)
+        self.files = {
+            'action': open(os.path.join(out_dir, 'action.txt'), 'a'),
+            'velocity': open(os.path.join(out_dir, 'velocilty.txt'), 'a'),
+            'acceleration': open(os.path.join(out_dir, 'acceleration.txt'), 'a')
+        }
+        self.data_write_thread = threading.Thread(target=self._writer_thread)
+        self.act_write_buffer = deque(maxlen=1000)
+        self.vel_write_buffer = deque(maxlen=1000)
+        self.acc_write_buffer = deque(maxlen=1000)
 
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
@@ -162,6 +164,12 @@ class VLAClientAsync():
         - Initializes trajectory fitting and control timestamps
         - Sets up the fitted action chunk for control
         """
+        if self.action_length is None or self.rdm.getCurrentActionIndex() == self.action_length - 1:
+            pass
+        else:
+            return
+
+
         # Disable automatic language switching during reset (but don't save/restore language)
         # saved_language = self.language
         self.allow_language_switch = False
@@ -198,11 +206,14 @@ class VLAClientAsync():
             self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
             # Record trajectory fitting timestamp
-            self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
+            action_chunk_fitted = np.vstack(action_chunk)
+            action_chunk_fitted = action_chunk_fitted.T
+            vel_chunk_fitted = np.zeros_like(action_chunk_fitted)
+            acc_chunk_fitted = np.zeros_like(action_chunk_fitted)
+            timestamps_fitted = np.array(timestamp_chunk)
+            self.action_length = len(action_chunk)
 
             # Record control timestamp
-            self.rdm.set_control_time_marker()
             self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted)
 
             # Compute average inference and trajectory fitting times
@@ -213,72 +224,6 @@ class VLAClientAsync():
         # self.language = saved_language
         self.allow_language_switch = True
     
-    @run_time_decorator
-    def inference_step(self):
-        """Regular inference step for continuous VLA inference.
-        
-        This method performs regular inference steps after the first inference:
-        - Retrieves observation data from the data manager
-        - Sends data to VLA server for inference
-        - Processes the returned action predictions
-        - Updates trajectory fitting with smoothing and search options
-        - Computes timing statistics
-        """
-        if not self.is_running_action:
-            return
-        
-        # Get observation data (thread-safe function, no lock needed)
-        data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.history_frame else 2)
-        if data is not None:
-            # Record inference start timestamp
-            self.rdm.set_infer_time_marker()
-            self.rdm.add_infer_count()
-            
-            # Send data for inference and wait for results
-            self.vla_zmq.sendMessage(data)
-            result = self.vla_zmq.recvMessage()
-            action_data = result['data']
-            
-            # Get current data timestamp and update timestamps
-            action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
-            self.rdm.set_observe_time_marker(loc_timestamp)
-            self.vis_idx_count = 0
-            self.vis_origin_chunk_action = action_chunk
-            
-            # Add action data (thread-safe function, no lock needed)
-            self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
-
-            # Record trajectory fitting timestamp
-            self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
-
-            # Record control timestamp
-            self.rdm.set_control_time_marker()
-            
-            # Get prob_progress from action data if available
-            prob_progress = None
-            if 'ext' in action_data and 'prob_progress' in action_data['ext']:
-                prob_progress = action_data['ext']['prob_progress']
-                # Check if prob_progress length > 1 to enable alignment processing
-                if not (isinstance(prob_progress, np.ndarray) and len(prob_progress) > 1):
-                    self.info_act['current_prob_progress'] = prob_progress
-                    if prob_progress >= self.config.thre_prob_progress and self.allow_language_switch:
-                        self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
-                    prob_progress = None
-                else:
-                    # prob_progress: (64,), interplot prob_progress to (420,)
-                    original_len, target_len = len(prob_progress), action_chunk_fitted.shape[1]
-                    x_original, x_target = np.linspace(0, 1, original_len), np.linspace(0, 1, target_len)
-                    interp_func = interp1d(x_original, prob_progress, kind='linear', fill_value='extrapolate')
-                    prob_progress = interp_func(x_target)
-
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, inter_chunk_mode=self.config.inter_chunk_mode, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
-
-            # Compute average inference and trajectory fitting times
-            self.rdm.compute_avg_infer_time()
-            self.rdm.compute_avg_traj_time()
-        else:
-            self.logger.warning("No observe data, skip inference.")
 
     def _control_thread_fun(self):
         """Control thread function for real-time robot action execution.
@@ -293,22 +238,17 @@ class VLAClientAsync():
         if not self.is_running_action:
             self.action_count = 0
             return
-        
-        # self.action_count += 1
-        # if self.action_count < 300:
-        #     return
 
         action_fitted, action_raw, vel_fitted, acc_fitted = self.rdm.get_action_fitted()
 
         if action_fitted is not None:
-
+            
             self.robot.control_robot(action_fitted)
 
             # tmp data buffer writing
-            if self.config.record_exp_data:
-                self.act_write_buffer.append(action_fitted)
-                self.vel_write_buffer.append(vel_fitted)
-                self.acc_write_buffer.append(acc_fitted)
+            self.act_write_buffer.append(action_fitted)
+            self.vel_write_buffer.append(vel_fitted)
+            self.acc_write_buffer.append(acc_fitted)
 
             with self.vis_action_lock:
                 if self.config.show_action_cams_qt:
@@ -330,73 +270,6 @@ class VLAClientAsync():
             self.info_act['action'] = action_fitted.shape
             
             self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw)
-
-    @run_time_decorator
-    def _traj_fitting(self, num_samples):
-        """Perform trajectory fitting for robot actions.
-        
-        This method retrieves action chunks from the real-time data manager,
-        performs polynomial fitting using the trajectory generator to create
-        smooth trajectories for robot control.
-        
-        Args:
-            num_samples (int): Number of action samples to use for fitting
-            
-        Returns:
-            tuple: A tuple containing:
-                - action_chunk_fitted (np.ndarray): Fitted action trajectory
-                - vel_chunk_fitted (np.ndarray): Fitted velocity trajectory  
-                - timestamps_fitted (np.ndarray): Corresponding timestamps
-        """
-        timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0, num_samples=num_samples)
-        self.logger.debug(f'timestamps for fitting: {timestamps[::10]}')
-        
-        start_time = timestamps[0]
-        end_time = timestamps[-1]
-        
-        if self.config.intra_chunk_mode == 'raw':
-            action_chunk_fitted = action_chunk
-            vel_chunk_fitted = np.zeros_like(action_chunk)
-            acc_chunk_fitted = np.zeros_like(action_chunk)
-            timestamps_fitted = timestamps  # original sparse timestamps
-        elif self.config.intra_chunk_mode == 'raw_ipt':
-            # Use CubicSpline interpolation for sparse raw chunks
-            action_chunk = np.asarray(action_chunk)
-            timestamps = np.asarray(timestamps)
-            
-            # Create dense timestamps for interpolation
-            time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
-            timestamps_fitted = np.arange(start_time, end_time, time_step)
-            
-            # Interpolate each joint dimension using CubicSpline
-            n_joints = action_chunk.shape[0]
-            action_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            vel_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            acc_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            
-            step_index_set = set(self.step_indices)
-            for j in range(n_joints):
-                # Gripper and head dimensions use zero-order hold interpolation (step-like)
-                if j in step_index_set:
-                    interp_func = interp1d(timestamps, action_chunk[j], kind='previous', bounds_error=False, fill_value='extrapolate')
-                    action_chunk_fitted[j] = interp_func(timestamps_fitted)
-                    vel_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
-                    acc_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
-                    continue
-                cs = CubicSpline(timestamps, action_chunk[j])
-                action_chunk_fitted[j] = cs(timestamps_fitted)
-                vel_chunk_fitted[j] = cs(timestamps_fitted, 1)  # 1st derivative
-                acc_chunk_fitted[j] = cs(timestamps_fitted, 2)  # 2nd derivative
-        else:  # fit mode (default)
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.traj_generator.traj_fitting(
-                timestamps=timestamps, 
-                action_chunk=action_chunk, 
-                start_time=start_time, 
-                end_time=end_time, 
-                deg=self.config.fitting_deg, 
-                time_step=self.config.fitting_time_step / 1000
-            )
-        return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted
 
     def _process_image(self, key, value):
         """Process image data by padding, resize and encoding.
@@ -494,7 +367,15 @@ class VLAClientAsync():
         action_type = action['type']
         
         if action_type == 'vla_action':
+
             pred_action = action['pred_action']
+            # pred_action = pred_action[:,0:16]
+            # # temp = pred_action.copy()
+            # # pred_action[:, 0:7] = temp[:, 7:14]
+            # # pred_action[:, 7:14] = temp[:, 0:7]
+            # # pred_action[:, 14] = temp[:, 15]
+            # # pred_action[:, 15] = temp[:, 14]
+            # # print(pred_action.shape)
             ref_timestamp = action['ref_timestamp']
             loc_timestamp = action['loc_timestamp']
             # Generate action and timestamp chunks
@@ -528,8 +409,7 @@ class VLAClientAsync():
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.start()
 
-        if self.config.record_exp_data:
-            self.data_write_thread.start()
+        self.data_write_thread.start()
         
         self.logger.info('Inference client started.')
     
@@ -548,8 +428,7 @@ class VLAClientAsync():
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.join(timeout=1.0)
 
-        if self.config.record_exp_data:
-            self.data_write_thread.join(timeout=1.0)
+        self.data_write_thread.join(timeout=1.0)
 
         self.logger.info('Inference client stopped.')
 
@@ -571,9 +450,8 @@ class VLAClientAsync():
 
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.join(timeout=1.0)
-        
-        if self.config.record_exp_data:
-            self.data_write_thread.join(timeout=1.0)
+
+        self.data_write_thread.join(timeout=1.0)
         
         # Stop and join control thread timer
         self.control_thread_timer.stop()
@@ -587,9 +465,8 @@ class VLAClientAsync():
         self.websocket_server.stop_server()
 
         # close file IO writer
-        if self.config.record_exp_data:
-            for f in self.files.values():
-                f.close()
+        for f in self.files.values():
+            f.close()
 
         self.logger.info('Inference client closed.')
 
@@ -599,14 +476,9 @@ class VLAClientAsync():
                 time.sleep(0.001)
                 continue
 
-            if self.rdm.infer_count == 0:
-                self.inference_first()
-                # time.sleep(self.config.controller.wait_step * self.config.controller.control_period/1000)
-                time.sleep(self.config.sleep_time)
-            else:
-                self.inference_step()
-                # self.inferenceFirstThreadFun()
-                time.sleep(self.config.sleep_time)
+            self.inference_first()
+            time.sleep(self.config.sleep_time)
+
             # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
             symbol = '=' * 10
 
@@ -617,35 +489,28 @@ class VLAClientAsync():
         Args:
             action_fitted: Predicted action values for robot joints
             vel_fitted: Predicted velocity values (of action_fitted) for robot joints
-            acc_fitted: Predicted acceleration values (of action_fitted) for robot joints
-            action_raw: Raw action values before fitting
+            aacc_fittedction: Predicted acceleration values (of action_fitted) for robot joints
         """
-        # Convert to numpy arrays once (action_fitted/vel_fitted/acc_fitted are already numpy arrays)
-        action_np = np.asarray(action_fitted)
-        action_vel = np.asarray(vel_fitted)
-        action_acc = np.asarray(acc_fitted)
-        state_np = np.asarray(self.robot.current_state)
-        
-        # Control period in seconds
-        dt_ctrl = self.config.controller.period / 1000.0
-        
-        # Build position data for action and state
-        list_data = [
-            {
+        # # Update action_fitted velocity and acceleration ==================================================================
+        list_data = [{
                 'tab': 'position',
                 'type': 'action',
                 'x': self.vis_global_step,
-                'joints_y': action_np.tolist()
-            },
-            {
+                'joints_y': action_fitted.tolist()
+            }, {
                 'tab': 'position',
                 'type': 'state',
                 'x': self.vis_global_step,
-                'joints_y': state_np.tolist()
-            }
-        ]
+                'joints_y': self.robot.current_state.tolist()
+            }]
+        action_np = np.asarray(action_fitted)
+        action_vel = np.asarray(vel_fitted)
+        action_acc = np.asarray(acc_fitted)
 
-        # Calculate robot state velocity and acceleration using finite difference
+        # # Calculate robot state velocity and acceleration ==================================================================
+        state_np = np.asarray(self.robot.current_state)
+        dt_ctrl = self.config.controller.period / 1000.0
+
         if self.vis_prev_state is None:
             state_vel = np.zeros_like(state_np)
             state_acc = np.zeros_like(state_np)
@@ -656,7 +521,6 @@ class VLAClientAsync():
             else:
                 state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
 
-        # Add velocity and acceleration data for action and state
         list_data.extend([
             {
                 'tab': 'velocity',
@@ -684,8 +548,7 @@ class VLAClientAsync():
             },
         ])
 
-        # Calculate origin (raw action) velocity and acceleration
-        # Origin data is sampled at observer frequency, so use observer.period for dt
+        # # Calculate action_raw velocity and acceleration ==================================================================
         origin_idx = self.vis_idx_count // int(self.vis_ratio) + 4
         if (self.vis_idx_count % int(self.vis_ratio) == 0 and origin_idx < len(self.vis_origin_chunk_action)):
             origin_np = np.asarray(action_raw)
@@ -695,11 +558,11 @@ class VLAClientAsync():
                 'x': self.vis_global_step,
                 'joints_y': origin_np.tolist()
             })
-            
-            # Use observer period for origin velocity/acceleration calculation
-            # This is the actual time between consecutive origin samples
-            dt_origin = self.config.observer.period
-            
+            if self.vis_prev_origin_idx is None:
+                dt_origin = self.config.observer.period
+            else:
+                delta_idx = origin_idx - self.vis_prev_origin_idx
+                dt_origin = max(delta_idx, 1) * (self.config.fitting_time_step / 1000.0)
             if self.vis_prev_origin is None:
                 origin_vel = np.zeros_like(origin_np)
                 origin_acc = np.zeros_like(origin_np)
@@ -728,12 +591,10 @@ class VLAClientAsync():
             self.vis_prev_origin_vel = origin_vel
             self.vis_prev_origin_idx = origin_idx
 
-        # Update previous state for next iteration
         self.vis_prev_action = action_np
         self.vis_prev_action_vel = action_vel
         self.vis_prev_state = state_np
         self.vis_prev_state_vel = state_vel
-        
         self.websocket_server.update_chart_data(list_data)
         self.vis_global_step += 1
         self.vis_idx_count += 1
@@ -765,6 +626,7 @@ class VLAClientAsync():
                         print("Send failed, action-camera visualization server probably offline")
 
             time.sleep(0.02)
+
     def _writer_thread(self):
         while self.running:
             # print("_writer_thread")
@@ -789,6 +651,7 @@ class VLAClientAsync():
             self.files['action'].write(line_af)
             self.files['velocity'].write(line_vf)
             self.files['acceleration'].write(line_ac)
+
 
 if __name__ == "__main__":
     pass
