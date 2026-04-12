@@ -27,7 +27,7 @@ def get_user_config():
     """
     return {
         # Simple parameter overrides
-        'chunk_trans_mode': 'poly',
+        'inter_chunk_mode': 'min_jerk',
         'language': [
             '[PLACE_CUP_ON_TABLE_RIGHT] [RIGHT_ARM] With the right arm, place the cup onto the table.',
             '[PLACE_CUP_ON_TABLE_LEFT] [LEFT_ARM] Using the left arm, place the cup onto the table.',

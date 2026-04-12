@@ -3,12 +3,120 @@ import time
 import math
 import threading
 import numpy as np
+from numba import njit
 import logging
 import matplotlib.pyplot as plt
 from collections import deque
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index
+from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index, get_action_layout_info
+
+
+@njit(fastmath=True, cache=True)
+def _smooth_velocity_transition_numba(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
+    # max_vel=2.0, max_acc=4.0, kp=20.0, kd=6.0
+    # max_vel=2.0, max_acc=4.0, kp=30.0, kd=10.0
+    """
+    This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
+    Note: Under the same parameter settings, the robot's operation speed using this strategy is slower than 'search_action' and 'poly'. 
+    Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
+
+    This function is **accelerated by Numba** using `@njit`, which compiles the
+    Python code into optimized machine code in *nopython mode*.
+    Key acceleration strategies:
+      1. `@njit`: eliminates Python interpreter overhead by compiling to native code.
+      2. Loop-based implementation (no Python objects or dynamic typing),
+         enabling efficient JIT optimization.
+      3. `fastmath=True`: allows aggressive floating-point optimizations
+         (acceptable for control / smoothing tasks with tolerance to small
+         numerical errors).
+      4. `cache=True`: caches the compiled binary to disk to avoid recompilation
+         on subsequent runs.
+
+    Note:
+      - All inputs must be NumPy arrays with fixed dtypes (e.g., float32/float64).
+      - Dynamic Python features and object operations are intentionally avoided
+        to ensure compatibility with Numba's nopython mode.
+
+    Parameters
+    ----------
+    joint_seq : ndarray of shape (dof, T)
+        Target joint position sequence to be tracked.
+    init_pos : ndarray of shape (dof,)
+        Initial joint positions.
+    init_vel : ndarray of shape (dof,)
+        Initial joint velocities.
+    init_acc : ndarray of shape (dof,)
+        Initial joint accelerations.
+    dt : float, optional
+        Time step for discrete integration.
+    max_vel : float, optional
+        Maximum allowed joint velocity (symmetric bound).
+    max_acc : float, optional
+        Maximum allowed joint acceleration (symmetric bound).
+    kp : float, optional
+        Proportional gain of the PD controller.
+    kd : float, optional
+        Derivative gain of the PD controller.
+
+    Returns
+    -------
+    pos_seq : ndarray of shape (dof, T)
+        Smoothed joint position sequence.
+    vel_seq : ndarray of shape (dof, T)
+        Corresponding joint velocity sequence.
+    acc_seq : ndarray of shape (dof, T)
+        Corresponding joint acceleration sequence.
+    """
+
+    # Number of degrees of freedom and time steps
+    dof, T = joint_seq.shape
+
+    # Current joint states (copied to avoid modifying inputs)
+    pos = init_pos.copy()
+    vel = init_vel.copy()
+    acc = init_acc.copy()
+
+    # Output buffers
+    pos_seq = np.zeros((dof, T))
+    vel_seq = np.zeros((dof, T))
+    acc_seq = np.zeros((dof, T))
+
+    # Time integration loop
+    for i in range(T):
+        # Target joint positions at current timestep
+        target = joint_seq[:, i]
+
+        # Per-joint PD control and state update
+        for j in range(dof):
+            # PD control law (position error + velocity damping)
+            acc[j] = kp * (target[j] - pos[j]) - kd * vel[j]
+
+            # Acceleration saturation
+            if acc[j] > max_acc:
+                acc[j] = max_acc
+            elif acc[j] < -max_acc:
+                acc[j] = -max_acc
+
+            # Velocity integration
+            vel[j] += acc[j] * dt
+
+            # Velocity saturation
+            if vel[j] > max_vel:
+                vel[j] = max_vel
+            elif vel[j] < -max_vel:
+                vel[j] = -max_vel
+
+            # Position integration
+            pos[j] += vel[j] * dt
+
+            # Record states
+            pos_seq[j, i] = pos[j]
+            vel_seq[j, i] = vel[j]
+            acc_seq[j, i] = acc[j]
+
+    return pos_seq, vel_seq, acc_seq
+
 
 class RealtimeDataManager():
     """Real-time data manager for handling observation data and action chunks in VLA inference system.
@@ -26,6 +134,8 @@ class RealtimeDataManager():
         """
         self.logger = logging.getLogger(__name__)
         self.rdm_config = rdm_config
+        self.action_layout = dict(rdm_config.action_layout) if hasattr(rdm_config, 'action_layout') else {}
+        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
         self.observe_buffer = deque(maxlen=rdm_config.max_len)
         self.action_chunks = []
         self.timestamp_chunks = []
@@ -50,12 +160,15 @@ class RealtimeDataManager():
         self.isDraw = False
 
         # Timing markers for inference, trajectory fitting and control
-        self.start_infer_marker = None
-        self.start_traj_marker = None
-        self.start_ctrl_marker = None
+        self.start_infer_marker = 0.0
+        self.start_traj_marker = 0.0
+        self.start_ctrl_marker = 0.0
         self.avg_infer_time = 0.0
         self.avg_traj_time = 0.0
         self.infer_count = 0
+
+        # Syncchronous Runing Flag
+        self.sync_running = False
 
     def add_infer_count(self):
         """Add one to infer count for each inference step.
@@ -110,6 +223,17 @@ class RealtimeDataManager():
         currt_traj_time = self.start_ctrl_marker - self.start_traj_marker
         self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count
         self.logger.debug(f'avg traj time: {self.avg_traj_time}')
+
+    def _get_joint_indices(self, action_chunk):
+        if self.joint_indices:
+            return self.joint_indices
+        return list(range(action_chunk.shape[0]))
+
+    def _get_step_indices(self, action_chunk):
+        if self.step_indices:
+            return self.step_indices
+        joint_indices = set(self._get_joint_indices(action_chunk))
+        return [index for index in range(action_chunk.shape[0]) if index not in joint_indices]
     
     def add_observe_data(self, frame):
         """Add observe data to buffer. The observe data is a dictionary containing the robot state, camera images and timestamps.
@@ -236,6 +360,18 @@ class RealtimeDataManager():
             else:
                 return self.timestamps_fitted[self.action_chunk_index]
                 
+    def getCurrentActionIndex(self):
+        """Get the current action index.
+        
+        Returns:
+            int: Current index or 0 if action_chunk_index is None.
+        """
+        with self.polynomial_thread_lock:
+            if self.action_chunk_index is None:
+                return 0
+            else:
+                return self.action_chunk_index
+                
     def getFutureTime(self, index_offset=0):
         """Get the future time based on the fitted timestamps with an index offset.
         
@@ -282,7 +418,7 @@ class RealtimeDataManager():
         """
         This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
         Note: Under the same parameter settings, the robot's operation speed using this strategy is slower than 'search_action' and 'poly'. 
-        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/manage/eyyw2n63gaugbk36) for acceleration, or contact the developers for assistance.
+        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
 
         Args:
             joint_seq: np.ndarray, target position sequence
@@ -339,7 +475,7 @@ class RealtimeDataManager():
                                 acc_chunk_fitted,
                                 timestamps_fitted,
                                 prob_progress=None,
-                                chunk_trans_mode = None,
+                                inter_chunk_mode = None,
                                 search_length = 20,
                                 smooth_action = False,
                                 smooth_length = 20,
@@ -362,7 +498,7 @@ class RealtimeDataManager():
             gripper_offset (int, optional): Gripper offset to adjust the delay of gripper response. Defaults to 25.
         """
         # update index firstly;
-        if self.action_chunk_index is None:
+        if self.action_chunk_index is None or self.sync_running:
             with self.polynomial_thread_lock:
                 self.action_chunk_index = 0
                 self.action_chunk_fitted = action_chunk_fitted
@@ -383,34 +519,65 @@ class RealtimeDataManager():
                     break
             currt_action = None
             currt_vel = None
+            joint_indices = self._get_joint_indices(action_chunk_fitted)
+            step_indices = self._get_step_indices(action_chunk_fitted)
+            with self.polynomial_thread_lock:
+                currt_action_full = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+                currt_vel_full = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
+                currt_acc_full = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else np.zeros_like(currt_vel_full)
 
-            if chunk_trans_mode == 'search_action':
+            if inter_chunk_mode == 'search_action':
                 candidate_action_chunk = None
                 candidate_action_chunk = copy.deepcopy(action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
-                with self.polynomial_thread_lock:
-                    currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
-                    currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index]
+                currt_action = currt_action_full
+                currt_vel = currt_vel_full
                 index_offset = self._search_smooth_action(currt_action, currt_vel, candidate_action_chunk, search_length)
                 target_chunk_index += index_offset
-            elif chunk_trans_mode == 'poly':
+            elif inter_chunk_mode == 'poly':
                 # can NOT use with search_action at the same time
+                currt_action = currt_action_full
+                currt_vel = currt_vel_full
                 action_chunk_fitted = self._poly_chunk_transition(
                     action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
                 )
-            elif chunk_trans_mode == 'smooth_velocity':
-                with self.polynomial_thread_lock:
-                    currt_action = self.action_chunk_fitted[:14, self.action_chunk_index].copy()
-                    currt_vel = self.vel_chunk_fitted[:14, self.action_chunk_index].copy()
-                    currt_acc = self.acc_chunk_fitted[:14, self.action_chunk_index].copy()
-                target_action_segment = action_chunk_fitted[:14, target_chunk_index:].copy()
+            elif inter_chunk_mode == 'smooth_velocity':
+                currt_action = currt_action_full[joint_indices]
+                currt_vel = currt_vel_full[joint_indices]
+                currt_acc = currt_acc_full[joint_indices]
+                target_action_segment = action_chunk_fitted[joint_indices, target_chunk_index:].copy()
                 delat_t = timestamps_fitted[1]
-                sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
-                action_chunk_fitted[:14, target_chunk_index:] = sim_action
-                vel_chunk_fitted[:14, target_chunk_index:] = sim_vel
-                acc_chunk_fitted[:14, target_chunk_index:] = sim_acc 
+                # sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
+                sim_action, sim_vel, sim_acc = _smooth_velocity_transition_numba(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
+                action_chunk_fitted[joint_indices, target_chunk_index:] = sim_action
+                # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
+                # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
+            elif inter_chunk_mode == 'min_jerk':
+                currt_action = currt_action_full
+                currt_vel = currt_vel_full
+                action_chunk_fitted = self._min_jerk_chunk_transition(
+                    action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
+                )
+            elif inter_chunk_mode == 'bspline':
+                currt_action = currt_action_full
+                currt_vel = currt_vel_full
+                action_chunk_fitted = self._bspline_chunk_transition(
+                    action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
+                )
             else:
                 pass
-                
+            
+            # # calculate velocity and acceleration in a unified format
+            action_future = action_chunk_fitted[joint_indices, target_chunk_index:].copy()
+            action_future_1 = np.concatenate((currt_action_full[joint_indices, None], action_future[:, :-1]), axis=1)
+            vel_future = (action_future - action_future_1) / timestamps_fitted[1]
+            
+            vel_future_1 = np.concatenate((currt_vel_full[joint_indices, None], vel_future[:, :-1]), axis=1)
+            acc_future = (vel_future - vel_future_1) / timestamps_fitted[1]
+
+            # # Update velocity and acceleration sequences
+            vel_chunk_fitted[joint_indices, target_chunk_index:] = vel_future
+            acc_chunk_fitted[joint_indices, target_chunk_index:] = acc_future 
+
             # weighted smoothing
             if smooth_action:
                 if currt_action is None:
@@ -419,7 +586,7 @@ class RealtimeDataManager():
                 smooth_length = min(smooth_length, len(timestamps_fitted) - target_chunk_index)
                 for index in range(smooth_length):
                     ratio = (1 - smooth_base) * math.pow(index / smooth_length, smooth_ratio)
-                    action_chunk_fitted[:14, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_fitted[:14, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action[:14]
+                    action_chunk_fitted[joint_indices, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_fitted[joint_indices, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action_full[joint_indices]
                     
             with self.polynomial_thread_lock:
                 self.action_chunk_index = target_chunk_index
@@ -429,11 +596,12 @@ class RealtimeDataManager():
                 self.timestamps_fitted = timestamps_fitted
                 self.prob_progress = prob_progress
                 # Apply gripper offset to compensate for gripper response delay
-                if gripper_offset > 0:
-                    self.action_chunk_fitted[14:, :-gripper_offset] = action_chunk_fitted[14:, gripper_offset:]
-                else:
-                    chunk_length = self.action_chunk_fitted.shape[-1]
-                    self.action_chunk_fitted[14:, -gripper_offset:] = action_chunk_fitted[14:, :chunk_length + gripper_offset]
+                if step_indices:
+                    if gripper_offset > 0:
+                        self.action_chunk_fitted[step_indices, :-gripper_offset] = action_chunk_fitted[step_indices, gripper_offset:]
+                    else:
+                        chunk_length = self.action_chunk_fitted.shape[-1]
+                        self.action_chunk_fitted[step_indices, -gripper_offset:] = action_chunk_fitted[step_indices, :chunk_length + gripper_offset]
 
     def _poly_chunk_transition(self, new_action_chunk, new_vel_chunk, new_timestamps, target_index, current_index):
         """Smooth transition across action chunks, ensuring continuity of position, velocity, and acceleration.
@@ -476,8 +644,8 @@ class RealtimeDataManager():
             new_acc = np.zeros_like(new_vel)
             
         # use quintic polynomial to smooth transition, ensuring position, velocity, and acceleration continuity
-        # transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
-        transition_length = new_action_chunk.shape[1] // 2
+        transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
+        # transition_length = new_action_chunk.shape[1] // 2
         # transition_length = current_index * 2
         # speed_diff = np.linalg.norm(current_vel - new_vel)
         # transition_length = min(max(50, int(speed_diff * 10)), 300)
@@ -488,13 +656,15 @@ class RealtimeDataManager():
             
         # compute smooth transition trajectory for each joint
         smoothed_chunk = new_action_chunk.copy()
-        for joint_idx in range(min(14, new_action_chunk.shape[0])):  # only process first 14 joints
+        end_index = target_index + transition_length - 1
+        joint_indices = self._get_joint_indices(new_action_chunk)
+        for joint_idx in joint_indices:
             # boundary conditions: starting point position, velocity, acceleration
             p0, v0, a0 = current_pos[joint_idx], current_vel[joint_idx], current_acc[joint_idx]
             # endpoint position, velocity, acceleration
-            pf = new_action_chunk[joint_idx, target_index + transition_length - 1]
-            vf = new_vel_chunk[joint_idx, target_index + transition_length - 1]
-            af = new_acc[joint_idx] if target_index + transition_length - 1 < len(new_acc) else 0.0
+            pf = new_action_chunk[joint_idx, end_index]
+            vf = new_vel_chunk[joint_idx, end_index]
+            af = new_acc[joint_idx] if end_index < len(new_acc) else 0.0
             
             # normalize transition time to [0,1]
             t_transition = np.linspace(0, 1, transition_length)
@@ -535,6 +705,180 @@ class RealtimeDataManager():
                     
                     smoothed_pos = h00*p0 + h10*v0 + h01*pf + h11*vf
                     smoothed_chunk[joint_idx, target_index + i] = smoothed_pos
+        
+        return smoothed_chunk
+
+    def _min_jerk_chunk_transition(self, new_action_chunk, new_vel_chunk, new_acc_chunk, new_timestamps, target_index, current_index):
+        """Minimum jerk trajectory minimizes the integral of jerk (time derivative of acceleration) over the entire trajectory:
+            J = ∫ (d³x/dt³)² dt
+        For boundary conditions [x0, v0, a0] → [xf, vf, af], the minimum jerk trajectory solution is a quintic polynomial:
+            x(t) = a0 + a1*t + a2*t² + a3*t³ + a4*t⁴ + a5*t⁵
+        
+        Compared to ordinary quintic polynomials, the minimum jerk version uses a closed-form solution (Flash & Hogan, 1985).
+        
+        Args:
+            new_action_chunk: New action trajectory [dof, T]
+            new_vel_chunk: New velocity trajectory [dof, T]  
+            new_acc_chunk: New acceleration trajectory [dof, T]
+            new_timestamps: Timestamp sequence
+            target_index: Target starting index of new trajectory
+            current_index: Current trajectory index
+            
+        Returns:
+            np.array: Smoothly transitioned action trajectory
+        """
+        if self.action_chunk_fitted is None or self.vel_chunk_fitted is None:
+            return new_action_chunk
+            
+        with self.polynomial_thread_lock:
+            current_pos = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+            current_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
+            current_acc = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else np.zeros_like(current_vel)
+        
+        # Get target state
+        target_pos = new_action_chunk[:, target_index].copy()
+        target_vel = new_vel_chunk[:, target_index].copy()
+        target_acc = new_acc_chunk[:, target_index].copy() if new_acc_chunk is not None else np.zeros_like(target_vel)
+        
+        # Adaptive transition length: based on pos/vel/acc difference
+        joint_indices = self._get_joint_indices(new_action_chunk)
+        pos_diff = np.linalg.norm(current_pos[joint_indices] - target_pos[joint_indices])
+        vel_diff = np.linalg.norm(current_vel[joint_indices] - target_vel[joint_indices])
+        acc_diff = np.linalg.norm(current_acc[joint_indices] - target_acc[joint_indices])
+        
+        # Base transition length + pos/vel/acc difference adjustment
+        base_transition = new_action_chunk.shape[1] // 2
+        adaptive_factor = min(2.0, 0.5 + pos_diff * 2.0 + vel_diff * 1.5 + acc_diff * 0.3)
+        transition_length = min(int(base_transition * adaptive_factor), new_action_chunk.shape[1] - target_index)
+        # print('\n', base_transition, adaptive_factor, transition_length)
+        
+        if transition_length <= 1:
+            return new_action_chunk
+            
+        smoothed_chunk = new_action_chunk.copy()
+        
+        # Calculate transition time
+        dt = new_timestamps[1] - new_timestamps[0] if len(new_timestamps) > 1 else 0.005
+        T = transition_length * dt  # Total transition time
+        
+        # End state (end of transition region)
+        end_index = min(target_index + transition_length - 1, new_action_chunk.shape[1] - 1)
+        
+        for joint_idx in joint_indices:
+            # Boundary conditions
+            x0 = current_pos[joint_idx]
+            v0 = current_vel[joint_idx] * T  # Normalized velocity
+            a0 = current_acc[joint_idx] * T * T  # Normalized acceleration
+            
+            xf = new_action_chunk[joint_idx, end_index]
+            vf = new_vel_chunk[joint_idx, end_index] * T if end_index < new_vel_chunk.shape[1] else 0.0
+            af = (new_acc_chunk[joint_idx, end_index] * T * T) if (new_acc_chunk is not None and end_index < new_acc_chunk.shape[1]) else 0.0
+            
+            # Minimum jerk trajectory closed-form solution (Flash & Hogan, 1985)
+            for i in range(transition_length):
+                tau = i / (transition_length - 1) if transition_length > 1 else 1.0
+                tau2 = tau * tau
+                tau3 = tau2 * tau
+                tau4 = tau3 * tau
+                tau5 = tau4 * tau
+                
+                # Minimum jerk polynomial basis functions
+                h0 = 1 - 10*tau3 + 15*tau4 - 6*tau5  # Position basis function for x0
+                h1 = tau - 6*tau3 + 8*tau4 - 3*tau5  # Velocity basis function for v0
+                h2 = 0.5*tau2 - 1.5*tau3 + 1.5*tau4 - 0.5*tau5  # Acceleration basis function for a0
+                h3 = 10*tau3 - 15*tau4 + 6*tau5  # Position basis function for xf
+                h4 = -4*tau3 + 7*tau4 - 3*tau5  # Velocity basis function for vf
+                h5 = 0.5*tau3 - tau4 + 0.5*tau5  # Acceleration basis function for af
+                
+                smoothed_pos = h0*x0 + h1*v0 + h2*a0 + h3*xf + h4*vf + h5*af
+                
+                # Smooth blending with target trajectory (end gradient)
+                blend_start = 0.7  # Start blending at 70%
+                if tau > blend_start:
+                    blend_ratio = (tau - blend_start) / (1.0 - blend_start)
+                    target_pos_at_i = new_action_chunk[joint_idx, target_index + i] if (target_index + i) < new_action_chunk.shape[1] else xf
+                    smoothed_pos = (1 - blend_ratio) * smoothed_pos + blend_ratio * target_pos_at_i
+                
+                if target_index + i < smoothed_chunk.shape[1]:
+                    smoothed_chunk[joint_idx, target_index + i] = smoothed_pos
+        
+        return smoothed_chunk
+
+    def _bspline_chunk_transition(self, new_action_chunk, new_vel_chunk, new_timestamps, target_index, current_index, num_control_points=6):
+        """B-Spline is a parametric curve defined by control points and basis functions:
+            C(t) = Σ Ni,p(t) * Pi
+        Where Pi are control points, Ni,p(t) are p-th order B-Spline basis functions.
+        
+        Args:
+            new_action_chunk: New action trajectory
+            new_vel_chunk: New velocity trajectory
+            new_timestamps: Timestamp sequence
+            target_index: Starting index
+            current_index: Current index
+            num_control_points: Number of control points, more points = more precise but slower
+            
+        Returns:
+            np.array: Smoothly transitioned action trajectory
+        """
+        from scipy.interpolate import make_interp_spline
+        
+        if self.action_chunk_fitted is None:
+            return new_action_chunk
+            
+        with self.polynomial_thread_lock:
+            current_pos = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+            current_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
+        
+        transition_length = min(new_action_chunk.shape[1] // 3, new_action_chunk.shape[1] - target_index)
+        
+        if transition_length <= 3:
+            return new_action_chunk
+            
+        smoothed_chunk = new_action_chunk.copy()
+        dt = new_timestamps[1] - new_timestamps[0] if len(new_timestamps) > 1 else 0.005
+        
+        # Sample control point indices
+        control_indices = np.linspace(0, transition_length - 1, num_control_points).astype(int)
+        
+        for joint_idx in range(min(14, new_action_chunk.shape[0])):
+            # Build control points
+            control_points = []
+            control_times = []
+            
+            # Starting point (current state)
+            control_points.append(current_pos[joint_idx])
+            control_times.append(0.0)
+            
+            # Intermediate control points (sampled from target trajectory)
+            for i, idx in enumerate(control_indices[1:], 1):
+                actual_idx = min(target_index + idx, new_action_chunk.shape[1] - 1)
+                control_points.append(new_action_chunk[joint_idx, actual_idx])
+                control_times.append(idx * dt)
+            
+            control_points = np.array(control_points)
+            control_times = np.array(control_times)
+            
+            try:
+                # Cubic B-Spline interpolation, boundary conditions use current velocity
+                bc_type = ((1, current_vel[joint_idx]), (1, new_vel_chunk[joint_idx, min(target_index + transition_length - 1, new_vel_chunk.shape[1] - 1)]))
+                spline = make_interp_spline(control_times, control_points, k=3, bc_type=bc_type)
+                
+                # Sample in the transition interval
+                sample_times = np.linspace(0, control_times[-1], transition_length)
+                smoothed_positions = spline(sample_times)
+                
+                for i in range(transition_length):
+                    if target_index + i < smoothed_chunk.shape[1]:
+                        smoothed_chunk[joint_idx, target_index + i] = smoothed_positions[i]
+                        
+            except Exception as e:
+                # Fall back to linear interpolation when B-Spline fails
+                self.logger.warning(f"B-Spline failed for joint {joint_idx}: {e}, using linear interpolation")
+                for i in range(transition_length):
+                    t = i / (transition_length - 1) if transition_length > 1 else 1.0
+                    target_idx = min(target_index + transition_length - 1, new_action_chunk.shape[1] - 1)
+                    if target_index + i < smoothed_chunk.shape[1]:
+                        smoothed_chunk[joint_idx, target_index + i] = (1 - t) * current_pos[joint_idx] + t * new_action_chunk[joint_idx, target_idx]
         
         return smoothed_chunk
 
@@ -582,35 +926,6 @@ class RealtimeDataManager():
         self.logger.debug(f'target_index: {target_index}, qualified dim: {qualified_joint_num}')
         return target_index
 
-    def smoothActionTrajOLD(self, currt_action, currt_vel, candidate_action_chunk, max_acc, smooth_length=15):
-        action_dim = len(currt_action)
-        max_accs = np.array([max_acc] * len(currt_action))
-        period = 0.005
-        
-        for index in range(smooth_length):
-            candidate_action = candidate_action_chunk[:, index]
-            action_diff = candidate_action - currt_action
-            acc_flag = np.array([1.0 if joint_diff > 0.0 else -1.0 for joint_diff in action_diff])
-            next_max_vel = currt_vel + acc_flag * max_accs * period
-            next_max_action = currt_action + currt_vel * period + 0.5 * acc_flag * max_accs * period * period
-            
-            for joint_index in range(action_dim):
-                if acc_flag[joint_index] == 1.0:
-                    if candidate_action[joint_index] > next_max_action[joint_index]:
-                        candidate_action[joint_index] = next_max_action[joint_index]
-                        currt_vel[joint_index] = next_max_vel[joint_index]
-                    else:
-                        currt_vel[joint_index] = (candidate_action[joint_index] - currt_action[joint_index]) / period
-                elif acc_flag[joint_index] == -1.0:
-                    if candidate_action[joint_index] < next_max_action[joint_index]:
-                        candidate_action[joint_index] = next_max_action[joint_index]
-                        currt_vel[joint_index] = next_max_vel[joint_index]
-                    else:
-                        currt_vel[joint_index] = (candidate_action[joint_index] - currt_action[joint_index]) / period
-                        
-            currt_action = candidate_action
-        return candidate_action_chunk
-    
     def get_action_fitted(self):
         """Get the current action (fitted and raw) indexed by action_chunk_index.
 
@@ -619,7 +934,7 @@ class RealtimeDataManager():
         """
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:
-                return None, None
+                return None, None, None, None
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
             # print(self.action_chunk_fitted.shape, len(self.action_chunks), self.action_chunks[0].shape, "!"*50)
             action_raw_index = int(self.action_chunk_index/(self.action_chunk_fitted.shape[1]/len(self.action_chunks)))
@@ -627,7 +942,9 @@ class RealtimeDataManager():
             # print(action_raw_index)
             action_raw = self.action_chunks[action_raw_index]
             action_fitted = self.action_chunk_fitted[:, self.action_chunk_index]
-            return action_fitted, action_raw
+            vel_fitted = self.vel_chunk_fitted[:, self.action_chunk_index]
+            acc_fitted = self.acc_chunk_fitted[:, self.action_chunk_index]
+            return action_fitted, action_raw, vel_fitted, acc_fitted
     
     def get_prob_progress(self):
         """Get the current prob_progress value indexed by action_chunk_index.
