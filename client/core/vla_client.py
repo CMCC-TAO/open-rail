@@ -170,7 +170,7 @@ class VLAClientAsync():
         observations, cnt = None, 0
         while observations is None or cnt < 3:
             time.sleep(0.2)
-            self.rdm.clear_observe_data()
+            self.rdm.clear_action_data()
             observations = self.robot.retrieve_observation()
             cnt += 1
 
