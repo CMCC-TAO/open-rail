@@ -1,4 +1,4 @@
-# VLA Large Model Inference Framework
+# VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots
 
 ## 1. Framework Overview
 
@@ -185,3 +185,18 @@ Utility scripts are available in the `scripts/` directory:
 - **Evaluation Tools**: [VLA Evaluation](scripts/vla_eval/README.md)
 - **Robot Reset**: [A2D Robot Reset](scripts/reset_robot/README.md)
 
+## 4. Citation
+
+If you find this work useful in your research, please consider citing our paper:
+
+```bibtex
+@misc{zhao2025vlarailrealtimeasynchronousinference,
+      title={VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots}, 
+      author={Yongsheng Zhao and Lei Zhao and Baoping Cheng and Gongxin Yao and Xuanzhang Wen and Han Gao},
+      year={2025},
+      eprint={2512.24673},
+      archivePrefix={arXiv},
+      primaryClass={cs.RO},
+      url={https://arxiv.org/abs/2512.24673}, 
+}
+```
