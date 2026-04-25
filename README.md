@@ -30,8 +30,49 @@ The framework uses a client-server architecture with ZMQ for communication:
 ```
 
 ## 2. Framework Usage
+### 2.1 Requirements
+- Python: >= 3.10
+- Core Dependencies:
 
-### 2.1 Configuration
+| Package | Version | Description |
+|---------|---------|-------------|
+| diffusers | >=0.32.2 | Diffusion models for image and audio generation |
+| einops | >=0.8.2 | Flexible and powerful tensor operations |
+| evaluate | >=0.4.6 | Hugging Face library for evaluating models |
+| huggingface_hub | >=0.29.3 | Client library to interact with the Hugging Face Hub |
+| ipython | >=8.12.3 | Enhanced Python interactive shell |
+| lerobot | >=0.5.1 | Machine learning for robotics |
+| matplotlib | >=3.10.9 | Plotting and visualization |
+| ml_collections | >=1.1.0 | Configuration library for ML experiments |
+| numba | >=0.61.0 | JIT compiler for Python code |
+| numpy | >=2.4.4 | Numerical operations |
+| omegaconf | >=2.3.0 | Configuration system based on YAML |
+| opencv_python | >=4.11.0.86 | Computer vision library |
+| packaging | >=26.2 | Core utilities for Python packages |
+| pandas | >=3.0.2 | Data processing |
+| Pillow | >=12.2.0 | Python Imaging Library |
+| pyarrow | >=18.1.0 | Python library for Apache Arrow |
+| PyQt5 | >=5.15.11 | Python bindings for the Qt application framework |
+| PyQt5_sip | >=12.13.0 | SIP module for PyQt5 |
+| pyqtgraph | >=0.14.0 | Scientific graphics and GUI library |
+| PyYAML | >=6.0.2 / 6.0.3 | YAML parser and emitter |
+| rich | >=15.0.0 | Library for rich text and beautiful formatting |
+| ruckig | >=0.17.3 | Instantaneous motion generation for robots |
+| scipy | >=1.17.1 | Scientific computing and technical computing |
+| seaborn | >=0.13.2 | Statistical data visualization |
+| setuptools | >=69.0.2 | Library for packaging Python projects |
+| torch | >=2.2.2 | Model training & inference |
+| torchvision | >=0.17.2 | Computer vision models and datasets |
+| tyro | >=1.0.13 | CLI parsing library |
+| websockets | >=16.0 | Library for building WebSocket servers and clients |
+| zarr | >=3.1.6 | Cloud-optimized chunked array storage |
+
+Install all dependencies via pip:
+```bash
+pip install -r requirements.txt
+```
+
+### 2.2 Configuration
 
 All framework configuration items are defined in the `conf/` directory. Each component has its own configuration file:
 
@@ -41,7 +82,7 @@ All framework configuration items are defined in the `conf/` directory. Each com
 - `robots_conf.py` - Robot configuration
 - `zmq_conf.py` - ZMQ communication configuration
 
-### 2.2 Client
+### 2.3 Client
 
 The client is responsible for:
 - Obtaining observation data and robot state from the robot
@@ -70,7 +111,7 @@ Currently supported robots:
    python run_client.py --help
    ```
 
-### 2.3 Server
+### 2.4 Server
 
 The server handles VLA model inference and provides results to clients.
 
@@ -109,9 +150,9 @@ The server handles VLA model inference and provides results to clients.
    - `--model_path`: Path to model checkpoint
 
 
-### 2.4 Auxiliary Tools
+### 2.5 Auxiliary Tools
 
-#### 2.4.1 Web-based visualization
+#### 2.5.1 Web-based visualization
 
    When the following parameter is set as:
 
@@ -123,7 +164,7 @@ The server handles VLA model inference and provides results to clients.
    ![vis_demo](data/media/vis_demo.gif)
    <!-- <video src="data/media/vis_demo.mp4" controls></video> -->
 
-#### 2.4.2 QT-based visualization
+#### 2.5.2 QT-based visualization
  To enable action-camera visualization based on QT, first set:
 
    ```python
@@ -151,24 +192,24 @@ In the action curves figure:
 
 **Note: There is **[a dropdown menu]** located above the action trajectory plot, which allows you to select the joint group (One joint for each of the left and right arms) to visualize.**
 
-### 2.5 Action Chunk Transition Strategy
+### 2.6 Action Chunk Transition Strategy
 For asynchronous inference, we designed multiple action chunk transition methods to smoothly move from the $n$-th action chunk to the $(n+1)$-th action chunk. You can set the following parameter to select different strategies:
 ``` python
 # Set this parameter in client_conf.py
 config.chunk_trans_mode = 'search_action'  # chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity')
 ```
 
-#### 2.5.1 'search_action' mode
+#### 2.6.1 'search_action' mode
 This strategy searches the candidate action in the new action chunk that provides the smoothest transition from the current action, where “most suitable” means matching the current velocity directions across active joints. The resulting action trajectory exhibits significant gaps, as visualized below:
 
 ![search_action](data/media/search_action.png)
 
-#### 2.5.2 'poly' mode
+#### 2.6.2 'poly' mode
 This strategy bridges the current action and the new action chunk using a 5-order polynomial, taking into account constraints on position, velocity, and angular velocity. The resulting action trajectory exhibits no obvious gaps, although some derivative values at the transition points show relatively large changes, as visualized below:
 
 ![poly](data/media/poly.png)
 
-#### 2.5.3 'smooth_velocity' mode
+#### 2.6.3 'smooth_velocity' mode
 This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence. The resulting action trajectory is very smooth, as visualized below:
 
 ![smooth_velocity](data/media/smooth_velocity.png)
