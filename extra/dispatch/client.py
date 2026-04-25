@@ -30,6 +30,7 @@ class DispatchClient:
         self.progress_history = deque(maxlen=10)  # 存储历史进度值用于滤波
 
         self.manual_command = None
+        self.replay_progress = -1
         
     def start(self):
         self.client.set_task_handler(self.handle_task)
@@ -86,8 +87,15 @@ class DispatchClient:
 
         return smoothed
 
+    def progress_cb(self, idx, total, cur_traj):
+        self.replay_progress = (idx + 1) / total * 100
+        print(f"Progress: {self.replay_progress:.2f}%")
+
     # 设置回调函数
     def handle_task(self, task_data):
+        if self.args.extra_dispatch_mode[0] == '2' and task_data['type'] != 'mock_task':
+            return 1
+
         """处理任务回调"""
         print('\n当前机器人配置：', self.config.robot_name, '\ntask_data: ', task_data)
 
@@ -120,11 +128,11 @@ class DispatchClient:
             time.sleep(0.1)
             self.robot.reset_robot(target_pose=self.config.reset_pose_start[key])
             time.sleep(self.config.sleep_reset_pose[key][0])
-            self.vla_client.inference_first()
 
         if 'replay:' not in self.config.language[key]:
             print(f'\n语言指令：{self.config.language[key]}\n')
             self.vla_client.language = self.config.language[key]
+            self.vla_client.inference_first()
             self.vla_client.is_running_action = True
             # 需等待current_prob_progress更新，避免还是上次任务的值
             time.sleep(1.0)
@@ -135,7 +143,7 @@ class DispatchClient:
             self.vla_client.is_running_action = False
             time.sleep(0.1)
             path_replay = self.config.language[key].split(':')[-1]
-            self.robot.replay_trajectories(path_replay)
+            self.robot.replay_trajectories(path_replay, progress_fn=self.progress_cb)
             self.client.send_status_update(task_data, 'executing', sub_skill=key, progress=100)
 
         # 重置稳定性检测变量
@@ -252,7 +260,7 @@ class DispatchClient:
                 # 点心
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_B",
                     "task_id": "ARM_B_1640995200123",
                     "skill_type": "pick",
@@ -265,7 +273,7 @@ class DispatchClient:
                 self.vla_client.is_running_action = True
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_B",
                     "task_id": "ARM_B_1640995200123",
                     "skill_type": "place",
@@ -279,7 +287,7 @@ class DispatchClient:
                 target_object = 'blacktea'
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_C",
                     "task_id": "ARM_C_1640995200123",
                     "skill_type": "pick",
@@ -292,7 +300,7 @@ class DispatchClient:
                 self.vla_client.is_running_action = True
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_C",
                     "task_id": "ARM_C_1640995200123",
                     "skill_type": "pour_water",
@@ -305,7 +313,7 @@ class DispatchClient:
                 self.vla_client.is_running_action = True
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_B",
                     "task_id": "ARM_B_1640995200123",
                     "skill_type": "place",
@@ -318,7 +326,7 @@ class DispatchClient:
                 # 冰箱
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_D",
                     "task_id": "ARM_D_1640995200123",
                     "skill_type": "open_door",
@@ -329,7 +337,7 @@ class DispatchClient:
                 print('任务D1执行结果：', result)
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_D",
                     "task_id": "ARM_D_1640995200123",
                     "skill_type": "pick",
@@ -342,7 +350,7 @@ class DispatchClient:
                 self.vla_client.is_running_action = True
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_D",
                     "task_id": "ARM_D_1640995200123",
                     "skill_type": "place",
@@ -353,7 +361,7 @@ class DispatchClient:
                 print('任务D3执行结果：', result)
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_D",
                     "task_id": "ARM_D_1640995200123",
                     "skill_type": "close_door",
@@ -366,7 +374,7 @@ class DispatchClient:
                 # 面包
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
                     "skill_type": "pick",
@@ -379,7 +387,7 @@ class DispatchClient:
                 self.vla_client.is_running_action = True
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
                     "skill_type": "place",
@@ -392,7 +400,7 @@ class DispatchClient:
                 self.vla_client.is_running_action = True
                 result = self.handle_task({
                     "version": "1.0",
-                    "type": "task",
+                    "type": "mock_task",
                     "robot_type": "ARM_E",
                     "task_id": "ARM_E_1640995200123",
                     "skill_type": "pick",

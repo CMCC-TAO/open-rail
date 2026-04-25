@@ -52,7 +52,6 @@ class VLAClientAsync():
         self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
         self.running = False
         self.is_running_action = True
-        self.action_count = 0
         self.language = self.config.language[0]
         self.allow_language_switch = True  # Flag to control automatic language switching
         
@@ -169,7 +168,7 @@ class VLAClientAsync():
         # Wait for observation changes after reset, then retrieve fresh obs for inference
         observations, cnt = None, 0
         while observations is None or cnt < 3:
-            time.sleep(0.2)
+            # time.sleep(0.2)
             self.rdm.clear_action_data()
             observations = self.robot.retrieve_observation()
             cnt += 1
@@ -297,12 +296,7 @@ class VLAClientAsync():
         - Update monitoring information
         """
         if not self.is_running_action:
-            self.action_count = 0
             return
-        
-        # self.action_count += 1
-        # if self.action_count < 300:
-        #     return
 
         action_fitted, action_raw, vel_fitted, acc_fitted = self.rdm.get_action_fitted()
 

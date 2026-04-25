@@ -104,6 +104,10 @@ class RobotBody(RobotBase):
             target_pose = np.array(target_pose)
         
         segments = {name: target_pose[v['start']:v['end']] for name, v in self.action_layout.items()}
+        # action_layout has no head and waist, but we still want to reset them to default position
+        segments['head'] = target_pose[16:18]
+        segments['waist'] = target_pose[18:20]
+        
         current_obs = self.retrieve_observation()
         current_positions = current_obs['obs.state'][:len(segments.get('arm', []))]
         target_positions = segments.get('arm', target_pose[:len(current_positions)])
@@ -224,7 +228,7 @@ class RobotBody(RobotBase):
                 self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
                 time.sleep(0.05)
 
-    def replay_trajectories(self, parquet_path, use_default: bool=True, accelerate:bool=True, accelerate_times: int=2, exclude_path=['place']):
+    def replay_trajectories(self, parquet_path, use_default: bool=True, accelerate:bool=True, accelerate_times: int=2, exclude_path=['place'], progress_fn=None):
         """replay trajectory based on teleoperation data"""
         try:
             if 'hand' in self.cfg['hand_type']:
@@ -238,6 +242,9 @@ class RobotBody(RobotBase):
                     if ele in parquet_path:
                         accelerate = False
                 for idx, traj in enumerate(trajs):
+                    if progress_fn is not None:
+                        progress_fn(idx, len(trajs), traj)
+
                     if accelerate:
                         if idx % accelerate_times == 0:
                             self.execute_action({'arm': traj[0:14].tolist()})

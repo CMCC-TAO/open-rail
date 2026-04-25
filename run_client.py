@@ -220,6 +220,7 @@ def handle_user_input(vla_client, robot, live):
         elif cmd == 'q':
             return False  # Signal to quit
         
+        vla_client.inference_first() # avoid pause/restart shaking
         vla_client.is_running_action = True
         return True  # Continue running
         
