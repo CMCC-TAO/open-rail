@@ -61,7 +61,7 @@ class ModelVLA:
         ext_result = {}
         predicted_action = self.policy.get_action(inp_obs)
         if isinstance(predicted_action, dict) and 'progress' in predicted_action:
-            ext_result['progress'] = predicted_action['progress'].squeeze(0)
+            ext_result['prob_progress'] = predicted_action['progress'][0, :, -1]
             del predicted_action['progress']
         predicted_action = np.concatenate([v.squeeze(0) for v in predicted_action['action'].values()], axis=1)
         print(time.time() - time1, 'action shape:', predicted_action.shape)
