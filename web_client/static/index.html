@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VLA-RAIL Web Client</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════ TOP BAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div id="status-badge" class="status-badge stopped">STOPPED</div>
+    </div>
+    <div class="topbar-center">
+      <span class="logo">VLA-RAIL</span>
+      <span class="subtitle">Web Client Dashboard</span>
+    </div>
+    <div class="topbar-right">
+      <span id="ws-indicator" class="ws-dot disconnected" title="WebSocket"></span>
+      <span class="ws-label">WS</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
+  <main class="layout">
+
+    <!-- ╔══════════════ LEFT: CONFIG PANEL ══════════════╗ -->
+    <aside class="panel panel-config" id="panel-config">
+      <div class="panel-header">
+        <span>⚙ Configuration</span>
+        <div class="panel-header-actions">
+          <button class="btn btn-xs" id="btn-config-collapse" title="Collapse">◀</button>
+        </div>
+      </div>
+      <div class="panel-body" id="config-body">
+
+        <!-- Config file bar -->
+        <div class="config-file-bar">
+          <input id="conf-path" class="input-text" type="text" placeholder="path/to/user_conf.py" />
+          <button class="btn btn-sm" id="btn-load-file">Load</button>
+          <button class="btn btn-sm" id="btn-save-file">Save</button>
+          <button class="btn btn-sm" id="btn-saveas-file">Save As…</button>
+        </div>
+
+        <!-- Search -->
+        <div class="config-search-bar">
+          <input id="conf-search" class="input-text" type="text" placeholder="Filter keys…" />
+        </div>
+
+        <!-- Config tree -->
+        <div id="config-tree" class="config-tree"></div>
+
+        <!-- Pending badge + apply -->
+        <div class="config-footer">
+          <span id="pending-badge" class="pending-badge hidden">● unsaved changes</span>
+          <button class="btn btn-primary btn-sm" id="btn-apply-config">Apply</button>
+          <button class="btn btn-sm" id="btn-reset-config">Reset</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ╔══════════════ CENTER: MONITOR + TRAJECTORY ══════════════╗ -->
+    <div class="center-col">
+
+      <!-- ── Runtime Monitor ── -->
+      <section class="panel panel-monitor">
+        <div class="panel-header"><span>📊 Runtime Monitor</span></div>
+        <div class="panel-body">
+
+          <!-- Control bar -->
+          <div class="control-bar">
+            <button class="btn btn-success btn-lg" id="btn-start">▶ Start</button>
+            <button class="btn btn-danger  btn-lg" id="btn-stop" disabled>■ Stop</button>
+            <button class="btn btn-warn    btn-sm" id="btn-pause" disabled>⏸ Pause</button>
+            <button class="btn btn-sm"             id="btn-resume" disabled>▶ Resume</button>
+            <button class="btn btn-sm"             id="btn-reset">↺ Reset Robot</button>
+          </div>
+
+          <!-- Stats cards -->
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Infer Count</div>
+              <div class="stat-value" id="val-infer-count">–</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Avg Infer Time</div>
+              <div class="stat-value" id="val-infer-time">–</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Avg Traj Time</div>
+              <div class="stat-value" id="val-traj-time">–</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Language</div>
+              <div class="stat-value stat-lang" id="val-language">–</div>
+            </div>
+          </div>
+
+          <!-- Config snapshot (live values while running) -->
+          <div class="section-title">Config Snapshot</div>
+          <div id="config-snapshot" class="kv-grid"></div>
+
+          <!-- Obs / Act info -->
+          <div class="section-title">Observation / Action Info</div>
+          <div id="obs-act-info" class="kv-grid"></div>
+
+          <!-- Robot state / action -->
+          <div class="section-title">Robot State &amp; Action</div>
+          <div class="joint-grid-wrap">
+            <div>
+              <div class="joint-grid-title">State</div>
+              <div id="joint-state" class="joint-grid"></div>
+            </div>
+            <div>
+              <div class="joint-grid-title">Action</div>
+              <div id="joint-action" class="joint-grid"></div>
+            </div>
+          </div>
+
+          <!-- Debug info -->
+          <div class="section-title">Debug Info</div>
+          <pre id="debug-info" class="debug-box"></pre>
+
+          <!-- Language panel -->
+          <div class="section-title">Set Language</div>
+          <div class="lang-bar">
+            <input id="lang-input" class="input-text" type="text" placeholder="Enter instruction or select preset" />
+            <button class="btn btn-sm btn-primary" id="btn-set-lang">Apply</button>
+          </div>
+          <div id="lang-presets" class="lang-presets"></div>
+
+          <!-- Manual robot control -->
+          <details class="robot-ctrl-details">
+            <summary class="section-title">Manual Robot Control</summary>
+            <div class="robot-ctrl-grid">
+              <div class="robot-ctrl-group">
+                <div class="robot-ctrl-label">Gripper (L R)</div>
+                <input id="gripper-l" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="L" />
+                <input id="gripper-r" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="R" />
+                <button class="btn btn-sm" id="btn-gripper">Send</button>
+              </div>
+              <div class="robot-ctrl-group">
+                <div class="robot-ctrl-label">Head (yaw pitch)</div>
+                <input id="head-yaw"   class="input-num" type="number" step="0.01" value="0"     placeholder="yaw" />
+                <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
+                <button class="btn btn-sm" id="btn-head">Send</button>
+              </div>
+              <div class="robot-ctrl-group">
+                <div class="robot-ctrl-label">Waist (pitch_rad h_cm)</div>
+                <input id="waist-pitch"  class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
+                <input id="waist-height" class="input-num" type="number" step="1"    value="20"    placeholder="height" />
+                <button class="btn btn-sm" id="btn-waist">Send</button>
+              </div>
+              <div class="robot-ctrl-group">
+                <button class="btn btn-sm" id="btn-save-data">💾 Save Data</button>
+                <button class="btn btn-sm btn-danger" id="btn-discard-data">🗑 Discard Data</button>
+              </div>
+            </div>
+          </details>
+
+        </div>
+      </section>
+
+      <!-- ── Joint Trajectory ── -->
+      <section class="panel panel-traj" id="panel-traj">
+        <div class="panel-header traj-panel-header" id="traj-panel-header">
+          <span>📈 Joint Trajectory</span>
+          <div class="panel-header-actions">
+            <!-- Source toggle -->
+            <span class="traj-src-label">Source:</span>
+            <button class="btn btn-xs btn-active" id="btn-traj-state">State</button>
+            <button class="btn btn-xs" id="btn-traj-action">Action</button>
+            <button class="btn btn-xs" id="btn-traj-both">Both</button>
+            <!-- Controls -->
+            <button class="btn btn-xs" id="btn-traj-pause">⏸</button>
+            <button class="btn btn-xs" id="btn-traj-clear">Clear</button>
+            <button class="btn btn-xs" id="btn-traj-collapse">▼</button>
+          </div>
+        </div>
+        <div class="traj-body" id="traj-body">
+          <!-- Joint selector row -->
+          <div class="traj-joint-bar">
+            <span class="traj-src-label">Joints:</span>
+            <div class="joint-selector" id="joint-selector"></div>
+            <button class="btn btn-xs" id="btn-joints-all">All</button>
+            <button class="btn btn-xs" id="btn-joints-none">None</button>
+          </div>
+          <!-- Chart grid: one Chart.js canvas per selected joint -->
+          <div class="traj-charts-grid" id="traj-charts-grid"></div>
+        </div>
+      </section>
+
+    </div><!-- /center-col -->
+
+    <!-- ╔══════════════ RIGHT: CAMERA VISUAL ══════════════╗ -->
+    <aside class="panel panel-visual" id="panel-visual">
+      <div class="panel-header">
+        <span>📷 Camera Visual</span>
+        <div class="panel-header-actions">
+          <button class="btn btn-xs btn-success" id="btn-cam-all-open">All On</button>
+          <button class="btn btn-xs btn-danger"  id="btn-cam-all-close">All Off</button>
+          <button class="btn btn-xs" id="btn-visual-collapse" title="Collapse">▶</button>
+        </div>
+      </div>
+      <div class="panel-body" id="camera-body">
+
+        <!-- Camera 0: Head -->
+        <div class="cam-item">
+          <div class="cam-row">
+            <span class="cam-label">Head</span>
+            <span class="cam-status active" id="cam-status-0">ON</span>
+            <span class="cam-spacer"></span>
+            <button class="btn btn-xs" id="btn-cam-0">Close</button>
+          </div>
+          <div class="cam-preview open" id="cam-preview-0">
+            <img id="cam-img-0" src="" alt="Head Camera" />
+            <div class="cam-preview-placeholder" id="cam-placeholder-0">Waiting for stream…</div>
+          </div>
+        </div>
+
+        <!-- Camera 1: Wrist-Left -->
+        <div class="cam-item">
+          <div class="cam-row">
+            <span class="cam-label">Wrist-Left</span>
+            <span class="cam-status active" id="cam-status-1">ON</span>
+            <span class="cam-spacer"></span>
+            <button class="btn btn-xs" id="btn-cam-1">Close</button>
+          </div>
+          <div class="cam-preview open" id="cam-preview-1">
+            <img id="cam-img-1" src="" alt="Wrist-Left Camera" />
+            <div class="cam-preview-placeholder" id="cam-placeholder-1">Waiting for stream…</div>
+          </div>
+        </div>
+
+        <!-- Camera 2: Wrist-Right -->
+        <div class="cam-item">
+          <div class="cam-row">
+            <span class="cam-label">Wrist-Right</span>
+            <span class="cam-status active" id="cam-status-2">ON</span>
+            <span class="cam-spacer"></span>
+            <button class="btn btn-xs" id="btn-cam-2">Close</button>
+          </div>
+          <div class="cam-preview open" id="cam-preview-2">
+            <img id="cam-img-2" src="" alt="Wrist-Right Camera" />
+            <div class="cam-preview-placeholder" id="cam-placeholder-2">Waiting for stream…</div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ═══════════════════ FOOTER ═══════════════════ -->
+  <footer class="footer-bar">
+    © 2025 VLA-RAIL. All rights reserved.
+  </footer>
+
+  <!-- ═══════════════════ TOAST ═══════════════════ -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- ═══════════════════ MODAL: Save As ═══════════════════ -->
+  <div id="modal-saveas" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title">Save Config As…</div>
+      <input id="saveas-path" class="input-text" type="text" placeholder="conf/my_config.py" />
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btn-saveas-confirm">Save</button>
+        <button class="btn" id="btn-saveas-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart.js + zoom plugin (same libs as visual/) -->
+  <script src="/visual/vlib/chart.js"></script>
+  <script src="/visual/vlib/hammer.min.js"></script>
+  <script src="/visual/vlib/chartjs-plugin-zoom.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

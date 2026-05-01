@@ -43,7 +43,7 @@ def get_robot(config: ConfigDict):
         raise ValueError(f'Invalid Robot Type: {config.robots.type}')
 
 def parse_args():
-    """Parse command line arguments for VLA Client
+    """Parse command line arguments for VLA-RAIL Client
     
     Returns:
         argparse.Namespace: Parsed command line arguments

@@ -1,0 +1,559 @@
+"""
+VLA Web Client Server
+FastAPI-based web server that wraps run_client.py logic for browser-based control.
+
+Architecture:
+  - REST API  : config load/save/update, client start/stop
+  - WebSocket : real-time runtime stats push (replaces Rich Live)
+  - Port 9000 : this server (HTTP + WS)
+  - Port 8765 : visual/ WebSocket data stream  (visual integration ready)
+  - Port 8080 : visual/ static file server      (visual integration ready)
+"""
+
+import asyncio
+import json
+import logging
+import logging.config
+import os
+import sys
+import threading
+import time
+import traceback
+import importlib.util
+from pathlib import Path
+from typing import Optional
+
+import uvicorn
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+# ── project root on sys.path ────────────────────────────────────────────────
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from conf.client_conf import get_client_config
+from conf.robots_conf import RobotType
+from conf.logging_conf import LOGGING_CONFIG
+from client.core.zmq_client import ZMQClient
+from client.core.trajectory_generator import TrajectoryGenerator
+from client.core.realtime_data_manager import RealtimeDataManager
+from client.utils.util import load_user_config, apply_user_config
+
+logger = logging.getLogger(__name__)
+
+# ── FastAPI app ──────────────────────────────────────────────────────────────
+app = FastAPI(title="VLA Web Client", version="1.0.0")
+
+STATIC_DIR  = Path(__file__).parent / "static"
+VISUAL_DIR  = ROOT / "visual"
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+# Expose visual/ libs (Chart.js, hammer, zoom plugin) used by web_client
+if VISUAL_DIR.exists():
+    app.mount("/visual", StaticFiles(directory=str(VISUAL_DIR)), name="visual")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Global state
+# ─────────────────────────────────────────────────────────────────────────────
+class ClientState:
+    def __init__(self):
+        self.vla_client = None
+        self.robot = None
+        self.config = None
+        self.running = False
+        self.lock = threading.Lock()
+        self.ws_clients: set[WebSocket] = set()
+        self.ws_lock = threading.Lock()
+        self._broadcast_task: Optional[asyncio.Task] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+state = ClientState()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Helpers: config serialisation
+# ─────────────────────────────────────────────────────────────────────────────
+def _config_to_dict(cfg) -> dict:
+    """Recursively convert a ConfigDict (or any object) to a plain dict."""
+    if cfg is None:
+        return {}
+    try:
+        from ml_collections import ConfigDict
+        if isinstance(cfg, ConfigDict):
+            result = {}
+            for k in cfg:
+                v = cfg[k]
+                if isinstance(v, ConfigDict):
+                    result[k] = _config_to_dict(v)
+                elif hasattr(v, 'value'):           # Enum
+                    result[k] = v.value
+                elif isinstance(v, (list, tuple)):
+                    result[k] = [x.value if hasattr(x, 'value') else x for x in v]
+                else:
+                    result[k] = v
+            return result
+    except Exception:
+        pass
+    return {}
+
+
+def _apply_flat_patch(config, patch: dict):
+    """Apply a flat {dot.separated.key: value} patch to config."""
+    from ml_collections import ConfigDict
+
+    def _set_nested(obj, keys, value):
+        for k in keys[:-1]:
+            obj = getattr(obj, k, None) or obj[k]
+        leaf_key = keys[-1]
+        current = getattr(obj, leaf_key, None)
+        # Enum coercion
+        if current is not None and hasattr(current, '__class__') and hasattr(current.__class__, '__bases__'):
+            if any('Enum' in str(b) for b in current.__class__.__bases__):
+                ec = current.__class__
+                try:
+                    value = ec(value)
+                except Exception:
+                    pass
+        setattr(obj, leaf_key, value)
+
+    for dotkey, value in patch.items():
+        keys = dotkey.split('.')
+        try:
+            _set_nested(config, keys, value)
+        except Exception as e:
+            logger.warning(f"Failed to patch config key '{dotkey}': {e}")
+
+
+def _get_robot(config):
+    if config.robots.type == RobotType.A2D:
+        from client.robots.a2d.body_robot import RobotBody
+        return RobotBody(config)
+    elif config.robots.type == RobotType.MOCK:
+        from client.robots.mock.body_robot import RobotBody
+        return RobotBody(config)
+    else:
+        raise ValueError(f"Unsupported robot type: {config.robots.type}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  WebSocket broadcast
+# ─────────────────────────────────────────────────────────────────────────────
+async def _broadcast(message: dict):
+    """Send JSON to all connected WebSocket clients."""
+    if not state.ws_clients:
+        return
+    data = json.dumps(message)
+    dead = set()
+    with state.ws_lock:
+        clients = set(state.ws_clients)
+    for ws in clients:
+        try:
+            await ws.send_text(data)
+        except Exception:
+            dead.add(ws)
+    if dead:
+        with state.ws_lock:
+            state.ws_clients -= dead
+
+
+async def _stats_push_loop():
+    """Background coroutine: push runtime stats to all WS clients every 250 ms."""
+    while True:
+        await asyncio.sleep(0.25)
+        if not state.ws_clients:
+            continue
+        try:
+            stats = _collect_stats()
+            await _broadcast({"type": "stats", "data": stats})
+        except Exception as e:
+            logger.debug(f"stats push error: {e}")
+
+
+def _collect_stats() -> dict:
+    """Gather runtime stats from the running vla_client."""
+    base = {
+        "running": state.running,
+        "infer_count": 0,
+        "avg_infer_time": 0.0,
+        "avg_traj_time": 0.0,
+        "language": "",
+        "current_state": [],
+        "current_action": [],
+        "info_obs": {},
+        "info_act": {},
+        "debug_info": "",
+        "config_snapshot": {},
+    }
+    vc = state.vla_client
+    cfg = state.config
+    if vc is None or cfg is None:
+        return base
+
+    try:
+        base["infer_count"]     = int(vc.rdm.infer_count)
+        base["avg_infer_time"]  = float(vc.rdm.avg_infer_time)
+        base["avg_traj_time"]   = float(vc.rdm.avg_traj_time)
+        base["language"]        = str(vc.language)
+        base["current_state"]   = [round(float(x), 4) for x in vc.info_current_state]
+        base["current_action"]  = [round(float(x), 4) for x in vc.info_current_action]
+        base["info_obs"]        = {k: str(v) for k, v in vc.info_obs.items()}
+        base["info_act"]        = {k: str(v) for k, v in vc.info_act.items()}
+        base["debug_info"]      = str(vc.debug_info)
+        base["config_snapshot"] = {
+            "fps":              cfg.observer.fps,
+            "sleep_time":       cfg.sleep_time,
+            "inter_chunk_mode": cfg.inter_chunk_mode,
+            "intra_chunk_mode": cfg.intra_chunk_mode,
+            "gripper_offset":   cfg.gripper_offset,
+            "preprocess":       cfg.preprocess,
+            "robots_type":      cfg.robots.type.value if hasattr(cfg.robots.type, 'value') else str(cfg.robots.type),
+            "record":           cfg.record.switch,
+            "thre_prob_progress": cfg.thre_prob_progress,
+        }
+    except Exception as e:
+        base["debug_info"] = f"stats error: {e}"
+    return base
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  REST: root
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/")
+async def index():
+    return FileResponse(str(STATIC_DIR / "index.html"))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  REST: config
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/api/config")
+async def get_config():
+    """Return current config as a nested dict."""
+    if state.config is None:
+        cfg = get_client_config()
+        state.config = cfg
+    return {"status": "ok", "config": _config_to_dict(state.config)}
+
+
+class ConfigPatchRequest(BaseModel):
+    patch: dict   # flat dot-key → value  OR  nested dict
+
+
+@app.post("/api/config/patch")
+async def patch_config(req: ConfigPatchRequest):
+    """Apply a partial update to in-memory config (does NOT restart client)."""
+    if state.running:
+        raise HTTPException(400, "Stop the client before modifying config.")
+    if state.config is None:
+        state.config = get_client_config()
+
+    # Support both nested dict and flat dot-key dict
+    def _flatten(d, prefix=""):
+        out = {}
+        for k, v in d.items():
+            full = f"{prefix}.{k}" if prefix else k
+            if isinstance(v, dict):
+                out.update(_flatten(v, full))
+            else:
+                out[full] = v
+        return out
+
+    flat = _flatten(req.patch)
+    _apply_flat_patch(state.config, flat)
+    return {"status": "ok", "config": _config_to_dict(state.config)}
+
+
+class ConfigFileRequest(BaseModel):
+    path: str
+
+
+@app.post("/api/config/load_file")
+async def load_config_file(req: ConfigFileRequest):
+    """Load a user_conf .py file and apply it (like --user_conf)."""
+    if state.running:
+        raise HTTPException(400, "Stop the client before loading a new config.")
+    user_cfg = load_user_config(req.path)
+    if user_cfg is None:
+        raise HTTPException(400, f"Failed to load config from: {req.path}")
+    base_cfg = get_client_config()
+    state.config = apply_user_config(base_cfg, user_cfg)
+    return {"status": "ok", "config": _config_to_dict(state.config)}
+
+
+@app.post("/api/config/save_file")
+async def save_config_file(req: ConfigFileRequest):
+    """Save current in-memory config to a .py file (get_user_config format)."""
+    if state.config is None:
+        raise HTTPException(400, "No config loaded.")
+    cfg_dict = _config_to_dict(state.config)
+    content = _dict_to_user_conf_py(cfg_dict)
+    save_path = Path(req.path)
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    save_path.write_text(content, encoding="utf-8")
+    return {"status": "ok", "path": str(save_path)}
+
+
+def _dict_to_user_conf_py(d: dict, indent=0) -> str:
+    """Convert a nested dict to a user_conf.py source string."""
+    lines = []
+    if indent == 0:
+        lines.append('"""Auto-generated user configuration."""\n')
+        lines.append("def get_user_config():")
+        lines.append("    return " + _fmt_dict(d, indent=1))
+    return "\n".join(lines) + "\n"
+
+
+def _fmt_dict(d: dict, indent: int) -> str:
+    sp = "    " * indent
+    sp1 = "    " * (indent + 1)
+    if not d:
+        return "{}"
+    items = []
+    for k, v in d.items():
+        if isinstance(v, dict):
+            items.append(f"{sp1}{repr(k)}: {_fmt_dict(v, indent+1)}")
+        elif isinstance(v, list):
+            inner = ", ".join(repr(x) for x in v)
+            items.append(f"{sp1}{repr(k)}: [{inner}]")
+        else:
+            items.append(f"{sp1}{repr(k)}: {repr(v)}")
+    return "{\n" + ",\n".join(items) + f",\n{sp}}}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  REST: client control
+# ─────────────────────────────────────────────────────────────────────────────
+@app.post("/api/client/start")
+async def start_client():
+    """Initialise and start the VLA client (non-blocking)."""
+    if state.running:
+        raise HTTPException(400, "Client is already running.")
+
+    loop = asyncio.get_event_loop()
+    state._loop = loop
+
+    def _run_in_thread():
+        try:
+            logging.config.dictConfig(LOGGING_CONFIG)
+            cfg = state.config if state.config is not None else get_client_config()
+            state.config = cfg
+
+            # Apply action_layout from robot config
+            robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
+            if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
+                cfg.rdm.action_layout = robot_cfg.action_layout
+                cfg.traj.action_layout = robot_cfg.action_layout
+
+            vla_zmq_client = ZMQClient(cfg.vla_zmq)
+            robot = _get_robot(cfg)
+            rdm = RealtimeDataManager(cfg.rdm)
+            traj_gen = TrajectoryGenerator(config=cfg.traj)
+
+            if cfg.inter_chunk_mode == 'sync':
+                from client.core.vla_client_sync import VLAClientSync
+                vc = VLAClientSync(config=cfg, rdm=rdm, traj_generator=traj_gen,
+                                   vla_zmq_client=vla_zmq_client, robot=robot)
+            else:
+                from client.core.vla_client import VLAClientAsync
+                vc = VLAClientAsync(config=cfg, rdm=rdm, traj_generator=traj_gen,
+                                    vla_zmq_client=vla_zmq_client, robot=robot)
+
+            state.vla_client = vc
+            state.robot = robot
+            state.running = True
+
+            vc.run()
+            asyncio.run_coroutine_threadsafe(
+                _broadcast({"type": "status", "data": {"running": True, "message": "Client started."}}),
+                loop
+            )
+
+            # Keep alive until externally stopped
+            while state.running:
+                time.sleep(0.1)
+
+        except Exception as e:
+            err = traceback.format_exc()
+            logger.error(f"Client thread error:\n{err}")
+            state.running = False
+            asyncio.run_coroutine_threadsafe(
+                _broadcast({"type": "error", "data": {"message": str(e), "trace": err}}),
+                loop
+            )
+        finally:
+            _cleanup()
+
+    t = threading.Thread(target=_run_in_thread, daemon=True, name="vla-client")
+    t.start()
+    return {"status": "ok", "message": "Client starting…"}
+
+
+@app.post("/api/client/stop")
+async def stop_client():
+    """Stop the running VLA client."""
+    if not state.running:
+        raise HTTPException(400, "Client is not running.")
+    state.running = False
+    _cleanup()
+    await _broadcast({"type": "status", "data": {"running": False, "message": "Client stopped."}})
+    return {"status": "ok"}
+
+
+def _cleanup():
+    vc = state.vla_client
+    robot = state.robot
+    if vc is not None:
+        try:
+            vc.close()
+        except Exception:
+            pass
+    if robot is not None:
+        try:
+            robot.close()
+        except Exception:
+            pass
+    state.vla_client = None
+    state.robot = None
+    state.running = False
+
+
+@app.get("/api/client/status")
+async def client_status():
+    return {"status": "ok", "data": _collect_stats()}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  REST: runtime commands (replaces Enter-key menu in run_client.py)
+# ─────────────────────────────────────────────────────────────────────────────
+class CommandRequest(BaseModel):
+    command: str          # reset / set_language / save_data / discard_data / gripper / head / waist
+    params: dict = {}
+
+
+@app.post("/api/client/command")
+async def client_command(req: CommandRequest):
+    vc = state.vla_client
+    robot = state.robot
+    if vc is None or not state.running:
+        raise HTTPException(400, "Client is not running.")
+
+    cmd = req.command
+    params = req.params
+
+    try:
+        if cmd == "reset":
+            vc.is_running_action = False
+            robot.reset_robot(mode='default')
+            vc.inference_first()
+            vc.is_running_action = True
+
+        elif cmd == "set_language":
+            lang = params.get("language", "")
+            vc.language = lang
+            vc.is_running_action = False
+            robot.reset_robot(mode='default')
+            vc.inference_first()
+            vc.is_running_action = True
+
+        elif cmd == "save_data":
+            if state.config.record.switch:
+                vc.dataset_write.save_writed_data()
+
+        elif cmd == "discard_data":
+            if state.config.record.switch:
+                vc.dataset_write.abandon_record_data()
+
+        elif cmd == "gripper":
+            pos = params.get("pos", [0.0, 0.0])
+            robot.execute_action({'gripper': pos})
+
+        elif cmd == "head":
+            pos = params.get("pos", [0.0, 0.436])
+            robot.execute_action({'head': pos})
+
+        elif cmd == "waist":
+            pos = params.get("pos", [0.297, 20.0])
+            robot.execute_action({'waist': pos})
+
+        elif cmd == "pause":
+            vc.is_running_action = False
+
+        elif cmd == "resume":
+            vc.inference_first()
+            vc.is_running_action = True
+
+        else:
+            raise HTTPException(400, f"Unknown command: {cmd}")
+
+        return {"status": "ok", "command": cmd}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  WebSocket endpoint  ws://host:9000/ws
+# ─────────────────────────────────────────────────────────────────────────────
+@app.websocket("/ws")
+async def websocket_endpoint(ws: WebSocket):
+    await ws.accept()
+    with state.ws_lock:
+        state.ws_clients.add(ws)
+
+    # Push current state immediately on connect
+    await ws.send_text(json.dumps({"type": "stats", "data": _collect_stats()}))
+
+    try:
+        while True:
+            # Keep connection alive; client may send ping
+            text = await asyncio.wait_for(ws.receive_text(), timeout=30.0)
+            try:
+                msg = json.loads(text)
+                if msg.get("type") == "ping":
+                    await ws.send_text(json.dumps({"type": "pong"}))
+            except Exception:
+                pass
+    except (WebSocketDisconnect, asyncio.TimeoutError):
+        pass
+    except Exception as e:
+        logger.debug(f"WS error: {e}")
+    finally:
+        with state.ws_lock:
+            state.ws_clients.discard(ws)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Startup / shutdown
+# ─────────────────────────────────────────────────────────────────────────────
+@app.on_event("startup")
+async def on_startup():
+    logging.config.dictConfig(LOGGING_CONFIG)
+    # Pre-load default config
+    state.config = get_client_config()
+    # Start background stats push
+    asyncio.create_task(_stats_push_loop())
+    logger.info("VLA Web Client server started on http://localhost:9000")
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    if state.running:
+        _cleanup()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Entry point
+# ─────────────────────────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    uvicorn.run(
+        "web_client.server:app",
+        host="0.0.0.0",
+        port=9000,
+        reload=False,
+        log_level="info",
+    )
