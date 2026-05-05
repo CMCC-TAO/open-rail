@@ -28,9 +28,25 @@ const MAX_CHART_POINTS  = 1500;
 // Chart update interval in ms (20 FPS, same as visual/)
 const CHART_UPDATE_MS   = 50;
 
-// Series colours — same palette as visual/app.js
-const COLOR_STATE  = 'rgb(54, 162, 235)';   // blue
-const COLOR_ACTION = 'rgb(255, 99, 132)';   // red
+// Per-joint colour palette (14 colours, one per joint L0-L6 R0-R6)
+const JOINT_COLORS = [
+  // L0-L6: blue family
+  'rgb(30, 120, 220)',   // L0
+  'rgb(0, 180, 240)',    // L1
+  'rgb(0, 210, 180)',    // L2
+  'rgb(60, 200, 80)',    // L3
+  'rgb(140, 200, 40)',   // L4
+  'rgb(200, 180, 0)',    // L5
+  'rgb(240, 130, 0)',    // L6
+  // R0-R6: red/purple family
+  'rgb(220, 50, 50)',    // R0
+  'rgb(220, 40, 140)',   // R1
+  'rgb(160, 40, 220)',   // R2
+  'rgb(100, 60, 220)',   // R3
+  'rgb(40, 100, 210)',   // R4
+  'rgb(0, 160, 160)',    // R5
+  'rgb(80, 160, 80)',    // R6
+];
 
 // ═══════════════════════════════════════════════════════
 //  State
@@ -39,7 +55,7 @@ const App = {
   ws: null,
   wsAlive: false,
   reconnectTimer: null,
-  isRunning: false,
+  isRunning: null,   // null = uninitialised; set on first stats push
 
   config: {},
   pendingPatch: {},
@@ -63,8 +79,8 @@ const App = {
     stepCounter: 0,
     // x window bounds
     xLeft: 0, xRight: 0,
-    // Chart.js instances keyed by joint index  { 0: Chart, 1: Chart, ... }
-    charts: {},
+    // Single unified Chart.js instance
+    chart: null,
     // Dirty flag → batch updates at CHART_UPDATE_MS
     dirty: false,
     updateTimer: null,
@@ -171,6 +187,34 @@ function updateWSIndicator(connected) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Default demo values for State & Action (shown when client is not running)
+//  Layout: J0-6 = Arm-Left (7), J7-13 = Arm-Right (7), J14-15 = Gripper (2)
+// ═══════════════════════════════════════════════════════
+const DEFAULT_JOINTS = Object.freeze([
+  // Arm-Left  J0-J6  (values in 100-180 range for label width validation)
+  135.12, 142.67, 118.45, 156.30, 127.89, 163.54, 109.22,
+  // Arm-Right J7-J13
+  148.76, 131.09, 170.43, 125.61, 158.97, 114.28, 177.35,
+  // Gripper   J14-J15
+  100.00, 100.00,
+]);
+
+/** Add small Gaussian-like noise to DEFAULT_JOINTS for a lifelike idle display. */
+function _makeDefaultJointValues(noiseScale = 0.03) {
+  return DEFAULT_JOINTS.map(v => {
+    const noise = (Math.random() + Math.random() + Math.random() - 1.5) * noiseScale;
+    return Math.round((v + noise) * 100) / 100;
+  });
+}
+
+// Cache default values so they don't flicker on every render cycle
+let _defaultStateCache  = null;
+let _defaultActionCache = null;
+
+function getDefaultState()  { if (!_defaultStateCache)  _defaultStateCache  = _makeDefaultJointValues(0.02); return _defaultStateCache; }
+function getDefaultAction() { if (!_defaultActionCache) _defaultActionCache = _makeDefaultJointValues(0.04); return _defaultActionCache; }
+
+// ═══════════════════════════════════════════════════════
 //  Stats rendering
 // ═══════════════════════════════════════════════════════
 function renderStats(data) {
@@ -181,15 +225,16 @@ function renderStats(data) {
     ? (data.avg_infer_time * 1000).toFixed(1) + ' ms' : '–';
   $('val-traj-time').textContent   = data.avg_traj_time != null
     ? (data.avg_traj_time * 1000).toFixed(1) + ' ms' : '–';
-  $('val-language').textContent    = data.language || '–';
 
-  renderKV('config-snapshot', data.config_snapshot || {});
-  renderKV('obs-act-info', { ...data.info_obs, ...data.info_act });
-  renderJoints('joint-state',  data.current_state  || []);
-  renderJoints('joint-action', data.current_action || []);
+  // Use default joint values when client is not running and no real data available
+  const stateVals  = (data.current_state  && data.current_state.length)  ? data.current_state  : getDefaultState();
+  const actionVals = (data.current_action && data.current_action.length) ? data.current_action : getDefaultAction();
+  renderJointsGrouped('state',  stateVals);
+  renderJointsGrouped('action', actionVals);
+
   $('debug-info').textContent = data.debug_info || '';
 
-  // Feed trajectory chart
+  // Feed trajectory chart (only real data, not defaults)
   ingestTrajData(data.current_state || [], data.current_action || []);
 }
 
@@ -216,6 +261,39 @@ function renderJoints(containerId, values) {
   });
 }
 
+// Joint layout: J0-6 = Arm Left (7), J7-13 = Arm Right (7), J14+ = Gripper/Hand
+const JOINT_ARM_L_COUNT   = 7;
+const JOINT_ARM_R_COUNT   = 7;
+// J0..6 → Arm-L, J7..13 → Arm-R, J14+ → Gripper/Hand
+
+function renderJointsGrouped(side, values) {
+  // side: 'state' | 'action'
+  const elArmL    = $(`joint-${side}-arm-l`);
+  const elArmR    = $(`joint-${side}-arm-r`);
+  const elGripper = $(`joint-${side}-gripper`);
+  if (!elArmL) return;
+
+  elArmL.innerHTML = '';
+  elArmR.innerHTML = '';
+  elGripper.innerHTML = '';
+
+  values.forEach((v, i) => {
+    const chip = document.createElement('div');
+    chip.className = 'joint-chip';
+    const val = typeof v === 'number' ? v.toFixed(2) : v;
+    if (i < JOINT_ARM_L_COUNT) {
+      chip.textContent = `L${i}: ${val}`;
+      elArmL.appendChild(chip);
+    } else if (i < JOINT_ARM_L_COUNT + JOINT_ARM_R_COUNT) {
+      chip.textContent = `R${i - JOINT_ARM_L_COUNT}: ${val}`;
+      elArmR.appendChild(chip);
+    } else {
+      chip.textContent = `G${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}: ${val}`;
+      elGripper.appendChild(chip);
+    }
+  });
+}
+
 // ═══════════════════════════════════════════════════════
 //  Running state UI
 // ═══════════════════════════════════════════════════════
@@ -232,8 +310,24 @@ function setRunningUI(running) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  Config rendering — BASIC group for ungrouped leaf keys
+//  Config rendering — BASIC group split into sub-groups
 // ═══════════════════════════════════════════════════════
+
+// Keys to exclude from the config tree (handled separately)
+const CONFIG_EXCLUDED_KEYS = new Set(['language']);
+
+// Sub-group definitions for root-level leaf keys in the BASIC section
+const BASIC_SUBGROUPS = {
+  intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples', 'fitting_time_step'],
+  inter_chunk: ['inter_chunk_mode', 'search_length', 'smooth_action', 'smooth_base', 'smooth_length', 'smooth_ratio'],
+};
+
+// Select options for specific keys
+const CONFIG_SELECT_OPTIONS = {
+  inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync'],
+  intra_chunk_mode: ['raw', 'raw_ipt', 'fit'],
+};
+
 function renderConfigTree(cfg) {
   const root = $('config-tree');
   root.innerHTML = '';
@@ -245,6 +339,9 @@ function buildTree(obj, prefix, parentEl) {
   const subGroupEntries = [];
 
   for (const [key, val] of Object.entries(obj)) {
+    // Skip excluded keys at root level
+    if (!prefix && CONFIG_EXCLUDED_KEYS.has(key)) continue;
+
     const isGroup = val !== null && typeof val === 'object' && !Array.isArray(val);
     if (isGroup) {
       subGroupEntries.push([key, val]);
@@ -255,9 +352,32 @@ function buildTree(obj, prefix, parentEl) {
     }
   }
 
-  // BASIC group for root-level leaves
+  // BASIC group for root-level leaves — split into sub-groups
   if (basicEntries.length > 0) {
-    parentEl.appendChild(buildGroup('BASIC', basicEntries.map(([k, v]) => createCfgRow(k, k, v))));
+    // Assign each basic entry to its sub-group or "others"
+    const sgMap = {};
+    for (const sgName of Object.keys(BASIC_SUBGROUPS)) sgMap[sgName] = [];
+    sgMap['others'] = [];
+
+    for (const [k, v] of basicEntries) {
+      let placed = false;
+      for (const [sgName, keys] of Object.entries(BASIC_SUBGROUPS)) {
+        if (keys.includes(k)) { sgMap[sgName].push([k, v]); placed = true; break; }
+      }
+      if (!placed) sgMap['others'].push([k, v]);
+    }
+
+    // Build the outer BASIC group
+    const basicBody = document.createElement('div');
+    basicBody.className = 'cfg-group-body';
+
+    for (const [sgName, entries] of Object.entries(sgMap)) {
+      if (entries.length === 0) continue;
+      const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
+      basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
+    }
+
+    parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
   }
 
   // Sub-groups
@@ -266,7 +386,6 @@ function buildTree(obj, prefix, parentEl) {
     const body    = document.createElement('div');
     body.className = 'cfg-group-body';
     buildTree(val, dotKey, body);
-    // Collect leaf rows from body for the group wrapper
     parentEl.appendChild(buildGroupFromEl(key.toUpperCase(), body));
   }
 }
@@ -315,8 +434,20 @@ function createCfgRow(dotKey, label, value) {
   const valEl = document.createElement('div');
   valEl.className = 'cfg-value';
 
+  // Extract the bare key name (last segment) for option lookup
+  const bareKey = dotKey.includes('.') ? dotKey.split('.').pop() : dotKey;
+
   let input;
-  if (typeof value === 'boolean') {
+  if (CONFIG_SELECT_OPTIONS[bareKey]) {
+    // Predefined select options
+    input = document.createElement('select');
+    CONFIG_SELECT_OPTIONS[bareKey].forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt; o.textContent = opt;
+      if (String(value) === opt) o.selected = true;
+      input.appendChild(o);
+    });
+  } else if (typeof value === 'boolean') {
     input = document.createElement('select');
     ['true', 'false'].forEach(opt => {
       const o = document.createElement('option');
@@ -373,29 +504,119 @@ function filterConfigTree(query) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  Language presets
+//  Language Command Panel
+//  Two-level hierarchy loaded from a JSON file via file picker.
+//  JSON format: { "TaskA": ["sub1","sub2",...], "TaskB": [...] }
+//  Tasks → <select> level-1; Sub-tasks → <select> level-2 (ordered Array)
 // ═══════════════════════════════════════════════════════
+const LangCmd = {
+  tasks: {},        // { taskName: [instruction0, instruction1, ...] }  — ordered array
+};
+
+function buildLangTasksFromData(data) {
+  LangCmd.tasks = {};
+  if (!data || typeof data !== 'object') return;
+
+  if (Array.isArray(data)) {
+    // Flat array → single "Default" task
+    LangCmd.tasks['Default'] = data.filter(x => typeof x === 'string');
+  } else {
+    for (const [taskName, subtasks] of Object.entries(data)) {
+      if (Array.isArray(subtasks)) {
+        LangCmd.tasks[taskName] = subtasks.filter(x => typeof x === 'string');
+      }
+    }
+  }
+}
+
+function renderLangTaskSelect() {
+  const taskSel    = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  if (!taskSel) return;
+
+  const prevTask = taskSel.value;
+  taskSel.innerHTML = '';
+
+  Object.keys(LangCmd.tasks).forEach(taskName => {
+    const opt = document.createElement('option');
+    opt.value = taskName;
+    opt.textContent = taskName;
+    taskSel.appendChild(opt);
+  });
+
+  // Restore or select first
+  if (prevTask && LangCmd.tasks[prevTask]) taskSel.value = prevTask;
+  if (!taskSel.value && taskSel.options.length > 0) taskSel.selectedIndex = 0;
+
+  renderLangSubtaskSelect();
+}
+
+function renderLangSubtaskSelect() {
+  const taskSel    = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  if (!subtaskSel) return;
+
+  subtaskSel.innerHTML = '';
+  const taskName = taskSel ? taskSel.value : null;
+  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+
+  subtasks.forEach((text, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${i + 1}. ${text.substring(0, 50)}${text.length > 50 ? '…' : ''}`;
+    opt.title = text;
+    subtaskSel.appendChild(opt);
+  });
+}
+
+// Keep old renderLangPresets as compatibility alias (called on config load)
 function renderLangPresets(presets) {
   App.langPresets = presets || [];
-  const container = $('lang-presets');
-  container.innerHTML = '';
-  App.langPresets.forEach((lang, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'lang-preset-chip';
-    chip.title = lang;
-    chip.textContent = `${i + 1}. ${lang.substring(0, 60)}${lang.length > 60 ? '…' : ''}`;
-    chip.addEventListener('click', () => {
-      $('lang-input').value = lang;
-      container.querySelectorAll('.lang-preset-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
+  // config.language (flat array) → put into LangCmd only if no JSON loaded yet
+  if (Object.keys(LangCmd.tasks).length === 0) {
+    buildLangTasksFromData(presets);
+    renderLangTaskSelect();
+  }
+}
+
+function setupLangPanel() {
+  const taskSel    = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+
+  // Task select → rebuild subtask list
+  if (taskSel) {
+    taskSel.addEventListener('change', () => {
+      renderLangSubtaskSelect();
     });
-    container.appendChild(chip);
-  });
+  }
+
+  // Subtask select → fill textarea
+  if (subtaskSel) {
+    subtaskSel.addEventListener('change', () => {
+      const taskName = taskSel ? taskSel.value : null;
+      const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+      const idx = parseInt(subtaskSel.value, 10);
+      if (!isNaN(idx) && subtasks[idx] !== undefined) {
+        $('lang-cmd-text').value = subtasks[idx];
+      }
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════
 //  Config load
 // ═══════════════════════════════════════════════════════
+
+// Conf directory path (absolute), fetched once from server
+let CONF_DIR = 'conf';
+
+async function initConfDir() {
+  try {
+    const res = await apiFetch('/api/conf_dir');
+    if (res.path) CONF_DIR = res.path;
+  } catch (_) { /* fallback to 'conf' */ }
+}
+
 async function loadConfigFromServer() {
   try {
     const res = await apiFetch('/api/config');
@@ -408,6 +629,17 @@ async function loadConfigFromServer() {
     }
     toast('Config loaded.', 'ok', 2000);
   } catch (e) { /* already toasted */ }
+}
+
+/** Load the default language command JSON from server and populate Language Command panel. */
+async function loadDefaultLangFile() {
+  try {
+    const res = await apiFetch('/api/default_lang_file');
+    if (res.data) {
+      buildLangTasksFromData(res.data);
+      renderLangTaskSelect();
+    }
+  } catch (_) { /* non-fatal: lang panel stays empty */ }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -433,36 +665,44 @@ const camState = {
 };
 
 function setupCameraPanel() {
-  // Collapse button
+  // Collapse / expand the whole camera panel
   $('btn-visual-collapse').addEventListener('click', () => {
     const panel  = $('panel-visual');
     const layout = document.querySelector('.layout');
-    if (panel.dataset.collapsed === 'true') {
-      panel.dataset.collapsed = 'false';
-      layout.style.gridTemplateColumns = '300px 1fr 360px';
-      $('btn-visual-collapse').textContent = '▶';
-    } else {
-      panel.dataset.collapsed = 'true';
+    const collapsed = panel.classList.toggle('collapsed');
+    if (collapsed) {
       layout.style.gridTemplateColumns = '300px 1fr 32px';
       $('btn-visual-collapse').textContent = '◀';
+    } else {
+      layout.style.gridTemplateColumns = '300px 1fr 300px';
+      $('btn-visual-collapse').textContent = '▶';
     }
   });
 
   // Individual open/close buttons
   for (let i = 0; i < 3; i++) {
-    $(`btn-cam-${i}`).addEventListener('click', () => toggleCamera(i));
+    $(`btn-cam-${i}`).addEventListener('click', () => { toggleCamera(i); updateAllToggleBtn(); });
   }
 
-  // All On / All Off
-  $('btn-cam-all-open').addEventListener('click', () => {
-    for (let i = 0; i < 3; i++) {
-      if (!App.camOpen[i]) toggleCamera(i);
+  // All toggle: Open All (all closed) ↔ Close All (all open)
+  function updateAllToggleBtn() {
+    const allOn = App.camOpen.every(v => v);
+    const btn = $('btn-cam-all-toggle');
+    if (allOn) {
+      btn.textContent = '⏸ Close All';
+      btn.className = 'btn btn-xs btn-danger';
+    } else {
+      btn.textContent = '▶ Open All';
+      btn.className = 'btn btn-xs btn-success';
     }
-  });
-  $('btn-cam-all-close').addEventListener('click', () => {
+  }
+  $('btn-cam-all-toggle').addEventListener('click', () => {
+    const allOn = App.camOpen.every(v => v);
     for (let i = 0; i < 3; i++) {
-      if (App.camOpen[i]) toggleCamera(i);
+      if (allOn && App.camOpen[i]) toggleCamera(i);
+      else if (!allOn && !App.camOpen[i]) toggleCamera(i);
     }
+    updateAllToggleBtn();
   });
 
   // Start 30FPS render timer (same as visual/app.js cameraUpdateTimer)
@@ -480,6 +720,9 @@ function setupCameraPanel() {
     camState.pendingUpdate = false;
     camState.lastUpdateTime = now;
   }, camState.updateInterval);
+
+  // Sync initial state of All toggle button
+  updateAllToggleBtn();
 }
 
 /* Called from handleWSMessage when a binary camera frame arrives */
@@ -526,68 +769,82 @@ function toggleCamera(idx) {
   const phEl     = $(`cam-placeholder-${idx}`);
 
   if (App.camOpen[idx]) {
-    preview.classList.add('open');
-    statusEl.textContent = 'ON'; statusEl.classList.add('active');
+    // Open: remove dim overlay, resume receiving frames
+    preview.classList.remove('closed');
+    statusEl.textContent = 'ON';
+    statusEl.classList.add('active');
+    statusEl.classList.remove('error');
     btnEl.textContent = 'Close';
-    // Show placeholder until first frame arrives
-    if (phEl) { phEl.style.display = ''; phEl.textContent = 'Waiting for stream…'; }
-    // If there is already a pending frame, render it immediately
+    // Show placeholder if no image yet
+    if (!imgEl.src || imgEl.src === location.href) {
+      if (phEl) { phEl.style.display = ''; phEl.textContent = 'Waiting for stream…'; }
+    }
+    // Render immediately if frame is cached
     if (camState.pendingData[idx]) {
       updateCameraDisplay(idx, camState.pendingData[idx]);
     }
   } else {
-    preview.classList.remove('open');
-    statusEl.textContent = 'OFF'; statusEl.classList.remove('active', 'error');
+    // Close: add dim overlay, stop rendering — but keep preview box visible
+    preview.classList.add('closed');
+    statusEl.textContent = 'OFF';
+    statusEl.classList.remove('active', 'error');
     btnEl.textContent = 'Open';
-    // Release blob URL
-    if (imgEl.src && imgEl.src.startsWith('blob:')) URL.revokeObjectURL(imgEl.src);
-    imgEl.src = '';
-    imgEl.classList.remove('loaded');
-    if (phEl) { phEl.style.display = ''; phEl.textContent = 'Waiting for stream…'; }
+    // Hide the "Waiting" placeholder (the CLOSED overlay takes over)
+    if (phEl) phEl.style.display = 'none';
   }
 }
 
 // ═══════════════════════════════════════════════════════
 //  Joint Trajectory — Chart.js implementation
-//  Mirrors visual/app.js architecture:
-//    - Dedicated Chart per joint
-//    - State (blue) + Action (red) series
-//    - 50ms batch update timer
-//    - Zoom/pan via chartjs-plugin-zoom
+//  Single unified chart: all selected joints on one canvas.
+//  State series = dashed line; Action series = solid line.
+//  Each joint has its own colour from JOINT_COLORS palette.
+//  Zoom/pan via chartjs-plugin-zoom.
 // ═══════════════════════════════════════════════════════
 
-/* ── Build Chart.js config ── */
-function makeChartConfig(jointLabel) {
-  return {
+// Fixed joint labels for trajectory selector: L0-L6 (idx 0-6), R0-R6 (idx 7-13)
+const TRAJ_JOINT_LABELS = [
+  'L0','L1','L2','L3','L4','L5','L6',
+  'R0','R1','R2','R3','R4','R5','R6',
+];
+const TRAJ_JOINT_COUNT = TRAJ_JOINT_LABELS.length;  // 14
+
+/* ── Create the single unified Chart.js instance ── */
+function createUnifiedChart() {
+  const t = App.traj;
+  if (t.chart) return;
+  const canvas = $('traj-canvas');
+  if (!canvas) return;
+  t.chart = new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: { datasets: [] },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      parsing: false,   // we supply {x, y} objects directly
+      parsing: false,
       scales: {
         x: {
           type: 'linear',
           title: { display: false },
-          ticks: {
-            maxTicksLimit: 6,
-            color: '#656d76',
-            font: { size: 9 },
-          },
+          ticks: { maxTicksLimit: 8, color: '#656d76', font: { size: 9 } },
           grid: { color: 'rgba(208,215,222,.5)' },
         },
         y: {
           title: { display: true, text: 'rad', color: '#656d76', font: { size: 9 } },
-          ticks: { maxTicksLimit: 5, color: '#656d76', font: { size: 9 } },
+          ticks: { maxTicksLimit: 6, color: '#656d76', font: { size: 9 } },
           grid: { color: 'rgba(208,215,222,.5)' },
         },
       },
       plugins: {
         legend: {
           display: true,
-          position: 'top',
-          labels: { usePointStyle: true, padding: 10, font: { size: 9 }, color: '#1f2328' },
+          position: 'right',
+          labels: {
+            usePointStyle: true, padding: 8,
+            font: { size: 9 }, color: '#1f2328',
+            boxWidth: 20,
+          },
         },
         tooltip: {
           mode: 'index', intersect: false,
@@ -611,82 +868,65 @@ function makeChartConfig(jointLabel) {
       },
       interaction: { intersect: false, mode: 'index' },
     },
-  };
+  });
 }
 
-/* ── Create DOM card + Chart instance for one joint ── */
-function createJointChart(jointIdx) {
-  const t = App.traj;
-  if (t.charts[jointIdx]) return;  // already exists
-
-  const card = document.createElement('div');
-  card.className = 'traj-chart-card';
-  card.id = `traj-card-${jointIdx}`;
-
-  const title = document.createElement('div');
-  title.className = 'traj-chart-title';
-  title.textContent = `Joint ${jointIdx}`;
-  card.appendChild(title);
-
-  const wrap = document.createElement('div');
-  wrap.className = 'traj-chart-wrap';
-  const canvas = document.createElement('canvas');
-  canvas.id = `traj-cv-${jointIdx}`;
-  wrap.appendChild(canvas);
-  card.appendChild(wrap);
-
-  $('traj-charts-grid').appendChild(card);
-
-  const cfg = makeChartConfig(`Joint ${jointIdx}`);
-  t.charts[jointIdx] = new Chart(canvas.getContext('2d'), cfg);
-}
-
-/* ── Remove Chart DOM card ── */
-function removeJointChart(jointIdx) {
-  const t = App.traj;
-  if (t.charts[jointIdx]) {
-    t.charts[jointIdx].destroy();
-    delete t.charts[jointIdx];
-  }
-  const card = $(`traj-card-${jointIdx}`);
-  if (card) card.remove();
-}
-
-/* ── Build joint selector chips ── */
+/* ── Build joint selector chips — two rows: L0-L6 (row-l), R0-R6 (row-r) ── */
 function buildJointSelector(numJoints) {
   const t = App.traj;
-  if (t.numJoints === numJoints) return;
-  t.numJoints = numJoints;
+  // Only build once; ignore subsequent calls
+  if (t.numJoints === TRAJ_JOINT_COUNT) return;
+  t.numJoints = TRAJ_JOINT_COUNT;
 
-  const container = $('joint-selector');
-  container.innerHTML = '';
   // Default: first 4 joints selected
-  t.selectedJoints = new Set([0, 1, 2, 3].filter(i => i < numJoints));
+  t.selectedJoints = new Set([0, 1, 2, 3]);
 
-  for (let i = 0; i < numJoints; i++) {
+  // Rows are already in HTML; insert chips BEFORE the All/None buttons
+  const rowL = $('joint-row-l');  // L0-L6 + All
+  const rowR = $('joint-row-r');  // R0-R6 + None
+  const btnAll  = $('btn-joints-all');
+  const btnNone = $('btn-joints-none');
+
+  for (let i = 0; i < TRAJ_JOINT_COUNT; i++) {
     const chip = document.createElement('span');
+    const color = JOINT_COLORS[i];
     chip.className = 'joint-sel-chip' + (t.selectedJoints.has(i) ? ' active' : '');
-    chip.textContent = `J${i}`;
+    chip.textContent = TRAJ_JOINT_LABELS[i];
     chip.dataset.idx = i;
+    _applyChipColor(chip, t.selectedJoints.has(i), color);
     chip.addEventListener('click', () => {
       if (t.selectedJoints.has(i)) {
         t.selectedJoints.delete(i);
         chip.classList.remove('active');
-        removeJointChart(i);
+        _applyChipColor(chip, false, color);
       } else {
         t.selectedJoints.add(i);
         chip.classList.add('active');
-        createJointChart(i);
-        refreshChartForJoint(i);
+        _applyChipColor(chip, true, color);
       }
+      refreshUnifiedChart();
     });
-    container.appendChild(chip);
+    if (i < 7) {
+      rowL.insertBefore(chip, btnAll);   // insert before All
+    } else {
+      rowR.insertBefore(chip, btnNone);  // insert before None
+    }
   }
 
-  // Rebuild chart cards for initially selected joints
-  $('traj-charts-grid').innerHTML = '';
-  t.charts = {};
-  [...t.selectedJoints].sort((a, b) => a - b).forEach(i => createJointChart(i));
+  refreshUnifiedChart();
+}
+
+/** Apply colour styling to a chip based on active state */
+function _applyChipColor(chip, active, color) {
+  if (active) {
+    chip.style.borderColor = color;
+    chip.style.color       = color;
+    chip.style.background  = color.replace('rgb(', 'rgba(').replace(')', ', 0.12)');
+  } else {
+    chip.style.borderColor = '';
+    chip.style.color       = '';
+    chip.style.background  = '';
+  }
 }
 
 /* ── Ingest new data point ── */
@@ -710,7 +950,7 @@ function ingestTrajData(stateArr, actionArr) {
     if (t.buffer.action.length > MAX_CHART_POINTS) t.buffer.action.shift();
   }
 
-  // Update x window (mirror visual/app.js logic)
+  // Update x window
   const stateRight  = t.buffer.state.length  ? t.buffer.state[t.buffer.state.length - 1].x   : -Infinity;
   const actionRight = t.buffer.action.length ? t.buffer.action[t.buffer.action.length - 1].x : -Infinity;
   const stateLeft   = t.buffer.state.length  ? t.buffer.state[0].x   : -Infinity;
@@ -725,7 +965,7 @@ function ingestTrajData(stateArr, actionArr) {
   t.dirty = true;
 }
 
-/* ── Extract series data for one joint ── */
+/* ── Extract series data for one joint from one buffer ── */
 function getJointSeriesData(bufferKey, jointIdx) {
   const buf = App.traj.buffer[bufferKey];
   if (!buf || buf.length === 0) return [];
@@ -736,69 +976,78 @@ function getJointSeriesData(bufferKey, jointIdx) {
   return visible.map(p => ({ x: p.x, y: p.joints_y[jointIdx] }));
 }
 
-/* ── Refresh one Chart.js instance ── */
-function refreshChartForJoint(jointIdx) {
-  const t     = App.traj;
-  const chart = t.charts[jointIdx];
-  if (!chart) return;
+/* ── Rebuild all datasets in the unified chart ── */
+function refreshUnifiedChart() {
+  const t = App.traj;
+  if (!t.chart) return;
 
-  const src  = t.source;
+  const src = t.source;
   const datasets = [];
   let allY = [];
 
-  if (src === 'state' || src === 'both') {
-    const data = getJointSeriesData('state', jointIdx);
-    datasets.push({
-      label: 'State',
-      data,
-      borderColor: COLOR_STATE,
-      backgroundColor: 'rgba(54,162,235,.08)',
-      borderWidth: 1.5,
-      pointRadius: 0, pointHoverRadius: 3,
-      tension: 0.1, fill: false,
-    });
-    allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
+  const sorted = [...t.selectedJoints].sort((a, b) => a - b);
+
+  for (const jointIdx of sorted) {
+    const color  = JOINT_COLORS[jointIdx] || 'rgb(100,100,100)';
+    const label  = TRAJ_JOINT_LABELS[jointIdx] ?? `J${jointIdx}`;
+    const alpha  = color.replace('rgb(', 'rgba(').replace(')', ', 0.08)');
+
+    if (src === 'state' || src === 'both') {
+      const data = getJointSeriesData('state', jointIdx);
+      datasets.push({
+        label: label,
+        data,
+        borderColor: color,
+        backgroundColor: alpha,
+        borderWidth: 1.5,
+        borderDash: [4, 3],       // dashed = state
+        pointRadius: 0, pointHoverRadius: 3,
+        tension: 0.1, fill: false,
+      });
+      allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
+    }
+
+    if (src === 'action' || src === 'both') {
+      const data = getJointSeriesData('action', jointIdx);
+      datasets.push({
+        label: label,
+        data,
+        borderColor: color,
+        backgroundColor: alpha,
+        borderWidth: 1.5,
+        borderDash: [],            // solid = action
+        pointRadius: 0, pointHoverRadius: 3,
+        tension: 0.1, fill: false,
+      });
+      allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
+    }
   }
 
-  if (src === 'action' || src === 'both') {
-    const data = getJointSeriesData('action', jointIdx);
-    datasets.push({
-      label: 'Action',
-      data,
-      borderColor: COLOR_ACTION,
-      backgroundColor: 'rgba(255,99,132,.08)',
-      borderWidth: 1.5,
-      pointRadius: 0, pointHoverRadius: 3,
-      tension: 0.1, fill: false,
-    });
-    allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
-  }
+  t.chart.data.datasets = datasets;
 
-  chart.data.datasets = datasets;
-
-  // Dynamic Y range with 10% padding (mirror visual/app.js)
+  // Dynamic Y range with 10% padding
   if (allY.length > 0) {
     const yMin = Math.min(...allY);
     const yMax = Math.max(...allY);
     const pad  = (yMax - yMin) * 0.1 || 0.1;
-    chart.options.scales.y.min = yMin - pad;
-    chart.options.scales.y.max = yMax + pad;
+    t.chart.options.scales.y.min = yMin - pad;
+    t.chart.options.scales.y.max = yMax + pad;
   } else {
-    chart.options.scales.y.min = undefined;
-    chart.options.scales.y.max = undefined;
+    t.chart.options.scales.y.min = undefined;
+    t.chart.options.scales.y.max = undefined;
   }
 
   // Sync X window
   const { xLeft, xRight } = t;
   if (Number.isFinite(xLeft) && Number.isFinite(xRight) && xRight > xLeft) {
-    chart.options.scales.x.min = xLeft;
-    chart.options.scales.x.max = xRight;
+    t.chart.options.scales.x.min = xLeft;
+    t.chart.options.scales.x.max = xRight;
   } else {
-    chart.options.scales.x.min = undefined;
-    chart.options.scales.x.max = undefined;
+    t.chart.options.scales.x.min = undefined;
+    t.chart.options.scales.x.max = undefined;
   }
 
-  chart.update('none');
+  t.chart.update('none');
 }
 
 /* ── Batch update timer (50 ms, 20 FPS) ── */
@@ -807,7 +1056,7 @@ function startTrajUpdateTimer() {
     if (!App.traj.dirty || App.traj.paused) return;
     const now = Date.now();
     if (now - App.traj.lastUpdateAt < CHART_UPDATE_MS) return;
-    [...App.traj.selectedJoints].forEach(i => refreshChartForJoint(i));
+    refreshUnifiedChart();
     App.traj.dirty = false;
     App.traj.lastUpdateAt = now;
   }, CHART_UPDATE_MS);
@@ -815,8 +1064,8 @@ function startTrajUpdateTimer() {
 
 /* ── Wire trajectory controls ── */
 function setupTrajPanel() {
-  // Source buttons
-  const srcBtns = { state: $('btn-traj-state'), action: $('btn-traj-action'), both: $('btn-traj-both') };
+  // Source buttons (State / Action only — Both removed)
+  const srcBtns = { state: $('btn-traj-state'), action: $('btn-traj-action') };
   function setSource(src) {
     App.traj.source = src;
     App.traj.dirty  = true;
@@ -826,12 +1075,13 @@ function setupTrajPanel() {
   }
   $('btn-traj-state').addEventListener('click',  () => setSource('state'));
   $('btn-traj-action').addEventListener('click', () => setSource('action'));
-  $('btn-traj-both').addEventListener('click',   () => setSource('both'));
 
   // Pause
   $('btn-traj-pause').addEventListener('click', () => {
     App.traj.paused = !App.traj.paused;
-    $('btn-traj-pause').textContent = App.traj.paused ? '▶' : '⏸';
+    $('btn-traj-pause').innerHTML = App.traj.paused
+      ? '<span class="btn-icon">▶</span> Play'
+      : '<span class="btn-icon">⏸</span> Play';
     $('btn-traj-pause').className   = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
   });
 
@@ -841,39 +1091,43 @@ function setupTrajPanel() {
     App.traj.stepCounter = 0;
     App.traj.xLeft = 0; App.traj.xRight = 0;
     App.traj.dirty = true;
-    [...App.traj.selectedJoints].forEach(i => refreshChartForJoint(i));
+    refreshUnifiedChart();
   });
 
   // Collapse
   $('btn-traj-collapse').addEventListener('click', () => {
-    const body = $('traj-body');
-    const btn  = $('btn-traj-collapse');
+    const body     = $('traj-body');
+    const btn      = $('btn-traj-collapse');
+    const panelT   = $('panel-traj');
+    const panelL   = $('panel-lang');
     const collapsed = body.classList.toggle('collapsed');
+    panelT.classList.toggle('body-collapsed', collapsed);
+    panelL.classList.toggle('expanded', collapsed);
     btn.textContent = collapsed ? '▲' : '▼';
   });
 
   // Select all / none
   $('btn-joints-all').addEventListener('click', () => {
     const t = App.traj;
-    for (let i = 0; i < t.numJoints; i++) {
+    for (let i = 0; i < TRAJ_JOINT_COUNT; i++) {
       if (!t.selectedJoints.has(i)) {
         t.selectedJoints.add(i);
-        createJointChart(i);
-        const chip = document.querySelector(`#joint-selector .joint-sel-chip[data-idx="${i}"]`);
-        if (chip) chip.classList.add('active');
+        const chip = document.querySelector(`.joint-sel-chip[data-idx="${i}"]`);
+        if (chip) { chip.classList.add('active'); _applyChipColor(chip, true, JOINT_COLORS[i]); }
       }
     }
     t.dirty = true;
+    refreshUnifiedChart();
   });
 
   $('btn-joints-none').addEventListener('click', () => {
     const t = App.traj;
     [...t.selectedJoints].forEach(i => {
-      removeJointChart(i);
-      const chip = document.querySelector(`#joint-selector .joint-sel-chip[data-idx="${i}"]`);
-      if (chip) chip.classList.remove('active');
+      const chip = document.querySelector(`.joint-sel-chip[data-idx="${i}"]`);
+      if (chip) { chip.classList.remove('active'); _applyChipColor(chip, false, JOINT_COLORS[i]); }
     });
     t.selectedJoints.clear();
+    refreshUnifiedChart();
   });
 
   startTrajUpdateTimer();
@@ -882,32 +1136,67 @@ function setupTrajPanel() {
 // ═══════════════════════════════════════════════════════
 //  Event wiring — config, client control, manual ctrl
 // ═══════════════════════════════════════════════════════
+
+/** Return path starting from /conf segment (e.g. /conf/user.py) */
+function _confRelPath(fullPath) {
+  const normalized = fullPath.replace(/\\/g, '/');
+  const idx = normalized.lastIndexOf('/conf/');
+  return idx >= 0 ? normalized.slice(idx) : normalized;
+}
+
+/**
+ * 初始化并绑定页面中各功能面板的事件处理程序
+ * - 配置面板：支持通过文件选择器加载配置、保存、另存为、搜索过滤、应用待改动、重置为服务器配置；加载成功后渲染配置树与语言预设，并在界面上显示配置相对路径
+ * - 布局控制：支持折叠配置面板并动态调整主布局列宽
+ * - 运行控制：绑定客户端的 Start/Stop/Pause/Resume/Reset 按钮，必要时在启动前自动提交待改动补丁
+ * - 数据录制/回放：切换录制状态、选择回放目录并发送回放命令，同时在界面上显示选择的目录
+ * - 语言指令：加载语言任务 JSON 文件、渲染任务选择器、发送语言指令，支持 Ctrl+Enter 快捷发送与面板折叠
+ * - 手动控制：为夹爪、头部、腰部的控制按钮绑定发送命令，发送成功后以通知提示
+ * - 统一使用后端 API 接口进行异步交互，并通过通知反馈结果；在多数失败场景下已内部捕获并提示
+ * 使用约定：应在页面初始化时调用一次，以确保 DOM 已就绪且必需的元素均存在
+ * @returns {void} 无返回值
+ * @throws {Error} 当必需的 DOM 元素缺失导致事件绑定失败，或个别未被内部捕获的 API/渲染异常发生时可能抛出错误
+ */
 function wireEvents() {
-  // Config file bar
-  $('btn-load-file').addEventListener('click', async () => {
-    const path = $('conf-path').value.trim();
-    if (!path) { toast('Enter a config file path.', 'warn'); return; }
+  // Config file bar — Load via file picker
+  $('conf-file-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const path = file.path || file.name;
     try {
       const res = await apiFetch('/api/config/load_file', { method: 'POST', body: JSON.stringify({ path }) });
       App.config = res.config || {}; App.pendingPatch = {};
       $('pending-badge').classList.add('hidden');
       renderConfigTree(App.config);
       if (App.config.language) renderLangPresets(App.config.language);
+      // Show relative path from /conf onward
+      const display = $('conf-path-display');
+      if (display) {
+        const rel = _confRelPath(path);
+        display.textContent = rel;
+        display.title = path;
+        display.dataset.fullPath = path;
+      }
       toast('Config file loaded.', 'ok');
     } catch (e) { /* toasted */ }
+    e.target.value = '';
   });
 
   $('btn-save-file').addEventListener('click', async () => {
-    const path = $('conf-path').value.trim();
-    if (!path) { toast('Enter a save path.', 'warn'); return; }
+    const display = $('conf-path-display');
+    const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+    if (!path) { toast('No config file loaded. Use Load first.', 'warn'); return; }
     try {
       await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
-      toast(`Saved to ${path}`, 'ok');
+      toast(`Saved to ${_confRelPath(path)}`, 'ok');
     } catch (e) { /* toasted */ }
   });
 
+  // Save As — modal with conf/ as default prefix
   $('btn-saveas-file').addEventListener('click', () => {
-    $('saveas-path').value = $('conf-path').value || 'conf/my_config.py';
+    const display = $('conf-path-display');
+    const current = (display && display.dataset.fullPath) || '';
+    $('saveas-path').value = current || (CONF_DIR + '/my_config.py');
     $('modal-saveas').classList.remove('hidden');
   });
   $('btn-saveas-confirm').addEventListener('click', async () => {
@@ -916,7 +1205,9 @@ function wireEvents() {
     $('modal-saveas').classList.add('hidden');
     try {
       await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
-      $('conf-path').value = path; toast(`Saved as ${path}`, 'ok');
+      const display = $('conf-path-display');
+      if (display) { display.textContent = _confRelPath(path); display.title = path; display.dataset.fullPath = path; }
+      toast(`Saved as ${_confRelPath(path)}`, 'ok');
     } catch (e) { /* toasted */ }
   });
   $('btn-saveas-cancel').addEventListener('click', () => $('modal-saveas').classList.add('hidden'));
@@ -944,10 +1235,10 @@ function wireEvents() {
     const panel = document.querySelector('.panel-config');
     const layout = document.querySelector('.layout');
     if (panel.classList.toggle('collapsed')) {
-      layout.style.gridTemplateColumns = '32px 1fr 360px';
+      layout.style.gridTemplateColumns = '32px 1fr 300px';
       $('btn-config-collapse').textContent = '▶';
     } else {
-      layout.style.gridTemplateColumns = '300px 1fr 360px';
+      layout.style.gridTemplateColumns = '280px 1fr 300px';
       $('btn-config-collapse').textContent = '◀';
     }
   });
@@ -971,14 +1262,70 @@ function wireEvents() {
   $('btn-resume').addEventListener('click', async () => sendCommand('resume'));
   $('btn-reset').addEventListener('click',  async () => { await sendCommand('reset'); toast('Robot reset initiated.', 'info'); });
 
-  // Language
-  $('btn-set-lang').addEventListener('click', async () => {
-    const lang = $('lang-input').value.trim();
+  // Record button — toggle recording via command
+  $('btn-record').addEventListener('click', async () => {
+    const btn = $('btn-record');
+    const recording = btn.classList.toggle('btn-active');
+    await sendCommand('record', { enable: recording });
+    toast(recording ? 'Recording started.' : 'Recording stopped.', recording ? 'ok' : 'warn', 2500);
+  });
+
+  // Replay — folder picker triggers load
+  $('replay-folder-input').addEventListener('change', async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    // Derive folder path from the first file's webkitRelativePath or path
+    const first = files[0];
+    let folderPath = '';
+    if (first.path) {
+      // Electron / NW.js: absolute path available
+      folderPath = first.path.replace(/[\\/][^\\/]+$/, '');
+    } else if (first.webkitRelativePath) {
+      // Browser: use the top-level folder name only (server resolves relative)
+      folderPath = first.webkitRelativePath.split('/')[0];
+    } else {
+      folderPath = first.name;
+    }
+    // Show path pill
+    const pill = $('replay-path-display');
+    if (pill) { pill.textContent = folderPath; pill.title = folderPath; }
+    try {
+      await apiFetch('/api/client/command', { method: 'POST', body: JSON.stringify({ command: 'replay', params: { path: folderPath } }) });
+      toast(`Replay loaded: ${folderPath}`, 'ok', 3000);
+    } catch (_) { /* toasted */ }
+    e.target.value = '';
+  });
+
+  // Language Command panel — JSON file picker
+  $('lang-file-input').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const path = file.path || file.name;
+    try {
+      const res = await apiFetch('/api/lang_file/load', { method: 'POST', body: JSON.stringify({ path }) });
+      buildLangTasksFromData(res.data);
+      renderLangTaskSelect();
+      toast('Language file loaded.', 'ok', 2000);
+    } catch (_) { /* toasted */ }
+    e.target.value = '';
+  });
+
+  // Language Command panel — send
+  $('btn-lang-send').addEventListener('click', async () => {
+    const lang = $('lang-cmd-text').value.trim();
     if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
     await sendCommand('set_language', { language: lang });
     toast('Language updated & robot reset.', 'info');
   });
-  $('lang-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-set-lang').click(); });
+  $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
+
+  // Language Command panel collapse
+  $('btn-lang-collapse').addEventListener('click', () => {
+    const body = $('lang-body');
+    const btn  = $('btn-lang-collapse');
+    const collapsed = body.classList.toggle('collapsed');
+    btn.textContent = collapsed ? '▲' : '▼';
+  });
 
   // Manual robot control
   $('btn-gripper').addEventListener('click', async () => sendCommand('gripper', { pos: [parseFloat($('gripper-l').value), parseFloat($('gripper-r').value)] }));
@@ -1015,7 +1362,11 @@ document.addEventListener('DOMContentLoaded', () => {
   wireEvents();
   setupCameraPanel();
   setupTrajPanel();
+  setupLangPanel();
+  createUnifiedChart();                  // create single unified trajectory chart
+  buildJointSelector(TRAJ_JOINT_COUNT);  // pre-build fixed 14-joint selector
   connectWS();
   startStatusPoll();
-  loadConfigFromServer();
+  initConfDir().then(() => loadConfigFromServer());
+  loadDefaultLangFile();
 });

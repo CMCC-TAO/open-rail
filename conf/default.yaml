@@ -1,0 +1,106 @@
+# VLA-RAIL Client Default Configuration
+# Generated from client_conf.py defaults
+# Usage: Load this file via Web Client → Configuration → Load
+
+# ── Inference & Control ─────────────────────────────────
+traj_strategy: fitting           # Trajectory strategy: fitting | interpolation
+intra_chunk_mode: fit            # Intra-chunk processing: raw | raw_ipt | fit
+inter_chunk_mode: min_jerk       # Inter-chunk transition: search_action | poly | smooth_velocity | min_jerk | bspline | sync
+
+fitting_deg: 5                   # Polynomial fitting degree
+fitting_num_samples: 64          # Number of samples for trajectory fitting
+fitting_time_step: 3.75          # Time step for trajectory fitting (ms)
+
+search_length: 100               # Forward search length (larger → less hesitation)
+smooth_action: false             # Enable action smoothing (Beta)
+smooth_length: 150               # Action smoothing window length
+smooth_base: 0.0                 # Smoothing base value (smaller → more smoothing)
+smooth_ratio: 0.75               # Action smoothing ratio (recommended 0.5)
+
+gripper_offset: 5                # Gripper forward offset (positive → slower gripper)
+sleep_time: 0.002                # Sleep time per inference frame (s)
+history_frame: false             # Use historical frames
+
+# ── Visualisation ────────────────────────────────────────
+vis_action_length: 1000          # Number of action steps to visualise
+show_action_cams_qt: false       # QT-based action camera visualisation
+show_img: false                  # Display images
+
+# ── Data Recording ───────────────────────────────────────
+record_exp_data: false           # Log action / velocity / acceleration to files
+thre_prob_progress: 9.9          # Probability threshold for switching language instructions
+
+# ── Preprocessing ────────────────────────────────────────
+preprocess: pad_and_resize
+preprocess_size: [640, 640]      # [height, width]
+
+# ── Observer ─────────────────────────────────────────────
+observer:
+  fps: 30
+
+# ── Controller ───────────────────────────────────────────
+controller:
+  wait_step: 4                   # Controller time delay (ms)
+  period: 3.75                   # Control period (ms)
+  strategy: step                 # step | realtime | fusion
+
+# ── Real-time Data Manager ────────────────────────────────
+rdm:
+  max_len: 100
+  record_data: false
+
+# ── Trajectory Generator ─────────────────────────────────
+traj:
+  filter_window_size: 4
+  min_gripper_action_threshold: 0.05
+  max_gripper_action_threshold: 0.95
+  max_joint_fitting_workers: 14
+  max_gripper_fitting_workers: 2
+  max_head_fitting_workers: 2
+  joint_dim: 14
+  gripper_dim: 2
+  head_dim: 2
+
+# ── ZMQ Communication ────────────────────────────────────
+vla_zmq:
+  client_addr: tcp://localhost:5566
+  server_addr: "tcp://*:5566"
+
+vis_zmq:
+  client_addr: tcp://localhost:7788
+  server_addr: "tcp://*:7788"
+
+# ── Robot ────────────────────────────────────────────────
+robots:
+  type: a2d                      # a2d | mock
+  a2d:
+    hand_type: gripper           # gripper | hand_as_gripper | hand
+    gripper_freq: 40
+    head_freq: 40
+    reset_robot_pos:
+      - -1.0748
+      - 0.6107
+      - 0.2816
+      - -1.2823
+      - 0.7292
+      - 1.4957
+      - -0.1869
+      - 1.0720
+      - -0.6103
+      - -0.2780
+      - 1.2822
+      - -0.7299
+      - -1.4929
+      - 0.1873
+      - 0.0
+      - 0.0
+      - 0.0
+      - 0.4363
+      - 0.2967
+      - 20.0
+      - 0.0
+      - 0.0
+  mock:
+    hand_type: gripper
+    root: /home/robot/Music/task_39_only1
+    repo_id: task_39_only1

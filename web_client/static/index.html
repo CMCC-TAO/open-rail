@@ -38,11 +38,18 @@
 
         <!-- Config file bar -->
         <div class="config-file-bar">
-          <input id="conf-path" class="input-text" type="text" placeholder="path/to/user_conf.py" />
-          <button class="btn btn-sm" id="btn-load-file">Load</button>
-          <button class="btn btn-sm" id="btn-save-file">Save</button>
-          <button class="btn btn-sm" id="btn-saveas-file">Save As…</button>
+          <label class="btn btn-sm" id="btn-load-file" title="Load config file">
+            📂 Load
+            <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
+          </label>
+          <button class="btn btn-sm" id="btn-save-file">💾 Save</button>
+          <label class="btn btn-sm" id="btn-saveas-file" title="Save config as…">
+            💾 Save As…
+            <input id="conf-saveas-file-input" type="file" accept=".yaml" nwsaveas="user_conf.yaml" style="display:none" />
+          </label>
         </div>
+        <!-- Current file path display -->
+        <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
 
         <!-- Search -->
         <div class="config-search-bar">
@@ -66,70 +73,92 @@
 
       <!-- ── Runtime Monitor ── -->
       <section class="panel panel-monitor">
-        <div class="panel-header"><span>📊 Runtime Monitor</span></div>
+        <div class="panel-header monitor-header">
+          <span class="monitor-title">📊 Runtime Monitor</span>
+          <!-- Spacer: push all button groups to the right -->
+          <span class="monitor-spacer"></span>
+          <!-- Group ①: primary controls -->
+          <div class="monitor-ctrl-group">
+            <button class="btn btn-success btn-sm" id="btn-start">▶ Start</button>
+            <button class="btn btn-danger  btn-sm" id="btn-stop" disabled>■ Stop</button>
+            <button class="btn btn-warn    btn-xs" id="btn-pause" disabled>⏸ Pause</button>
+            <button class="btn btn-xs"             id="btn-resume" disabled>▶ Resume</button>
+            <button class="btn btn-xs"             id="btn-reset" disabled>↺ Reset</button>
+          </div>
+          <!-- Separator -->
+          <span class="monitor-sep"></span>
+          <!-- Group ②: record / replay -->
+          <div class="monitor-ctrl-group">
+            <button class="btn btn-xs" id="btn-record">⏺ Record</button>
+            <label  class="btn btn-xs" id="btn-replay" title="Select replay folder">▶ Replay
+              <input id="replay-folder-input" type="file" webkitdirectory style="display:none" />
+            </label>
+            <span class="replay-path-display" id="replay-path-display"></span>
+          </div>
+        </div>
         <div class="panel-body">
 
-          <!-- Control bar -->
-          <div class="control-bar">
-            <button class="btn btn-success btn-lg" id="btn-start">▶ Start</button>
-            <button class="btn btn-danger  btn-lg" id="btn-stop" disabled>■ Stop</button>
-            <button class="btn btn-warn    btn-sm" id="btn-pause" disabled>⏸ Pause</button>
-            <button class="btn btn-sm"             id="btn-resume" disabled>▶ Resume</button>
-            <button class="btn btn-sm"             id="btn-reset">↺ Reset Robot</button>
+          <!-- Stats inline bar -->
+          <div class="section-title">Key Statistics</div>
+          <div class="stats-inline">
+            <span class="stat-inline-item">
+              <span class="stat-inline-label">Infer&nbsp;Count</span>
+              <span class="stat-inline-value" id="val-infer-count">–</span>
+            </span>
+            <span class="stat-inline-sep">|</span>
+            <span class="stat-inline-item">
+              <span class="stat-inline-label">Avg&nbsp;Infer</span>
+              <span class="stat-inline-value" id="val-infer-time">–</span>
+            </span>
+            <span class="stat-inline-sep">|</span>
+            <span class="stat-inline-item">
+              <span class="stat-inline-label">Avg&nbsp;Traj</span>
+              <span class="stat-inline-value" id="val-traj-time">–</span>
+            </span>
           </div>
 
-          <!-- Stats cards -->
-          <div class="stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">Infer Count</div>
-              <div class="stat-value" id="val-infer-count">–</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Avg Infer Time</div>
-              <div class="stat-value" id="val-infer-time">–</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Avg Traj Time</div>
-              <div class="stat-value" id="val-traj-time">–</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Language</div>
-              <div class="stat-value stat-lang" id="val-language">–</div>
-            </div>
-          </div>
-
-          <!-- Config snapshot (live values while running) -->
-          <div class="section-title">Config Snapshot</div>
-          <div id="config-snapshot" class="kv-grid"></div>
-
-          <!-- Obs / Act info -->
-          <div class="section-title">Observation / Action Info</div>
-          <div id="obs-act-info" class="kv-grid"></div>
+          <!-- hidden KV containers kept for JS compatibility (not rendered) -->
+          <div id="config-snapshot" style="display:none"></div>
+          <div id="obs-act-info"    style="display:none"></div>
 
           <!-- Robot state / action -->
           <div class="section-title">Robot State &amp; Action</div>
-          <div class="joint-grid-wrap">
-            <div>
-              <div class="joint-grid-title">State</div>
-              <div id="joint-state" class="joint-grid"></div>
+          <div class="joint-grouped-wrap">
+            <!-- State column -->
+            <div class="joint-grouped-col">
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm · Left <span class="joint-col-tag">State</span></div>
+                <div id="joint-state-arm-l" class="joint-grid"></div>
+              </div>
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm · Right <span class="joint-col-tag">State</span></div>
+                <div id="joint-state-arm-r" class="joint-grid"></div>
+              </div>
+              <div class="joint-group-section">
+                <div class="joint-group-label">Gripper / Hand <span class="joint-col-tag">State</span></div>
+                <div id="joint-state-gripper" class="joint-grid"></div>
+              </div>
             </div>
-            <div>
-              <div class="joint-grid-title">Action</div>
-              <div id="joint-action" class="joint-grid"></div>
+            <!-- Action column -->
+            <div class="joint-grouped-col">
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm · Left <span class="joint-col-tag tag-action">Action</span></div>
+                <div id="joint-action-arm-l" class="joint-grid"></div>
+              </div>
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm · Right <span class="joint-col-tag tag-action">Action</span></div>
+                <div id="joint-action-arm-r" class="joint-grid"></div>
+              </div>
+              <div class="joint-group-section">
+                <div class="joint-group-label">Gripper / Hand <span class="joint-col-tag tag-action">Action</span></div>
+                <div id="joint-action-gripper" class="joint-grid"></div>
+              </div>
             </div>
           </div>
 
           <!-- Debug info -->
           <div class="section-title">Debug Info</div>
-          <pre id="debug-info" class="debug-box"></pre>
-
-          <!-- Language panel -->
-          <div class="section-title">Set Language</div>
-          <div class="lang-bar">
-            <input id="lang-input" class="input-text" type="text" placeholder="Enter instruction or select preset" />
-            <button class="btn btn-sm btn-primary" id="btn-set-lang">Apply</button>
-          </div>
-          <div id="lang-presets" class="lang-presets"></div>
+          <!-- <pre id="debug-info" class="debug-box"></pre> -->
 
           <!-- Manual robot control -->
           <details class="robot-ctrl-details">
@@ -163,32 +192,92 @@
         </div>
       </section>
 
+      <!-- ── Language Command ── -->
+      <section class="panel panel-lang" id="panel-lang">
+        <div class="panel-header">
+          <span>🗣 Language Command</span>
+          <div class="panel-header-actions">
+            <label class="btn btn-xs" title="Load JSON language file">
+              📂 Load JSON
+              <input id="lang-file-input" type="file" accept=".json" style="display:none" />
+            </label>
+            <button class="btn btn-xs" id="btn-lang-collapse" title="Collapse">▼</button>
+          </div>
+        </div>
+        <div class="panel-body" id="lang-body">
+          <div class="lang-cmd-layout">
+            <!-- Task selector (level-1) -->
+            <div class="lang-cmd-col">
+              <div class="lang-cmd-col-title">Task</div>
+              <select id="lang-task-select" class="lang-cmd-select" size="5"></select>
+            </div>
+            <!-- Sub-task selector (level-2) -->
+            <div class="lang-cmd-col lang-cmd-col-subtask">
+              <div class="lang-cmd-col-title">Sub-task</div>
+              <select id="lang-subtask-select" class="lang-cmd-select" size="5"></select>
+            </div>
+            <!-- Current instruction + send -->
+            <div class="lang-cmd-col lang-cmd-col-send">
+              <div class="lang-cmd-col-title">Instruction</div>
+              <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
+              <button class="btn btn-sm btn-primary" id="btn-lang-send">▶ Apply</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ── Joint Trajectory ── -->
       <section class="panel panel-traj" id="panel-traj">
         <div class="panel-header traj-panel-header" id="traj-panel-header">
           <span>📈 Joint Trajectory</span>
-          <div class="panel-header-actions">
-            <!-- Source toggle -->
-            <span class="traj-src-label">Source:</span>
-            <button class="btn btn-xs btn-active" id="btn-traj-state">State</button>
-            <button class="btn btn-xs" id="btn-traj-action">Action</button>
-            <button class="btn btn-xs" id="btn-traj-both">Both</button>
-            <!-- Controls -->
-            <button class="btn btn-xs" id="btn-traj-pause">⏸</button>
-            <button class="btn btn-xs" id="btn-traj-clear">Clear</button>
-            <button class="btn btn-xs" id="btn-traj-collapse">▼</button>
+          <div class="panel-header-actions traj-header-actions">
+            <!-- spacer: push all groups to the right -->
+            <span class="traj-header-spacer"></span>
+            <!-- ① Source: label + State/Action two rows -->
+            <div class="traj-src-group">
+              <span class="traj-src-label">Source</span>
+              <div class="traj-src-rows">
+                <button class="btn btn-xs btn-active" id="btn-traj-state">State</button>
+                <button class="btn btn-xs" id="btn-traj-action">Action</button>
+              </div>
+            </div>
+            <!-- Divider -->
+            <span class="traj-header-sep"></span>
+            <!-- ② Joints: label + two rows (L0-L6+All / R0-R6+None) -->
+            <div class="traj-joints-group">
+              <span class="traj-src-label">Joints</span>
+              <div class="traj-joints-rows">
+                <div class="joint-sel-row" id="joint-row-l">
+                  <!-- L0-L6 chips injected by JS -->
+                  <button class="btn btn-xs traj-allnone-btn" id="btn-joints-all">All</button>
+                </div>
+                <div class="joint-sel-row" id="joint-row-r">
+                  <!-- R0-R6 chips injected by JS -->
+                  <button class="btn btn-xs traj-allnone-btn" id="btn-joints-none">None</button>
+                </div>
+              </div>
+            </div>
+            <!-- Divider -->
+            <span class="traj-header-sep"></span>
+            <!-- ③ Play + Clear: two rows matching Source height -->
+            <div class="traj-ctrl-group">
+              <span class="traj-src-label">Ctrl</span>
+              <div class="traj-ctrl-rows">
+                <button class="btn btn-xs" id="btn-traj-pause"><span class="btn-icon">⏸</span> Play</button>
+                <button class="btn btn-xs" id="btn-traj-clear">🗑 Clear</button>
+              </div>
+            </div>
+            <!-- Divider -->
+            <span class="traj-header-sep"></span>
+            <!-- ④ Collapse: rightmost -->
+            <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse">▼</button>
           </div>
         </div>
         <div class="traj-body" id="traj-body">
-          <!-- Joint selector row -->
-          <div class="traj-joint-bar">
-            <span class="traj-src-label">Joints:</span>
-            <div class="joint-selector" id="joint-selector"></div>
-            <button class="btn btn-xs" id="btn-joints-all">All</button>
-            <button class="btn btn-xs" id="btn-joints-none">None</button>
+          <!-- Single unified chart canvas -->
+          <div class="traj-chart-wrap" id="traj-chart-wrap">
+            <canvas id="traj-canvas"></canvas>
           </div>
-          <!-- Chart grid: one Chart.js canvas per selected joint -->
-          <div class="traj-charts-grid" id="traj-charts-grid"></div>
         </div>
       </section>
 
@@ -199,8 +288,7 @@
       <div class="panel-header">
         <span>📷 Camera Visual</span>
         <div class="panel-header-actions">
-          <button class="btn btn-xs btn-success" id="btn-cam-all-open">All On</button>
-          <button class="btn btn-xs btn-danger"  id="btn-cam-all-close">All Off</button>
+          <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle">⏸ Close All</button>
           <button class="btn btn-xs" id="btn-visual-collapse" title="Collapse">▶</button>
         </div>
       </div>
@@ -214,7 +302,7 @@
             <span class="cam-spacer"></span>
             <button class="btn btn-xs" id="btn-cam-0">Close</button>
           </div>
-          <div class="cam-preview open" id="cam-preview-0">
+          <div class="cam-preview" id="cam-preview-0">
             <img id="cam-img-0" src="" alt="Head Camera" />
             <div class="cam-preview-placeholder" id="cam-placeholder-0">Waiting for stream…</div>
           </div>
@@ -228,7 +316,7 @@
             <span class="cam-spacer"></span>
             <button class="btn btn-xs" id="btn-cam-1">Close</button>
           </div>
-          <div class="cam-preview open" id="cam-preview-1">
+          <div class="cam-preview" id="cam-preview-1">
             <img id="cam-img-1" src="" alt="Wrist-Left Camera" />
             <div class="cam-preview-placeholder" id="cam-placeholder-1">Waiting for stream…</div>
           </div>
@@ -242,7 +330,7 @@
             <span class="cam-spacer"></span>
             <button class="btn btn-xs" id="btn-cam-2">Close</button>
           </div>
-          <div class="cam-preview open" id="cam-preview-2">
+          <div class="cam-preview" id="cam-preview-2">
             <img id="cam-img-2" src="" alt="Wrist-Right Camera" />
             <div class="cam-preview-placeholder" id="cam-placeholder-2">Waiting for stream…</div>
           </div>
@@ -255,7 +343,7 @@
 
   <!-- ═══════════════════ FOOTER ═══════════════════ -->
   <footer class="footer-bar">
-    © 2025 VLA-RAIL. All rights reserved.
+    © 2025-2026 VLA-RAIL. All rights reserved.
   </footer>
 
   <!-- ═══════════════════ TOAST ═══════════════════ -->

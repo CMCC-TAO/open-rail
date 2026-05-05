@@ -14,14 +14,19 @@ import asyncio
 import json
 import logging
 import logging.config
-import os
 import sys
 import threading
 import time
 import traceback
-import importlib.util
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
+
+try:
+    import yaml as _yaml
+    _HAS_YAML = True
+except ImportError:
+    _HAS_YAML = False
 
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -44,10 +49,35 @@ from client.utils.util import load_user_config, apply_user_config
 logger = logging.getLogger(__name__)
 
 # ── FastAPI app ──────────────────────────────────────────────────────────────
-app = FastAPI(title="VLA Web Client", version="1.0.0")
+# lifespan replaces the deprecated @app.on_event("startup"/"shutdown") pattern.
+# The context manager is defined inline here; module-level globals (state, etc.)
+# are accessible at call-time (not at definition time), so forward-use is safe.
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    # ── startup ──
+    logging.config.dictConfig(LOGGING_CONFIG)
+    state.config = get_client_config()
+    if DEFAULT_YAML.exists():
+        try:
+            _apply_default_yaml(state.config)
+            logger.info(f"Loaded default config overrides from {DEFAULT_YAML}")
+        except Exception as e:
+            logger.warning(f"Failed to apply default.yaml: {e}")
+    asyncio.create_task(_stats_push_loop())
+    logger.info("VLA Web Client server started on http://localhost:9000")
+    yield
+    # ── shutdown ──
+    if state.running:
+        _cleanup()
+
+app = FastAPI(title="VLA Web Client", version="1.0.0", lifespan=_lifespan)
 
 STATIC_DIR  = Path(__file__).parent / "static"
 VISUAL_DIR  = ROOT / "visual"
+
+# Default config files bundled with the project
+DEFAULT_YAML     = ROOT / "conf" / "default.yaml"
+DEFAULT_LANG_CMD = ROOT / "conf" / "lang_cmd.json"
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # Expose visual/ libs (Chart.js, hammer, zoom plugin) used by web_client
@@ -74,7 +104,7 @@ state = ClientState()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Helpers: config serialisation
+#  Helpers: config serialization
 # ─────────────────────────────────────────────────────────────────────────────
 def _config_to_dict(cfg) -> dict:
     """Recursively convert a ConfigDict (or any object) to a plain dict."""
@@ -106,7 +136,10 @@ def _apply_flat_patch(config, patch: dict):
 
     def _set_nested(obj, keys, value):
         for k in keys[:-1]:
-            obj = getattr(obj, k, None) or obj[k]
+            # Use getattr with a sentinel to avoid falsy-value short-circuit
+            _sentinel = object()
+            attr = getattr(obj, k, _sentinel)
+            obj = obj[k] if attr is _sentinel else attr
         leaf_key = keys[-1]
         current = getattr(obj, leaf_key, None)
         # Enum coercion
@@ -229,6 +262,51 @@ async def index():
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: config
 # ─────────────────────────────────────────────────────────────────────────────
+@app.get("/api/conf_dir")
+async def get_conf_dir():
+    """Return the absolute path of the project conf/ directory."""
+    conf_dir = ROOT / "conf"
+    return {"status": "ok", "path": str(conf_dir)}
+
+
+@app.get("/api/default_lang_file")
+async def get_default_lang_file():
+    """Return the path and contents of the default language command JSON file."""
+    if not DEFAULT_LANG_CMD.exists():
+        raise HTTPException(404, "Default lang_cmd.json not found.")
+    try:
+        data = json.loads(DEFAULT_LANG_CMD.read_text(encoding="utf-8"))
+        rel_path = str(DEFAULT_LANG_CMD.relative_to(ROOT))
+        return {"status": "ok", "path": rel_path, "data": data}
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse lang_cmd.json: {e}")
+
+
+class LangFileRequest(BaseModel):
+    path: str
+
+
+@app.post("/api/lang_file/load")
+async def load_lang_file(req: LangFileRequest):
+    """Load a JSON language command file and return its contents."""
+    p = Path(req.path)
+    if not p.is_absolute():
+        p = ROOT / p
+    # Guard against path-traversal: resolved path must stay inside ROOT
+    try:
+        p = p.resolve()
+        p.relative_to(ROOT.resolve())
+    except ValueError:
+        raise HTTPException(400, "Path is outside the allowed project directory.")
+    if not p.exists():
+        raise HTTPException(404, f"File not found: {p}")
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+        return {"status": "ok", "data": data}
+    except Exception as e:
+        raise HTTPException(400, f"Failed to parse JSON: {e}")
+
+
 @app.get("/api/config")
 async def get_config():
     """Return current config as a nested dict."""
@@ -275,9 +353,17 @@ async def load_config_file(req: ConfigFileRequest):
     """Load a user_conf .py file and apply it (like --user_conf)."""
     if state.running:
         raise HTTPException(400, "Stop the client before loading a new config.")
-    user_cfg = load_user_config(req.path)
+    # Guard against path-traversal
+    p = Path(req.path)
+    if not p.is_absolute():
+        p = ROOT / p
+    try:
+        p.resolve().relative_to(ROOT.resolve())
+    except ValueError:
+        raise HTTPException(400, "Path is outside the allowed project directory.")
+    user_cfg = load_user_config(str(p))
     if user_cfg is None:
-        raise HTTPException(400, f"Failed to load config from: {req.path}")
+        raise HTTPException(400, f"Failed to load config from: {p}")
     base_cfg = get_client_config()
     state.config = apply_user_config(base_cfg, user_cfg)
     return {"status": "ok", "config": _config_to_dict(state.config)}
@@ -288,12 +374,56 @@ async def save_config_file(req: ConfigFileRequest):
     """Save current in-memory config to a .py file (get_user_config format)."""
     if state.config is None:
         raise HTTPException(400, "No config loaded.")
+    save_path = Path(req.path)
+    if not save_path.is_absolute():
+        save_path = ROOT / save_path
+    # Guard against path-traversal: resolved path must stay inside ROOT
+    try:
+        save_path.resolve().relative_to(ROOT.resolve())
+    except ValueError:
+        raise HTTPException(400, "Path is outside the allowed project directory.")
     cfg_dict = _config_to_dict(state.config)
     content = _dict_to_user_conf_py(cfg_dict)
-    save_path = Path(req.path)
     save_path.parent.mkdir(parents=True, exist_ok=True)
     save_path.write_text(content, encoding="utf-8")
     return {"status": "ok", "path": str(save_path)}
+
+
+def _apply_default_yaml(config):
+    """Read default.yaml and apply flat/nested overrides onto config (best-effort)."""
+    if not _HAS_YAML:
+        # Fallback: simple line-by-line key: value parser (no nested support)
+        text = DEFAULT_YAML.read_text(encoding="utf-8")
+        patch = {}
+        for line in text.splitlines():
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            if ':' in line and not line.startswith('-'):
+                k, _, v = line.partition(':')
+                k = k.strip(); v = v.strip()
+                if v and not v.startswith('#'):
+                    patch[k] = v
+        _apply_flat_patch(config, patch)
+        return
+
+    text = DEFAULT_YAML.read_text(encoding="utf-8")
+    data = _yaml.safe_load(text)
+    if not isinstance(data, dict):
+        return
+
+    def _flatten(d, prefix=""):
+        out = {}
+        for k, v in d.items():
+            full = f"{prefix}.{k}" if prefix else k
+            if isinstance(v, dict):
+                out.update(_flatten(v, full))
+            else:
+                out[full] = v
+        return out
+
+    flat = _flatten(data)
+    _apply_flat_patch(config, flat)
 
 
 def _dict_to_user_conf_py(d: dict, indent=0) -> str:
@@ -329,10 +459,16 @@ def _fmt_dict(d: dict, indent: int) -> str:
 @app.post("/api/client/start")
 async def start_client():
     """Initialise and start the VLA client (non-blocking)."""
-    if state.running:
-        raise HTTPException(400, "Client is already running.")
+    # Lock prevents concurrent requests from both passing the running guard
+    with state.lock:
+        if state.running:
+            raise HTTPException(400, "Client is already running.")
+        # Set eagerly inside the lock so a second concurrent request is rejected
+        # before the worker thread is even created.
+        state.running = True
 
-    loop = asyncio.get_event_loop()
+    # get_running_loop() is the correct API inside a running coroutine (Python 3.10+)
+    loop = asyncio.get_running_loop()
     state._loop = loop
 
     def _run_in_thread():
@@ -363,13 +499,14 @@ async def start_client():
 
             state.vla_client = vc
             state.robot = robot
-            state.running = True
 
-            vc.run()
+            # Broadcast "started" immediately before entering the blocking vc.run()
             asyncio.run_coroutine_threadsafe(
                 _broadcast({"type": "status", "data": {"running": True, "message": "Client started."}}),
                 loop
             )
+
+            vc.run()
 
             # Keep alive until externally stopped
             while state.running:
@@ -525,25 +662,6 @@ async def websocket_endpoint(ws: WebSocket):
     finally:
         with state.ws_lock:
             state.ws_clients.discard(ws)
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Startup / shutdown
-# ─────────────────────────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def on_startup():
-    logging.config.dictConfig(LOGGING_CONFIG)
-    # Pre-load default config
-    state.config = get_client_config()
-    # Start background stats push
-    asyncio.create_task(_stats_push_loop())
-    logger.info("VLA Web Client server started on http://localhost:9000")
-
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    if state.running:
-        _cleanup()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
