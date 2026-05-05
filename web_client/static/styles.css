@@ -398,11 +398,18 @@ html, body {
   background: rgba(26,127,55,.08); border-color: rgba(26,127,55,.3);
   color: var(--success);
 }
-.joint-grid { display: flex; flex-wrap: wrap; gap: 3px; }
+.joint-grid { 
+  display: flex; 
+  flex-wrap: wrap; 
+  gap: 3px; 
+  justify-content: space-between;  /* Distribute items evenly */
+}
 .joint-chip {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 3px; padding: 2px 2px; font-size: 10px;
-  min-width: 50px; text-align: center; white-space: nowrap;
+  width: 60px;                /* Fixed width */
+  text-align: center; white-space: nowrap;
+  flex: 0 0 auto;             /* Don't grow or shrink, fixed size */
 }
 
 /* ── Debug box ── */

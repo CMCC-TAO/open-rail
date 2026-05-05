@@ -283,15 +283,15 @@ function renderJointsGrouped(side, values) {
     const val = typeof v === 'number' ? v.toFixed(2) : v;
     if (i < JOINT_ARM_L_COUNT) {
       // chip.textContent = `L${i}: ${val}`;
-      chip.textContent = `${i}: ${val}`;
+      chip.textContent = `${i}｜${val}`;
       elArmL.appendChild(chip);
     } else if (i < JOINT_ARM_L_COUNT + JOINT_ARM_R_COUNT) {
       // chip.textContent = `R${i - JOINT_ARM_L_COUNT}: ${val}`;
-      chip.textContent = `${i - JOINT_ARM_L_COUNT}: ${val}`;
+      chip.textContent = `${i - JOINT_ARM_L_COUNT}｜${val}`;
       elArmR.appendChild(chip);
     } else {
       // chip.textContent = `G${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}: ${val}`;
-      chip.textContent = `${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}: ${val}`;
+      chip.textContent = `${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}｜${val}`;
       elGripper.appendChild(chip);
     }
   });
