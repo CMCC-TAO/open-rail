@@ -401,8 +401,8 @@ html, body {
 .joint-grid { display: flex; flex-wrap: wrap; gap: 3px; }
 .joint-chip {
   background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 3px; padding: 2px 4px; font-size: 10px;
-  min-width: 80px; text-align: center; white-space: nowrap;
+  border-radius: 3px; padding: 2px 2px; font-size: 10px;
+  min-width: 50px; text-align: center; white-space: nowrap;
 }
 
 /* ── Debug box ── */
