@@ -30,22 +30,23 @@ const CHART_UPDATE_MS   = 50;
 
 // Per-joint colour palette (14 colours, one per joint L0-L6 R0-R6)
 const JOINT_COLORS = [
-  // L0-L6: blue family
-  'rgb(30, 120, 220)',   // L0
-  'rgb(0, 180, 240)',    // L1
-  'rgb(0, 210, 180)',    // L2
-  'rgb(60, 200, 80)',    // L3
-  'rgb(140, 200, 40)',   // L4
-  'rgb(200, 180, 0)',    // L5
-  'rgb(240, 130, 0)',    // L6
-  // R0-R6: red/purple family
-  'rgb(220, 50, 50)',    // R0
-  'rgb(220, 40, 140)',   // R1
-  'rgb(160, 40, 220)',   // R2
-  'rgb(100, 60, 220)',   // R3
-  'rgb(40, 100, 210)',   // R4
-  'rgb(0, 160, 160)',    // R5
-  'rgb(80, 160, 80)',    // R6
+  // L0-L6: High contrast bright colors
+  'rgb(220, 20, 60)',   // L0 - Crimson red
+  'rgb(255, 140, 0)',   // L1 - Dark orange
+  'rgb(255, 0, 255)',   // L2 - Magenta (changed from purple for better contrast)
+  'rgb(0, 150, 0)',     // L3 - Forest green (changed from green for better contrast)
+  'rgb(0, 70, 255)',    // L4 - Strong blue (changed from blue for better contrast)
+  'rgb(75, 0, 130)',    // L5 - Indigo
+  'rgb(186, 85, 211)',  // L6 - Medium purple (changed from violet for better contrast)
+  
+  // R0-R6: Contrasting colors from the first set
+  'rgb(0, 191, 255)',   // R0 - Deep sky blue (changed from magenta to avoid repetition)
+  'rgb(255, 20, 147)',  // R1 - Deep pink
+  'rgb(139, 69, 19)',   // R2 - Saddle brown (changed from brown for better contrast)
+  'rgb(184, 134, 11)',  // R3 - Dark goldenrod (changed from olive for better contrast)
+  'rgb(0, 128, 128)',   // R4 - Teal
+  'rgb(160, 32, 240)',  // R5 - Purple (changed from sienna for better contrast)
+  'rgb(255, 105, 180)', // R6 - Hot pink (changed from crimson to ensure uniqueness)
 ];
 
 // ═══════════════════════════════════════════════════════
