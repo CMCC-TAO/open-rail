@@ -196,7 +196,7 @@ const DEFAULT_JOINTS = Object.freeze([
   // Arm-Right J7-J13
   148.76, 131.09, 170.43, 125.61, 158.97, 114.28, 177.35,
   // Gripper   J14-J15
-  100.00, 100.00,
+  100.00, 100.00, 100.00, 100.00, 100.00, 100.00, 100.00
 ]);
 
 /** Add small Gaussian-like noise to DEFAULT_JOINTS for a lifelike idle display. */

@@ -402,14 +402,16 @@ html, body {
   display: flex; 
   flex-wrap: wrap; 
   gap: 3px; 
-  justify-content: space-between;  /* Distribute items evenly */
+  justify-content: flex-start;
 }
 .joint-chip {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: 3px; padding: 2px 2px; font-size: 10px;
-  width: 60px;                /* Fixed width */
+  flex: 1;                    /* Allow chips to grow and fill available space */
+  min-width: 50px;            /* Minimum width to prevent extreme shrinking */
+  max-width: 80px;            /* Maximum width to prevent extreme growing */
   text-align: center; white-space: nowrap;
-  flex: 0 0 auto;             /* Don't grow or shrink, fixed size */
+  margin: 0 1px;              /* Small horizontal margins to assist with spacing */
 }
 
 /* ── Debug box ── */
