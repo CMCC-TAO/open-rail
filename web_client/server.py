@@ -53,16 +53,15 @@ logger = logging.getLogger(__name__)
 # The context manager is defined inline here; module-level globals (state, etc.)
 # are accessible at call-time (not at definition time), so forward-use is safe.
 @asynccontextmanager
-async def _lifespan(app: FastAPI):
+async def _lifespan(_: FastAPI):
     # ── startup ──
     logging.config.dictConfig(LOGGING_CONFIG)
     state.config = get_client_config()
     if DEFAULT_YAML.exists():
         try:
-            _apply_default_yaml(state.config)
-            logger.info(f"Loaded default config overrides from {DEFAULT_YAML}")
+            _apply_yaml_config(state.config, DEFAULT_YAML)
         except Exception as e:
-            logger.warning(f"Failed to apply default.yaml: {e}")
+            logger.warning(f"Failed to apply yaml conf: {e}")
     asyncio.create_task(_stats_push_loop())
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
@@ -76,7 +75,7 @@ STATIC_DIR  = Path(__file__).parent / "static"
 VISUAL_DIR  = ROOT / "visual"
 
 # Default config files bundled with the project
-DEFAULT_YAML     = ROOT / "conf" / "default.yaml"
+DEFAULT_YAML     = ROOT / "conf" / "default_conf.yaml"
 DEFAULT_LANG_CMD = ROOT / "conf" / "lang_cmd.json"
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -350,22 +349,28 @@ class ConfigFileRequest(BaseModel):
 
 @app.post("/api/config/load_file")
 async def load_config_file(req: ConfigFileRequest):
-    """Load a user_conf .py file and apply it (like --user_conf)."""
+    """Load a yaml conf file and apply it (like --default_conf.yaml)."""
     if state.running:
         raise HTTPException(400, "Stop the client before loading a new config.")
     # Guard against path-traversal
     p = Path(req.path)
+    # --- 调试开始 ---
+    # print(f"DEBUG: Logger name is: {logger.name}")
+    # print(f"DEBUG: Logger effective level is: {logger.getEffectiveLevel()}")
+    # print(f"DEBUG: Logging module root level is: {logging.root.getEffectiveLevel()}")
+    # logger.info(f"Loading config from file: {p}")
     if not p.is_absolute():
-        p = ROOT / p
+        p = ROOT / "conf" / p
     try:
         p.resolve().relative_to(ROOT.resolve())
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
-    user_cfg = load_user_config(str(p))
-    if user_cfg is None:
-        raise HTTPException(400, f"Failed to load config from: {p}")
-    base_cfg = get_client_config()
-    state.config = apply_user_config(base_cfg, user_cfg)
+    _apply_yaml_config(state.config, p)
+    # user_cfg = load_user_config(str(p))
+    # if user_cfg is None:
+    #     raise HTTPException(400, f"Failed to load config from: {p}")
+    # base_cfg = get_client_config()
+    # state.config = apply_user_config(base_cfg, user_cfg)
     return {"status": "ok", "config": _config_to_dict(state.config)}
 
 
@@ -389,11 +394,11 @@ async def save_config_file(req: ConfigFileRequest):
     return {"status": "ok", "path": str(save_path)}
 
 
-def _apply_default_yaml(config):
-    """Read default.yaml and apply flat/nested overrides onto config (best-effort)."""
+def _apply_yaml_config(config, yaml_conf_path: Path):
+    """Read yaml conf file and apply flat/nested overrides onto config (best-effort)."""
     if not _HAS_YAML:
         # Fallback: simple line-by-line key: value parser (no nested support)
-        text = DEFAULT_YAML.read_text(encoding="utf-8")
+        text = yaml_conf_path.read_text(encoding="utf-8")
         patch = {}
         for line in text.splitlines():
             line = line.strip()
@@ -407,7 +412,7 @@ def _apply_default_yaml(config):
         _apply_flat_patch(config, patch)
         return
 
-    text = DEFAULT_YAML.read_text(encoding="utf-8")
+    text = yaml_conf_path.read_text(encoding="utf-8")
     data = _yaml.safe_load(text)
     if not isinstance(data, dict):
         return
@@ -424,6 +429,7 @@ def _apply_default_yaml(config):
 
     flat = _flatten(data)
     _apply_flat_patch(config, flat)
+    logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
 
 
 def _dict_to_user_conf_py(d: dict, indent=0) -> str:

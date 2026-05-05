@@ -627,6 +627,15 @@ async function loadConfigFromServer() {
     if (App.config.language && Array.isArray(App.config.language)) {
       renderLangPresets(App.config.language);
     }
+    // Set default path display on startup
+    const display = $('conf-path-display');
+    if (display && !display.dataset.fullPath) {
+      const defaultRel = 'conf/default_conf.yaml';
+      const defaultFull = CONF_DIR.replace(/\/conf$/, '') + '/' + defaultRel;
+      display.textContent = defaultRel;
+      display.title = defaultFull;
+      display.dataset.fullPath = defaultFull;
+    }
     toast('Config loaded.', 'ok', 2000);
   } catch (e) { /* already toasted */ }
 }
@@ -1162,7 +1171,8 @@ function wireEvents() {
   $('conf-file-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const path = file.path || file.name;
+    const path = file.path || (CONF_DIR + '/' + file.name);
+    // const path = file.path || null;
     try {
       const res = await apiFetch('/api/config/load_file', { method: 'POST', body: JSON.stringify({ path }) });
       App.config = res.config || {}; App.pendingPatch = {};

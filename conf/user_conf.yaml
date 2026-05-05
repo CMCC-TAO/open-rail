@@ -7,7 +7,7 @@ traj_strategy: fitting           # Trajectory strategy: fitting | interpolation
 intra_chunk_mode: fit            # Intra-chunk processing: raw | raw_ipt | fit
 inter_chunk_mode: min_jerk       # Inter-chunk transition: search_action | poly | smooth_velocity | min_jerk | bspline | sync
 
-fitting_deg: 5                   # Polynomial fitting degree
+fitting_deg: 6                   # Polynomial fitting degree: 3 | 4| 5
 fitting_num_samples: 64          # Number of samples for trajectory fitting
 fitting_time_step: 3.75          # Time step for trajectory fitting (ms)
 
