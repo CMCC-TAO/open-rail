@@ -326,7 +326,14 @@ const BASIC_SUBGROUPS = {
 const CONFIG_SELECT_OPTIONS = {
   inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync'],
   intra_chunk_mode: ['raw', 'raw_ipt', 'fit'],
+  fitting_deg: [3, 4, 5, 6],
 };
+
+// Keys that must be treated as integers (rendered as number input, parsed with parseInt)
+const CONFIG_INT_KEYS = new Set([
+  'fitting_num_samples', 'search_length', 'smooth_length', 'gripper_offset',
+  'fps', 'height', 'width',
+]);
 
 function renderConfigTree(cfg) {
   const root = $('config-tree');
@@ -444,7 +451,7 @@ function createCfgRow(dotKey, label, value) {
     CONFIG_SELECT_OPTIONS[bareKey].forEach(opt => {
       const o = document.createElement('option');
       o.value = opt; o.textContent = opt;
-      if (String(value) === opt) o.selected = true;
+      if (String(value) === String(opt)) o.selected = true;
       input.appendChild(o);
     });
   } else if (typeof value === 'boolean') {
@@ -458,6 +465,9 @@ function createCfgRow(dotKey, label, value) {
   } else if (Array.isArray(value)) {
     input = document.createElement('input');
     input.type = 'text'; input.value = JSON.stringify(value); input.title = 'JSON array';
+  } else if (CONFIG_INT_KEYS.has(bareKey)) {
+    input = document.createElement('input');
+    input.type = 'number'; input.step = '1'; input.value = value === null ? '' : String(Math.round(Number(value)));
   } else {
     input = document.createElement('input');
     input.type = 'text'; input.value = value === null ? '' : String(value);
@@ -474,14 +484,21 @@ function createCfgRow(dotKey, label, value) {
 
 function onCfgChange(dotKey, input, originalValue) {
   const raw = input.tagName === 'SELECT' ? input.value : input.value.trim();
+  const bareKey = dotKey.includes('.') ? dotKey.split('.').pop() : dotKey;
   let parsed;
   if (typeof originalValue === 'boolean') {
     parsed = raw === 'true';
+  } else if (CONFIG_INT_KEYS.has(bareKey)) {
+    parsed = parseInt(raw, 10);
+    if (isNaN(parsed)) { input.style.borderColor = 'var(--danger)'; return; }
   } else if (typeof originalValue === 'number') {
     parsed = Number(raw);
     if (isNaN(parsed)) { input.style.borderColor = 'var(--danger)'; return; }
   } else if (Array.isArray(originalValue)) {
     try { parsed = JSON.parse(raw); } catch { input.style.borderColor = 'var(--danger)'; return; }
+  } else if (CONFIG_SELECT_OPTIONS[bareKey] && typeof CONFIG_SELECT_OPTIONS[bareKey][0] === 'number') {
+    parsed = parseInt(raw, 10);
+    if (isNaN(parsed)) { input.style.borderColor = 'var(--danger)'; return; }
   } else {
     parsed = raw;
   }
