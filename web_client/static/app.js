@@ -66,8 +66,8 @@ const App = {
 
   // ── Trajectory chart state ──
   traj: {
-    // 'state' | 'action'
-    source: 'state',
+    // Set<'state'|'action'> — which sources to display (both can be active simultaneously)
+    source: new Set(['state']),
     paused: false,
     // Number of joints (determined from first data push)
     numJoints: 0,
@@ -282,13 +282,16 @@ function renderJointsGrouped(side, values) {
     chip.className = 'joint-chip';
     const val = typeof v === 'number' ? v.toFixed(2) : v;
     if (i < JOINT_ARM_L_COUNT) {
-      chip.textContent = `L${i}: ${val}`;
+      // chip.textContent = `L${i}: ${val}`;
+      chip.textContent = `${i}: ${val}`;
       elArmL.appendChild(chip);
     } else if (i < JOINT_ARM_L_COUNT + JOINT_ARM_R_COUNT) {
-      chip.textContent = `R${i - JOINT_ARM_L_COUNT}: ${val}`;
+      // chip.textContent = `R${i - JOINT_ARM_L_COUNT}: ${val}`;
+      chip.textContent = `${i - JOINT_ARM_L_COUNT}: ${val}`;
       elArmR.appendChild(chip);
     } else {
-      chip.textContent = `G${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}: ${val}`;
+      // chip.textContent = `G${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}: ${val}`;
+      chip.textContent = `${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}: ${val}`;
       elGripper.appendChild(chip);
     }
   });
@@ -1218,7 +1221,7 @@ function refreshUnifiedChart() {
   const t = App.traj;
   if (!t.chart) return;
 
-  const src = t.source;
+  const src = t.source;   // Set<'state'|'action'>
   const datasets = [];
   let allY = [];
 
@@ -1229,10 +1232,10 @@ function refreshUnifiedChart() {
     const label  = TRAJ_JOINT_LABELS[jointIdx] ?? `J${jointIdx}`;
     const alpha  = color.replace('rgb(', 'rgba(').replace(')', ', 0.08)');
 
-    if (src === 'state') {
+    if (src.has('state')) {
       const data = getJointSeriesData('state', jointIdx);
       datasets.push({
-        label: label,
+        label: label + (src.has('action') ? ' (S)' : ''),
         data,
         borderColor: color,
         backgroundColor: alpha,
@@ -1244,10 +1247,10 @@ function refreshUnifiedChart() {
       allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
     }
 
-    if (src === 'action') {
+    if (src.has('action')) {
       const data = getJointSeriesData('action', jointIdx);
       datasets.push({
-        label: label,
+        label: label + (src.has('state') ? ' (A)' : ''),
         data,
         borderColor: color,
         backgroundColor: alpha,
@@ -1301,17 +1304,26 @@ function startTrajUpdateTimer() {
 
 /* ── Wire trajectory controls ── */
 function setupTrajPanel() {
-  // Source buttons (State / Action only — Both removed)
+  // Source buttons: toggle independently; at least one must remain active
   const srcBtns = { state: $('btn-traj-state'), action: $('btn-traj-action') };
-  function setSource(src) {
-    App.traj.source = src;
-    App.traj.dirty  = true;
+  function syncSrcButtons() {
     Object.entries(srcBtns).forEach(([k, btn]) => {
-      btn.className = 'btn btn-xs' + (k === src ? ' btn-active' : '');
+      btn.className = 'btn btn-xs' + (App.traj.source.has(k) ? ' btn-active' : '');
     });
   }
-  $('btn-traj-state').addEventListener('click',  () => setSource('state'));
-  $('btn-traj-action').addEventListener('click', () => setSource('action'));
+  function toggleSource(src) {
+    const s = App.traj.source;
+    if (s.has(src)) {
+      // Only deselect if the other source is still selected
+      if (s.size > 1) s.delete(src);
+    } else {
+      s.add(src);
+    }
+    App.traj.dirty = true;
+    syncSrcButtons();
+  }
+  $('btn-traj-state').addEventListener('click',  () => toggleSource('state'));
+  $('btn-traj-action').addEventListener('click', () => toggleSource('action'));
 
   // Pause
   $('btn-traj-pause').addEventListener('click', () => {
