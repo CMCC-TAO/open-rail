@@ -129,7 +129,7 @@ def _config_to_dict(cfg) -> dict:
     return {}
 
 
-def _apply_flat_patch(config, patch: dict):
+def _apply_flat_patch_old(config, patch: dict):
     """Apply a flat {dot.separated.key: value} patch to config."""
     from ml_collections import ConfigDict
 
@@ -158,7 +158,68 @@ def _apply_flat_patch(config, patch: dict):
         except Exception as e:
             logger.warning(f"Failed to patch config key '{dotkey}': {e}")
 
+def _apply_flat_patch(config, patch: dict):
+    """Apply a flat {dot.separated.key: value} patch to config."""
+    from ml_collections import ConfigDict
 
+    def _set_nested(obj, keys, value):
+        current = obj
+        for k in keys[:-1]:
+            # Try to access the next level
+            next_level = None
+            # 1. Try dict/key access first (works for both dict and ConfigDict)
+            if isinstance(current, dict):
+                if k in current:
+                    next_level = current[k]
+                else:
+                    # Auto-create intermediate dict/ConfigDict if missing
+                    if isinstance(current, ConfigDict):
+                        current[k] = ConfigDict()
+                    else:
+                        current[k] = {}
+                    next_level = current[k]
+            else:
+                # Fallback for other objects (unlikely in this config structure)
+                try:
+                    next_level = getattr(current, k)
+                except AttributeError:
+                    setattr(current, k, {})
+                    next_level = getattr(current, k)
+            
+            current = next_level
+
+        # Set the final leaf value
+        leaf_key = keys[-1]
+        
+        # Enum coercion logic
+        current_val = None
+        if isinstance(current, dict):
+            current_val = current.get(leaf_key)
+        else:
+            current_val = getattr(current, leaf_key, None)
+
+        if current_val is not None and hasattr(current_val, '__class__'):
+            # Check if it's an Enum
+            import enum
+            if isinstance(current_val, enum.Enum):
+                ec = current_val.__class__
+                try:
+                    value = ec(value)
+                except Exception:
+                    pass
+        
+        # Assign value
+        if isinstance(current, dict):
+            current[leaf_key] = value
+        else:
+            setattr(current, leaf_key, value)
+
+    for dotkey, value in patch.items():
+        keys = dotkey.split('.')
+        try:
+            _set_nested(config, keys, value)
+        except Exception as e:
+            logger.warning(f"Failed to patch config key '{dotkey}': {e}")
 def _get_robot(config):
     if config.robots.type == RobotType.A2D:
         from client.robots.a2d.body_robot import RobotBody
@@ -219,9 +280,9 @@ def _collect_stats() -> dict:
         "debug_info": "",
         "config_snapshot": {},
     }
-    vc = state.vla_client
-    cfg = state.config
-    if vc is None or cfg is None:
+    with state.lock:
+        vc = state.vla_client
+    if vc is None:
         return base
 
     try:
@@ -229,22 +290,22 @@ def _collect_stats() -> dict:
         base["avg_infer_time"]  = float(vc.rdm.avg_infer_time)
         base["avg_traj_time"]   = float(vc.rdm.avg_traj_time)
         base["language"]        = str(vc.language)
-        base["current_state"]   = [round(float(x), 4) for x in vc.info_current_state]
-        base["current_action"]  = [round(float(x), 4) for x in vc.info_current_action]
+        base["current_state"]   = [round(float(x), 2) for x in vc.info_current_state]
+        base["current_action"]  = [round(float(x), 2) for x in vc.info_current_action]
         base["info_obs"]        = {k: str(v) for k, v in vc.info_obs.items()}
         base["info_act"]        = {k: str(v) for k, v in vc.info_act.items()}
         base["debug_info"]      = str(vc.debug_info)
-        base["config_snapshot"] = {
-            "fps":              cfg.observer.fps,
-            "sleep_time":       cfg.sleep_time,
-            "inter_chunk_mode": cfg.inter_chunk_mode,
-            "intra_chunk_mode": cfg.intra_chunk_mode,
-            "gripper_offset":   cfg.gripper_offset,
-            "preprocess":       cfg.preprocess,
-            "robots_type":      cfg.robots.type.value if hasattr(cfg.robots.type, 'value') else str(cfg.robots.type),
-            "record":           cfg.record.switch,
-            "thre_prob_progress": cfg.thre_prob_progress,
-        }
+        # base["config_snapshot"] = {
+        #     "fps":              cfg.observer.fps,
+        #     "sleep_time":       cfg.sleep_time,
+        #     "inter_chunk_mode": cfg.inter_chunk_mode,
+        #     "intra_chunk_mode": cfg.intra_chunk_mode,
+        #     "gripper_offset":   cfg.gripper_offset,
+        #     "preprocess":       cfg.preprocess,
+        #     "robots_type":      cfg.robots.type.value if hasattr(cfg.robots.type, 'value') else str(cfg.robots.type),
+        #     "record":           cfg.record.switch,
+        #     "thre_prob_progress": cfg.thre_prob_progress,
+        # }
     except Exception as e:
         base["debug_info"] = f"stats error: {e}"
     return base

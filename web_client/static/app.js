@@ -327,6 +327,7 @@ const CONFIG_SELECT_OPTIONS = {
   inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync'],
   intra_chunk_mode: ['raw', 'raw_ipt', 'fit'],
   fitting_deg: [3, 4, 5, 6],
+  preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
