@@ -88,7 +88,7 @@ html, body {
   position: fixed;
   top: var(--topbar-h); left: 0; right: 0; bottom: var(--footer-h);
   display: grid;
-  grid-template-columns: 300px 1fr 360px;
+  grid-template-columns: 280px 1fr 300px;
   gap: var(--panel-gap);
   padding: var(--panel-gap);
   overflow: hidden;
@@ -102,13 +102,120 @@ html, body {
 
 .panel-monitor {
   flex: 0 0 auto;
-  max-height: 60%;
   overflow: hidden;
 }
+.panel-monitor .panel-body { padding: 6px 8px; gap: 6px; }
+
+/* ── Monitor panel header: title left, button groups right ── */
+.monitor-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; flex-wrap: nowrap;
+}
+.monitor-title { font-weight: 600; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0; }
+/* Spacer pushes all button groups to the right */
+.monitor-spacer { flex: 1; }
+/* Each button group */
+.monitor-ctrl-group { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+/* Thin vertical separator between groups */
+.monitor-sep {
+  width: 1px; height: 22px;
+  background: var(--border);
+  flex-shrink: 0; margin: 0 4px; align-self: center;
+}
+
+/* Replay path pill */
+.replay-path-display {
+  font-size: 10px; color: var(--text-muted);
+  max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 1px solid transparent; border-radius: var(--radius); padding: 1px 4px;
+}
+.replay-path-display:not(:empty) { border-color: var(--border); background: var(--bg); }
+
+/* Language Command panel */
+.panel-lang {
+  flex: 0 0 auto;
+  overflow: hidden;
+  min-height: 0;
+}
+/* When traj panel is collapsed, lang panel can grow to fill freed space */
+.panel-lang.expanded {
+  flex: 1;
+}
+.panel-lang .panel-body { padding: 8px; }
+.panel-lang .panel-body.collapsed { display: none; }
+/* When lang panel is expanded (traj collapsed), allow body to fill vertically */
+.panel-lang.expanded .panel-body {
+  overflow-y: auto;
+}
+.panel-lang.expanded .lang-cmd-layout {
+  flex: 1; min-height: 0;
+}
+.panel-lang.expanded .lang-cmd-select {
+  max-height: none;
+}
+
+.lang-cmd-layout {
+  display: flex; gap: 8px; min-height: 0;
+}
+/* Task: 3; Sub-task: 4; Instruction: 3 */
+.lang-cmd-col            { display: flex; flex-direction: column; gap: 4px; flex: 3; min-width: 0; }
+.lang-cmd-col-subtask    { flex: 4; }
+.lang-cmd-col-send       { flex: 3; }
+.lang-cmd-col-title {
+  font-size: 10px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  padding-bottom: 3px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.lang-cmd-list {
+  display: flex; flex-direction: column; gap: 3px;
+  overflow-y: auto; max-height: 120px;
+}
+.lang-cmd-chip {
+  padding: 3px 8px; font-size: 11px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg); color: var(--text-muted);
+  cursor: pointer; transition: all .15s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.lang-cmd-chip:hover  { border-color: var(--accent); color: var(--accent); }
+.lang-cmd-chip.active { background: rgba(9,105,218,.1); border-color: var(--accent); color: var(--accent); }
+
+/* Select-based task/subtask lists */
+.lang-cmd-select {
+  flex: 1; min-height: 80px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font); font-size: 11px; padding: 2px 0;
+  outline: none; transition: border .15s;
+  overflow-y: auto;
+}
+.lang-cmd-select:focus { border-color: var(--accent); }
+.lang-cmd-select option {
+  padding: 3px 8px; cursor: pointer;
+}
+.lang-cmd-select option:checked {
+  background: rgba(9,105,218,.12); color: var(--accent);
+}
+
+.lang-cmd-textarea {
+  flex: 1; resize: vertical; min-height: 54px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font); font-size: 11px; padding: 5px 8px;
+  outline: none; transition: border .15s;
+}
+.lang-cmd-textarea:focus { border-color: var(--accent); }
 
 .panel-traj {
   flex: 1; min-height: 0;
   overflow: hidden;
+}
+/* When the chart body is collapsed, shrink the panel to header height only,
+   releasing the remaining flex space to Language Command panel above */
+.panel-traj.body-collapsed {
+  flex: 0 0 auto;
 }
 
 /* ── Generic Panel ── */
@@ -125,9 +232,9 @@ html, body {
   display: flex; align-items: center; justify-content: space-between;
   font-weight: 600; font-size: 12px; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: .5px;
-  flex-shrink: 0; background: var(--bg3);
+  flex-shrink: 0; background: var(--bg3); gap: 6px;
 }
-.panel-header-actions { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.panel-header-actions { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; flex-shrink: 0; }
 .panel-body { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
 
 /* Config panel collapsed */
@@ -141,6 +248,12 @@ html, body {
   border-radius: var(--radius); background: var(--bg);
   color: var(--text); cursor: pointer; font-family: var(--font);
   font-size: 12px; transition: all .15s; white-space: nowrap;
+  line-height: 1.4;
+}
+/* Inline icon <span> inside buttons: normalise symbol/emoji height */
+.btn-icon {
+  display: inline-block; font-size: 10px; line-height: 1;
+  vertical-align: middle; position: relative; top: -0.5px;
 }
 .btn:hover  { border-color: var(--accent); color: var(--accent); background: rgba(9,105,218,.06); }
 .btn:active { opacity: .7; }
@@ -169,8 +282,19 @@ html, body {
 .input-text:focus, .input-num:focus { border-color: var(--accent); }
 
 /* ── Config panel ── */
-.config-file-bar { display: flex; gap: 4px; flex-wrap: wrap; }
-.config-file-bar .input-text { flex: 1; min-width: 0; }
+.config-file-bar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.config-file-bar label.btn { position: relative; overflow: hidden; cursor: pointer; }
+.config-path-display {
+  font-size: 10px; color: var(--text-muted); padding: 2px 6px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  border: 1px solid transparent; border-radius: var(--radius);
+  display: none;   /* hidden when empty; JS sets display via :not(:empty) trick below */
+}
+.config-path-display:not(:empty) {
+  display: block;
+  border-color: var(--border); background: var(--bg);
+  color: var(--accent);
+}
 .config-tree { flex: 1; overflow-y: auto; }
 
 .cfg-group { margin-bottom: 4px; }
@@ -202,11 +326,23 @@ html, body {
 .pending-badge { color: var(--warn); font-size: 11px; flex: 1; }
 .pending-badge.hidden { display: none; }
 
-/* ── Control bar ── */
+/* ── Control bar (kept for any remaining uses) ── */
 .control-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-/* ── Stats grid ── */
-.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+/* ── Stats inline bar (single row) ── */
+.stats-inline {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px 10px;
+  flex-wrap: nowrap; flex-shrink: 0;
+}
+.stat-inline-item  { display: flex; align-items: baseline; gap: 5px; }
+.stat-inline-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+.stat-inline-value { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.stat-inline-sep   { color: var(--border); font-size: 14px; user-select: none; }
+
+/* ── Stats grid (kept for compatibility) ── */
+.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
 .stat-card {
   background: var(--bg); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 8px 10px;
@@ -232,14 +368,43 @@ html, body {
 .kv-key { color: var(--text-muted); font-size: 11px; }
 .kv-val { color: var(--text); font-size: 11px; word-break: break-all; }
 
-/* ── Joint chips (current values) ── */
-.joint-grid-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.joint-grid-title { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+/* ── Joint chips (current values) — grouped layout ── */
+.joint-grouped-wrap {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+}
+.joint-grouped-col {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.joint-grouped-col-title {
+  font-size: 11px; color: var(--text-muted); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px;
+}
+.joint-group-section {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 4px 6px;
+}
+.joint-group-label {
+  font-size: 10px; color: var(--text-muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px;
+  border-bottom: 1px solid var(--border); padding-bottom: 2px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+/* State / Action inline tag shown at the right of each group label */
+.joint-col-tag {
+  font-size: 9px; font-weight: 700; letter-spacing: .4px;
+  padding: 1px 5px; border-radius: 8px;
+  background: rgba(9,105,218,.08); border: 1px solid rgba(9,105,218,.25);
+  color: var(--accent); text-transform: uppercase; flex-shrink: 0;
+}
+.joint-col-tag.tag-action {
+  background: rgba(26,127,55,.08); border-color: rgba(26,127,55,.3);
+  color: var(--success);
+}
 .joint-grid { display: flex; flex-wrap: wrap; gap: 3px; }
 .joint-chip {
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 3px; padding: 2px 5px; font-size: 10px;
-  min-width: 54px; text-align: center;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 3px; padding: 2px 4px; font-size: 10px;
+  min-width: 80px; text-align: center; white-space: nowrap;
 }
 
 /* ── Debug box ── */
@@ -249,18 +414,6 @@ html, body {
   color: var(--text-muted); white-space: pre-wrap; word-break: break-word;
   max-height: 80px; overflow-y: auto;
 }
-
-/* ── Language ── */
-.lang-bar { display: flex; gap: 6px; }
-.lang-presets { display: flex; flex-wrap: wrap; gap: 4px; }
-.lang-preset-chip {
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 10px; padding: 2px 10px; font-size: 11px;
-  cursor: pointer; transition: all .15s; max-width: 220px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.lang-preset-chip:hover { border-color: var(--accent); color: var(--accent); }
-.lang-preset-chip.active { background: rgba(9,105,218,.08); border-color: var(--accent); color: var(--accent); }
 
 /* ── Robot control ── */
 .robot-ctrl-details { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px; background: var(--bg); }
@@ -272,64 +425,96 @@ html, body {
 /* ═══════════════════════════════════════════
    JOINT TRAJECTORY PANEL
    ═══════════════════════════════════════════ */
+/* traj header has 2-row content, align top */
+.traj-panel-header { align-items: flex-start; padding-top: 5px; padding-bottom: 5px; }
+
 .traj-panel-header .traj-src-label {
-  font-size: 11px; color: var(--text-muted); font-weight: 400;
-  text-transform: none; letter-spacing: 0;
+  font-size: 10px; color: var(--text-muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .4px;
+  margin-bottom: 2px; display: block;
 }
 
+/* Header actions: fills remaining space, groups pushed to the right */
+.traj-header-actions {
+  display: flex; align-items: flex-start;
+  flex-wrap: nowrap; flex: 1; min-width: 0;
+}
+
+/* Spacer that pushes all groups to the right */
+.traj-header-spacer {
+  flex: 1;
+}
+
+/* Thin vertical separator between groups */
+.traj-header-sep {
+  width: 1px; height: 36px;
+  background: var(--border);
+  flex-shrink: 0; margin: 0 8px; align-self: center;
+}
+
+/* ── ① Source group ── */
+.traj-src-group {
+  display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0;
+}
+.traj-src-rows {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.traj-src-rows .btn { width: 62px; text-align: center; }
+
+/* ── ② Joints group ── */
+.traj-joints-group {
+  display: flex; flex-direction: column; align-items: flex-start;
+  flex-shrink: 1; min-width: 0;
+}
+.traj-joints-rows {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.joint-sel-row {
+  display: flex; gap: 3px; flex-wrap: nowrap; align-items: center;
+}
+
+/* All / None buttons inside joint rows */
+.traj-allnone-btn {
+  width: 42px; text-align: center; flex-shrink: 0;
+  margin-left: 4px;
+}
+
+/* Joint toggle chips */
+.joint-sel-chip {
+  padding: 1px 6px; font-size: 10px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text-muted);
+  cursor: pointer; transition: all .15s; user-select: none;
+  font-family: var(--font); white-space: nowrap; flex-shrink: 0;
+}
+.joint-sel-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── ③ Ctrl group: Play + Clear two rows ── */
+.traj-ctrl-group {
+  display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0;
+}
+.traj-ctrl-rows {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.traj-ctrl-rows .btn { width: 72px; text-align: center; }
+
+/* ── ④ Collapse button: rightmost, vertically centered ── */
+.traj-collapse-btn {
+  align-self: center; flex-shrink: 0; margin-left: 2px;
+}
+
+/* ── Body / chart ── */
 .traj-body {
   flex: 1; min-height: 0;
-  display: flex; flex-direction: column; gap: 6px;
+  display: flex; flex-direction: column;
   padding: 8px; overflow: hidden;
 }
 .traj-body.collapsed { display: none; }
 
-/* Joint selector bar */
-.traj-joint-bar {
-  display: flex; align-items: center; gap: 6px;
-  flex-wrap: wrap; flex-shrink: 0;
-}
-.traj-joint-bar .traj-src-label {
-  font-size: 11px; color: var(--text-muted);
-}
-
-/* Joint toggle chips */
-.joint-selector {
-  display: flex; flex-wrap: wrap; gap: 3px; flex: 1;
-}
-.joint-sel-chip {
-  padding: 2px 8px; font-size: 10px;
-  border: 1px solid var(--border); border-radius: 10px;
-  background: var(--bg); color: var(--text-muted);
-  cursor: pointer; transition: all .15s; user-select: none;
-  font-family: var(--font);
-}
-.joint-sel-chip:hover  { border-color: var(--accent); color: var(--accent); }
-.joint-sel-chip.active {
-  background: rgba(9,105,218,.1); border-color: var(--accent); color: var(--accent);
-}
-
-/* Charts grid: one row per joint, scroll if overflow */
-.traj-charts-grid {
-  flex: 1; min-height: 0;
-  overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; gap: 8px;
-}
-
-/* Each joint chart card */
-.traj-chart-card {
-  flex-shrink: 0;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 6px 8px;
-  display: flex; flex-direction: column; gap: 4px;
-}
-.traj-chart-title {
-  font-size: 10px; color: var(--text-muted);
-  font-weight: 600; text-transform: uppercase; letter-spacing: .5px;
-}
+/* Single unified chart fills the whole traj-body */
 .traj-chart-wrap {
+  flex: 1; min-height: 0;
   position: relative;
-  height: 100px;  /* fixed height per chart */
 }
 .traj-chart-wrap canvas {
   width: 100% !important; height: 100% !important;
@@ -341,50 +526,78 @@ html, body {
 .panel-visual {
   overflow: hidden;
 }
+/* panel-visual collapsed: shrink column to icon width */
+.panel-visual.collapsed {
+  overflow: hidden;
+}
+.panel-visual.collapsed .panel-body { display: none; }
+.panel-visual.collapsed .panel-header-actions .btn:not(#btn-visual-collapse) { display: none; }
+.panel-visual.collapsed .panel-header > span:first-child { display: none; }
+
 .panel-visual .panel-body {
-  gap: 0;
-  padding: 6px 8px;
+  gap: 4px;
+  padding: 4px;
   overflow-y: auto;
+  /* natural flow — items stack vertically, scroll if needed */
+  display: flex; flex-direction: column;
 }
 
-/* Each camera item (row + preview together) */
+/* ── Camera item card: rounded border wrapping title+preview ── */
 .cam-item {
   display: flex; flex-direction: column;
-  flex: 1; min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+  flex-shrink: 0;   /* never compress; scroll the body instead */
 }
 
-/* Camera rows */
+/* Header row inside the card */
 .cam-row {
   display: flex; align-items: center; gap: 6px;
-  padding: 3px 2px; flex-shrink: 0;
+  padding: 3px 8px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.cam-label { font-size: 11px; color: var(--text-muted); flex: 0 0 72px; }
+.cam-label { font-size: 11px; font-weight: 600; color: var(--text); flex: 0 0 auto; }
 .cam-status {
   font-size: 10px; padding: 1px 6px; border-radius: 8px;
-  background: var(--bg3); border: 1px solid var(--border);
+  background: var(--bg2); border: 1px solid var(--border);
   color: var(--text-muted); transition: all .2s;
 }
 .cam-status.active { background: rgba(26,127,55,.1); border-color: var(--success); color: var(--success); }
 .cam-status.error  { background: rgba(207,34,46,.08); border-color: var(--danger);  color: var(--danger);  }
 .cam-spacer { flex: 1; }
 
-/* Preview: 640:480 = 4:3, hidden by default unless .open */
+/* Preview area: always visible, 640:480 = 4:3 */
 .cam-preview {
   width: 100%;
   aspect-ratio: 4 / 3;
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: var(--radius); overflow: hidden;
-  display: none; position: relative; flex-shrink: 0;
-  margin-bottom: 4px;
+  background: var(--bg3);
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
 }
-.cam-preview.open { display: block; }
+/* Closed state: dim the image with an overlay, don't hide the box */
+.cam-preview.closed::after {
+  content: 'CLOSED';
+  position: absolute; inset: 0;
+  background: rgba(31,35,40,.55);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; letter-spacing: 2px;
+  color: rgba(255,255,255,.8);
+  pointer-events: none;
+}
 .cam-preview img {
   width: 100%; height: 100%; object-fit: cover; background: var(--bg3);
+  display: block;
 }
 .cam-preview-placeholder {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
   font-size: 11px; color: var(--text-muted);
+  pointer-events: none;
 }
 
 /* ── Toast ── */
