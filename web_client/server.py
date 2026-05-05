@@ -376,7 +376,12 @@ async def load_config_file(req: ConfigFileRequest):
 
 @app.post("/api/config/save_file")
 async def save_config_file(req: ConfigFileRequest):
-    """Save current in-memory config to a .py file (get_user_config format)."""
+    """Save current in-memory config to a file.
+
+    Supported formats (determined by file extension):
+      .yaml / .yml  →  YAML  (via _dict_to_user_conf_yaml)
+      .py           →  Python get_user_config() module (via _dict_to_user_conf_py)
+    """
     if state.config is None:
         raise HTTPException(400, "No config loaded.")
     save_path = Path(req.path)
@@ -388,7 +393,10 @@ async def save_config_file(req: ConfigFileRequest):
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
     cfg_dict = _config_to_dict(state.config)
-    content = _dict_to_user_conf_py(cfg_dict)
+    if save_path.suffix in (".yaml", ".yml"):
+        content = _dict_to_user_conf_yaml(cfg_dict)
+    else:
+        content = _dict_to_user_conf_py(cfg_dict)
     save_path.parent.mkdir(parents=True, exist_ok=True)
     save_path.write_text(content, encoding="utf-8")
     return {"status": "ok", "path": str(save_path)}
@@ -457,6 +465,62 @@ def _fmt_dict(d: dict, indent: int) -> str:
         else:
             items.append(f"{sp1}{repr(k)}: {repr(v)}")
     return "{\n" + ",\n".join(items) + f",\n{sp}}}"
+
+
+def _dict_to_user_conf_yaml(d: dict) -> str:
+    """Convert a nested dict to a YAML config string.
+
+    Uses PyYAML when available; falls back to a simple manual serialiser
+    that handles the nested dicts produced by _config_to_dict.
+    """
+    if _HAS_YAML:
+        header = (
+            "# VLA-RAIL Client Configuration\n"
+            "# Auto-generated — edit values as needed\n\n"
+        )
+        return header + _yaml.dump(
+            d,
+            default_flow_style=False,
+            allow_unicode=True,
+            sort_keys=False,
+        )
+
+    # ── fallback: manual serialiser ──────────────────────────────────────────
+    lines = [
+        "# VLA-RAIL Client Configuration",
+        "# Auto-generated — edit values as needed",
+        "",
+    ]
+
+    def _emit(obj, indent: int):
+        sp = "  " * indent
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(v, dict):
+                    lines.append(f"{sp}{k}:")
+                    _emit(v, indent + 1)
+                elif isinstance(v, list):
+                    lines.append(f"{sp}{k}:")
+                    for item in v:
+                        lines.append(f"{sp}  - {_yaml_scalar(item)}")
+                else:
+                    lines.append(f"{sp}{k}: {_yaml_scalar(v)}")
+
+    def _yaml_scalar(v) -> str:
+        if v is None:
+            return "null"
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, (int, float)):
+            return str(v)
+        s = str(v)
+        # Quote strings that could be misread by YAML parsers
+        if any(c in s for c in (':', '#', '[', ']', '{', '}', ',', '&', '*', '?', '|', '-', '<', '>', '=', '!', '%', '@', '`')):
+            return f'"{s}"'
+        return s
+
+    _emit(d, 0)
+    return "\n".join(lines) + "\n"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
