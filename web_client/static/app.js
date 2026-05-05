@@ -66,7 +66,7 @@ const App = {
 
   // ── Trajectory chart state ──
   traj: {
-    // 'state' | 'action' | 'both'
+    // 'state' | 'action'
     source: 'state',
     paused: false,
     // Number of joints (determined from first data push)
@@ -891,9 +891,15 @@ const camState = {
 function updateLayoutColumns() {
   const configCollapsed = document.querySelector('.panel-config').classList.contains('collapsed');
   const visualCollapsed = $('panel-visual').classList.contains('collapsed');
-  const left  = configCollapsed ? '32px'  : '280px';
-  const right = visualCollapsed ? '32px'  : '300px';
-  document.querySelector('.layout').style.gridTemplateColumns = `${left} 1fr ${right}`;
+  const left  = configCollapsed ? '0px'   : '280px';
+  const right = visualCollapsed ? '0px'   : '300px';
+  // When a column is 0, also suppress the gap on that side by adjusting padding
+  const layout = document.querySelector('.layout');
+  layout.style.gridTemplateColumns = `${left} 1fr ${right}`;
+  // Suppress padding on collapsed sides so no whitespace strip remains
+  const gap = getComputedStyle(document.documentElement).getPropertyValue('--panel-gap').trim();
+  layout.style.paddingLeft   = configCollapsed ? '0' : gap;
+  layout.style.paddingRight  = visualCollapsed ? '0' : gap;
 }
 
 function setupCameraPanel() {
@@ -901,7 +907,12 @@ function setupCameraPanel() {
   $('btn-visual-collapse').addEventListener('click', () => {
     const panel = $('panel-visual');
     const collapsed = panel.classList.toggle('collapsed');
-    $('btn-visual-collapse').textContent = collapsed ? '◀' : '▶';
+    $('btn-visual-reveal').classList.toggle('hidden', !collapsed);
+    updateLayoutColumns();
+  });
+  $('btn-visual-reveal').addEventListener('click', () => {
+    $('panel-visual').classList.remove('collapsed');
+    $('btn-visual-reveal').classList.add('hidden');
     updateLayoutColumns();
   });
 
@@ -1218,7 +1229,7 @@ function refreshUnifiedChart() {
     const label  = TRAJ_JOINT_LABELS[jointIdx] ?? `J${jointIdx}`;
     const alpha  = color.replace('rgb(', 'rgba(').replace(')', ', 0.08)');
 
-    if (src === 'state' || src === 'both') {
+    if (src === 'state') {
       const data = getJointSeriesData('state', jointIdx);
       datasets.push({
         label: label,
@@ -1233,7 +1244,7 @@ function refreshUnifiedChart() {
       allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
     }
 
-    if (src === 'action' || src === 'both') {
+    if (src === 'action') {
       const data = getJointSeriesData('action', jointIdx);
       datasets.push({
         label: label,
@@ -1461,7 +1472,12 @@ function wireEvents() {
   $('btn-config-collapse').addEventListener('click', () => {
     const panel = document.querySelector('.panel-config');
     const collapsed = panel.classList.toggle('collapsed');
-    $('btn-config-collapse').textContent = collapsed ? '▶' : '◀';
+    $('btn-config-reveal').classList.toggle('hidden', !collapsed);
+    updateLayoutColumns();
+  });
+  $('btn-config-reveal').addEventListener('click', () => {
+    document.querySelector('.panel-config').classList.remove('collapsed');
+    $('btn-config-reveal').classList.add('hidden');
     updateLayoutColumns();
   });
 

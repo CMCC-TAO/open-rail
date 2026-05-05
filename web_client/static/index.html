@@ -31,7 +31,7 @@
       <div class="panel-header">
         <span>⚙ Configuration</span>
         <div class="panel-header-actions">
-          <button class="btn btn-xs" id="btn-config-collapse" title="Collapse">◀</button>
+          <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse">◀</button>
         </div>
       </div>
       <div class="panel-body" id="config-body">
@@ -286,7 +286,7 @@
         <span>📷 Camera Visual</span>
         <div class="panel-header-actions">
           <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle">⏸ Close All</button>
-          <button class="btn btn-xs" id="btn-visual-collapse" title="Collapse">▶</button>
+          <button class="btn btn-xs panel-collapse-inline" id="btn-visual-collapse" title="Collapse">▶</button>
         </div>
       </div>
       <div class="panel-body" id="camera-body">
@@ -337,6 +337,10 @@
     </aside>
 
   </main>
+
+  <!-- ═══════════════════ PANEL REVEAL BUTTONS (floating, shown when panel is collapsed) ═══════════════════ -->
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-left hidden" id="btn-config-reveal" title="Show Configuration">▶</button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-right hidden" id="btn-visual-reveal" title="Show Camera Visual">◀</button>
 
   <!-- ═══════════════════ FOOTER ═══════════════════ -->
   <footer class="footer-bar">
