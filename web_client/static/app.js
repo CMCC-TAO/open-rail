@@ -328,6 +328,7 @@ const CONFIG_SELECT_OPTIONS = {
   intra_chunk_mode: ['raw', 'raw_ipt', 'fit'],
   fitting_deg: [3, 4, 5, 6],
   preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
+  type: ['a2d', 'mock']
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
@@ -342,7 +343,7 @@ function renderConfigTree(cfg) {
   buildTree(cfg, '', root);
 }
 
-function buildTree(obj, prefix, parentEl) {
+function buildTree_old(obj, prefix, parentEl) {
   const basicEntries    = [];
   const subGroupEntries = [];
 
@@ -395,6 +396,198 @@ function buildTree(obj, prefix, parentEl) {
     body.className = 'cfg-group-body';
     buildTree(val, dotKey, body);
     parentEl.appendChild(buildGroupFromEl(key.toUpperCase(), body));
+  }
+}
+function buildTree(obj, prefix, parentEl) {
+  const basicEntries    = [];
+  const subGroupEntries = [];
+
+  for (const [key, val] of Object.entries(obj)) {
+    // Skip excluded keys at root level
+    if (!prefix && CONFIG_EXCLUDED_KEYS.has(key)) continue;
+
+    const isGroup = val !== null && typeof val === 'object' && !Array.isArray(val);
+    if (isGroup) {
+      subGroupEntries.push([key, val]);
+    } else if (!prefix) {
+      basicEntries.push([key, val]);
+    } else {
+      parentEl.appendChild(createCfgRow(`${prefix}.${key}`, key, val));
+    }
+  }
+
+  // 1. Render BASIC group first (if there are root-level leaves)
+  if (basicEntries.length > 0) {
+    // Assign each basic entry to its sub-group or "others"
+    const sgMap = {};
+    for (const sgName of Object.keys(BASIC_SUBGROUPS)) sgMap[sgName] = [];
+    sgMap['others'] = [];
+
+    for (const [k, v] of basicEntries) {
+      let placed = false;
+      for (const [sgName, keys] of Object.entries(BASIC_SUBGROUPS)) {
+        if (keys.includes(k)) { sgMap[sgName].push([k, v]); placed = true; break; }
+      }
+      if (!placed) sgMap['others'].push([k, v]);
+    }
+
+    // Build the outer BASIC group
+    const basicBody = document.createElement('div');
+    basicBody.className = 'cfg-group-body';
+
+    for (const [sgName, entries] of Object.entries(sgMap)) {
+      if (entries.length === 0) continue;
+      const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
+      basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
+    }
+
+    parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
+  }
+
+  // 2. Define custom order for sub-groups
+  // List the keys in the order you want them to appear.
+  // Keys not listed here will appear at the end in their original order.
+  const CUSTOM_GROUP_ORDER = [
+    'robots', // Move ROBOTS to the top of the sub-groups (immediately after BASIC)
+    // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
+  ];
+
+  // 3. Sort subGroupEntries based on CUSTOM_GROUP_ORDER
+  subGroupEntries.sort((a, b) => {
+    const keyA = a[0].toLowerCase();
+    const keyB = b[0].toLowerCase();
+    
+    const indexA = CUSTOM_GROUP_ORDER.indexOf(keyA);
+    const indexB = CUSTOM_GROUP_ORDER.indexOf(keyB);
+    
+    // If both are in the custom list, sort by their index
+    if (indexA !== -1 && indexB !== -1) {
+      return indexA - indexB;
+    }
+    // If only A is in the list, A comes first
+    if (indexA !== -1) return -1;
+    // If only B is in the list, B comes first
+    if (indexB !== -1) return 1;
+    // If neither is in the list, maintain original relative order (stable sort)
+    return 0;
+  });
+
+  // 4. Render sorted sub-groups
+  for (const [key, val] of subGroupEntries) {
+    const dotKey  = prefix ? `${prefix}.${key}` : key;
+    const body    = document.createElement('div');
+    body.className = 'cfg-group-body';
+    // ROBOTS group: custom rendering with type-driven sub-group visibility
+    if (!prefix && key === 'robots') {
+      _buildRobotsGroup(val, body);
+    } else {
+      buildTree(val, dotKey, body);
+    }
+    parentEl.appendChild(buildGroupFromEl(key.toUpperCase(), body));
+  }
+}
+// ═══════════════════════════════════════════════════════
+//  Robots group — dynamic sub-group visibility by type
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Renders the robots config group with dynamic sub-group visibility.
+ * The robots.type select controls which sub-group (a2d / mock / …) is shown.
+ *
+ * robots object structure (example):
+ *   { type: 'a2d', a2d: {...}, mock: {...} }
+ *
+ * Layout inside parentEl:
+ *   ┌── type row (select)
+ *   ├── [sub-group: a2d]   ← shown only when type === 'a2d'
+ *   └── [sub-group: mock]  ← shown only when type === 'mock'
+ */
+function _buildRobotsGroup(obj, parentEl) {
+  const TYPE_KEY = 'type';
+  const currentType = String(obj[TYPE_KEY] ?? '');
+
+  // Separate leaf keys from sub-group keys
+  const leaves = [];        // [ [key, val], ... ]  — non-object entries (incl. type)
+  const subGroups = [];     // [ [key, val], ... ]  — object entries (the robot types)
+
+  for (const [k, v] of Object.entries(obj)) {
+    const isGroup = v !== null && typeof v === 'object' && !Array.isArray(v);
+    if (isGroup) {
+      subGroups.push([k, v]);
+    } else {
+      leaves.push([k, v]);
+    }
+  }
+
+  // ── 1. Render leaf rows (type + any other flat keys) ──────────────────
+  // Put 'type' first
+  const typeEntry = leaves.find(([k]) => k === TYPE_KEY);
+  const otherLeaves = leaves.filter(([k]) => k !== TYPE_KEY);
+  const orderedLeaves = typeEntry ? [typeEntry, ...otherLeaves] : otherLeaves;
+
+  // Build a dedicated select for robots.type that drives visibility
+  const knownTypes = subGroups.map(([k]) => k);
+
+  let typeInput = null;
+  for (const [k, v] of orderedLeaves) {
+    const dotKey = `robots.${k}`;
+    const row = document.createElement('div');
+    row.className = 'cfg-row';
+    row.dataset.key = dotKey;
+
+    const keyEl = document.createElement('div');
+    keyEl.className = 'cfg-key'; keyEl.title = dotKey; keyEl.textContent = k;
+
+    const valEl = document.createElement('div');
+    valEl.className = 'cfg-value';
+
+    let input;
+    if (k === TYPE_KEY && knownTypes.length > 0) {
+      // Build select from known sub-group names
+      input = document.createElement('select');
+      knownTypes.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt; o.textContent = opt;
+        if (opt === currentType) o.selected = true;
+        input.appendChild(o);
+      });
+      typeInput = input;
+    } else {
+      input = document.createElement('input');
+      input.type = 'text'; input.value = v === null ? '' : String(v);
+    }
+    input.className = 'input-text';
+    input.addEventListener('input',  () => onCfgChange(dotKey, input, v));
+    input.addEventListener('change', () => onCfgChange(dotKey, input, v));
+    valEl.appendChild(input);
+    row.appendChild(keyEl); row.appendChild(valEl);
+    parentEl.appendChild(row);
+  }
+
+  // ── 2. Render sub-groups with initial visibility ──────────────────────
+  const subGroupEls = {};  // { typeName: groupEl }
+
+  for (const [k, v] of subGroups) {
+    const dotKey = `robots.${k}`;
+    const body = document.createElement('div');
+    body.className = 'cfg-group-body';
+    buildTree(v, dotKey, body);
+    const groupEl = buildGroupFromEl(k.toUpperCase(), body);
+    groupEl.dataset.robotType = k;
+    // Show only the group matching current type
+    groupEl.style.display = (k === currentType) ? '' : 'none';
+    subGroupEls[k] = groupEl;
+    parentEl.appendChild(groupEl);
+  }
+
+  // ── 3. Wire type select → sub-group visibility ────────────────────────
+  if (typeInput) {
+    typeInput.addEventListener('change', () => {
+      const selected = typeInput.value;
+      for (const [k, el] of Object.entries(subGroupEls)) {
+        el.style.display = (k === selected) ? '' : 'none';
+      }
+    });
   }
 }
 
@@ -514,6 +707,9 @@ function filterConfigTree(query) {
     row.style.display = (!q || row.dataset.key.toLowerCase().includes(q)) ? '' : 'none';
   });
   $('config-tree').querySelectorAll('.cfg-group').forEach(g => {
+    // Robot type sub-groups (data-robot-type) are controlled exclusively by the
+    // type select in _buildRobotsGroup; never let the filter override their visibility.
+    if (g.dataset.robotType) return;
     if (!q) { g.style.display = ''; return; }
     const body = g.querySelector('.cfg-group-body');
     if (!body) return;
@@ -691,19 +887,22 @@ const camState = {
   updateTimer: null,
 };
 
+/** Recalculate and apply grid-template-columns based on current collapsed state. */
+function updateLayoutColumns() {
+  const configCollapsed = document.querySelector('.panel-config').classList.contains('collapsed');
+  const visualCollapsed = $('panel-visual').classList.contains('collapsed');
+  const left  = configCollapsed ? '32px'  : '280px';
+  const right = visualCollapsed ? '32px'  : '300px';
+  document.querySelector('.layout').style.gridTemplateColumns = `${left} 1fr ${right}`;
+}
+
 function setupCameraPanel() {
   // Collapse / expand the whole camera panel
   $('btn-visual-collapse').addEventListener('click', () => {
-    const panel  = $('panel-visual');
-    const layout = document.querySelector('.layout');
+    const panel = $('panel-visual');
     const collapsed = panel.classList.toggle('collapsed');
-    if (collapsed) {
-      layout.style.gridTemplateColumns = '300px 1fr 32px';
-      $('btn-visual-collapse').textContent = '◀';
-    } else {
-      layout.style.gridTemplateColumns = '300px 1fr 300px';
-      $('btn-visual-collapse').textContent = '▶';
-    }
+    $('btn-visual-collapse').textContent = collapsed ? '◀' : '▶';
+    updateLayoutColumns();
   });
 
   // Individual open/close buttons
@@ -1261,14 +1460,9 @@ function wireEvents() {
 
   $('btn-config-collapse').addEventListener('click', () => {
     const panel = document.querySelector('.panel-config');
-    const layout = document.querySelector('.layout');
-    if (panel.classList.toggle('collapsed')) {
-      layout.style.gridTemplateColumns = '32px 1fr 300px';
-      $('btn-config-collapse').textContent = '▶';
-    } else {
-      layout.style.gridTemplateColumns = '280px 1fr 300px';
-      $('btn-config-collapse').textContent = '◀';
-    }
+    const collapsed = panel.classList.toggle('collapsed');
+    $('btn-config-collapse').textContent = collapsed ? '▶' : '◀';
+    updateLayoutColumns();
   });
 
   // Client control
