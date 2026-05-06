@@ -534,24 +534,14 @@ class VLAClientAsync():
         self.logger.info('Inference client started.')
     
     def stop(self):
-        """Stop the VLA client and wait for threads to finish.
+        """Stop inference and robot commands without releasing resources.
         
-        This method safely stops the VLA client by setting the running flag to False
-        and waiting for the observation and control threads to finish with a timeout.
-        The inference thread continues running for potential future operations.
+        This method pauses the VLA client by setting is_running_action to False,
+        which stops both the inference pipeline and robot command execution.
+        Resources (ZMQ, WebSocket, threads) are kept alive for potential resume.
         """
-        with self.thread_lock:
-            self.running = False
-        self.observe_thread.join(timeout=1.0)
-        self.control_thread_timer.join(timeout=1.0)
-
-        if self.config.show_action_cams_qt:
-            self.vis_action_cams_thread.join(timeout=1.0)
-
-        if self.config.record_exp_data:
-            self.data_write_thread.join(timeout=1.0)
-
-        self.logger.info('Inference client stopped.')
+        self.is_running_action = False
+        self.logger.info('Inference client stopped (paused inference and robot commands).')
 
     def close(self):
         """Close the VLA client and clean up all resources.
