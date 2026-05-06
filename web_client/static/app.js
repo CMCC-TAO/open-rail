@@ -361,8 +361,8 @@ function setRunningUI(running, paused = false) {
 //  Config rendering — BASIC group split into sub-groups
 // ═══════════════════════════════════════════════════════
 
-// Keys to exclude from the config tree (handled separately)
-const CONFIG_EXCLUDED_KEYS = new Set(['language']);
+// Keys to exclude from the config tree (handled separately or rendered via createLangLinkRow)
+const CONFIG_EXCLUDED_KEYS = new Set(['language', 'language_task', 'language_index']);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
@@ -488,6 +488,12 @@ function buildTree(obj, prefix, parentEl) {
       const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
       basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
     }
+
+    // Append the virtual language-link group (language_task + language_index selects)
+    basicBody.appendChild(buildGroup('LANGUAGE', [
+      createLangLinkRow('language_task',  'language_task'),
+      createLangLinkRow('language_index', 'language_index'),
+    ]));
 
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
   }
@@ -749,6 +755,111 @@ function onCfgChange(dotKey, input, originalValue) {
   $('pending-badge').classList.remove('hidden');
 }
 
+/**
+ * Create a real cfg-row for language_task or language_index.
+ * Both are real config fields that write to App.pendingPatch when changed.
+ *   language_task  → string key into LangCmd.tasks (Task <select>)
+ *   language_index → integer index into the selected task's subtask array
+ */
+function createLangLinkRow(dotKey, label) {
+  const row = document.createElement('div');
+  row.className = 'cfg-row';
+  row.dataset.key = dotKey;
+
+  const keyEl = document.createElement('div');
+  keyEl.className = 'cfg-key'; keyEl.title = dotKey; keyEl.textContent = label;
+
+  const valEl = document.createElement('div');
+  valEl.className = 'cfg-value';
+
+  const sel = document.createElement('select');
+  sel.className = 'input-text';
+  // IDs: cfg-language-task / cfg-language-index
+  sel.id = `cfg-${dotKey.replace(/_/g, '-')}`;
+
+  valEl.appendChild(sel);
+  row.appendChild(keyEl);
+  row.appendChild(valEl);
+
+  if (dotKey === 'language_task') {
+    sel.addEventListener('change', () => {
+      const task = sel.value;
+      // Write real config patch
+      App.pendingPatch['language_task'] = task;
+      // Reset language_index to 0 when task changes
+      App.pendingPatch['language_index'] = 0;
+      $('pending-badge').classList.remove('hidden');
+      // Rebuild language_index options
+      syncLangIndexOptions(task, 0);
+      // Sync → Language Command panel Task select
+      const taskSel = $('lang-task-select');
+      if (taskSel && taskSel.value !== task) {
+        taskSel.value = task;
+        taskSel.dispatchEvent(new Event('change'));
+      }
+    });
+  } else {
+    // language_index
+    sel.addEventListener('change', () => {
+      const idx = parseInt(sel.value, 10);
+      if (!isNaN(idx)) {
+        App.pendingPatch['language_index'] = idx;
+        $('pending-badge').classList.remove('hidden');
+      }
+      // Sync → Language Command panel Sub-task select
+      const subtaskSel = $('lang-subtask-select');
+      if (subtaskSel && subtaskSel.value !== sel.value) {
+        subtaskSel.value = sel.value;
+        subtaskSel.dispatchEvent(new Event('change'));
+      }
+    });
+  }
+
+  return row;
+}
+
+/** Populate the cfg-language-task select from current LangCmd.tasks.
+ *  @param {string} [currentTask]  - task to pre-select (from App.config)
+ *  @param {number} [currentIndex] - index to pre-select in language_index (from App.config)
+ */
+function syncLangTaskOptions(currentTask, currentIndex) {
+  const sel = $('cfg-language-task');
+  if (!sel) return;
+  const prev = currentTask !== undefined ? currentTask : sel.value;
+  sel.innerHTML = '';
+  Object.keys(LangCmd.tasks).forEach(name => {
+    const o = document.createElement('option');
+    o.value = name; o.textContent = name;
+    sel.appendChild(o);
+  });
+  if (prev && LangCmd.tasks[prev]) sel.value = prev;
+  else if (sel.options.length > 0) sel.selectedIndex = 0;
+  syncLangIndexOptions(sel.value, currentIndex);
+}
+
+/** Populate the cfg-language-index select from the given task's sub-tasks.
+ *  @param {string} taskName
+ *  @param {number} [currentIndex] - index to pre-select
+ */
+function syncLangIndexOptions(taskName, currentIndex) {
+  const sel = $('cfg-language-index');
+  if (!sel) return;
+  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  sel.innerHTML = '';
+  subtasks.forEach((text, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = `${i + 1}. ${text.substring(0, 60)}${text.length > 60 ? '…' : ''}`;
+    o.title = text;
+    sel.appendChild(o);
+  });
+  // Pre-select given index, or restore previous
+  if (currentIndex !== undefined && !isNaN(currentIndex)) {
+    sel.value = currentIndex;
+  }
+  if (!sel.value && sel.options.length > 0) sel.selectedIndex = 0;
+}
+
 function filterConfigTree(query) {
   const q = query.toLowerCase().trim();
   $('config-tree').querySelectorAll('.cfg-row').forEach(row => {
@@ -811,6 +922,10 @@ function renderLangTaskSelect() {
   if (!taskSel.value && taskSel.options.length > 0) taskSel.selectedIndex = 0;
 
   renderLangSubtaskSelect();
+  // Sync Config panel: use App.config values if available, otherwise current selection
+  const cfgTask  = (App.config && App.config.language_task)  || taskSel.value;
+  const cfgIndex = (App.config && App.config.language_index != null) ? App.config.language_index : undefined;
+  syncLangTaskOptions(cfgTask, cfgIndex);
 }
 
 function renderLangSubtaskSelect() {
@@ -829,6 +944,8 @@ function renderLangSubtaskSelect() {
     opt.title = text;
     subtaskSel.appendChild(opt);
   });
+  // Sync Config panel language_index options (preserve current selection)
+  syncLangIndexOptions(taskName);
 }
 
 // Keep old renderLangPresets as compatibility alias (called on config load)
@@ -845,14 +962,24 @@ function setupLangPanel() {
   const taskSel    = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
 
-  // Task select → rebuild subtask list
+  // Task select → rebuild subtask list + sync Config panel
   if (taskSel) {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
+      // Sync Config panel language_task select (without triggering its own change listener)
+      const cfgTaskSel = $('cfg-language-task');
+      if (cfgTaskSel && cfgTaskSel.value !== taskSel.value) {
+        cfgTaskSel.value = taskSel.value;
+        // Also write to pendingPatch and reset language_index
+        App.pendingPatch['language_task'] = taskSel.value;
+        App.pendingPatch['language_index'] = 0;
+        $('pending-badge').classList.remove('hidden');
+        syncLangIndexOptions(taskSel.value, 0);
+      }
     });
   }
 
-  // Subtask select → fill textarea
+  // Subtask select → fill textarea + sync Config panel
   if (subtaskSel) {
     subtaskSel.addEventListener('change', () => {
       const taskName = taskSel ? taskSel.value : null;
@@ -860,6 +987,16 @@ function setupLangPanel() {
       const idx = parseInt(subtaskSel.value, 10);
       if (!isNaN(idx) && subtasks[idx] !== undefined) {
         $('lang-cmd-text').value = subtasks[idx];
+      }
+      // Sync Config panel language_index select
+      const cfgIdxSel = $('cfg-language-index');
+      if (cfgIdxSel && cfgIdxSel.value !== subtaskSel.value) {
+        cfgIdxSel.value = subtaskSel.value;
+        // Write to pendingPatch
+        if (!isNaN(idx)) {
+          App.pendingPatch['language_index'] = idx;
+          $('pending-badge').classList.remove('hidden');
+        }
       }
     });
   }
@@ -889,6 +1026,8 @@ async function loadConfigFromServer() {
     if (App.config.language && Array.isArray(App.config.language)) {
       renderLangPresets(App.config.language);
     }
+    // Apply language_task / language_index to lang panel (if lang data already loaded)
+    if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
     // Set default path display on startup
     const display = $('conf-path-display');
     if (display && !display.dataset.fullPath) {
@@ -909,8 +1048,44 @@ async function loadDefaultLangFile() {
     if (res.data) {
       buildLangTasksFromData(res.data);
       renderLangTaskSelect();
+      // Apply language_task / language_index from current config
+      applyLangConfigSelection();
     }
   } catch (_) { /* non-fatal: lang panel stays empty */ }
+}
+
+/**
+ * After lang data is loaded (or config reloaded), synchronize the Language Command panel
+ * and Config panel selects to reflect App.config.language_task / language_index.
+ * Also fills lang-cmd-text with the corresponding instruction.
+ */
+function applyLangConfigSelection() {
+  const task  = App.config && App.config.language_task;
+  const index = (App.config && App.config.language_index != null) ? App.config.language_index : 0;
+
+  // Sync Lang Panel Task select
+  const taskSel = $('lang-task-select');
+  if (taskSel && task && LangCmd.tasks[task]) {
+    taskSel.value = task;
+  }
+
+  // Rebuild subtask list for the selected task
+  renderLangSubtaskSelect();
+
+  // Sync Lang Panel Sub-task select
+  const subtaskSel = $('lang-subtask-select');
+  if (subtaskSel) {
+    subtaskSel.value = index;
+    // Fill textarea
+    const taskName = taskSel ? taskSel.value : null;
+    const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+    if (subtasks[index] !== undefined) {
+      $('lang-cmd-text').value = subtasks[index];
+    }
+  }
+
+  // Sync Config panel selects
+  syncLangTaskOptions(task, index);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1464,6 +1639,7 @@ function wireEvents() {
       $('pending-badge').classList.add('hidden');
       renderConfigTree(App.config);
       if (App.config.language) renderLangPresets(App.config.language);
+      if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
       // Show relative path from /conf onward
       const display = $('conf-path-display');
       if (display) {
@@ -1517,6 +1693,7 @@ function wireEvents() {
       $('pending-badge').classList.add('hidden');
       renderConfigTree(App.config);
       if (App.config.language) renderLangPresets(App.config.language);
+      if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
       toast('Config applied.', 'ok');
     } catch (e) { /* toasted */ }
   });

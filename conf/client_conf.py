@@ -57,9 +57,7 @@ def get_client_config():
     config.preprocess = 'pad_and_resize'
     config.preprocess_size = [640, 640] # [height, width]
     # Language instruction options, default index 0
-    config.language = [
-        'Grasp the bottle selected by the finger with the nearer gripper and pass it to the hand carefully. If and only if the bottle is caught by hand, release the gripper.',
-        'default language instruction',
-    ]
+    config.language_task = 'pour_tea'
+    config.language_index = 1
     config.thre_prob_progress = 9.9  # Probability threshold for switching language instructions
     return config
