@@ -193,11 +193,11 @@ function updateWSIndicator(connected) {
 // ═══════════════════════════════════════════════════════
 const DEFAULT_JOINTS = Object.freeze([
   // Arm-Left  J0-J6  (values in 100-180 range for label width validation)
-  135.12, 142.67, 118.45, 156.30, 127.89, 163.54, 109.22,
+  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
   // Arm-Right J7-J13
-  148.76, 131.09, 170.43, 125.61, 158.97, 114.28, 177.35,
+  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
   // Gripper   J14-J15
-  100.00, 100.00, 100.00, 100.00, 100.00, 100.00, 100.00
+  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000
 ]);
 
 /** Add small Gaussian-like noise to DEFAULT_JOINTS for a lifelike idle display. */
@@ -212,8 +212,8 @@ function _makeDefaultJointValues(noiseScale = 0.03) {
 let _defaultStateCache  = null;
 let _defaultActionCache = null;
 
-function getDefaultState()  { if (!_defaultStateCache)  _defaultStateCache  = _makeDefaultJointValues(0.02); return _defaultStateCache; }
-function getDefaultAction() { if (!_defaultActionCache) _defaultActionCache = _makeDefaultJointValues(0.04); return _defaultActionCache; }
+function getDefaultState()  { if (!_defaultStateCache)  _defaultStateCache  = _makeDefaultJointValues(0.00); return _defaultStateCache; }
+function getDefaultAction() { if (!_defaultActionCache) _defaultActionCache = _makeDefaultJointValues(0.00); return _defaultActionCache; }
 
 // ═══════════════════════════════════════════════════════
 //  Stats rendering
@@ -281,7 +281,7 @@ function renderJointsGrouped(side, values) {
   values.forEach((v, i) => {
     const chip = document.createElement('div');
     chip.className = 'joint-chip';
-    const val = typeof v === 'number' ? v.toFixed(2) : v;
+    const val = typeof v === 'number' ? v.toFixed(4) : v;
     if (i < JOINT_ARM_L_COUNT) {
       // chip.textContent = `L${i}: ${val}`;
       chip.textContent = `${i}｜${val}`;

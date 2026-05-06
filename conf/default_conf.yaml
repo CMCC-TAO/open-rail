@@ -5,7 +5,7 @@ controller:
   period: 3.75
   strategy: step
   wait_step: 4
-fitting_deg: 6
+fitting_deg: 4
 fitting_num_samples: 64
 fitting_time_step: 3.75
 gripper_offset: 5
@@ -18,11 +18,21 @@ language:
 - default language instruction
 observer:
   fps: 30
+  period: 0.03333333333333333
 preprocess: pad_and_resize
 preprocess_size:
 - 640
 - 640
 rdm:
+  action_layout:
+    arm:
+      end: 14
+      policy: joint
+      start: 0
+    gripper:
+      end: 16
+      policy: gripper
+      start: 14
   max_len: 100
   record_data: false
 record:
@@ -35,6 +45,88 @@ record:
         dtype: float32
         shape:
         - 22
+      cam:
+        hand_left:
+          dtype: video
+          info:
+            has_audio: false
+            video:
+              channels: 3
+              codec: mpeg4
+              fps: 30.0
+              height: 480
+              is_depth_map: false
+              pix_fmt: yuv420p
+              width: 848
+          names:
+          - height
+          - width
+          - channel
+          shape:
+          - 480
+          - 848
+          - 3
+          video_info:
+            has_audio: false
+            video:
+              codec: av1
+              fps: 30.0
+              is_depth_map: false
+              pix_fmt: yuv420p
+        hand_right:
+          dtype: video
+          info:
+            has_audio: false
+            video:
+              channels: 3
+              codec: mpeg4
+              fps: 30.0
+              height: 480
+              is_depth_map: false
+              pix_fmt: yuv420p
+              width: 848
+          names:
+          - height
+          - width
+          - channel
+          shape:
+          - 480
+          - 848
+          - 3
+          video_info:
+            has_audio: false
+            video:
+              codec: av1
+              fps: 30.0
+              is_depth_map: false
+              pix_fmt: yuv420p
+        head:
+          dtype: video
+          info:
+            has_audio: false
+            video:
+              channels: 3
+              codec: mpeg4
+              fps: 30.0
+              height: 720
+              is_depth_map: false
+              pix_fmt: yuv420p
+              width: 1280
+          names:
+          - height
+          - width
+          - channel
+          shape:
+          - 720
+          - 1280
+          - 3
+          video_info:
+            has_audio: false
+            video:
+              codec: av1
+              fps: 30.0
+              is_depth_map: false
+              pix_fmt: yuv420p
       cam.hand_left:
         dtype: video
         info:
@@ -125,6 +217,11 @@ record:
         names: null
         shape:
         - 1
+      observation:
+        state:
+          dtype: float32
+          shape:
+          - 20
       observation.state:
         dtype: float32
         shape:
@@ -230,6 +327,15 @@ smooth_length: 150
 smooth_ratio: 0.75
 thre_prob_progress: 9.9
 traj:
+  action_layout:
+    arm:
+      end: 14
+      policy: joint
+      start: 0
+    gripper:
+      end: 16
+      policy: gripper
+      start: 14
   filter_window_size: 4
   gripper_dim: 2
   head_dim: 2
