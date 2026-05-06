@@ -1,6 +1,8 @@
 # C extensions
 *.so
 python3.10.INFO
+.codebuddy
+.marscode
 
 # Distribution / packaging
 .Python
