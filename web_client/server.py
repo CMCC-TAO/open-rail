@@ -220,15 +220,23 @@ def _apply_flat_patch(config, patch: dict):
             _set_nested(config, keys, value)
         except Exception as e:
             logger.warning(f"Failed to patch config key '{dotkey}': {e}")
+# 建议放在 _get_robot 函数定义的上方
+robot_instance = None
+
 def _get_robot(config):
+    global robot_instance
+    if robot_instance is not None:
+        logger.info("Robot instance already exists, reusing it.")
+        return robot_instance
     if config.robots.type == RobotType.A2D:
         from client.robots.a2d.body_robot import RobotBody
-        return RobotBody(config)
+        robot_instance = RobotBody(config)
     elif config.robots.type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
-        return RobotBody(config)
+        robot_instance = RobotBody(config)
     else:
         raise ValueError(f"Unsupported robot type: {config.robots.type}")
+    return robot_instance
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -290,8 +298,8 @@ def _collect_stats() -> dict:
         base["avg_infer_time"]  = float(vc.rdm.avg_infer_time)
         base["avg_traj_time"]   = float(vc.rdm.avg_traj_time)
         base["language"]        = str(vc.language)
-        base["current_state"]   = [round(float(x), 2) for x in vc.info_current_state]
-        base["current_action"]  = [round(float(x), 2) for x in vc.info_current_action]
+        base["current_state"]   = [round(float(x), 4) for x in vc.info_current_state]
+        base["current_action"]  = [round(float(x), 4) for x in vc.info_current_action]
         base["info_obs"]        = {k: str(v) for k, v in vc.info_obs.items()}
         base["info_act"]        = {k: str(v) for k, v in vc.info_act.items()}
         base["debug_info"]      = str(vc.debug_info)
@@ -672,17 +680,17 @@ async def stop_client():
 
 def _cleanup():
     vc = state.vla_client
-    robot = state.robot
+    # robot = state.robot
     if vc is not None:
         try:
             vc.close()
         except Exception:
             pass
-    if robot is not None:
-        try:
-            robot.close()
-        except Exception:
-            pass
+    # if robot is not None:
+    #     try:
+    #         robot.close()
+    #     except Exception:
+    #         pass
     state.vla_client = None
     state.robot = None
     state.running = False
