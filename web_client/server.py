@@ -277,6 +277,7 @@ def _collect_stats() -> dict:
     """Gather runtime stats from the running vla_client."""
     base = {
         "running": state.running,
+        "paused": False,
         "infer_count": 0,
         "avg_infer_time": 0.0,
         "avg_traj_time": 0.0,
@@ -294,6 +295,7 @@ def _collect_stats() -> dict:
         return base
 
     try:
+        base["paused"]          = not bool(vc.is_running_action)
         base["infer_count"]     = int(vc.rdm.infer_count)
         base["avg_infer_time"]  = float(vc.rdm.avg_infer_time)
         base["avg_traj_time"]   = float(vc.rdm.avg_traj_time)
@@ -669,12 +671,12 @@ async def start_client():
 
 @app.post("/api/client/stop")
 async def stop_client():
-    """Stop the running VLA client."""
-    if not state.running:
+    """Stop inference and robot commands without releasing resources."""
+    vc = state.vla_client
+    if vc is None or not state.running:
         raise HTTPException(400, "Client is not running.")
-    state.running = False
-    _cleanup()
-    await _broadcast({"type": "status", "data": {"running": False, "message": "Client stopped."}})
+    vc.stop()
+    await _broadcast({"type": "status", "data": {"running": True, "paused": True, "message": "Client stopped (inference and robot commands paused)."}})
     return {"status": "ok"}
 
 
@@ -705,7 +707,7 @@ async def client_status():
 #  REST: runtime commands (replaces Enter-key menu in run_client.py)
 # ─────────────────────────────────────────────────────────────────────────────
 class CommandRequest(BaseModel):
-    command: str          # reset / set_language / save_data / discard_data / gripper / head / waist
+    command: str          # reset / resume / set_language / save_data / discard_data / gripper / head / waist
     params: dict = {}
 
 
@@ -721,15 +723,22 @@ async def client_command(req: CommandRequest):
 
     try:
         if cmd == "reset":
-            vc.is_running_action = False
+            # Stop first before resetting robot to initial position
+            vc.stop()
             robot.reset_robot(mode='default')
             vc.inference_first()
             vc.is_running_action = True
+            await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Robot reset complete, client resumed."}})
+
+        elif cmd == "resume":
+            vc.inference_first()
+            vc.is_running_action = True
+            await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
 
         elif cmd == "set_language":
             lang = params.get("language", "")
             vc.language = lang
-            vc.is_running_action = False
+            vc.stop()
             robot.reset_robot(mode='default')
             vc.inference_first()
             vc.is_running_action = True
@@ -753,13 +762,6 @@ async def client_command(req: CommandRequest):
         elif cmd == "waist":
             pos = params.get("pos", [0.297, 20.0])
             robot.execute_action({'waist': pos})
-
-        elif cmd == "pause":
-            vc.is_running_action = False
-
-        elif cmd == "resume":
-            vc.inference_first()
-            vc.is_running_action = True
 
         else:
             raise HTTPException(400, f"Unknown command: {cmd}")

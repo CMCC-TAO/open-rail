@@ -64,6 +64,7 @@ html, body {
 }
 .status-badge.running { background: rgba(26,127,55,.1); color: var(--success); border: 1px solid var(--success); }
 .status-badge.stopped { background: rgba(207,34,46,.08); color: var(--danger); border: 1px solid var(--danger); }
+.status-badge.paused  { background: rgba(210,153,34,.1); color: var(--warn); border: 1px solid var(--warn); }
 
 /* ── WS indicator ── */
 .ws-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; transition: background .3s; }

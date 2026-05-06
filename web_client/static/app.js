@@ -57,6 +57,8 @@ const App = {
   wsAlive: false,
   reconnectTimer: null,
   isRunning: null,   // null = uninitialised; set on first stats push
+  isPaused: false,   // true when client is stopped (inference/commands paused but resources alive)
+  hasStarted: false, // true once client has been started at least once (btn-start becomes Resume after stop)
 
   config: {},
   pendingPatch: {},
@@ -157,8 +159,8 @@ function connectWS() {
 function handleWSMessage(msg) {
   switch (msg.type) {
     case 'stats':  renderStats(msg.data); break;
-    case 'status': toast(msg.data.message, msg.data.running ? 'ok' : 'warn'); setRunningUI(msg.data.running); break;
-    case 'error':  toast(msg.data.message, 'error'); setRunningUI(false); break;
+    case 'status': toast(msg.data.message, msg.data.running || msg.data.paused ? 'ok' : 'warn'); setRunningUI(msg.data.running, msg.data.paused ?? false); break;
+    case 'error':  toast(msg.data.message, 'error'); setRunningUI(false, false); break;
     case 'pong':   break;
   }
 }
@@ -219,7 +221,7 @@ function getDefaultAction() { if (!_defaultActionCache) _defaultActionCache = _m
 //  Stats rendering
 // ═══════════════════════════════════════════════════════
 function renderStats(data) {
-  setRunningUI(data.running);
+  setRunningUI(data.running, data.paused ?? false);
 
   $('val-infer-count').textContent = data.infer_count ?? '–';
   $('val-infer-time').textContent  = data.avg_infer_time != null
@@ -301,16 +303,58 @@ function renderJointsGrouped(side, values) {
 // ═══════════════════════════════════════════════════════
 //  Running state UI
 // ═══════════════════════════════════════════════════════
-function setRunningUI(running) {
-  if (App.isRunning === running) return;
+/**
+ * Update button states and status badge.
+ * @param {boolean} running  - Whether the vla_client process is alive.
+ * @param {boolean} paused   - Whether inference/robot commands are stopped (is_running_action=False).
+ *
+ * Button availability matrix:
+ *   State            | Start/Resume | Stop | Reset
+ *   -----------------+--------------+------+------
+ *   Not running      |  ✓ (Start)   |  ✗   |  ✗
+ *   Running (active) |  ✗           |  ✓   |  ✓
+ *   Running (paused) |  ✓ (Resume)  |  ✗   |  ✓
+ */
+function setRunningUI(running, paused = false) {
+  if (App.isRunning === running && App.isPaused === paused) return;
   App.isRunning = running;
-  $('status-badge').textContent = running ? 'RUNNING' : 'STOPPED';
-  $('status-badge').className = `status-badge ${running ? 'running' : 'stopped'}`;
-  $('btn-start').disabled  = running;
-  $('btn-stop').disabled   = !running;
-  $('btn-pause').disabled  = !running;
-  $('btn-resume').disabled = !running;
-  $('btn-reset').disabled  = !running;
+  App.isPaused  = paused;
+  if (running) App.hasStarted = true;
+
+  // Status badge
+  let badgeText, badgeClass;
+  if (!running) {
+    badgeText  = 'STOPPED';
+    badgeClass = 'stopped';
+  } else if (paused) {
+    badgeText  = 'PAUSED';
+    badgeClass = 'paused';
+  } else {
+    badgeText  = 'RUNNING';
+    badgeClass = 'running';
+  }
+  $('status-badge').textContent = badgeText;
+  $('status-badge').className   = `status-badge ${badgeClass}`;
+
+  // btn-start: shows "Start" when not running, "Resume" when running+paused, hidden when running+active
+  const btnStart = $('btn-start');
+  if (!running) {
+    // Not running: show Start (re-initialise)
+    btnStart.textContent = '▶ Start';
+    btnStart.disabled    = false;
+  } else if (paused) {
+    // Running but paused: show Resume
+    btnStart.textContent = '▶ Resume';
+    btnStart.disabled    = false;
+  } else {
+    // Running and active: hide Start/Resume
+    btnStart.textContent = '▶ Start';
+    btnStart.disabled    = true;
+  }
+
+  // Other buttons
+  $('btn-stop').disabled  = !running || paused;  // only when running & active
+  $('btn-reset').disabled = !running;             // available in both running states
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1496,6 +1540,13 @@ function wireEvents() {
 
   // Client control
   $('btn-start').addEventListener('click', async () => {
+    // If client is running but paused (after Stop/Reset), act as Resume
+    if (App.isPaused) {
+      await sendCommand('resume');
+      toast('Client resumed.', 'ok');
+      return;
+    }
+    // Otherwise full initialisation start
     if (Object.keys(App.pendingPatch).length) {
       try {
         await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
@@ -1506,12 +1557,16 @@ function wireEvents() {
   });
 
   $('btn-stop').addEventListener('click', async () => {
-    try { await apiFetch('/api/client/stop', { method: 'POST' }); } catch (e) { /* toasted */ }
+    try {
+      await apiFetch('/api/client/stop', { method: 'POST' });
+      toast('Client stopped.', 'warn');
+    } catch (e) { /* toasted */ }
   });
 
-  $('btn-pause').addEventListener('click',  async () => sendCommand('pause'));
-  $('btn-resume').addEventListener('click', async () => sendCommand('resume'));
-  $('btn-reset').addEventListener('click',  async () => { await sendCommand('reset'); toast('Robot reset initiated.', 'info'); });
+  $('btn-reset').addEventListener('click',  async () => {
+    await sendCommand('reset');
+    toast('Robot reset initiated.', 'info');
+  });
 
   // Record button — toggle recording via command
   $('btn-record').addEventListener('click', async () => {
