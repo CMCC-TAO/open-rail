@@ -20,7 +20,6 @@ pyarrow==18.1.0
 PyQt5==5.15.11
 PyQt5_sip==12.13.0
 pyqtgraph==0.14.0
-PyYAML==6.0.2
 PyYAML==6.0.3
 rich==15.0.0
 ruckig==0.17.3
