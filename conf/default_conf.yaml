@@ -5,7 +5,7 @@ controller:
   period: 3.75
   strategy: step
   wait_step: 4
-fitting_deg: 4
+fitting_deg: 3
 fitting_num_samples: 64
 fitting_time_step: 3.75
 gripper_offset: 5
@@ -16,7 +16,8 @@ language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
   hand carefully. If and only if the bottle is caught by hand, release the gripper.
 - default language instruction
-language_index: 3
+language_index: 1
+language_task: pour_tea
 observer:
   fps: 30
   period: 0.03333333333333333
