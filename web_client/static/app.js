@@ -64,8 +64,8 @@ const App = {
   pendingPatch: {},
   langPresets: [],
 
-  // Camera open/close state — default all open
-  camOpen: [true, true, true],
+  // Camera open/close state — default all closed
+  camOpen: [false, false, false],
 
   // ── Trajectory chart state ──
   traj: {
@@ -1176,6 +1176,9 @@ function setupCameraPanel() {
     camState.lastUpdateTime = now;
   }, camState.updateInterval);
 
+  // Apply initial closed state to all cameras
+  for (let i = 0; i < 3; i++) _applyCameraClosedState(i);
+
   // Sync initial state of All toggle button
   updateAllToggleBtn();
 }
@@ -1215,6 +1218,19 @@ function updateCameraDisplay(idx, imageBytes) {
   tmp.src = blobUrl;
 }
 
+/** Apply the visual closed state for camera idx (no toggle, just sets DOM to closed). */
+function _applyCameraClosedState(idx) {
+  const preview  = $(`cam-preview-${idx}`);
+  const statusEl = $(`cam-status-${idx}`);
+  const btnEl    = $(`btn-cam-${idx}`);
+  const phEl     = $(`cam-placeholder-${idx}`);
+  if (preview)  preview.classList.add('closed');
+  if (statusEl) { statusEl.textContent = 'OFF'; statusEl.classList.remove('active', 'error'); }
+  if (btnEl)    btnEl.textContent = 'Open';
+  if (phEl)     phEl.style.display = 'none';
+  // cam-row (title + button) always visible
+}
+
 function toggleCamera(idx) {
   App.camOpen[idx] = !App.camOpen[idx];
   const preview  = $(`cam-preview-${idx}`);
@@ -1230,8 +1246,9 @@ function toggleCamera(idx) {
     statusEl.classList.add('active');
     statusEl.classList.remove('error');
     btnEl.textContent = 'Close';
-    // Show placeholder if no image yet
-    if (!imgEl.src || imgEl.src === location.href) {
+    // Show placeholder only if no stream yet
+    const hasStream = imgEl && imgEl.classList.contains('loaded');
+    if (!hasStream) {
       if (phEl) { phEl.style.display = ''; phEl.textContent = 'Waiting for stream…'; }
     }
     // Render immediately if frame is cached
@@ -1246,6 +1263,7 @@ function toggleCamera(idx) {
     btnEl.textContent = 'Open';
     // Hide the "Waiting" placeholder (the CLOSED overlay takes over)
     if (phEl) phEl.style.display = 'none';
+    // cam-row (title + button) always visible
   }
 }
 
