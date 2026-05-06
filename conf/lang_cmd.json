@@ -15,5 +15,9 @@
     "[REMOVE_GLASS] [LEFT_ARM] Using the left arm, carefully pick up the glass and move it to the tray.",
     "[FOLD_NAPKIN] [RIGHT_ARM] With the right arm, fold the napkin and place it neatly on the tray.",
     "[CLEAR_CUTLERY] [BOTH_ARMS] Collect all cutlery from the table using both arms and place on tray."
+  ],
+  "point_bottle": [
+    "[POINT_BOTTLE] [RIGHT_ARM] With the right arm, point to the bottle on the table.",
+    "[POINT_BOTTLE] [LEFT_ARM] Using the left arm, point to the bottle on the table."
   ]
 }
