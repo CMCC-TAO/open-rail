@@ -752,7 +752,21 @@ function onCfgChange(dotKey, input, originalValue) {
   }
   input.style.borderColor = '';
   App.pendingPatch[dotKey] = parsed;
+  markPending();
+}
+
+/** Mark pending changes: show badge + highlight Apply button */
+function markPending() {
   $('pending-badge').classList.remove('hidden');
+  const btn = $('btn-apply-config');
+  if (btn) btn.classList.add('btn-primary');
+}
+
+/** Clear pending state: hide badge + restore Apply button to normal */
+function clearPending() {
+  $('pending-badge').classList.add('hidden');
+  const btn = $('btn-apply-config');
+  if (btn) btn.classList.remove('btn-primary');
 }
 
 /**
@@ -784,12 +798,7 @@ function createLangLinkRow(dotKey, label) {
   if (dotKey === 'language_task') {
     sel.addEventListener('change', () => {
       const task = sel.value;
-      // Write real config patch
-      App.pendingPatch['language_task'] = task;
-      // Reset language_index to 0 when task changes
-      App.pendingPatch['language_index'] = 0;
-      $('pending-badge').classList.remove('hidden');
-      // Rebuild language_index options
+      // Rebuild language_index options (display sync only, pendingPatch written on Apply)
       syncLangIndexOptions(task, 0);
       // Sync → Language Command panel Task select
       const taskSel = $('lang-task-select');
@@ -801,12 +810,7 @@ function createLangLinkRow(dotKey, label) {
   } else {
     // language_index
     sel.addEventListener('change', () => {
-      const idx = parseInt(sel.value, 10);
-      if (!isNaN(idx)) {
-        App.pendingPatch['language_index'] = idx;
-        $('pending-badge').classList.remove('hidden');
-      }
-      // Sync → Language Command panel Sub-task select
+      // Sync → Language Command panel Sub-task select (display sync only)
       const subtaskSel = $('lang-subtask-select');
       if (subtaskSel && subtaskSel.value !== sel.value) {
         subtaskSel.value = sel.value;
@@ -962,24 +966,20 @@ function setupLangPanel() {
   const taskSel    = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
 
-  // Task select → rebuild subtask list + sync Config panel
+  // Task select → rebuild subtask list + sync Config panel selects only (no pendingPatch yet)
   if (taskSel) {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
-      // Sync Config panel language_task select (without triggering its own change listener)
+      // Sync Config panel language_task select display only
       const cfgTaskSel = $('cfg-language-task');
       if (cfgTaskSel && cfgTaskSel.value !== taskSel.value) {
         cfgTaskSel.value = taskSel.value;
-        // Also write to pendingPatch and reset language_index
-        App.pendingPatch['language_task'] = taskSel.value;
-        App.pendingPatch['language_index'] = 0;
-        $('pending-badge').classList.remove('hidden');
         syncLangIndexOptions(taskSel.value, 0);
       }
     });
   }
 
-  // Subtask select → fill textarea + sync Config panel
+  // Subtask select → fill textarea + sync Config panel selects only (no pendingPatch yet)
   if (subtaskSel) {
     subtaskSel.addEventListener('change', () => {
       const taskName = taskSel ? taskSel.value : null;
@@ -988,15 +988,10 @@ function setupLangPanel() {
       if (!isNaN(idx) && subtasks[idx] !== undefined) {
         $('lang-cmd-text').value = subtasks[idx];
       }
-      // Sync Config panel language_index select
+      // Sync Config panel language_index select display only
       const cfgIdxSel = $('cfg-language-index');
       if (cfgIdxSel && cfgIdxSel.value !== subtaskSel.value) {
         cfgIdxSel.value = subtaskSel.value;
-        // Write to pendingPatch
-        if (!isNaN(idx)) {
-          App.pendingPatch['language_index'] = idx;
-          $('pending-badge').classList.remove('hidden');
-        }
       }
     });
   }
@@ -1021,7 +1016,7 @@ async function loadConfigFromServer() {
     const res = await apiFetch('/api/config');
     App.config = res.config || {};
     App.pendingPatch = {};
-    $('pending-badge').classList.add('hidden');
+    clearPending();
     renderConfigTree(App.config);
     if (App.config.language && Array.isArray(App.config.language)) {
       renderLangPresets(App.config.language);
@@ -1636,7 +1631,7 @@ function wireEvents() {
     try {
       const res = await apiFetch('/api/config/load_file', { method: 'POST', body: JSON.stringify({ path }) });
       App.config = res.config || {}; App.pendingPatch = {};
-      $('pending-badge').classList.add('hidden');
+      clearPending();
       renderConfigTree(App.config);
       if (App.config.language) renderLangPresets(App.config.language);
       if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
@@ -1651,16 +1646,6 @@ function wireEvents() {
       toast('Config file loaded.', 'ok');
     } catch (e) { /* toasted */ }
     e.target.value = '';
-  });
-
-  $('btn-save-file').addEventListener('click', async () => {
-    const display = $('conf-path-display');
-    const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-    if (!path) { toast('No config file loaded. Use Load first.', 'warn'); return; }
-    try {
-      await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
-      toast(`Saved to ${_confRelPath(path)}`, 'ok');
-    } catch (e) { /* toasted */ }
   });
 
   // Save As — modal with conf/ as default prefix
@@ -1690,17 +1675,21 @@ function wireEvents() {
     try {
       const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
       App.config = res.config || {}; App.pendingPatch = {};
-      $('pending-badge').classList.add('hidden');
+      clearPending();
       renderConfigTree(App.config);
       if (App.config.language) renderLangPresets(App.config.language);
       if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
       toast('Config applied.', 'ok');
+      // Auto-save after apply
+      const display = $('conf-path-display');
+      const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+      if (path) {
+        try {
+          await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
+          toast(`Saved to ${_confRelPath(path)}`, 'ok');
+        } catch (_) { /* toasted */ }
+      }
     } catch (e) { /* toasted */ }
-  });
-
-  $('btn-reset-config').addEventListener('click', async () => {
-    App.pendingPatch = {}; $('pending-badge').classList.add('hidden');
-    await loadConfigFromServer();
   });
 
   $('btn-config-collapse').addEventListener('click', () => {
@@ -1727,7 +1716,7 @@ function wireEvents() {
     if (Object.keys(App.pendingPatch).length) {
       try {
         await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
-        App.pendingPatch = {}; $('pending-badge').classList.add('hidden');
+        App.pendingPatch = {}; clearPending();
       } catch (e) { return; }
     }
     try { await apiFetch('/api/client/start', { method: 'POST' }); toast('Client starting…', 'info'); } catch (e) { /* toasted */ }
@@ -1797,6 +1786,22 @@ function wireEvents() {
   $('btn-lang-send').addEventListener('click', async () => {
     const lang = $('lang-cmd-text').value.trim();
     if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
+
+    // 1. Write current Task / SubTask selection into pendingPatch
+    const taskSel    = $('lang-task-select');
+    const subtaskSel = $('lang-subtask-select');
+    const task  = taskSel    ? taskSel.value                    : null;
+    const idx   = subtaskSel ? parseInt(subtaskSel.value, 10)   : NaN;
+    if (task != null) {
+      App.pendingPatch['language_task']  = task;
+      App.pendingPatch['language_index'] = isNaN(idx) ? 0 : idx;
+      markPending();
+    }
+
+    // 2. Trigger Config Apply (patch + save) — reuse the same handler
+    $('btn-apply-config').click();
+
+    // 3. Send language command to robot
     await sendCommand('set_language', { language: lang });
     toast('Language updated & robot reset.', 'info');
   });

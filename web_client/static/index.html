@@ -42,7 +42,7 @@
             📂 Load
             <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
           </label>
-          <button class="btn btn-sm" id="btn-save-file">💾 Save</button>
+          <button class="btn btn-sm" id="btn-apply-config">✔ Apply</button>
           <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…">💾 Save As…</button>
         </div>
         <!-- Current file path display -->
@@ -56,11 +56,9 @@
         <!-- Config tree -->
         <div id="config-tree" class="config-tree"></div>
 
-        <!-- Pending badge + apply -->
+        <!-- Pending badge -->
         <div class="config-footer">
           <span id="pending-badge" class="pending-badge hidden">● unsaved changes</span>
-          <button class="btn btn-primary btn-sm" id="btn-apply-config">Apply</button>
-          <button class="btn btn-sm" id="btn-reset-config">Reset</button>
         </div>
       </div>
     </aside>
