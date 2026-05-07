@@ -318,7 +318,7 @@ robots:
     hand_type: gripper
     repo_id: task_39_only1
     root: /home/robot/Music/task_39_only1
-  type: a2d
+  type: mock
 search_length: 100
 show_action_cams_qt: false
 show_img: false

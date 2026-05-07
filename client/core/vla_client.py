@@ -190,6 +190,10 @@ class VLAClientAsync():
             # Send data for inference and wait for results
             self.vla_zmq.sendMessage(data)
             result = self.vla_zmq.recvMessage()
+            # TODO： Handle None result or inference failure cases more robustly
+            if result is None:
+                return
+            
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
