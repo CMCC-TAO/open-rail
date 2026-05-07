@@ -23,7 +23,7 @@ class VLAWebSocketServer:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, host='localhost', port=8765):
+    def __init__(self, host='0.0.0.0', port=8765):
         if self.__class__._initialized:
             return
         self.__class__._initialized = True
@@ -48,7 +48,7 @@ class VLAWebSocketServer:
         self._run_http_server_thread()
 
     @classmethod
-    def get_instance(cls, host='localhost', port=8765):
+    def get_instance(cls, host='0.0.0.0', port=8765):
         return cls(host=host, port=port)
 
     def kill_port(self, port):

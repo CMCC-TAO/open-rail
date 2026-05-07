@@ -23,6 +23,10 @@
 const WS_URL    = `ws://${location.host}/ws`;
 const RECONNECT = 3000;
 
+// Visual WebSocket — connects to VLAWebSocketServer (port 8765) for camera frames
+const CAM_WS_URL       = `ws://${location.hostname}:8765`;
+const CAM_WS_RECONNECT = 3000;
+
 // Max data points per series (mirrors visual/app.js maxChartPoints)
 const MAX_CHART_POINTS  = 1500;
 // Chart update interval in ms (20 FPS, same as visual/)
@@ -59,6 +63,11 @@ const App = {
   isRunning: null,   // null = uninitialised; set on first stats push
   isPaused: false,   // true when client is stopped (inference/commands paused but resources alive)
   hasStarted: false, // true once client has been started at least once (btn-start becomes Resume after stop)
+
+  // Camera WebSocket (port 8765 — VLAWebSocketServer)
+  camWs: null,
+  camWsAlive: false,
+  camWsReconnectTimer: null,
 
   config: {},
   pendingPatch: {},
@@ -138,11 +147,6 @@ function connectWS() {
   };
 
   App.ws.onmessage = (ev) => {
-    // Binary frame: camera image data (mirrors visual/app.js handleBinaryCameraData)
-    if (ev.data instanceof ArrayBuffer || ev.data instanceof Blob) {
-      decodeCameraBinaryFrame(ev.data);
-      return;
-    }
     try { handleWSMessage(JSON.parse(ev.data)); } catch (e) { /* ignore */ }
   };
 
@@ -154,6 +158,47 @@ function connectWS() {
   };
 
   App.ws.onerror = () => App.ws.close();
+}
+
+// ═══════════════════════════════════════════════════════
+//  Camera WebSocket (VLAWebSocketServer — port 8765)
+// ═══════════════════════════════════════════════════════
+function connectCamWS() {
+  if (App.camWs && App.camWs.readyState <= 1) return;
+  App.camWs = new WebSocket(CAM_WS_URL);
+  App.camWs.binaryType = 'arraybuffer';
+
+  App.camWs.onopen = () => {
+    App.camWsAlive = true;
+    clearTimeout(App.camWsReconnectTimer);
+  };
+
+  App.camWs.onmessage = (ev) => {
+    if (ev.data instanceof ArrayBuffer || ev.data instanceof Blob) {
+      decodeCameraBinaryFrame(ev.data);
+    }
+  };
+
+  App.camWs.onclose = () => {
+    App.camWsAlive = false;
+    if (App.isRunning) {
+      App.camWsReconnectTimer = setTimeout(connectCamWS, CAM_WS_RECONNECT);
+    }
+  };
+
+  App.camWs.onerror = () => {
+    if (App.camWs) App.camWs.close();
+  };
+}
+
+function disconnectCamWS() {
+  clearTimeout(App.camWsReconnectTimer);
+  if (App.camWs) {
+    App.camWs.onclose = null; // prevent auto-reconnect after manual close
+    App.camWs.close();
+    App.camWs = null;
+  }
+  App.camWsAlive = false;
 }
 
 function handleWSMessage(msg) {
@@ -320,6 +365,10 @@ function setRunningUI(running, paused = false) {
   App.isRunning = running;
   App.isPaused  = paused;
   if (running) App.hasStarted = true;
+
+  // Camera Visual: connect dedicated WS server only when client is running
+  if (running) connectCamWS();
+  else disconnectCamWS();
 
   // Status badge
   let badgeText, badgeClass;
