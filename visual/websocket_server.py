@@ -80,6 +80,7 @@ class VLAWebSocketServer:
         """
         with self.data_lock:
             self.latest_imgs = imgs.copy()
+        print(f"图像数据已更新，包含摄像头: {list(imgs.keys())}")
 
     def update_chart_data(self, data: List[Dict]):
         """更新图表数据
@@ -120,7 +121,11 @@ class VLAWebSocketServer:
     
     async def send_camera_data(self):
         """发送摄像头数据 - 使用二进制传输优化性能"""
-        if not self.clients or not self.latest_imgs:
+        if not self.clients:
+            print(f"No client is connected.")
+            return
+        if not self.latest_imgs:
+            print(f"No latest images.")
             return
         
         disconnected_clients = set()
@@ -174,7 +179,7 @@ class VLAWebSocketServer:
                         
             except Exception as e:
                 print(f"处理图像数据失败 {camera_key}: {e}")
-        
+        print(f"已发送摄像头数据，包含摄像头: {list(imgs.keys())}")
         # 清理断开的客户端
         for client in disconnected_clients:
             await self.unregister_client(client)
