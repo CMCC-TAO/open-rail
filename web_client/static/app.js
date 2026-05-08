@@ -411,7 +411,7 @@ function setRunningUI(running, paused = false) {
   btnStart.disabled    = !!running;
 
   // Pause button toggles Pause/Resume while running
-  const btnPause = $('btn-stop');
+  const btnPause = $('btn-pause');
   btnPause.disabled = !running;
   if (!running) {
     btnPause.textContent = '⏸ Pause';
@@ -1804,7 +1804,7 @@ function wireEvents() {
     try { await apiFetch('/api/client/start', { method: 'POST' }); toast('Client starting…', 'info'); } catch (e) { /* toasted */ }
   });
 
-  $('btn-stop').addEventListener('click', async () => {
+  $('btn-pause').addEventListener('click', async () => {
     try {
       if (App.isPaused) {
         await apiFetch('/api/client/resume', { method: 'POST' });
