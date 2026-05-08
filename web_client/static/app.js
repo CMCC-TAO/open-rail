@@ -1808,10 +1808,10 @@ function wireEvents() {
     try {
       if (App.isPaused) {
         await apiFetch('/api/client/resume', { method: 'POST' });
-        toast('Client resumed.', 'ok');
+        // toast('Client resumed.', 'ok');
       } else {
         await apiFetch('/api/client/pause', { method: 'POST' });
-        toast('Client paused.', 'warn');
+        // toast('Client paused.', 'warn');
       }
     } catch (e) { /* toasted */ }
   });

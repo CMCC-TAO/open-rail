@@ -691,7 +691,7 @@ async def pause_client():
     if vc is None or not state.running:
         raise HTTPException(400, "Client is not running.")
     _pause_vla_client(vc)
-    await _broadcast({"type": "status", "data": {"running": True, "paused": True, "message": "Client paused (inference and robot commands paused)."}})
+    await _broadcast({"type": "status", "data": {"running": True, "paused": True, "message": "Client paused.)."}})
     return {"status": "ok"}
 
 
