@@ -217,16 +217,37 @@ function handleWSMessage(msg) {
  */
 async function decodeCameraBinaryFrame(raw) {
   try {
-    const buf = raw instanceof Blob ? await raw.arrayBuffer() : raw;
-    const view = new DataView(buf);
-    const headerLen = view.getUint32(0, false);  // big-endian
-    const headerBytes = new Uint8Array(buf, 4, headerLen);
-    const header = JSON.parse(new TextDecoder().decode(headerBytes));
-    if (header.type !== 'camera_data_binary') return;
-    const cameraId = header.camera_id;
-    if (cameraId === undefined || cameraId === null) return;
-    const imageBytes = new Uint8Array(buf, 4 + headerLen);
-    handleCameraFrame(Number(cameraId), imageBytes);
+    // Mirror visual/app.js::handleBinaryMessage protocol
+    const arrayBuffer = raw instanceof Blob ? await raw.arrayBuffer() : raw;
+    if (!(arrayBuffer instanceof ArrayBuffer) || arrayBuffer.byteLength < 4) return;
+
+    const dataView = new DataView(arrayBuffer);
+
+    // Header length (first 4 bytes, big-endian)
+    const headerLength = dataView.getUint32(0, false);
+    if (headerLength <= 0 || (4 + headerLength) > arrayBuffer.byteLength) return;
+
+    // Header JSON
+    const headerBytes = new Uint8Array(arrayBuffer, 4, headerLength);
+    const headerText = new TextDecoder().decode(headerBytes);
+    const header = JSON.parse(headerText);
+
+    // Payload (image bytes)
+    const payloadStart = 4 + headerLength;
+    const declaredSize = Number(header.data_size);
+    const payloadEnd = Number.isFinite(declaredSize) && declaredSize > 0
+      ? Math.min(arrayBuffer.byteLength, payloadStart + declaredSize)
+      : arrayBuffer.byteLength;
+    if (payloadEnd <= payloadStart) return;
+
+    // Copy payload to independent buffer to avoid byteOffset-related corruption
+    const imageData = new Uint8Array(arrayBuffer.slice(payloadStart, payloadEnd));
+
+    if (header.type === 'camera_data_binary') {
+      const cameraId = header.camera_id;
+      if (cameraId === undefined || cameraId === null) return;
+      handleCameraFrame(Number(cameraId), imageData);
+    }
   } catch (e) { /* malformed frame, ignore */ }
 }
 

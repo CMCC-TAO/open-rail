@@ -2,13 +2,16 @@
 import asyncio
 import websockets
 import json
-import cv2
 import numpy as np
 import time
 import threading
 from typing import Dict, List, Set, Optional
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import os
+import cv2
+
+# 限制 OpenCV 线程，降低与解码端并发冲突概率
+cv2.setNumThreads(1)
 
 
 class VLAWebSocketServer:
@@ -27,7 +30,8 @@ class VLAWebSocketServer:
         if self.__class__._initialized:
             return
         self.__class__._initialized = True
-
+         # 设置 OpenCV 线程数为 1，避免多线程问题
+        # cv2.setNumThreads(1)
         self.kill_port(port)
         self.host = host
         self.port = port
@@ -122,10 +126,10 @@ class VLAWebSocketServer:
     async def send_camera_data(self):
         """发送摄像头数据 - 使用二进制传输优化性能"""
         if not self.clients:
-            print(f"No client is connected.")
+            # print(f"No client is connected.")
             return
         if not self.latest_imgs:
-            print(f"No latest images.")
+            # print(f"No latest images.")
             return
         
         disconnected_clients = set()
@@ -140,16 +144,19 @@ class VLAWebSocketServer:
             try:
                 # 将numpy数组转换为bytes
                 if isinstance(img, np.ndarray):
-                    h, w = img.shape[:2]
                     # img = cv2.resize(img, (w // 2, h // 2))  # 降低分辨率以减少数据量
                     if 'depth.' in camera_key:
                         img_depth_norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-                        img = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
+                        img_for_encode = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
                     else:
-                        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+                        # 避免 cv2.cvtColor 额外并发调用；同时统一到 uint8，防止 CV_64F 导致编码异常
+                        img_uint8 = img if img.dtype == np.uint8 else np.clip(img, 0, 255).astype(np.uint8)
+                        img_for_encode = img_uint8[:, :, ::-1] if img_uint8.ndim == 3 and img_uint8.shape[2] == 3 else img_uint8
                     encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                    img = cv2.imencode('.jpg', img, encode_params)[1]
-                    frame_bytes = img.tobytes()
+                    ok, enc = cv2.imencode('.jpg', img_for_encode, encode_params)
+                    if not ok:
+                        continue
+                    frame_bytes = enc.tobytes()
                 else:
                     frame_bytes = img
 
@@ -179,7 +186,7 @@ class VLAWebSocketServer:
                         
             except Exception as e:
                 print(f"处理图像数据失败 {camera_key}: {e}")
-        print(f"已发送摄像头数据，包含摄像头: {list(imgs.keys())}")
+        # print(f"已发送摄像头数据，包含摄像头: {list(imgs.keys())}")
         # 清理断开的客户端
         for client in disconnected_clients:
             await self.unregister_client(client)

@@ -4,14 +4,20 @@ import random
 import logging
 import numpy as np
 from pprint import pprint
+import threading
+
+from launch import Action
 from ..base_robot import RobotBase
 from client.utils.util import run_time_decorator
 
-try:
-    import torch
-    from lerobot.datasets.lerobot_dataset import LeRobotDataset, LeRobotDatasetMetadata
-except ImportError:
-    pass
+import os
+import glob
+import pandas as pd
+import torch
+
+# 限制 OpenCV/FFmpeg 线程，避免多线程解码冲突（pthread_frame async_lock）
+os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "threads;1")
+cv2.setNumThreads(1)
 
 class RobotBody(RobotBase):
     def __init__(self, config):
@@ -26,25 +32,84 @@ class RobotBody(RobotBase):
         self.action_layout = dict(self.cfg.get('action_layout', {}))
         self.action_dim = max([v['end'] for v in self.action_layout.values()]) if self.action_layout else 20
         self.current_state = np.zeros(self.action_dim)
+        self.dataset = None
+        self.episode_files = []
+        self.current_episode_idx = 0
+        self.currt_index = 0
+        self.period = 1.0 / 30.0
+        self.video_caps = {}
+        self._io_lock = threading.Lock()
+
         try:
-            self.dataset = LeRobotDataset(repo_id=self.cfg['repo_id'], root=self.cfg['root'])
-            self.dataloader = iter(torch.utils.data.DataLoader(
-                self.dataset,
-                num_workers=1,
-                batch_size=1,
-                shuffle=False,
-            ))
-            # And see how many frames you have:
-            self.logger.info(f"Selected episodes: {self.dataset.episodes}")
-            self.logger.info(f"Number of episodes selected: {self.dataset.num_episodes}")
-            self.logger.info(f"Number of frames selected: {self.dataset.num_frames}")
-            self.logger.info(f"Dataset fps: {self.dataset.meta.fps}")
-            self.init_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-            self.currt_index = 0
-            self.period = 1.0 / self.dataset.meta.fps # in seconds
-            # time.sleep(1) # in real robot, this is the time to wait for the robot ready
+            root = self.cfg['root']
+            parquet_glob = os.path.join(root, 'data', 'chunk-*', 'episode_*.parquet')
+            parquet_files = sorted(glob.glob(parquet_glob))
+            if not parquet_files:
+                raise FileNotFoundError(f'未找到离线数据: {parquet_glob}')
+
+            for parquet_path in parquet_files:
+                chunk_dir = os.path.basename(os.path.dirname(parquet_path))
+                chunk_id = int(chunk_dir.split('-')[-1])
+                ep_name = os.path.splitext(os.path.basename(parquet_path))[0]
+                episode_id = int(ep_name.split('_')[-1])
+                self.episode_files.append((chunk_id, episode_id, parquet_path))
+
+            self._load_episode(0)
+
+            meta_info_path = os.path.join(root, 'meta', 'info.json')
+            if os.path.exists(meta_info_path):
+                try:
+                    import json
+                    with open(meta_info_path, 'r', encoding='utf-8') as f:
+                        info = json.load(f)
+                    fps = info.get('fps', 30)
+                    self.period = 1.0 / max(float(fps), 1e-6)
+                except Exception:
+                    pass
+
+            self.logger.info(f"Loaded local episodes: {len(self.episode_files)}")
+            self.logger.info(f"Current episode frames: {len(self.dataset)}")
+            self.logger.info(f"Playback fps: {1.0 / self.period:.2f}")
         except Exception as e:
+            self.logger.error(f"Failed to load local dataset: {e}")
+            print(f"Failed to load local dataset: {e}")
             self.dataset = None
+
+    def _release_video_caps(self):
+        for cap in self.video_caps.values():
+            try:
+                cap.release()
+            except Exception:
+                pass
+        self.video_caps = {}
+
+    def _load_episode(self, episode_list_idx: int):
+        self._release_video_caps()
+        self.current_episode_idx = episode_list_idx
+        chunk_id, episode_id, parquet_path = self.episode_files[self.current_episode_idx]
+        self.dataset = pd.read_parquet(parquet_path)
+        self.currt_index = 0
+
+        for _, video_key in self.cfg['camera']['names'].items():
+            video_path = os.path.join(
+                self.cfg['root'],
+                'videos',
+                f'chunk-{chunk_id:03d}',
+                video_key,
+                f'episode_{episode_id:06d}.mp4'
+            )
+            if not os.path.exists(video_path):
+                raise FileNotFoundError(f'视频文件不存在: {video_path}')
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                raise RuntimeError(f'视频打开失败: {video_path}')
+            self.video_caps[video_key] = cap
+
+    def _next_episode(self):
+        if not self.episode_files:
+            return
+        next_idx = (self.current_episode_idx + 1) % len(self.episode_files)
+        self._load_episode(next_idx)
 
     def execute_action(self, action):
         """Execute the given action on the mock robot.
@@ -63,69 +128,72 @@ class RobotBody(RobotBase):
         self.current_state = target_pose if target_pose is not None else self.current_state
 
     def retrieve_observation(self):
-        """Retrieve observation data from the LeRobot dataset for simulation.
-        
-        Returns:
-            dict: Dictionary containing camera images, joint states, and timestamp from dataset
-        """
-        # Use random data if dataset is not available
-        if self.dataset is None:
-            result = {}
-            cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
-            image, ref_timestamp = np.random.randint(0, 256, (640, 640, 3), dtype=np.uint8), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-            result['ref_timestamp'] = ref_timestamp
-            result[f'cam.{cam_ref}'] = image
-            for key, value in cam_names.items():
-                if key == cam_ref:
-                    continue
-                image = np.random.randint(0, 256, (640, 640, 3), dtype=np.uint8)
-                if key == 'depth_head':
-                    key = 'depth.head'
-                    image = np.random.randint(0, 2**16, (640, 640), dtype=np.uint16)
-                result[f'cam.{key}'] = image
-            result['obs.state'] = np.random.rand(self.action_dim,)
-            self.current_state = result['obs.state']
-            return result
+        """Retrieve observation data from local lerobot-format files."""
+        if self.dataset is None or len(self.dataset) == 0:
+            return None
 
         start_time = time.time()
-        result = {}
-        if self.currt_index >= self.dataset.num_frames:
-            self.logger.info(f'End of dataset, currt_index: {self.currt_index}, num_frames: {self.dataset.num_frames}')
-            self.dataloader = iter(torch.utils.data.DataLoader(
-                self.dataset,
-                num_workers=1,
-                batch_size=1,
-                shuffle=False,
-            ))
-            self.currt_index = 0
-        
-        self.currt_index += 1
-        data = next(self.dataloader)
-        
-        cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
-        image, ref_timestamp = (data[cam_names[cam_ref]][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8), time.clock_gettime_ns(time.CLOCK_MONOTONIC)
 
-        result['ref_timestamp'] = ref_timestamp
-        result[f'cam.{cam_ref}'] = image
-        for key, value in cam_names.items():
-            self.logger.debug(f'mock robot camera key: {key}, value: {value}')
-            if key == cam_ref:
-                continue
-            image = (data[value][0].permute(1, 2, 0).cpu().numpy()* 255).astype(np.uint8)
-            if key == 'depth_head':
-                key = 'depth.head'
-            result[f'cam.{key}'] = image
-    
-        obs_state = data["observation.state"][0].cpu().numpy()
-        if obs_state.shape[0] != self.action_dim:
-            obs_state = obs_state[:self.action_dim] if obs_state.shape[0] > self.action_dim else np.pad(obs_state, (0, self.action_dim - obs_state.shape[0]))
-        result['obs.state'] = obs_state
-        self.current_state = result['obs.state']
+        with self._io_lock:
+            if self.currt_index >= len(self.dataset):
+                self.logger.info(f'End of episode {self.current_episode_idx}, frames: {len(self.dataset)}')
+                self._next_episode()
+                if self.dataset is None or len(self.dataset) == 0:
+                    return None
+
+            row = self.dataset.iloc[self.currt_index]
+            cam_names = self.cfg['camera']['names']
+
+            result = {
+                'ref_timestamp': time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+            }
+
+            # 顺序读取3路视频帧；若当前episode读到结尾，切换下一段后重读一次
+            for _ in range(2):
+                all_ok = True
+                for key, video_key in cam_names.items():
+                    cap = self.video_caps.get(video_key)
+                    if cap is None:
+                        raise RuntimeError(f'视频流未初始化: {video_key}')
+
+                    ok, frame_bgr = cap.read()
+                    if not ok or frame_bgr is None:
+                        all_ok = False
+                        break
+
+                    # 避免在 mock 侧使用 cv2.cvtColor，减少与其他模块的 OpenCV/FFmpeg 竞争
+                    frame_rgb = frame_bgr[:, :, ::-1].copy()
+                    cam_key = f'cam.{key if key != "depth_head" else "depth.head"}'
+                    result[cam_key] = frame_rgb
+
+                if all_ok:
+                    break
+
+                self.logger.warning('视频读取到末尾，切换下一段 episode 重试')
+                self._next_episode()
+                if self.dataset is None or len(self.dataset) == 0:
+                    return None
+                row = self.dataset.iloc[self.currt_index]
+                result = {'ref_timestamp': time.clock_gettime_ns(time.CLOCK_MONOTONIC)}
+            else:
+                return None
+
+            obs_state = np.asarray(row["observation.state"], dtype=np.float32)
+            if obs_state.shape[0] != self.action_dim:
+                obs_state = obs_state[:self.action_dim] if obs_state.shape[0] > self.action_dim else np.pad(obs_state, (0, self.action_dim - obs_state.shape[0]))
+            result['obs.state'] = obs_state
+            self.current_state = obs_state
+
+            action = np.asarray(row["action"], dtype=np.float32)
+            if action.shape[0] != self.action_dim:
+                action = action[:self.action_dim] if action.shape[0] > self.action_dim else np.pad(action, (0, self.action_dim - action.shape[0]))
+            result['action'] = action
+
+            self.currt_index += 1
+
         end_time = time.time()
-        if end_time-start_time < self.period:
-            sleep_time = self.period - (end_time - start_time)
-            time.sleep(sleep_time)
-        end_time = time.time()
+        if end_time - start_time < self.period:
+            time.sleep(self.period - (end_time - start_time))
         return result
 
     def close(self):
@@ -133,19 +201,24 @@ class RobotBody(RobotBase):
         
         This method performs cleanup for the mock robot simulation.
         """
+        self._release_video_caps()
         self.logger.info('Close mock robot...')
 
 if __name__ == '__main__':
-    from conf.robots_conf import get_robots_config
-    config = get_robots_config()
+    # from conf.robots_conf import get_robots_config
+    from conf.client_conf import get_client_config
+    # config = get_robots_config()
+    config = get_client_config()
     robot = RobotBody(config)
     try:
         while True:
             result = robot.retrieve_observation()
+            print(f"retrieve_observation: {result.keys()}")
             if result is None:
-                continue
+                break
             for key, value in result.items():
                 if 'cam.' not in key:
+                    print(f"{key}: {value}")
                     continue
                 if 'depth.' in key:
                     img_depth_norm = cv2.normalize(value, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
