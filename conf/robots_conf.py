@@ -4,6 +4,7 @@ from ml_collections import ConfigDict
 class RobotType(str, Enum):
     A2D = 'a2d'
     MOCK = 'mock'
+    UNITREE_G1 = 'unitree_g1'
 
 def get_a2d_config():
     """Generate configuration for A2D robot.
@@ -57,6 +58,31 @@ def get_mock_config():
     config.repo_id = 'task_39_only1'
     return config
 
+def get_unitree_g1_config():
+    """Generate configuration template for Unitree G1 robot.
+
+    Returns:
+        ConfigDict: Configuration dictionary for unitree_g1 robot adapter.
+    """
+    config = ConfigDict()
+    config.camera = ConfigDict()
+    config.hand_type = 'gripper'
+    config.camera.ref = 'head'
+    config.camera.names = {
+        'head': 'head',
+        'hand_left': 'hand_left',
+        'hand_right': 'hand_right',
+    }
+    config.proprio_names = ['arm', 'gripper']
+    config.gripper_freq = 40
+    config.head_freq = 40
+    config.reset_robot_pos = [0.0] * 16
+    config.action_layout = {
+        'arm': {'start': 0, 'end': 14, 'policy': 'joint'},
+        'gripper': {'start': 14, 'end': 16, 'policy': 'gripper'},
+    }
+    return config
+
 def get_robots_config():
     """Generate configuration for all supported robot types.
     
@@ -74,6 +100,7 @@ def get_robots_config():
     config.type = RobotType.A2D
     config.a2d = get_a2d_config()
     config.mock = get_mock_config()
+    config.unitree_g1 = get_unitree_g1_config()
     return config
 
 if __name__ == '__main__':
