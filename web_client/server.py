@@ -669,15 +669,47 @@ async def start_client():
     return {"status": "ok", "message": "Client starting…"}
 
 
-@app.post("/api/client/stop")
-async def stop_client():
-    """Stop inference and robot commands without releasing resources."""
+def _pause_vla_client(vc):
+    if hasattr(vc, "pause"):
+        vc.pause()
+    else:
+        vc.stop()
+
+
+def _resume_vla_client(vc):
+    if hasattr(vc, "resume"):
+        vc.resume()
+    else:
+        vc.inference_first()
+        vc.is_running_action = True
+
+
+@app.post("/api/client/pause")
+async def pause_client():
+    """Pause inference and robot commands without releasing resources."""
     vc = state.vla_client
     if vc is None or not state.running:
         raise HTTPException(400, "Client is not running.")
-    vc.stop()
-    await _broadcast({"type": "status", "data": {"running": True, "paused": True, "message": "Client stopped (inference and robot commands paused)."}})
+    _pause_vla_client(vc)
+    await _broadcast({"type": "status", "data": {"running": True, "paused": True, "message": "Client paused (inference and robot commands paused)."}})
     return {"status": "ok"}
+
+
+@app.post("/api/client/resume")
+async def resume_client():
+    """Resume inference and robot commands."""
+    vc = state.vla_client
+    if vc is None or not state.running:
+        raise HTTPException(400, "Client is not running.")
+    _resume_vla_client(vc)
+    await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
+    return {"status": "ok"}
+
+
+@app.post("/api/client/stop")
+async def stop_client():
+    """Backward-compatible alias of pause."""
+    return await pause_client()
 
 
 def _cleanup():
@@ -723,25 +755,22 @@ async def client_command(req: CommandRequest):
 
     try:
         if cmd == "reset":
-            # Stop first before resetting robot to initial position
-            vc.stop()
+            # Pause first before resetting robot to initial position
+            _pause_vla_client(vc)
             robot.reset_robot(mode='default')
-            vc.inference_first()
-            vc.is_running_action = True
+            _resume_vla_client(vc)
             await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Robot reset complete, client resumed."}})
 
         elif cmd == "resume":
-            vc.inference_first()
-            vc.is_running_action = True
+            _resume_vla_client(vc)
             await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
 
         elif cmd == "set_language":
             lang = params.get("language", "")
             vc.language = lang
-            vc.stop()
+            _pause_vla_client(vc)
             robot.reset_robot(mode='default')
-            vc.inference_first()
-            vc.is_running_action = True
+            _resume_vla_client(vc)
 
         elif cmd == "save_data":
             if state.config.record.switch:

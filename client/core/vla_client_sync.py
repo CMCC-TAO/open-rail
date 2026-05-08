@@ -413,6 +413,19 @@ class VLAClientSync():
         
         self.logger.info('Inference client started.')
     
+    def pause(self):
+        """Pause inference and robot commands without releasing resources."""
+        self.is_running_action = False
+        self.logger.info('Inference client paused (inference and robot commands paused).')
+
+    def resume(self):
+        """Resume inference and robot commands."""
+        if self.is_running_action:
+            return
+        # self.inference_first()
+        self.is_running_action = True
+        self.logger.info('Inference client resumed.')
+
     def stop(self):
         """Stop the VLA client and wait for threads to finish.
         

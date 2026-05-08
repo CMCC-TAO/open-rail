@@ -25,9 +25,13 @@ def parse_args():
     p.add_argument('--reload', action='store_true', help='Enable hot reload (dev only)')
     return p.parse_args()
 
+def kill_port(port):
+    import os
+    os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
 
 if __name__ == '__main__':
     args = parse_args()
+    kill_port(port=args.port)
     uvicorn.run(
         "web_client.server:app",
         host=args.host,
