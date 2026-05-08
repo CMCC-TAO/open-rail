@@ -84,7 +84,7 @@ class VLAWebSocketServer:
         """
         with self.data_lock:
             self.latest_imgs = imgs.copy()
-        print(f"图像数据已更新，包含摄像头: {list(imgs.keys())}")
+        # print(f"图像数据已更新，包含摄像头: {list(imgs.keys())}")
 
     def update_chart_data(self, data: List[Dict]):
         """更新图表数据

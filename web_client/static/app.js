@@ -11,7 +11,8 @@
  *   POST /api/config/save_file   { path: "..." }
  *   GET  /api/client/status
  *   POST /api/client/start
- *   POST /api/client/stop
+ *   POST /api/client/pause
+ *   POST /api/client/resume
  *   POST /api/client/command     { command, params }
  */
 
@@ -61,8 +62,7 @@ const App = {
   wsAlive: false,
   reconnectTimer: null,
   isRunning: null,   // null = uninitialised; set on first stats push
-  isPaused: false,   // true when client is stopped (inference/commands paused but resources alive)
-  hasStarted: false, // true once client has been started at least once (btn-start becomes Resume after stop)
+  isPaused: false,   // true when client is paused (inference/commands paused but resources alive)
 
   // Camera WebSocket (port 8765 — VLAWebSocketServer)
   camWs: null,
@@ -375,17 +375,16 @@ function renderJointsGrouped(side, values) {
  * @param {boolean} paused   - Whether inference/robot commands are stopped (is_running_action=False).
  *
  * Button availability matrix:
- *   State            | Start/Resume | Stop | Reset
- *   -----------------+--------------+------+------
- *   Not running      |  ✓ (Start)   |  ✗   |  ✗
- *   Running (active) |  ✗           |  ✓   |  ✓
- *   Running (paused) |  ✓ (Resume)  |  ✗   |  ✓
+ *   State            | Start | Pause/Resume | Reset
+ *   -----------------+-------+--------------+------
+ *   Not running      |  ✓    |  ✗           |  ✗
+ *   Running (active) |  ✗    |  Pause       |  ✓
+ *   Running (paused) |  ✗    |  Resume      |  ✓
  */
 function setRunningUI(running, paused = false) {
   if (App.isRunning === running && App.isPaused === paused) return;
   App.isRunning = running;
   App.isPaused  = paused;
-  if (running) App.hasStarted = true;
 
   // Camera Visual: connect dedicated WS server only when client is running
   if (running) connectCamWS();
@@ -406,24 +405,25 @@ function setRunningUI(running, paused = false) {
   $('status-badge').textContent = badgeText;
   $('status-badge').className   = `status-badge ${badgeClass}`;
 
-  // btn-start: shows "Start" when not running, "Resume" when running+paused, hidden when running+active
+  // btn-start: always Start
   const btnStart = $('btn-start');
+  btnStart.textContent = '▶ Start';
+  btnStart.disabled    = !!running;
+
+  // Pause button toggles Pause/Resume while running
+  const btnPause = $('btn-stop');
+  btnPause.disabled = !running;
   if (!running) {
-    // Not running: show Start (re-initialise)
-    btnStart.textContent = '▶ Start';
-    btnStart.disabled    = false;
+    btnPause.textContent = '⏸ Pause';
+    btnPause.className = 'btn btn-danger  btn-sm';
   } else if (paused) {
-    // Running but paused: show Resume
-    btnStart.textContent = '▶ Resume';
-    btnStart.disabled    = false;
+    btnPause.textContent = '▶ Resume';
+    btnPause.className = 'btn btn-success btn-sm';
   } else {
-    // Running and active: hide Start/Resume
-    btnStart.textContent = '▶ Start';
-    btnStart.disabled    = true;
+    btnPause.textContent = '⏸ Pause';
+    btnPause.className = 'btn btn-danger  btn-sm';
   }
 
-  // Other buttons
-  $('btn-stop').disabled  = !running || paused;  // only when running & active
   $('btn-reset').disabled = !running;             // available in both running states
 }
 
@@ -1794,13 +1794,7 @@ function wireEvents() {
 
   // Client control
   $('btn-start').addEventListener('click', async () => {
-    // If client is running but paused (after Stop/Reset), act as Resume
-    if (App.isPaused) {
-      await sendCommand('resume');
-      toast('Client resumed.', 'ok');
-      return;
-    }
-    // Otherwise full initialisation start
+    if (App.isRunning) return;
     if (Object.keys(App.pendingPatch).length) {
       try {
         await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
@@ -1812,8 +1806,13 @@ function wireEvents() {
 
   $('btn-stop').addEventListener('click', async () => {
     try {
-      await apiFetch('/api/client/stop', { method: 'POST' });
-      toast('Client stopped.', 'warn');
+      if (App.isPaused) {
+        await apiFetch('/api/client/resume', { method: 'POST' });
+        toast('Client resumed.', 'ok');
+      } else {
+        await apiFetch('/api/client/pause', { method: 'POST' });
+        toast('Client paused.', 'warn');
+      }
     } catch (e) { /* toasted */ }
   });
 
