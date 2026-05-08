@@ -551,14 +551,8 @@ class VLAClientAsync():
         self.logger.info('VLA client resumed.')
 
     def stop(self):
-        """Stop inference and robot commands without releasing resources.
-        
-        This method pauses the VLA client by setting is_running_action to False,
-        which stops both the inference pipeline and robot command execution.
-        Resources (ZMQ, WebSocket, threads) are kept alive for potential resume.
-        """
-        self.is_running_action = False
-        self.logger.info('Inference client stopped (paused inference and robot commands).')
+        """Backward-compatible alias of pause()."""
+        self.pause()
 
     def close(self):
         """Close the VLA client and clean up all resources.

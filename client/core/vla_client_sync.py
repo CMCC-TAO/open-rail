@@ -427,23 +427,8 @@ class VLAClientSync():
         self.logger.info('Inference client resumed.')
 
     def stop(self):
-        """Stop the VLA client and wait for threads to finish.
-        
-        This method safely stops the VLA client by setting the running flag to False
-        and waiting for the observation and control threads to finish with a timeout.
-        The inference thread continues running for potential future operations.
-        """
-        with self.thread_lock:
-            self.running = False
-        self.observe_thread.join(timeout=1.0)
-        self.control_thread_timer.join(timeout=1.0)
-
-        if self.config.show_action_cams_qt:
-            self.vis_action_cams_thread.join(timeout=1.0)
-
-        self.data_write_thread.join(timeout=1.0)
-
-        self.logger.info('Inference client stopped.')
+        """Backward-compatible alias of pause()."""
+        self.pause()
 
     def close(self):
         """Close the VLA client and clean up all resources.
