@@ -535,8 +535,21 @@ class VLAClientAsync():
         if self.config.record_exp_data:
             self.data_write_thread.start()
         
-        self.logger.info('Inference client started.')
+        self.logger.info('VLA client started.')
     
+    def pause(self):
+        """Pause inference and robot commands without releasing resources."""
+        self.is_running_action = False
+        self.logger.info('VLA client paused.')
+
+    def resume(self):
+        """Resume inference and robot commands."""
+        if self.is_running_action:
+            return
+        # self.inference_first()
+        self.is_running_action = True
+        self.logger.info('VLA client resumed.')
+
     def stop(self):
         """Stop inference and robot commands without releasing resources.
         
