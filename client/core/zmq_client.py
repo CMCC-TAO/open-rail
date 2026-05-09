@@ -61,9 +61,13 @@ class ZMQClient():
             return None
 
     def sendMessage(self, data, meta=None):
-        """Send message to the VLA inference server."""
+        """Send message to the VLA inference server.
+
+        Returns:
+            bool: True if sent successfully, False otherwise.
+        """
         if self._closed:
-            return
+            return False
 
         if meta is None:
             meta = {}
@@ -72,16 +76,20 @@ class ZMQClient():
             data = pickle.dumps(data)
             meta = json.dumps(meta).encode('utf8')
             self.dealer.send_multipart([data, meta], flags=zmq.NOBLOCK)
+            return True
         except zmq.ZMQError as e:
-            if self._closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM):
-                return
+            # EAGAIN means HWM/backpressure in non-blocking mode; treat as soft failure.
+            if self._closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM, zmq.EAGAIN):
+                return False
             print(f"Error sending message: {e}")
             import traceback
             traceback.print_exc()
+            return False
         except Exception as e:
             print(f"Error sending message: {e}")
             import traceback
             traceback.print_exc()
+            return False
 
     def close(self):
         """Close the ZMQ client and clean up resources."""

@@ -260,6 +260,9 @@ html, body {
 .btn-xs  { padding: 2px 7px; font-size: 11px; }
 .btn-sm  { padding: 4px 10px; font-size: 12px; }
 .btn-lg  { padding: 7px 20px; font-size: 13px; font-weight: 600; }
+
+/* Keep Start/Stop button width stable while text toggles */
+#btn-start { min-width: 84px; text-align: center; }
 .btn-primary { background: rgba(9,105,218,.08); border-color: var(--accent); color: var(--accent); }
 .btn-primary:hover { background: rgba(9,105,218,.16); }
 .btn-success { background: rgba(26,127,55,.08); border-color: var(--success); color: var(--success); }
