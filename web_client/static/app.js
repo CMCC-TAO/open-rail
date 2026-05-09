@@ -317,6 +317,16 @@ function renderStats(data) {
   $('val-traj-time').textContent   = data.avg_traj_time != null
     ? (data.avg_traj_time * 1000).toFixed(1) + ' ms' : '–';
 
+  const cpuVal = Number(data.cpu_usage);
+  const gpuVal = Number(data.gpu_usage);
+  const memVal = Number(data.mem_usage);
+  const cpuEl = $('val-cpu-usage');
+  const gpuEl = $('val-gpu-usage');
+  const memEl = $('val-mem-usage');
+  if (cpuEl) cpuEl.textContent = `CPU ${Number.isFinite(cpuVal) ? cpuVal.toFixed(1) + '%' : '--'}`;
+  if (gpuEl) gpuEl.textContent = `GPU ${Number.isFinite(gpuVal) ? gpuVal.toFixed(1) + '%' : '--'}`;
+  if (memEl) memEl.textContent = `MEM ${Number.isFinite(memVal) ? memVal.toFixed(1) + '%' : '--'}`;
+
   // Use default joint values when client is not running and no real data available
   const stateVals  = (data.current_state  && data.current_state.length)  ? data.current_state  : getDefaultState();
   const actionVals = (data.current_action && data.current_action.length) ? data.current_action : getDefaultAction();
