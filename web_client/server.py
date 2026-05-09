@@ -14,6 +14,8 @@ import asyncio
 import json
 import logging
 import logging.config
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -21,6 +23,13 @@ import traceback
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
+
+try:
+    import psutil
+    _HAS_PSUTIL = True
+except Exception:
+    psutil = None
+    _HAS_PSUTIL = False
 
 try:
     import yaml as _yaml
@@ -100,6 +109,132 @@ class ClientState:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
 state = ClientState()
+
+_RESOURCE_CACHE = {
+    "ts": 0.0,
+    "data": {
+        "cpu_usage": None,
+        "gpu_usage": None,
+        "mem_usage": None,
+    }
+}
+_LAST_CPU_STAT = None
+_HAS_NVIDIA_SMI = shutil.which("nvidia-smi") is not None
+
+
+def _read_linux_cpu_usage() -> Optional[float]:
+    """Read CPU usage percentage from /proc/stat without extra dependencies."""
+    global _LAST_CPU_STAT
+    try:
+        with open("/proc/stat", "r", encoding="utf-8") as f:
+            line = f.readline().strip()
+        parts = line.split()
+        if len(parts) < 8 or parts[0] != "cpu":
+            return None
+        vals = [int(x) for x in parts[1:8]]
+        idle = vals[3] + vals[4]
+        total = sum(vals)
+        if _LAST_CPU_STAT is None:
+            _LAST_CPU_STAT = (idle, total)
+            return None
+        prev_idle, prev_total = _LAST_CPU_STAT
+        _LAST_CPU_STAT = (idle, total)
+        total_delta = total - prev_total
+        idle_delta = idle - prev_idle
+        if total_delta <= 0:
+            return None
+        usage = (1.0 - (idle_delta / total_delta)) * 100.0
+        return max(0.0, min(100.0, usage))
+    except Exception:
+        return None
+
+
+def _read_linux_mem_usage() -> Optional[float]:
+    """Read memory usage percentage from /proc/meminfo."""
+    try:
+        mem_total = None
+        mem_available = None
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    mem_total = float(line.split()[1])
+                elif line.startswith("MemAvailable:"):
+                    mem_available = float(line.split()[1])
+                if mem_total is not None and mem_available is not None:
+                    break
+        if not mem_total or mem_available is None:
+            return None
+        usage = (1.0 - mem_available / mem_total) * 100.0
+        return max(0.0, min(100.0, usage))
+    except Exception:
+        return None
+
+
+def _read_gpu_usage() -> Optional[float]:
+    """Read average GPU utilization from nvidia-smi (if available)."""
+    try:
+        if not _HAS_NVIDIA_SMI:
+            return None
+        proc = subprocess.run(
+            ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=0.25,
+            check=False,
+        )
+        if proc.returncode != 0:
+            return None
+        vals = []
+        for line in proc.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                vals.append(float(line))
+            except Exception:
+                continue
+        if not vals:
+            return None
+        usage = sum(vals) / len(vals)
+        return max(0.0, min(100.0, usage))
+    except Exception:
+        return None
+
+
+def _collect_resource_stats() -> dict:
+    """Collect resource stats with 1s cache to reduce overhead."""
+    now = time.time()
+    if now - _RESOURCE_CACHE["ts"] < 1.0:
+        return _RESOURCE_CACHE["data"]
+
+    cpu_usage = None
+    mem_usage = None
+
+    if _HAS_PSUTIL and psutil is not None:
+        try:
+            cpu_usage = float(psutil.cpu_percent(interval=None))
+        except Exception:
+            cpu_usage = None
+        try:
+            mem_usage = float(psutil.virtual_memory().percent)
+        except Exception:
+            mem_usage = None
+
+    if cpu_usage is None:
+        cpu_usage = _read_linux_cpu_usage()
+    if mem_usage is None:
+        mem_usage = _read_linux_mem_usage()
+
+    gpu_usage = _read_gpu_usage()
+
+    data = {
+        "cpu_usage": round(cpu_usage, 1) if cpu_usage is not None else None,
+        "gpu_usage": round(gpu_usage, 1) if gpu_usage is not None else None,
+        "mem_usage": round(mem_usage, 1) if mem_usage is not None else None,
+    }
+    _RESOURCE_CACHE["ts"] = now
+    _RESOURCE_CACHE["data"] = data
+    return data
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -288,9 +423,14 @@ def _collect_stats() -> dict:
         "info_act": {},
         "debug_info": "",
         "config_snapshot": {},
+        "cpu_usage": None,
+        "gpu_usage": None,
+        "mem_usage": None,
     }
     with state.lock:
         vc = state.vla_client
+    base.update(_collect_resource_stats())
+
     if vc is None:
         return base
 

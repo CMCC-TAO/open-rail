@@ -132,6 +132,20 @@ html, body {
 }
 .replay-path-display:not(:empty) { border-color: var(--border); background: var(--bg); }
 
+/* Monitor resource usage group */
+.monitor-resource-group { gap: 4px; }
+.resource-pill {
+  font-size: 10px;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 1px 6px;
+  line-height: 16px;
+  min-width: 64px;
+  text-align: center;
+}
+
 /* Language Command panel */
 .panel-lang {
   flex: 0 0 auto;
