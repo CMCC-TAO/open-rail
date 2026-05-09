@@ -618,7 +618,7 @@ class VLAClientAsync():
                 # self.inferenceFirstThreadFun()
                 time.sleep(self.config.sleep_time)
             # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
-            symbol = '=' * 10
+            # symbol = '=' * 10
 
     def vis_action_state(self, action_fitted, vel_fitted, acc_fitted, action_raw, current_state):
         """

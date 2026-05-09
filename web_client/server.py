@@ -119,7 +119,8 @@ _RESOURCE_CACHE = {
     }
 }
 _LAST_CPU_STAT = None
-_HAS_NVIDIA_SMI = shutil.which("nvidia-smi") is not None
+_NVIDIA_SMI_BIN = shutil.which("nvidia-smi")
+_HAS_NVIDIA_SMI = _NVIDIA_SMI_BIN is not None
 
 
 def _read_linux_cpu_usage() -> Optional[float]:
@@ -170,33 +171,47 @@ def _read_linux_mem_usage() -> Optional[float]:
         return None
 
 
+def _parse_gpu_util_lines(raw_text: str) -> list[float]:
+    vals: list[float] = []
+    for line in raw_text.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        line = line.replace("%", "").strip()
+        try:
+            vals.append(float(line))
+        except Exception:
+            continue
+    return vals
+
+
 def _read_gpu_usage() -> Optional[float]:
-    """Read average GPU utilization from nvidia-smi (if available)."""
+    """Read average GPU utilization from NVIDIA GPUs via nvidia-smi."""
     try:
-        if not _HAS_NVIDIA_SMI:
+        if not _HAS_NVIDIA_SMI or not _NVIDIA_SMI_BIN:
             return None
-        proc = subprocess.run(
-            ["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
-            capture_output=True,
-            text=True,
-            timeout=0.25,
-            check=False,
-        )
-        if proc.returncode != 0:
-            return None
-        vals = []
-        for line in proc.stdout.splitlines():
-            line = line.strip()
-            if not line:
+
+        # Prefer nounits format; fallback to plain csv for older drivers/toolchains.
+        cmd_list = [
+            [_NVIDIA_SMI_BIN, "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits"],
+            [_NVIDIA_SMI_BIN, "--query-gpu=utilization.gpu", "--format=csv,noheader"],
+        ]
+
+        for cmd in cmd_list:
+            proc = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=1.0,
+                check=False,
+            )
+            if proc.returncode != 0:
                 continue
-            try:
-                vals.append(float(line))
-            except Exception:
-                continue
-        if not vals:
-            return None
-        usage = sum(vals) / len(vals)
-        return max(0.0, min(100.0, usage))
+            vals = _parse_gpu_util_lines(proc.stdout)
+            if vals:
+                usage = sum(vals) / len(vals)
+                return max(0.0, min(100.0, usage))
+        return None
     except Exception:
         return None
 
