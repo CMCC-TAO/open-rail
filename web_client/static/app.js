@@ -88,8 +88,9 @@ const App = {
     selectedJoints: new Set(),
     // Data buffer: { 'state': [{x, joints_y}, ...], 'action': [{x, joints_y}, ...] }
     buffer: { state: [], action: [] },
-    // step counter (x-axis)
-    stepCounter: 0,
+    // Time axis baseline and monotonic guard (x-axis in seconds)
+    startTimeSec: null,
+    lastX: 0,
     // x window bounds
     xLeft: 0, xRight: 0,
     // Single unified Chart.js instance
@@ -262,13 +263,13 @@ async function decodeCameraBinaryFrame(raw) {
 function handleCamWSMessage(msg) {
   if (!msg || msg.type !== 'joint_data' || !msg.data) return;
 
-  const { tab, type, joints_y } = msg.data;
+  const { tab, type, joints_y, timestamp } = msg.data;
   if (tab !== 'position' || !Array.isArray(joints_y) || joints_y.length === 0) return;
 
   if (type === 'state') {
-    ingestTrajData(joints_y, []);
+    ingestTrajData(joints_y, [], timestamp);
   } else if (type === 'action') {
-    ingestTrajData([], joints_y);
+    ingestTrajData([], joints_y, timestamp);
   }
 }
 
@@ -324,8 +325,11 @@ function renderStats(data) {
 
   $('debug-info').textContent = data.debug_info || '';
 
-  // Feed trajectory chart (only real data, not defaults)
-  ingestTrajData(data.current_state || [], data.current_action || []);
+  // Feed trajectory chart from stats only when visual WS stream is unavailable.
+  // Avoid mixing two data sources (different timestamps/rates), which causes jitter.
+  if (!App.camWsAlive) {
+    ingestTrajData(data.current_state || [], data.current_action || []);
+  }
 }
 
 function renderKV(containerId, obj) {
@@ -1500,7 +1504,7 @@ function _applyChipColor(chip, active, color) {
 }
 
 /* ── Ingest new data point ── */
-function ingestTrajData(stateArr, actionArr) {
+function ingestTrajData(stateArr, actionArr, timestampSec = null) {
   if (App.traj.paused) return;
   const n = Math.max(stateArr.length, actionArr.length);
   if (n === 0) return;
@@ -1508,8 +1512,14 @@ function ingestTrajData(stateArr, actionArr) {
   // Build selector if numJoints changed
   buildJointSelector(n);
 
-  const t   = App.traj;
-  const x   = ++t.stepCounter;
+  const t = App.traj;
+  const nowSec = Number.isFinite(Number(timestampSec)) ? Number(timestampSec) : (Date.now() / 1000);
+  if (t.startTimeSec == null) t.startTimeSec = nowSec;
+
+  let x = nowSec - t.startTimeSec;
+  if (!Number.isFinite(x) || x < 0) x = t.lastX;
+  if (x < t.lastX) x = t.lastX;
+  t.lastX = x;
 
   if (stateArr.length > 0) {
     t.buffer.state.push({ x, joints_y: stateArr.slice() });
@@ -1520,16 +1530,21 @@ function ingestTrajData(stateArr, actionArr) {
     if (t.buffer.action.length > MAX_CHART_POINTS) t.buffer.action.shift();
   }
 
-  // Update x window
-  const stateRight  = t.buffer.state.length  ? t.buffer.state[t.buffer.state.length - 1].x   : -Infinity;
-  const actionRight = t.buffer.action.length ? t.buffer.action[t.buffer.action.length - 1].x : -Infinity;
-  const stateLeft   = t.buffer.state.length  ? t.buffer.state[0].x   : -Infinity;
-  const actionLeft  = t.buffer.action.length ? t.buffer.action[0].x : -Infinity;
-  const span  = Math.max(stateRight - stateLeft, actionRight - actionLeft);
-  const right = Math.max(stateRight, actionRight);
-  if (Number.isFinite(right)) {
-    t.xRight = right;
-    if (span > 0) t.xLeft = right - span;
+  // Dynamic x window based on current buffered data time-span (finite-only)
+  const stateRight  = t.buffer.state.length  ? t.buffer.state[t.buffer.state.length - 1].x : undefined;
+  const actionRight = t.buffer.action.length ? t.buffer.action[t.buffer.action.length - 1].x : undefined;
+  const stateLeft   = t.buffer.state.length  ? t.buffer.state[0].x : undefined;
+  const actionLeft  = t.buffer.action.length ? t.buffer.action[0].x : undefined;
+
+  const leftCandidates = [stateLeft, actionLeft].filter(Number.isFinite);
+  const rightCandidates = [stateRight, actionRight].filter(Number.isFinite);
+  if (leftCandidates.length && rightCandidates.length) {
+    const left = Math.min(...leftCandidates);
+    const right = Math.max(...rightCandidates);
+    if (right >= left) {
+      t.xLeft = left;
+      t.xRight = right;
+    }
   }
 
   t.dirty = true;
@@ -1539,11 +1554,9 @@ function ingestTrajData(stateArr, actionArr) {
 function getJointSeriesData(bufferKey, jointIdx) {
   const buf = App.traj.buffer[bufferKey];
   if (!buf || buf.length === 0) return [];
-  const { xLeft: left, xRight: right } = App.traj;
-  const visible = (Number.isFinite(left) && Number.isFinite(right) && right > left)
-    ? buf.filter(p => p.x >= left && p.x <= right)
-    : buf;
-  return visible.map(p => ({ x: p.x, y: p.joints_y[jointIdx] }));
+  // Do not filter by x-window here; Chart.js x.min/x.max handles clipping.
+  // This avoids per-refresh full-buffer filtering overhead and improves smoothness.
+  return buf.map(p => ({ x: p.x, y: p.joints_y[jointIdx] }));
 }
 
 /* ── Rebuild all datasets in the unified chart ── */
@@ -1667,7 +1680,8 @@ function setupTrajPanel() {
   // Clear
   $('btn-traj-clear').addEventListener('click', () => {
     App.traj.buffer = { state: [], action: [] };
-    App.traj.stepCounter = 0;
+    App.traj.startTimeSec = null;
+    App.traj.lastX = 0;
     App.traj.xLeft = 0; App.traj.xRight = 0;
     App.traj.dirty = true;
     refreshUnifiedChart();
