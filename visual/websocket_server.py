@@ -102,6 +102,8 @@ class VLAWebSocketServer:
             # 保持队列大小，避免内存溢出
             if len(self.data_send_queue) > 1000:
                 self.data_send_queue = self.data_send_queue[-500:]
+        
+        # print(f"chart_data: {self.data_send_queue}")
     
     async def register_client(self, websocket):
         """注册新客户端"""

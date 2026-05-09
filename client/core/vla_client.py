@@ -335,8 +335,9 @@ class VLAClientAsync():
                 self.dataset_write.async_write_action(action_fitted, time.perf_counter())
             
             self.info_act['action'] = action_fitted.shape
-            
-            self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw)
+
+        current_state = getattr(self.robot, 'current_state', None)
+        self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw, current_state)
 
     @run_time_decorator
     def _traj_fitting(self, num_samples):
@@ -619,84 +620,91 @@ class VLAClientAsync():
             # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
             symbol = '=' * 10
 
-    def vis_action_state(self, action_fitted, vel_fitted, acc_fitted, action_raw):
+    def vis_action_state(self, action_fitted, vel_fitted, acc_fitted, action_raw, current_state):
         """
         Visualize action and state data for debugging and monitoring.
-        
+
         Args:
             action_fitted: Predicted action values for robot joints
             vel_fitted: Predicted velocity values (of action_fitted) for robot joints
             acc_fitted: Predicted acceleration values (of action_fitted) for robot joints
             action_raw: Raw action values before fitting
+            current_state: Current robot joint state
         """
-        # Convert to numpy arrays once (action_fitted/vel_fitted/acc_fitted are already numpy arrays)
-        action_np = np.asarray(action_fitted)
-        action_vel = np.asarray(vel_fitted)
-        action_acc = np.asarray(acc_fitted)
-        state_np = np.asarray(self.robot.current_state)
-        
+        # Convert non-None inputs to numpy arrays
+        action_np = np.asarray(action_fitted) if action_fitted is not None else None
+        action_vel = np.asarray(vel_fitted) if vel_fitted is not None else None
+        action_acc = np.asarray(acc_fitted) if acc_fitted is not None else None
+        state_np = np.asarray(current_state) if current_state is not None else None
+
         # Control period in seconds
         dt_ctrl = self.config.controller.period / 1000.0
-        
-        # Build position data for action and state
-        list_data = [
-            {
+
+        list_data = []
+
+        # Position data
+        if action_np is not None:
+            list_data.append({
                 'tab': 'position',
                 'type': 'action',
                 'x': self.vis_global_step,
                 'joints_y': action_np.tolist()
-            },
-            {
+            })
+        if state_np is not None:
+            list_data.append({
                 'tab': 'position',
                 'type': 'state',
                 'x': self.vis_global_step,
                 'joints_y': state_np.tolist()
-            }
-        ]
+            })
 
-        # Calculate robot state velocity and acceleration using finite difference
-        if self.vis_prev_state is None:
-            state_vel = np.zeros_like(state_np)
-            state_acc = np.zeros_like(state_np)
-        else:
-            state_vel = (state_np - self.vis_prev_state) / dt_ctrl
-            if self.vis_prev_state_vel is None:
+        # Velocity/acceleration for state (derived from state)
+        state_vel = None
+        state_acc = None
+        if state_np is not None:
+            if self.vis_prev_state is None:
+                state_vel = np.zeros_like(state_np)
                 state_acc = np.zeros_like(state_np)
             else:
-                state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
+                state_vel = (state_np - self.vis_prev_state) / dt_ctrl
+                if self.vis_prev_state_vel is None:
+                    state_acc = np.zeros_like(state_np)
+                else:
+                    state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
 
-        # Add velocity and acceleration data for action and state
-        list_data.extend([
-            {
-                'tab': 'velocity',
-                'type': 'action',
-                'x': self.vis_global_step,
-                'joints_y': action_vel.tolist()
-            },
-            {
+            list_data.append({
                 'tab': 'velocity',
                 'type': 'state',
                 'x': self.vis_global_step,
                 'joints_y': state_vel.tolist()
-            },
-            {
-                'tab': 'acceleration',
-                'type': 'action',
-                'x': self.vis_global_step,
-                'joints_y': action_acc.tolist()
-            },
-            {
+            })
+            list_data.append({
                 'tab': 'acceleration',
                 'type': 'state',
                 'x': self.vis_global_step,
                 'joints_y': state_acc.tolist()
-            },
-        ])
+            })
 
-        # Calculate origin (raw action) velocity and acceleration
-        # Origin data is sampled at observer frequency, so use observer.period for dt
+        # Velocity/acceleration for action (direct input)
+        if action_vel is not None:
+            list_data.append({
+                'tab': 'velocity',
+                'type': 'action',
+                'x': self.vis_global_step,
+                'joints_y': action_vel.tolist()
+            })
+        if action_acc is not None:
+            list_data.append({
+                'tab': 'acceleration',
+                'type': 'action',
+                'x': self.vis_global_step,
+                'joints_y': action_acc.tolist()
+            })
+
+        # Origin (raw action) series
         origin_idx = self.vis_idx_count // int(self.vis_ratio) + 4
-        if (self.vis_idx_count % int(self.vis_ratio) == 0 and origin_idx < len(self.vis_origin_chunk_action)):
+        has_origin_chunk = self.vis_origin_chunk_action is not None
+        if action_raw is not None and has_origin_chunk and (self.vis_idx_count % int(self.vis_ratio) == 0 and origin_idx < len(self.vis_origin_chunk_action)):
             origin_np = np.asarray(action_raw)
             list_data.append({
                 'tab': 'position',
@@ -704,11 +712,8 @@ class VLAClientAsync():
                 'x': self.vis_global_step,
                 'joints_y': origin_np.tolist()
             })
-            
-            # Use observer period for origin velocity/acceleration calculation
-            # This is the actual time between consecutive origin samples
+
             dt_origin = self.config.observer.period
-            
             if self.vis_prev_origin is None:
                 origin_vel = np.zeros_like(origin_np)
                 origin_acc = np.zeros_like(origin_np)
@@ -719,33 +724,36 @@ class VLAClientAsync():
                 else:
                     origin_acc = (origin_vel - self.vis_prev_origin_vel) / dt_origin
 
-            list_data.extend([
-                {
-                    'tab': 'velocity',
-                    'type': 'origin',
-                    'x': self.vis_global_step,
-                    'joints_y': origin_vel.tolist()
-                },
-                {
-                    'tab': 'acceleration',
-                    'type': 'origin',
-                    'x': self.vis_global_step,
-                    'joints_y': origin_acc.tolist()
-                }
-            ])
+            list_data.append({
+                'tab': 'velocity',
+                'type': 'origin',
+                'x': self.vis_global_step,
+                'joints_y': origin_vel.tolist()
+            })
+            list_data.append({
+                'tab': 'acceleration',
+                'type': 'origin',
+                'x': self.vis_global_step,
+                'joints_y': origin_acc.tolist()
+            })
             self.vis_prev_origin = origin_np
             self.vis_prev_origin_vel = origin_vel
             self.vis_prev_origin_idx = origin_idx
 
-        # Update previous state for next iteration
-        self.vis_prev_action = action_np
-        self.vis_prev_action_vel = action_vel
-        self.vis_prev_state = state_np
-        self.vis_prev_state_vel = state_vel
-        
-        self.websocket_server.update_chart_data(list_data)
-        self.vis_global_step += 1
-        self.vis_idx_count += 1
+        if list_data:
+            self.websocket_server.update_chart_data(list_data)
+            self.vis_global_step += 1
+            self.vis_idx_count += 1
+
+        # Update previous values only for available inputs
+        if action_np is not None:
+            self.vis_prev_action = action_np
+        if action_vel is not None:
+            self.vis_prev_action_vel = action_vel
+        if state_np is not None:
+            self.vis_prev_state = state_np
+        if state_vel is not None:
+            self.vis_prev_state_vel = state_vel
 
     def send_action_cams_to_vis_server(self):
         """
