@@ -191,8 +191,11 @@ class VLAClientSync():
             self.rdm.add_infer_count()
             
             # Send data for inference and wait for results
-            self.vla_zmq.sendMessage(data)
+            if not self.vla_zmq.sendMessage(data):
+                return
             result = self.vla_zmq.recvMessage()
+            if result is None or 'data' not in result:
+                return
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
@@ -460,6 +463,11 @@ class VLAClientSync():
             self.dataset_write.close()
         
         self.vla_zmq.close()
+        if self.config.show_action_cams_qt:
+            try:
+                self.vis_action_cams_zmq.close()
+            except Exception:
+                pass
         self.websocket_server.stop_server()
 
         # close file IO writer

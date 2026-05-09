@@ -11,6 +11,7 @@
  *   POST /api/config/save_file   { path: "..." }
  *   GET  /api/client/status
  *   POST /api/client/start
+ *   POST /api/client/stop
  *   POST /api/client/pause
  *   POST /api/client/resume
  *   POST /api/client/command     { command, params }
@@ -375,11 +376,11 @@ function renderJointsGrouped(side, values) {
  * @param {boolean} paused   - Whether inference/robot commands are stopped (is_running_action=False).
  *
  * Button availability matrix:
- *   State            | Start | Pause/Resume | Reset
- *   -----------------+-------+--------------+------
- *   Not running      |  ✓    |  ✗           |  ✗
- *   Running (active) |  ✗    |  Pause       |  ✓
- *   Running (paused) |  ✗    |  Resume      |  ✓
+ *   State            | Start/Stop | Pause/Resume | Reset
+ *   -----------------+------------+--------------+------
+ *   Not running      |  Start     |  ✗           |  ✗
+ *   Running (active) |  Stop      |  Pause       |  ✓
+ *   Running (paused) |  Stop      |  Resume      |  ✓
  */
 function setRunningUI(running, paused = false) {
   if (App.isRunning === running && App.isPaused === paused) return;
@@ -405,10 +406,16 @@ function setRunningUI(running, paused = false) {
   $('status-badge').textContent = badgeText;
   $('status-badge').className   = `status-badge ${badgeClass}`;
 
-  // btn-start: always Start
+  // btn-start toggles Start/Stop
   const btnStart = $('btn-start');
-  btnStart.textContent = '▶ Start';
-  btnStart.disabled    = !!running;
+  if (running) {
+    btnStart.textContent = '■ Stop';
+    btnStart.className = 'btn btn-danger btn-sm';
+  } else {
+    btnStart.textContent = '▶ Start';
+    btnStart.className = 'btn btn-success btn-sm';
+  }
+  btnStart.disabled = false;
 
   // Pause button toggles Pause/Resume while running
   const btnPause = $('btn-pause');
@@ -1794,7 +1801,10 @@ function wireEvents() {
 
   // Client control
   $('btn-start').addEventListener('click', async () => {
-    if (App.isRunning) return;
+    if (App.isRunning) {
+      try { await apiFetch('/api/client/stop', { method: 'POST' }); } catch (e) { /* toasted */ }
+      return;
+    }
     if (Object.keys(App.pendingPatch).length) {
       try {
         await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });

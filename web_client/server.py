@@ -708,26 +708,42 @@ async def resume_client():
 
 @app.post("/api/client/stop")
 async def stop_client():
-    """Backward-compatible alias of pause."""
-    return await pause_client()
+    """Fully stop client threads and release all resources."""
+    with state.lock:
+        is_active = state.running or (state.vla_client is not None)
+        state.running = False
+    if not is_active:
+        raise HTTPException(400, "Client is not running.")
+
+    await asyncio.to_thread(_cleanup)
+    await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped and all resources released."}})
+    return {"status": "ok"}
 
 
 def _cleanup():
-    vc = state.vla_client
-    # robot = state.robot
+    global robot_instance
+
+    with state.lock:
+        vc = state.vla_client
+        robot = state.robot
+        state.vla_client = None
+        state.robot = None
+        state.running = False
+
     if vc is not None:
         try:
             vc.close()
         except Exception:
             pass
-    # if robot is not None:
-    #     try:
-    #         robot.close()
-    #     except Exception:
-    #         pass
-    state.vla_client = None
-    state.robot = None
-    state.running = False
+
+    if robot is not None:
+        try:
+            robot.close()
+        except Exception:
+            pass
+
+    if robot_instance is robot:
+        robot_instance = None
 
 
 @app.get("/api/client/status")
@@ -759,7 +775,7 @@ async def client_command(req: CommandRequest):
             _pause_vla_client(vc)
             robot.reset_robot(mode='default')
             _resume_vla_client(vc)
-            await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Robot reset complete, client resumed."}})
+            await _broadcast({"type": "status", "data": {"running": state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
 
         elif cmd == "resume":
             _resume_vla_client(vc)
