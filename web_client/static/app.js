@@ -177,6 +177,13 @@ function connectCamWS() {
   App.camWs.onmessage = (ev) => {
     if (ev.data instanceof ArrayBuffer || ev.data instanceof Blob) {
       decodeCameraBinaryFrame(ev.data);
+      return;
+    }
+
+    if (typeof ev.data === 'string') {
+      try {
+        handleCamWSMessage(JSON.parse(ev.data));
+      } catch (e) { /* ignore malformed text frame */ }
     }
   };
 
@@ -250,6 +257,19 @@ async function decodeCameraBinaryFrame(raw) {
       handleCameraFrame(Number(cameraId), imageData);
     }
   } catch (e) { /* malformed frame, ignore */ }
+}
+
+function handleCamWSMessage(msg) {
+  if (!msg || msg.type !== 'joint_data' || !msg.data) return;
+
+  const { tab, type, joints_y } = msg.data;
+  if (tab !== 'position' || !Array.isArray(joints_y) || joints_y.length === 0) return;
+
+  if (type === 'state') {
+    ingestTrajData(joints_y, []);
+  } else if (type === 'action') {
+    ingestTrajData([], joints_y);
+  }
 }
 
 function updateWSIndicator(connected) {
