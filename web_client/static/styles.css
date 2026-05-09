@@ -142,8 +142,13 @@ html, body {
   background: var(--bg);
   padding: 1px 6px;
   line-height: 16px;
-  min-width: 64px;
+  width: 84px;
+  min-width: 84px;
+  max-width: 84px;
+  flex: 0 0 84px;
   text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Language Command panel */
