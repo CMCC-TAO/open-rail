@@ -31,8 +31,8 @@ const CAM_WS_RECONNECT = 3000;
 
 // Max data points per series (mirrors visual/app.js maxChartPoints)
 const MAX_CHART_POINTS  = 1500;
-// Chart update interval in ms (20 FPS, same as visual/)
-const CHART_UPDATE_MS   = 50;
+// Default trajectory chart update interval in ms (20 FPS)
+const DEFAULT_TRAJ_UPDATE_MS = 50;
 
 // Per-joint colour palette (14 colours, one per joint L0-L6 R0-R6)
 const JOINT_COLORS = [
@@ -76,6 +76,7 @@ const App = {
 
   // Camera open/close state — default all closed
   camOpen: [false, false, false],
+  cameraConnectWhenRunning: true,
 
   // ── Trajectory chart state ──
   traj: {
@@ -96,8 +97,9 @@ const App = {
     xLeft: 0, xRight: 0,
     // Single unified Chart.js instance
     chart: null,
-    // Dirty flag → batch updates at CHART_UPDATE_MS
+    // Dirty flag → batch updates at configured interval
     dirty: false,
+    updateIntervalMs: DEFAULT_TRAJ_UPDATE_MS,
     updateTimer: null,
     lastUpdateAt: 0,
   },
@@ -422,8 +424,8 @@ function setRunningUI(running, paused = false) {
   App.isRunning = running;
   App.isPaused  = paused;
 
-  // Camera Visual: connect dedicated WS server only when client is running
-  if (running) connectCamWS();
+  // Camera Visual: connect dedicated WS server only when enabled and running
+  if (running && App.cameraConnectWhenRunning) connectCamWS();
   else disconnectCamWS();
 
   // Status badge
@@ -494,7 +496,7 @@ const CONFIG_SELECT_OPTIONS = {
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
   'fitting_num_samples', 'search_length', 'smooth_length', 'gripper_offset',
-  'fps', 'height', 'width',
+  'fps', 'height', 'width', 'update_interval_ms',
 ]);
 
 function renderConfigTree(cfg) {
@@ -614,7 +616,8 @@ function buildTree(obj, prefix, parentEl) {
   // List the keys in the order you want them to appear.
   // Keys not listed here will appear at the end in their original order.
   const CUSTOM_GROUP_ORDER = [
-    'robots', // Move ROBOTS to the top of the sub-groups (immediately after BASIC)
+    'robots',
+    'visual',
     // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
   ];
 
@@ -1123,6 +1126,86 @@ async function initConfDir() {
   } catch (_) { /* fallback to 'conf' */ }
 }
 
+function _toBool(v, fallback) {
+  return typeof v === 'boolean' ? v : fallback;
+}
+
+function _toInt(v, fallback, min = null) {
+  const n = parseInt(v, 10);
+  if (!Number.isFinite(n)) return fallback;
+  if (min != null && n < min) return min;
+  return n;
+}
+
+function applyVisualConfig(cfg = App.config) {
+  const visualCfg = (cfg && typeof cfg === 'object') ? (cfg.visual || {}) : {};
+
+  const camCfg = (visualCfg.camera && typeof visualCfg.camera === 'object') ? visualCfg.camera : {};
+  const trajCfg = (visualCfg.trajectory && typeof visualCfg.trajectory === 'object') ? visualCfg.trajectory : {};
+
+  App.cameraConnectWhenRunning = _toBool(camCfg.connect_when_running, true);
+  camState.updateInterval = _toInt(camCfg.update_interval_ms, camState.updateInterval || 33, 16);
+  restartCameraUpdateTimer();
+
+  const camOpenCfg = Array.isArray(camCfg.default_open) ? camCfg.default_open : App.camOpen;
+  const nextCamOpen = [0, 1, 2].map(i => !!camOpenCfg[i]);
+  for (let i = 0; i < 3; i++) {
+    if (App.camOpen[i] !== nextCamOpen[i]) toggleCamera(i);
+  }
+  const camAllBtn = $('btn-cam-all-toggle');
+  if (camAllBtn) {
+    const allOn = App.camOpen.every(v => v);
+    camAllBtn.textContent = allOn ? '⏸ Close All' : '▶ Open All';
+    camAllBtn.className = allOn ? 'btn btn-xs btn-danger' : 'btn btn-xs btn-success';
+  }
+
+  App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
+  App.traj.updateIntervalMs = _toInt(trajCfg.update_interval_ms, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
+
+  if (Array.isArray(trajCfg.default_source)) {
+    const source = new Set();
+    trajCfg.default_source.forEach(k => {
+      if (k === 'state' || k === 'action') source.add(k);
+    });
+    if (source.size > 0) App.traj.source = source;
+  }
+
+  if (Array.isArray(trajCfg.default_selected_joints)) {
+    const joints = trajCfg.default_selected_joints
+      .map(v => parseInt(v, 10))
+      .filter(v => Number.isFinite(v) && v >= 0 && v < TRAJ_JOINT_COUNT);
+    if (joints.length > 0) App.traj.selectedJoints = new Set(joints);
+  }
+
+  document.querySelectorAll('.joint-sel-chip').forEach(chip => {
+    const idx = parseInt(chip.dataset.idx, 10);
+    const active = App.traj.selectedJoints.has(idx);
+    chip.classList.toggle('active', active);
+    _applyChipColor(chip, active, JOINT_COLORS[idx]);
+  });
+
+  const btnState = $('btn-traj-state');
+  const btnAction = $('btn-traj-action');
+  const btnPlay = $('btn-traj-pause');
+  if (btnState) btnState.className = 'btn btn-xs' + (App.traj.source.has('state') ? ' btn-active' : '');
+  if (btnAction) btnAction.className = 'btn btn-xs' + (App.traj.source.has('action') ? ' btn-active' : '');
+  if (btnPlay) {
+    btnPlay.innerHTML = App.traj.paused
+      ? '<span class="btn-icon">▶</span> Play'
+      : '<span class="btn-icon">⏸</span> Pause';
+    btnPlay.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
+  }
+
+  startTrajUpdateTimer();
+  App.traj.dirty = true;
+  refreshUnifiedChart();
+
+  if (App.isRunning) {
+    if (App.cameraConnectWhenRunning) connectCamWS();
+    else disconnectCamWS();
+  }
+}
+
 async function loadConfigFromServer() {
   try {
     const res = await apiFetch('/api/config');
@@ -1133,6 +1216,7 @@ async function loadConfigFromServer() {
     if (App.config.language && Array.isArray(App.config.language)) {
       renderLangPresets(App.config.language);
     }
+    applyVisualConfig(App.config);
     // Apply language_task / language_index to lang panel (if lang data already loaded)
     if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
     // Set default path display on startup
@@ -1213,9 +1297,27 @@ const camState = {
   pendingData: {},      // { 0: Uint8Array, 1: Uint8Array, 2: Uint8Array }
   pendingUpdate: false,
   lastUpdateTime: 0,
-  updateInterval: 33,   // 30 FPS
+  updateInterval: 33,
   updateTimer: null,
 };
+
+function restartCameraUpdateTimer() {
+  if (camState.updateTimer) clearInterval(camState.updateTimer);
+  camState.updateTimer = setInterval(() => {
+    if (!camState.pendingUpdate) return;
+    const now = Date.now();
+    if (now - camState.lastUpdateTime < camState.updateInterval) return;
+
+    Object.keys(camState.pendingData).forEach(idx => {
+      const i = Number(idx);
+      if (!App.camOpen[i]) return;
+      updateCameraDisplay(i, camState.pendingData[i]);
+    });
+
+    camState.pendingUpdate = false;
+    camState.lastUpdateTime = now;
+  }, camState.updateInterval);
+}
 
 /** Recalculate and apply grid-template-columns based on current collapsed state. */
 function updateLayoutColumns() {
@@ -1272,21 +1374,7 @@ function setupCameraPanel() {
     updateAllToggleBtn();
   });
 
-  // Start 30FPS render timer (same as visual/app.js cameraUpdateTimer)
-  camState.updateTimer = setInterval(() => {
-    if (!camState.pendingUpdate) return;
-    const now = Date.now();
-    if (now - camState.lastUpdateTime < camState.updateInterval) return;
-
-    Object.keys(camState.pendingData).forEach(idx => {
-      const i = Number(idx);
-      if (!App.camOpen[i]) return;
-      updateCameraDisplay(i, camState.pendingData[i]);
-    });
-
-    camState.pendingUpdate = false;
-    camState.lastUpdateTime = now;
-  }, camState.updateInterval);
+  restartCameraUpdateTimer();
 
   // Apply initial closed state to all cameras
   for (let i = 0; i < 3; i++) _applyCameraClosedState(i);
@@ -1645,14 +1733,19 @@ function refreshUnifiedChart() {
 
 /* ── Batch update timer (50 ms, 20 FPS) ── */
 function startTrajUpdateTimer() {
+  if (App.traj.updateTimer) clearInterval(App.traj.updateTimer);
+  const intervalMs = Number.isFinite(Number(App.traj.updateIntervalMs))
+    ? Math.max(16, Number(App.traj.updateIntervalMs))
+    : DEFAULT_TRAJ_UPDATE_MS;
+
   App.traj.updateTimer = setInterval(() => {
     if (!App.traj.dirty || App.traj.paused) return;
     const now = Date.now();
-    if (now - App.traj.lastUpdateAt < CHART_UPDATE_MS) return;
+    if (now - App.traj.lastUpdateAt < intervalMs) return;
     refreshUnifiedChart();
     App.traj.dirty = false;
     App.traj.lastUpdateAt = now;
-  }, CHART_UPDATE_MS);
+  }, intervalMs);
 }
 
 /* ── Wire trajectory controls ── */
@@ -1785,6 +1878,7 @@ function wireEvents() {
       renderConfigTree(App.config);
       if (App.config.language) renderLangPresets(App.config.language);
       if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
+      applyVisualConfig(App.config);
       // Show relative path from /conf onward
       const display = $('conf-path-display');
       if (display) {
@@ -1829,6 +1923,7 @@ function wireEvents() {
       renderConfigTree(App.config);
       if (App.config.language) renderLangPresets(App.config.language);
       if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
+      applyVisualConfig(App.config);
       toast('Config applied.', 'ok');
       // Auto-save after apply
       const display = $('conf-path-display');
