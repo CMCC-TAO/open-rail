@@ -871,7 +871,7 @@ async def stop_client():
         raise HTTPException(400, "Client is not running.")
 
     await asyncio.to_thread(_cleanup)
-    await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped and all resources released."}})
+    await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped."}})
     return {"status": "ok"}
 
 

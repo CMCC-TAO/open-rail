@@ -81,7 +81,8 @@ const App = {
   traj: {
     // Set<'state'|'action'> — which sources to display (both can be active simultaneously)
     source: new Set(['state']),
-    paused: false,
+    // Default manual mode: do not play until user clicks Play
+    paused: true,
     // Number of joints (determined from first data push)
     numJoints: 0,
     // Which joints to display  Set<number>
@@ -1515,7 +1516,6 @@ function _applyChipColor(chip, active, color) {
 
 /* ── Ingest new data point ── */
 function ingestTrajData(stateArr, actionArr, timestampSec = null) {
-  if (App.traj.paused) return;
   const n = Math.max(stateArr.length, actionArr.length);
   if (n === 0) return;
 
@@ -1678,14 +1678,25 @@ function setupTrajPanel() {
   $('btn-traj-state').addEventListener('click',  () => toggleSource('state'));
   $('btn-traj-action').addEventListener('click', () => toggleSource('action'));
 
-  // Pause
+  // Play/Pause
+  function syncTrajPlayButton() {
+    const btn = $('btn-traj-pause');
+    if (!btn) return;
+    btn.innerHTML = App.traj.paused
+      ? '<span class="btn-icon">▶</span> Play'
+      : '<span class="btn-icon">⏸</span> Pause';
+    btn.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
+  }
+
   $('btn-traj-pause').addEventListener('click', () => {
     App.traj.paused = !App.traj.paused;
-    $('btn-traj-pause').innerHTML = App.traj.paused
-      ? '<span class="btn-icon">▶</span> Play'
-      : '<span class="btn-icon">⏸</span> Play';
-    $('btn-traj-pause').className   = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
+    syncTrajPlayButton();
+    if (!App.traj.paused) {
+      App.traj.dirty = true;
+      refreshUnifiedChart();
+    }
   });
+  syncTrajPlayButton();
 
   // Clear
   $('btn-traj-clear').addEventListener('click', () => {
