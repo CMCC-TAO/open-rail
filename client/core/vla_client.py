@@ -445,7 +445,8 @@ class VLAClientAsync():
             processed_imgs[key] = processed
 
         # Send images to visualization interface
-        self.websocket_server.update_image_data(processed_imgs)
+        camera_cfg = getattr(getattr(self.config, 'visual', None), 'camera', None)
+        self.websocket_server.update_image_data(processed_imgs, camera_cfg)
 
         return encoded_imgs
 

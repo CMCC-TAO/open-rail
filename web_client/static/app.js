@@ -79,7 +79,6 @@ const App = {
 
   // Camera open/close state — default all closed
   camOpen: [false, false, false],
-  cameraConnectWhenRunning: true,
 
   // ── Trajectory chart state ──
   traj: {
@@ -427,8 +426,8 @@ function setRunningUI(running, paused = false) {
   App.isRunning = running;
   App.isPaused  = paused;
 
-  // Camera Visual: connect dedicated WS server only when enabled and running
-  if (running && App.cameraConnectWhenRunning) connectCamWS();
+  // Camera Visual: connect dedicated WS server when running
+  if (running) connectCamWS();
   else disconnectCamWS();
 
   // Status badge
@@ -474,10 +473,7 @@ function setRunningUI(running, paused = false) {
   $('btn-reset').disabled = !running;             // available in both running states
 
   if (!running) {
-    const hasVisualPending = Object.keys(App.pendingPatch).some(k =>
-      k.startsWith('visual.camera.') || k.startsWith('visual.trajectory.')
-    );
-    if (hasVisualPending) schedulePersistVisualState(0);
+    schedulePersistVisualState(0);
   }
 }
 
@@ -510,6 +506,7 @@ const CONFIG_INT_KEYS = new Set([
 ]);
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
+  'visual.camera.connect_when_running',
   'visual.camera.open_head',
   'visual.camera.open_wrist_left',
   'visual.camera.open_wrist_right',
@@ -1227,7 +1224,6 @@ function applyVisualConfig(cfg = App.config) {
   const camCfg = (visualCfg.camera && typeof visualCfg.camera === 'object') ? visualCfg.camera : {};
   const trajCfg = (visualCfg.trajectory && typeof visualCfg.trajectory === 'object') ? visualCfg.trajectory : {};
 
-  App.cameraConnectWhenRunning = _toBool(camCfg.connect_when_running, true);
   camState.updateInterval = _toInt(camCfg.update_interval_ms, camState.updateInterval || 33, 16);
   restartCameraUpdateTimer();
 
@@ -1308,8 +1304,7 @@ function applyVisualConfig(cfg = App.config) {
   refreshUnifiedChart();
 
   if (App.isRunning) {
-    if (App.cameraConnectWhenRunning) connectCamWS();
-    else disconnectCamWS();
+    connectCamWS();
   }
 }
 
@@ -1377,8 +1372,11 @@ async function persistVisualStateNow() {
   syncVisualStateToLocalConfig(patch);
   syncVisualStateToConfigInputs(patch);
 
-  Object.assign(App.pendingPatch, patch);
-  markPending();
+  // Visual panel changes are auto-applied; never show "unsaved changes" for them.
+  Object.keys(App.pendingPatch)
+    .filter(k => k.startsWith('visual.camera.') || k.startsWith('visual.trajectory.'))
+    .forEach(k => delete App.pendingPatch[k]);
+  if (!Object.keys(App.pendingPatch).length) clearPending();
 
   if (App.isRunning || _visualPersistInFlight) return;
 
@@ -1390,16 +1388,13 @@ async function persistVisualStateNow() {
     });
     App.config = res.config || App.config;
 
-    Object.keys(patch).forEach(k => delete App.pendingPatch[k]);
-    if (!Object.keys(App.pendingPatch).length) clearPending();
-
     const display = $('conf-path-display');
     const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
     if (path) {
       await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
     }
   } catch (_) {
-    // keep pendingPatch for manual apply when not running
+    // no-op: visual state already effective in UI
   } finally {
     _visualPersistInFlight = false;
   }

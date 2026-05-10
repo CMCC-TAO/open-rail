@@ -6,7 +6,6 @@ def get_visual_config():
     config = ConfigDict()
 
     config.camera = ConfigDict()
-    config.camera.connect_when_running = True
     config.camera.open_head = False
     config.camera.open_wrist_left = False
     config.camera.open_wrist_right = False

@@ -41,6 +41,7 @@ class VLAWebSocketServer:
         # 数据存储
         self.latest_imgs: Optional[Dict] = None
         self.latest_chart_data: List[Dict] = []
+        self.camera_open = {0: True, 1: True, 2: True}  # 0=head, 1=left wrist, 2=right wrist
         self.data_lock = threading.Lock()
         
         # 数据发送队列
@@ -76,12 +77,16 @@ class VLAWebSocketServer:
         )
         http_thread.start()
         
-    def update_image_data(self, imgs: Dict):
+    def update_image_data(self, imgs: Dict, camera_cfg=None):
         """更新图像数据
-        
+
         Args:
             imgs (Dict): 图像数据，key为摄像头标识，value为图像数据
+            camera_cfg: 相机显示配置，支持 open_head/open_wrist_left/open_wrist_right
         """
+        if camera_cfg is not None:
+            self.update_camera_open_config(camera_cfg)
+
         with self.data_lock:
             self.latest_imgs = imgs.copy()
         # print(f"图像数据已更新，包含摄像头: {list(imgs.keys())}")
@@ -124,7 +129,31 @@ class VLAWebSocketServer:
         """注销客户端"""
         self.clients.discard(websocket)
         print(f"客户端已断开，当前连接数: {len(self.clients)}")
-    
+
+    @staticmethod
+    def _cfg_get(cfg, key, default=False):
+        if cfg is None:
+            return default
+        if isinstance(cfg, dict):
+            return bool(cfg.get(key, default))
+        return bool(getattr(cfg, key, default))
+
+    @staticmethod
+    def _camera_id_from_key(camera_key: str):
+        k = str(camera_key).lower()
+        if 'hand_left' in k or 'left_wrist' in k or 'wrist_left' in k:
+            return 1
+        if 'hand_right' in k or 'right_wrist' in k or 'wrist_right' in k:
+            return 2
+        if 'head' in k:
+            return 0
+        return None
+
+    def update_camera_open_config(self, camera_cfg):
+        self.camera_open[0] = self._cfg_get(camera_cfg, 'open_head', True)
+        self.camera_open[1] = self._cfg_get(camera_cfg, 'open_wrist_left', True)
+        self.camera_open[2] = self._cfg_get(camera_cfg, 'open_wrist_right', True)
+
     async def send_camera_data(self):
         """发送摄像头数据 - 使用二进制传输优化性能"""
         if not self.clients:
@@ -141,9 +170,19 @@ class VLAWebSocketServer:
             imgs = self.latest_imgs.copy() if self.latest_imgs else {}
 
 
+        sent_camera_ids = set()
+
         # 为每个摄像头发送单独的二进制消息
-        for index, (camera_key, img) in enumerate(imgs.items()):
+        for camera_key, img in imgs.items():
             try:
+                camera_id = self._camera_id_from_key(camera_key)
+                if camera_id is None:
+                    continue
+                if camera_id in sent_camera_ids:
+                    continue
+                if not self.camera_open.get(camera_id, True):
+                    continue
+
                 # 将numpy数组转换为bytes
                 if isinstance(img, np.ndarray):
                     # img = cv2.resize(img, (w // 2, h // 2))  # 降低分辨率以减少数据量
@@ -162,10 +201,12 @@ class VLAWebSocketServer:
                 else:
                     frame_bytes = img
 
+                sent_camera_ids.add(camera_id)
+
                 # 创建消息头（JSON格式）
                 header = {
                     'type': 'camera_data_binary',
-                    'camera_id': index,
+                    'camera_id': camera_id,
                     'timestamp': time.time(),
                     'data_size': len(frame_bytes)
                 }
