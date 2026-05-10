@@ -354,12 +354,12 @@ vis_zmq:
   server_addr: tcp://*:7788
 visual:
   camera:
-    open_head: true
-    open_wrist_left: true
-    open_wrist_right: true
+    open_head: false
+    open_wrist_left: false
+    open_wrist_right: false
     update_interval_ms: 33
   trajectory:
-    play: false
+    play: true
     selected_joints:
     - 0
     - 1

@@ -6,9 +6,9 @@ def get_visual_config():
     config = ConfigDict()
 
     config.camera = ConfigDict()
-    config.camera.open_head = False
-    config.camera.open_wrist_left = False
-    config.camera.open_wrist_right = False
+    config.camera.open_head = True
+    config.camera.open_wrist_left = True
+    config.camera.open_wrist_right = True
     config.camera.update_interval_ms = 33
 
     config.trajectory = ConfigDict()
