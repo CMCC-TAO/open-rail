@@ -339,6 +339,8 @@ html, body {
 .cfg-key   { color: var(--text-muted); flex: 0 0 auto; min-width: 120px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cfg-value { flex: 1; }
 .cfg-value input, .cfg-value select { width: 100%; }
+.cfg-value select[multiple] { min-height: 70px; padding: 4px; }
+.cfg-value select[multiple] option { padding: 1px 2px; }
 
 .config-footer {
   display: flex; align-items: center; gap: 8px;

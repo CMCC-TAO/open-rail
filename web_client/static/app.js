@@ -58,6 +58,9 @@ const JOINT_COLORS = [
 // ═══════════════════════════════════════════════════════
 //  State
 // ═══════════════════════════════════════════════════════
+let _visualPersistTimer = null;
+let _visualPersistInFlight = false;
+
 const App = {
   ws: null,
   wsAlive: false,
@@ -469,6 +472,13 @@ function setRunningUI(running, paused = false) {
   }
 
   $('btn-reset').disabled = !running;             // available in both running states
+
+  if (!running) {
+    const hasVisualPending = Object.keys(App.pendingPatch).some(k =>
+      k.startsWith('visual.camera.') || k.startsWith('visual.trajectory.')
+    );
+    if (hasVisualPending) schedulePersistVisualState(0);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -499,6 +509,29 @@ const CONFIG_INT_KEYS = new Set([
   'fps', 'height', 'width', 'update_interval_ms',
 ]);
 
+const CONFIG_HIDDEN_DOT_KEYS = new Set([
+  'visual.camera.open_head',
+  'visual.camera.open_wrist_left',
+  'visual.camera.open_wrist_right',
+  'visual.trajectory.selected_joints',
+  'visual.trajectory.source',
+]);
+
+function getCfgMultiSelectOptions(dotKey) {
+  if (dotKey === 'visual.trajectory.source') {
+    return [
+      { value: 'State', label: 'State' },
+      { value: 'Action', label: 'Action' },
+    ];
+  }
+
+  if (dotKey === 'visual.trajectory.selected_joints') {
+    return TRAJ_JOINT_LABELS.map((name, idx) => ({ value: String(idx), label: `${name} (${idx})` }));
+  }
+
+  return null;
+}
+
 function renderConfigTree(cfg) {
   const root = $('config-tree');
   root.innerHTML = '';
@@ -519,7 +552,9 @@ function buildTree_old(obj, prefix, parentEl) {
     } else if (!prefix) {
       basicEntries.push([key, val]);
     } else {
-      parentEl.appendChild(createCfgRow(`${prefix}.${key}`, key, val));
+      const dotKey = `${prefix}.${key}`;
+      if (CONFIG_HIDDEN_DOT_KEYS.has(dotKey)) continue;
+      parentEl.appendChild(createCfgRow(dotKey, key, val));
     }
   }
 
@@ -574,7 +609,9 @@ function buildTree(obj, prefix, parentEl) {
     } else if (!prefix) {
       basicEntries.push([key, val]);
     } else {
-      parentEl.appendChild(createCfgRow(`${prefix}.${key}`, key, val));
+      const dotKey = `${prefix}.${key}`;
+      if (CONFIG_HIDDEN_DOT_KEYS.has(dotKey)) continue;
+      parentEl.appendChild(createCfgRow(dotKey, key, val));
     }
   }
 
@@ -808,7 +845,34 @@ function createCfgRow(dotKey, label, value) {
   const bareKey = dotKey.includes('.') ? dotKey.split('.').pop() : dotKey;
 
   let input;
-  if (CONFIG_SELECT_OPTIONS[bareKey]) {
+  const multiSelectOptions = getCfgMultiSelectOptions(dotKey);
+  if (multiSelectOptions) {
+    input = document.createElement('select');
+    input.multiple = true;
+    input.size = Math.min(8, Math.max(2, multiSelectOptions.length));
+
+    const selectedRaw = Array.isArray(value)
+      ? value
+      : (value == null ? [] : String(value).split(',').map(v => v.trim()).filter(Boolean));
+
+    const selectedSet = new Set(
+      selectedRaw.map(v => {
+        if (dotKey === 'visual.trajectory.source') return String(v).trim().toLowerCase();
+        return String(parseInt(v, 10));
+      })
+    );
+
+    multiSelectOptions.forEach(opt => {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      const key = dotKey === 'visual.trajectory.source'
+        ? String(opt.value).toLowerCase()
+        : String(parseInt(opt.value, 10));
+      if (selectedSet.has(key)) o.selected = true;
+      input.appendChild(o);
+    });
+  } else if (CONFIG_SELECT_OPTIONS[bareKey]) {
     // Predefined select options
     input = document.createElement('select');
     CONFIG_SELECT_OPTIONS[bareKey].forEach(opt => {
@@ -846,8 +910,28 @@ function createCfgRow(dotKey, label, value) {
 }
 
 function onCfgChange(dotKey, input, originalValue) {
-  const raw = input.tagName === 'SELECT' ? input.value : input.value.trim();
   const bareKey = dotKey.includes('.') ? dotKey.split('.').pop() : dotKey;
+
+  if (input.tagName === 'SELECT' && input.multiple) {
+    const selected = Array.from(input.selectedOptions).map(o => o.value);
+    let parsed = selected;
+
+    if (dotKey === 'visual.trajectory.selected_joints') {
+      parsed = selected.map(v => parseInt(v, 10)).filter(Number.isFinite);
+    } else if (dotKey === 'visual.trajectory.source') {
+      parsed = selected
+        .map(v => String(v).trim().toLowerCase())
+        .filter(v => v === 'state' || v === 'action')
+        .map(v => v === 'state' ? 'State' : 'Action');
+    }
+
+    input.style.borderColor = '';
+    App.pendingPatch[dotKey] = parsed;
+    markPending();
+    return;
+  }
+
+  const raw = input.tagName === 'SELECT' ? input.value : input.value.trim();
   let parsed;
   if (typeof originalValue === 'boolean') {
     parsed = raw === 'true';
@@ -1162,7 +1246,11 @@ function applyVisualConfig(cfg = App.config) {
     camAllBtn.className = allOn ? 'btn btn-xs btn-danger' : 'btn btn-xs btn-success';
   }
 
-  App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
+  if (typeof trajCfg.play === 'boolean') {
+    App.traj.paused = !trajCfg.play;
+  } else {
+    App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
+  }
   App.traj.updateIntervalMs = _toInt(trajCfg.update_interval_ms, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
 
   const sourceCfgRaw = Array.isArray(trajCfg.source)
@@ -1223,6 +1311,106 @@ function applyVisualConfig(cfg = App.config) {
     if (App.cameraConnectWhenRunning) connectCamWS();
     else disconnectCamWS();
   }
+}
+
+function getVisualStatePatch() {
+  return {
+    'visual.camera.open_head': !!App.camOpen[0],
+    'visual.camera.open_wrist_left': !!App.camOpen[1],
+    'visual.camera.open_wrist_right': !!App.camOpen[2],
+    'visual.trajectory.play': !App.traj.paused,
+    'visual.trajectory.source': [...App.traj.source].map(s => (s === 'action' ? 'Action' : 'State')),
+    'visual.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
+  };
+}
+
+function syncVisualStateToLocalConfig(patch) {
+  if (!App.config || typeof App.config !== 'object') App.config = {};
+  if (!App.config.visual || typeof App.config.visual !== 'object') App.config.visual = {};
+  if (!App.config.visual.camera || typeof App.config.visual.camera !== 'object') App.config.visual.camera = {};
+  if (!App.config.visual.trajectory || typeof App.config.visual.trajectory !== 'object') App.config.visual.trajectory = {};
+
+  App.config.visual.camera.open_head = patch['visual.camera.open_head'];
+  App.config.visual.camera.open_wrist_left = patch['visual.camera.open_wrist_left'];
+  App.config.visual.camera.open_wrist_right = patch['visual.camera.open_wrist_right'];
+  App.config.visual.trajectory.play = patch['visual.trajectory.play'];
+  delete App.config.visual.trajectory.default_paused;
+  App.config.visual.trajectory.source = patch['visual.trajectory.source'];
+  App.config.visual.trajectory.selected_joints = patch['visual.trajectory.selected_joints'];
+}
+
+function syncVisualStateToConfigInputs(patch) {
+  const setVal = (dotKey, value) => {
+    const row = document.querySelector(`.cfg-row[data-key="${dotKey}"]`);
+    if (!row) return;
+    const input = row.querySelector('input, select');
+    if (!input) return;
+
+    if (input.tagName === 'SELECT' && input.multiple) {
+      const selectedSet = new Set((Array.isArray(value) ? value : [value]).map(v => String(v)));
+      Array.from(input.options).forEach(opt => {
+        const k = dotKey === 'visual.trajectory.source'
+          ? String(opt.value).toLowerCase()
+          : String(opt.value);
+        const vv = dotKey === 'visual.trajectory.source'
+          ? new Set([...selectedSet].map(x => x.toLowerCase()))
+          : selectedSet;
+        opt.selected = vv.has(k);
+      });
+      return;
+    }
+
+    if (input.tagName === 'SELECT') {
+      input.value = String(value);
+      return;
+    }
+
+    if (Array.isArray(value)) input.value = JSON.stringify(value);
+    else input.value = value == null ? '' : String(value);
+  };
+
+  Object.entries(patch).forEach(([k, v]) => setVal(k, v));
+}
+
+async function persistVisualStateNow() {
+  const patch = getVisualStatePatch();
+  syncVisualStateToLocalConfig(patch);
+  syncVisualStateToConfigInputs(patch);
+
+  Object.assign(App.pendingPatch, patch);
+  markPending();
+
+  if (App.isRunning || _visualPersistInFlight) return;
+
+  _visualPersistInFlight = true;
+  try {
+    const res = await apiFetch('/api/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = res.config || App.config;
+
+    Object.keys(patch).forEach(k => delete App.pendingPatch[k]);
+    if (!Object.keys(App.pendingPatch).length) clearPending();
+
+    const display = $('conf-path-display');
+    const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+    if (path) {
+      await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
+    }
+  } catch (_) {
+    // keep pendingPatch for manual apply when not running
+  } finally {
+    _visualPersistInFlight = false;
+  }
+}
+
+function schedulePersistVisualState(delay = 120) {
+  if (_visualPersistTimer) clearTimeout(_visualPersistTimer);
+  _visualPersistTimer = setTimeout(() => {
+    _visualPersistTimer = null;
+    persistVisualStateNow();
+  }, delay);
 }
 
 async function loadConfigFromServer() {
@@ -1369,7 +1557,11 @@ function setupCameraPanel() {
 
   // Individual open/close buttons
   for (let i = 0; i < 3; i++) {
-    $(`btn-cam-${i}`).addEventListener('click', () => { toggleCamera(i); updateAllToggleBtn(); });
+    $(`btn-cam-${i}`).addEventListener('click', () => {
+      toggleCamera(i);
+      updateAllToggleBtn();
+      schedulePersistVisualState();
+    });
   }
 
   // All toggle: Open All (all closed) ↔ Close All (all open)
@@ -1391,6 +1583,7 @@ function setupCameraPanel() {
       else if (!allOn && !App.camOpen[i]) toggleCamera(i);
     }
     updateAllToggleBtn();
+    schedulePersistVisualState();
   });
 
   restartCameraUpdateTimer();
@@ -1597,6 +1790,7 @@ function buildJointSelector(numJoints) {
         _applyChipColor(chip, true, color);
       }
       refreshUnifiedChart();
+      schedulePersistVisualState();
     });
     if (i < 7) {
       rowL.insertBefore(chip, btnAll);   // insert before All
@@ -1786,6 +1980,7 @@ function setupTrajPanel() {
     }
     App.traj.dirty = true;
     syncSrcButtons();
+    schedulePersistVisualState();
   }
   $('btn-traj-state').addEventListener('click',  () => toggleSource('state'));
   $('btn-traj-action').addEventListener('click', () => toggleSource('action'));
@@ -1807,6 +2002,7 @@ function setupTrajPanel() {
       App.traj.dirty = true;
       refreshUnifiedChart();
     }
+    schedulePersistVisualState();
   });
   syncTrajPlayButton();
 
@@ -1844,6 +2040,7 @@ function setupTrajPanel() {
     }
     t.dirty = true;
     refreshUnifiedChart();
+    schedulePersistVisualState();
   });
 
   $('btn-joints-none').addEventListener('click', () => {
@@ -1854,6 +2051,7 @@ function setupTrajPanel() {
     });
     t.selectedJoints.clear();
     refreshUnifiedChart();
+    schedulePersistVisualState();
   });
 
   startTrajUpdateTimer();
