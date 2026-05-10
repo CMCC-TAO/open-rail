@@ -7,13 +7,15 @@ def get_visual_config():
 
     config.camera = ConfigDict()
     config.camera.connect_when_running = True
-    config.camera.default_open = [False, False, False]
+    config.camera.open_head = False
+    config.camera.open_wrist_left = False
+    config.camera.open_wrist_right = False
     config.camera.update_interval_ms = 33
 
     config.trajectory = ConfigDict()
     config.trajectory.default_paused = True
-    config.trajectory.default_source = ['state']
-    config.trajectory.default_selected_joints = [0, 1, 2, 3]
+    config.trajectory.source = ['State']
+    config.trajectory.selected_joints = [0, 1, 2, 3]
     config.trajectory.update_interval_ms = 50
 
     return config
