@@ -545,6 +545,28 @@ class ConfigPatchRequest(BaseModel):
     patch: dict   # flat dot-key → value  OR  nested dict
 
 
+class VisualCameraConfigRequest(BaseModel):
+    open_head: Optional[bool] = None
+    open_wrist_left: Optional[bool] = None
+    open_wrist_right: Optional[bool] = None
+
+
+@app.post("/api/visual/camera_cfg")
+async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
+    """Update runtime camera open config for visual websocket server (effective immediately)."""
+    payload = req.dict(exclude_none=True)
+    if not payload:
+        return {"status": "ok", "applied": False}
+
+    vc = state.vla_client
+    ws_server = getattr(vc, "websocket_server", None) if vc is not None else None
+    if ws_server is None:
+        return {"status": "ok", "applied": False}
+
+    ws_server.update_camera_open_config(payload)
+    return {"status": "ok", "applied": True, "camera_cfg": payload}
+
+
 @app.post("/api/config/patch")
 async def patch_config(req: ConfigPatchRequest):
     """Apply a partial update to in-memory config (does NOT restart client)."""

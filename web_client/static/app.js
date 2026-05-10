@@ -1378,7 +1378,23 @@ async function persistVisualStateNow() {
     .forEach(k => delete App.pendingPatch[k]);
   if (!Object.keys(App.pendingPatch).length) clearPending();
 
-  if (App.isRunning || _visualPersistInFlight) return;
+  if (App.isRunning) {
+    try {
+      await apiFetch('/api/visual/camera_cfg', {
+        method: 'POST',
+        body: JSON.stringify({
+          open_head: patch['visual.camera.open_head'],
+          open_wrist_left: patch['visual.camera.open_wrist_left'],
+          open_wrist_right: patch['visual.camera.open_wrist_right'],
+        }),
+      });
+    } catch (_) {
+      // no-op: keep local UI effective
+    }
+    return;
+  }
+
+  if (_visualPersistInFlight) return;
 
   _visualPersistInFlight = true;
   try {
