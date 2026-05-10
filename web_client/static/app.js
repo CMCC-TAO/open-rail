@@ -1900,6 +1900,31 @@ function _applyChipColor(chip, active, color) {
   }
 }
 
+function recomputeTrajXWindow() {
+  const t = App.traj;
+  const keys = ['state', 'action_fitted', 'action_raw'];
+  const activeKeys = keys.filter(k => t.source.has(k));
+  const targetKeys = activeKeys.length ? activeKeys : keys;
+  const leftCandidates = [];
+  const rightCandidates = [];
+
+  targetKeys.forEach(k => {
+    const buf = t.buffer[k];
+    if (!buf || buf.length === 0) return;
+    leftCandidates.push(buf[0].x);
+    rightCandidates.push(buf[buf.length - 1].x);
+  });
+
+  if (leftCandidates.length && rightCandidates.length) {
+    const left = Math.max(...leftCandidates);
+    const right = Math.max(...rightCandidates);
+    if (Number.isFinite(left) && Number.isFinite(right) && right >= left) {
+      t.xLeft = left;
+      t.xRight = right;
+    }
+  }
+}
+
 /* ── Ingest new data point ── */
 function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampSec = null) {
   const n = Math.max(stateArr.length, actionFittedArr.length, actionRawArr.length);
@@ -1933,25 +1958,7 @@ function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampS
   // If Source is None (all unchecked), keep axis frozen and skip redraw trigger.
   if (t.source.size === 0) return;
 
-  // Dynamic x window based on current buffered data time-span (finite-only)
-  const stateRight = t.buffer.state.length ? t.buffer.state[t.buffer.state.length - 1].x : undefined;
-  const fittedRight = t.buffer.action_fitted.length ? t.buffer.action_fitted[t.buffer.action_fitted.length - 1].x : undefined;
-  const rawRight = t.buffer.action_raw.length ? t.buffer.action_raw[t.buffer.action_raw.length - 1].x : undefined;
-  const stateLeft = t.buffer.state.length ? t.buffer.state[0].x : undefined;
-  const fittedLeft = t.buffer.action_fitted.length ? t.buffer.action_fitted[0].x : undefined;
-  const rawLeft = t.buffer.action_raw.length ? t.buffer.action_raw[0].x : undefined;
-
-  const leftCandidates = [stateLeft, fittedLeft, rawLeft].filter(Number.isFinite);
-  const rightCandidates = [stateRight, fittedRight, rawRight].filter(Number.isFinite);
-  if (leftCandidates.length && rightCandidates.length) {
-    const left = Math.min(...leftCandidates);
-    const right = Math.max(...rightCandidates);
-    if (right >= left) {
-      t.xLeft = left;
-      t.xRight = right;
-    }
-  }
-
+  recomputeTrajXWindow();
   t.dirty = true;
 }
 
@@ -1977,6 +1984,7 @@ function refreshUnifiedChart() {
   const enabledSources = ['state', 'action_fitted', 'action_raw'].filter(k => src.has(k));
   const showSuffix = enabledSources.length > 1;
 
+
   for (const jointIdx of sorted) {
     const color  = JOINT_COLORS[jointIdx] || 'rgb(100,100,100)';
     const label  = TRAJ_JOINT_LABELS[jointIdx] ?? `J${jointIdx}`;
@@ -1990,7 +1998,7 @@ function refreshUnifiedChart() {
         borderColor: color,
         backgroundColor: alpha,
         borderWidth: 1.5,
-        borderDash: [4, 3],
+        borderDash: [1, 3],
         pointRadius: 0, pointHoverRadius: 3,
         tension: 0.1, fill: false,
       });
@@ -2020,7 +2028,7 @@ function refreshUnifiedChart() {
         borderColor: color,
         backgroundColor: alpha,
         borderWidth: 1.5,
-        borderDash: [1, 3],
+        borderDash: [4, 3],
         pointRadius: 0, pointHoverRadius: 3,
         tension: 0.1, fill: false,
       });
@@ -2098,6 +2106,7 @@ function setupTrajPanel() {
     const s = App.traj.source;
     if (s.has(src)) s.delete(src);
     else s.add(src);
+    if (s.size > 0) recomputeTrajXWindow();
     App.traj.dirty = true;
     syncSrcButtons();
     refreshUnifiedChart();
@@ -2113,6 +2122,7 @@ function setupTrajPanel() {
       App.traj.source = allSelected
         ? new Set()
         : new Set(['state', 'action_fitted', 'action_raw']);
+      if (App.traj.source.size > 0) recomputeTrajXWindow();
       App.traj.dirty = true;
       syncSrcButtons();
       refreshUnifiedChart();
