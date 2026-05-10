@@ -352,6 +352,24 @@ vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788
   server_addr: tcp://*:7788
+visual:
+  camera:
+    connect_when_running: true
+    default_open:
+    - false
+    - false
+    - false
+    update_interval_ms: 33
+  trajectory:
+    default_paused: false
+    default_selected_joints:
+    - 0
+    - 1
+    - 2
+    - 3
+    default_source:
+    - state
+    update_interval_ms: 50
 vla_zmq:
   client_addr: tcp://localhost:5566
   server_addr: tcp://*:5566
