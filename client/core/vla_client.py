@@ -650,7 +650,7 @@ class VLAClientAsync():
         if action_np is not None:
             list_data.append({
                 'tab': 'position',
-                'type': 'action',
+                'type': 'action_fitted',
                 'x': self.vis_global_step,
                 'joints_y': action_np.tolist()
             })
@@ -693,14 +693,14 @@ class VLAClientAsync():
         if action_vel is not None:
             list_data.append({
                 'tab': 'velocity',
-                'type': 'action',
+                'type': 'action_fitted',
                 'x': self.vis_global_step,
                 'joints_y': action_vel.tolist()
             })
         if action_acc is not None:
             list_data.append({
                 'tab': 'acceleration',
-                'type': 'action',
+                'type': 'action_fitted',
                 'x': self.vis_global_step,
                 'joints_y': action_acc.tolist()
             })
@@ -712,7 +712,7 @@ class VLAClientAsync():
             origin_np = np.asarray(action_raw)
             list_data.append({
                 'tab': 'position',
-                'type': 'origin',
+                'type': 'action_raw',
                 'x': self.vis_global_step,
                 'joints_y': origin_np.tolist()
             })
@@ -730,13 +730,13 @@ class VLAClientAsync():
 
             list_data.append({
                 'tab': 'velocity',
-                'type': 'origin',
+                'type': 'action_raw',
                 'x': self.vis_global_step,
                 'joints_y': origin_vel.tolist()
             })
             list_data.append({
                 'tab': 'acceleration',
-                'type': 'origin',
+                'type': 'action_raw',
                 'x': self.vis_global_step,
                 'joints_y': origin_acc.tolist()
             })

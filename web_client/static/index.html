@@ -239,8 +239,14 @@
             <div class="traj-src-group">
               <span class="traj-src-label">Source</span>
               <div class="traj-src-rows">
-                <button class="btn btn-xs btn-active" id="btn-traj-state">State</button>
-                <button class="btn btn-xs" id="btn-traj-action">Action</button>
+                <div class="traj-src-col traj-src-col-action">
+                  <button class="btn btn-xs" id="btn-traj-action-fitted"><span class="traj-src-btn-text">ActionFitted</span><span class="traj-line-indicator traj-line-indicator-action-fitted" aria-hidden="true"></span></button>
+                  <button class="btn btn-xs" id="btn-traj-action-raw"><span class="traj-src-btn-text">ActionRaw</span><span class="traj-line-indicator traj-line-indicator-action-raw" aria-hidden="true"></span></button>
+                </div>
+                <div class="traj-src-col traj-src-col-state">
+                  <button class="btn btn-xs btn-active" id="btn-traj-state"><span class="traj-src-btn-text">State</span><span class="traj-line-indicator traj-line-indicator-state" aria-hidden="true"></span></button>
+                  <button class="btn btn-xs" id="btn-traj-all"><span class="traj-src-btn-text">All</span></button>
+                </div>
               </div>
             </div>
             <!-- Divider -->

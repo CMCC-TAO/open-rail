@@ -500,9 +500,45 @@ html, body {
   display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0;
 }
 .traj-src-rows {
-  display: flex; flex-direction: column; gap: 3px;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
 }
-.traj-src-rows .btn { width: 62px; text-align: center; }
+
+.traj-src-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.traj-src-col-action .btn { width: 112px; }
+.traj-src-col-state .btn { width: 76px; }
+
+.traj-src-rows .btn {
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.traj-src-btn-text {
+  flex: 1;
+  text-align: left;
+}
+
+.traj-line-indicator {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2px solid currentColor;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.traj-line-indicator-state { border-top-style: dashed; }
+.traj-line-indicator-action-fitted { border-top-style: solid; }
+.traj-line-indicator-action-raw { border-top-style: dotted; }
 
 /* ── ② Joints group ── */
 .traj-joints-group {
