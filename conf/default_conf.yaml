@@ -364,8 +364,7 @@ visual:
     - 0
     - 1
     - 3
-    source:
-    - State
+    source: []
     update_interval_ms: 50
 vla_zmq:
   client_addr: tcp://localhost:5566
