@@ -141,11 +141,11 @@ class VLAWebSocketServer:
     @staticmethod
     def _camera_id_from_key(camera_key: str):
         k = str(camera_key).lower()
-        if 'hand_left' in k or 'left_wrist' in k or 'wrist_left' in k or '.left' in k:
+        if 'hand_left' in k or 'left_wrist' in k or 'wrist_left' in k:
             return 1
-        if 'hand_right' in k or 'right_wrist' in k or 'wrist_right' in k or '.right' in k:
+        if 'hand_right' in k or 'right_wrist' in k or 'wrist_right' in k:
             return 2
-        if 'head' in k or '.top' in k:
+        if 'head' in k:
             return 0
         return None
 
@@ -171,12 +171,17 @@ class VLAWebSocketServer:
             imgs = self.latest_imgs.copy() if self.latest_imgs else {}
             camera_open = self.camera_open.copy()
 
+        sent_camera_ids = set()
+
         # 为每个摄像头发送单独的二进制消息
-        for index, (camera_key, img) in enumerate(imgs.items()):
+        for camera_key, img in imgs.items():
             try:
-                mapped_id = self._camera_id_from_key(camera_key)
-                camera_id = mapped_id if mapped_id is not None else index
-                if camera_id in (0, 1, 2) and not camera_open.get(camera_id, True):
+                camera_id = self._camera_id_from_key(camera_key)
+                if camera_id is None:
+                    continue
+                if camera_id in sent_camera_ids:
+                    continue
+                if not camera_open.get(camera_id, True):
                     continue
 
                 # 将numpy数组转换为bytes
@@ -196,6 +201,8 @@ class VLAWebSocketServer:
                     frame_bytes = enc.tobytes()
                 else:
                     frame_bytes = img
+
+                sent_camera_ids.add(camera_id)
 
                 # 创建消息头（JSON格式）
                 header = {

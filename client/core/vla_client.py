@@ -94,6 +94,9 @@ class VLAClientAsync():
 
         # Create Visualization WebSocket server
         self.websocket_server = VLAWebSocketServer.get_instance()
+        camera_cfg = getattr(getattr(self.config, 'visual', None), 'camera', None)
+        if camera_cfg is not None:
+            self.websocket_server.update_camera_open_config(camera_cfg)
         self.vis_global_step = 0
         self.vis_idx_count = 0
         self.vis_origin_chunk_action = None
@@ -445,8 +448,7 @@ class VLAClientAsync():
             processed_imgs[key] = processed
 
         # Send images to visualization interface
-        camera_cfg = getattr(getattr(self.config, 'visual', None), 'camera', None)
-        self.websocket_server.update_image_data(processed_imgs, camera_cfg)
+        self.websocket_server.update_image_data(processed_imgs)
 
         return encoded_imgs
 
