@@ -435,14 +435,35 @@ function renderJointsGrouped(side, values) {
  *   Running (active) |  Stop      |  Pause       |  ✓
  *   Running (paused) |  Stop      |  Resume      |  ✓
  */
+async function syncRuntimeCameraConfig() {
+  if (!App.isRunning) return;
+  try {
+    await apiFetch('/api/visual/camera_cfg', {
+      method: 'POST',
+      body: JSON.stringify({
+        open_head: !!App.camOpen[0],
+        open_wrist_left: !!App.camOpen[1],
+        open_wrist_right: !!App.camOpen[2],
+      }),
+    });
+  } catch (_) {
+    // no-op
+  }
+}
+
 function setRunningUI(running, paused = false) {
   if (App.isRunning === running && App.isPaused === paused) return;
+  const wasRunning = App.isRunning === true;
   App.isRunning = running;
   App.isPaused  = paused;
 
   // Camera Visual: connect dedicated WS server when running
-  if (running) connectCamWS();
-  else disconnectCamWS();
+  if (running) {
+    connectCamWS();
+    syncRuntimeCameraConfig();
+  } else {
+    disconnectCamWS();
+  }
 
   // Status badge
   let badgeText, badgeClass;
@@ -486,7 +507,9 @@ function setRunningUI(running, paused = false) {
 
   $('btn-reset').disabled = !running;             // available in both running states
 
-  if (!running) {
+  // Persist visual state only when transitioning from running -> stopped.
+  // Avoid startup/status-sync overwriting config before user interaction.
+  if (!running && wasRunning) {
     schedulePersistVisualState(0);
   }
 }
@@ -1319,6 +1342,7 @@ function applyVisualConfig(cfg = App.config) {
 
   if (App.isRunning) {
     connectCamWS();
+    syncRuntimeCameraConfig();
   }
 }
 
