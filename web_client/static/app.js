@@ -1305,7 +1305,7 @@ function applyVisualConfig(cfg = App.config) {
       else if (key === 'action' || key === 'actionfitted' || key === 'action_fitted') source.add('action_fitted');
       else if (key === 'origin' || key === 'actionraw' || key === 'action_raw') source.add('action_raw');
     });
-    if (source.size > 0) App.traj.source = source;
+    App.traj.source = source;
   }
 
   const selectedJointsRaw = trajCfg.selected_joints ?? trajCfg.default_selected_joints;
@@ -1345,6 +1345,7 @@ function applyVisualConfig(cfg = App.config) {
   if (btnAllSource) {
     const allSelected = App.traj.source.has('state') && App.traj.source.has('action_fitted') && App.traj.source.has('action_raw');
     btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
+    btnAllSource.textContent = allSelected ? 'None' : 'All';
   }
   if (btnPlay) {
     btnPlay.innerHTML = App.traj.paused
@@ -2070,7 +2071,7 @@ function startTrajUpdateTimer() {
 
 /* ── Wire trajectory controls ── */
 function setupTrajPanel() {
-  // Source buttons: toggle independently; at least one must remain active
+  // Source buttons: toggle independently; all can be deselected
   const srcBtns = {
     state: $('btn-traj-state'),
     action_fitted: $('btn-traj-action-fitted'),
@@ -2087,16 +2088,13 @@ function setupTrajPanel() {
       const s = App.traj.source;
       const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
       btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
+      btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
   }
   function toggleSource(src) {
     const s = App.traj.source;
-    if (s.has(src)) {
-      // Only deselect if the other source is still selected
-      if (s.size > 1) s.delete(src);
-    } else {
-      s.add(src);
-    }
+    if (s.has(src)) s.delete(src);
+    else s.add(src);
     App.traj.dirty = true;
     syncSrcButtons();
     refreshUnifiedChart();
@@ -2107,7 +2105,11 @@ function setupTrajPanel() {
   $('btn-traj-action-raw').addEventListener('click',    () => toggleSource('action_raw'));
   if (btnAllSource) {
     btnAllSource.addEventListener('click', () => {
-      App.traj.source = new Set(['state', 'action_fitted', 'action_raw']);
+      const s = App.traj.source;
+      const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
+      App.traj.source = allSelected
+        ? new Set()
+        : new Set(['state', 'action_fitted', 'action_raw']);
       App.traj.dirty = true;
       syncSrcButtons();
       refreshUnifiedChart();
