@@ -1930,6 +1930,9 @@ function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampS
     if (t.buffer.action_raw.length > MAX_CHART_POINTS) t.buffer.action_raw.shift();
   }
 
+  // If Source is None (all unchecked), keep axis frozen and skip redraw trigger.
+  if (t.source.size === 0) return;
+
   // Dynamic x window based on current buffered data time-span (finite-only)
   const stateRight = t.buffer.state.length ? t.buffer.state[t.buffer.state.length - 1].x : undefined;
   const fittedRight = t.buffer.action_fitted.length ? t.buffer.action_fitted[t.buffer.action_fitted.length - 1].x : undefined;
