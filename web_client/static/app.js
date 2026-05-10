@@ -82,7 +82,7 @@ const App = {
 
   // ── Trajectory chart state ──
   traj: {
-    // Set<'state'|'action'> — which sources to display (both can be active simultaneously)
+    // Set<'state'|'action_fitted'|'action_raw'> — which sources to display (can be combined)
     source: new Set(['state']),
     // Default manual mode: do not play until user clicks Play
     paused: true,
@@ -90,8 +90,8 @@ const App = {
     numJoints: 0,
     // Which joints to display  Set<number>
     selectedJoints: new Set(),
-    // Data buffer: { 'state': [{x, joints_y}, ...], 'action': [{x, joints_y}, ...] }
-    buffer: { state: [], action: [] },
+    // Data buffer: { state: [...], action_fitted: [...], action_raw: [...] }
+    buffer: { state: [], action_fitted: [], action_raw: [] },
     // Time axis baseline and monotonic guard (x-axis in seconds)
     startTimeSec: null,
     lastX: 0,
@@ -272,9 +272,11 @@ function handleCamWSMessage(msg) {
   if (tab !== 'position' || !Array.isArray(joints_y) || joints_y.length === 0) return;
 
   if (type === 'state') {
-    ingestTrajData(joints_y, [], timestamp);
-  } else if (type === 'action') {
-    ingestTrajData([], joints_y, timestamp);
+    ingestTrajData(joints_y, [], [], timestamp);
+  } else if (type === 'action_fitted' || type === 'action') {
+    ingestTrajData([], joints_y, [], timestamp);
+  } else if (type === 'action_raw' || type === 'origin') {
+    ingestTrajData([], [], joints_y, timestamp);
   }
 }
 
@@ -357,7 +359,7 @@ function renderStats(data) {
   // Feed trajectory chart from stats only when visual WS stream is unavailable.
   // Avoid mixing two data sources (different timestamps/rates), which causes jitter.
   if (!App.camWsAlive) {
-    ingestTrajData(data.current_state || [], data.current_action || []);
+    ingestTrajData(data.current_state || [], data.current_action || [], []);
   }
 }
 
@@ -555,7 +557,8 @@ function getCfgMultiSelectOptions(dotKey) {
   if (dotKey === 'visual.trajectory.source') {
     return [
       { value: 'State', label: 'State' },
-      { value: 'Action', label: 'Action' },
+      { value: 'ActionFitted', label: 'ActionFitted' },
+      { value: 'ActionRaw', label: 'ActionRaw' },
     ];
   }
 
@@ -955,8 +958,13 @@ function onCfgChange(dotKey, input, originalValue) {
     } else if (dotKey === 'visual.trajectory.source') {
       parsed = selected
         .map(v => String(v).trim().toLowerCase())
-        .filter(v => v === 'state' || v === 'action')
-        .map(v => v === 'state' ? 'State' : 'Action');
+        .map(v => {
+          if (v === 'state') return 'State';
+          if (v === 'action' || v === 'actionfitted' || v === 'action_fitted') return 'ActionFitted';
+          if (v === 'origin' || v === 'actionraw' || v === 'action_raw') return 'ActionRaw';
+          return null;
+        })
+        .filter(Boolean);
     }
 
     input.style.borderColor = '';
@@ -1293,7 +1301,9 @@ function applyVisualConfig(cfg = App.config) {
     const source = new Set();
     sourceCfgRaw.forEach(k => {
       const key = String(k).trim().toLowerCase();
-      if (key === 'state' || key === 'action') source.add(key);
+      if (key === 'state') source.add('state');
+      else if (key === 'action' || key === 'actionfitted' || key === 'action_fitted') source.add('action_fitted');
+      else if (key === 'origin' || key === 'actionraw' || key === 'action_raw') source.add('action_raw');
     });
     if (source.size > 0) App.traj.source = source;
   }
@@ -1325,10 +1335,17 @@ function applyVisualConfig(cfg = App.config) {
   });
 
   const btnState = $('btn-traj-state');
-  const btnAction = $('btn-traj-action');
+  const btnActionFitted = $('btn-traj-action-fitted');
+  const btnActionRaw = $('btn-traj-action-raw');
+  const btnAllSource = $('btn-traj-all');
   const btnPlay = $('btn-traj-pause');
   if (btnState) btnState.className = 'btn btn-xs' + (App.traj.source.has('state') ? ' btn-active' : '');
-  if (btnAction) btnAction.className = 'btn btn-xs' + (App.traj.source.has('action') ? ' btn-active' : '');
+  if (btnActionFitted) btnActionFitted.className = 'btn btn-xs' + (App.traj.source.has('action_fitted') ? ' btn-active' : '');
+  if (btnActionRaw) btnActionRaw.className = 'btn btn-xs' + (App.traj.source.has('action_raw') ? ' btn-active' : '');
+  if (btnAllSource) {
+    const allSelected = App.traj.source.has('state') && App.traj.source.has('action_fitted') && App.traj.source.has('action_raw');
+    btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
+  }
   if (btnPlay) {
     btnPlay.innerHTML = App.traj.paused
       ? '<span class="btn-icon">▶</span> Play'
@@ -1352,7 +1369,11 @@ function getVisualStatePatch() {
     'visual.camera.open_wrist_left': !!App.camOpen[1],
     'visual.camera.open_wrist_right': !!App.camOpen[2],
     'visual.trajectory.play': !App.traj.paused,
-    'visual.trajectory.source': [...App.traj.source].map(s => (s === 'action' ? 'Action' : 'State')),
+    'visual.trajectory.source': [...App.traj.source].map(s => {
+      if (s === 'action_fitted') return 'ActionFitted';
+      if (s === 'action_raw') return 'ActionRaw';
+      return 'State';
+    }),
     'visual.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
   };
 }
@@ -1775,9 +1796,23 @@ function createUnifiedChart() {
           display: true,
           position: 'right',
           labels: {
-            usePointStyle: true, padding: 8,
-            font: { size: 9 }, color: '#1f2328',
+            usePointStyle: true,
+            pointStyle: 'line',
+            padding: 8,
+            font: { size: 9 },
+            color: '#1f2328',
             boxWidth: 20,
+            generateLabels(chart) {
+              const labels = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+              return labels.map(item => {
+                const ds = chart.data.datasets[item.datasetIndex] || {};
+                item.pointStyle = 'line';
+                item.lineWidth = Number(ds.borderWidth) || 1.5;
+                item.lineDash = Array.isArray(ds.borderDash) ? ds.borderDash : [];
+                item.lineDashOffset = Number(ds.borderDashOffset) || 0;
+                return item;
+              });
+            },
           },
         },
         tooltip: {
@@ -1865,8 +1900,8 @@ function _applyChipColor(chip, active, color) {
 }
 
 /* ── Ingest new data point ── */
-function ingestTrajData(stateArr, actionArr, timestampSec = null) {
-  const n = Math.max(stateArr.length, actionArr.length);
+function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampSec = null) {
+  const n = Math.max(stateArr.length, actionFittedArr.length, actionRawArr.length);
   if (n === 0) return;
 
   // Build selector if numJoints changed
@@ -1885,19 +1920,25 @@ function ingestTrajData(stateArr, actionArr, timestampSec = null) {
     t.buffer.state.push({ x, joints_y: stateArr.slice() });
     if (t.buffer.state.length > MAX_CHART_POINTS) t.buffer.state.shift();
   }
-  if (actionArr.length > 0) {
-    t.buffer.action.push({ x, joints_y: actionArr.slice() });
-    if (t.buffer.action.length > MAX_CHART_POINTS) t.buffer.action.shift();
+  if (actionFittedArr.length > 0) {
+    t.buffer.action_fitted.push({ x, joints_y: actionFittedArr.slice() });
+    if (t.buffer.action_fitted.length > MAX_CHART_POINTS) t.buffer.action_fitted.shift();
+  }
+  if (actionRawArr.length > 0) {
+    t.buffer.action_raw.push({ x, joints_y: actionRawArr.slice() });
+    if (t.buffer.action_raw.length > MAX_CHART_POINTS) t.buffer.action_raw.shift();
   }
 
   // Dynamic x window based on current buffered data time-span (finite-only)
-  const stateRight  = t.buffer.state.length  ? t.buffer.state[t.buffer.state.length - 1].x : undefined;
-  const actionRight = t.buffer.action.length ? t.buffer.action[t.buffer.action.length - 1].x : undefined;
-  const stateLeft   = t.buffer.state.length  ? t.buffer.state[0].x : undefined;
-  const actionLeft  = t.buffer.action.length ? t.buffer.action[0].x : undefined;
+  const stateRight = t.buffer.state.length ? t.buffer.state[t.buffer.state.length - 1].x : undefined;
+  const fittedRight = t.buffer.action_fitted.length ? t.buffer.action_fitted[t.buffer.action_fitted.length - 1].x : undefined;
+  const rawRight = t.buffer.action_raw.length ? t.buffer.action_raw[t.buffer.action_raw.length - 1].x : undefined;
+  const stateLeft = t.buffer.state.length ? t.buffer.state[0].x : undefined;
+  const fittedLeft = t.buffer.action_fitted.length ? t.buffer.action_fitted[0].x : undefined;
+  const rawLeft = t.buffer.action_raw.length ? t.buffer.action_raw[0].x : undefined;
 
-  const leftCandidates = [stateLeft, actionLeft].filter(Number.isFinite);
-  const rightCandidates = [stateRight, actionRight].filter(Number.isFinite);
+  const leftCandidates = [stateLeft, fittedLeft, rawLeft].filter(Number.isFinite);
+  const rightCandidates = [stateRight, fittedRight, rawRight].filter(Number.isFinite);
   if (leftCandidates.length && rightCandidates.length) {
     const left = Math.min(...leftCandidates);
     const right = Math.max(...rightCandidates);
@@ -1924,11 +1965,13 @@ function refreshUnifiedChart() {
   const t = App.traj;
   if (!t.chart) return;
 
-  const src = t.source;   // Set<'state'|'action'>
+  const src = t.source;   // Set<'state'|'action_fitted'|'action_raw'>
   const datasets = [];
   let allY = [];
 
   const sorted = [...t.selectedJoints].sort((a, b) => a - b);
+  const enabledSources = ['state', 'action_fitted', 'action_raw'].filter(k => src.has(k));
+  const showSuffix = enabledSources.length > 1;
 
   for (const jointIdx of sorted) {
     const color  = JOINT_COLORS[jointIdx] || 'rgb(100,100,100)';
@@ -1938,27 +1981,42 @@ function refreshUnifiedChart() {
     if (src.has('state')) {
       const data = getJointSeriesData('state', jointIdx);
       datasets.push({
-        label: label + (src.has('action') ? ' (S)' : ''),
+        label: label + (showSuffix ? ' (S)' : ''),
         data,
         borderColor: color,
         backgroundColor: alpha,
         borderWidth: 1.5,
-        borderDash: [4, 3],       // dashed = state
+        borderDash: [4, 3],
         pointRadius: 0, pointHoverRadius: 3,
         tension: 0.1, fill: false,
       });
       allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
     }
 
-    if (src.has('action')) {
-      const data = getJointSeriesData('action', jointIdx);
+    if (src.has('action_fitted')) {
+      const data = getJointSeriesData('action_fitted', jointIdx);
       datasets.push({
-        label: label + (src.has('state') ? ' (A)' : ''),
+        label: label + (showSuffix ? ' (AF)' : ''),
         data,
         borderColor: color,
         backgroundColor: alpha,
         borderWidth: 1.5,
-        borderDash: [],            // solid = action
+        borderDash: [],
+        pointRadius: 0, pointHoverRadius: 3,
+        tension: 0.1, fill: false,
+      });
+      allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
+    }
+
+    if (src.has('action_raw')) {
+      const data = getJointSeriesData('action_raw', jointIdx);
+      datasets.push({
+        label: label + (showSuffix ? ' (AR)' : ''),
+        data,
+        borderColor: color,
+        backgroundColor: alpha,
+        borderWidth: 1.5,
+        borderDash: [1, 3],
         pointRadius: 0, pointHoverRadius: 3,
         tension: 0.1, fill: false,
       });
@@ -2013,11 +2071,23 @@ function startTrajUpdateTimer() {
 /* ── Wire trajectory controls ── */
 function setupTrajPanel() {
   // Source buttons: toggle independently; at least one must remain active
-  const srcBtns = { state: $('btn-traj-state'), action: $('btn-traj-action') };
+  const srcBtns = {
+    state: $('btn-traj-state'),
+    action_fitted: $('btn-traj-action-fitted'),
+    action_raw: $('btn-traj-action-raw'),
+  };
+  const btnAllSource = $('btn-traj-all');
+
   function syncSrcButtons() {
     Object.entries(srcBtns).forEach(([k, btn]) => {
+      if (!btn) return;
       btn.className = 'btn btn-xs' + (App.traj.source.has(k) ? ' btn-active' : '');
     });
+    if (btnAllSource) {
+      const s = App.traj.source;
+      const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
+      btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
+    }
   }
   function toggleSource(src) {
     const s = App.traj.source;
@@ -2029,10 +2099,22 @@ function setupTrajPanel() {
     }
     App.traj.dirty = true;
     syncSrcButtons();
+    refreshUnifiedChart();
     schedulePersistVisualState();
   }
-  $('btn-traj-state').addEventListener('click',  () => toggleSource('state'));
-  $('btn-traj-action').addEventListener('click', () => toggleSource('action'));
+  $('btn-traj-state').addEventListener('click',         () => toggleSource('state'));
+  $('btn-traj-action-fitted').addEventListener('click', () => toggleSource('action_fitted'));
+  $('btn-traj-action-raw').addEventListener('click',    () => toggleSource('action_raw'));
+  if (btnAllSource) {
+    btnAllSource.addEventListener('click', () => {
+      App.traj.source = new Set(['state', 'action_fitted', 'action_raw']);
+      App.traj.dirty = true;
+      syncSrcButtons();
+      refreshUnifiedChart();
+      schedulePersistVisualState();
+    });
+  }
+  syncSrcButtons();
 
   // Play/Pause
   function syncTrajPlayButton() {
@@ -2057,7 +2139,7 @@ function setupTrajPanel() {
 
   // Clear
   $('btn-traj-clear').addEventListener('click', () => {
-    App.traj.buffer = { state: [], action: [] };
+    App.traj.buffer = { state: [], action_fitted: [], action_raw: [] };
     App.traj.startTimeSec = null;
     App.traj.lastX = 0;
     App.traj.xLeft = 0; App.traj.xRight = 0;

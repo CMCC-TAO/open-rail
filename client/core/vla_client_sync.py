@@ -503,7 +503,7 @@ class VLAClientSync():
         # # Update action_fitted velocity and acceleration ==================================================================
         list_data = [{
                 'tab': 'position',
-                'type': 'action',
+                'type': 'action_fitted',
                 'x': self.vis_global_step,
                 'joints_y': action_fitted.tolist()
             }, {
@@ -533,7 +533,7 @@ class VLAClientSync():
         list_data.extend([
             {
                 'tab': 'velocity',
-                'type': 'action',
+                'type': 'action_fitted',
                 'x': self.vis_global_step,
                 'joints_y': action_vel.tolist()
             },
@@ -545,7 +545,7 @@ class VLAClientSync():
             },
             {
                 'tab': 'acceleration',
-                'type': 'action',
+                'type': 'action_fitted',
                 'x': self.vis_global_step,
                 'joints_y': action_acc.tolist()
             },
@@ -563,7 +563,7 @@ class VLAClientSync():
             origin_np = np.asarray(action_raw)
             list_data.append({
                 'tab': 'position',
-                'type': 'origin',
+                'type': 'action_raw',
                 'x': self.vis_global_step,
                 'joints_y': origin_np.tolist()
             })
@@ -585,13 +585,13 @@ class VLAClientSync():
             list_data.extend([
                 {
                     'tab': 'velocity',
-                    'type': 'origin',
+                    'type': 'action_raw',
                     'x': self.vis_global_step,
                     'joints_y': origin_vel.tolist()
                 },
                 {
                     'tab': 'acceleration',
-                    'type': 'origin',
+                    'type': 'action_raw',
                     'x': self.vis_global_step,
                     'joints_y': origin_acc.tolist()
                 }

@@ -363,7 +363,6 @@ visual:
     selected_joints:
     - 0
     - 1
-    - 2
     - 3
     source:
     - State
