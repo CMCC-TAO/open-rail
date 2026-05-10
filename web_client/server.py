@@ -116,9 +116,11 @@ _RESOURCE_CACHE = {
         "cpu_usage": None,
         "gpu_usage": None,
         "mem_usage": None,
+        "bandwidth_m": None,
     }
 }
 _LAST_CPU_STAT = None
+_LAST_NET_STAT = None
 _NVIDIA_SMI_BIN = shutil.which("nvidia-smi")
 _HAS_NVIDIA_SMI = _NVIDIA_SMI_BIN is not None
 
@@ -216,6 +218,60 @@ def _read_gpu_usage() -> Optional[float]:
         return None
 
 
+def _read_linux_net_bytes_total() -> Optional[float]:
+    """Read total network bytes (rx + tx) from /proc/net/dev."""
+    try:
+        total = 0.0
+        with open("/proc/net/dev", "r", encoding="utf-8") as f:
+            lines = f.readlines()[2:]
+        for line in lines:
+            if ":" not in line:
+                continue
+            _, payload = line.split(":", 1)
+            parts = payload.split()
+            if len(parts) < 16:
+                continue
+            rx_bytes = float(parts[0])
+            tx_bytes = float(parts[8])
+            total += rx_bytes + tx_bytes
+        return total
+    except Exception:
+        return None
+
+
+def _read_bandwidth_m() -> Optional[float]:
+    """Read total communication bandwidth in MB/s (rx + tx)."""
+    global _LAST_NET_STAT
+    now = time.time()
+
+    total_bytes = None
+    if _HAS_PSUTIL and psutil is not None:
+        try:
+            io = psutil.net_io_counters()
+            total_bytes = float(io.bytes_recv + io.bytes_sent)
+        except Exception:
+            total_bytes = None
+
+    if total_bytes is None:
+        total_bytes = _read_linux_net_bytes_total()
+
+    if total_bytes is None:
+        return None
+
+    if _LAST_NET_STAT is None:
+        _LAST_NET_STAT = (now, total_bytes)
+        return None
+
+    prev_ts, prev_total = _LAST_NET_STAT
+    _LAST_NET_STAT = (now, total_bytes)
+    dt = now - prev_ts
+    if dt <= 0:
+        return None
+
+    delta = max(0.0, total_bytes - prev_total)
+    return delta / dt / (1024.0 * 1024.0)
+
+
 def _collect_resource_stats() -> dict:
     """Collect resource stats with 1s cache to reduce overhead."""
     now = time.time()
@@ -241,11 +297,13 @@ def _collect_resource_stats() -> dict:
         mem_usage = _read_linux_mem_usage()
 
     gpu_usage = _read_gpu_usage()
+    bandwidth_m = _read_bandwidth_m()
 
     data = {
         "cpu_usage": round(cpu_usage, 1) if cpu_usage is not None else None,
         "gpu_usage": round(gpu_usage, 1) if gpu_usage is not None else None,
         "mem_usage": round(mem_usage, 1) if mem_usage is not None else None,
+        "bandwidth_m": round(bandwidth_m, 2) if bandwidth_m is not None else None,
     }
     _RESOURCE_CACHE["ts"] = now
     _RESOURCE_CACHE["data"] = data
@@ -441,6 +499,7 @@ def _collect_stats() -> dict:
         "cpu_usage": None,
         "gpu_usage": None,
         "mem_usage": None,
+        "bandwidth_m": None,
     }
     with state.lock:
         vc = state.vla_client

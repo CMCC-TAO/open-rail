@@ -325,12 +325,26 @@ function renderStats(data) {
   const cpuVal = Number(data.cpu_usage);
   const gpuVal = Number(data.gpu_usage);
   const memVal = Number(data.mem_usage);
+  const bwVal = Number(data.bandwidth_m);
   const cpuEl = $('val-cpu-usage');
   const gpuEl = $('val-gpu-usage');
   const memEl = $('val-mem-usage');
-  if (cpuEl) cpuEl.textContent = `CPU ${Number.isFinite(cpuVal) ? cpuVal.toFixed(1) + '%' : '--'}`;
-  if (gpuEl) gpuEl.textContent = `GPU ${Number.isFinite(gpuVal) ? gpuVal.toFixed(1) + '%' : '--'}`;
-  if (memEl) memEl.textContent = `MEM ${Number.isFinite(memVal) ? memVal.toFixed(1) + '%' : '--'}`;
+  const bwEl = $('val-bw-usage');
+
+  const setResourceValue = (el, value, label) => {
+    if (!el) return;
+    const valueEl = el.querySelector('.resource-value');
+    if (valueEl) {
+      valueEl.textContent = value;
+    } else {
+      el.textContent = `${label} ${value}`;
+    }
+  };
+
+  setResourceValue(cpuEl, Number.isFinite(cpuVal) ? cpuVal.toFixed(1) + '%' : '--', 'CPU');
+  setResourceValue(gpuEl, Number.isFinite(gpuVal) ? gpuVal.toFixed(1) + '%' : '--', 'GPU');
+  setResourceValue(memEl, Number.isFinite(memVal) ? memVal.toFixed(1) + '%' : '--', 'MEM');
+  setResourceValue(bwEl, Number.isFinite(bwVal) ? bwVal.toFixed(2) + 'M' : '--', 'BW');
 
   // Use default joint values when client is not running and no real data available
   const stateVals  = (data.current_state  && data.current_state.length)  ? data.current_state  : getDefaultState();

@@ -133,7 +133,7 @@ html, body {
 .replay-path-display:not(:empty) { border-color: var(--border); background: var(--bg); }
 
 /* Monitor resource usage group */
-.monitor-resource-group { gap: 4px; }
+.monitor-resource-group { gap: 2px; }
 .resource-pill {
   font-size: 10px;
   color: var(--text-muted);
@@ -142,12 +142,23 @@ html, body {
   background: var(--bg);
   padding: 1px 6px;
   line-height: 16px;
-  width: 84px;
-  min-width: 84px;
-  max-width: 84px;
-  flex: 0 0 84px;
-  text-align: center;
+  width: 70px;
+  min-width: 70px;
+  max-width: 70px;
+  flex: 0 0 70px;
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  align-items: center;
+  gap: 1px;
   white-space: nowrap;
+}
+.resource-label {
+  text-align: left;
+  color: var(--text-muted);
+}
+.resource-value {
+  text-align: right;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
