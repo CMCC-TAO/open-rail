@@ -238,6 +238,7 @@ class VLAClientAsync():
         
         # Get observation data (thread-safe function, no lock needed)
         data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.history_frame else 2)
+        # print(f"data keys: {data.keys() if data is not None else None}, infer_count: {self.rdm.infer_count}")
         if data is not None:
             # Record inference start timestamp
             self.rdm.set_infer_time_marker()

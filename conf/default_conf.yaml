@@ -322,7 +322,7 @@ robots:
 search_length: 100
 show_action_cams_qt: false
 show_img: false
-sleep_time: 0.002
+sleep_time: 0.2
 smooth_action: false
 smooth_base: 0.0
 smooth_length: 150
