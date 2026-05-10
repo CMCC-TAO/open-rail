@@ -536,9 +536,9 @@ html, body {
   flex-shrink: 0;
 }
 
-.traj-line-indicator-state { border-top-style: dashed; }
+.traj-line-indicator-state { border-top-style: dotted; }
 .traj-line-indicator-action-fitted { border-top-style: solid; }
-.traj-line-indicator-action-raw { border-top-style: dotted; }
+.traj-line-indicator-action-raw { border-top-style: dashed; }
 
 /* ── ② Joints group ── */
 .traj-joints-group {

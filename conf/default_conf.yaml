@@ -10,7 +10,7 @@ fitting_num_samples: 64
 fitting_time_step: 3.75
 gripper_offset: 5
 history_frame: false
-inter_chunk_mode: min_jerk
+inter_chunk_mode: search_action
 intra_chunk_mode: fit
 language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
@@ -354,17 +354,17 @@ vis_zmq:
   server_addr: tcp://*:7788
 visual:
   camera:
-    open_head: false
-    open_wrist_left: false
-    open_wrist_right: false
+    open_head: true
+    open_wrist_left: true
+    open_wrist_right: true
     update_interval_ms: 33
   trajectory:
-    play: true
+    play: false
     selected_joints:
-    - 0
-    - 1
-    - 3
-    source: []
+    - 6
+    source:
+    - ActionFitted
+    - ActionRaw
     update_interval_ms: 50
 vla_zmq:
   client_addr: tcp://localhost:5566
