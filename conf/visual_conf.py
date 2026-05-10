@@ -13,7 +13,7 @@ def get_visual_config():
     config.camera.update_interval_ms = 33
 
     config.trajectory = ConfigDict()
-    config.trajectory.default_paused = True
+    config.trajectory.play = False
     config.trajectory.source = ['State']
     config.trajectory.selected_joints = [0, 1, 2, 3]
     config.trajectory.update_interval_ms = 50

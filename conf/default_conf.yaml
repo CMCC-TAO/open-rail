@@ -355,17 +355,20 @@ vis_zmq:
 visual:
   camera:
     connect_when_running: true
-    open_head: false
-    open_wrist_left: false
-    open_wrist_right: false
+    open_head: true
+    open_wrist_left: true
+    open_wrist_right: true
     update_interval_ms: 33
   trajectory:
-    default_paused: false
+    play: false
     selected_joints:
     - 0
     - 1
     - 2
     - 3
+    - 4
+    - 5
+    - 6
     source:
     - State
     update_interval_ms: 50
