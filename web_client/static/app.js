@@ -1147,7 +1147,10 @@ function applyVisualConfig(cfg = App.config) {
   camState.updateInterval = _toInt(camCfg.update_interval_ms, camState.updateInterval || 33, 16);
   restartCameraUpdateTimer();
 
-  const camOpenCfg = Array.isArray(camCfg.default_open) ? camCfg.default_open : App.camOpen;
+  const hasNamedCamOpen = ['open_head', 'open_wrist_left', 'open_wrist_right'].some(k => k in camCfg);
+  const camOpenCfg = hasNamedCamOpen
+    ? [camCfg.open_head, camCfg.open_wrist_left, camCfg.open_wrist_right]
+    : (Array.isArray(camCfg.default_open) ? camCfg.default_open : App.camOpen);
   const nextCamOpen = [0, 1, 2].map(i => !!camOpenCfg[i]);
   for (let i = 0; i < 3; i++) {
     if (App.camOpen[i] !== nextCamOpen[i]) toggleCamera(i);
@@ -1162,17 +1165,33 @@ function applyVisualConfig(cfg = App.config) {
   App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
   App.traj.updateIntervalMs = _toInt(trajCfg.update_interval_ms, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
 
-  if (Array.isArray(trajCfg.default_source)) {
+  const sourceCfgRaw = Array.isArray(trajCfg.source)
+    ? trajCfg.source
+    : (Array.isArray(trajCfg.default_source) ? trajCfg.default_source : null);
+  if (Array.isArray(sourceCfgRaw)) {
     const source = new Set();
-    trajCfg.default_source.forEach(k => {
-      if (k === 'state' || k === 'action') source.add(k);
+    sourceCfgRaw.forEach(k => {
+      const key = String(k).trim().toLowerCase();
+      if (key === 'state' || key === 'action') source.add(key);
     });
     if (source.size > 0) App.traj.source = source;
   }
 
-  if (Array.isArray(trajCfg.default_selected_joints)) {
-    const joints = trajCfg.default_selected_joints
-      .map(v => parseInt(v, 10))
+  const selectedJointsRaw = trajCfg.selected_joints ?? trajCfg.default_selected_joints;
+  let jointTokens = [];
+  if (Array.isArray(selectedJointsRaw)) {
+    jointTokens = selectedJointsRaw;
+  } else if (typeof selectedJointsRaw === 'string') {
+    jointTokens = selectedJointsRaw.split(',').map(v => v.trim()).filter(Boolean);
+  }
+  if (jointTokens.length > 0) {
+    const joints = jointTokens
+      .map(v => {
+        if (typeof v === 'number') return v;
+        const s = String(v).trim();
+        if (/^[LR]\d+$/i.test(s)) return parseInt(s.slice(1), 10) + (s[0].toUpperCase() === 'R' ? 7 : 0);
+        return parseInt(s, 10);
+      })
       .filter(v => Number.isFinite(v) && v >= 0 && v < TRAJ_JOINT_COUNT);
     if (joints.length > 0) App.traj.selectedJoints = new Set(joints);
   }

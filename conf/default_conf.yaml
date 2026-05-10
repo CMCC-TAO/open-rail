@@ -355,20 +355,19 @@ vis_zmq:
 visual:
   camera:
     connect_when_running: true
-    default_open:
-    - false
-    - false
-    - false
+    open_head: false
+    open_wrist_left: false
+    open_wrist_right: false
     update_interval_ms: 33
   trajectory:
     default_paused: false
-    default_selected_joints:
+    selected_joints:
     - 0
     - 1
     - 2
     - 3
-    default_source:
-    - state
+    source:
+    - State
     update_interval_ms: 50
 vla_zmq:
   client_addr: tcp://localhost:5566
