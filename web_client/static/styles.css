@@ -175,6 +175,26 @@ html, body {
 .panel-lang .panel-body { padding: 8px; }
 .panel-lang .panel-body.collapsed { display: none; }
 
+.lang-auto-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.lang-auto-mode input {
+  margin: 0;
+  cursor: pointer;
+}
+
 .task-progress-wrap {
   display: inline-flex;
   align-items: center;
