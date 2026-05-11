@@ -31,6 +31,8 @@ const CAM_WS_RECONNECT = 3000;
 
 // Max data points per series (mirrors visual/app.js maxChartPoints)
 const MAX_CHART_POINTS  = 1500;
+// Sliding window span computed from latest points per source
+const TRAJ_WINDOW_POINT_COUNT = 600;
 // Default trajectory chart update interval in ms (20 FPS)
 const DEFAULT_TRAJ_UPDATE_MS = 50;
 
@@ -1985,24 +1987,53 @@ function recomputeTrajXWindow() {
   const keys = ['state', 'action_fitted', 'action_raw'];
   const activeKeys = keys.filter(k => t.source.has(k));
   const targetKeys = activeKeys.length ? activeKeys : keys;
-  const leftCandidates = [];
-  const rightCandidates = [];
 
+  const rightCandidates = [];
   targetKeys.forEach(k => {
     const buf = t.buffer[k];
     if (!buf || buf.length === 0) return;
-    leftCandidates.push(buf[0].x);
     rightCandidates.push(buf[buf.length - 1].x);
   });
+  if (!rightCandidates.length) return;
 
-  if (leftCandidates.length && rightCandidates.length) {
+  const right = Math.max(...rightCandidates);
+  if (!Number.isFinite(right)) return;
+
+  const calcSpanByRecentPoints = (buf) => {
+    if (!buf || buf.length < 2) return null;
+    const lastIdx = buf.length - 1;
+    const firstIdx = Math.max(0, lastIdx - (TRAJ_WINDOW_POINT_COUNT - 1));
+    const span = buf[lastIdx].x - buf[firstIdx].x;
+    return Number.isFinite(span) && span > 0 ? span : null;
+  };
+
+  // Prefer State / ActionFitted span, fallback to ActionRaw.
+  const preferredOrder = ['state', 'action_fitted', 'action_raw'];
+  let span = null;
+  for (const k of preferredOrder) {
+    const s = calcSpanByRecentPoints(t.buffer[k]);
+    if (s != null) { span = s; break; }
+  }
+
+  if (span == null) {
+    // Fallback to full visible span of current target keys.
+    const leftCandidates = [];
+    targetKeys.forEach(k => {
+      const buf = t.buffer[k];
+      if (!buf || buf.length === 0) return;
+      leftCandidates.push(buf[0].x);
+    });
+    if (!leftCandidates.length) return;
     const left = Math.max(...leftCandidates);
-    const right = Math.max(...rightCandidates);
-    if (Number.isFinite(left) && Number.isFinite(right) && right >= left) {
+    if (Number.isFinite(left) && right >= left) {
       t.xLeft = left;
       t.xRight = right;
     }
+    return;
   }
+
+  t.xRight = right;
+  t.xLeft = right - span;
 }
 
 /* ── Ingest new data point ── */

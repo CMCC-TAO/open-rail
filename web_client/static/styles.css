@@ -572,12 +572,13 @@ html, body {
   gap: 3px;
 }
 
-.traj-src-col-action .traj-src-check { width: 142px; }
+.traj-src-col-action .traj-src-check { width: 128px; }
 .traj-src-col-state .traj-src-check { width: 96px; }
 
 .traj-src-check {
   display: inline-flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   height: 22px;
   padding: 0 6px;
@@ -596,7 +597,7 @@ html, body {
 }
 
 .traj-src-btn-text {
-  flex: 1;
+  flex: 0 0 auto;
   text-align: left;
 }
 
