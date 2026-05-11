@@ -29,10 +29,13 @@ const RECONNECT = 3000;
 const CAM_WS_URL       = `ws://${location.hostname}:8765`;
 const CAM_WS_RECONNECT = 3000;
 
-// Max data points per series (mirrors visual/app.js maxChartPoints)
-const MAX_CHART_POINTS  = 1500;
-// Sliding window span computed from latest points per source
-const TRAJ_WINDOW_POINT_COUNT = 600;
+// Trajectory x-axis window span (seconds).
+// Historical mapping: old point-count window used 600 points with fitting_time_step=3.75ms => 2.25s.
+const TRAJ_WINDOW_SPAN_SEC = 10.0;
+// Maximum supported trajectory window span (seconds).
+const TRAJ_WINDOW_SPAN_SEC_MAX = 15.0;
+// Hard cap for safety under very high-frequency streams.
+const TRAJ_BUFFER_HARD_MAX_POINTS = 20000;
 // Default trajectory chart update interval in ms (20 FPS)
 const DEFAULT_TRAJ_UPDATE_MS = 50;
 
@@ -104,6 +107,8 @@ const App = {
     lastX: 0,
     // x window bounds
     xLeft: 0, xRight: 0,
+    // fixed x-axis sliding window span in seconds
+    windowSpanSec: normalizeTrajWindowSpanSec(TRAJ_WINDOW_SPAN_SEC),
     // Single unified Chart.js instance
     chart: null,
     // Dirty flag → batch updates at configured interval
@@ -1345,6 +1350,30 @@ function _toInt(v, fallback, min = null) {
   return n;
 }
 
+function normalizeTrajWindowSpanSec(rawSpanSec, fallback = TRAJ_WINDOW_SPAN_SEC) {
+  const fallbackVal = Number(fallback);
+  const fallbackSafe = Number.isFinite(fallbackVal) && fallbackVal > 0
+    ? Math.min(fallbackVal, TRAJ_WINDOW_SPAN_SEC_MAX)
+    : 2.25;
+  const span = Number(rawSpanSec);
+  if (!Number.isFinite(span) || span <= 0) return fallbackSafe;
+  return Math.min(span, TRAJ_WINDOW_SPAN_SEC_MAX);
+}
+
+function trimTrajBufferToMaxWindow(bufferKey, latestX) {
+  const t = App.traj;
+  const buf = t.buffer[bufferKey];
+  if (!buf || buf.length === 0 || !Number.isFinite(latestX)) return;
+
+  const cutoff = latestX - TRAJ_WINDOW_SPAN_SEC_MAX;
+  while (buf.length > 0 && Number.isFinite(buf[0].x) && buf[0].x < cutoff) {
+    buf.shift();
+  }
+  if (buf.length > TRAJ_BUFFER_HARD_MAX_POINTS) {
+    buf.splice(0, buf.length - TRAJ_BUFFER_HARD_MAX_POINTS);
+  }
+}
+
 function applyVisualConfig(cfg = App.config) {
   const visualCfg = (cfg && typeof cfg === 'object') ? (cfg.visual || {}) : {};
 
@@ -1375,6 +1404,8 @@ function applyVisualConfig(cfg = App.config) {
     App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
   }
   App.traj.updateIntervalMs = _toInt(trajCfg.update_interval_ms, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
+  const cfgWindowSpanSec = Number(trajCfg.window_span_sec ?? trajCfg.window_sec ?? trajCfg.window_seconds);
+  App.traj.windowSpanSec = normalizeTrajWindowSpanSec(cfgWindowSpanSec, App.traj.windowSpanSec);
 
   const sourceCfgRaw = Array.isArray(trajCfg.source)
     ? trajCfg.source
@@ -1999,41 +2030,10 @@ function recomputeTrajXWindow() {
   const right = Math.max(...rightCandidates);
   if (!Number.isFinite(right)) return;
 
-  const calcSpanByRecentPoints = (buf) => {
-    if (!buf || buf.length < 2) return null;
-    const lastIdx = buf.length - 1;
-    const firstIdx = Math.max(0, lastIdx - (TRAJ_WINDOW_POINT_COUNT - 1));
-    const span = buf[lastIdx].x - buf[firstIdx].x;
-    return Number.isFinite(span) && span > 0 ? span : null;
-  };
-
-  // Prefer State / ActionFitted span, fallback to ActionRaw.
-  const preferredOrder = ['state', 'action_fitted', 'action_raw'];
-  let span = null;
-  for (const k of preferredOrder) {
-    const s = calcSpanByRecentPoints(t.buffer[k]);
-    if (s != null) { span = s; break; }
-  }
-
-  if (span == null) {
-    // Fallback to full visible span of current target keys.
-    const leftCandidates = [];
-    targetKeys.forEach(k => {
-      const buf = t.buffer[k];
-      if (!buf || buf.length === 0) return;
-      leftCandidates.push(buf[0].x);
-    });
-    if (!leftCandidates.length) return;
-    const left = Math.max(...leftCandidates);
-    if (Number.isFinite(left) && right >= left) {
-      t.xLeft = left;
-      t.xRight = right;
-    }
-    return;
-  }
-
+  const span = normalizeTrajWindowSpanSec(t.windowSpanSec, TRAJ_WINDOW_SPAN_SEC);
+  t.windowSpanSec = span;
   t.xRight = right;
-  t.xLeft = right - span;
+  t.xLeft = Math.max(0, right - span);
 }
 
 /* ── Ingest new data point ── */
@@ -2055,15 +2055,15 @@ function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampS
 
   if (stateArr.length > 0) {
     t.buffer.state.push({ x, joints_y: stateArr.slice() });
-    if (t.buffer.state.length > MAX_CHART_POINTS) t.buffer.state.shift();
+    trimTrajBufferToMaxWindow('state', x);
   }
   if (actionFittedArr.length > 0) {
     t.buffer.action_fitted.push({ x, joints_y: actionFittedArr.slice() });
-    if (t.buffer.action_fitted.length > MAX_CHART_POINTS) t.buffer.action_fitted.shift();
+    trimTrajBufferToMaxWindow('action_fitted', x);
   }
   if (actionRawArr.length > 0) {
     t.buffer.action_raw.push({ x, joints_y: actionRawArr.slice() });
-    if (t.buffer.action_raw.length > MAX_CHART_POINTS) t.buffer.action_raw.shift();
+    trimTrajBufferToMaxWindow('action_raw', x);
   }
 
   // If Source is None (all unchecked), keep axis frozen and skip redraw trigger.
