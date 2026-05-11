@@ -80,6 +80,11 @@ const App = {
   // Camera open/close state — default all closed
   camOpen: [false, false, false],
 
+  // Language auto mode state
+  langAuto: {
+    lastProgress: null,
+  },
+
   // ── Trajectory chart state ──
   traj: {
     // Set<'state'|'action_fitted'|'action_raw'> — which sources to display (can be combined)
@@ -397,12 +402,60 @@ function updateTaskProgress(rawProgress) {
   if (!Number.isFinite(parsed)) {
     fillEl.style.width = '0%';
     valueEl.textContent = '--';
+    App.langAuto.lastProgress = null;
     return;
   }
 
   const clamped = Math.max(0, Math.min(1, parsed));
   fillEl.style.width = `${(clamped * 100).toFixed(1)}%`;
   valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
+  maybeAutoSwitchLanguageByProgress(clamped);
+}
+
+function maybeAutoSwitchLanguageByProgress(progress01) {
+  const autoChk = $('chk-lang-auto-mode');
+  if (!autoChk || !autoChk.checked) {
+    App.langAuto.lastProgress = progress01;
+    return;
+  }
+
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  const textEl = $('lang-cmd-text');
+  if (!taskSel || !subtaskSel || !textEl) return;
+
+  const taskName = taskSel.value;
+  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  const n = subtasks.length;
+  if (n <= 1) {
+    App.langAuto.lastProgress = progress01;
+    return;
+  }
+
+  const prev = App.langAuto.lastProgress;
+  App.langAuto.lastProgress = progress01;
+  if (!Number.isFinite(prev)) return;
+
+  let curIdx = parseInt(subtaskSel.value, 10);
+  if (!Number.isFinite(curIdx) || curIdx < 0) curIdx = 0;
+
+  let nextIdx = curIdx;
+  while (nextIdx < n - 1) {
+    const threshold = (nextIdx + 1) / n;
+    if (prev < threshold && progress01 >= threshold) nextIdx += 1;
+    else break;
+  }
+
+  if (nextIdx === curIdx) return;
+
+  subtaskSel.value = String(nextIdx);
+  subtaskSel.dispatchEvent(new Event('change'));
+
+  const lang = subtasks[nextIdx];
+  if (typeof lang === 'string' && lang.trim()) {
+    textEl.value = lang;
+    sendCommand('set_language', { language: lang });
+  }
 }
 
 // Joint layout: J0-6 = Arm Left (7), J7-13 = Arm Right (7), J14+ = Gripper/Hand
@@ -1230,6 +1283,7 @@ function setupLangPanel() {
   if (taskSel) {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
+      App.langAuto.lastProgress = null;
       // Sync Config panel language_task select display only
       const cfgTaskSel = $('cfg-language-task');
       if (cfgTaskSel && cfgTaskSel.value !== taskSel.value) {
@@ -1253,6 +1307,13 @@ function setupLangPanel() {
       if (cfgIdxSel && cfgIdxSel.value !== subtaskSel.value) {
         cfgIdxSel.value = subtaskSel.value;
       }
+    });
+  }
+
+  const autoChk = $('chk-lang-auto-mode');
+  if (autoChk) {
+    autoChk.addEventListener('change', () => {
+      App.langAuto.lastProgress = null;
     });
   }
 }
