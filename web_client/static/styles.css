@@ -174,6 +174,47 @@ html, body {
 }
 .panel-lang .panel-body { padding: 8px; }
 .panel-lang .panel-body.collapsed { display: none; }
+
+.task-progress-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.task-progress-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.task-progress-track {
+  width: 160px;
+  height: 80%;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg2);
+  overflow: hidden;
+}
+.task-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #2da44e 0%, #0969da 100%);
+  transition: width .2s ease;
+}
+.task-progress-value {
+  min-width: 44px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
 /* When lang panel is expanded (traj collapsed), allow body to fill vertically */
 .panel-lang.expanded .panel-body {
   overflow-y: auto;
