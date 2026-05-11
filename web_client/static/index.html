@@ -251,11 +251,23 @@
               <span class="traj-src-label">Source</span>
               <div class="traj-src-rows">
                 <div class="traj-src-col traj-src-col-action">
-                  <button class="btn btn-xs" id="btn-traj-action-fitted"><span class="traj-src-btn-text">ActionFitted</span><span class="traj-line-indicator traj-line-indicator-action-fitted" aria-hidden="true"></span></button>
-                  <button class="btn btn-xs" id="btn-traj-action-raw"><span class="traj-src-btn-text">ActionRaw</span><span class="traj-line-indicator traj-line-indicator-action-raw" aria-hidden="true"></span></button>
+                  <label class="traj-src-check" title="Toggle Action Fitted source">
+                    <input id="chk-traj-action-fitted" type="checkbox" />
+                    <span class="traj-src-btn-text">Action Fit</span>
+                    <span class="traj-line-indicator traj-line-indicator-action-fitted" aria-hidden="true"></span>
+                  </label>
+                  <label class="traj-src-check" title="Toggle Action Raw source">
+                    <input id="chk-traj-action-raw" type="checkbox" />
+                    <span class="traj-src-btn-text">Action Raw</span>
+                    <span class="traj-line-indicator traj-line-indicator-action-raw" aria-hidden="true"></span>
+                  </label>
                 </div>
                 <div class="traj-src-col traj-src-col-state">
-                  <button class="btn btn-xs btn-active" id="btn-traj-state"><span class="traj-src-btn-text">State</span><span class="traj-line-indicator traj-line-indicator-state" aria-hidden="true"></span></button>
+                  <label class="traj-src-check" title="Toggle State source">
+                    <input id="chk-traj-state" type="checkbox" checked />
+                    <span class="traj-src-btn-text">State</span>
+                    <span class="traj-line-indicator traj-line-indicator-state" aria-hidden="true"></span>
+                  </label>
                   <button class="btn btn-xs" id="btn-traj-all"><span class="traj-src-btn-text">All</span></button>
                 </div>
               </div>
