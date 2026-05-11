@@ -223,48 +223,38 @@ class UnitreeG1Robot(Node):
 
 
 # ==============================================
-# main：统一管理两个节点 + 测试
+# main：纯机器人驱动测试（无需相机）
 # ==============================================
 def main():
     rclpy.init()
 
-    from UnitreeG1Camera import UnitreeG1Camera
-    print("Starting UnitreeG1Camera + UnitreeG1Robot...")
-    camera = UnitreeG1Camera()
     robot = UnitreeG1Robot()
 
+    # 启动自旋线程，让 ROS2 回调正常工作
     running = True
     def spin_worker():
         while running:
-            rclpy.spin_once(camera, timeout_sec=0.005)
             rclpy.spin_once(robot, timeout_sec=0.005)
 
     spin_thread = threading.Thread(target=spin_worker, daemon=True)
     spin_thread.start()
 
-    print("Waiting for camera/robot data...")
-    time.sleep(2.5)
+    print("Waiting for robot state data...")
+    time.sleep(2.0)
 
-    # 读取相机
-    cam_data = camera.get_latest_image()
-    if not cam_data:
-        print("No camera data")
-        running = False
-        return
-
-    head_img, head_ts, left_img, left_ts, right_img, right_ts = cam_data
-    print("Camera sync OK, head ts:", head_ts)
-
-    # 机器人状态对齐
-    robot_state = robot.get_arm_hand_states_nearest_func(head_ts)
-    print("Robot state alignment OK, ref ts:", robot_state["ref_timestamp"])
+    # 打印当前读取到的状态
+    print("Left arm state:", robot.latest_left_arm)
+    print("Right arm state:", robot.latest_right_arm)
+    print("Left hand state:", robot.latest_left_hand)
+    print("Right hand state:", robot.latest_right_hand)
 
     # 动作控制测试：26 维动作
+    print("\nSending 26-dim action (right hand close)...")
     action = [
-        -1.0072, 1.4473, 1.6156, -1.8399, -0.4101, -0.2185, -0.3232,
-        1.0072, 1.4473, -1.6156, -1.8399, 0.4101, -0.2252, 0.3232,
-        -1000.0, -1000.0, -1000.0, -1000.0, -1000.0, -1000.0,
-        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0,
+        -1.0072, 1.4473, 1.6156, -1.8399, -0.4101, -0.2185, -0.3232,  # left arm
+        1.0072, 1.4473, -1.6156, -1.8399, 0.4101, -0.2252, 0.3232,    # right arm
+        -1000.0, -1000.0, -1000.0, -1000.0, -1000.0, -1000.0,         # left hand (disabled)
+        650.0, 650.0, 650.0, 650.0, 650.0, 250.0,                    # right hand (close)
     ]
     robot.send_robot_action(action)
     print("Action sent OK")
@@ -273,7 +263,7 @@ def main():
 
     running = False
     robot.stop()
-    print("All tests passed")
+    print("Robot driver test done")
 
 
 if __name__ == "__main__":
