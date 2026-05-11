@@ -37,7 +37,7 @@ class ZMQClient():
             return None
 
         try:
-            if self.dealer.poll(timeout=100) != 0:
+            if self.dealer.poll(timeout=500) != 0:
                 parts = self.dealer.recv_multipart()
                 if len(parts) >= 2:
                     return {

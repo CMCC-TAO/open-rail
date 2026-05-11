@@ -191,7 +191,6 @@ class VLAClientSync():
         if data is not None:
             # Record inference start timestamp for control timestamp updates
             self.rdm.set_infer_time_marker()
-            self.rdm.add_infer_count()
             
             # Send data for inference and wait for results
             if not self.vla_zmq.sendMessage(data):
@@ -199,6 +198,7 @@ class VLAClientSync():
             result = self.vla_zmq.recvMessage()
             if result is None or 'data' not in result:
                 return
+            self.rdm.add_infer_count()
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
@@ -212,6 +212,7 @@ class VLAClientSync():
             self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
             # Record trajectory fitting timestamp
+            self.rdm.set_traj_time_marker()
             action_chunk_fitted = np.vstack(action_chunk)
             action_chunk_fitted = action_chunk_fitted.T
             vel_chunk_fitted = np.zeros_like(action_chunk_fitted)
@@ -220,6 +221,7 @@ class VLAClientSync():
             self.action_length = len(action_chunk)
 
             # Record control timestamp
+            self.rdm.set_control_time_marker()
             self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted)
 
             # Compute average inference and trajectory fitting times
