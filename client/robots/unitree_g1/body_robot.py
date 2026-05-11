@@ -1,166 +1,223 @@
 import time
-import logging
+import cv2
 import numpy as np
-
+from .UnitreeG1Robot import UnitreeG1Robot as Robot
+from .UnitreeG1Camera import UnitreeG1Camera as Camera
 from ..base_robot import RobotBase
+import rclpy
+import copy
+import threading
 
 
 class RobotBody(RobotBase):
-    """Template robot adapter for Unitree G1.
-
-    This file is intentionally kept close to the style of existing robot adapters.
-    Replace TODO blocks with your real G1 SDK integration.
-    """
+    """Unitree G1 机器人业务层（纯 ROS2 + 26 维灵巧手）"""
 
     def __init__(self, config):
-        """Initialize Unitree G1 robot adapter.
-
-        Args:
-            config (dict): Full project config.
-        """
         super().__init__()
-        self.logger = logging.getLogger(__name__)
-        self.cfg, self.ori_cfg = config['robots']['unitree_g1'], config
-        self.action_layout = dict(self.cfg.get('action_layout', {}))
-        self.action_dim = max([v['end'] for v in self.action_layout.values()]) if self.action_layout else 0
+        self.cfg, self.ori_cfg = config["robots"]["unitree_g1"], config
 
-        self.current_state = np.zeros(self.action_dim, dtype=np.float32)
+        if not rclpy.ok():
+            rclpy.init()
+
+        self.camera = Camera()
+        self.robot = Robot()
+
+        # 统一自旋线程
+        self.running = True
+        self._start_spin_thread()
+
+        # 状态缓存
         self.current_timestamp = 0
+        self.current_state = None
 
-        self.gripper_count = 0
-        self.head_count = 0
+        print("Unitree G1 RobotBody ready")
+        time.sleep(2.0)
 
-        # TODO(unitree_g1): Initialize your G1 SDK objects here.
-        # Example placeholders:
-        # self.camera = YourG1CameraSDK(...)
-        # self.robot = YourG1ControlSDK(...)
-        self.camera = None
-        self.robot = None
+    def _start_spin_thread(self):
+        def spin_worker():
+            while self.running:
+                rclpy.spin_once(self.camera, timeout_sec=0.005)
+                rclpy.spin_once(self.robot, timeout_sec=0.005)
+        spin_thread = threading.Thread(target=spin_worker, daemon=True)
+        spin_thread.start()
 
-        self.logger.info('Unitree G1 RobotBody initialized (template mode).')
-
+    # ==================================================================
+    # 控制机器人（26 维动作）
+    # ==================================================================
     def control_robot(self, action):
-        """Control robot by splitting full action vector using action_layout.
+        """发送 26 维动作
 
-        Args:
-            action (array-like): Full action vector from controller.
+        action[0:7]   -> 左臂
+        action[7:14]  -> 右臂
+        action[14:20] -> 左手
+        action[20:26] -> 右手
         """
-        action = np.asarray(action)
-        segments = {name: action[v['start']:v['end']] for name, v in self.action_layout.items()}
+        action = np.array(action).flatten()
+        assert len(action) == 26, "must be 26-dim action"
+        self.robot.send_robot_action(action)
 
-        # Keep same calling style as a2d implementation.
-        if 'arm' in segments:
-            self.execute_action({'arm': segments['arm'].tolist()})
-
-        if 'gripper' in segments and self.gripper_count % self.cfg.get('gripper_freq', 1) == 0:
-            self.gripper_count = 0
-            self.execute_action({'gripper': segments['gripper'].tolist()})
-        self.gripper_count += 1
-
-        if 'head' in segments and self.head_count % self.cfg.get('head_freq', 1) == 0:
-            self.head_count = 0
-            self.execute_action({'head': segments['head'].tolist()})
-        self.head_count += 1
-
-        if 'waist' in segments:
-            self.execute_action({'waist': segments['waist'].tolist()})
-
-        if 'wheel' in segments:
-            self.execute_action({'wheel': segments['wheel'].tolist()})
-
-    def execute_action(self, data):
-        """Execute low-level action command with your G1 SDK.
-
-        Args:
-            data (dict): Action dictionary, e.g. {'arm': [...], 'gripper': [...]}.
-        """
-        # TODO(unitree_g1): Map these keys to your real SDK APIs.
-        # Suggested mapping style (example only):
-        # if 'arm' in data:
-        #     self.robot.move_arm(data['arm'])
-        # if 'gripper' in data:
-        #     self.robot.move_gripper(data['gripper'])
-        # if 'head' in data:
-        #     self.robot.move_head(data['head'])
-        # if 'waist' in data:
-        #     self.robot.move_waist(data['waist'])
-        # if 'wheel' in data:
-        #     self.robot.move_wheel(data['wheel'][0], data['wheel'][1])
-        if self.robot is None:
-            self.logger.debug(f'execute_action skipped (template mode), data keys: {list(data.keys())}')
-
-    def reset_robot(self, target_pose=None, mode='default'):
-        """Reset robot to safe/default pose.
-
-        Args:
-            target_pose (array-like | None): Target pose.
-            mode (str): Reset mode.
-        """
+    # ==================================================================
+    # 复位机器人（使用 ruckig 轨迹规划）
+    # ==================================================================
+    def reset_robot(self, target_pose=None, mode="default"):
         if target_pose is None:
-            if mode == 'default':
-                target_pose = np.array(self.cfg.get('reset_robot_pos', []), dtype=np.float32)
-            elif mode == 'zero':
-                target_pose = np.zeros(self.action_dim, dtype=np.float32)
+            if mode == "default":
+                target_pose = np.array(self.cfg["reset_robot_pos"])
+            elif mode == "zero":
+                target_pose = np.zeros(26)
             else:
-                self.logger.warning('target_pose is None and mode is unsupported, skip reset.')
+                print("Warning: unknown reset mode, skip")
                 return
+        target_pose = np.array(target_pose)
+
+        # 使用 ruckig 平滑规划前 14 维（左右臂）
+        current_obs = self.retrieve_observation()
+        if current_obs is not None:
+            current_positions = current_obs["obs.state"][:14]
+            target_positions = target_pose[:14]
+            dis = np.abs(current_positions - target_positions)
+            if np.any(dis > np.deg2rad(0.01)):
+                trajs = self.ruckig_planning(current_positions, target_positions)
+                for traj in trajs:
+                    tmp = target_pose.copy()
+                    tmp[:14] = traj
+                    self.robot.send_robot_action(tmp)
+                    time.sleep(0.01)
+            else:
+                self.robot.send_robot_action(target_pose)
         else:
-            target_pose = np.array(target_pose, dtype=np.float32)
+            self.robot.send_robot_action(target_pose)
 
-        # TODO(unitree_g1): Implement smooth reset with real SDK if needed.
-        # You can also reuse self.ruckig_planning(...) for arm joints.
-        self.current_state = target_pose.copy()
+        # 设置手部初始状态
+        self.robot.current_left_hand_state = target_pose[14:20]
+        self.robot.current_right_hand_state = target_pose[20:26]
 
-        segments = {name: target_pose[v['start']:v['end']] for name, v in self.action_layout.items()}
-        if 'arm' in segments:
-            self.execute_action({'arm': segments['arm'].tolist()})
-        if 'gripper' in segments:
-            self.execute_action({'gripper': segments['gripper'].tolist()})
-        if 'head' in segments:
-            self.execute_action({'head': segments['head'].tolist()})
-        if 'waist' in segments:
-            self.execute_action({'waist': segments['waist'].tolist()})
+        time.sleep(1.0)
+        print("Unitree G1 reset done")
 
+    # ==================================================================
+    # 获取观测（图像 + 对齐后的关节角）
+    # ==================================================================
     def retrieve_observation(self):
-        """Retrieve observation from Unitree G1 SDK.
+        try:
+            result = {}
+            cam_data = self.camera.get_latest_image()
+            if not cam_data:
+                return None
 
-        Returns:
-            dict or None: Must follow framework contract:
-                - ref_timestamp
-                - cam.<name> image arrays
-                - obs.state numpy array
-        """
-        # TODO(unitree_g1): Read synchronized camera frames and robot state from your SDK.
-        # Contract example:
-        # result = {
-        #     'ref_timestamp': ref_timestamp,
-        #     'cam.head': image_head,
-        #     'cam.hand_left': image_left,
-        #     'cam.hand_right': image_right,
-        #     'obs.state': np.array(joint_states, dtype=np.float32),
-        # }
-        # return result
+            head_img, head_ts, left_img, left_ts, right_img, right_ts = cam_data
+            if self.current_timestamp == head_ts:
+                return None
 
-        # Template fallback: return None when no SDK data source is wired yet.
-        return None
+            self.current_timestamp = head_ts
 
+            # 图像
+            result["cam.head"] = head_img
+            result["cam.hand_left"] = left_img
+            result["cam.hand_right"] = right_img
+            result["ref_timestamp"] = head_ts
+
+            # 机器人状态对齐（以头部相机时间戳为基准）
+            robot_state = self.robot.get_arm_hand_states_nearest_func(head_ts)
+
+            # 拼接 26 维 state 向量
+            state = []
+
+            # 左臂
+            if robot_state["left_arm"] is not None:
+                state.extend(robot_state["left_arm"].position)
+            else:
+                state.extend([0] * 7)
+
+            # 右臂
+            if robot_state["right_arm"] is not None:
+                state.extend(robot_state["right_arm"].position)
+            else:
+                state.extend([0] * 7)
+
+            # 左手
+            if robot_state["left_hand"] is not None:
+                state.extend(robot_state["left_hand"].position)
+            else:
+                state.extend([0] * 6)
+
+            # 右手
+            if robot_state["right_hand"] is not None:
+                state.extend(robot_state["right_hand"].position)
+            else:
+                state.extend([0] * 6)
+
+            result["obs.state"] = np.array(state)
+            self.current_state = result["obs.state"]
+            return result
+
+        except Exception as e:
+            print("Observation error:", e)
+            return None
+
+    # ==================================================================
+    # 关闭
+    # ==================================================================
     def close(self):
-        """Release hardware resources."""
-        # TODO(unitree_g1): Close camera/robot SDK sessions here.
-        self.logger.info('Close Unitree G1 robot (template mode).')
+        self.running = False
+        print("Unitree G1 RobotBody closed")
 
 
-if __name__ == '__main__':
-    from conf.robots_conf import get_robots_config
+# ==============================================
+# 测试
+# ==============================================
+def test_robot_body():
+    print("=" * 60)
+    print("Testing Unitree G1 RobotBody")
+    print("=" * 60)
 
-    cfg = get_robots_config()
-    robot = RobotBody(cfg)
-    try:
-        while True:
-            obs = robot.retrieve_observation()
-            if obs is None:
-                time.sleep(0.01)
-                continue
-            print(f"obs keys: {list(obs.keys())}")
-    except KeyboardInterrupt:
-        robot.close()
+    default_action = (
+        [-1.6819, 1.5263, 2.2737, -0.2362, -0.5204, 0.1292, 0.1906]  # left arm
+        + [1.3119, 1.4473, -1.6156, -1.6655, 0.4101, -0.2252, 0.3232]  # right arm
+        + [1000.0] * 6  # left hand (all -1000 = disabled)
+        + [650.0, 650.0, 650.0, 650.0, 650.0, 250.0]  # right hand
+    )
+
+    mock_config = {
+        "robots": {
+            "unitree_g1": {
+                "reset_robot_pos": default_action,
+            }
+        }
+    }
+
+    robot_body = RobotBody(mock_config)
+    time.sleep(1.0)
+
+    # 测试 1：获取观测
+    print("\nTest 1: retrieve observation...")
+    for _ in range(10):
+        obs = robot_body.retrieve_observation()
+        if obs is not None:
+            print("  OK - state dim:", obs["obs.state"].shape, "head img:", obs["cam.head"].shape)
+            break
+        time.sleep(0.1)
+    else:
+        print("  FAIL - no observation")
+
+    # 测试 2：动作控制
+    print("\nTest 2: control robot (right hand close)...")
+    action = np.zeros(26)
+    action[20:26] = [650.0, 650.0, 650.0, 650.0, 650.0, 250.0]
+    robot_body.control_robot(action)
+    print("  OK")
+    time.sleep(1.5)
+
+    # 测试 3：复位
+    print("\nTest 3: reset robot...")
+    robot_body.reset_robot(mode="default")
+    print("  OK")
+
+    robot_body.close()
+    print("\n" + "=" * 60)
+    print("All tests passed")
+    print("=" * 60)
+
+
+if __name__ == "__main__":
+    test_robot_body()

@@ -66,20 +66,18 @@ def get_unitree_g1_config():
     """
     config = ConfigDict()
     config.camera = ConfigDict()
-    config.hand_type = 'gripper'
+    config.hand_type = 'hand'
     config.camera.ref = 'head'
     config.camera.names = {
         'head': 'head',
         'hand_left': 'hand_left',
         'hand_right': 'hand_right',
     }
-    config.proprio_names = ['arm', 'gripper']
-    config.gripper_freq = 40
-    config.head_freq = 40
-    config.reset_robot_pos = [0.0] * 16
+    config.proprio_names = ['arm', 'hand']
+    config.reset_robot_pos = [0.0] * 26
     config.action_layout = {
         'arm': {'start': 0, 'end': 14, 'policy': 'joint'},
-        'gripper': {'start': 14, 'end': 16, 'policy': 'gripper'},
+        'hand': {'start': 14, 'end': 26, 'policy': 'hand'},
     }
     return config
 
