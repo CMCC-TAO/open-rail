@@ -188,7 +188,6 @@ class VLAClientAsync():
         if data is not None:
             # Record inference start timestamp for control timestamp updates
             self.rdm.set_infer_time_marker()
-            self.rdm.add_infer_count()
             
             # Send data for inference and wait for results
             if not self.vla_zmq.sendMessage(data):
@@ -196,6 +195,7 @@ class VLAClientAsync():
             result = self.vla_zmq.recvMessage()
             if result is None or 'data' not in result:
                 return
+            self.rdm.add_infer_count()
 
             action_data = result['data']
             
@@ -245,7 +245,6 @@ class VLAClientAsync():
         if data is not None:
             # Record inference start timestamp
             self.rdm.set_infer_time_marker()
-            self.rdm.add_infer_count()
             
             # Send data for inference and wait for results
             if not self.vla_zmq.sendMessage(data):
@@ -253,6 +252,7 @@ class VLAClientAsync():
             result = self.vla_zmq.recvMessage()
             if result is None or 'data' not in result:
                 return
+            self.rdm.add_infer_count()
             action_data = result['data']
             
             # Get current data timestamp and update timestamps

@@ -197,11 +197,13 @@ class RealtimeDataManager():
         """Set the local timestamp when start inference. Used for calculating the inference time.
         """
         self.start_infer_marker = time.perf_counter()
+        print(f"Start inference at {self.start_infer_marker:.4f} s")
         
     def set_traj_time_marker(self):
         """Set the local timestamp when start trajectory fitting. Used for calculating the trajectory fitting time.
         """
         self.start_traj_marker = time.perf_counter()
+        print(f"Start trajectory fitting at {self.start_traj_marker:.4f} s")
         
     def set_control_time_marker(self):
         """Set the local timestamp when start control. Used for calculating the control time.
@@ -215,6 +217,7 @@ class RealtimeDataManager():
         currt_infer_time = self.start_traj_marker - self.start_infer_marker
         self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count
         self.logger.debug(f'avg infer time: {self.avg_infer_time}')
+        print(f"avg infer time: {self.avg_infer_time}, infer count: {self.infer_count}")
 
     def compute_avg_traj_time(self):
         """Compute the average trajectory fitting time. The average trajectory fitting time is used to set the offset of the action chunk.
