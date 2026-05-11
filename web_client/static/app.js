@@ -1414,14 +1414,14 @@ function applyVisualConfig(cfg = App.config) {
     _applyChipColor(chip, active, JOINT_COLORS[idx]);
   });
 
-  const btnState = $('btn-traj-state');
-  const btnActionFitted = $('btn-traj-action-fitted');
-  const btnActionRaw = $('btn-traj-action-raw');
+  const chkState = $('chk-traj-state');
+  const chkActionFitted = $('chk-traj-action-fitted');
+  const chkActionRaw = $('chk-traj-action-raw');
   const btnAllSource = $('btn-traj-all');
   const btnPlay = $('btn-traj-pause');
-  if (btnState) btnState.className = 'btn btn-xs' + (App.traj.source.has('state') ? ' btn-active' : '');
-  if (btnActionFitted) btnActionFitted.className = 'btn btn-xs' + (App.traj.source.has('action_fitted') ? ' btn-active' : '');
-  if (btnActionRaw) btnActionRaw.className = 'btn btn-xs' + (App.traj.source.has('action_raw') ? ' btn-active' : '');
+  if (chkState) chkState.checked = App.traj.source.has('state');
+  if (chkActionFitted) chkActionFitted.checked = App.traj.source.has('action_fitted');
+  if (chkActionRaw) chkActionRaw.checked = App.traj.source.has('action_raw');
   if (btnAllSource) {
     const allSelected = App.traj.source.has('state') && App.traj.source.has('action_fitted') && App.traj.source.has('action_raw');
     btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
@@ -2162,18 +2162,18 @@ function startTrajUpdateTimer() {
 
 /* ── Wire trajectory controls ── */
 function setupTrajPanel() {
-  // Source buttons: toggle independently; all can be deselected
-  const srcBtns = {
-    state: $('btn-traj-state'),
-    action_fitted: $('btn-traj-action-fitted'),
-    action_raw: $('btn-traj-action-raw'),
+  // Source checkboxes: toggle independently; all can be deselected
+  const srcChecks = {
+    state: $('chk-traj-state'),
+    action_fitted: $('chk-traj-action-fitted'),
+    action_raw: $('chk-traj-action-raw'),
   };
   const btnAllSource = $('btn-traj-all');
 
   function syncSrcButtons() {
-    Object.entries(srcBtns).forEach(([k, btn]) => {
-      if (!btn) return;
-      btn.className = 'btn btn-xs' + (App.traj.source.has(k) ? ' btn-active' : '');
+    Object.entries(srcChecks).forEach(([k, chk]) => {
+      if (!chk) return;
+      chk.checked = App.traj.source.has(k);
     });
     if (btnAllSource) {
       const s = App.traj.source;
@@ -2182,19 +2182,19 @@ function setupTrajPanel() {
       btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
   }
-  function toggleSource(src) {
+  function setSource(src, enabled) {
     const s = App.traj.source;
-    if (s.has(src)) s.delete(src);
-    else s.add(src);
+    if (enabled) s.add(src);
+    else s.delete(src);
     if (s.size > 0) recomputeTrajXWindow();
     App.traj.dirty = true;
     syncSrcButtons();
     refreshUnifiedChart();
     schedulePersistVisualState();
   }
-  $('btn-traj-state').addEventListener('click',         () => toggleSource('state'));
-  $('btn-traj-action-fitted').addEventListener('click', () => toggleSource('action_fitted'));
-  $('btn-traj-action-raw').addEventListener('click',    () => toggleSource('action_raw'));
+  srcChecks.state?.addEventListener('change', e => setSource('state', !!e.target.checked));
+  srcChecks.action_fitted?.addEventListener('change', e => setSource('action_fitted', !!e.target.checked));
+  srcChecks.action_raw?.addEventListener('change', e => setSource('action_raw', !!e.target.checked));
   if (btnAllSource) {
     btnAllSource.addEventListener('click', () => {
       const s = App.traj.source;
