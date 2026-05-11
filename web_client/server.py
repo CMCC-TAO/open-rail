@@ -518,6 +518,10 @@ def _collect_stats() -> dict:
         base["current_action"]  = [round(float(x), 4) for x in vc.info_current_action]
         base["info_obs"]        = {k: str(v) for k, v in vc.info_obs.items()}
         base["info_act"]        = {k: str(v) for k, v in vc.info_act.items()}
+        try:
+            base["current_prob_progress"] = float(vc.info_act.get("current_prob_progress", 0.0))
+        except Exception:
+            base["current_prob_progress"] = 0.0
         base["debug_info"]      = str(vc.debug_info)
         # base["config_snapshot"] = {
         #     "fps":              cfg.observer.fps,

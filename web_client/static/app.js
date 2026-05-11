@@ -324,6 +324,8 @@ function renderStats(data) {
   $('val-traj-time').textContent   = data.avg_traj_time != null
     ? (data.avg_traj_time * 1000).toFixed(1) + ' ms' : '–';
 
+  updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress);
+
   const cpuVal = Number(data.cpu_usage);
   const gpuVal = Number(data.gpu_usage);
   const memVal = Number(data.mem_usage);
@@ -384,6 +386,23 @@ function renderJoints(containerId, values) {
     chip.textContent = `J${i}: ${typeof v === 'number' ? v.toFixed(3) : v}`;
     el.appendChild(chip);
   });
+}
+
+function updateTaskProgress(rawProgress) {
+  const fillEl = $('task-progress-fill');
+  const valueEl = $('task-progress-value');
+  if (!fillEl || !valueEl) return;
+
+  const parsed = Number(rawProgress);
+  if (!Number.isFinite(parsed)) {
+    fillEl.style.width = '0%';
+    valueEl.textContent = '--';
+    return;
+  }
+
+  const clamped = Math.max(0, Math.min(1, parsed));
+  fillEl.style.width = `${(clamped * 100).toFixed(1)}%`;
+  valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
 }
 
 // Joint layout: J0-6 = Arm Left (7), J7-13 = Arm Right (7), J14+ = Gripper/Hand

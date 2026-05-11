@@ -199,6 +199,13 @@
         <div class="panel-header">
           <span>🗣 Language Command</span>
           <div class="panel-header-actions">
+            <div class="task-progress-wrap" id="task-progress-wrap" title="Task progress (current_prob_progress)">
+              <span class="task-progress-label">Task Progress</span>
+              <div class="task-progress-track">
+                <div class="task-progress-fill" id="task-progress-fill"></div>
+              </div>
+              <span class="task-progress-value" id="task-progress-value">--</span>
+            </div>
             <label class="btn btn-xs" title="Load JSON language file">
               📂 Load JSON
               <input id="lang-file-input" type="file" accept=".json" style="display:none" />
