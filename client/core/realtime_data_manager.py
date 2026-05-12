@@ -172,7 +172,7 @@ class RealtimeDataManager():
         self.sync_running = False
 
         # Inter-chunk transition / fusion helper
-        self.inter_chunk_fusion = InterChunkFusion(self)
+        self.inter_chunk_fusion = InterChunkFusion(logger=self.logger)
 
     def add_infer_count(self):
         """Add one to infer count for each inference step.
@@ -532,6 +532,12 @@ class RealtimeDataManager():
                 currt_action_full = self.action_chunk_fitted[:, self.action_chunk_index].copy()
                 currt_vel_full = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
                 currt_acc_full = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else np.zeros_like(currt_vel_full)
+                if self.action_chunk_index > 0 and self.vel_chunk_fitted is not None and self.timestamps_fitted is not None:
+                    prev_vel = self.vel_chunk_fitted[:, self.action_chunk_index - 1]
+                    dt_prev = self.timestamps_fitted[self.action_chunk_index] - self.timestamps_fitted[self.action_chunk_index - 1]
+                    currt_acc_poly = (currt_vel_full - prev_vel) / dt_prev if dt_prev > 0 else np.zeros_like(currt_vel_full)
+                else:
+                    currt_acc_poly = np.zeros_like(currt_vel_full)
 
             if inter_chunk_mode == 'search_action':
                 candidate_action_chunk = None
@@ -545,7 +551,14 @@ class RealtimeDataManager():
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
                 action_chunk_fitted = self.inter_chunk_fusion.poly_chunk_transition(
-                    action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
+                    action_chunk_fitted,
+                    vel_chunk_fitted,
+                    timestamps_fitted,
+                    target_chunk_index,
+                    currt_action_full,
+                    currt_vel_full,
+                    currt_acc_poly,
+                    joint_indices=joint_indices,
                 )
             elif inter_chunk_mode == 'smooth_velocity':
                 currt_action = currt_action_full[joint_indices]
@@ -562,13 +575,26 @@ class RealtimeDataManager():
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
                 action_chunk_fitted = self.inter_chunk_fusion.min_jerk_chunk_transition(
-                    action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
+                    action_chunk_fitted,
+                    vel_chunk_fitted,
+                    acc_chunk_fitted,
+                    timestamps_fitted,
+                    target_chunk_index,
+                    currt_action_full,
+                    currt_vel_full,
+                    currt_acc_full,
+                    joint_indices=joint_indices,
                 )
             elif inter_chunk_mode == 'bspline':
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
                 action_chunk_fitted = self.inter_chunk_fusion.bspline_chunk_transition(
-                    action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
+                    action_chunk_fitted,
+                    vel_chunk_fitted,
+                    timestamps_fitted,
+                    target_chunk_index,
+                    currt_action_full,
+                    currt_vel_full,
                 )
             else:
                 pass
