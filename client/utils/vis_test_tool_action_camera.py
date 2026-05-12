@@ -17,7 +17,7 @@ if project_root not in sys.path:
 # Import project modules
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
-from conf.logging_conf import LOGGING_CONFIG
+from conf.logging_conf import setup_logging
 from conf.client_conf import get_client_config
 
 from client.utils.util import load_user_config, apply_user_config
@@ -204,9 +204,8 @@ def override_config_with_args(config, args):
 if __name__ == "__main__":
     # Parse command line arguments
     args = parse_args()
-    # Initialize logging configuration    
-    logging.config.dictConfig(LOGGING_CONFIG)
-    logger = logging.getLogger(__name__)
+    # Initialize logging configuration
+    logger = setup_logging("client.log", __name__)
     
     # Get configuration and apply command line arguments
     config = get_client_config()

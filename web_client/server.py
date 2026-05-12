@@ -49,7 +49,7 @@ sys.path.insert(0, str(ROOT))
 
 from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
-from conf.logging_conf import LOGGING_CONFIG
+from conf.logging_conf import setup_logging
 from client.core.zmq_client import ZMQClient
 from client.core.trajectory_generator import TrajectoryGenerator
 from client.core.realtime_data_manager import RealtimeDataManager
@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     # ── startup ──
-    logging.config.dictConfig(LOGGING_CONFIG)
+    setup_logging("client.log")
     state.config = get_client_config()
     if DEFAULT_YAML.exists():
         try:
@@ -886,7 +886,7 @@ async def start_client():
 
     def _run_in_thread():
         try:
-            logging.config.dictConfig(LOGGING_CONFIG)
+            # setup_logging("client.log")
             cfg = state.config if state.config is not None else get_client_config()
             state.config = cfg
 

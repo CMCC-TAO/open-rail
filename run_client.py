@@ -10,7 +10,7 @@ from ml_collections import ConfigDict
 from client.core import zmq_client
 from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
-from conf.logging_conf import LOGGING_CONFIG
+from conf.logging_conf import setup_logging
 from client.core.vla_client import VLAClientAsync
 from client.core.vla_client_sync import VLAClientSync
 from client.core.zmq_client import ZMQClient
@@ -230,9 +230,8 @@ def handle_user_input(vla_client, robot, live):
 
 if __name__ == "__main__":
     args = parse_args()
-    # Initialize logging configuration    
-    logging.config.dictConfig(LOGGING_CONFIG)
-    logger = logging.getLogger(__name__)
+    # Initialize logging configuration
+    logger = setup_logging("client.log", __name__)
     
     # Get configuration and apply command line arguments
     config = get_client_config()
