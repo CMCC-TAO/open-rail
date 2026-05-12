@@ -16,6 +16,7 @@ language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
   hand carefully. If and only if the bottle is caught by hand, release the gripper.
 - default language instruction
+language_auto_mode: false
 language_index: 1
 language_task: pour_tea
 observer:
