@@ -600,7 +600,7 @@ function setRunningUI(running, paused = false) {
 // ═══════════════════════════════════════════════════════
 
 // Keys to exclude from the config tree (handled separately or rendered via createLangLinkRow)
-const CONFIG_EXCLUDED_KEYS = new Set(['language', 'language_task', 'language_index']);
+const CONFIG_EXCLUDED_KEYS = new Set(['language', 'language_task', 'language_index', 'language_auto_mode']);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
@@ -1320,8 +1320,42 @@ function setupLangPanel() {
 
   const autoChk = $('chk-lang-auto-mode');
   if (autoChk) {
-    autoChk.addEventListener('change', () => {
+    autoChk.addEventListener('change', async () => {
       App.langAuto.lastProgress = null;
+      const enabled = !!autoChk.checked;
+
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      App.config.language_auto_mode = enabled;
+
+      App.pendingPatch.language_auto_mode = enabled;
+      markPending();
+
+      if (App.isRunning) {
+        toast('Auto Mode 已更新，配置将在停止后保存。', 'warn', 2200);
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/config/patch', {
+          method: 'POST',
+          body: JSON.stringify({ patch: { language_auto_mode: enabled } }),
+        });
+        App.config = res.config || App.config;
+        delete App.pendingPatch.language_auto_mode;
+        if (!Object.keys(App.pendingPatch).length) clearPending();
+
+        const display = $('conf-path-display');
+        const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+        if (path) {
+          await apiFetch('/api/config/save_file', {
+            method: 'POST',
+            body: JSON.stringify({ path }),
+          });
+        }
+      } catch (e) {
+        App.pendingPatch.language_auto_mode = enabled;
+        markPending();
+      }
     });
   }
 }
@@ -1662,6 +1696,10 @@ async function loadDefaultLangFile() {
 function applyLangConfigSelection() {
   const task  = App.config && App.config.language_task;
   const index = (App.config && App.config.language_index != null) ? App.config.language_index : 0;
+  const autoMode = !!(App.config && App.config.language_auto_mode);
+
+  const autoChk = $('chk-lang-auto-mode');
+  if (autoChk) autoChk.checked = autoMode;
 
   // Sync Lang Panel Task select
   const taskSel = $('lang-task-select');
