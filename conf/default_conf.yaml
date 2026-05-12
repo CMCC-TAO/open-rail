@@ -10,7 +10,7 @@ fitting_num_samples: 64
 fitting_time_step: 3.75
 gripper_offset: 5
 history_frame: false
-inter_chunk_mode: search_action
+inter_chunk_mode: min_jerk
 intra_chunk_mode: fit
 language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the

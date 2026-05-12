@@ -10,6 +10,7 @@ from collections import deque
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index, get_action_layout_info
+from client.core.inter_chunk_fusion import InterChunkFusion
 
 
 @njit(fastmath=True, cache=True)
@@ -169,6 +170,9 @@ class RealtimeDataManager():
 
         # Syncchronous Runing Flag
         self.sync_running = False
+
+        # Inter-chunk transition / fusion helper
+        self.inter_chunk_fusion = InterChunkFusion(self)
 
     def add_infer_count(self):
         """Add one to infer count for each inference step.
@@ -534,13 +538,13 @@ class RealtimeDataManager():
                 candidate_action_chunk = copy.deepcopy(action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
-                index_offset = self._search_smooth_action(currt_action, currt_vel, candidate_action_chunk, search_length)
+                index_offset = self.inter_chunk_fusion.search_smooth_action(currt_action, currt_vel, candidate_action_chunk, search_length)
                 target_chunk_index += index_offset
             elif inter_chunk_mode == 'poly':
                 # can NOT use with search_action at the same time
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
-                action_chunk_fitted = self._poly_chunk_transition(
+                action_chunk_fitted = self.inter_chunk_fusion.poly_chunk_transition(
                     action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
                 )
             elif inter_chunk_mode == 'smooth_velocity':
@@ -557,13 +561,13 @@ class RealtimeDataManager():
             elif inter_chunk_mode == 'min_jerk':
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
-                action_chunk_fitted = self._min_jerk_chunk_transition(
+                action_chunk_fitted = self.inter_chunk_fusion.min_jerk_chunk_transition(
                     action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
                 )
             elif inter_chunk_mode == 'bspline':
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
-                action_chunk_fitted = self._bspline_chunk_transition(
+                action_chunk_fitted = self.inter_chunk_fusion.bspline_chunk_transition(
                     action_chunk_fitted, vel_chunk_fitted, timestamps_fitted, target_chunk_index, self.action_chunk_index
                 )
             else:
