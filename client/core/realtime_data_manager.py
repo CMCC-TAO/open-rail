@@ -197,7 +197,7 @@ class RealtimeDataManager():
         """Set the local timestamp when start inference. Used for calculating the inference time.
         """
         self.start_infer_marker = time.perf_counter()
-        # print(f"Start inference at {self.start_infer_marker:.4f} s")
+        print(f"Start inference at {self.start_infer_marker:.4f} s")
         
     def set_traj_time_marker(self):
         """Set the local timestamp when start trajectory fitting. Used for calculating the trajectory fitting time.
@@ -225,7 +225,7 @@ class RealtimeDataManager():
         # self.last_traj_time = self.currt_traj_time
         currt_traj_time = self.start_ctrl_marker - self.start_traj_marker
         self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count
-        self.logger.debug(f'avg traj time: {self.avg_traj_time}')
+        # self.logger.debug(f'avg traj time: {self.avg_traj_time}')
 
     def _get_joint_indices(self, action_chunk):
         if self.joint_indices:
