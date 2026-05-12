@@ -630,6 +630,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visual.camera.open_wrist_right',
   'visual.trajectory.selected_joints',
   'visual.trajectory.source',
+  'visual.trajectory.window_span_sec',
 ]);
 
 function getCfgMultiSelectOptions(dotKey) {
@@ -1374,6 +1375,20 @@ function trimTrajBufferToMaxWindow(bufferKey, latestX) {
   }
 }
 
+function syncTrajWindowSpanUI() {
+  const span = normalizeTrajWindowSpanSec(App.traj.windowSpanSec, TRAJ_WINDOW_SPAN_SEC);
+  const uiValue = Math.round(span);
+  const slider = $('traj-window-span-slider');
+  const value = $('traj-window-span-value');
+  if (slider) {
+    slider.min = '1';
+    slider.max = String(TRAJ_WINDOW_SPAN_SEC_MAX);
+    slider.step = '1';
+    slider.value = String(uiValue);
+  }
+  if (value) value.textContent = `${uiValue}s`;
+}
+
 function applyVisualConfig(cfg = App.config) {
   const visualCfg = (cfg && typeof cfg === 'object') ? (cfg.visual || {}) : {};
 
@@ -1406,6 +1421,7 @@ function applyVisualConfig(cfg = App.config) {
   App.traj.updateIntervalMs = _toInt(trajCfg.update_interval_ms, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
   const cfgWindowSpanSec = Number(trajCfg.window_span_sec ?? trajCfg.window_sec ?? trajCfg.window_seconds);
   App.traj.windowSpanSec = normalizeTrajWindowSpanSec(cfgWindowSpanSec, App.traj.windowSpanSec);
+  syncTrajWindowSpanUI();
 
   const sourceCfgRaw = Array.isArray(trajCfg.source)
     ? trajCfg.source
@@ -1489,6 +1505,7 @@ function getVisualStatePatch() {
       return 'State';
     }),
     'visual.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
+    'visual.trajectory.window_span_sec': normalizeTrajWindowSpanSec(App.traj.windowSpanSec, TRAJ_WINDOW_SPAN_SEC),
   };
 }
 
@@ -1505,6 +1522,7 @@ function syncVisualStateToLocalConfig(patch) {
   delete App.config.visual.trajectory.default_paused;
   App.config.visual.trajectory.source = patch['visual.trajectory.source'];
   App.config.visual.trajectory.selected_joints = patch['visual.trajectory.selected_joints'];
+  App.config.visual.trajectory.window_span_sec = patch['visual.trajectory.window_span_sec'];
 }
 
 function syncVisualStateToConfigInputs(patch) {
@@ -2241,6 +2259,22 @@ function setupTrajPanel() {
     });
   }
   syncSrcButtons();
+
+  const windowSlider = $('traj-window-span-slider');
+  const applyWindowSpan = (raw) => {
+    const next = normalizeTrajWindowSpanSec(Number(raw), App.traj.windowSpanSec);
+    App.traj.windowSpanSec = next;
+    syncTrajWindowSpanUI();
+    if (App.traj.source.size > 0) recomputeTrajXWindow();
+    App.traj.dirty = true;
+    refreshUnifiedChart();
+    schedulePersistVisualState();
+  };
+  if (windowSlider) {
+    windowSlider.addEventListener('input', e => applyWindowSpan(e.target.value));
+    windowSlider.addEventListener('change', e => applyWindowSpan(e.target.value));
+  }
+  syncTrajWindowSpanUI();
 
   // Play/Pause
   function syncTrajPlayButton() {

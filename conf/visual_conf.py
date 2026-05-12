@@ -16,5 +16,6 @@ def get_visual_config():
     config.trajectory.source = ['State']
     config.trajectory.selected_joints = [0, 1, 2, 3]
     config.trajectory.update_interval_ms = 50
+    config.trajectory.window_span_sec = 10.0
 
     return config

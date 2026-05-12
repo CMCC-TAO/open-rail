@@ -119,7 +119,7 @@ html, body {
 .monitor-ctrl-group { display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
 /* Thin vertical separator between groups */
 .monitor-sep {
-  width: 1px; height: 22px;
+  width: 1px; height: 28px;
   background: var(--border);
   flex-shrink: 0; margin: 0 4px; align-self: center;
 }
@@ -127,7 +127,7 @@ html, body {
 /* Replay path pill */
 .replay-path-display {
   font-size: 10px; color: var(--text-muted);
-  max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   border: 1px solid transparent; border-radius: var(--radius); padding: 1px 4px;
 }
 .replay-path-display:not(:empty) { border-color: var(--border); background: var(--bg); }
@@ -551,9 +551,9 @@ html, body {
 
 /* Thin vertical separator between groups */
 .traj-header-sep {
-  width: 1px; height: 36px;
+  width: 1px; height: 56px;
   background: var(--border);
-  flex-shrink: 0; margin: 0 8px; align-self: center;
+  flex-shrink: 0; margin: 0 4px; align-self: center;
 }
 
 /* ── ① Source group ── */
@@ -564,6 +564,34 @@ html, body {
   display: flex;
   flex-direction: row;
   gap: 6px;
+}
+
+.traj-window-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.traj-window-row {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.traj-window-slider {
+  width: 110px;
+  margin: 0;
+}
+
+.traj-window-value {
+  min-width: 16px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-muted);
 }
 
 .traj-src-col {

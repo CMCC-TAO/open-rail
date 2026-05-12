@@ -87,7 +87,7 @@
             <label  class="btn btn-xs" id="btn-replay" title="Select replay folder">▶ Replay
               <input id="replay-folder-input" type="file" webkitdirectory style="display:none" />
             </label>
-            <span class="replay-path-display" id="replay-path-display"></span>
+            <!-- <span class="replay-path-display" id="replay-path-display"></span> -->
           </div>
           <!-- Separator -->
           <span class="monitor-sep"></span>
@@ -247,7 +247,17 @@
           <div class="panel-header-actions traj-header-actions">
             <!-- spacer: push all groups to the right -->
             <span class="traj-header-spacer"></span>
-            <!-- ① Source: label + State/Action two rows -->
+            <!-- ① Window group -->
+            <div class="traj-window-group" title="Trajectory window span in seconds">
+              <span class="traj-src-label">Window</span>
+              <div class="traj-window-row">
+                <input id="traj-window-span-slider" class="traj-window-slider" type="range" min="1" max="15" step="1" value="10" />
+                <span id="traj-window-span-value" class="traj-window-value">10s</span>
+              </div>
+            </div>
+            <!-- Divider -->
+            <span class="traj-header-sep"></span>
+            <!-- ② Source: independent group -->
             <div class="traj-src-group">
               <span class="traj-src-label">Source</span>
               <div class="traj-src-rows">
@@ -275,7 +285,7 @@
             </div>
             <!-- Divider -->
             <span class="traj-header-sep"></span>
-            <!-- ② Joints: label + two rows (L0-L6+All / R0-R6+None) -->
+            <!-- ③ Joints: label + two rows (L0-L6+All / R0-R6+None) -->
             <div class="traj-joints-group">
               <span class="traj-src-label">Joints</span>
               <div class="traj-joints-rows">
