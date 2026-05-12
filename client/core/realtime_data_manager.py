@@ -65,7 +65,7 @@ class RealtimeDataManager():
         self.sync_running = False
 
         # Inter-chunk transition / fusion helper
-        self.inter_chunk_fusion = InterChunkFusion(logger=self.logger)
+        self.inter_chunk_fusion = InterChunkFusion()
 
     def add_infer_count(self):
         """Add one to infer count for each inference step.
