@@ -1330,11 +1330,6 @@ function setupLangPanel() {
       App.pendingPatch.language_auto_mode = enabled;
       markPending();
 
-      if (App.isRunning) {
-        toast('Auto Mode 已更新，配置将在停止后保存。', 'warn', 2200);
-        return;
-      }
-
       try {
         const res = await apiFetch('/api/config/patch', {
           method: 'POST',

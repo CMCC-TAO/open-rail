@@ -5,7 +5,7 @@ controller:
   period: 3.75
   strategy: step
   wait_step: 4
-fitting_deg: 3
+fitting_deg: 4
 fitting_num_samples: 64
 fitting_time_step: 3.75
 gripper_offset: 5
@@ -355,9 +355,9 @@ vis_zmq:
   server_addr: tcp://*:7788
 visual:
   camera:
-    open_head: false
-    open_wrist_left: false
-    open_wrist_right: false
+    open_head: true
+    open_wrist_left: true
+    open_wrist_right: true
     update_interval_ms: 33
   trajectory:
     play: true
