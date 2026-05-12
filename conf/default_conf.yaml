@@ -10,7 +10,7 @@ fitting_num_samples: 64
 fitting_time_step: 3.75
 gripper_offset: 5
 history_frame: false
-inter_chunk_mode: min_jerk
+inter_chunk_mode: smooth_velocity
 intra_chunk_mode: fit
 language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
@@ -362,7 +362,7 @@ visual:
   trajectory:
     play: true
     selected_joints:
-    - 6
+    - 5
     source:
     - ActionFitted
     - ActionRaw
