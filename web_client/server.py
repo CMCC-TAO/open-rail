@@ -640,9 +640,7 @@ async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
 
 @app.post("/api/config/patch")
 async def patch_config(req: ConfigPatchRequest):
-    """Apply a partial update to in-memory config (does NOT restart client)."""
-    if state.running:
-        raise HTTPException(400, "Stop the client before modifying config.")
+    """Apply a partial update to in-memory config. Effective immediately when possible."""
     if state.config is None:
         state.config = get_client_config()
 
@@ -658,7 +656,20 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
-    _apply_flat_patch(state.config, flat)
+    with state.lock:
+        _apply_flat_patch(state.config, flat)
+
+    # Runtime side-effects for keys that need explicit push
+    if state.running and state.vla_client is not None:
+        try:
+            if any(k.startswith("visual.camera.") for k in flat.keys()):
+                cam_cfg = getattr(getattr(state.config, "visual", None), "camera", None)
+                ws_server = getattr(state.vla_client, "websocket_server", None)
+                if ws_server is not None and cam_cfg is not None:
+                    ws_server.update_camera_open_config(cam_cfg)
+        except Exception as e:
+            logger.warning(f"Runtime camera config sync failed: {e}")
+
     return {"status": "ok", "config": _config_to_dict(state.config)}
 
 
@@ -668,9 +679,9 @@ class ConfigFileRequest(BaseModel):
 
 @app.post("/api/config/load_file")
 async def load_config_file(req: ConfigFileRequest):
-    """Load a yaml conf file and apply it (like --default_conf.yaml)."""
-    if state.running:
-        raise HTTPException(400, "Stop the client before loading a new config.")
+    """Load a yaml conf file and apply it. Effective immediately when possible."""
+    if state.config is None:
+        state.config = get_client_config()
     # Guard against path-traversal
     p = Path(req.path)
     # --- 调试开始 ---
@@ -684,7 +695,20 @@ async def load_config_file(req: ConfigFileRequest):
         p.resolve().relative_to(ROOT.resolve())
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
-    _apply_yaml_config(state.config, p)
+
+    with state.lock:
+        _apply_yaml_config(state.config, p)
+
+    # Runtime side-effects for configs requiring explicit push
+    if state.running and state.vla_client is not None:
+        try:
+            cam_cfg = getattr(getattr(state.config, "visual", None), "camera", None)
+            ws_server = getattr(state.vla_client, "websocket_server", None)
+            if ws_server is not None and cam_cfg is not None:
+                ws_server.update_camera_open_config(cam_cfg)
+        except Exception as e:
+            logger.warning(f"Runtime camera config sync after load failed: {e}")
+
     # user_cfg = load_user_config(str(p))
     # if user_cfg is None:
     #     raise HTTPException(400, f"Failed to load config from: {p}")
