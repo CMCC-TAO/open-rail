@@ -1,4 +1,95 @@
 import numpy as np
+from numba import njit
+
+
+@njit(fastmath=True, cache=True)
+def _smooth_velocity_transition_numba(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
+    """
+        This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
+        Note: Under the same parameter settings, the robot's operation speed using this strategy is slower than 'search_action' and 'poly'. 
+        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
+
+        This function is **accelerated by Numba** using `@njit`, which compiles the
+        Python code into optimized machine code in *nopython mode*.
+        Key acceleration strategies:
+        1. `@njit`: eliminates Python interpreter overhead by compiling to native code.
+        2. Loop-based implementation (no Python objects or dynamic typing),
+            enabling efficient JIT optimization.
+        3. `fastmath=True`: allows aggressive floating-point optimizations
+            (acceptable for control / smoothing tasks with tolerance to small
+            numerical errors).
+        4. `cache=True`: caches the compiled binary to disk to avoid recompilation
+            on subsequent runs.
+
+        Note:
+        - All inputs must be NumPy arrays with fixed dtypes (e.g., float32/float64).
+        - Dynamic Python features and object operations are intentionally avoided
+            to ensure compatibility with Numba's nopython mode.
+
+        Parameters
+        ----------
+        joint_seq : ndarray of shape (dof, T)
+            Target joint position sequence to be tracked.
+        init_pos : ndarray of shape (dof,)
+            Initial joint positions.
+        init_vel : ndarray of shape (dof,)
+            Initial joint velocities.
+        init_acc : ndarray of shape (dof,)
+            Initial joint accelerations.
+        dt : float, optional
+            Time step for discrete integration.
+        max_vel : float, optional
+            Maximum allowed joint velocity (symmetric bound).
+        max_acc : float, optional
+            Maximum allowed joint acceleration (symmetric bound).
+        kp : float, optional
+            Proportional gain of the PD controller.
+        kd : float, optional
+            Derivative gain of the PD controller.
+
+        Returns
+        -------
+        pos_seq : ndarray of shape (dof, T)
+            Smoothed joint position sequence.
+        vel_seq : ndarray of shape (dof, T)
+            Corresponding joint velocity sequence.
+        acc_seq : ndarray of shape (dof, T)
+            Corresponding joint acceleration sequence.
+    """
+    dof, T = joint_seq.shape
+
+    pos = init_pos.copy()
+    vel = init_vel.copy()
+    acc = init_acc.copy()
+
+    pos_seq = np.zeros((dof, T))
+    vel_seq = np.zeros((dof, T))
+    acc_seq = np.zeros((dof, T))
+
+    for i in range(T):
+        target = joint_seq[:, i]
+        for j in range(dof):
+            acc[j] = kp * (target[j] - pos[j]) - kd * vel[j]
+
+            if acc[j] > max_acc:
+                acc[j] = max_acc
+            elif acc[j] < -max_acc:
+                acc[j] = -max_acc
+
+            vel[j] += acc[j] * dt
+
+            if vel[j] > max_vel:
+                vel[j] = max_vel
+            elif vel[j] < -max_vel:
+                vel[j] = -max_vel
+
+            pos[j] += vel[j] * dt
+
+            pos_seq[j, i] = pos[j]
+            vel_seq[j, i] = vel[j]
+            acc_seq[j, i] = acc[j]
+
+    return pos_seq, vel_seq, acc_seq
 
 
 class InterChunkFusion:
@@ -6,6 +97,10 @@ class InterChunkFusion:
 
     def __init__(self, logger=None):
         self.logger = logger
+
+    @staticmethod
+    def smooth_velocity_transition_numba(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
+        return _smooth_velocity_transition_numba(joint_seq, init_pos, init_vel, init_acc, dt, max_vel, max_acc, kp, kd)
 
     @staticmethod
     def _get_joint_indices(action_chunk, joint_indices=None):
