@@ -547,6 +547,14 @@ async def index():
     return FileResponse(str(STATIC_DIR / "index.html"))
 
 
+@app.get("/favicon.ico")
+async def favicon():
+    icon_path = STATIC_DIR / "favicon.ico"
+    if icon_path.exists():
+        return FileResponse(str(icon_path))
+    raise HTTPException(status_code=404, detail="favicon.ico not found")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: config
 # ─────────────────────────────────────────────────────────────────────────────
