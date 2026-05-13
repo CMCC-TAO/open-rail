@@ -219,6 +219,7 @@ show_action_cams_qt: false
 show_img: false
 sleep_time: 0.002
 language:
+  file_path: conf/lang_cmd.json
   task_progress_threshold: 9.9
 inter_chunk:
   inter_chunk_mode: min_jerk

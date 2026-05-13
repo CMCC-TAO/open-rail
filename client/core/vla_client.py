@@ -1,5 +1,6 @@
 import cv2
 import os
+import json
 import time
 from datetime import datetime
 import threading
@@ -52,7 +53,8 @@ class VLAClientAsync():
         self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
         self.running = False
         self.is_running_action = True
-        self.language = self.config.language[0]
+        self.language_tasks = self._load_language_tasks(getattr(self.config.language, 'file_path', ''))
+        self.language = self._sync_language_from_config()
         self.allow_language_switch = True  # Flag to control automatic language switching
         
         # Define image preprocess function
@@ -131,6 +133,48 @@ class VLAClientAsync():
             self.act_write_buffer = deque(maxlen=1000)
             self.vel_write_buffer = deque(maxlen=1000)
             self.acc_write_buffer = deque(maxlen=1000)
+
+    def _load_language_tasks(self, file_path: str) -> dict:
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        target_path = file_path if os.path.isabs(file_path) else os.path.join(root_dir, file_path)
+        try:
+            with open(target_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return {'Default': [x for x in data if isinstance(x, str)]}
+            if isinstance(data, dict):
+                return {k: [x for x in v if isinstance(x, str)] for k, v in data.items() if isinstance(v, list)}
+        except Exception as e:
+            self.logger.warning(f'Failed to load language command file: {target_path}, error: {e}')
+        return {}
+
+    def _sync_language_from_config(self) -> str:
+        task_id = getattr(self.config.language, 'task_id', '')
+        sub_task_id = int(getattr(self.config.language, 'sub_task_id', 0))
+        task_cmds = self.language_tasks.get(task_id, [])
+
+        if not task_cmds and self.language_tasks:
+            task_id = next(iter(self.language_tasks.keys()))
+            self.config.language.task_id = task_id
+            task_cmds = self.language_tasks.get(task_id, [])
+
+        if not task_cmds:
+            self.config.language.sub_task_id = 0
+            return ''
+
+        sub_task_id = max(0, min(sub_task_id, len(task_cmds) - 1))
+        self.config.language.sub_task_id = sub_task_id
+        return task_cmds[sub_task_id]
+
+    def _advance_language_subtask(self):
+        task_id = getattr(self.config.language, 'task_id', '')
+        task_cmds = self.language_tasks.get(task_id, [])
+        if not task_cmds:
+            return
+        sub_task_id = int(getattr(self.config.language, 'sub_task_id', 0))
+        sub_task_id = (sub_task_id + 1) % len(task_cmds)
+        self.config.language.sub_task_id = sub_task_id
+        self.language = task_cmds[sub_task_id]
 
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
@@ -272,14 +316,15 @@ class VLAClientAsync():
             self.rdm.set_control_time_marker()
             
             # Get prob_progress from action data if available
+            # TODO: fix language command auto change
             prob_progress = None
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
                 prob_progress = action_data['ext']['prob_progress']
                 # Check if prob_progress length > 1 to enable alignment processing
                 if not (isinstance(prob_progress, np.ndarray) and len(prob_progress) > 1):
                     self.info_act['current_prob_progress'] = prob_progress
-                    if prob_progress >= self.config.language.task_progress_threshold and self.allow_language_switch:
-                        self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
+                    if prob_progress >= self.config.language.task_progress_threshold and self.allow_language_switch and self.config.language.auto_mode:
+                        self._advance_language_subtask()
                     prob_progress = None
                 else:
                     # prob_progress: (64,), interplot prob_progress to (420,)

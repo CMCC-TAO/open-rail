@@ -1655,9 +1655,6 @@ async function loadConfigFromServer() {
     App.pendingPatch = {};
     clearPending();
     renderConfigTree(App.config);
-    if (App.config.language && Array.isArray(App.config.language)) {
-      renderLangPresets(App.config.language);
-    }
     applyVisualConfig(App.config);
     // Apply task_id / sub_task_id to lang panel (if lang data already loaded)
     if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
@@ -1674,10 +1671,20 @@ async function loadConfigFromServer() {
   } catch (e) { /* already toasted */ }
 }
 
-/** Load the default language command JSON from server and populate Language Command panel. */
+/** Load language command JSON from App.config.language.file_path (fallback to default endpoint). */
 async function loadDefaultLangFile() {
   try {
-    const res = await apiFetch('/api/default_lang_file');
+    const langPath = App.config && App.config.language && App.config.language.file_path;
+    let res;
+    if (langPath) {
+      res = await apiFetch('/api/lang_file/load', { method: 'POST', body: JSON.stringify({ path: langPath }) });
+    } else {
+      res = await apiFetch('/api/default_lang_file');
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+      if (res.path) App.config.language.file_path = res.path;
+    }
+
     if (res.data) {
       buildLangTasksFromData(res.data);
       renderLangTaskSelect();
@@ -2421,7 +2428,7 @@ function wireEvents() {
       App.config = res.config || {}; App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
-      if (App.config.language) renderLangPresets(App.config.language);
+      await loadDefaultLangFile();
       if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
       applyVisualConfig(App.config);
       // Show relative path from /conf onward
@@ -2466,7 +2473,7 @@ function wireEvents() {
       App.config = res.config || {}; App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
-      if (App.config.language) renderLangPresets(App.config.language);
+      await loadDefaultLangFile();
       if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
       applyVisualConfig(App.config);
       toast('Config applied.', 'ok');
@@ -2569,6 +2576,33 @@ function wireEvents() {
       const res = await apiFetch('/api/lang_file/load', { method: 'POST', body: JSON.stringify({ path }) });
       buildLangTasksFromData(res.data);
       renderLangTaskSelect();
+
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+      App.config.language.file_path = path;
+
+      App.pendingPatch['language.file_path'] = path;
+      markPending();
+
+      try {
+        const patchRes = await apiFetch('/api/config/patch', {
+          method: 'POST',
+          body: JSON.stringify({ patch: { 'language.file_path': path } }),
+        });
+        App.config = patchRes.config || App.config;
+        delete App.pendingPatch['language.file_path'];
+        if (!Object.keys(App.pendingPatch).length) clearPending();
+
+        const display = $('conf-path-display');
+        const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+        if (cfgPath) {
+          await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
+        }
+      } catch (_) {
+        App.pendingPatch['language.file_path'] = path;
+        markPending();
+      }
+
       toast('Language file loaded.', 'ok', 2000);
     } catch (_) { /* toasted */ }
     e.target.value = '';
@@ -2647,6 +2681,8 @@ document.addEventListener('DOMContentLoaded', () => {
   buildJointSelector(TRAJ_JOINT_COUNT);  // pre-build fixed 14-joint selector
   connectWS();
   startStatusPoll();
-  initConfDir().then(() => loadConfigFromServer());
-  loadDefaultLangFile();
+  initConfDir().then(async () => {
+    await loadConfigFromServer();
+    await loadDefaultLangFile();
+  });
 });

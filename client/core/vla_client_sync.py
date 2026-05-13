@@ -1,5 +1,6 @@
 import cv2
 import os
+import json
 import time
 from datetime import datetime
 import threading
@@ -55,7 +56,8 @@ class VLAClientSync():
         self.running = False
         self.is_running_action = True
         self.action_count = 0
-        self.language = self.config.language[0]
+        self.language_tasks = self._load_language_tasks(getattr(self.config.language, 'file_path', ''))
+        self.language = self._sync_language_from_config()
         self.allow_language_switch = True  # Flag to control automatic language switching
         
         # Define image preprocess function
@@ -134,6 +136,38 @@ class VLAClientSync():
         self.act_write_buffer = deque(maxlen=1000)
         self.vel_write_buffer = deque(maxlen=1000)
         self.acc_write_buffer = deque(maxlen=1000)
+
+    def _load_language_tasks(self, file_path: str) -> dict:
+        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        target_path = file_path if os.path.isabs(file_path) else os.path.join(root_dir, file_path)
+        try:
+            with open(target_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return {'Default': [x for x in data if isinstance(x, str)]}
+            if isinstance(data, dict):
+                return {k: [x for x in v if isinstance(x, str)] for k, v in data.items() if isinstance(v, list)}
+        except Exception as e:
+            self.logger.warning(f'Failed to load language command file: {target_path}, error: {e}')
+        return {}
+
+    def _sync_language_from_config(self) -> str:
+        task_id = getattr(self.config.language, 'task_id', '')
+        sub_task_id = int(getattr(self.config.language, 'sub_task_id', 0))
+        task_cmds = self.language_tasks.get(task_id, [])
+
+        if not task_cmds and self.language_tasks:
+            task_id = next(iter(self.language_tasks.keys()))
+            self.config.language.task_id = task_id
+            task_cmds = self.language_tasks.get(task_id, [])
+
+        if not task_cmds:
+            self.config.language.sub_task_id = 0
+            return ''
+
+        sub_task_id = max(0, min(sub_task_id, len(task_cmds) - 1))
+        self.config.language.sub_task_id = sub_task_id
+        return task_cmds[sub_task_id]
 
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
