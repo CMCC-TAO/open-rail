@@ -43,7 +43,7 @@ language:
 - default language instruction
 language_config:
   auto_mode: true
-  sub_task_id: 0
+  sub_task_id: 1
   task_id: pour_tea
   task_progress_threshold: 9.9
 observer:
