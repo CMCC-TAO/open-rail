@@ -271,7 +271,7 @@ def create_layout(info: dict, terminal_size=None):
         f"fps: {config.observer.fps}\n"
         f"sleep_time: {config.sleep_time}\n"
         f"gripper_offset: {config.gripper_offset}\n"
-        f"history_frame: {config.history_frame}\n"
+        f"history_frame: {config.vision.history_frame}\n"
     )
     col_layout1_info3 = (
         f"wait_step: {config.controller.wait_step}\n"
@@ -291,7 +291,7 @@ def create_layout(info: dict, terminal_size=None):
         f"avg_traj_time: {vla_client.rdm.avg_traj_time: .4f}s\n"
     )
     obs_act_info = {
-        "preprocess": config.preprocess,
+        "preprocess": config.vision.preprocess,
         **vla_client.info_obs,
         **vla_client.info_act,
     }
