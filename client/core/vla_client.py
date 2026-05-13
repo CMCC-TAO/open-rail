@@ -278,7 +278,7 @@ class VLAClientAsync():
                 # Check if prob_progress length > 1 to enable alignment processing
                 if not (isinstance(prob_progress, np.ndarray) and len(prob_progress) > 1):
                     self.info_act['current_prob_progress'] = prob_progress
-                    if prob_progress >= self.config.language_config.task_progress_threshold and self.allow_language_switch:
+                    if prob_progress >= self.config.language.task_progress_threshold and self.allow_language_switch:
                         self.language = self.config.language[(self.config.language.index(self.language) + 1) % len(self.config.language)]
                     prob_progress = None
                 else:
