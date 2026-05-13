@@ -276,8 +276,8 @@ def create_layout(info: dict, terminal_size=None):
     col_layout1_info3 = (
         f"wait_step: {config.controller.wait_step}\n"
         f"fps: {config.observer.fps}\n"
-        f"fit_num_samples: {config.fitting_num_samples}\n"
-        f"fit_time_step: {config.fitting_time_step}\n"
+        f"fit_num_samples: {config.intra_chunk.fitting_num_samples}\n"
+        f"fit_time_step: {config.intra_chunk.fitting_time_step}\n"
     )
     col_layout1.split_row(
         Layout(Panel(col_layout1_info1, subtitle='', subtitle_align='center', height=col_height)),

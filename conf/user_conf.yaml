@@ -5,13 +5,9 @@ controller:
   period: 3.75
   strategy: step
   wait_step: 4
-fitting_deg: 6
-fitting_num_samples: 64
-fitting_time_step: 3.75
 gripper_offset: 5
 history_frame: false
 inter_chunk_mode: min_jerk
-intra_chunk_mode: fit
 language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
   hand carefully. If and only if the bottle is caught by hand, release the gripper.
@@ -229,7 +225,7 @@ smooth_base: 0.0
 smooth_length: 150
 smooth_ratio: 0.75
 thre_prob_progress: 9.9
-traj:
+intra_chunk:
   filter_window_size: 4
   gripper_dim: 2
   head_dim: 2
@@ -239,6 +235,10 @@ traj:
   max_head_fitting_workers: 2
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
+  fitting_num_samples: 64
+  fitting_time_step: 3.75
+  fitting_deg: 6
+  intra_chunk_mode: fit
 # traj_strategy: fitting
 vis_action_length: 1000
 vis_zmq:

@@ -20,7 +20,7 @@ def get_client_config():
     Returns:
         ConfigDict: Complete configuration dictionary for the VLA client containing:
             - rdm: Real-time data manager configuration
-            - traj: Trajectory generation configuration  
+            - intra_chunk: Intra-chunk smoothing/fitting configuration
             - controller: Robot controller configuration
             - observer: Observation system configuration
             - robots: Robot-specific configuration
@@ -30,7 +30,7 @@ def get_client_config():
     """
     config = ConfigDict()
     config.rdm = get_rdm_config()
-    config.traj = get_intra_chunk_config()
+    config.intra_chunk = get_intra_chunk_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     config.robots = get_robots_config()
@@ -42,11 +42,7 @@ def get_client_config():
     config.show_action_cams_qt = False  # QT-based action-camera visualization. If set as True, run /client/utils/vis_action_camera.py.py to launch the visualization server
     config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     config.show_img = False  # Enable/disable image display
-    # config.traj_strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
-    config.fitting_num_samples = 64
-    config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
-    config.fitting_deg = 4  # Polynomial fitting degree
-    config.intra_chunk_mode = 'fit'  # intra-chunk processing mode, choices = ('raw', 'raw_ipt', 'fit')
+    # config.intra_chunk.strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.inter_chunk_mode = 'min_jerk'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync')
     config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
     config.smooth_action = False  # Enable action smoothing (Beta)
