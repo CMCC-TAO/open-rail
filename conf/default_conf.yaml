@@ -7,6 +7,13 @@ controller:
   wait_step: 4
 gripper_offset: 5
 history_frame: false
+inter_chunk:
+  inter_chunk_mode: bspline
+  search_length: 100
+  smooth_action: false
+  smooth_base: 0.0
+  smooth_length: 150
+  smooth_ratio: 0.75
 intra_chunk:
   action_layout:
     arm:
@@ -342,13 +349,6 @@ show_action_cams_qt: false
 show_img: false
 sleep_time: 0.2
 thre_prob_progress: 9.9
-inter_chunk:
-  inter_chunk_mode: smooth_velocity
-  search_length: 100
-  smooth_action: false
-  smooth_base: 0.0
-  smooth_length: 150
-  smooth_ratio: 0.75
 vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788
