@@ -58,8 +58,8 @@ def get_client_config():
 
 def get_language_config() -> ConfigDict:
     config = ConfigDict()
-    config.language_task = 'pour_tea'
-    config.language_index = 1
-    config.language_auto_mode = True  # If True, automatically switch language instructions based on probability threshold
+    config.task_id = 'pour_tea'
+    config.sub_task_id = 1
+    config.auto_mode = True  # If True, automatically switch language instructions based on probability threshold
     config.task_progress_threshold = 9.9  # Probability threshold for switching language instructions
     return config
