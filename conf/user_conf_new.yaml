@@ -7,7 +7,6 @@ controller:
   wait_step: 4
 gripper_offset: 5
 history_frame: false
-inter_chunk_mode: min_jerk
 language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
   hand carefully. If and only if the bottle is caught by hand, release the gripper.
@@ -216,15 +215,17 @@ robots:
     repo_id: task_39_only1
     root: /home/robot/Music/task_39_only1
   type: a2d
-search_length: 100
 show_action_cams_qt: false
 show_img: false
 sleep_time: 0.002
-smooth_action: false
-smooth_base: 0.0
-smooth_length: 150
-smooth_ratio: 0.75
 thre_prob_progress: 9.9
+inter_chunk:
+  inter_chunk_mode: min_jerk
+  search_length: 100
+  smooth_action: false
+  smooth_base: 0.0
+  smooth_length: 150
+  smooth_ratio: 0.75
 intra_chunk:
   filter_window_size: 4
   gripper_dim: 2

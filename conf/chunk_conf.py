@@ -33,4 +33,10 @@ def get_intra_chunk_config():
 
 def get_inter_chunk_config() -> ConfigDict:
     config = ConfigDict()
+    config.inter_chunk_mode = 'min_jerk'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync')
+    config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
+    config.smooth_action = False  # Enable action smoothing (Beta)
+    config.smooth_length = 150  # Action smoothing length
+    config.smooth_base = 0.0  # Base value for action smoothing, smaller values mean more smoothing
+    config.smooth_ratio = 0.75  # Action smoothing ratio, recommended 0.5
     return config

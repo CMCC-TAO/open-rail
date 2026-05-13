@@ -5,7 +5,7 @@ from conf.control_conf import get_controller_config
 from conf.observe_conf import get_observer_config
 from conf.zmq_conf import get_vla_zmq_config, get_vis_zmq_config
 from conf.save_conf import get_record_data_config
-from conf.chunk_conf import get_intra_chunk_config
+from conf.chunk_conf import get_intra_chunk_config, get_inter_chunk_config
 from conf.robots_conf import get_robots_config
 from conf.visual_conf import get_visual_config
 
@@ -31,6 +31,7 @@ def get_client_config():
     config = ConfigDict()
     config.rdm = get_rdm_config()
     config.intra_chunk = get_intra_chunk_config()
+    config.inter_chunk = get_inter_chunk_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     config.robots = get_robots_config()
@@ -43,12 +44,6 @@ def get_client_config():
     config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     config.show_img = False  # Enable/disable image display
     # config.intra_chunk.strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
-    config.inter_chunk_mode = 'min_jerk'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync')
-    config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
-    config.smooth_action = False  # Enable action smoothing (Beta)
-    config.smooth_length = 150  # Action smoothing length
-    config.smooth_base = 0.0  # Base value for action smoothing, smaller values mean more smoothing
-    config.smooth_ratio = 0.75  # Action smoothing ratio, recommended 0.5
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
     config.sleep_time = 0.002  # Sleep time after each inference frame in seconds. Note: robot to hesitate, increase it.
     config.history_frame = False  # Enable/disable historical frame usage
