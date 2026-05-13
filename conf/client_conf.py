@@ -42,7 +42,7 @@ def get_client_config():
     config.show_action_cams_qt = False  # QT-based action-camera visualization. If set as True, run /client/utils/vis_action_camera.py.py to launch the visualization server
     config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     config.show_img = False  # Enable/disable image display
-    config.traj_strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
+    # config.traj_strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 64
     config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
     config.fitting_deg = 4  # Polynomial fitting degree
