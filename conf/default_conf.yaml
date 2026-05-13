@@ -41,9 +41,11 @@ language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
   hand carefully. If and only if the bottle is caught by hand, release the gripper.
 - default language instruction
-language_auto_mode: false
-language_index: 1
-language_task: pour_tea
+language_config:
+  language_auto_mode: false
+  language_index: 1
+  language_task: pour_tea
+  task_progress_threshold: 9.9
 observer:
   fps: 30
   period: 0.03333333333333333
@@ -348,7 +350,6 @@ robots:
 show_action_cams_qt: false
 show_img: false
 sleep_time: 0.2
-task_progress_threshold: 9.9
 vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788

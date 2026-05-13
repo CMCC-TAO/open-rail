@@ -49,7 +49,15 @@ def get_client_config():
     config.history_frame = False  # Enable/disable historical frame usage
     config.preprocess = 'pad_and_resize'
     config.preprocess_size = [640, 640] # [height, width]
-    # Language instruction options, default index 0
+    config.language_config = get_language_config()
+    config.language = [
+        'Grasp the bottle selected by the finger with the nearer gripper and pass it to the hand carefully. If and only if the bottle is caught by hand, release the gripper.',
+        'default language instruction',
+    ]
+    return config
+
+def get_language_config() -> ConfigDict:
+    config = ConfigDict()
     config.language_task = 'pour_tea'
     config.language_index = 1
     config.language_auto_mode = True  # If True, automatically switch language instructions based on probability threshold

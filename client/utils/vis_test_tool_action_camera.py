@@ -191,7 +191,7 @@ def override_config_with_args(config, args):
     if args.robots_type is not None:
         config.robots.type = RobotType(args.robots_type)
     if args.task_progress_threshold is not None:
-        config.task_progress_threshold = args.task_progress_threshold
+        config.language_config.task_progress_threshold = args.task_progress_threshold
     if args.preprocess is not None:
         config.preprocess = args.preprocess
     if args.preprocess_size is not None:

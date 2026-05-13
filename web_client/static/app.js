@@ -600,7 +600,7 @@ function setRunningUI(running, paused = false) {
 // ═══════════════════════════════════════════════════════
 
 // Keys to exclude from the config tree (handled separately or rendered via createLangLinkRow)
-const CONFIG_EXCLUDED_KEYS = new Set(['language', 'language_task', 'language_index', 'language_auto_mode']);
+const CONFIG_EXCLUDED_KEYS = new Set(['language']);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
@@ -624,6 +624,9 @@ const CONFIG_INT_KEYS = new Set([
 ]);
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
+  'language_config.language_task',
+  'language_config.language_index',
+  'language_config.language_auto_mode',
   'visual.camera.connect_when_running',
   'visual.camera.open_head',
   'visual.camera.open_wrist_left',
@@ -759,8 +762,8 @@ function buildTree(obj, prefix, parentEl) {
 
     // Append the virtual language-link group (language_task + language_index selects)
     basicBody.appendChild(buildGroup('LANGUAGE', [
-      createLangLinkRow('language_task',  'language_task'),
-      createLangLinkRow('language_index', 'language_index'),
+      createLangLinkRow('language_config.language_task',  'language_task'),
+      createLangLinkRow('language_config.language_index', 'language_index'),
     ]));
 
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
@@ -1110,13 +1113,13 @@ function createLangLinkRow(dotKey, label) {
   const sel = document.createElement('select');
   sel.className = 'input-text';
   // IDs: cfg-language-task / cfg-language-index
-  sel.id = `cfg-${dotKey.replace(/_/g, '-')}`;
+  sel.id = dotKey.endsWith('language_task') ? 'cfg-language-task' : 'cfg-language-index';
 
   valEl.appendChild(sel);
   row.appendChild(keyEl);
   row.appendChild(valEl);
 
-  if (dotKey === 'language_task') {
+  if (dotKey.endsWith('language_task')) {
     sel.addEventListener('change', () => {
       const task = sel.value;
       // Rebuild language_index options (display sync only, pendingPatch written on Apply)
@@ -1248,8 +1251,8 @@ function renderLangTaskSelect() {
 
   renderLangSubtaskSelect();
   // Sync Config panel: use App.config values if available, otherwise current selection
-  const cfgTask  = (App.config && App.config.language_task)  || taskSel.value;
-  const cfgIndex = (App.config && App.config.language_index != null) ? App.config.language_index : undefined;
+  const cfgTask  = (App.config && App.config.language_config && App.config.language_config.language_task) || taskSel.value;
+  const cfgIndex = (App.config && App.config.language_config && App.config.language_config.language_index != null) ? App.config.language_config.language_index : undefined;
   syncLangTaskOptions(cfgTask, cfgIndex);
 }
 
@@ -1325,18 +1328,19 @@ function setupLangPanel() {
       const enabled = !!autoChk.checked;
 
       if (!App.config || typeof App.config !== 'object') App.config = {};
-      App.config.language_auto_mode = enabled;
+      if (!App.config.language_config || typeof App.config.language_config !== 'object') App.config.language_config = {};
+      App.config.language_config.language_auto_mode = enabled;
 
-      App.pendingPatch.language_auto_mode = enabled;
+      App.pendingPatch['language_config.language_auto_mode'] = enabled;
       markPending();
 
       try {
         const res = await apiFetch('/api/config/patch', {
           method: 'POST',
-          body: JSON.stringify({ patch: { language_auto_mode: enabled } }),
+          body: JSON.stringify({ patch: { 'language_config.language_auto_mode': enabled } }),
         });
         App.config = res.config || App.config;
-        delete App.pendingPatch.language_auto_mode;
+        delete App.pendingPatch['language_config.language_auto_mode'];
         if (!Object.keys(App.pendingPatch).length) clearPending();
 
         const display = $('conf-path-display');
@@ -1348,7 +1352,7 @@ function setupLangPanel() {
           });
         }
       } catch (e) {
-        App.pendingPatch.language_auto_mode = enabled;
+        App.pendingPatch['language_config.language_auto_mode'] = enabled;
         markPending();
       }
     });
@@ -1689,9 +1693,9 @@ async function loadDefaultLangFile() {
  * Also fills lang-cmd-text with the corresponding instruction.
  */
 function applyLangConfigSelection() {
-  const task  = App.config && App.config.language_task;
-  const index = (App.config && App.config.language_index != null) ? App.config.language_index : 0;
-  const autoMode = !!(App.config && App.config.language_auto_mode);
+  const task  = App.config && App.config.language_config && App.config.language_config.language_task;
+  const index = (App.config && App.config.language_config && App.config.language_config.language_index != null) ? App.config.language_config.language_index : 0;
+  const autoMode = !!(App.config && App.config.language_config && App.config.language_config.language_auto_mode);
 
   const autoChk = $('chk-lang-auto-mode');
   if (autoChk) autoChk.checked = autoMode;
@@ -2581,8 +2585,8 @@ function wireEvents() {
     const task  = taskSel    ? taskSel.value                    : null;
     const idx   = subtaskSel ? parseInt(subtaskSel.value, 10)   : NaN;
     if (task != null) {
-      App.pendingPatch['language_task']  = task;
-      App.pendingPatch['language_index'] = isNaN(idx) ? 0 : idx;
+      App.pendingPatch['language_config.language_task']  = task;
+      App.pendingPatch['language_config.language_index'] = isNaN(idx) ? 0 : idx;
       markPending();
     }
 
