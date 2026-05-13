@@ -109,6 +109,12 @@ class RobotBody(RobotBase):
             if self.current_timestamp == head_ts:
                 return None
 
+            # ######################
+            # 新增: 任一相机图像为 None 则跳过本轮（防止下游 pad_and_resize 崩溃）
+            # ######################
+            if head_img is None or left_img is None or right_img is None:
+                return None
+
             self.current_timestamp = head_ts
 
             # 图像

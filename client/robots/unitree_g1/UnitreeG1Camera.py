@@ -41,16 +41,19 @@ class UnitreeG1Camera(Node):
     def _cb_head(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_head.append((img, ts))
 
     def _cb_left(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_left.append((img, ts))
 
     def _cb_right(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_right.append((img, ts))
 
     # 外部获取图像，以头部相机时间戳对齐左右腕
@@ -98,11 +101,11 @@ def main():
                 if head_ts != last_head_ts:
                     last_head_ts = head_ts
                     if head_img is not None:
-                        cv2.imshow("head", head_img)
+                        cv2.imshow("head", cv2.cvtColor(head_img, cv2.COLOR_RGB2BGR))
                     if left_img is not None:
-                        cv2.imshow("left", left_img)
+                        cv2.imshow("left", cv2.cvtColor(left_img, cv2.COLOR_RGB2BGR))
                     if right_img is not None:
-                        cv2.imshow("right", right_img)
+                        cv2.imshow("right", cv2.cvtColor(right_img, cv2.COLOR_RGB2BGR))
 
                 # 只打印一次，不影响每帧显示
                 print(f"head ts={head_ts:.6f}", end="\r")
