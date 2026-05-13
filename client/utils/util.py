@@ -265,7 +265,7 @@ def create_layout(info: dict, terminal_size=None):
         f"language: {vla_client.language}\n"
         f"record: {config.record.switch}\n"
         f"robots_type: {config.robots.type}\n"
-        f"task_progress_threshold: {config.language_config.task_progress_threshold}\n"
+        f"task_progress_threshold: {config.language.task_progress_threshold}\n"
     )
     col_layout1_info2 = (
         f"fps: {config.observer.fps}\n"
