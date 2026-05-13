@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import JointState
+from message_center.msg import Jointpos
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 from collections import deque
 import threading
@@ -24,18 +25,17 @@ class UnitreeG1Robot(Node):
         # ======================
         # 订阅话题（状态读取）
         # ======================
-        self.topic_left_arm = "/left_arm/joint_states"
-        self.topic_right_arm = "/right_arm/joint_states"
-        self.topic_left_hand = "/left_hand/angle_state"
-        self.topic_right_hand = "/right_hand/angle_state"
+        self.topic_joint_states = "/joint_state"
+        self.topic_left_hand = "/left_hand/get_angle"
+        self.topic_right_hand = "/right_hand/get_angle"
 
         # ======================
         # 发布话题（控制输出）
         # ======================
-        self.topic_left_arm_cmd = "/left_arm/joint_cmd"
-        self.topic_right_arm_cmd = "/right_arm/joint_cmd"
-        self.topic_left_hand_cmd = "/left_hand/angle_cmd"
-        self.topic_right_hand_cmd = "/right_hand/angle_cmd"
+        self.topic_left_arm_cmd = "/left_arm/joint_pos"
+        self.topic_right_arm_cmd = "/right_arm/joint_pos"
+        self.topic_left_hand_cmd = "/left_hand/set_angle"
+        self.topic_right_hand_cmd = "/right_hand/set_angle"
 
         # 最新状态缓存
         self.latest_left_arm = None
@@ -60,29 +60,28 @@ class UnitreeG1Robot(Node):
         # ======================
         # 订阅（读取状态）
         # ======================
-        self.create_subscription(JointState, self.topic_left_arm, self._cb_left_arm, qos_correct)
-        self.create_subscription(JointState, self.topic_right_arm, self._cb_right_arm, qos_correct)
+        self.create_subscription(JointState, self.topic_joint_states, self._cb_joint_states, qos_correct)
         self.create_subscription(JointState, self.topic_left_hand, self._cb_left_hand, qos_correct)
         self.create_subscription(JointState, self.topic_right_hand, self._cb_right_hand, qos_correct)
 
         # ======================
         # 发布（控制机器人）
         # ======================
-        self.pub_left_arm = self.create_publisher(JointState, self.topic_left_arm_cmd, qos_pub)
-        self.pub_right_arm = self.create_publisher(JointState, self.topic_right_arm_cmd, qos_pub)
+        self.pub_left_arm = self.create_publisher(Jointpos, self.topic_left_arm_cmd, qos_pub)
+        self.pub_right_arm = self.create_publisher(Jointpos, self.topic_right_arm_cmd, qos_pub)
         self.pub_left_hand = self.create_publisher(JointState, self.topic_left_hand_cmd, qos_pub)
         self.pub_right_hand = self.create_publisher(JointState, self.topic_right_hand_cmd, qos_pub)
 
         # 固定关节名
         self.left_arm_joint_names = [
-            "L_SHOULDER_P_JOINT", "L_SHOULDER_R_JOINT", "L_SHOULDER_Y_JOINT",
-            "L_ELBOW_JOINT", "L_WRIST_Y_JOINT", "L_WRIST_R_JOINT", "L_WRIST_P_JOINT",
+            "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
+            "left_elbow_pitch_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint",
         ]
         self.right_arm_joint_names = [
-            "R_SHOULDER_P_JOINT", "R_SHOULDER_R_JOINT", "R_SHOULDER_Y_JOINT",
-            "R_ELBOW_JOINT", "R_WRIST_Y_JOINT", "R_WRIST_R_JOINT", "R_WRIST_P_JOINT",
+            "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
+            "right_elbow_pitch_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint",
         ]
-        self.hand_joint_names = ["thumb", "index", "middle", "ring", "pinky", "thumb_rotation"]
+        self.hand_joint_names = ["little_finger", "ring_finger", "middle_finger", "index_finger", "thumb_bend", "thumb_rotate"]
 
         self.current_left_hand_state = None
         self.current_right_hand_state = None
@@ -112,16 +111,18 @@ class UnitreeG1Robot(Node):
 
         # 左臂
         if left_arm_act[-1] > -100:
-            msg = JointState()
-            msg.name = self.left_arm_joint_names
-            msg.position = left_arm_act.tolist()
+            msg = Jointpos()
+            msg.joint = left_arm_act.tolist()
+            msg.type = 1  # left arm
+            msg.dof = 7
             self.pub_left_arm.publish(msg)
 
         # 右臂
         if right_arm_act[-1] > -100:
-            msg = JointState()
-            msg.name = self.right_arm_joint_names
-            msg.position = right_arm_act.tolist()
+            msg = Jointpos()
+            msg.joint = right_arm_act.tolist()
+            msg.type = 2  # right arm
+            msg.dof = 7
             self.pub_right_arm.publish(msg)
 
         # 左手（带防抖：差值 > 50 才发送）
@@ -153,13 +154,38 @@ class UnitreeG1Robot(Node):
     # ======================
     # 订阅回调
     # ======================
-    def _cb_left_arm(self, msg):
+    def _cb_joint_states(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        self.latest_left_arm = (msg, ts)
 
-    def _cb_right_arm(self, msg):
-        ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        self.latest_right_arm = (msg, ts)
+        # 按 joint name 构建 name->index 映射
+        name_to_idx = {name: i for i, name in enumerate(msg.name)}
+
+        # 按名称提取左臂位置
+        left_positions = []
+        for name in self.left_arm_joint_names:
+            if name in name_to_idx:
+                left_positions.append(msg.position[name_to_idx[name]])
+
+        # 按名称提取右臂位置
+        right_positions = []
+        for name in self.right_arm_joint_names:
+            if name in name_to_idx:
+                right_positions.append(msg.position[name_to_idx[name]])
+
+        # 构造合成 JointState 保持下游兼容
+        if len(left_positions) == len(self.left_arm_joint_names):
+            left_msg = JointState()
+            left_msg.header = msg.header
+            left_msg.name = list(self.left_arm_joint_names)
+            left_msg.position = [float(p) for p in left_positions]
+            self.latest_left_arm = (left_msg, ts)
+
+        if len(right_positions) == len(self.right_arm_joint_names):
+            right_msg = JointState()
+            right_msg.header = msg.header
+            right_msg.name = list(self.right_arm_joint_names)
+            right_msg.position = [float(p) for p in right_positions]
+            self.latest_right_arm = (right_msg, ts)
 
     def _cb_left_hand(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
@@ -236,33 +262,56 @@ def main():
         while running:
             rclpy.spin_once(robot, timeout_sec=0.005)
 
-    spin_thread = threading.Thread(target=spin_worker, daemon=True)
+    spin_thread = threading.Thread(target=spin_worker)
     spin_thread.start()
 
-    print("Waiting for robot state data...")
-    time.sleep(2.0)
+    print("Monitoring robot states. Press Ctrl+C to stop.\n")
+    print(f"  Sub: {robot.topic_joint_states}, {robot.topic_left_hand}, {robot.topic_right_hand}")
+    print(f"  Pub: {robot.topic_left_arm_cmd}, {robot.topic_right_arm_cmd}, "
+          f"{robot.topic_left_hand_cmd}, {robot.topic_right_hand_cmd}")
+    print()
 
-    # 打印当前读取到的状态
-    print("Left arm state:", robot.latest_left_arm)
-    print("Right arm state:", robot.latest_right_arm)
-    print("Left hand state:", robot.latest_left_hand)
-    print("Right hand state:", robot.latest_right_hand)
+    count = 0
+    try:
+        while running:
+            time.sleep(0.05)
 
-    # 动作控制测试：26 维动作
-    print("\nSending 26-dim action (right hand close)...")
-    action = [
-        -1.0072, 1.4473, 1.6156, -1.8399, -0.4101, -0.2185, -0.3232,  # left arm
-        1.0072, 1.4473, -1.6156, -1.8399, 0.4101, -0.2252, 0.3232,    # right arm
-        -1000.0, -1000.0, -1000.0, -1000.0, -1000.0, -1000.0,         # left hand (disabled)
-        650.0, 650.0, 650.0, 650.0, 650.0, 250.0,                    # right hand (close)
-    ]
-    robot.send_robot_action(action)
-    print("Action sent OK")
+            la = robot.latest_left_arm
+            ra = robot.latest_right_arm
+            lh = robot.latest_left_hand
+            rh = robot.latest_right_hand
 
-    time.sleep(1.5)
+            la_pos = la[0].position if la and la[0] and la[0].position else [None]*7
+            ra_pos = ra[0].position if ra and ra[0] and ra[0].position else [None]*7
+            lh_pos = lh[0].position if lh and lh[0] and lh[0].position else [None]*6
+            rh_pos = rh[0].position if rh and rh[0] and rh[0].position else [None]*6
+
+            if la is not None and ra is not None and lh is not None and rh is not None:
+                action = np.zeros(26, dtype=float)
+                action[0:7] = la_pos
+                action[7:14] = ra_pos
+                action[14:20] = lh_pos
+                action[20:26] = rh_pos
+                robot.send_robot_action(action)
+
+            count += 1
+            if count % 10 != 0:  # 每秒打印一次
+                continue
+
+            print("=" * 70)
+            print(f"  left_arm(7):  [{', '.join(f'{v:8.4f}' if v is not None else '    None' for v in la_pos)}]")
+            print(f"  right_arm(7): [{', '.join(f'{v:8.4f}' if v is not None else '    None' for v in ra_pos)}]")
+            print(f"  left_hand(6): [{', '.join(f'{v:8.4f}' if v is not None else '    None' for v in lh_pos)}]")
+            print(f"  right_hand(6):[{', '.join(f'{v:8.4f}' if v is not None else '    None' for v in rh_pos)}]")
+
+
+    except KeyboardInterrupt:
+        print("\nStopped by user")
 
     running = False
     robot.stop()
+    spin_thread.join(timeout=1.0)
+    rclpy.shutdown()
     print("Robot driver test done")
 
 
