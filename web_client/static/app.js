@@ -624,9 +624,9 @@ const CONFIG_INT_KEYS = new Set([
 ]);
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
-  'language_config.language_task',
-  'language_config.language_index',
-  'language_config.language_auto_mode',
+  'language_config.task_id',
+  'language_config.sub_task_id',
+  'language_config.auto_mode',
   'visual.camera.connect_when_running',
   'visual.camera.open_head',
   'visual.camera.open_wrist_left',
@@ -760,10 +760,10 @@ function buildTree(obj, prefix, parentEl) {
       basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
     }
 
-    // Append the virtual language-link group (language_task + language_index selects)
+    // Append the virtual language-link group (task_id + sub_task_id selects)
     basicBody.appendChild(buildGroup('LANGUAGE', [
-      createLangLinkRow('language_config.language_task',  'language_task'),
-      createLangLinkRow('language_config.language_index', 'language_index'),
+      createLangLinkRow('language_config.task_id',  'task_id'),
+      createLangLinkRow('language_config.sub_task_id', 'sub_task_id'),
     ]));
 
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
@@ -1094,10 +1094,10 @@ function clearPending() {
 }
 
 /**
- * Create a real cfg-row for language_task or language_index.
+ * Create a real cfg-row for task_id or sub_task_id.
  * Both are real config fields that write to App.pendingPatch when changed.
- *   language_task  → string key into LangCmd.tasks (Task <select>)
- *   language_index → integer index into the selected task's subtask array
+ *   task_id  → string key into LangCmd.tasks (Task <select>)
+ *   sub_task_id → integer index into the selected task's subtask array
  */
 function createLangLinkRow(dotKey, label) {
   const row = document.createElement('div');
@@ -1113,16 +1113,16 @@ function createLangLinkRow(dotKey, label) {
   const sel = document.createElement('select');
   sel.className = 'input-text';
   // IDs: cfg-language-task / cfg-language-index
-  sel.id = dotKey.endsWith('language_task') ? 'cfg-language-task' : 'cfg-language-index';
+  sel.id = dotKey.endsWith('task_id') ? 'cfg-language-task' : 'cfg-language-index';
 
   valEl.appendChild(sel);
   row.appendChild(keyEl);
   row.appendChild(valEl);
 
-  if (dotKey.endsWith('language_task')) {
+  if (dotKey.endsWith('task_id')) {
     sel.addEventListener('change', () => {
       const task = sel.value;
-      // Rebuild language_index options (display sync only, pendingPatch written on Apply)
+      // Rebuild sub_task_id options (display sync only, pendingPatch written on Apply)
       syncLangIndexOptions(task, 0);
       // Sync → Language Command panel Task select
       const taskSel = $('lang-task-select');
@@ -1132,7 +1132,7 @@ function createLangLinkRow(dotKey, label) {
       }
     });
   } else {
-    // language_index
+    // sub_task_id
     sel.addEventListener('change', () => {
       // Sync → Language Command panel Sub-task select (display sync only)
       const subtaskSel = $('lang-subtask-select');
@@ -1148,7 +1148,7 @@ function createLangLinkRow(dotKey, label) {
 
 /** Populate the cfg-language-task select from current LangCmd.tasks.
  *  @param {string} [currentTask]  - task to pre-select (from App.config)
- *  @param {number} [currentIndex] - index to pre-select in language_index (from App.config)
+ *  @param {number} [currentIndex] - index to pre-select in sub_task_id (from App.config)
  */
 function syncLangTaskOptions(currentTask, currentIndex) {
   const sel = $('cfg-language-task');
@@ -1251,8 +1251,8 @@ function renderLangTaskSelect() {
 
   renderLangSubtaskSelect();
   // Sync Config panel: use App.config values if available, otherwise current selection
-  const cfgTask  = (App.config && App.config.language_config && App.config.language_config.language_task) || taskSel.value;
-  const cfgIndex = (App.config && App.config.language_config && App.config.language_config.language_index != null) ? App.config.language_config.language_index : undefined;
+  const cfgTask  = (App.config && App.config.language_config && App.config.language_config.task_id) || taskSel.value;
+  const cfgIndex = (App.config && App.config.language_config && App.config.language_config.sub_task_id != null) ? App.config.language_config.sub_task_id : undefined;
   syncLangTaskOptions(cfgTask, cfgIndex);
 }
 
@@ -1272,7 +1272,7 @@ function renderLangSubtaskSelect() {
     opt.title = text;
     subtaskSel.appendChild(opt);
   });
-  // Sync Config panel language_index options (preserve current selection)
+  // Sync Config panel sub_task_id options (preserve current selection)
   syncLangIndexOptions(taskName);
 }
 
@@ -1295,7 +1295,7 @@ function setupLangPanel() {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
       App.langAuto.lastProgress = null;
-      // Sync Config panel language_task select display only
+      // Sync Config panel task_id select display only
       const cfgTaskSel = $('cfg-language-task');
       if (cfgTaskSel && cfgTaskSel.value !== taskSel.value) {
         cfgTaskSel.value = taskSel.value;
@@ -1313,7 +1313,7 @@ function setupLangPanel() {
       if (!isNaN(idx) && subtasks[idx] !== undefined) {
         $('lang-cmd-text').value = subtasks[idx];
       }
-      // Sync Config panel language_index select display only
+      // Sync Config panel sub_task_id select display only
       const cfgIdxSel = $('cfg-language-index');
       if (cfgIdxSel && cfgIdxSel.value !== subtaskSel.value) {
         cfgIdxSel.value = subtaskSel.value;
@@ -1329,18 +1329,18 @@ function setupLangPanel() {
 
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.language_config || typeof App.config.language_config !== 'object') App.config.language_config = {};
-      App.config.language_config.language_auto_mode = enabled;
+      App.config.language_config.auto_mode = enabled;
 
-      App.pendingPatch['language_config.language_auto_mode'] = enabled;
+      App.pendingPatch['language_config.auto_mode'] = enabled;
       markPending();
 
       try {
         const res = await apiFetch('/api/config/patch', {
           method: 'POST',
-          body: JSON.stringify({ patch: { 'language_config.language_auto_mode': enabled } }),
+          body: JSON.stringify({ patch: { 'language_config.auto_mode': enabled } }),
         });
         App.config = res.config || App.config;
-        delete App.pendingPatch['language_config.language_auto_mode'];
+        delete App.pendingPatch['language_config.auto_mode'];
         if (!Object.keys(App.pendingPatch).length) clearPending();
 
         const display = $('conf-path-display');
@@ -1352,7 +1352,7 @@ function setupLangPanel() {
           });
         }
       } catch (e) {
-        App.pendingPatch['language_config.language_auto_mode'] = enabled;
+        App.pendingPatch['language_config.auto_mode'] = enabled;
         markPending();
       }
     });
@@ -1659,7 +1659,7 @@ async function loadConfigFromServer() {
       renderLangPresets(App.config.language);
     }
     applyVisualConfig(App.config);
-    // Apply language_task / language_index to lang panel (if lang data already loaded)
+    // Apply task_id / sub_task_id to lang panel (if lang data already loaded)
     if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
     // Set default path display on startup
     const display = $('conf-path-display');
@@ -1681,7 +1681,7 @@ async function loadDefaultLangFile() {
     if (res.data) {
       buildLangTasksFromData(res.data);
       renderLangTaskSelect();
-      // Apply language_task / language_index from current config
+      // Apply task_id / sub_task_id from current config
       applyLangConfigSelection();
     }
   } catch (_) { /* non-fatal: lang panel stays empty */ }
@@ -1689,13 +1689,13 @@ async function loadDefaultLangFile() {
 
 /**
  * After lang data is loaded (or config reloaded), synchronize the Language Command panel
- * and Config panel selects to reflect App.config.language_task / language_index.
+ * and Config panel selects to reflect App.config.task_id / sub_task_id.
  * Also fills lang-cmd-text with the corresponding instruction.
  */
 function applyLangConfigSelection() {
-  const task  = App.config && App.config.language_config && App.config.language_config.language_task;
-  const index = (App.config && App.config.language_config && App.config.language_config.language_index != null) ? App.config.language_config.language_index : 0;
-  const autoMode = !!(App.config && App.config.language_config && App.config.language_config.language_auto_mode);
+  const task  = App.config && App.config.language_config && App.config.language_config.task_id;
+  const index = (App.config && App.config.language_config && App.config.language_config.sub_task_id != null) ? App.config.language_config.sub_task_id : 0;
+  const autoMode = !!(App.config && App.config.language_config && App.config.language_config.auto_mode);
 
   const autoChk = $('chk-lang-auto-mode');
   if (autoChk) autoChk.checked = autoMode;
@@ -2585,8 +2585,8 @@ function wireEvents() {
     const task  = taskSel    ? taskSel.value                    : null;
     const idx   = subtaskSel ? parseInt(subtaskSel.value, 10)   : NaN;
     if (task != null) {
-      App.pendingPatch['language_config.language_task']  = task;
-      App.pendingPatch['language_config.language_index'] = isNaN(idx) ? 0 : idx;
+      App.pendingPatch['language_config.task_id']  = task;
+      App.pendingPatch['language_config.sub_task_id'] = isNaN(idx) ? 0 : idx;
       markPending();
     }
 
