@@ -1,4 +1,3 @@
-from cv2 import config
 from ml_collections import ConfigDict
 
 def get_intra_chunk_config():
