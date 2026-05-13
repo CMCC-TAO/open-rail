@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument('--show_action_cams_qt', action='store_true', help='Show action and camera images visualization based on QT')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
-    parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
+    parser.add_argument('--task_progress_threshold', type=float, help='Probability threshold for switching language instructions')
     parser.add_argument('--preprocess', type=str, choices=['crop_and_resize', 'pad_and_resize', 'resize', 'none'], help='Image preprocessing method')
     parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')
     parser.add_argument('--language', nargs='+', type=str, help='Language instruction options')
@@ -95,8 +95,8 @@ def override_config_with_args(config, args):
         config.record.switch = True
     if args.robots_type is not None:
         config.robots.type = RobotType(args.robots_type)
-    if args.thre_prob_progress is not None:
-        config.thre_prob_progress = args.thre_prob_progress
+    if args.task_progress_threshold is not None:
+        config.task_progress_threshold = args.task_progress_threshold
     if args.preprocess is not None:
         config.preprocess = args.preprocess
     if args.preprocess_size is not None:

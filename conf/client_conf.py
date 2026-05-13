@@ -53,5 +53,5 @@ def get_client_config():
     config.language_task = 'pour_tea'
     config.language_index = 1
     config.language_auto_mode = True  # If True, automatically switch language instructions based on probability threshold
-    config.thre_prob_progress = 9.9  # Probability threshold for switching language instructions
+    config.task_progress_threshold = 9.9  # Probability threshold for switching language instructions
     return config

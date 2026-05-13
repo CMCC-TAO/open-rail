@@ -348,7 +348,7 @@ robots:
 show_action_cams_qt: false
 show_img: false
 sleep_time: 0.2
-thre_prob_progress: 9.9
+task_progress_threshold: 9.9
 vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788
