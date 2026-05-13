@@ -73,7 +73,7 @@ class IntraChunkSmoother():
         # Calculate joint acceleration using the second derivative
         second_derivative_polynomial = np.poly1d(second_derivative_coefficients)
         acceleration_chunk_fitted = second_derivative_polynomial(x)
-
+        # print(f"fitting degree: {deg}, time_step: {time_step}")
         return index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
     def _gripper_traj_fitting(self, timestamps, gripper_chunk, index, start_time, end_time, time_step = 0.001):

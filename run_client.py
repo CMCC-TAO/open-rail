@@ -84,7 +84,7 @@ def override_config_with_args(config, args):
     if args.gripper_offset is not None:
         config.gripper_offset = args.gripper_offset
     if args.intra_chunk_mode is not None:
-        config.intra_chunk_mode = args.intra_chunk_mode
+        config.intra_chunk.intra_chunk_mode = args.intra_chunk_mode
     if args.inter_chunk_mode is not None:
         config.inter_chunk_mode = args.inter_chunk_mode
     if args.show_action_cams_qt:
@@ -250,9 +250,9 @@ if __name__ == "__main__":
     robot_cfg = getattr(config.robots, config.robots.type.value, None)
     if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
         config.rdm.action_layout = robot_cfg.action_layout
-        config.traj.action_layout = robot_cfg.action_layout
+        config.intra_chunk.action_layout = robot_cfg.action_layout
     rdm = RealtimeDataManager(config.rdm)
-    intra_chunk_smoother = IntraChunkSmoother(config=config.traj)
+    intra_chunk_smoother = IntraChunkSmoother(config=config.intra_chunk)
     if config.inter_chunk_mode == 'sync':
         vla_client = VLAClientSync(config=config, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother, vla_zmq_client=vla_zmq_client, robot=robot)
     else:

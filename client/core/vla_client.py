@@ -66,7 +66,7 @@ class VLAClientAsync():
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.config.observer.period = 1.0 / self.config.observer.fps
-        if self.config.intra_chunk_mode == 'raw':
+        if self.config.intra_chunk.intra_chunk_mode == 'raw':
             self.config.controller.period = self.config.observer.period * 1000.0
             self.config.inter_chunk_mode = 'search_action'
             self.config.search_length = 1
@@ -100,7 +100,7 @@ class VLAClientAsync():
         self.vis_global_step = 0
         self.vis_idx_count = 0
         self.vis_origin_chunk_action = None
-        self.vis_ratio = (1.0 / self.config.observer.fps) / (self.config.fitting_time_step / 1000.0) # (64 - 1) * ratio -> 420
+        self.vis_ratio = (1.0 / self.config.observer.fps) / (self.config.intra_chunk.fitting_time_step / 1000.0) # (64 - 1) * ratio -> 420
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
         self.vis_prev_origin_idx = None
@@ -211,7 +211,7 @@ class VLAClientAsync():
 
             # Record trajectory fitting timestamp
             self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
@@ -266,7 +266,7 @@ class VLAClientAsync():
 
             # Record trajectory fitting timestamp
             self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.fitting_num_samples)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
@@ -366,18 +366,18 @@ class VLAClientAsync():
         start_time = timestamps[0]
         end_time = timestamps[-1]
         
-        if self.config.intra_chunk_mode == 'raw':
+        if self.config.intra_chunk.intra_chunk_mode == 'raw':
             action_chunk_fitted = action_chunk
             vel_chunk_fitted = np.zeros_like(action_chunk)
             acc_chunk_fitted = np.zeros_like(action_chunk)
             timestamps_fitted = timestamps  # original sparse timestamps
-        elif self.config.intra_chunk_mode == 'raw_ipt':
+        elif self.config.intra_chunk.intra_chunk_mode == 'raw_ipt':
             # Use CubicSpline interpolation for sparse raw chunks
             action_chunk = np.asarray(action_chunk)
             timestamps = np.asarray(timestamps)
             
             # Create dense timestamps for interpolation
-            time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
+            time_step = self.config.intra_chunk.fitting_time_step / 1000  # convert ms to seconds
             timestamps_fitted = np.arange(start_time, end_time, time_step)
             
             # Interpolate each joint dimension using CubicSpline
@@ -405,8 +405,8 @@ class VLAClientAsync():
                 action_chunk=action_chunk, 
                 start_time=start_time, 
                 end_time=end_time, 
-                deg=self.config.fitting_deg, 
-                time_step=self.config.fitting_time_step / 1000
+                deg=self.config.intra_chunk.fitting_deg, 
+                time_step=self.config.intra_chunk.fitting_time_step / 1000
             )
         return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted
 

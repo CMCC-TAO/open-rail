@@ -98,7 +98,7 @@ class VLAClientSync():
         self.vis_global_step = 0
         self.vis_idx_count = 0
         self.vis_origin_chunk_action = None
-        self.vis_ratio = (1.0 / self.config.observer.fps) / (self.config.fitting_time_step / 1000.0) # (64 - 1) * ratio -> 420
+        self.vis_ratio = (1.0 / self.config.observer.fps) / (self.config.intra_chunk.fitting_time_step / 1000.0) # (64 - 1) * ratio -> 420
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
         self.vis_prev_origin_idx = None
@@ -573,7 +573,7 @@ class VLAClientSync():
                 dt_origin = self.config.observer.period
             else:
                 delta_idx = origin_idx - self.vis_prev_origin_idx
-                dt_origin = max(delta_idx, 1) * (self.config.fitting_time_step / 1000.0)
+                dt_origin = max(delta_idx, 1) * (self.config.intra_chunk.fitting_time_step / 1000.0)
             if self.vis_prev_origin is None:
                 origin_vel = np.zeros_like(origin_np)
                 origin_acc = np.zeros_like(origin_np)

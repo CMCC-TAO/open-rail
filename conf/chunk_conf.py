@@ -1,3 +1,4 @@
+from cv2 import config
 from ml_collections import ConfigDict
 
 def get_intra_chunk_config():
@@ -21,7 +22,15 @@ def get_intra_chunk_config():
     config.max_joint_fitting_workers = 14
     config.max_gripper_fitting_workers = 2
     config.max_head_fitting_workers = 2
+    config.fitting_num_samples = 64
+    config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
+    config.fitting_deg = 4  # Polynomial fitting degree
+    config.intra_chunk_mode = 'fit'  # intra-chunk processing mode, choices = ('raw', 'raw_ipt', 'fit')
     config.joint_dim = 14  # Degrees of freedom for dual arms
     config.gripper_dim = 2  # Degrees of freedom for dual grippers
     config.head_dim = 2  # Degrees of freedom for head
+    return config
+
+def get_inter_chunk_config() -> ConfigDict:
+    config = ConfigDict()
     return config

@@ -5,13 +5,32 @@ controller:
   period: 3.75
   strategy: step
   wait_step: 4
-fitting_deg: 4
-fitting_num_samples: 64
-fitting_time_step: 3.75
 gripper_offset: 5
 history_frame: false
 inter_chunk_mode: smooth_velocity
-intra_chunk_mode: fit
+intra_chunk:
+  action_layout:
+    arm:
+      end: 14
+      policy: joint
+      start: 0
+    gripper:
+      end: 16
+      policy: gripper
+      start: 14
+  filter_window_size: 4
+  fitting_deg: 5
+  fitting_num_samples: 64
+  fitting_time_step: 3.75
+  gripper_dim: 2
+  head_dim: 2
+  intra_chunk_mode: fit
+  joint_dim: 14
+  max_gripper_action_threshold: 0.95
+  max_gripper_fitting_workers: 2
+  max_head_fitting_workers: 2
+  max_joint_fitting_workers: 14
+  min_gripper_action_threshold: 0.05
 language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
   hand carefully. If and only if the bottle is caught by hand, release the gripper.
@@ -329,25 +348,6 @@ smooth_base: 0.0
 smooth_length: 150
 smooth_ratio: 0.75
 thre_prob_progress: 9.9
-traj:
-  action_layout:
-    arm:
-      end: 14
-      policy: joint
-      start: 0
-    gripper:
-      end: 16
-      policy: gripper
-      start: 14
-  filter_window_size: 4
-  gripper_dim: 2
-  head_dim: 2
-  joint_dim: 14
-  max_gripper_action_threshold: 0.95
-  max_gripper_fitting_workers: 2
-  max_head_fitting_workers: 2
-  max_joint_fitting_workers: 14
-  min_gripper_action_threshold: 0.05
 vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788

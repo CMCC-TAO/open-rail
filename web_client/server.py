@@ -527,7 +527,7 @@ def _collect_stats() -> dict:
         #     "fps":              cfg.observer.fps,
         #     "sleep_time":       cfg.sleep_time,
         #     "inter_chunk_mode": cfg.inter_chunk_mode,
-        #     "intra_chunk_mode": cfg.intra_chunk_mode,
+        #     "intra_chunk_mode": cfg.intra_chunk.intra_chunk_mode,
         #     "gripper_offset":   cfg.gripper_offset,
         #     "preprocess":       cfg.preprocess,
         #     "robots_type":      cfg.robots.type.value if hasattr(cfg.robots.type, 'value') else str(cfg.robots.type),
@@ -894,12 +894,12 @@ async def start_client():
             robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
             if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
                 cfg.rdm.action_layout = robot_cfg.action_layout
-                cfg.traj.action_layout = robot_cfg.action_layout
+                cfg.intra_chunk.action_layout = robot_cfg.action_layout
 
             vla_zmq_client = ZMQClient(cfg.vla_zmq)
             robot = _get_robot(cfg)
             rdm = RealtimeDataManager(cfg.rdm)
-            intra_chunk_smoother = IntraChunkSmoother(config=cfg.traj)
+            intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
 
             if cfg.inter_chunk_mode == 'sync':
                 from client.core.vla_client_sync import VLAClientSync
