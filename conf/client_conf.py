@@ -5,7 +5,7 @@ from conf.control_conf import get_controller_config
 from conf.observe_conf import get_observer_config
 from conf.zmq_conf import get_vla_zmq_config, get_vis_zmq_config
 from conf.save_conf import get_record_data_config
-from conf.traj_conf import get_traj_config
+from conf.chunk_conf import get_intra_chunk_config
 from conf.robots_conf import get_robots_config
 from conf.visual_conf import get_visual_config
 
@@ -30,7 +30,7 @@ def get_client_config():
     """
     config = ConfigDict()
     config.rdm = get_rdm_config()
-    config.traj = get_traj_config()
+    config.traj = get_intra_chunk_config()
     config.controller = get_controller_config()
     config.observer = get_observer_config()
     config.robots = get_robots_config()
