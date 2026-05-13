@@ -14,7 +14,7 @@ from client.utils import misc
 from client.utils.util import run_time_decorator, get_action_layout_info
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
-from client.core.trajectory_generator import TrajectoryGenerator
+from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.save_lerobot import LeRobotDatasetWriter
 from visual.websocket_server import VLAWebSocketServer
@@ -29,13 +29,13 @@ class VLAClientSync():
     - Real-time robot control
     - Data recording for dataset creation
     """
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, traj_generator: TrajectoryGenerator, vla_zmq_client: ZMQClient, robot: None):
+    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, intra_chunk_smoother: IntraChunkSmoother, vla_zmq_client: ZMQClient, robot: None):
         """Initialize the VLA Client.
         
         Args:
             config (ConfigDict): Configuration dictionary containing all system parameters
             rdm (RealtimeDataManager): Real-time data manager for handling observation and action data
-            traj_generator (TrajectoryGenerator): Trajectory generator for action smoothing and fitting
+            intra_chunk_smoother (IntraChunkSmoother): Intra-chunk smoother for action smoothing and fitting
             zmq_client (ZMQClient): ZMQ client for communication with VLA inference server
             vis_action_cams_zmq_client (ZMQClient): ZMQ client for communication with camera-action visualization server
             robot: Robot interface for observation collection and action execution
@@ -47,7 +47,7 @@ class VLAClientSync():
         if self.config.inter_chunk_mode == 'sync':
             self.rdm.sync_running = True
             self.action_length = None
-        self.traj_generator = traj_generator
+        self.intra_chunk_smoother = intra_chunk_smoother
         self.vla_zmq = vla_zmq_client
         self.robot = robot
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
@@ -321,7 +321,7 @@ class VLAClientSync():
 
         return encoded_imgs
 
-    @run_time_decorator
+    # @run_time_decorator
     def _process_data(self, frame):
         """Process observation data by adding local timestamp, encoding images and adding task name.
 

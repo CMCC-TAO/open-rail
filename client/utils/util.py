@@ -23,7 +23,7 @@ def run_time_decorator(func):
         end_time = time.perf_counter()  # Record the end time
         elapsed_time = end_time - start_time  # Calculate the elapsed time
         # Do not uncomment, too much data output affects debugging
-        logger.info(f"Function {func.__name__} called and took {elapsed_time*1000:.4f} milliseconds to execute.")
+        logger.info(f"{func.__name__} takes {elapsed_time*1000:.4f} milliseconds to execute.")
         return result
     return wrapper
 

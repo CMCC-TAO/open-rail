@@ -7,7 +7,7 @@ from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 from client.utils.util import run_time_decorator, get_action_layout_info
 
-class TrajectoryGenerator():
+class IntraChunkSmoother():
     """Trajectory generator for robot motion planning and control.
     
     This class provides functionality for fitting and generating smooth trajectories
@@ -194,4 +194,4 @@ if __name__ == '__main__':
     from conf.traj_conf import get_traj_config
     config = get_traj_config()
     print(config)
-    traj_generator = TrajectoryGenerator(config=config)
+    intra_chunk_smoother = IntraChunkSmoother(config=config)

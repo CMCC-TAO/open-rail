@@ -14,7 +14,7 @@ from conf.logging_conf import setup_logging
 from client.core.vla_client import VLAClientAsync
 from client.core.vla_client_sync import VLAClientSync
 from client.core.zmq_client import ZMQClient
-from client.core.trajectory_generator import TrajectoryGenerator
+from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from rich.live import Live
 from rich.console import Console
@@ -252,11 +252,11 @@ if __name__ == "__main__":
         config.rdm.action_layout = robot_cfg.action_layout
         config.traj.action_layout = robot_cfg.action_layout
     rdm = RealtimeDataManager(config.rdm)
-    traj_generator = TrajectoryGenerator(config=config.traj)
+    intra_chunk_smoother = IntraChunkSmoother(config=config.traj)
     if config.inter_chunk_mode == 'sync':
-        vla_client = VLAClientSync(config=config, rdm=rdm, traj_generator=traj_generator, vla_zmq_client=vla_zmq_client, robot=robot)
+        vla_client = VLAClientSync(config=config, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother, vla_zmq_client=vla_zmq_client, robot=robot)
     else:
-        vla_client = VLAClientAsync(config=config, rdm=rdm, traj_generator=traj_generator, vla_zmq_client=vla_zmq_client, robot=robot)
+        vla_client = VLAClientAsync(config=config, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother, vla_zmq_client=vla_zmq_client, robot=robot)
 
 
     # extra
