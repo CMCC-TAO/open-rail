@@ -126,32 +126,21 @@ class RobotBody(RobotBase):
             # 机器人状态对齐（以头部相机时间戳为基准）
             robot_state = self.robot.get_arm_hand_states_nearest_func(head_ts)
 
+            # ######################
+            # 修改: 任一部位状态缺失则跳过本轮（避免零填充给模型输入错误数据）
+            # ######################
+            if (robot_state["left_arm"] is None
+                    or robot_state["right_arm"] is None
+                    or robot_state["left_hand"] is None
+                    or robot_state["right_hand"] is None):
+                return None
+
             # 拼接 26 维 state 向量
             state = []
-
-            # 左臂
-            if robot_state["left_arm"] is not None:
-                state.extend(robot_state["left_arm"].position)
-            else:
-                state.extend([0] * 7)
-
-            # 右臂
-            if robot_state["right_arm"] is not None:
-                state.extend(robot_state["right_arm"].position)
-            else:
-                state.extend([0] * 7)
-
-            # 左手
-            if robot_state["left_hand"] is not None:
-                state.extend(robot_state["left_hand"].position)
-            else:
-                state.extend([0] * 6)
-
-            # 右手
-            if robot_state["right_hand"] is not None:
-                state.extend(robot_state["right_hand"].position)
-            else:
-                state.extend([0] * 6)
+            state.extend(robot_state["left_arm"].position)   # 7
+            state.extend(robot_state["right_arm"].position)  # 7
+            state.extend(robot_state["left_hand"].position)  # 6
+            state.extend(robot_state["right_hand"].position) # 6
 
             result["obs.state"] = np.array(state)
             self.current_state = result["obs.state"]

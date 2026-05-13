@@ -88,6 +88,14 @@ class UnitreeG1Robot(Node):
 
         self.running = True
 
+        # ######################
+        # 新增: 去重标记，避免采样线程重复入队相同时间戳的数据
+        # ######################
+        self._last_queue_ts_left_arm = 0.0
+        self._last_queue_ts_right_arm = 0.0
+        self._last_queue_ts_left_hand = 0.0
+        self._last_queue_ts_right_hand = 0.0
+
         # 采样线程
         self.sample_thread = threading.Thread(target=self._sample_loop, daemon=True)
         self.sample_thread.start()
@@ -200,14 +208,30 @@ class UnitreeG1Robot(Node):
     # ======================
     def _sample_loop(self):
         while self.running:
+            # ######################
+            # 修改: 时间戳去重（浮点比较使用 1ms 阈值）
+            # ######################
+            eps = 1e-4
             if self.latest_left_arm:
-                self.queue_left_arm.append(self.latest_left_arm)
+                ts = self.latest_left_arm[1]
+                if abs(ts - self._last_queue_ts_left_arm) > eps:
+                    self.queue_left_arm.append(self.latest_left_arm)
+                    self._last_queue_ts_left_arm = ts
             if self.latest_right_arm:
-                self.queue_right_arm.append(self.latest_right_arm)
+                ts = self.latest_right_arm[1]
+                if abs(ts - self._last_queue_ts_right_arm) > eps:
+                    self.queue_right_arm.append(self.latest_right_arm)
+                    self._last_queue_ts_right_arm = ts
             if self.latest_left_hand:
-                self.queue_left_hand.append(self.latest_left_hand)
+                ts = self.latest_left_hand[1]
+                if abs(ts - self._last_queue_ts_left_hand) > eps:
+                    self.queue_left_hand.append(self.latest_left_hand)
+                    self._last_queue_ts_left_hand = ts
             if self.latest_right_hand:
-                self.queue_right_hand.append(self.latest_right_hand)
+                ts = self.latest_right_hand[1]
+                if abs(ts - self._last_queue_ts_right_hand) > eps:
+                    self.queue_right_hand.append(self.latest_right_hand)
+                    self._last_queue_ts_right_hand = ts
             time.sleep(0.002)
 
     # ======================
