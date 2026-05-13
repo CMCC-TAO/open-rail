@@ -58,7 +58,7 @@ def get_client_config():
 
 def get_language_config() -> ConfigDict:
     config = ConfigDict()
-    config.file_path = 'conf/lang_cmd.json'  # Path to language configuration file
+    config.file_path = 'lang_cmd.json'  # Path to language configuration file, must in conf dir.
     config.task_id = 'pour_tea'
     config.sub_task_id = 1
     config.auto_mode = True  # If True, automatically switch language instructions based on probability threshold
