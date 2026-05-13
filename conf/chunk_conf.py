@@ -1,6 +1,6 @@
 from ml_collections import ConfigDict
 
-def get_traj_config():
+def get_intra_chunk_config():
     """Generate configuration for trajectory generation system.
     
     This function creates configuration settings for the trajectory generation
