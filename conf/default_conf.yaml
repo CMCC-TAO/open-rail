@@ -2,10 +2,10 @@
 # Auto-generated — edit values as needed
 
 controller:
+  gripper_offset: 5
   period: 3.75
   strategy: step
-  wait_step: 4
-gripper_offset: 5
+  wait_time: 250
 inter_chunk:
   inter_chunk_mode: bspline
   search_length: 100
@@ -340,7 +340,6 @@ robots:
     root: /home/robot/Music/task_39_only1
   type: mock
 show_action_cams_qt: false
-sleep_time: 0.2
 vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788

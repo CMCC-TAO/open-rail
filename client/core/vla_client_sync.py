@@ -218,7 +218,6 @@ class VLAClientSync():
             data = self._process_data(observations)
             self.rdm.add_observe_data(data)
             # Clear action data to ensure fresh action retrieval
-        # time.sleep(self.config.sleep_time_after_reset)
         
         # Get observation data (thread-safe function, no lock needed)
         data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
@@ -522,7 +521,7 @@ class VLAClientSync():
                 continue
 
             self.inference_first()
-            time.sleep(self.config.sleep_time)
+            time.sleep(self.config.controller.wait_time)
 
             # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
             symbol = '=' * 10

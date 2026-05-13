@@ -269,12 +269,11 @@ def create_layout(info: dict, terminal_size=None):
     )
     col_layout1_info2 = (
         f"fps: {config.observer.fps}\n"
-        f"sleep_time: {config.sleep_time}\n"
-        f"gripper_offset: {config.gripper_offset}\n"
+        f"wait_time: {config.controller.wait_time}\n"
+        f"gripper_offset: {config.controller.gripper_offset}\n"
         f"history_frame: {config.vision.history_frame}\n"
     )
     col_layout1_info3 = (
-        f"wait_step: {config.controller.wait_step}\n"
         f"fps: {config.observer.fps}\n"
         f"fit_num_samples: {config.intra_chunk.fitting_num_samples}\n"
         f"fit_time_step: {config.intra_chunk.fitting_time_step}\n"

@@ -149,7 +149,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Client Application')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable live interface')
     parser.add_argument('--fps', type=int, help='Frame rate setting')
-    parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
+    parser.add_argument('--wait_time', type=float, help='Wait time for the next inference step in milliseconds')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
     parser.add_argument('--search_length', type=int, help='Forward search length')
     parser.add_argument('--show_action_state', action='store_true', help='Show action and state visualization')
@@ -178,10 +178,10 @@ def override_config_with_args(config, args):
     """
     if args.fps is not None:
         config.observer.fps = args.fps
-    if args.sleep_time is not None:
-        config.sleep_time = args.sleep_time
+    if args.wait_time is not None:
+        config.controller.wait_time = args.wait_time
     if args.gripper_offset is not None:
-        config.gripper_offset = args.gripper_offset
+        config.controller.gripper_offset = args.gripper_offset
     if args.show_action_state:
         config.show_action_state = True
     if args.show_action_cams:

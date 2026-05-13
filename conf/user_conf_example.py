@@ -8,7 +8,7 @@ Usage:
     python run_client.py --user_conf conf/user_conf_example.py
 
 Configuration Priority (highest to lowest):
-    1. Command line arguments (--fps, --sleep_time, etc.)
+    1. Command line arguments (--fps, --wait_time, etc.)
     2. User configuration file (--user_conf)
     3. Default client configuration (client_conf.py)
 """

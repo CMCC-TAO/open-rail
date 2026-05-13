@@ -51,7 +51,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Client')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     parser.add_argument('--fps', type=int, help='FPS')
-    parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
+    parser.add_argument('--wait_time', type=int, help='Wait time for the next inference step in milliseconds')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
     parser.add_argument('--search_length', type=int, help='Forward search length')
     parser.add_argument('--intra_chunk_mode', type=str, choices=['raw', 'raw_ipt', 'fit'], help='Intra-chunk processing mode: raw_ipt=direct execution with interpolation')
@@ -79,10 +79,10 @@ def override_config_with_args(config, args):
     """
     if args.fps is not None:
         config.observer.fps = args.fps
-    if args.sleep_time is not None:
-        config.sleep_time = args.sleep_time
+    if args.wait_time is not None:
+        config.controller.wait_time = args.wait_time
     if args.gripper_offset is not None:
-        config.gripper_offset = args.gripper_offset
+        config.controller.gripper_offset = args.gripper_offset
     if args.intra_chunk_mode is not None:
         config.intra_chunk.intra_chunk_mode = args.intra_chunk_mode
     if args.search_length is not None:

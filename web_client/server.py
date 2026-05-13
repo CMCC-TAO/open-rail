@@ -525,10 +525,10 @@ def _collect_stats() -> dict:
         base["debug_info"]      = str(vc.debug_info)
         # base["config_snapshot"] = {
         #     "fps":              cfg.observer.fps,
-        #     "sleep_time":       cfg.sleep_time,
+        #     "wait_time":        cfg.controller.wait_time,
         #     "inter_chunk_mode": cfg.inter_chunk.inter_chunk_mode,
         #     "intra_chunk_mode": cfg.intra_chunk.intra_chunk_mode,
-        #     "gripper_offset":   cfg.gripper_offset,
+        #     "gripper_offset":   cfg.controller.gripper_offset,
         #     "preprocess":       cfg.preprocess,
         #     "robots_type":      cfg.robots.type.value if hasattr(cfg.robots.type, 'value') else str(cfg.robots.type),
         #     "record":           cfg.record.switch,
