@@ -348,7 +348,6 @@ traj:
   max_head_fitting_workers: 2
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
-traj_strategy: fitting
 vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788
