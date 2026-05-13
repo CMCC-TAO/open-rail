@@ -6,17 +6,18 @@ controller:
   strategy: step
   wait_step: 4
 gripper_offset: 5
-history_frame: false
 language:
 - Grasp the bottle selected by the finger with the nearer gripper and pass it to the
   hand carefully. If and only if the bottle is caught by hand, release the gripper.
 - default language instruction
 observer:
   fps: 30
-preprocess: pad_and_resize
-preprocess_size:
-- 640
-- 640
+vision:
+  history_frame: false
+  preprocess: pad_and_resize
+  preprocess_size:
+  - 640
+  - 640
 rdm:
   max_len: 100
   record_data: false
@@ -216,7 +217,7 @@ robots:
     root: /home/robot/Music/task_39_only1
   type: a2d
 show_action_cams_qt: false
-show_img: false
+# show_img: false
 sleep_time: 0.002
 language:
   file_path: conf/lang_cmd.json

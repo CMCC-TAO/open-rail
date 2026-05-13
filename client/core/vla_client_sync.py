@@ -61,9 +61,9 @@ class VLAClientSync():
         self.allow_language_switch = True  # Flag to control automatic language switching
         
         # Define image preprocess function
-        if self.config.preprocess != 'none':
-            preprocess_func = getattr(misc, self.config.preprocess)
-            height, width = self.config.preprocess_size
+        if self.config.vision.preprocess != 'none':
+            preprocess_func = getattr(misc, self.config.vision.preprocess)
+            height, width = self.config.vision.preprocess_size
             self._preprocess_func = lambda img: preprocess_func(img, target_height=height, target_width=width)
         else:
             self._preprocess_func = None
@@ -221,7 +221,7 @@ class VLAClientSync():
         # time.sleep(self.config.sleep_time_after_reset)
         
         # Get observation data (thread-safe function, no lock needed)
-        data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.history_frame else 2)
+        data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
         if data is not None:
             # Record inference start timestamp for control timestamp updates
             self.rdm.set_infer_time_marker()

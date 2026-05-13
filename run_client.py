@@ -98,9 +98,9 @@ def override_config_with_args(config, args):
     if args.task_progress_threshold is not None:
         config.language.task_progress_threshold = args.task_progress_threshold
     if args.preprocess is not None:
-        config.preprocess = args.preprocess
+        config.vision.preprocess = args.preprocess
     if args.preprocess_size is not None:
-        config.preprocess_size = args.preprocess_size
+        config.vision.preprocess_size = args.preprocess_size
     if args.language is not None:
         config.language = args.language
     return config

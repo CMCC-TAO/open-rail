@@ -42,13 +42,11 @@ def get_client_config():
     config.record = get_record_data_config()  # Data recording configuration
     config.show_action_cams_qt = False  # QT-based action-camera visualization. If set as True, run /client/utils/vis_action_camera.py.py to launch the visualization server
     config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
-    config.show_img = False  # Enable/disable image display
+    # config.show_img = False  # Enable/disable image display
     # config.intra_chunk.strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
     config.sleep_time = 0.002  # Sleep time after each inference frame in seconds. Note: robot to hesitate, increase it.
-    config.history_frame = False  # Enable/disable historical frame usage
-    config.preprocess = 'pad_and_resize'
-    config.preprocess_size = [640, 640] # [height, width]
+    config.vision = get_vision_config()
     config.language = get_language_config()
     # config.language = [
     #     'Grasp the bottle selected by the finger with the nearer gripper and pass it to the hand carefully. If and only if the bottle is caught by hand, release the gripper.',
@@ -67,4 +65,7 @@ def get_language_config() -> ConfigDict:
 
 def get_vision_config() -> ConfigDict:
     config = ConfigDict()
+    config.history_frame = False  # Enable/disable historical frame usage
+    config.preprocess = 'pad_and_resize'
+    config.preprocess_size = [640, 640]  # [height, width]
     return config

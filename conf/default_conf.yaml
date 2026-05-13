@@ -6,7 +6,6 @@ controller:
   strategy: step
   wait_step: 4
 gripper_offset: 5
-history_frame: false
 inter_chunk:
   inter_chunk_mode: bspline
   search_length: 100
@@ -40,16 +39,12 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 2
+  sub_task_id: 0
   task_id: pour_tea
   task_progress_threshold: 9.9
 observer:
   fps: 30
   period: 0.03333333333333333
-preprocess: pad_and_resize
-preprocess_size:
-- 640
-- 640
 rdm:
   action_layout:
     arm:
@@ -345,12 +340,17 @@ robots:
     root: /home/robot/Music/task_39_only1
   type: mock
 show_action_cams_qt: false
-show_img: false
 sleep_time: 0.2
 vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788
   server_addr: tcp://*:7788
+vision:
+  history_frame: false
+  preprocess: pad_and_resize
+  preprocess_size:
+  - 640
+  - 640
 visual:
   camera:
     open_head: true
