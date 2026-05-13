@@ -68,8 +68,8 @@ class VLAClientAsync():
         self.config.observer.period = 1.0 / self.config.observer.fps
         if self.config.intra_chunk.intra_chunk_mode == 'raw':
             self.config.controller.period = self.config.observer.period * 1000.0
-            self.config.inter_chunk_mode = 'search_action'
-            self.config.search_length = 1
+            self.config.inter_chunk.inter_chunk_mode = 'search_action'
+            self.config.inter_chunk.search_length = 1
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
         
         self.thread_lock = threading.Lock()
@@ -288,7 +288,20 @@ class VLAClientAsync():
                     interp_func = interp1d(x_original, prob_progress, kind='linear', fill_value='extrapolate')
                     prob_progress = interp_func(x_target)
 
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, prob_progress=prob_progress, inter_chunk_mode=self.config.inter_chunk_mode, search_length=self.config.search_length, smooth_action=self.config.smooth_action, smooth_length=self.config.smooth_length, gripper_offset=self.config.gripper_offset)
+            self.rdm.update_action_chunk_fitted(
+                action_chunk_fitted,
+                vel_chunk_fitted,
+                acc_chunk_fitted,
+                timestamps_fitted,
+                prob_progress=prob_progress,
+                inter_chunk_mode=self.config.inter_chunk.inter_chunk_mode,
+                search_length=self.config.inter_chunk.search_length,
+                smooth_action=self.config.inter_chunk.smooth_action,
+                smooth_length=self.config.inter_chunk.smooth_length,
+                smooth_base=self.config.inter_chunk.smooth_base,
+                smooth_ratio=self.config.inter_chunk.smooth_ratio,
+                gripper_offset=self.config.gripper_offset,
+            )
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()

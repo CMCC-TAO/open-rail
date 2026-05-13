@@ -526,7 +526,7 @@ def _collect_stats() -> dict:
         # base["config_snapshot"] = {
         #     "fps":              cfg.observer.fps,
         #     "sleep_time":       cfg.sleep_time,
-        #     "inter_chunk_mode": cfg.inter_chunk_mode,
+        #     "inter_chunk_mode": cfg.inter_chunk.inter_chunk_mode,
         #     "intra_chunk_mode": cfg.intra_chunk.intra_chunk_mode,
         #     "gripper_offset":   cfg.gripper_offset,
         #     "preprocess":       cfg.preprocess,
@@ -901,7 +901,7 @@ async def start_client():
             rdm = RealtimeDataManager(cfg.rdm)
             intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
 
-            if cfg.inter_chunk_mode == 'sync':
+            if cfg.inter_chunk.inter_chunk_mode == 'sync':
                 from client.core.vla_client_sync import VLAClientSync
                 vc = VLAClientSync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
                                    vla_zmq_client=vla_zmq_client, robot=robot)
