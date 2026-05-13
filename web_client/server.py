@@ -585,13 +585,18 @@ class LangFileRequest(BaseModel):
 @app.post("/api/lang_file/load")
 async def load_lang_file(req: LangFileRequest):
     """Load a JSON language command file and return its contents."""
+    print(f"Loading language file: {req.path}")
     p = Path(req.path)
+    if "conf" not in req.path:
+        p = "conf" / p
     if not p.is_absolute():
         p = ROOT / p
     # Guard against path-traversal: resolved path must stay inside ROOT
+    print(f"language file path: {p}")
     try:
         p = p.resolve()
         p.relative_to(ROOT.resolve())
+        print(f"resolved path: {p}")
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
     if not p.exists():
