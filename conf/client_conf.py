@@ -39,8 +39,6 @@ def get_client_config():
     config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     # config.show_img = False  # Enable/disable image display
     # config.intra_chunk.strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
-    config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
-    config.sleep_time = 0.002  # Sleep time after each inference frame in seconds. Note: robot to hesitate, increase it.
     config.vision = get_vision_config()
     config.language = get_language_config()
     # config.language = [
@@ -113,14 +111,16 @@ def get_controller_config() -> ConfigDict:
 
     Returns:
         ConfigDict: Configuration dictionary for Controller containing:
-            - wait_step: Time delay for robot controller in milliseconds
+            - wait_time: Time delay for robot controller in milliseconds
             - period: Control period for robot control in milliseconds
             - strategy: Control strategy type
+            - gripper_offset: Gripper command forward offset with respect to arm command in frames
     """
     config = ConfigDict()
-    config.wait_step = 4  # Time delay for robot controller in milliseconds
-    config.period = 3.75   # Control period for robot control in milliseconds
+    config.wait_time = 200  # Wait time for the next inference step in millisecond. Note: robot to hesitate, increase it.
+    config.period = 3.75   # Control period for sending command to robot in milliseconds
     config.strategy = 'step'  # Control strategy, choices = ('step', 'realtime', 'fusion')
+    config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
     return config
 
 def get_observer_config() -> ConfigDict:
