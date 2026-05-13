@@ -160,6 +160,19 @@ class RobotBody(RobotBase):
     # ==================================================================
     def close(self):
         self.running = False
+        time.sleep(0.1)  # 给自旋线程一个机会退出
+
+        # ######################
+        # 新增: 停止机器人采样线程
+        # ######################
+        self.robot.stop()
+
+        # ######################
+        # 新增: 销毁 ROS2 节点（释放资源）
+        # ######################
+        self.camera.destroy_node()
+        self.robot.destroy_node()
+
         print("Unitree G1 RobotBody closed")
 
 
