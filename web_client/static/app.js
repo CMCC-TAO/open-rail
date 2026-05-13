@@ -1113,13 +1113,13 @@ function createLangLinkRow(dotKey, label) {
   const sel = document.createElement('select');
   sel.className = 'input-text';
   // IDs: cfg-language-task / cfg-language-index
-  sel.id = dotKey.endsWith('task_id') ? 'cfg-language-task' : 'cfg-language-index';
+  sel.id = dotKey === 'language_config.task_id' ? 'cfg-language-task' : 'cfg-language-index';
 
   valEl.appendChild(sel);
   row.appendChild(keyEl);
   row.appendChild(valEl);
 
-  if (dotKey.endsWith('task_id')) {
+  if (dotKey === 'language_config.task_id') {
     sel.addEventListener('change', () => {
       const task = sel.value;
       // Rebuild sub_task_id options (display sync only, pendingPatch written on Apply)
