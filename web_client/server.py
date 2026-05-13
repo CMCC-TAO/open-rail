@@ -532,7 +532,7 @@ def _collect_stats() -> dict:
         #     "preprocess":       cfg.preprocess,
         #     "robots_type":      cfg.robots.type.value if hasattr(cfg.robots.type, 'value') else str(cfg.robots.type),
         #     "record":           cfg.record.switch,
-        #     "thre_prob_progress": cfg.thre_prob_progress,
+        #     "task_progress_threshold": cfg.task_progress_threshold,
         # }
     except Exception as e:
         base["debug_info"] = f"stats error: {e}"
