@@ -67,11 +67,12 @@ class VLAServer:
         """
         data['obs'][key] = cv2.imdecode(data['obs'][key], cv2.IMREAD_COLOR)
     
-    def inference(self, data):
+    def inference(self, data, meta=None):
         """Process inference request with image decoding and model inference
         
         Args:
             data: Input data containing observations and other information
+            meta: Optional metadata dict from client request.
         """
         try:
             # Decode image data with parallel processing
@@ -107,7 +108,7 @@ class VLAServer:
             inference_start_time = time.time()
             model_data = data if isinstance(data, list) else [data]
             future = self.executor.submit(self.model.infer, model_data)
-            future.add_done_callback(lambda f: self.inference_callback(f, inference_start_time))
+            future.add_done_callback(lambda f: self.inference_callback(f, inference_start_time, meta=meta))
             for key, value in model_data[0]['obs'].items():
                 if 'cam.' in key:
                     self.obs_info[key] = value.shape
@@ -121,12 +122,13 @@ class VLAServer:
             import traceback
             traceback.print_exc()
     
-    def inference_callback(self, future, start_time):
+    def inference_callback(self, future, start_time, meta=None):
         """Callback function for handling inference results
         
         Args:
             future: Future object containing inference results
             start_time: Inference start time for timing calculation
+            meta: Optional metadata dict from request.
         """
         try:
             result = future.result()  # Get thread result
@@ -139,7 +141,7 @@ class VLAServer:
                 # Calculate rolling average from recent inference times
                 if self.inference_times:
                     self.avg_inference_time = sum(self.inference_times) / len(self.inference_times)
-            self.zmq_server.sendMessage(result)
+            self.zmq_server.sendMessage(result, meta=meta or {})
             self.act_info['pred_action'] = result['pred_action']
         except Exception as e:
             print(f"Error in inference callback: {e}")
@@ -151,7 +153,9 @@ class VLAServer:
         print('Start to receive data and infer...')
         while self.running:
             message = self.zmq_server.recvMessage()
-            self.inference(message['data'])
+            if message is None or 'data' not in message:
+                continue
+            self.inference(message['data'], message.get('meta', {}))
         print('Stop to receive data...')
     
     def close(self):

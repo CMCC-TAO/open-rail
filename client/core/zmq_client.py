@@ -27,8 +27,11 @@ class ZMQClient():
         self._close_lock = threading.Lock()
         print(f'ZMQ client started, connected to: {config.client_addr}')
 
-    def recvMessage(self):
+    def recvMessage(self, timeout_ms=500):
         """Receive message from the VLA inference server.
+
+        Args:
+            timeout_ms (int): Poll timeout in milliseconds.
 
         Returns:
             dict: Message containing 'data' and 'meta' fields, or None if no data/error/closed.
@@ -37,7 +40,7 @@ class ZMQClient():
             return None
 
         try:
-            if self.dealer.poll(timeout=500) != 0:
+            if self.dealer.poll(timeout=timeout_ms) != 0:
                 parts = self.dealer.recv_multipart()
                 if len(parts) >= 2:
                     return {
