@@ -87,6 +87,7 @@ class VLAClientSync():
         self.infer_flag = False
         self.wait_frame_count = 0
         self.infer_thread_lock = threading.Lock()
+        self._request_id = 0
 
         if self.config.record.switch:
             # Initialize the dataset writer with the provided recording configuration
@@ -226,9 +227,7 @@ class VLAClientSync():
             self.rdm.set_infer_time_marker()
             
             # Send data for inference and wait for results
-            if not self.vla_zmq.sendMessage(data):
-                return
-            result = self.vla_zmq.recvMessage()
+            result = self._request_inference(data, timeout_ms=500)
             if result is None or 'data' not in result:
                 return
             self.rdm.add_infer_count()
@@ -430,6 +429,28 @@ class VLAClientSync():
         else:
             self.logger.error(f'wrong action type: {action_type}')
             return None, None, None
+
+    def _next_request_id(self):
+        self._request_id += 1
+        return f"{time.time_ns()}-{self._request_id}"
+
+    def _request_inference(self, data, timeout_ms=500):
+        request_id = self._next_request_id()
+        if not self.vla_zmq.sendMessage(data, meta={'request_id': request_id}):
+            return None
+
+        deadline = time.perf_counter() + timeout_ms / 1000.0
+        while True:
+            remain_s = deadline - time.perf_counter()
+            if remain_s <= 0:
+                return None
+            msg = self.vla_zmq.recvMessage(timeout_ms=max(1, int(remain_s * 1000)))
+            if msg is None:
+                return None
+            meta = msg.get('meta') or {}
+            if meta.get('request_id') == request_id:
+                return msg
+            self.logger.warning(f"Drop stale response with unmatched request_id: {meta.get('request_id')}")
 
     def run(self):
         """Start the VLA client and all associated threads.
