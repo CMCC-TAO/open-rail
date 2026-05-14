@@ -99,53 +99,50 @@
         <div class="panel-body collapsed" id="manual-body">
           <div class="robot-ctrl-grid">
             <section class="robot-ctrl-section">
-              <div class="robot-ctrl-section-title">Arm</div>
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Arm</div>
+                <div class="robot-ctrl-checks-right">
+                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> Left</label>
+                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> Right</label>
+                </div>
+              </div>
               <div class="robot-ctrl-row">
                 <button class="btn btn-sm" id="btn-arm-reset">↺ Arm Reset</button>
-                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> Left</label>
-                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> Right</label>
               </div>
             </section>
 
             <section class="robot-ctrl-section">
-              <div class="robot-ctrl-section-title">Gripper / Hand</div>
-              <div class="robot-gripper-split">
-                <div class="robot-gripper-col">
-                  <div class="robot-gripper-col-title">Left</div>
-                  <div class="robot-ctrl-row">
-                    <input id="gripper-l" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="left" />
-                  </div>
-                  <div class="robot-ctrl-row robot-gripper-actions">
-                    <button class="btn btn-sm" id="btn-gripper-left-open">Open</button>
-                    <button class="btn btn-sm" id="btn-gripper-left-close">Close</button>
-                    <button class="btn btn-sm" id="btn-gripper-left-send">Send</button>
-                  </div>
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Gripper / Hand</div>
+                <div class="robot-ctrl-checks-right">
+                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-left" checked /> Left</label>
+                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-right" checked /> Right</label>
                 </div>
-                <div class="robot-gripper-col">
-                  <div class="robot-gripper-col-title">Right</div>
-                  <div class="robot-ctrl-row">
-                    <input id="gripper-r" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="right" />
-                  </div>
-                  <div class="robot-ctrl-row robot-gripper-actions">
-                    <button class="btn btn-sm" id="btn-gripper-right-open">Open</button>
-                    <button class="btn btn-sm" id="btn-gripper-right-close">Close</button>
-                    <button class="btn btn-sm" id="btn-gripper-right-send">Send</button>
-                  </div>
-                </div>
+              </div>
+              <div class="robot-ctrl-row">
+                <input id="gripper-value" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="value" />
+              </div>
+              <div class="robot-ctrl-row robot-ctrl-row-actions">
+                <button class="btn btn-sm" id="btn-gripper-open">Open</button>
+                <button class="btn btn-sm" id="btn-gripper-close">Close</button>
+                <button class="btn btn-sm" id="btn-gripper-send">Send</button>
               </div>
             </section>
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-title">Head</div>
-              <div class="robot-ctrl-row">
+              <div class="robot-ctrl-row robot-head-label-row">
                 <div class="robot-ctrl-label">Yaw</div>
-                <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
                 <div class="robot-ctrl-label">Pitch</div>
-                <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
+                <div class="robot-ctrl-label">Raw</div>
               </div>
-              <div class="robot-ctrl-row">
-                <div class="robot-ctrl-label">Row</div>
-                <input id="head-row" class="input-num" type="number" step="0.01" value="0" placeholder="row" />
+              <div class="robot-ctrl-row robot-head-input-row">
+                <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
+                <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
+                <input id="head-row" class="input-num" type="number" step="0.01" value="0" placeholder="raw" />
+              </div>
+              <div class="robot-ctrl-row robot-head-action-row">
+                <button class="btn btn-sm" id="btn-head-reset">Reset</button>
                 <button class="btn btn-sm" id="btn-head">Send</button>
               </div>
             </section>

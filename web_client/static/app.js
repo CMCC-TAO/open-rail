@@ -2881,39 +2881,54 @@ function wireEvents() {
   };
   const getChecked = (id) => !!$(id)?.checked;
 
-  const sendGripperPos = async (left, right) => {
-    const l = Number.isFinite(left) ? left : getNum('gripper-l', 0);
-    const r = Number.isFinite(right) ? right : getNum('gripper-r', 0);
-    $('gripper-l').value = String(l);
-    $('gripper-r').value = String(r);
-    await sendCommand('gripper', { pos: [l, r] });
+  const getGripperState = () => {
+    const value = getNum('gripper-value', 0);
+    const useLeft = getChecked('chk-gripper-left');
+    const useRight = getChecked('chk-gripper-right');
+    return { value, useLeft, useRight };
   };
 
-  $('btn-gripper-left-send').addEventListener('click', async () => {
-    await sendGripperPos(getNum('gripper-l', 0), getNum('gripper-r', 0));
+  const sendGripperBySelection = async (target = null) => {
+    const { value, useLeft, useRight } = getGripperState();
+    if (!useLeft && !useRight) {
+      toast('Select Left or Right gripper first.', 'warn');
+      return;
+    }
+
+    const val = Number.isFinite(target) ? target : value;
+    $('gripper-value').value = String(val);
+    const cur = Array.isArray(App.latestState) ? App.latestState : [];
+    const curL = Number.isFinite(Number(cur[14])) ? Number(cur[14]) : 0;
+    const curR = Number.isFinite(Number(cur[15])) ? Number(cur[15]) : 0;
+    const nextL = useLeft ? val : curL;
+    const nextR = useRight ? val : curR;
+    await sendCommand('gripper', { pos: [nextL, nextR] });
+  };
+
+  $('btn-gripper-send').addEventListener('click', async () => {
+    await sendGripperBySelection();
   });
-  $('btn-gripper-right-send').addEventListener('click', async () => {
-    await sendGripperPos(getNum('gripper-l', 0), getNum('gripper-r', 0));
+  $('btn-gripper-open').addEventListener('click', async () => {
+    await sendGripperBySelection(1);
+    toast('Gripper opened.', 'ok');
   });
-  $('btn-gripper-left-open').addEventListener('click', async () => {
-    await sendGripperPos(1, getNum('gripper-r', 0));
-    toast('Left gripper opened.', 'ok');
-  });
-  $('btn-gripper-left-close').addEventListener('click', async () => {
-    await sendGripperPos(0, getNum('gripper-r', 0));
-    toast('Left gripper closed.', 'ok');
-  });
-  $('btn-gripper-right-open').addEventListener('click', async () => {
-    await sendGripperPos(getNum('gripper-l', 0), 1);
-    toast('Right gripper opened.', 'ok');
-  });
-  $('btn-gripper-right-close').addEventListener('click', async () => {
-    await sendGripperPos(getNum('gripper-l', 0), 0);
-    toast('Right gripper closed.', 'ok');
+  $('btn-gripper-close').addEventListener('click', async () => {
+    await sendGripperBySelection(0);
+    toast('Gripper closed.', 'ok');
   });
 
-  $('btn-head').addEventListener('click', async () => {
+  const sendHead = async () => {
     await sendCommand('head', { pos: [getNum('head-yaw', 0), getNum('head-pitch', 0.436), getNum('head-row', 0)] });
+  };
+  $('btn-head').addEventListener('click', async () => {
+    await sendHead();
+  });
+  $('btn-head-reset').addEventListener('click', async () => {
+    $('head-yaw').value = '0';
+    $('head-pitch').value = '0.436';
+    $('head-row').value = '0';
+    await sendHead();
+    toast('Head reset.', 'ok');
   });
 
   $('btn-waist').addEventListener('click', async () => {

@@ -680,6 +680,18 @@ html, body {
   text-transform: uppercase;
   letter-spacing: .4px;
 }
+.robot-ctrl-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.robot-ctrl-checks-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
 .robot-ctrl-row {
   display: flex;
   align-items: center;
@@ -690,31 +702,6 @@ html, body {
 }
 .robot-ctrl-row-actions .btn {
   flex: 1 1 110px;
-}
-.robot-gripper-split {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-.robot-gripper-col {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg2);
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.robot-gripper-col-title {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .4px;
-}
-.robot-gripper-actions .btn {
-  flex: 1 1 0;
 }
 .robot-ctrl-label {
   color: var(--text-muted);
@@ -739,10 +726,23 @@ html, body {
   flex: 1 1 auto;
   min-width: 0;
 }
-@media (max-width: 640px) {
-  .robot-gripper-split {
-    grid-template-columns: 1fr;
-  }
+#gripper-value {
+  width: 100%;
+}
+.robot-head-label-row,
+.robot-head-input-row,
+.robot-head-action-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  align-items: center;
+}
+.robot-head-label-row .robot-ctrl-label {
+  min-width: 0;
+}
+.robot-head-input-row .input-num,
+.robot-head-action-row .btn {
+  width: 100%;
 }
 
 /* ═══════════════════════════════════════════
