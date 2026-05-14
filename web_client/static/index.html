@@ -27,42 +27,81 @@
   <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
   <main class="layout">
 
-    <!-- ╔══════════════ LEFT: CONFIG PANEL ══════════════╗ -->
-    <aside class="panel panel-config" id="panel-config">
-      <div class="panel-header">
-        <span>⚙ Configuration</span>
-        <div class="panel-header-actions">
-          <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse">◀</button>
+    <!-- ╔══════════════ LEFT: CONFIG + MANUAL CONTROL ══════════════╗ -->
+    <div class="left-col" id="left-col">
+      <aside class="panel panel-config" id="panel-config">
+        <div class="panel-header">
+          <span>⚙ Configuration</span>
+          <div class="panel-header-actions">
+            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse">◀</button>
+          </div>
         </div>
-      </div>
-      <div class="panel-body" id="config-body">
+        <div class="panel-body" id="config-body">
 
-        <!-- Config file bar -->
-        <div class="config-file-bar">
-          <label class="btn btn-sm" id="btn-load-file" title="Load config file">
-            📂 Load
-            <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
-          </label>
-          <button class="btn btn-sm" id="btn-apply-config">✔ Apply</button>
-          <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…">💾 Save As…</button>
+          <!-- Config file bar -->
+          <div class="config-file-bar">
+            <label class="btn btn-sm" id="btn-load-file" title="Load config file">
+              📂 Load
+              <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
+            </label>
+            <button class="btn btn-sm" id="btn-apply-config">✔ Apply</button>
+            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…">💾 Save As…</button>
+          </div>
+          <!-- Current file path display -->
+          <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
+
+          <!-- Search -->
+          <div class="config-search-bar">
+            <input id="conf-search" class="input-text" type="text" placeholder="Filter keys…" />
+          </div>
+
+          <!-- Config tree -->
+          <div id="config-tree" class="config-tree"></div>
+
+          <!-- Pending badge -->
+          <div class="config-footer">
+            <span id="pending-badge" class="pending-badge hidden">● unsaved changes</span>
+          </div>
         </div>
-        <!-- Current file path display -->
-        <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
+      </aside>
 
-        <!-- Search -->
-        <div class="config-search-bar">
-          <input id="conf-search" class="input-text" type="text" placeholder="Filter keys…" />
+      <section class="panel panel-manual" id="panel-manual">
+        <div class="panel-header">
+          <span>🕹 Manual Robot Control</span>
         </div>
-
-        <!-- Config tree -->
-        <div id="config-tree" class="config-tree"></div>
-
-        <!-- Pending badge -->
-        <div class="config-footer">
-          <span id="pending-badge" class="pending-badge hidden">● unsaved changes</span>
+        <div class="panel-body" id="manual-body">
+          <div class="robot-ctrl-grid">
+            <div class="robot-ctrl-group">
+              <div class="robot-ctrl-label">Gripper (L R)</div>
+              <input id="gripper-l" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="L" />
+              <input id="gripper-r" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="R" />
+              <button class="btn btn-sm" id="btn-gripper">Send</button>
+            </div>
+            <div class="robot-ctrl-group">
+              <div class="robot-ctrl-label">Head (yaw pitch)</div>
+              <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
+              <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
+              <button class="btn btn-sm" id="btn-head">Send</button>
+            </div>
+            <div class="robot-ctrl-group">
+              <div class="robot-ctrl-label">Waist (pitch_rad h_cm)</div>
+              <input id="waist-pitch" class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
+              <input id="waist-height" class="input-num" type="number" step="1" value="20" placeholder="height" />
+              <button class="btn btn-sm" id="btn-waist">Send</button>
+            </div>
+            <div class="robot-ctrl-group">
+              <button class="btn btn-sm" id="btn-arm-reset">↺ Arm Reset</button>
+              <button class="btn btn-sm" id="btn-gripper-open">Gripper Open</button>
+              <button class="btn btn-sm" id="btn-gripper-close">Gripper Close</button>
+            </div>
+            <div class="robot-ctrl-group">
+              <button class="btn btn-sm" id="btn-save-data">💾 Save Data</button>
+              <button class="btn btn-sm btn-danger" id="btn-discard-data">🗑 Discard Data</button>
+            </div>
+          </div>
         </div>
-      </div>
-    </aside>
+      </section>
+    </div>
 
     <!-- ╔══════════════ CENTER: MONITOR + TRAJECTORY ══════════════╗ -->
     <div class="center-col">
@@ -159,38 +198,6 @@
             </div>
           </div>
 
-          <!-- Debug info -->
-          <div class="section-title">Debug Info</div>
-          <!-- <pre id="debug-info" class="debug-box"></pre> -->
-
-          <!-- Manual robot control -->
-          <details class="robot-ctrl-details">
-            <summary class="section-title">Manual Robot Control</summary>
-            <div class="robot-ctrl-grid">
-              <div class="robot-ctrl-group">
-                <div class="robot-ctrl-label">Gripper (L R)</div>
-                <input id="gripper-l" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="L" />
-                <input id="gripper-r" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="R" />
-                <button class="btn btn-sm" id="btn-gripper">Send</button>
-              </div>
-              <div class="robot-ctrl-group">
-                <div class="robot-ctrl-label">Head (yaw pitch)</div>
-                <input id="head-yaw"   class="input-num" type="number" step="0.01" value="0"     placeholder="yaw" />
-                <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
-                <button class="btn btn-sm" id="btn-head">Send</button>
-              </div>
-              <div class="robot-ctrl-group">
-                <div class="robot-ctrl-label">Waist (pitch_rad h_cm)</div>
-                <input id="waist-pitch"  class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
-                <input id="waist-height" class="input-num" type="number" step="1"    value="20"    placeholder="height" />
-                <button class="btn btn-sm" id="btn-waist">Send</button>
-              </div>
-              <div class="robot-ctrl-group">
-                <button class="btn btn-sm" id="btn-save-data">💾 Save Data</button>
-                <button class="btn btn-sm btn-danger" id="btn-discard-data">🗑 Discard Data</button>
-              </div>
-            </div>
-          </details>
 
         </div>
       </section>

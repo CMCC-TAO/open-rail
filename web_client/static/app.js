@@ -1851,16 +1851,16 @@ function restartCameraUpdateTimer() {
 
 /** Recalculate and apply grid-template-columns based on current collapsed state. */
 function updateLayoutColumns() {
-  const configCollapsed = document.querySelector('.panel-config').classList.contains('collapsed');
+  const leftCollapsed = $('left-col').classList.contains('collapsed');
   const visualCollapsed = $('panel-visual').classList.contains('collapsed');
-  const left  = configCollapsed ? '0px'   : '280px';
-  const right = visualCollapsed ? '0px'   : '300px';
+  const left  = leftCollapsed ? '0px'   : '280px';
+  const right = visualCollapsed ? '0px' : '300px';
   // When a column is 0, also suppress the gap on that side by adjusting padding
   const layout = document.querySelector('.layout');
   layout.style.gridTemplateColumns = `${left} 1fr ${right}`;
   // Suppress padding on collapsed sides so no whitespace strip remains
   const gap = getComputedStyle(document.documentElement).getPropertyValue('--panel-gap').trim();
-  layout.style.paddingLeft   = configCollapsed ? '0' : gap;
+  layout.style.paddingLeft   = leftCollapsed ? '0' : gap;
   layout.style.paddingRight  = visualCollapsed ? '0' : gap;
 }
 
@@ -2579,13 +2579,13 @@ function wireEvents() {
   });
 
   $('btn-config-collapse').addEventListener('click', () => {
-    const panel = document.querySelector('.panel-config');
-    const collapsed = panel.classList.toggle('collapsed');
+    const leftCol = $('left-col');
+    const collapsed = leftCol.classList.toggle('collapsed');
     $('btn-config-reveal').classList.toggle('hidden', !collapsed);
     updateLayoutColumns();
   });
   $('btn-config-reveal').addEventListener('click', () => {
-    document.querySelector('.panel-config').classList.remove('collapsed');
+    $('left-col').classList.remove('collapsed');
     $('btn-config-reveal').classList.add('hidden');
     updateLayoutColumns();
   });
@@ -2734,6 +2734,19 @@ function wireEvents() {
   $('btn-gripper').addEventListener('click', async () => sendCommand('gripper', { pos: [parseFloat($('gripper-l').value), parseFloat($('gripper-r').value)] }));
   $('btn-head').addEventListener('click',    async () => sendCommand('head',    { pos: [parseFloat($('head-yaw').value),   parseFloat($('head-pitch').value)]  }));
   $('btn-waist').addEventListener('click',   async () => sendCommand('waist',   { pos: [parseFloat($('waist-pitch').value), parseFloat($('waist-height').value)] }));
+  $('btn-arm-reset').addEventListener('click', async () => { await sendCommand('reset'); toast('Arm reset command sent.', 'ok'); });
+  $('btn-gripper-open').addEventListener('click', async () => {
+    $('gripper-l').value = '1';
+    $('gripper-r').value = '1';
+    await sendCommand('gripper', { pos: [1, 1] });
+    toast('Gripper opened.', 'ok');
+  });
+  $('btn-gripper-close').addEventListener('click', async () => {
+    $('gripper-l').value = '0';
+    $('gripper-r').value = '0';
+    await sendCommand('gripper', { pos: [0, 0] });
+    toast('Gripper closed.', 'ok');
+  });
   $('btn-save-data').addEventListener('click',    async () => { await sendCommand('save_data');    toast('Data saved.',      'ok');   });
   $('btn-discard-data').addEventListener('click', async () => { await sendCommand('discard_data'); toast('Data discarded.', 'warn'); });
 }
