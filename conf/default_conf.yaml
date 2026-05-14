@@ -7,7 +7,7 @@ controller:
   strategy: step
   wait_time: 250
 inter_chunk:
-  inter_chunk_mode: bspline
+  inter_chunk_mode: search_action
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
@@ -365,7 +365,7 @@ visual:
     - ActionRaw
     - State
     update_interval_ms: 50
-    window_span_sec: 6.0
+    window_span_sec: 8.0
 vla_zmq:
   client_addr: tcp://localhost:5566
   server_addr: tcp://*:5566
