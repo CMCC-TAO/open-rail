@@ -761,12 +761,6 @@ function buildTree(obj, prefix, parentEl) {
       basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
     }
 
-    // Append the virtual language-link group (task_id + sub_task_id selects)
-    basicBody.appendChild(buildGroup('LANGUAGE', [
-      createLangLinkRow('language.task_id',  'task_id'),
-      createLangLinkRow('language.sub_task_id', 'sub_task_id'),
-    ]));
-
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
   }
 
@@ -922,10 +916,11 @@ function buildGroup(label, rowEls) {
   const group  = document.createElement('div');
   group.className = 'cfg-group';
   const header = document.createElement('div');
-  header.className = 'cfg-group-header open';
+  header.className = 'cfg-group-header';
   header.innerHTML = `<span class="cfg-group-toggle">▶</span><span>${label}</span>`;
   const body = document.createElement('div');
   body.className = 'cfg-group-body';
+  body.style.display = 'none';
   rowEls.forEach(r => body.appendChild(r));
   header.addEventListener('click', () => {
     const open = header.classList.toggle('open');
@@ -940,8 +935,9 @@ function buildGroupFromEl(label, bodyEl) {
   const group  = document.createElement('div');
   group.className = 'cfg-group';
   const header = document.createElement('div');
-  header.className = 'cfg-group-header open';
+  header.className = 'cfg-group-header';
   header.innerHTML = `<span class="cfg-group-toggle">▶</span><span>${label}</span>`;
+  bodyEl.style.display = 'none';
   header.addEventListener('click', () => {
     const open = header.classList.toggle('open');
     bodyEl.style.display = open ? '' : 'none';
@@ -2549,6 +2545,16 @@ function wireEvents() {
 
   $('btn-apply-config').addEventListener('click', async () => {
     if (!Object.keys(App.pendingPatch).length) { toast('No pending changes.', 'warn', 2000); return; }
+
+    const configTree = $('config-tree');
+    const prevScrollTop = configTree ? configTree.scrollTop : 0;
+    const prevScrollLeft = configTree ? configTree.scrollLeft : 0;
+    const restoreConfigTreeScroll = () => {
+      if (!configTree) return;
+      configTree.scrollTop = prevScrollTop;
+      configTree.scrollLeft = prevScrollLeft;
+    };
+
     try {
       const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
       App.config = res.config || {}; App.pendingPatch = {};
@@ -2557,6 +2563,8 @@ function wireEvents() {
       await loadDefaultLangFile();
       applyLangConfigSelection();
       applyVisualConfig(App.config);
+      restoreConfigTreeScroll();
+      requestAnimationFrame(restoreConfigTreeScroll);
       toast('Config applied.', 'ok');
       // Auto-save after apply
       const display = $('conf-path-display');

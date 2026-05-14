@@ -618,10 +618,55 @@ html, body {
 .traj-window-slider {
   width: 110px;
   margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.traj-window-slider:focus {
+  outline: none;
+}
+
+.traj-window-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.traj-window-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+  margin-top: -2px;
+}
+
+.traj-window-slider::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.traj-window-slider::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.traj-window-slider::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .traj-window-value {
-  min-width: 16px;
+  min-width: 20px;
+  max-width: 20px;
   text-align: right;
   font-size: 11px;
   color: var(--text-muted);
