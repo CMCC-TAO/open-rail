@@ -627,6 +627,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.task_id',
   'language.sub_task_id',
   'language.auto_mode',
+  'language.task_progress_threshold',
   'visual.camera.connect_when_running',
   'visual.camera.open_head',
   'visual.camera.open_wrist_left',
@@ -1287,15 +1288,79 @@ function renderLangPresets(presets) {
 }
 
 function setupLangPanel() {
-  const taskSel    = $('lang-task-select');
+  const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
+  const autoChk = $('chk-lang-auto-mode');
+  const thresholdInput = $('inp-lang-threshold');
+  let thresholdSaveTimer = null;
+
+  const setThresholdEditable = (enabled) => {
+    if (!thresholdInput) return;
+    thresholdInput.disabled = !enabled;
+  };
+
+  const getConfigSavePath = () => {
+    const display = $('conf-path-display');
+    return (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+  };
+
+  const persistLanguagePatch = async (patch) => {
+    if (!App.config || typeof App.config !== 'object') App.config = {};
+    if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+
+    Object.entries(patch).forEach(([dotKey, value]) => {
+      App.pendingPatch[dotKey] = value;
+      if (dotKey.startsWith('language.')) {
+        const key = dotKey.slice('language.'.length);
+        App.config.language[key] = value;
+      }
+    });
+    markPending();
+
+    try {
+      const res = await apiFetch('/api/config/patch', {
+        method: 'POST',
+        body: JSON.stringify({ patch }),
+      });
+      App.config = res.config || App.config;
+
+      Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
+      if (!Object.keys(App.pendingPatch).length) clearPending();
+
+      const path = getConfigSavePath();
+      if (path) {
+        await apiFetch('/api/config/save_file', {
+          method: 'POST',
+          body: JSON.stringify({ path }),
+        });
+      }
+      return true;
+    } catch (_) {
+      Object.entries(patch).forEach(([dotKey, value]) => {
+        App.pendingPatch[dotKey] = value;
+      });
+      markPending();
+      return false;
+    }
+  };
+
+  const commitThreshold = async () => {
+    if (!thresholdInput || thresholdInput.disabled) return;
+    const raw = thresholdInput.value.trim();
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      thresholdInput.style.borderColor = 'var(--danger)';
+      return;
+    }
+    thresholdInput.style.borderColor = '';
+    await persistLanguagePatch({ 'language.task_progress_threshold': value });
+  };
 
   // Task select → rebuild subtask list + sync Config panel selects only (no pendingPatch yet)
   if (taskSel) {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
       App.langAuto.lastProgress = null;
-      // Sync Config panel task_id select display only
       const cfgTaskSel = $('cfg-language-task');
       if (cfgTaskSel && cfgTaskSel.value !== taskSel.value) {
         cfgTaskSel.value = taskSel.value;
@@ -1313,7 +1378,6 @@ function setupLangPanel() {
       if (!isNaN(idx) && subtasks[idx] !== undefined) {
         $('lang-cmd-text').value = subtasks[idx];
       }
-      // Sync Config panel sub_task_id select display only
       const cfgIdxSel = $('cfg-language-index');
       if (cfgIdxSel && cfgIdxSel.value !== subtaskSel.value) {
         cfgIdxSel.value = subtaskSel.value;
@@ -1321,42 +1385,46 @@ function setupLangPanel() {
     });
   }
 
-  const autoChk = $('chk-lang-auto-mode');
   if (autoChk) {
     autoChk.addEventListener('change', async () => {
       App.langAuto.lastProgress = null;
       const enabled = !!autoChk.checked;
-
-      if (!App.config || typeof App.config !== 'object') App.config = {};
-      if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
-      App.config.language.auto_mode = enabled;
-
-      App.pendingPatch['language.auto_mode'] = enabled;
-      markPending();
-
-      try {
-        const res = await apiFetch('/api/config/patch', {
-          method: 'POST',
-          body: JSON.stringify({ patch: { 'language.auto_mode': enabled } }),
-        });
-        App.config = res.config || App.config;
-        delete App.pendingPatch['language.auto_mode'];
-        if (!Object.keys(App.pendingPatch).length) clearPending();
-
-        const display = $('conf-path-display');
-        const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-        if (path) {
-          await apiFetch('/api/config/save_file', {
-            method: 'POST',
-            body: JSON.stringify({ path }),
-          });
-        }
-      } catch (e) {
-        App.pendingPatch['language.auto_mode'] = enabled;
-        markPending();
-      }
+      setThresholdEditable(enabled);
+      await persistLanguagePatch({ 'language.auto_mode': enabled });
     });
   }
+
+  if (thresholdInput) {
+    thresholdInput.addEventListener('input', () => {
+      const value = Number(thresholdInput.value.trim());
+      thresholdInput.style.borderColor = Number.isFinite(value) ? '' : 'var(--danger)';
+      if (thresholdInput.disabled || !Number.isFinite(value)) return;
+      if (thresholdSaveTimer) clearTimeout(thresholdSaveTimer);
+      thresholdSaveTimer = setTimeout(() => {
+        thresholdSaveTimer = null;
+        commitThreshold();
+      }, 300);
+    });
+
+    thresholdInput.addEventListener('change', async () => {
+      if (thresholdSaveTimer) {
+        clearTimeout(thresholdSaveTimer);
+        thresholdSaveTimer = null;
+      }
+      await commitThreshold();
+    });
+
+    thresholdInput.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      if (thresholdSaveTimer) {
+        clearTimeout(thresholdSaveTimer);
+        thresholdSaveTimer = null;
+      }
+      await commitThreshold();
+    });
+  }
+
+  setThresholdEditable(!!(autoChk && autoChk.checked));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1656,8 +1724,8 @@ async function loadConfigFromServer() {
     clearPending();
     renderConfigTree(App.config);
     applyVisualConfig(App.config);
-    // Apply task_id / sub_task_id to lang panel (if lang data already loaded)
-    if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
+    // Apply language-related UI state from config (task/sub-task/auto/threshold)
+    applyLangConfigSelection();
     // Set default path display on startup
     const display = $('conf-path-display');
     if (display && !display.dataset.fullPath) {
@@ -1700,12 +1768,26 @@ async function loadDefaultLangFile() {
  * Also fills lang-cmd-text with the corresponding instruction.
  */
 function applyLangConfigSelection() {
-  const task  = App.config && App.config.language && App.config.language.task_id;
+  const task = App.config && App.config.language && App.config.language.task_id;
   const index = (App.config && App.config.language && App.config.language.sub_task_id != null) ? App.config.language.sub_task_id : 0;
-  const autoMode = !!(App.config && App.config.language && App.config.language.auto_mode);
+  const autoModeRaw = App.config && App.config.language && App.config.language.auto_mode;
+  const autoMode = (autoModeRaw === true || autoModeRaw === 'true' || autoModeRaw === 1 || autoModeRaw === '1');
+  const thresholdRaw = App.config && App.config.language && App.config.language.task_progress_threshold;
+  const threshold = Number(thresholdRaw);
 
   const autoChk = $('chk-lang-auto-mode');
   if (autoChk) autoChk.checked = autoMode;
+
+  const thresholdInput = $('inp-lang-threshold');
+  if (thresholdInput) {
+    const fallback = Number(thresholdInput.value);
+    const displayThreshold = Number.isFinite(threshold)
+      ? threshold
+      : (Number.isFinite(fallback) ? fallback : 0.95);
+    thresholdInput.value = String(displayThreshold);
+    thresholdInput.disabled = !(autoChk ? !!autoChk.checked : autoMode);
+    thresholdInput.style.borderColor = '';
+  }
 
   // Sync Lang Panel Task select
   const taskSel = $('lang-task-select');
@@ -1720,7 +1802,6 @@ function applyLangConfigSelection() {
   const subtaskSel = $('lang-subtask-select');
   if (subtaskSel) {
     subtaskSel.value = index;
-    // Fill textarea
     const taskName = taskSel ? taskSel.value : null;
     const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
     if (subtasks[index] !== undefined) {
@@ -2429,7 +2510,7 @@ function wireEvents() {
       clearPending();
       renderConfigTree(App.config);
       await loadDefaultLangFile();
-      if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
+      applyLangConfigSelection();
       applyVisualConfig(App.config);
       // Show relative path from /conf onward
       const display = $('conf-path-display');
@@ -2474,7 +2555,7 @@ function wireEvents() {
       clearPending();
       renderConfigTree(App.config);
       await loadDefaultLangFile();
-      if (Object.keys(LangCmd.tasks).length > 0) applyLangConfigSelection();
+      applyLangConfigSelection();
       applyVisualConfig(App.config);
       toast('Config applied.', 'ok');
       // Auto-save after apply

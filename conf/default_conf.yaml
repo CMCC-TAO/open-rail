@@ -41,7 +41,7 @@ language:
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: pour_tea
-  task_progress_threshold: 9.9
+  task_progress_threshold: 0.87
 observer:
   fps: 30
   period: 0.03333333333333333
