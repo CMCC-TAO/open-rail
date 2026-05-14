@@ -65,6 +65,30 @@
         </div>
       </aside>
 
+      <section class="panel panel-recording" id="panel-recording">
+        <div class="panel-header">
+          <span>🧾 Data Recording</span>
+          <div class="panel-header-actions">
+            <button class="btn btn-xs" id="btn-recording-collapse" title="Collapse">▲</button>
+          </div>
+        </div>
+        <div class="panel-body collapsed" id="recording-body">
+          <div class="recording-controls">
+            <button class="btn btn-sm btn-success" id="btn-recording-start">⏺ Start Recording</button>
+            <button class="btn btn-sm btn-danger" id="btn-recording-stop">⏹ Stop Recording</button>
+          </div>
+          <div class="recording-options">
+            <span class="recording-options-title">Save Content</span>
+            <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" checked /> Episode</label>
+            <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label>
+          </div>
+          <div class="recording-file-wrap">
+            <div class="recording-file-title">Recorded Files <span id="recording-base-dir" class="recording-base-dir"></span></div>
+            <div id="recording-file-list" class="recording-file-list"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel panel-manual" id="panel-manual">
         <div class="panel-header">
           <span>🕹 Manual Robot Control</span>

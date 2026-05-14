@@ -374,8 +374,99 @@ html, body {
 .left-col.collapsed { overflow: hidden; min-width: 0; }
 
 .panel-config { flex: 1 1 auto; min-height: 0; }
+.panel-recording { flex: 0 0 auto; }
+.panel-recording .panel-body { padding: 8px; gap: 8px; }
+.panel-recording .panel-body.collapsed { display: none; }
 .panel-manual { flex: 0 0 auto; }
 .panel-manual .panel-body { padding: 8px; }
+
+.recording-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.recording-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.recording-options-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+.recording-option-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.recording-option-item input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.recording-file-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 6px;
+}
+
+.recording-file-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 6px;
+}
+
+.recording-base-dir {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--accent);
+}
+
+.recording-file-list {
+  min-height: 96px;
+  max-height: 140px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg2);
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+.recording-file-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.recording-file-item.empty {
+  color: var(--text-muted);
+}
 
 /* ── Buttons ── */
 .btn {

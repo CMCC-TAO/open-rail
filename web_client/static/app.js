@@ -117,6 +117,8 @@ const App = {
     updateTimer: null,
     lastUpdateAt: 0,
   },
+
+  recordingListTimer: null,
 };
 
 // ═══════════════════════════════════════════════════════
@@ -2002,6 +2004,76 @@ function toggleCamera(idx) {
   }
 }
 
+function getRecordingSaveItems() {
+  const items = [];
+  if ($('chk-record-episode')?.checked) items.push('Episode');
+  if ($('chk-record-expdata')?.checked) items.push('ExpData');
+  return items;
+}
+
+function renderRecordingFileList(data) {
+  const listEl = $('recording-file-list');
+  const baseEl = $('recording-base-dir');
+  if (!listEl) return;
+
+  const files = Array.isArray(data?.files) ? data.files : [];
+  if (baseEl) baseEl.textContent = data?.base_dir || '';
+
+  if (!files.length) {
+    listEl.innerHTML = '<div class="recording-file-item empty">(empty)</div>';
+    return;
+  }
+
+  const top = files.slice(0, 200);
+  listEl.innerHTML = top
+    .map(item => {
+      const name = typeof item === 'string' ? item : (item.path || item.name || '');
+      const safe = String(name)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+      return `<div class="recording-file-item" title="${safe}">${safe}</div>`;
+    })
+    .join('');
+}
+
+async function refreshRecordingFileList() {
+  try {
+    const res = await apiFetch('/api/recording/files');
+    renderRecordingFileList(res);
+  } catch (_) { /* toasted */ }
+}
+
+function setupRecordingPanel() {
+  const body = $('recording-body');
+  const btn = $('btn-recording-collapse');
+  if (body && btn) {
+    btn.textContent = body.classList.contains('collapsed') ? '▲' : '▼';
+    btn.addEventListener('click', () => {
+      const collapsed = body.classList.toggle('collapsed');
+      btn.textContent = collapsed ? '▲' : '▼';
+      if (!collapsed) refreshRecordingFileList();
+    });
+  }
+
+  $('btn-recording-start')?.addEventListener('click', async () => {
+    const saveItems = getRecordingSaveItems();
+    await sendCommand('record', { enable: true, save_items: saveItems });
+    toast('Recording started.', 'ok');
+  });
+
+  $('btn-recording-stop')?.addEventListener('click', async () => {
+    const saveItems = getRecordingSaveItems();
+    await sendCommand('record', { enable: false, save_items: saveItems });
+    toast('Recording stopped.', 'warn');
+    await refreshRecordingFileList();
+  });
+
+  refreshRecordingFileList();
+  if (App.recordingListTimer) clearInterval(App.recordingListTimer);
+  App.recordingListTimer = setInterval(refreshRecordingFileList, 5000);
+}
+
 // ═══════════════════════════════════════════════════════
 //  Joint Trajectory — Chart.js implementation
 //  Single unified chart: all selected joints on one canvas.
@@ -2779,6 +2851,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCameraPanel();
   setupTrajPanel();
   setupLangPanel();
+  setupRecordingPanel();
   createUnifiedChart();                  // create single unified trajectory chart
   buildJointSelector(TRAJ_JOINT_COUNT);  // pre-build fixed 14-joint selector
   connectWS();

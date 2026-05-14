@@ -565,6 +565,34 @@ async def get_conf_dir():
     return {"status": "ok", "path": str(conf_dir)}
 
 
+@app.get("/api/recording/files")
+async def get_recording_files():
+    """List files under data/recoding by default (fallback: data/recording)."""
+    recoding_dir = ROOT / "data" / "recoding"
+    fallback_dir = ROOT / "data" / "recording"
+    base_dir = recoding_dir if (recoding_dir.exists() or not fallback_dir.exists()) else fallback_dir
+
+    if not base_dir.exists():
+        return {"status": "ok", "base_dir": str(base_dir.relative_to(ROOT)), "files": []}
+
+    files = []
+    try:
+        for p in base_dir.rglob("*"):
+            if not p.is_file():
+                continue
+            st = p.stat()
+            files.append({
+                "path": str(p.relative_to(base_dir)),
+                "size": st.st_size,
+                "mtime": st.st_mtime,
+            })
+        files.sort(key=lambda x: x["mtime"], reverse=True)
+    except Exception as e:
+        raise HTTPException(500, f"Failed to list recording files: {e}")
+
+    return {"status": "ok", "base_dir": str(base_dir.relative_to(ROOT)), "files": files}
+
+
 @app.get("/api/default_lang_file")
 async def get_default_lang_file():
     """Return the path and contents of the default language command JSON file."""
@@ -1032,7 +1060,7 @@ async def client_status():
 #  REST: runtime commands (replaces Enter-key menu in run_client.py)
 # ─────────────────────────────────────────────────────────────────────────────
 class CommandRequest(BaseModel):
-    command: str          # reset / resume / set_language / save_data / discard_data / gripper / head / waist
+    command: str          # reset / resume / set_language / record / save_data / discard_data / gripper / head / waist
     params: dict = {}
 
 
@@ -1064,6 +1092,22 @@ async def client_command(req: CommandRequest):
             _pause_vla_client(vc)
             robot.reset_robot(mode='default')
             _resume_vla_client(vc)
+
+        elif cmd == "record":
+            enable = bool(params.get("enable", True))
+            save_items = params.get("save_items", [])
+            if not isinstance(save_items, list):
+                save_items = []
+
+            state.config.record_exp_data = ('ExpData' in save_items)
+
+            if not state.config.record.switch:
+                if enable:
+                    raise HTTPException(400, "record.switch is false in config; enable recording in config first.")
+            elif not hasattr(vc, "dataset_write") or vc.dataset_write is None:
+                raise HTTPException(400, "Recorder is not initialized.")
+            else:
+                vc.dataset_write.shared_data.stop.value = (not enable)
 
         elif cmd == "save_data":
             if state.config.record.switch:
