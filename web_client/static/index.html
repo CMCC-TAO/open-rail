@@ -33,7 +33,7 @@
         <div class="panel-header" id="panel-config-header">
           <span>⚙ Configuration</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse / Expand">▼</button>
+            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse / Expand">▲</button>
           </div>
         </div>
         <div class="panel-body" id="config-body">
@@ -98,33 +98,94 @@
         </div>
         <div class="panel-body collapsed" id="manual-body">
           <div class="robot-ctrl-grid">
-            <div class="robot-ctrl-group">
-              <div class="robot-ctrl-label">Gripper (L R)</div>
-              <input id="gripper-l" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="L" />
-              <input id="gripper-r" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="R" />
-              <button class="btn btn-sm" id="btn-gripper">Send</button>
-            </div>
-            <div class="robot-ctrl-group">
-              <div class="robot-ctrl-label">Head (yaw pitch)</div>
-              <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
-              <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
-              <button class="btn btn-sm" id="btn-head">Send</button>
-            </div>
-            <div class="robot-ctrl-group">
-              <div class="robot-ctrl-label">Waist (pitch_rad h_cm)</div>
-              <input id="waist-pitch" class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
-              <input id="waist-height" class="input-num" type="number" step="1" value="20" placeholder="height" />
-              <button class="btn btn-sm" id="btn-waist">Send</button>
-            </div>
-            <div class="robot-ctrl-group">
-              <button class="btn btn-sm" id="btn-arm-reset">↺ Arm Reset</button>
-              <button class="btn btn-sm" id="btn-gripper-open">Gripper Open</button>
-              <button class="btn btn-sm" id="btn-gripper-close">Gripper Close</button>
-            </div>
-            <div class="robot-ctrl-group">
-              <button class="btn btn-sm" id="btn-save-data">💾 Save Data</button>
-              <button class="btn btn-sm btn-danger" id="btn-discard-data">🗑 Discard Data</button>
-            </div>
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-title">Arm</div>
+              <div class="robot-ctrl-row">
+                <button class="btn btn-sm" id="btn-arm-reset">↺ Arm Reset</button>
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> Left</label>
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> Right</label>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-title">Gripper / Hand</div>
+              <div class="robot-gripper-split">
+                <div class="robot-gripper-col">
+                  <div class="robot-gripper-col-title">Left</div>
+                  <div class="robot-ctrl-row">
+                    <input id="gripper-l" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="left" />
+                  </div>
+                  <div class="robot-ctrl-row robot-gripper-actions">
+                    <button class="btn btn-sm" id="btn-gripper-left-open">Open</button>
+                    <button class="btn btn-sm" id="btn-gripper-left-close">Close</button>
+                    <button class="btn btn-sm" id="btn-gripper-left-send">Send</button>
+                  </div>
+                </div>
+                <div class="robot-gripper-col">
+                  <div class="robot-gripper-col-title">Right</div>
+                  <div class="robot-ctrl-row">
+                    <input id="gripper-r" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="right" />
+                  </div>
+                  <div class="robot-ctrl-row robot-gripper-actions">
+                    <button class="btn btn-sm" id="btn-gripper-right-open">Open</button>
+                    <button class="btn btn-sm" id="btn-gripper-right-close">Close</button>
+                    <button class="btn btn-sm" id="btn-gripper-right-send">Send</button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-title">Head</div>
+              <div class="robot-ctrl-row">
+                <div class="robot-ctrl-label">Yaw</div>
+                <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
+                <div class="robot-ctrl-label">Pitch</div>
+                <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
+              </div>
+              <div class="robot-ctrl-row">
+                <div class="robot-ctrl-label">Row</div>
+                <input id="head-row" class="input-num" type="number" step="0.01" value="0" placeholder="row" />
+                <button class="btn btn-sm" id="btn-head">Send</button>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-title">Waist</div>
+              <div class="robot-ctrl-row">
+                <div class="robot-ctrl-label">Pitch / Height</div>
+                <input id="waist-pitch" class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
+                <input id="waist-height" class="input-num" type="number" step="1" value="20" placeholder="height" />
+                <button class="btn btn-sm" id="btn-waist">Send</button>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-title">Body</div>
+              <div class="robot-ctrl-row">
+                <div class="robot-ctrl-label">Height (cm)</div>
+                <input id="body-height" class="input-num" type="number" step="1" value="20" placeholder="height" />
+                <button class="btn btn-sm" id="btn-body-height">Set Height</button>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-title">Wheel / Leg</div>
+              <div class="robot-ctrl-row">
+                <div class="robot-ctrl-label">Linear / Angular</div>
+                <input id="wheel-linear" class="input-num" type="number" step="0.01" value="0" placeholder="linear" />
+                <input id="wheel-angular" class="input-num" type="number" step="0.01" value="0" placeholder="angular" />
+                <button class="btn btn-sm" id="btn-wheel-move">Send</button>
+              </div>
+              <div class="robot-ctrl-row robot-ctrl-row-actions">
+                <button class="btn btn-sm" id="btn-wheel-forward">↑ Forward</button>
+                <button class="btn btn-sm" id="btn-wheel-backward">↓ Backward</button>
+                <button class="btn btn-sm" id="btn-wheel-left">↺ Turn Left</button>
+                <button class="btn btn-sm" id="btn-wheel-right">↻ Turn Right</button>
+                <button class="btn btn-sm" id="btn-wheel-stop">■ Stop</button>
+              </div>
+            </section>
+
           </div>
         </div>
       </section>
@@ -368,7 +429,6 @@
         <span>📷 Camera Visual</span>
         <div class="panel-header-actions">
           <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle">⏸ Close All</button>
-          <button class="btn btn-xs panel-collapse-inline" id="btn-visual-collapse" title="Collapse">▶</button>
         </div>
       </div>
       <div class="panel-body" id="camera-body">
@@ -423,6 +483,7 @@
   <!-- ═══════════════════ PANEL REVEAL BUTTONS (floating, shown when panel is collapsed) ═══════════════════ -->
   <button class="btn btn-xs panel-reveal-btn panel-reveal-config-hide" id="btn-config-hide" title="Hide Configuration">◀</button>
   <button class="btn btn-xs panel-reveal-btn panel-reveal-left hidden" id="btn-config-reveal" title="Show Configuration">▶</button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-visual-hide" id="btn-visual-collapse" title="Hide Camera Visual">▶</button>
   <button class="btn btn-xs panel-reveal-btn panel-reveal-right hidden" id="btn-visual-reveal" title="Show Camera Visual">◀</button>
 
   <!-- ═══════════════════ FOOTER ═══════════════════ -->

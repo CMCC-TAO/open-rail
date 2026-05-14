@@ -1060,7 +1060,7 @@ async def client_status():
 #  REST: runtime commands (replaces Enter-key menu in run_client.py)
 # ─────────────────────────────────────────────────────────────────────────────
 class CommandRequest(BaseModel):
-    command: str          # reset / resume / set_language / record / save_data / discard_data / gripper / head / waist
+    command: str          # reset / resume / set_language / record / save_data / discard_data / arm / gripper / head / waist / wheel
     params: dict = {}
 
 
@@ -1117,6 +1117,10 @@ async def client_command(req: CommandRequest):
             if state.config.record.switch:
                 vc.dataset_write.abandon_record_data()
 
+        elif cmd == "arm":
+            pos = params.get("pos", [0.0] * 14)
+            robot.execute_action({'arm': pos})
+
         elif cmd == "gripper":
             pos = params.get("pos", [0.0, 0.0])
             robot.execute_action({'gripper': pos})
@@ -1128,6 +1132,10 @@ async def client_command(req: CommandRequest):
         elif cmd == "waist":
             pos = params.get("pos", [0.297, 20.0])
             robot.execute_action({'waist': pos})
+
+        elif cmd == "wheel":
+            pos = params.get("pos", [0.0, 0.0])
+            robot.execute_action({'wheel': pos})
 
         else:
             raise HTTPException(400, f"Unknown command: {cmd}")

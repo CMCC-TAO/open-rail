@@ -119,6 +119,7 @@ const App = {
   },
 
   recordingListTimer: null,
+  latestState: [],
 };
 
 // ═══════════════════════════════════════════════════════
@@ -367,6 +368,7 @@ function renderStats(data) {
   // Use default joint values when client is not running and no real data available
   const stateVals  = (data.current_state  && data.current_state.length)  ? data.current_state  : getDefaultState();
   const actionVals = (data.current_action && data.current_action.length) ? data.current_action : getDefaultAction();
+  App.latestState = Array.isArray(data.current_state) ? data.current_state.slice() : [];
   renderJointsGrouped('state',  stateVals);
   renderJointsGrouped('action', actionVals);
 
@@ -1872,11 +1874,13 @@ function setupCameraPanel() {
     const panel = $('panel-visual');
     const collapsed = panel.classList.toggle('collapsed');
     $('btn-visual-reveal').classList.toggle('hidden', !collapsed);
+    $('btn-visual-collapse').classList.toggle('hidden', collapsed);
     updateLayoutColumns();
   });
   $('btn-visual-reveal').addEventListener('click', () => {
     $('panel-visual').classList.remove('collapsed');
     $('btn-visual-reveal').classList.add('hidden');
+    $('btn-visual-collapse').classList.remove('hidden');
     updateLayoutColumns();
   });
 
@@ -2071,7 +2075,12 @@ function setupLeftPanelAccordion() {
       const expanded = bodyId === targetBodyId;
       body.classList.toggle('collapsed', !expanded);
       panel?.classList.toggle('panel-expanded', expanded);
-      if (btn) btn.textContent = expanded ? '▼' : '▲';
+      if (btn) {
+        const isConfigBtn = btnId === 'btn-config-collapse';
+        btn.textContent = isConfigBtn
+          ? (expanded ? '▲' : '▼')
+          : (expanded ? '▼' : '▲');
+      }
     });
 
     currentExpandedBodyId = targetBodyId;
@@ -2866,24 +2875,114 @@ function wireEvents() {
   });
 
   // Manual robot control
-  $('btn-gripper').addEventListener('click', async () => sendCommand('gripper', { pos: [parseFloat($('gripper-l').value), parseFloat($('gripper-r').value)] }));
-  $('btn-head').addEventListener('click',    async () => sendCommand('head',    { pos: [parseFloat($('head-yaw').value),   parseFloat($('head-pitch').value)]  }));
-  $('btn-waist').addEventListener('click',   async () => sendCommand('waist',   { pos: [parseFloat($('waist-pitch').value), parseFloat($('waist-height').value)] }));
-  $('btn-arm-reset').addEventListener('click', async () => { await sendCommand('reset'); toast('Arm reset command sent.', 'ok'); });
-  $('btn-gripper-open').addEventListener('click', async () => {
-    $('gripper-l').value = '1';
-    $('gripper-r').value = '1';
-    await sendCommand('gripper', { pos: [1, 1] });
-    toast('Gripper opened.', 'ok');
+  const getNum = (id, fallback = 0) => {
+    const v = Number($(id)?.value);
+    return Number.isFinite(v) ? v : fallback;
+  };
+  const getChecked = (id) => !!$(id)?.checked;
+
+  const sendGripperPos = async (left, right) => {
+    const l = Number.isFinite(left) ? left : getNum('gripper-l', 0);
+    const r = Number.isFinite(right) ? right : getNum('gripper-r', 0);
+    $('gripper-l').value = String(l);
+    $('gripper-r').value = String(r);
+    await sendCommand('gripper', { pos: [l, r] });
+  };
+
+  $('btn-gripper-left-send').addEventListener('click', async () => {
+    await sendGripperPos(getNum('gripper-l', 0), getNum('gripper-r', 0));
   });
-  $('btn-gripper-close').addEventListener('click', async () => {
-    $('gripper-l').value = '0';
-    $('gripper-r').value = '0';
-    await sendCommand('gripper', { pos: [0, 0] });
-    toast('Gripper closed.', 'ok');
+  $('btn-gripper-right-send').addEventListener('click', async () => {
+    await sendGripperPos(getNum('gripper-l', 0), getNum('gripper-r', 0));
   });
-  $('btn-save-data').addEventListener('click',    async () => { await sendCommand('save_data');    toast('Data saved.',      'ok');   });
-  $('btn-discard-data').addEventListener('click', async () => { await sendCommand('discard_data'); toast('Data discarded.', 'warn'); });
+  $('btn-gripper-left-open').addEventListener('click', async () => {
+    await sendGripperPos(1, getNum('gripper-r', 0));
+    toast('Left gripper opened.', 'ok');
+  });
+  $('btn-gripper-left-close').addEventListener('click', async () => {
+    await sendGripperPos(0, getNum('gripper-r', 0));
+    toast('Left gripper closed.', 'ok');
+  });
+  $('btn-gripper-right-open').addEventListener('click', async () => {
+    await sendGripperPos(getNum('gripper-l', 0), 1);
+    toast('Right gripper opened.', 'ok');
+  });
+  $('btn-gripper-right-close').addEventListener('click', async () => {
+    await sendGripperPos(getNum('gripper-l', 0), 0);
+    toast('Right gripper closed.', 'ok');
+  });
+
+  $('btn-head').addEventListener('click', async () => {
+    await sendCommand('head', { pos: [getNum('head-yaw', 0), getNum('head-pitch', 0.436), getNum('head-row', 0)] });
+  });
+
+  $('btn-waist').addEventListener('click', async () => {
+    const pitch = getNum('waist-pitch', 0.297);
+    const height = getNum('waist-height', 20);
+    $('body-height').value = String(height);
+    await sendCommand('waist', { pos: [pitch, height] });
+  });
+
+  $('btn-body-height').addEventListener('click', async () => {
+    const pitch = getNum('waist-pitch', 0.297);
+    const height = getNum('body-height', 20);
+    $('waist-height').value = String(height);
+    await sendCommand('waist', { pos: [pitch, height] });
+    toast(`Body height set to ${height}.`, 'ok');
+  });
+
+  $('btn-arm-reset').addEventListener('click', async () => {
+    const useLeft = getChecked('chk-arm-left');
+    const useRight = getChecked('chk-arm-right');
+    if (!useLeft && !useRight) {
+      toast('Select Left or Right arm first.', 'warn');
+      return;
+    }
+
+    if (useLeft && useRight) {
+      await sendCommand('reset');
+      toast('Arm reset command sent.', 'ok');
+      return;
+    }
+
+    const current = Array.isArray(App.latestState) ? App.latestState.slice(0, 14) : [];
+    const resetPose = App.config?.robots?.a2d?.reset_robot_pos;
+    if (!Array.isArray(current) || current.length < 14 || !Array.isArray(resetPose) || resetPose.length < 14) {
+      await sendCommand('reset');
+      toast('State unavailable, full reset applied.', 'warn');
+      return;
+    }
+
+    const target = current.map(x => Number(x));
+    if (useLeft) {
+      for (let i = 0; i < 7; i++) target[i] = Number(resetPose[i]);
+    }
+    if (useRight) {
+      for (let i = 7; i < 14; i++) target[i] = Number(resetPose[i]);
+    }
+    await sendCommand('arm', { pos: target });
+    toast(`Arm reset (${useLeft ? 'Left' : ''}${useLeft && useRight ? ' + ' : ''}${useRight ? 'Right' : ''}).`, 'ok');
+  });
+
+
+
+  const sendWheel = async (linear, angular, msg = 'Wheel command sent.') => {
+    $('wheel-linear').value = String(linear);
+    $('wheel-angular').value = String(angular);
+    await sendCommand('wheel', { pos: [linear, angular] });
+    toast(msg, 'ok');
+  };
+
+  $('btn-wheel-move').addEventListener('click', async () => {
+    await sendWheel(getNum('wheel-linear', 0), getNum('wheel-angular', 0));
+  });
+  $('btn-wheel-forward').addEventListener('click',  async () => sendWheel(0.1, 0, 'Wheel forward.'));
+  $('btn-wheel-backward').addEventListener('click', async () => sendWheel(-0.1, 0, 'Wheel backward.'));
+  $('btn-wheel-left').addEventListener('click',     async () => sendWheel(0, 0.1, 'Wheel turn left.'));
+  $('btn-wheel-right').addEventListener('click',    async () => sendWheel(0, -0.1, 'Wheel turn right.'));
+  $('btn-wheel-stop').addEventListener('click',     async () => sendWheel(0, 0, 'Wheel stopped.'));
+
+
 }
 
 async function sendCommand(command, params = {}) {
