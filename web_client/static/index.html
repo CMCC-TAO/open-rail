@@ -29,11 +29,11 @@
 
     <!-- ╔══════════════ LEFT: CONFIG + MANUAL CONTROL ══════════════╗ -->
     <div class="left-col" id="left-col">
-      <aside class="panel panel-config" id="panel-config">
-        <div class="panel-header">
+      <aside class="panel panel-config panel-expanded" id="panel-config">
+        <div class="panel-header" id="panel-config-header">
           <span>⚙ Configuration</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse">◀</button>
+            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse / Expand">▼</button>
           </div>
         </div>
         <div class="panel-body" id="config-body">
@@ -66,7 +66,7 @@
       </aside>
 
       <section class="panel panel-recording" id="panel-recording">
-        <div class="panel-header">
+        <div class="panel-header" id="panel-recording-header">
           <span>🧾 Data Recording</span>
           <div class="panel-header-actions">
             <button class="btn btn-xs" id="btn-recording-collapse" title="Collapse">▲</button>
@@ -90,10 +90,13 @@
       </section>
 
       <section class="panel panel-manual" id="panel-manual">
-        <div class="panel-header">
+        <div class="panel-header" id="panel-manual-header">
           <span>🕹 Manual Robot Control</span>
+          <div class="panel-header-actions">
+            <button class="btn btn-xs" id="btn-manual-collapse" title="Collapse">▲</button>
+          </div>
         </div>
-        <div class="panel-body" id="manual-body">
+        <div class="panel-body collapsed" id="manual-body">
           <div class="robot-ctrl-grid">
             <div class="robot-ctrl-group">
               <div class="robot-ctrl-label">Gripper (L R)</div>
@@ -144,9 +147,8 @@
           </div>
           <!-- Separator -->
           <span class="monitor-sep"></span>
-          <!-- Group ②: record / replay -->
+          <!-- Group ②: replay -->
           <div class="monitor-ctrl-group">
-            <button class="btn btn-xs" id="btn-record">⏺ Record</button>
             <label  class="btn btn-xs" id="btn-replay" title="Select replay folder">▶ Replay
               <input id="replay-folder-input" type="file" webkitdirectory style="display:none" />
             </label>
@@ -419,6 +421,7 @@
   </main>
 
   <!-- ═══════════════════ PANEL REVEAL BUTTONS (floating, shown when panel is collapsed) ═══════════════════ -->
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-config-hide" id="btn-config-hide" title="Hide Configuration">◀</button>
   <button class="btn btn-xs panel-reveal-btn panel-reveal-left hidden" id="btn-config-reveal" title="Show Configuration">▶</button>
   <button class="btn btn-xs panel-reveal-btn panel-reveal-right hidden" id="btn-visual-reveal" title="Show Camera Visual">◀</button>
 

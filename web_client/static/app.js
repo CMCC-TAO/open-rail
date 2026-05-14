@@ -2044,18 +2044,86 @@ async function refreshRecordingFileList() {
   } catch (_) { /* toasted */ }
 }
 
-function setupRecordingPanel() {
-  const body = $('recording-body');
-  const btn = $('btn-recording-collapse');
-  if (body && btn) {
-    btn.textContent = body.classList.contains('collapsed') ? '▲' : '▼';
-    btn.addEventListener('click', () => {
-      const collapsed = body.classList.toggle('collapsed');
-      btn.textContent = collapsed ? '▲' : '▼';
-      if (!collapsed) refreshRecordingFileList();
-    });
-  }
+function setupLeftPanelAccordion() {
+  const panels = [
+    { panelId: 'panel-config',    headerId: 'panel-config-header',    bodyId: 'config-body',    btnId: 'btn-config-collapse' },
+    { panelId: 'panel-recording', headerId: 'panel-recording-header', bodyId: 'recording-body', btnId: 'btn-recording-collapse' },
+    { panelId: 'panel-manual',    headerId: 'panel-manual-header',    bodyId: 'manual-body',    btnId: 'btn-manual-collapse' },
+  ];
 
+  const panelBodyIds = panels.map(p => p.bodyId);
+  let currentExpandedBodyId = null;
+  let autoCollapsedHistory = [];
+
+  const setExpanded = (targetBodyId, reason = 'switch') => {
+    if (!targetBodyId || !panelBodyIds.includes(targetBodyId)) return;
+
+    if (currentExpandedBodyId && currentExpandedBodyId !== targetBodyId && reason !== 'init') {
+      autoCollapsedHistory = autoCollapsedHistory.filter(id => id !== currentExpandedBodyId && id !== targetBodyId);
+      autoCollapsedHistory.push(currentExpandedBodyId);
+    }
+
+    panels.forEach(({ panelId, bodyId, btnId }) => {
+      const panel = $(panelId);
+      const body = $(bodyId);
+      const btn = btnId ? $(btnId) : null;
+      if (!body) return;
+      const expanded = bodyId === targetBodyId;
+      body.classList.toggle('collapsed', !expanded);
+      panel?.classList.toggle('panel-expanded', expanded);
+      if (btn) btn.textContent = expanded ? '▼' : '▲';
+    });
+
+    currentExpandedBodyId = targetBodyId;
+    if (targetBodyId === 'recording-body') refreshRecordingFileList();
+  };
+
+  const togglePanel = (bodyId) => {
+    if (!panelBodyIds.includes(bodyId)) return;
+
+    if (currentExpandedBodyId !== bodyId) {
+      setExpanded(bodyId, 'switch');
+      return;
+    }
+
+    let fallbackBodyId = null;
+    while (autoCollapsedHistory.length > 0) {
+      const candidate = autoCollapsedHistory.pop();
+      if (candidate && candidate !== bodyId && panelBodyIds.includes(candidate)) {
+        fallbackBodyId = candidate;
+        break;
+      }
+    }
+    if (!fallbackBodyId) {
+      fallbackBodyId = panelBodyIds.find(id => id !== bodyId) || bodyId;
+    }
+    setExpanded(fallbackBodyId, 'fallback');
+  };
+
+  panels.forEach(({ headerId, bodyId, btnId }) => {
+    const header = $(headerId);
+    if (header) {
+      header.addEventListener('click', (e) => {
+        if (e.target.closest('.panel-header-actions')) return;
+        togglePanel(bodyId);
+      });
+    }
+
+    if (btnId) {
+      const btn = $(btnId);
+      btn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        togglePanel(bodyId);
+      });
+    }
+  });
+
+  // Default: Configuration expanded, Recording/Manual collapsed.
+  setExpanded('config-body', 'init');
+}
+
+function setupRecordingPanel() {
   $('btn-recording-start')?.addEventListener('click', async () => {
     const saveItems = getRecordingSaveItems();
     await sendCommand('record', { enable: true, save_items: saveItems });
@@ -2650,14 +2718,17 @@ function wireEvents() {
     } catch (e) { /* toasted */ }
   });
 
-  $('btn-config-collapse').addEventListener('click', () => {
+  // Left column collapse / reveal
+  $('btn-config-hide').addEventListener('click', () => {
     const leftCol = $('left-col');
     const collapsed = leftCol.classList.toggle('collapsed');
+    $('btn-config-hide').classList.toggle('hidden', collapsed);
     $('btn-config-reveal').classList.toggle('hidden', !collapsed);
     updateLayoutColumns();
   });
   $('btn-config-reveal').addEventListener('click', () => {
     $('left-col').classList.remove('collapsed');
+    $('btn-config-hide').classList.remove('hidden');
     $('btn-config-reveal').classList.add('hidden');
     updateLayoutColumns();
   });
@@ -2692,14 +2763,6 @@ function wireEvents() {
   $('btn-reset').addEventListener('click',  async () => {
     await sendCommand('reset');
     toast('Robot reset initiated.', 'info');
-  });
-
-  // Record button — toggle recording via command
-  $('btn-record').addEventListener('click', async () => {
-    const btn = $('btn-record');
-    const recording = btn.classList.toggle('btn-active');
-    await sendCommand('record', { enable: recording });
-    toast(recording ? 'Recording started.' : 'Recording stopped.', recording ? 'ok' : 'warn', 2500);
   });
 
   // Replay — folder picker triggers load
@@ -2851,6 +2914,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupCameraPanel();
   setupTrajPanel();
   setupLangPanel();
+  setupLeftPanelAccordion();
   setupRecordingPanel();
   createUnifiedChart();                  // create single unified trajectory chart
   buildJointSelector(TRAJ_JOINT_COUNT);  // pre-build fixed 14-joint selector
