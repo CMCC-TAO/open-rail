@@ -692,6 +692,23 @@ html, body {
   gap: 10px;
   flex-wrap: wrap;
 }
+.robot-ctrl-actions-right {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.robot-ctrl-actions-right .btn {
+  min-width: 56px;
+  height: 18px;
+  padding: 0 8px;
+  font-size: 11px;
+  line-height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
 .robot-ctrl-row {
   display: flex;
   align-items: center;
@@ -731,18 +748,35 @@ html, body {
 }
 .robot-head-label-row,
 .robot-head-input-row,
-.robot-head-action-row {
+.robot-waist-label-row,
+.robot-waist-input-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   align-items: center;
 }
-.robot-head-label-row .robot-ctrl-label {
+.robot-head-label-row .robot-ctrl-label,
+.robot-waist-label-row .robot-ctrl-label {
   min-width: 0;
+  text-align: center;
 }
 .robot-head-input-row .input-num,
-.robot-head-action-row .btn {
+.robot-waist-input-row .input-num {
   width: 100%;
+}
+
+.btn-unsaved-star {
+  position: relative;
+}
+.btn-unsaved-star::after {
+  content: '*';
+  position: absolute;
+  right: 4px;
+  top: 1px;
+  color: var(--danger);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 /* ═══════════════════════════════════════════

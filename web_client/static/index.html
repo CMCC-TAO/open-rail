@@ -130,30 +130,44 @@
             </section>
 
             <section class="robot-ctrl-section">
-              <div class="robot-ctrl-section-title">Head</div>
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Head</div>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-head-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-head">Set</button>
+                  <button class="btn btn-sm" id="btn-head-save">Save</button>
+                </div>
+              </div>
               <div class="robot-ctrl-row robot-head-label-row">
                 <div class="robot-ctrl-label">Yaw</div>
                 <div class="robot-ctrl-label">Pitch</div>
-                <div class="robot-ctrl-label">Raw</div>
+                <div class="robot-ctrl-label">Roll</div>
               </div>
               <div class="robot-ctrl-row robot-head-input-row">
                 <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
                 <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
-                <input id="head-row" class="input-num" type="number" step="0.01" value="0" placeholder="raw" />
-              </div>
-              <div class="robot-ctrl-row robot-head-action-row">
-                <button class="btn btn-sm" id="btn-head-reset">Reset</button>
-                <button class="btn btn-sm" id="btn-head">Send</button>
+                <input id="head-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
               </div>
             </section>
 
             <section class="robot-ctrl-section">
-              <div class="robot-ctrl-section-title">Waist</div>
-              <div class="robot-ctrl-row">
-                <div class="robot-ctrl-label">Pitch / Height</div>
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Waist</div>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-waist-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-waist">Set</button>
+                  <button class="btn btn-sm" id="btn-waist-save">Save</button>
+                </div>
+              </div>
+              <div class="robot-ctrl-row robot-waist-label-row">
+                <div class="robot-ctrl-label">Yaw</div>
+                <div class="robot-ctrl-label">Pitch</div>
+                <div class="robot-ctrl-label">Roll</div>
+              </div>
+              <div class="robot-ctrl-row robot-waist-input-row">
+                <input id="waist-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
                 <input id="waist-pitch" class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
-                <input id="waist-height" class="input-num" type="number" step="1" value="20" placeholder="height" />
-                <button class="btn btn-sm" id="btn-waist">Send</button>
+                <input id="waist-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
               </div>
             </section>
 
