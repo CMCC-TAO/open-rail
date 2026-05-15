@@ -59,23 +59,23 @@ logger = logging.getLogger(__name__)
 
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 # lifespan replaces the deprecated @app.on_event("startup"/"shutdown") pattern.
-# The context manager is defined inline here; module-level globals (state, etc.)
+# The context manager is defined inline here; module-level globals (client_state, etc.)
 # are accessible at call-time (not at definition time), so forward-use is safe.
 @asynccontextmanager
 async def _lifespan(_: FastAPI):
     # ── startup ──
     setup_logging("client.log")
-    state.config = get_client_config()
+    client_state.config = get_client_config()
     if DEFAULT_YAML.exists():
         try:
-            _apply_yaml_config(state.config, DEFAULT_YAML)
+            _apply_yaml_config(client_state.config, DEFAULT_YAML)
         except Exception as e:
             logger.warning(f"Failed to apply yaml conf: {e}")
     asyncio.create_task(_stats_push_loop())
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
     # ── shutdown ──
-    if state.running:
+    if client_state.running:
         _cleanup()
 
 app = FastAPI(title="VLA Web Client", version="1.0.0", lifespan=_lifespan)
@@ -94,7 +94,7 @@ if VISUAL_DIR.exists():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Global state
+#  Global client_state
 # ─────────────────────────────────────────────────────────────────────────────
 class ClientState:
     def __init__(self):
@@ -108,7 +108,7 @@ class ClientState:
         self._broadcast_task: Optional[asyncio.Task] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
-state = ClientState()
+client_state = ClientState()
 
 _RESOURCE_CACHE = {
     "ts": 0.0,
@@ -452,27 +452,27 @@ def _get_robot(config):
 # ─────────────────────────────────────────────────────────────────────────────
 async def _broadcast(message: dict):
     """Send JSON to all connected WebSocket clients."""
-    if not state.ws_clients:
+    if not client_state.ws_clients:
         return
     data = json.dumps(message)
     dead = set()
-    with state.ws_lock:
-        clients = set(state.ws_clients)
+    with client_state.ws_lock:
+        clients = set(client_state.ws_clients)
     for ws in clients:
         try:
             await ws.send_text(data)
         except Exception:
             dead.add(ws)
     if dead:
-        with state.ws_lock:
-            state.ws_clients -= dead
+        with client_state.ws_lock:
+            client_state.ws_clients -= dead
 
 
 async def _stats_push_loop():
     """Background coroutine: push runtime stats to all WS clients every 250 ms."""
     while True:
         await asyncio.sleep(0.25)
-        if not state.ws_clients:
+        if not client_state.ws_clients:
             continue
         try:
             stats = _collect_stats()
@@ -484,7 +484,7 @@ async def _stats_push_loop():
 def _collect_stats() -> dict:
     """Gather runtime stats from the running vla_client."""
     base = {
-        "running": state.running,
+        "running": client_state.running,
         "paused": False,
         "infer_count": 0,
         "avg_infer_time": 0.0,
@@ -501,28 +501,28 @@ def _collect_stats() -> dict:
         "mem_usage": None,
         "bandwidth_m": None,
     }
-    with state.lock:
-        vc = state.vla_client
+    with client_state.lock:
+        vla_client = client_state.vla_client
     base.update(_collect_resource_stats())
 
-    if vc is None:
+    if vla_client is None:
         return base
 
     try:
-        base["paused"]          = not bool(vc.is_running_action)
-        base["infer_count"]     = int(vc.rdm.infer_count)
-        base["avg_infer_time"]  = float(vc.rdm.avg_infer_time)
-        base["avg_traj_time"]   = float(vc.rdm.avg_traj_time)
-        base["language"]        = str(vc.language)
-        base["current_state"]   = [round(float(x), 4) for x in vc.info_current_state]
-        base["current_action"]  = [round(float(x), 4) for x in vc.info_current_action]
-        base["info_obs"]        = {k: str(v) for k, v in vc.info_obs.items()}
-        base["info_act"]        = {k: str(v) for k, v in vc.info_act.items()}
+        base["paused"]          = not bool(vla_client.is_running_action)
+        base["infer_count"]     = int(vla_client.rdm.infer_count)
+        base["avg_infer_time"]  = float(vla_client.rdm.avg_infer_time)
+        base["avg_traj_time"]   = float(vla_client.rdm.avg_traj_time)
+        base["language"]        = str(vla_client.language)
+        base["current_state"]   = [round(float(x), 4) for x in vla_client.info_current_state]
+        base["current_action"]  = [round(float(x), 4) for x in vla_client.info_current_action]
+        base["info_obs"]        = {k: str(v) for k, v in vla_client.info_obs.items()}
+        base["info_act"]        = {k: str(v) for k, v in vla_client.info_act.items()}
         try:
-            base["current_prob_progress"] = float(vc.info_act.get("current_prob_progress", 0.0))
+            base["current_prob_progress"] = float(vla_client.info_act.get("current_prob_progress", 0.0))
         except Exception:
             base["current_prob_progress"] = 0.0
-        base["debug_info"]      = str(vc.debug_info)
+        base["debug_info"]      = str(vla_client.debug_info)
         # base["config_snapshot"] = {
         #     "fps":              cfg.observer.fps,
         #     "wait_time":        cfg.controller.wait_time,
@@ -639,10 +639,10 @@ async def load_lang_file(req: LangFileRequest):
 @app.get("/api/config")
 async def get_config():
     """Return current config as a nested dict."""
-    if state.config is None:
+    if client_state.config is None:
         cfg = get_client_config()
-        state.config = cfg
-    return {"status": "ok", "config": _config_to_dict(state.config)}
+        client_state.config = cfg
+    return {"status": "ok", "config": _config_to_dict(client_state.config)}
 
 
 class ConfigPatchRequest(BaseModel):
@@ -662,8 +662,8 @@ async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
     if not payload:
         return {"status": "ok", "applied": False}
 
-    vc = state.vla_client
-    ws_server = getattr(vc, "websocket_server", None) if vc is not None else None
+    vla_client = client_state.vla_client
+    ws_server = getattr(vla_client, "websocket_server", None) if vla_client is not None else None
     if ws_server is None:
         return {"status": "ok", "applied": False}
 
@@ -674,8 +674,8 @@ async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
 @app.post("/api/config/patch")
 async def patch_config(req: ConfigPatchRequest):
     """Apply a partial update to in-memory config. Effective immediately when possible."""
-    if state.config is None:
-        state.config = get_client_config()
+    if client_state.config is None:
+        client_state.config = get_client_config()
 
     # Support both nested dict and flat dot-key dict
     def _flatten(d, prefix=""):
@@ -689,21 +689,21 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
-    with state.lock:
-        _apply_flat_patch(state.config, flat)
+    with client_state.lock:
+        _apply_flat_patch(client_state.config, flat)
 
     # Runtime side-effects for keys that need explicit push
-    if state.running and state.vla_client is not None:
+    if client_state.running and client_state.vla_client is not None:
         try:
             if any(k.startswith("visual.camera.") for k in flat.keys()):
-                cam_cfg = getattr(getattr(state.config, "visual", None), "camera", None)
-                ws_server = getattr(state.vla_client, "websocket_server", None)
+                cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
+                ws_server = getattr(client_state.vla_client, "websocket_server", None)
                 if ws_server is not None and cam_cfg is not None:
                     ws_server.update_camera_open_config(cam_cfg)
         except Exception as e:
             logger.warning(f"Runtime camera config sync failed: {e}")
 
-    return {"status": "ok", "config": _config_to_dict(state.config)}
+    return {"status": "ok", "config": _config_to_dict(client_state.config)}
 
 
 class ConfigFileRequest(BaseModel):
@@ -713,8 +713,8 @@ class ConfigFileRequest(BaseModel):
 @app.post("/api/config/load_file")
 async def load_config_file(req: ConfigFileRequest):
     """Load a yaml conf file and apply it. Effective immediately when possible."""
-    if state.config is None:
-        state.config = get_client_config()
+    if client_state.config is None:
+        client_state.config = get_client_config()
     # Guard against path-traversal
     p = Path(req.path)
     # --- 调试开始 ---
@@ -729,14 +729,14 @@ async def load_config_file(req: ConfigFileRequest):
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
 
-    with state.lock:
-        _apply_yaml_config(state.config, p)
+    with client_state.lock:
+        _apply_yaml_config(client_state.config, p)
 
     # Runtime side-effects for configs requiring explicit push
-    if state.running and state.vla_client is not None:
+    if client_state.running and client_state.vla_client is not None:
         try:
-            cam_cfg = getattr(getattr(state.config, "visual", None), "camera", None)
-            ws_server = getattr(state.vla_client, "websocket_server", None)
+            cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
+            ws_server = getattr(client_state.vla_client, "websocket_server", None)
             if ws_server is not None and cam_cfg is not None:
                 ws_server.update_camera_open_config(cam_cfg)
         except Exception as e:
@@ -746,8 +746,8 @@ async def load_config_file(req: ConfigFileRequest):
     # if user_cfg is None:
     #     raise HTTPException(400, f"Failed to load config from: {p}")
     # base_cfg = get_client_config()
-    # state.config = apply_user_config(base_cfg, user_cfg)
-    return {"status": "ok", "config": _config_to_dict(state.config)}
+    # client_state.config = apply_user_config(base_cfg, user_cfg)
+    return {"status": "ok", "config": _config_to_dict(client_state.config)}
 
 
 @app.post("/api/config/save_file")
@@ -758,7 +758,7 @@ async def save_config_file(req: ConfigFileRequest):
       .yaml / .yml  →  YAML  (via _dict_to_user_conf_yaml)
       .py           →  Python get_user_config() module (via _dict_to_user_conf_py)
     """
-    if state.config is None:
+    if client_state.config is None:
         raise HTTPException(400, "No config loaded.")
     save_path = Path(req.path)
     if not save_path.is_absolute():
@@ -768,7 +768,7 @@ async def save_config_file(req: ConfigFileRequest):
         save_path.resolve().relative_to(ROOT.resolve())
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
-    cfg_dict = _config_to_dict(state.config)
+    cfg_dict = _config_to_dict(client_state.config)
     if save_path.suffix in (".yaml", ".yml"):
         content = _dict_to_user_conf_yaml(cfg_dict)
     else:
@@ -906,22 +906,22 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
 async def start_client():
     """Initialise and start the VLA client (non-blocking)."""
     # Lock prevents concurrent requests from both passing the running guard
-    with state.lock:
-        if state.running:
+    with client_state.lock:
+        if client_state.running:
             raise HTTPException(400, "Client is already running.")
         # Set eagerly inside the lock so a second concurrent request is rejected
         # before the worker thread is even created.
-        state.running = True
+        client_state.running = True
 
     # get_running_loop() is the correct API inside a running coroutine (Python 3.10+)
     loop = asyncio.get_running_loop()
-    state._loop = loop
+    client_state._loop = loop
 
     def _run_in_thread():
         try:
             # setup_logging("client.log")
-            cfg = state.config if state.config is not None else get_client_config()
-            state.config = cfg
+            cfg = client_state.config if client_state.config is not None else get_client_config()
+            client_state.config = cfg
 
             # Apply action_layout from robot config
             robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
@@ -936,32 +936,32 @@ async def start_client():
 
             if cfg.inter_chunk.inter_chunk_mode == 'sync':
                 from client.core.vla_client_sync import VLAClientSync
-                vc = VLAClientSync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
+                vla_client = VLAClientSync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
                                    vla_zmq_client=vla_zmq_client, robot=robot)
             else:
                 from client.core.vla_client import VLAClientAsync
-                vc = VLAClientAsync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
+                vla_client = VLAClientAsync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
                                     vla_zmq_client=vla_zmq_client, robot=robot)
 
-            state.vla_client = vc
-            state.robot = robot
+            client_state.vla_client = vla_client
+            client_state.robot = robot
 
-            # Broadcast "started" immediately before entering the blocking vc.run()
+            # Broadcast "started" immediately before entering the blocking vla_client.run()
             asyncio.run_coroutine_threadsafe(
                 _broadcast({"type": "status", "data": {"running": True, "message": "Client started."}}),
                 loop
             )
 
-            vc.run()
+            vla_client.run()
 
             # Keep alive until externally stopped
-            while state.running:
+            while client_state.running:
                 time.sleep(0.1)
 
         except Exception as e:
             err = traceback.format_exc()
             logger.error(f"Client thread error:\n{err}")
-            state.running = False
+            client_state.running = False
             asyncio.run_coroutine_threadsafe(
                 _broadcast({"type": "error", "data": {"message": str(e), "trace": err}}),
                 loop
@@ -974,28 +974,28 @@ async def start_client():
     return {"status": "ok", "message": "Client starting…"}
 
 
-def _pause_vla_client(vc):
-    if hasattr(vc, "pause"):
-        vc.pause()
+def _pause_vla_client(vla_client):
+    if hasattr(vla_client, "pause"):
+        vla_client.pause()
     else:
-        vc.stop()
+        vla_client.stop()
 
 
-def _resume_vla_client(vc):
-    if hasattr(vc, "resume"):
-        vc.resume()
+def _resume_vla_client(vla_client):
+    if hasattr(vla_client, "resume"):
+        vla_client.resume()
     else:
-        vc.inference_first()
-        vc.is_running_action = True
+        vla_client.inference_first()
+        vla_client.is_running_action = True
 
 
 @app.post("/api/client/pause")
 async def pause_client():
     """Pause inference and robot commands without releasing resources."""
-    vc = state.vla_client
-    if vc is None or not state.running:
+    vla_client = client_state.vla_client
+    if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
-    _pause_vla_client(vc)
+    _pause_vla_client(vla_client)
     await _broadcast({"type": "status", "data": {"running": True, "paused": True, "message": "Client paused."}})   
     return {"status": "ok"}
 
@@ -1003,10 +1003,10 @@ async def pause_client():
 @app.post("/api/client/resume")
 async def resume_client():
     """Resume inference and robot commands."""
-    vc = state.vla_client
-    if vc is None or not state.running:
+    vla_client = client_state.vla_client
+    if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
-    _resume_vla_client(vc)
+    _resume_vla_client(vla_client)
     await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
     return {"status": "ok"}
 
@@ -1015,8 +1015,8 @@ async def resume_client():
 async def stop_client():
     """Fully stop client threads and release all resources."""
     with state.lock:
-        is_active = state.running or (state.vla_client is not None)
-        state.running = False
+        is_active = client_state.running or (client_state.vla_client is not None)
+        client_state.running = False
     if not is_active:
         raise HTTPException(400, "Client is not running.")
 
@@ -1028,16 +1028,16 @@ async def stop_client():
 def _cleanup():
     global robot_instance
 
-    with state.lock:
-        vc = state.vla_client
-        robot = state.robot
-        state.vla_client = None
-        state.robot = None
-        state.running = False
+    with client_state.lock:
+        vla_client = client_state.vla_client
+        robot = client_state.robot
+        client_state.vla_client = None
+        client_state.robot = None
+        client_state.running = False
 
-    if vc is not None:
+    if vla_client is not None:
         try:
-            vc.close()
+            vla_client.close()
         except Exception:
             pass
 
@@ -1066,9 +1066,9 @@ class CommandRequest(BaseModel):
 
 @app.post("/api/client/command")
 async def client_command(req: CommandRequest):
-    vc = state.vla_client
-    robot = state.robot
-    if vc is None or not state.running:
+    vla_client = client_state.vla_client
+    robot = client_state.robot
+    if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
 
     cmd = req.command
@@ -1077,21 +1077,21 @@ async def client_command(req: CommandRequest):
     try:
         if cmd == "reset":
             # Pause first before resetting robot to initial position
-            _pause_vla_client(vc)
+            _pause_vla_client(vla_client)
             robot.reset_robot(mode='default')
-            _resume_vla_client(vc)
-            await _broadcast({"type": "status", "data": {"running": state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
+            _resume_vla_client(vla_client)
+            await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
 
         elif cmd == "resume":
-            _resume_vla_client(vc)
+            _resume_vla_client(vla_client)
             await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
 
         elif cmd == "set_language":
             lang = params.get("language", "")
-            vc.language = lang
-            _pause_vla_client(vc)
+            vla_client.language = lang
+            _pause_vla_client(vla_client)
             robot.reset_robot(mode='default')
-            _resume_vla_client(vc)
+            _resume_vla_client(vla_client)
 
         elif cmd == "record":
             enable = bool(params.get("enable", True))
@@ -1099,23 +1099,23 @@ async def client_command(req: CommandRequest):
             if not isinstance(save_items, list):
                 save_items = []
 
-            state.config.record_exp_data = ('ExpData' in save_items)
+            client_state.config.record_exp_data = ('ExpData' in save_items)
 
-            if not state.config.record.switch:
+            if not client_state.config.record.switch:
                 if enable:
                     raise HTTPException(400, "record.switch is false in config; enable recording in config first.")
-            elif not hasattr(vc, "dataset_write") or vc.dataset_write is None:
+            elif not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
                 raise HTTPException(400, "Recorder is not initialized.")
             else:
-                vc.dataset_write.shared_data.stop.value = (not enable)
+                vla_client.dataset_write.shared_data.stop.value = (not enable)
 
         elif cmd == "save_data":
-            if state.config.record.switch:
-                vc.dataset_write.save_writed_data()
+            if client_state.config.record.switch:
+                vla_client.dataset_write.save_writed_data()
 
         elif cmd == "discard_data":
-            if state.config.record.switch:
-                vc.dataset_write.abandon_record_data()
+            if client_state.config.record.switch:
+                vla_client.dataset_write.abandon_record_data()
 
         elif cmd == "arm":
             pos = params.get("pos", [0.0] * 14)
@@ -1154,10 +1154,10 @@ async def client_command(req: CommandRequest):
 @app.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
-    with state.ws_lock:
-        state.ws_clients.add(ws)
+    with client_state.ws_lock:
+        client_state.ws_clients.add(ws)
 
-    # Push current state immediately on connect
+    # Push current client_state immediately on connect
     await ws.send_text(json.dumps({"type": "stats", "data": _collect_stats()}))
 
     try:
@@ -1175,8 +1175,8 @@ async def websocket_endpoint(ws: WebSocket):
     except Exception as e:
         logger.debug(f"WS error: {e}")
     finally:
-        with state.ws_lock:
-            state.ws_clients.discard(ws)
+        with client_state.ws_lock:
+            client_state.ws_clients.discard(ws)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

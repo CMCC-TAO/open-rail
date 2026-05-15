@@ -6,14 +6,58 @@ handlers, supporting different log levels and formats for development and produc
 
 import logging
 import logging.config
+import shutil
 from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
+import re
 
 # Create logs directory relative to project root
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_RETENTION_DAYS = 7
+_LOG_DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})--\d{2}:\d{2}:\d{2}$")
+
+
+def _extract_log_day(log_file: Path) -> str:
+    """Extract log day in YYYY-MM-DD from filename suffix or fallback to mtime."""
+    name = log_file.name
+    m = _LOG_DATE_RE.search(name)
+    if m:
+        return m.group(1)
+    return datetime.fromtimestamp(log_file.stat().st_mtime).strftime("%Y-%m-%d")
+
+
+def _iter_log_files(prefix: str):
+    """Yield matching log files from logs root and day subfolders."""
+    for p in LOG_DIR.rglob(f"{prefix}*"):
+        if p.is_file():
+            yield p
+
+
+def _organize_historical_logs(log_filename: str) -> None:
+    """Move yesterday-and-older logs into per-day folders under logs/."""
+    path = Path(log_filename)
+    stem = path.stem or "app"
+    suffix = path.suffix or ".log"
+    prefix = f"{stem}{suffix}."
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    for log_file in list(_iter_log_files(prefix)):
+        try:
+            day = _extract_log_day(log_file)
+            if day >= today:
+                continue
+            day_dir = LOG_DIR / day
+            day_dir.mkdir(parents=True, exist_ok=True)
+            target = day_dir / log_file.name
+            if target.resolve() == log_file.resolve():
+                continue
+            if target.exists():
+                target.unlink(missing_ok=True)
+            log_file.rename(target)
+        except Exception:
+            continue
 
 
 def _build_log_path(log_filename: str) -> str:
@@ -26,21 +70,25 @@ def _build_log_path(log_filename: str) -> str:
 
 
 def _cleanup_old_logs(log_filename: str, retention_days: int = LOG_RETENTION_DAYS) -> None:
-    """Delete log files older than retention_days for the specified log prefix."""
-    path = Path(log_filename)
-    stem = path.stem or "app"
-    suffix = path.suffix or ".log"
-    prefix = f"{stem}{suffix}."
-    cutoff = datetime.now() - timedelta(days=retention_days)
+    """Delete whole day folders older than retention_days."""
+    _ = log_filename
+    cutoff_day = (datetime.now() - timedelta(days=retention_days)).date()
 
-    for log_file in LOG_DIR.glob(f"{prefix}*"):
-        try:
-            mtime = datetime.fromtimestamp(log_file.stat().st_mtime)
-            if mtime < cutoff:
-                log_file.unlink(missing_ok=True)
-        except Exception:
-            # Best-effort cleanup: ignore deletion/stat errors.
+    for day_dir in LOG_DIR.iterdir():
+        if not day_dir.is_dir():
             continue
+        try:
+            folder_day = datetime.strptime(day_dir.name, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+        except Exception:
+            continue
+
+        if folder_day < cutoff_day:
+            try:
+                shutil.rmtree(day_dir)
+            except Exception:
+                continue
 
 
 def get_logging_config(log_filename: str = "app.log") -> dict:
@@ -80,6 +128,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
 
 def setup_logging(log_filename: str = "app.log", logger_name: str | None = None) -> logging.Logger:
     """Setup logging and return logger instance."""
+    _organize_historical_logs(log_filename)
     _cleanup_old_logs(log_filename, LOG_RETENTION_DAYS)
     logging.config.dictConfig(get_logging_config(log_filename))
     return logging.getLogger(logger_name)
