@@ -125,9 +125,54 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "level": "DEBUG",
                 "propagate": False,
             },
+            "client.core.vla_client_sync": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "client.core.realtime_data_manager": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "client.core.inter_chunk_fusion": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "client.core.save_lerobot": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
             "client.utils.util": {
                 "handlers": ["file"],
-                "level": "INFO",
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "client.robots.mock.body_robot": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "web_client.server": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "scripts.show_lerobot_data.show_data_qt": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "DispatchZMQClient": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "__main__": {
+                "handlers": ["file"],
+                "level": "DEBUG",
                 "propagate": False,
             },
         },
