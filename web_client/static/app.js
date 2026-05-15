@@ -2917,34 +2917,126 @@ function wireEvents() {
     toast('Gripper closed.', 'ok');
   });
 
+  const HEAD_SAVE_KEY = 'manual.head.saved';
+  const WAIST_SAVE_KEY = 'manual.waist.saved';
+
+  const approxEq = (a, b) => Math.abs(Number(a) - Number(b)) < 1e-9;
+  const samePose = (a, b) => Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => approxEq(v, b[i]));
+
+  const createManualCtrlState = ({ inputIds, setBtnId, saveBtnId, saveKey }) => {
+    const readPose = () => inputIds.map(id => getNum(id, 0));
+    let savedPose = readPose();
+    try {
+      const raw = localStorage.getItem(saveKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      if (parsed && typeof parsed === 'object') {
+        const vals = inputIds.map(id => getNum(id, 0));
+        const loaded = inputIds.map((id, idx) => {
+          const key = id.replace(/^[^-]+-/, '');
+          const v = Number(parsed[key]);
+          return Number.isFinite(v) ? v : vals[idx];
+        });
+        savedPose = loaded;
+      }
+    } catch (_) {}
+
+    let appliedPose = readPose();
+    const setBtn = $(setBtnId);
+    const saveBtn = $(saveBtnId);
+
+    const refresh = () => {
+      const cur = readPose();
+      setBtn?.classList.toggle('btn-primary', !samePose(cur, appliedPose));
+      saveBtn?.classList.toggle('btn-unsaved-star', !samePose(cur, savedPose));
+    };
+
+    inputIds.forEach(id => {
+      $(id)?.addEventListener('input', refresh);
+      $(id)?.addEventListener('change', refresh);
+    });
+
+    return {
+      refresh,
+      markApplied: () => { appliedPose = readPose(); refresh(); },
+      markSaved: () => {
+        savedPose = readPose();
+        const payload = {};
+        inputIds.forEach((id, idx) => {
+          const key = id.replace(/^[^-]+-/, '');
+          payload[key] = savedPose[idx];
+        });
+        localStorage.setItem(saveKey, JSON.stringify(payload));
+        refresh();
+      },
+    };
+  };
+
+  const headCtrlState = createManualCtrlState({
+    inputIds: ['head-yaw', 'head-pitch', 'head-roll'],
+    setBtnId: 'btn-head',
+    saveBtnId: 'btn-head-save',
+    saveKey: HEAD_SAVE_KEY,
+  });
+  const waistCtrlState = createManualCtrlState({
+    inputIds: ['waist-yaw', 'waist-pitch', 'waist-roll'],
+    setBtnId: 'btn-waist',
+    saveBtnId: 'btn-waist-save',
+    saveKey: WAIST_SAVE_KEY,
+  });
+
   const sendHead = async () => {
-    await sendCommand('head', { pos: [getNum('head-yaw', 0), getNum('head-pitch', 0.436), getNum('head-row', 0)] });
+    await sendCommand('head', { pos: [getNum('head-yaw', 0), getNum('head-pitch', 0.436), getNum('head-roll', 0)] });
   };
   $('btn-head').addEventListener('click', async () => {
     await sendHead();
+    headCtrlState.markApplied();
   });
   $('btn-head-reset').addEventListener('click', async () => {
     $('head-yaw').value = '0';
     $('head-pitch').value = '0.436';
-    $('head-row').value = '0';
+    $('head-roll').value = '0';
     await sendHead();
+    headCtrlState.markApplied();
     toast('Head reset.', 'ok');
   });
+  $('btn-head-save').addEventListener('click', () => {
+    headCtrlState.markSaved();
+    toast('Head values saved.', 'ok');
+  });
 
+  const sendWaist = async () => {
+    await sendCommand('waist', { pos: [getNum('waist-yaw', 0), getNum('waist-pitch', 0.297), getNum('waist-roll', 0)] });
+  };
   $('btn-waist').addEventListener('click', async () => {
-    const pitch = getNum('waist-pitch', 0.297);
-    const height = getNum('waist-height', 20);
-    $('body-height').value = String(height);
-    await sendCommand('waist', { pos: [pitch, height] });
+    await sendWaist();
+    waistCtrlState.markApplied();
+  });
+  $('btn-waist-reset').addEventListener('click', async () => {
+    $('waist-yaw').value = '0';
+    $('waist-pitch').value = '0.297';
+    $('waist-roll').value = '0';
+    await sendWaist();
+    waistCtrlState.markApplied();
+    toast('Waist reset.', 'ok');
+  });
+  $('btn-waist-save').addEventListener('click', () => {
+    waistCtrlState.markSaved();
+    toast('Waist values saved.', 'ok');
   });
 
   $('btn-body-height').addEventListener('click', async () => {
+    const yaw = getNum('waist-yaw', 0);
     const pitch = getNum('waist-pitch', 0.297);
-    const height = getNum('body-height', 20);
-    $('waist-height').value = String(height);
-    await sendCommand('waist', { pos: [pitch, height] });
-    toast(`Body height set to ${height}.`, 'ok');
+    const roll = getNum('body-height', 0);
+    const waistRollEl = $('waist-roll');
+    if (waistRollEl) waistRollEl.value = String(roll);
+    await sendCommand('waist', { pos: [yaw, pitch, roll] });
+    waistCtrlState.markApplied();
+    toast(`Body height set to ${roll}.`, 'ok');
   });
+
+  headCtrlState.refresh();
+  waistCtrlState.refresh();
 
   $('btn-arm-reset').addEventListener('click', async () => {
     const useLeft = getChecked('chk-arm-left');

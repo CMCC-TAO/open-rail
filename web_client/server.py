@@ -1126,11 +1126,11 @@ async def client_command(req: CommandRequest):
             robot.execute_action({'gripper': pos})
 
         elif cmd == "head":
-            pos = params.get("pos", [0.0, 0.436])
+            pos = params.get("pos", [0.0, 0.436, 0.0])
             robot.execute_action({'head': pos})
 
         elif cmd == "waist":
-            pos = params.get("pos", [0.297, 20.0])
+            pos = params.get("pos", [0.0, 0.297, 0.0])
             robot.execute_action({'waist': pos})
 
         elif cmd == "wheel":
