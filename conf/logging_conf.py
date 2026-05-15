@@ -99,10 +99,10 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
         "disable_existing_loggers": False,
         "formatters": {
             "standard": {
-                "format": "%(asctime)s - [%(levelname)s] - %(name)s - %(message)s"
+                "format": "%(asctime)s-[%(levelname)s]-%(name)s-%(message)s"
             },
             "verbose": {
-                "format": "%(asctime)s - [%(levelname)s] - %(name)s - %(filename)s:%(lineno)d - %(message)s"
+                "format": "%(asctime)s-[%(levelname)s]-%(name)s-%(filename)s:%(lineno)d-%(message)s"
             },
         },
         "handlers": {
@@ -117,6 +117,18 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "formatter": "verbose",
                 "filename": log_path,
                 "encoding": "utf-8",
+            },
+        },
+        "loggers": {
+            "client.core.vla_client": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "client.utils.util": {
+                "handlers": ["file"],
+                "level": "INFO",
+                "propagate": False,
             },
         },
         "root": {

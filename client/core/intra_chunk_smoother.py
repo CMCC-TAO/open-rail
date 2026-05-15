@@ -191,7 +191,7 @@ if __name__ == '__main__':
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     print(f'root_dir: {root_dir}')
     sys.path.append(root_dir)
-    from conf.chunk_conf import get_intra_chunk_config
+    from conf.client_conf import get_intra_chunk_config
     intra_chunk_config = get_intra_chunk_config()
     print(intra_chunk_config)
     intra_chunk_smoother = IntraChunkSmoother(config=intra_chunk_config)
