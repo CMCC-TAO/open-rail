@@ -18,12 +18,22 @@ def run_time_decorator(func):
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.perf_counter()  # Record the start time
-        result = func(*args, **kwargs)  # Call the function
-        end_time = time.perf_counter()  # Record the end time
-        elapsed_time = end_time - start_time  # Calculate the elapsed time
-        # Do not uncomment, too much data output affects debugging
-        logger.info(f"{func.__name__} takes {elapsed_time*1000:.4f} milliseconds to execute.")
+        bound_logger = logger
+        if args:
+            instance_logger = getattr(args[0], "logger", None)
+            if isinstance(instance_logger, logging.Logger):
+                bound_logger = instance_logger
+
+        start_time = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+        except Exception:
+            bound_logger.exception(f"{func.__name__} failed")
+            raise
+
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        bound_logger.info(f"{func.__name__} takes {elapsed_time*1000:.4f} milliseconds to execute.")
         return result
     return wrapper
 

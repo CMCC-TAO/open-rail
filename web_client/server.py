@@ -613,18 +613,18 @@ class LangFileRequest(BaseModel):
 @app.post("/api/lang_file/load")
 async def load_lang_file(req: LangFileRequest):
     """Load a JSON language command file and return its contents."""
-    print(f"Loading language file: {req.path}")
+    # print(f"Loading language file: {req.path}")
     p = Path(req.path)
     if "conf" not in req.path:
         p = "conf" / p
     if not p.is_absolute():
         p = ROOT / p
     # Guard against path-traversal: resolved path must stay inside ROOT
-    print(f"language file path: {p}")
+    # print(f"language file path: {p}")
     try:
         p = p.resolve()
         p.relative_to(ROOT.resolve())
-        print(f"resolved path: {p}")
+        # print(f"resolved path: {p}")
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
     if not p.exists():
@@ -1014,7 +1014,7 @@ async def resume_client():
 @app.post("/api/client/stop")
 async def stop_client():
     """Fully stop client threads and release all resources."""
-    with state.lock:
+    with client_state.lock:
         is_active = client_state.running or (client_state.vla_client is not None)
         client_state.running = False
     if not is_active:

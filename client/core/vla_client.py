@@ -44,6 +44,7 @@ class VLAClientAsync():
             robot: Robot interface for observation collection and action execution
         """
         self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.DEBUG)
         self.config = config
         self.rdm = rdm
         self.intra_chunk_smoother = intra_chunk_smoother
@@ -51,7 +52,7 @@ class VLAClientAsync():
         self.robot = robot
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
         self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
-        self.running = False
+        self.is_running = False
         self.is_running_action = True
         self.language_tasks = self._load_language_tasks(getattr(self.config.language, 'file_path', ''))
         self.language = self._sync_language_from_config()
@@ -137,7 +138,7 @@ class VLAClientAsync():
 
     def _load_language_tasks(self, file_path: str) -> dict:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        target_path = file_path if os.path.isabs(file_path) else os.path.join(root_dir, file_path)
+        target_path = file_path if os.path.isabs(file_path) else os.path.join(root_dir, 'conf', file_path)
         try:
             with open(target_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -186,7 +187,7 @@ class VLAClientAsync():
         - Adds processed data to the real-time data manager
         - Records data if recording is enabled
         """
-        while self.running:
+        while self.is_running:
             if not self.is_running_action:
                 time.sleep(0.001)
                 continue
@@ -267,7 +268,7 @@ class VLAClientAsync():
         # self.language = saved_language
         self.allow_language_switch = True
     
-    @run_time_decorator
+    # @run_time_decorator
     def inference_step(self):
         """Regular inference step for continuous VLA inference.
         
@@ -389,7 +390,7 @@ class VLAClientAsync():
             if prob_progress is not None:
                 self.info_act['current_prob_progress'] = prob_progress
 
-            if self.config.record.switch and self.is_running_action and self.running:
+            if self.config.record.switch and self.is_running_action and self.is_running:
                 self.dataset_write.async_write_action(action_fitted, time.perf_counter())
             
             self.info_act['action'] = action_fitted.shape
@@ -397,7 +398,7 @@ class VLAClientAsync():
         current_state = getattr(self.robot, 'current_state', None)
         self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw, current_state)
 
-    @run_time_decorator
+    # @run_time_decorator
     def _traj_fitting(self, num_samples):
         """Perform trajectory fitting for robot actions.
         
@@ -605,7 +606,7 @@ class VLAClientAsync():
         thread-safe startup and begins the main control loop.
         """
         with self.thread_lock:
-            self.running = True
+            self.is_running = True
     
         # Start threads
         self.observe_thread.start()
@@ -649,7 +650,7 @@ class VLAClientAsync():
         - Cleaning up all allocated resources
         """
         with self.thread_lock:
-            self.running = False
+            self.is_running = False
         
         self.observe_thread.join(timeout=1.0)
         self.inference_thread.join(timeout=1.0)
@@ -684,7 +685,7 @@ class VLAClientAsync():
         self.logger.info('Inference client closed.')
 
     def _inference_thread_fun(self):
-        while self.running:
+        while self.is_running:
             if not self.is_running_action:
                 time.sleep(0.001)
                 continue
@@ -839,7 +840,7 @@ class VLAClientAsync():
         This method sends actions and camera images to
         the visualization system via ZMQ.
         """
-        while self.running:
+        while self.is_running:
 
             if self.config.show_action_cams_qt:
 
@@ -862,7 +863,7 @@ class VLAClientAsync():
 
             time.sleep(0.02)
     def _writer_thread(self):
-        while self.running:
+        while self.is_running:
             # print("_writer_thread")
             if not self.act_write_buffer:
                 time.sleep(0.001)
