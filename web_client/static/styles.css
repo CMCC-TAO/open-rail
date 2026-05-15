@@ -743,26 +743,59 @@ html, body {
   flex: 1 1 auto;
   min-width: 0;
 }
+.robot-arm-row {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.robot-arm-row .robot-ctrl-check {
+  flex: 0 0 24px;
+}
+.robot-arm-input {
+  flex: 1 1 300px;
+  width: auto;
+  min-width: 0;
+  min-height: 36px;
+  height: auto;
+  padding: 2px 4px;
+  line-height: 1.2;
+  white-space: pre-wrap;
+  /* overflow-y: hidden; */
+  resize: none;
+}
+.robot-arm-input:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
 #gripper-value {
   width: 100%;
 }
-.robot-head-label-row,
 .robot-head-input-row,
-.robot-waist-label-row,
 .robot-waist-input-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   align-items: center;
 }
-.robot-head-label-row .robot-ctrl-label,
-.robot-waist-label-row .robot-ctrl-label {
+.robot-axis-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   min-width: 0;
-  text-align: center;
+}
+.robot-axis-tag {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  min-width: 14px;
+  text-align: right;
+  flex: 0 0 auto;
 }
 .robot-head-input-row .input-num,
 .robot-waist-input-row .input-num {
-  width: 100%;
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  padding: 4px 4px;
 }
 
 .btn-unsaved-star {

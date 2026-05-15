@@ -101,13 +101,19 @@
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
                 <div class="robot-ctrl-section-title">Arm</div>
-                <div class="robot-ctrl-checks-right">
-                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> Left</label>
-                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> Right</label>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-arm-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-arm">Set</button>
+                  <button class="btn btn-sm" id="btn-arm-save">Save</button>
                 </div>
               </div>
-              <div class="robot-ctrl-row">
-                <button class="btn btn-sm" id="btn-arm-reset">↺ Arm Reset</button>
+              <div class="robot-ctrl-row robot-arm-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> L</label>
+                <textarea id="arm-left-joints" class="input-text robot-arm-input" rows="2" placeholder="[0.123, 1.234, 4.567, 0.345, 0.322, 0.456, 0.786]">[0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000]</textarea>
+              </div>
+              <div class="robot-ctrl-row robot-arm-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> R</label>
+                <textarea id="arm-right-joints" class="input-text robot-arm-input" rows="2" placeholder="[0.123, 1.234, 4.567, 0.345, 0.322, 0.456, 0.786]">[0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000]</textarea>
               </div>
             </section>
 
@@ -138,15 +144,19 @@
                   <button class="btn btn-sm" id="btn-head-save">Save</button>
                 </div>
               </div>
-              <div class="robot-ctrl-row robot-head-label-row">
-                <div class="robot-ctrl-label">Yaw</div>
-                <div class="robot-ctrl-label">Pitch</div>
-                <div class="robot-ctrl-label">Roll</div>
-              </div>
               <div class="robot-ctrl-row robot-head-input-row">
-                <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
-                <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
-                <input id="head-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">Y:</span>
+                  <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
+                </div>
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">P:</span>
+                  <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
+                </div>
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">R:</span>
+                  <input id="head-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
+                </div>
               </div>
             </section>
 
@@ -159,41 +169,49 @@
                   <button class="btn btn-sm" id="btn-waist-save">Save</button>
                 </div>
               </div>
-              <div class="robot-ctrl-row robot-waist-label-row">
-                <div class="robot-ctrl-label">Yaw</div>
-                <div class="robot-ctrl-label">Pitch</div>
-                <div class="robot-ctrl-label">Roll</div>
-              </div>
               <div class="robot-ctrl-row robot-waist-input-row">
-                <input id="waist-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
-                <input id="waist-pitch" class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
-                <input id="waist-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">Y:</span>
+                  <input id="waist-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
+                </div>
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">P:</span>
+                  <input id="waist-pitch" class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
+                </div>
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">R:</span>
+                  <input id="waist-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
+                </div>
               </div>
             </section>
 
             <section class="robot-ctrl-section">
-              <div class="robot-ctrl-section-title">Body</div>
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Body</div>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-body-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-body">Set</button>
+                  <button class="btn btn-sm" id="btn-body-save">Save</button>
+                </div>
+              </div>
               <div class="robot-ctrl-row">
-                <div class="robot-ctrl-label">Height (cm)</div>
+                <div class="robot-ctrl-label">Height (mm)</div>
                 <input id="body-height" class="input-num" type="number" step="1" value="20" placeholder="height" />
-                <button class="btn btn-sm" id="btn-body-height">Set Height</button>
               </div>
             </section>
 
             <section class="robot-ctrl-section">
-              <div class="robot-ctrl-section-title">Wheel / Leg</div>
-              <div class="robot-ctrl-row">
-                <div class="robot-ctrl-label">Linear / Angular</div>
-                <input id="wheel-linear" class="input-num" type="number" step="0.01" value="0" placeholder="linear" />
-                <input id="wheel-angular" class="input-num" type="number" step="0.01" value="0" placeholder="angular" />
-                <button class="btn btn-sm" id="btn-wheel-move">Send</button>
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Wheel / Leg</div>
+                <div class="robot-ctrl-checks-right">
+                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel-keyboard" /> Keyboard Control</label>
+                </div>
               </div>
               <div class="robot-ctrl-row robot-ctrl-row-actions">
                 <button class="btn btn-sm" id="btn-wheel-forward">↑ Forward</button>
                 <button class="btn btn-sm" id="btn-wheel-backward">↓ Backward</button>
                 <button class="btn btn-sm" id="btn-wheel-left">↺ Turn Left</button>
                 <button class="btn btn-sm" id="btn-wheel-right">↻ Turn Right</button>
-                <button class="btn btn-sm" id="btn-wheel-stop">■ Stop</button>
               </div>
             </section>
 
