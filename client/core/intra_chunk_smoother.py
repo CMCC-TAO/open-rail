@@ -193,10 +193,12 @@ class IntraChunkSmoother():
                     futures.append(self.joint_fitting_executor.submit(
                         self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
                     ))
-                else:
+                elif seg['policy'] == 'stepwise':
                     futures.append(self.gripper_fitting_executor.submit(
                         self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
                     ))
+                else:
+                    raise ValueError(f"Unknown policy: {seg['policy']}")
 
         results = [future.result() for future in futures]
         
