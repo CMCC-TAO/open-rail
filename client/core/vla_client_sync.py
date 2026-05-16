@@ -12,7 +12,7 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc
-from client.utils.util import run_time_decorator, get_action_layout_info
+from client.utils.util import run_time_decorator, parse_action_layout
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -52,7 +52,7 @@ class VLAClientSync():
         self.vla_zmq = vla_zmq_client
         self.robot = robot
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.running = False
         self.is_running_action = True
         self.action_count = 0

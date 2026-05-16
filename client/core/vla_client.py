@@ -13,7 +13,7 @@ from scipy.interpolate import CubicSpline, interp1d
 from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc
-from client.utils.util import run_time_decorator, get_action_layout_info
+from client.utils.util import run_time_decorator, parse_action_layout
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -44,14 +44,13 @@ class VLAClientAsync():
             robot: Robot interface for observation collection and action execution
         """
         self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG)
         self.config = config
         self.rdm = rdm
         self.intra_chunk_smoother = intra_chunk_smoother
         self.vla_zmq = vla_zmq_client
         self.robot = robot
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.is_running = False
         self.is_running_action = True
         self.language_tasks = self._load_language_tasks(getattr(self.config.language, 'file_path', ''))
@@ -455,13 +454,13 @@ class VLAClientAsync():
                 vel_chunk_fitted[j] = cs(timestamps_fitted, 1)  # 1st derivative
                 acc_chunk_fitted[j] = cs(timestamps_fitted, 2)  # 2nd derivative
         else:  # fit mode (default)
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.intra_chunk_smoother.traj_fitting(
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.intra_chunk_smoother._traj_fitting(
                 timestamps=timestamps, 
                 action_chunk=action_chunk, 
                 start_time=start_time, 
                 end_time=end_time, 
-                deg=self.config.intra_chunk.fitting_deg, 
-                time_step=self.config.intra_chunk.fitting_time_step / 1000
+                # deg=self.config.intra_chunk.fitting_deg, 
+                # time_step=self.config.intra_chunk.fitting_time_step / 1000
             )
         return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted
 

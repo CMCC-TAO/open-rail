@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from collections import deque
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index, get_action_layout_info
+from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index, parse_action_layout
 from client.core.inter_chunk_fusion import InterChunkFusion
 
 
@@ -29,7 +29,7 @@ class RealtimeDataManager():
         self.logger = logging.getLogger(__name__)
         self.rdm_config = rdm_config
         self.action_layout = dict(rdm_config.action_layout) if hasattr(rdm_config, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.observe_buffer = deque(maxlen=rdm_config.max_len)
         self.action_chunks = []
         self.timestamp_chunks = []

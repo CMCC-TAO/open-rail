@@ -8,7 +8,7 @@ import threading
 
 from launch import Action
 from ..base_robot import RobotBase
-from client.utils.util import run_time_decorator
+from client.utils.util import run_time_decorator, parse_action_layout
 
 import os
 import glob
@@ -29,8 +29,10 @@ class RobotBody(RobotBase):
         super().__init__()
         self.logger = logging.getLogger(__name__)
         self.cfg, self.ori_cfg = config['robots']['mock'], config
+        if not hasattr(self.cfg, 'action_layout'):
+            self.logger.error("Parameter action_layout is required, please check the configuration.")
         self.action_layout = dict(self.cfg.get('action_layout', {}))
-        self.action_dim = max([v['end'] for v in self.action_layout.values()]) if self.action_layout else 20
+        self.action_dim, _, _ = parse_action_layout(self.action_layout)
         self.current_state = np.zeros(self.action_dim)
         self.dataset = None
         self.episode_files = []
