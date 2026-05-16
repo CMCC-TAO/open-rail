@@ -3,6 +3,7 @@ import queue
 import threading
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.interpolate import CubicSpline, interp1d
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 from client.utils.util import run_time_decorator, parse_action_layout
@@ -36,7 +37,7 @@ class IntraChunkSmoother():
         
         self.frame = 0
 
-    def process(self, action_chunk, timestamps, ):
+    def process(self, timestamps, action_chunk):
         """Perform trajectory fitting for robot actions.
         
         This method retrieves action chunks from the real-time data manager,
@@ -62,33 +63,12 @@ class IntraChunkSmoother():
                 action_chunk=action_chunk
             ) 
         elif self.config.intra_chunk_mode == 'interpolation':
-            # Use CubicSpline interpolation for sparse raw chunks
-            action_chunk = np.asarray(action_chunk)
-            timestamps = np.asarray(timestamps)
-            
-            # Create dense timestamps for interpolation
-            time_step = self.config.intra_chunk.fitting_time_step / 1000  # convert ms to seconds
-            timestamps_fitted = np.arange(start_time, end_time, time_step)
-            
-            # Interpolate each joint dimension using CubicSpline
-            n_joints = action_chunk.shape[0]
-            action_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            vel_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            acc_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            
-            step_index_set = set(self.step_indices)
-            for j in range(n_joints):
-                # Gripper and head dimensions use zero-order hold interpolation (step-like)
-                if j in step_index_set:
-                    interp_func = interp1d(timestamps, action_chunk[j], kind='previous', bounds_error=False, fill_value='extrapolate')
-                    action_chunk_fitted[j] = interp_func(timestamps_fitted)
-                    vel_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
-                    acc_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
-                    continue
-                cs = CubicSpline(timestamps, action_chunk[j])
-                action_chunk_fitted[j] = cs(timestamps_fitted)
-                vel_chunk_fitted[j] = cs(timestamps_fitted, 1)  # 1st derivative
-                acc_chunk_fitted[j] = cs(timestamps_fitted, 2)  # 2nd derivative
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_interpolation(
+                timestamps=timestamps,
+                action_chunk=action_chunk,
+                start_time=start_time,
+                end_time=end_time
+            )
         else:  # fit mode (default)
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
                 timestamps=timestamps, 
@@ -249,6 +229,7 @@ class IntraChunkSmoother():
 
         return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
     
+    @run_time_decorator
     def _traj_raw(self, timestamps, action_chunk):
         """Return raw trajectories without fitting for both joints and grippers.
         
@@ -261,6 +242,45 @@ class IntraChunkSmoother():
         vel_fitted = np.zeros_like(action_chunk)
         acc_fitted = np.zeros_like(action_chunk)
         timestamps_fitted = timestamps  # original sparse timestamps
+        return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
+    
+    @run_time_decorator
+    def _traj_interpolation(self, timestamps, action_chunk, start_time, end_time):
+        """Interpolate trajectories for both joints and grippers using CubicSpline.
+        
+        Args:
+            timestamps (np.array): Timestamps for the action chunk.
+            action_chunk (np.array): Action data to be interpolated.
+            start_time (float): Start time for the interpolated trajectory.
+            end_time (float): End time for the interpolated trajectory.
+        """
+        # Use CubicSpline interpolation for sparse raw chunks
+        # action_chunk = np.asarray(action_chunk)
+        # timestamps = np.asarray(timestamps)
+        
+        # Create dense timestamps for interpolation
+        time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
+        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        
+        # Interpolate each joint dimension using CubicSpline
+        n_joints = action_chunk.shape[0]
+        traj_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+        vel_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+        acc_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+        
+        step_index_set = set(self.step_indices)
+        for j in range(n_joints):
+            # Gripper and head dimensions use zero-order hold interpolation (step-like)
+            if j in step_index_set:
+                interp_1d = interp1d(timestamps, action_chunk[j], kind='previous', bounds_error=False, fill_value='extrapolate')
+                traj_fitted[j] = interp_1d(timestamps_fitted)
+                vel_fitted[j] = np.zeros(len(timestamps_fitted))
+                acc_fitted[j] = np.zeros(len(timestamps_fitted))
+                continue
+            cubic_spline = CubicSpline(timestamps, action_chunk[j])
+            traj_fitted[j] = cubic_spline(timestamps_fitted)
+            vel_fitted[j] = cubic_spline(timestamps_fitted, 1)  # 1st derivative
+            acc_fitted[j] = cubic_spline(timestamps_fitted, 2)  # 2nd derivative
         return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
 
 if __name__ == '__main__':

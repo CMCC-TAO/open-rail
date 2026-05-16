@@ -414,7 +414,7 @@ class VLAClientAsync():
                 - vel_chunk_fitted (np.ndarray): Fitted velocity trajectory  
                 - timestamps_fitted (np.ndarray): Corresponding timestamps
         """
-        timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0, num_samples=num_samples)
+        timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
         self.logger.debug(f'timestamps for fitting: {timestamps[::10]}')
         
         start_time = timestamps[0]
