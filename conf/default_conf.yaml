@@ -29,7 +29,7 @@ intra_chunk:
   fitting_time_step: 3.75
   gripper_dim: 2
   head_dim: 2
-  intra_chunk_mode: fit
+  intra_chunk_mode: fitting
   joint_dim: 14
   max_gripper_action_threshold: 0.95
   max_gripper_fitting_workers: 2
