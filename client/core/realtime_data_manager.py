@@ -113,7 +113,7 @@ class RealtimeDataManager():
         # self.last_infer_time = self.currt_infer_time
         currt_infer_time = self.start_traj_marker - self.start_infer_marker
         self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count
-        self.logger.debug(f'avg infer time: {self.avg_infer_time}')
+        self.logger.debug(f'avg infer time: {self.avg_infer_time:.4f}s')
         # print(f"avg infer time: {self.avg_infer_time}, infer count: {self.infer_count}")
 
     def compute_avg_traj_time(self):
@@ -355,7 +355,7 @@ class RealtimeDataManager():
             # Calculate time offset from observation to trajectory fitting completion
             target_chunk_index = 0
             time_offset = self.start_ctrl_marker - self.observe_marker
-            self.logger.debug(f'total inference time: {time_offset} s')
+            self.logger.debug(f'total inference time: {time_offset:.3f}s')
             
             for index in range(len(timestamps_fitted)):
                 if timestamps_fitted[index] > time_offset:
