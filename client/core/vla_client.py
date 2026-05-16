@@ -68,11 +68,8 @@ class VLAClientAsync():
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.config.observer.period = 1.0 / self.config.observer.fps
-        if self.config.intra_chunk.intra_chunk_mode == 'raw':
-            self.config.controller.period = self.config.observer.period * 1000.0
-            self.config.inter_chunk.inter_chunk_mode = 'search_action'
-            self.config.inter_chunk.search_length = 1
-        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
+        control_period_ms = float(self.config.controller.period)
+        self.control_thread_timer = MultiThreadTimer(control_period_ms, self._control_thread_fun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
