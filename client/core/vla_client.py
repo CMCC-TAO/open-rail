@@ -253,7 +253,9 @@ class VLAClientAsync():
 
             # Record trajectory fitting timestamp
             self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
+            timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk)
+            # action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
@@ -306,7 +308,10 @@ class VLAClientAsync():
 
             # Record trajectory fitting timestamp
             self.rdm.set_traj_time_marker()
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
+
+            timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk)
+            # action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
