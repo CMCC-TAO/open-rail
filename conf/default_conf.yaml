@@ -17,11 +17,11 @@ intra_chunk:
   action_layout:
     arm:
       end: 14
-      policy: joint
+      policy: gradual
       start: 0
     gripper:
       end: 16
-      policy: gripper
+      policy: stepwise
       start: 14
   filter_window_size: 4
   fitting_deg: 5
@@ -49,11 +49,11 @@ rdm:
   action_layout:
     arm:
       end: 14
-      policy: joint
+      policy: gradual
       start: 0
     gripper:
       end: 16
-      policy: gripper
+      policy: stepwise
       start: 14
   max_len: 100
   record_data: false
@@ -276,11 +276,11 @@ robots:
     action_layout:
       arm:
         end: 14
-        policy: joint
+        policy: gradual
         start: 0
       gripper:
         end: 16
-        policy: gripper
+        policy: stepwise
         start: 14
     camera:
       names:
@@ -323,11 +323,11 @@ robots:
     action_layout:
       arm:
         end: 14
-        policy: joint
+        policy: gradual
         start: 0
       gripper:
         end: 16
-        policy: gripper
+        policy: stepwise
         start: 14
     camera:
       names:

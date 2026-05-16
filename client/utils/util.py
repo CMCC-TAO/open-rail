@@ -173,15 +173,28 @@ def apply_user_config(config, user_config):
     
     return config
 
-def get_action_layout_info(action_layout):
+def parse_action_layout(action_layout):
+    """
+    Parses the action layout.
+
+    Args:
+        action_layout (dict): A dictionary describing the action layout.
+            Example: {'arm': {'start': 0, 'end': 7, 'policy': 'gradual'}, 'gripper': {'start': 7, 'end': 8, 'policy': 'stepwise'}}
+
+    Returns:
+        tuple[int, list[int], list[int]]: A tuple containing:
+            - action_dim (int): The total dimension of the action space.
+            - gradual_indices (list[int]): Action indices for the 'gradual' policy.
+            - stepwise_indices (list[int]): Action indices for the 'stepwise' policy.
+    """
     action_dim = max([v['end'] for v in action_layout.values()]) if action_layout else 0
-    joint_indices, step_indices = [], []
+    gradual_indices, stepwise_indices = [], []
     for v in action_layout.values():
-        if v['policy'] == 'joint':
-            joint_indices.extend(range(v['start'], v['end']))
-        elif v['policy'] == 'gripper':
-            step_indices.extend(range(v['start'], v['end']))
-    return action_dim, joint_indices, step_indices
+        if v['policy'] == 'gradual':
+            gradual_indices.extend(range(v['start'], v['end']))
+        elif v['policy'] == 'stepwise':
+            stepwise_indices.extend(range(v['start'], v['end']))
+    return action_dim, gradual_indices, stepwise_indices
 
 def command_prompt(info: dict):
     """Create a command prompt table for VLA inference framework.

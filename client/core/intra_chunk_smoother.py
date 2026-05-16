@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from client.utils.util import run_time_decorator, get_action_layout_info
+from client.utils.util import run_time_decorator, parse_action_layout
 
 class IntraChunkSmoother():
     """Trajectory generator for robot motion planning and control.
@@ -21,7 +21,7 @@ class IntraChunkSmoother():
         """
         self.config = config
         self.action_layout = dict(config.action_layout) if hasattr(config, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         # Create thread pools for parallel trajectory fitting
         self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers)
         self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers)
@@ -202,14 +202,14 @@ class IntraChunkSmoother():
             tuple: (fitted_trajectory, fitted_velocity, fitted_timestamps)
         """
         # use config parameters for fitting degree and time step to allow dynamic adjustment without modifying code
-        deg=self.config.intra_chunk.fitting_deg 
-        time_step=self.config.intra_chunk.fitting_time_step / 1000 # convert ms to seconds
+        deg=self.config.fitting_deg 
+        time_step=self.config.fitting_time_step / 1000 # convert ms to seconds
 
         futures = []
         for name, seg in self.action_layout.items():
             for index in range(seg['start'], seg['end']):
                 joint_chunk = np.array(action_chunk[index, :])
-                if seg['policy'] == 'joint':
+                if seg['policy'] == 'gradual':
                     futures.append(self.joint_fitting_executor.submit(
                         self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
                     ))
