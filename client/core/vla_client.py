@@ -426,7 +426,7 @@ class VLAClientAsync():
             vel_chunk_fitted = np.zeros_like(action_chunk)
             acc_chunk_fitted = np.zeros_like(action_chunk)
             timestamps_fitted = timestamps  # original sparse timestamps
-        elif self.config.intra_chunk.intra_chunk_mode == 'raw_ipt':
+        elif self.config.intra_chunk.intra_chunk_mode == 'interpolation':
             # Use CubicSpline interpolation for sparse raw chunks
             action_chunk = np.asarray(action_chunk)
             timestamps = np.asarray(timestamps)

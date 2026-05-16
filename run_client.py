@@ -54,7 +54,7 @@ def parse_args():
     parser.add_argument('--wait_time', type=int, help='Wait time for the next inference step in milliseconds')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
     parser.add_argument('--search_length', type=int, help='Forward search length')
-    parser.add_argument('--intra_chunk_mode', type=str, choices=['raw', 'raw_ipt', 'fit'], help='Intra-chunk processing mode: raw_ipt=direct execution with interpolation')
+    parser.add_argument('--intra_chunk_mode', type=str, choices=['raw', 'interpolation', 'fitting'], help='Intra-chunk processing mode: interpolation=process with interpolation')
     parser.add_argument('--inter_chunk_mode', type=str, choices=['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync'], help='The method to bridge action chunks')
     parser.add_argument('--show_action_cams_qt', action='store_true', help='Show action and camera images visualization based on QT')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
