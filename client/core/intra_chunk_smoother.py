@@ -187,7 +187,7 @@ class IntraChunkSmoother():
         return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted), np.zeros_like(gripper_chunk_fitted)  # Gripper velocity and acceleration are not considered
 
     @run_time_decorator
-    def traj_fitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):
+    def _traj_fitting(self, timestamps, action_chunk, start_time, end_time):
         """Fit trajectories for both joints and grippers.
         
         Args:
@@ -201,6 +201,10 @@ class IntraChunkSmoother():
         Returns:
             tuple: (fitted_trajectory, fitted_velocity, fitted_timestamps)
         """
+        # use config parameters for fitting degree and time step to allow dynamic adjustment without modifying code
+        deg=self.config.intra_chunk.fitting_deg 
+        time_step=self.config.intra_chunk.fitting_time_step / 1000 # convert ms to seconds
+
         futures = []
         for name, seg in self.action_layout.items():
             for index in range(seg['start'], seg['end']):
