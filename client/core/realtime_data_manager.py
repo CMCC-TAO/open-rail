@@ -213,17 +213,17 @@ class RealtimeDataManager():
             else:
                 return None, None
     
-    def pop_action_chunk(self, time_offset = 0.0, num_samples=32):
+    def pop_action_chunk(self, time_offset = 0.0):
         """Returns the action chunk and timestamp chunk with the given time offset and number of samples for trajectory fitting.
 
         Args:
             time_offset (float, optional): The action data is discarded if its timestamp is smaller the time offset. Defaults to 0.0.
-            num_samples (int, optional): The number of samples to return. Defaults to 32.
 
         Returns:
             np.array: The timestamp chunks in numpy array format.
             np.array: The action chunks in numpy array format.
         """
+        # TODO: compute current time according to the infer time
         currt_time = 0.0
         target_time = currt_time + time_offset
         self.logger.debug(f'currt_time: {currt_time}, target_time: {target_time}')
@@ -235,12 +235,13 @@ class RealtimeDataManager():
                 valid_index = index
                 break
         if valid_index is None:
-            print("[Error] No valid data in action chunk.")
+            self.logger.error("No valid data in action chunk, please check time_offset.")
             return None, None
         
         # Data fitting needs to look back a few frames to prevent non-smooth fitting results
         start_index = max(0, valid_index-1)
-        end_index = min(len(self.action_chunks), start_index + num_samples)
+        end_index = len(self.action_chunks)
+        # end_index = min(len(self.action_chunks), start_index + num_samples)
         
         timestamp_chunks_np = np.array(self.timestamp_chunks[start_index:end_index])
         action_chunks_np = np.array(action_chunk_2_joint_chunk(self.action_chunks[start_index:end_index]))
