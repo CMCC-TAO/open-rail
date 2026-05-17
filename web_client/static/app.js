@@ -657,6 +657,69 @@ function getCfgMultiSelectOptions(dotKey) {
   return null;
 }
 
+function _cfgGroupHeaderLabel(header) {
+  const spans = header.querySelectorAll('span');
+  return (spans[1]?.textContent || header.textContent || '').trim();
+}
+
+function _cfgGroupHeaderPath(header) {
+  const parts = [];
+  let group = header.closest('.cfg-group');
+  while (group) {
+    const h = group.querySelector(':scope > .cfg-group-header');
+    if (h) parts.unshift(_cfgGroupHeaderLabel(h));
+    const parentBody = group.parentElement;
+    if (!parentBody || !parentBody.classList.contains('cfg-group-body')) break;
+    group = parentBody.closest('.cfg-group');
+  }
+  return parts.join('/');
+}
+
+function captureConfigTreeUiState() {
+  const configTree = $('config-tree');
+  const configBody = $('config-body');
+  const openGroups = new Set();
+
+  if (configTree) {
+    configTree.querySelectorAll('.cfg-group-header.open').forEach((header) => {
+      openGroups.add(_cfgGroupHeaderPath(header));
+    });
+  }
+
+  return {
+    openGroups,
+    treeScrollTop: configTree ? configTree.scrollTop : 0,
+    treeScrollLeft: configTree ? configTree.scrollLeft : 0,
+    bodyScrollTop: configBody ? configBody.scrollTop : 0,
+    bodyScrollLeft: configBody ? configBody.scrollLeft : 0,
+  };
+}
+
+function restoreConfigTreeUiState(state) {
+  const configTree = $('config-tree');
+  const configBody = $('config-body');
+  if (!state) return;
+
+  if (configTree) {
+    configTree.querySelectorAll('.cfg-group').forEach((group) => {
+      const header = group.querySelector(':scope > .cfg-group-header');
+      const body = group.querySelector(':scope > .cfg-group-body');
+      if (!header || !body) return;
+      const open = state.openGroups.has(_cfgGroupHeaderPath(header));
+      header.classList.toggle('open', open);
+      body.style.display = open ? '' : 'none';
+    });
+
+    configTree.scrollTop = state.treeScrollTop || 0;
+    configTree.scrollLeft = state.treeScrollLeft || 0;
+  }
+
+  if (configBody) {
+    configBody.scrollTop = state.bodyScrollTop || 0;
+    configBody.scrollLeft = state.bodyScrollLeft || 0;
+  }
+}
+
 function renderConfigTree(cfg) {
   const root = $('config-tree');
   root.innerHTML = '';
@@ -2695,14 +2758,8 @@ function wireEvents() {
   $('btn-apply-config').addEventListener('click', async () => {
     if (!Object.keys(App.pendingPatch).length) { toast('No pending changes.', 'warn', 2000); return; }
 
-    const configTree = $('config-tree');
-    const prevScrollTop = configTree ? configTree.scrollTop : 0;
-    const prevScrollLeft = configTree ? configTree.scrollLeft : 0;
-    const restoreConfigTreeScroll = () => {
-      if (!configTree) return;
-      configTree.scrollTop = prevScrollTop;
-      configTree.scrollLeft = prevScrollLeft;
-    };
+    const uiState = captureConfigTreeUiState();
+    const restoreConfigTreeState = () => restoreConfigTreeUiState(uiState);
 
     try {
       const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
@@ -2712,8 +2769,8 @@ function wireEvents() {
       await loadDefaultLangFile();
       applyLangConfigSelection();
       applyVisualConfig(App.config);
-      restoreConfigTreeScroll();
-      requestAnimationFrame(restoreConfigTreeScroll);
+      restoreConfigTreeState();
+      requestAnimationFrame(restoreConfigTreeState);
       toast('Config applied.', 'ok');
       // Auto-save after apply
       const display = $('conf-path-display');

@@ -7,7 +7,7 @@ controller:
   strategy: step
   wait_time: 250
 inter_chunk:
-  inter_chunk_mode: search_action
+  inter_chunk_mode: min_jerk
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
