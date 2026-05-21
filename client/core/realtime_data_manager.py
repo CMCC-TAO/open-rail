@@ -65,7 +65,7 @@ class RealtimeDataManager():
         self.sync_running = False
 
         # Inter-chunk transition / fusion helper
-        self.inter_chunk_fusion = InterChunkFusion()
+        self.inter_chunk_fusion = InterChunkFusion(config=self.rdm_config)
 
     def add_infer_count(self):
         """Add one to infer count for each inference step.
@@ -381,13 +381,13 @@ class RealtimeDataManager():
                 candidate_action_chunk = copy.deepcopy(action_chunk_fitted[:, target_chunk_index:target_chunk_index + search_length])
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
-                index_offset = self.inter_chunk_fusion.search_smooth_action(currt_action, currt_vel, candidate_action_chunk, search_length)
+                index_offset = self.inter_chunk_fusion._search_smooth_action(currt_action, currt_vel, candidate_action_chunk, search_length)
                 target_chunk_index += index_offset
             elif inter_chunk_mode == 'poly':
                 # can NOT use with search_action at the same time
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
-                action_chunk_fitted = self.inter_chunk_fusion.poly_chunk_transition(
+                action_chunk_fitted = self.inter_chunk_fusion._poly_chunk_transition(
                     action_chunk_fitted,
                     vel_chunk_fitted,
                     timestamps_fitted,
@@ -404,14 +404,14 @@ class RealtimeDataManager():
                 target_action_segment = action_chunk_fitted[joint_indices, target_chunk_index:].copy()
                 delat_t = timestamps_fitted[1]
                 # sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
-                sim_action, sim_vel, sim_acc = self.inter_chunk_fusion.smooth_velocity_transition_numba(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
+                sim_action, sim_vel, sim_acc = self.inter_chunk_fusion._smooth_velocity_transition_numba(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
                 action_chunk_fitted[joint_indices, target_chunk_index:] = sim_action
                 # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
                 # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
             elif inter_chunk_mode == 'min_jerk':
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
-                action_chunk_fitted = self.inter_chunk_fusion.min_jerk_chunk_transition(
+                action_chunk_fitted = self.inter_chunk_fusion._min_jerk_chunk_transition(
                     action_chunk_fitted,
                     vel_chunk_fitted,
                     acc_chunk_fitted,
@@ -425,7 +425,7 @@ class RealtimeDataManager():
             elif inter_chunk_mode == 'bspline':
                 currt_action = currt_action_full
                 currt_vel = currt_vel_full
-                action_chunk_fitted = self.inter_chunk_fusion.bspline_chunk_transition(
+                action_chunk_fitted = self.inter_chunk_fusion._bspline_chunk_transition(
                     action_chunk_fitted,
                     vel_chunk_fitted,
                     timestamps_fitted,
