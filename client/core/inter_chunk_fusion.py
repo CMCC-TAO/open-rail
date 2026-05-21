@@ -1,4 +1,5 @@
 import logging
+import math
 import numpy as np
 from numba import njit
 from ml_collections import ConfigDict
@@ -83,31 +84,54 @@ class InterChunkFusion:
                 start_chunk_index,
                 currt_action,
                 currt_vel,
+                num_control_points=6,
+                transition_length=32
             )
         else:
             pass
             
         # # calculate velocity and acceleration in a unified format
-        action_future = action_chunk_fitted[joint_indices, target_chunk_index:].copy()
-        action_future_1 = np.concatenate((currt_action_full[joint_indices, None], action_future[:, :-1]), axis=1)
-        vel_future = (action_future - action_future_1) / timestamps_fitted[1]
+        # TODO: Calculate velocity and acceleration in methods;
+        action_future = action_chunk_smoothed[joint_indices, target_chunk_index:].copy()
+        action_future_1 = np.concatenate((currt_action[joint_indices, None], action_future[:, :-1]), axis=1)
+        vel_future = (action_future - action_future_1) / (next_timestamps[1] - next_timestamps[0])
         
-        vel_future_1 = np.concatenate((currt_vel_full[joint_indices, None], vel_future[:, :-1]), axis=1)
-        acc_future = (vel_future - vel_future_1) / timestamps_fitted[1]
+        vel_future_1 = np.concatenate((currt_vel[joint_indices, None], vel_future[:, :-1]), axis=1)
+        acc_future = (vel_future - vel_future_1) / (next_timestamps[1] - next_timestamps[0])
 
         # # Update velocity and acceleration sequences
-        vel_chunk_fitted[joint_indices, target_chunk_index:] = vel_future
-        acc_chunk_fitted[joint_indices, target_chunk_index:] = acc_future 
+        vel_chunk_smoothed = next_vel_chunk.copy()
+        vel_chunk_smoothed[joint_indices, target_chunk_index:] = vel_future
+        acc_chunk_smoothed = next_acc_chunk.copy()
+        acc_chunk_smoothed[joint_indices, target_chunk_index:] = acc_future 
 
         # weighted smoothing
-        if smooth_action:
-            if currt_action is None:
-                with self.polynomial_thread_lock:
-                    currt_action = self.action_chunk_fitted[:, self.action_chunk_index]
-            smooth_length = min(smooth_length, len(timestamps_fitted) - target_chunk_index)
-            for index in range(smooth_length):
-                ratio = (1 - smooth_base) * math.pow(index / smooth_length, smooth_ratio)
-                action_chunk_fitted[joint_indices, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_fitted[joint_indices, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action_full[joint_indices]
+        if self.config.smooth_action:
+            action_chunk_smoothed = self._weighted_smoothing(
+                next_action_chunk=next_action_chunk,
+                target_chunk_index=target_chunk_index,
+                currt_action=currt_action,
+                joint_indices=joint_indices,
+                smooth_length=self.config.smooth_length,
+                smooth_base=self.config.smooth_base,
+                smooth_ratio=self.config.smooth_ratio
+            )
+        return action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index
+    
+    def _weighted_smoothing(self,
+                        next_action_chunk,
+                        target_chunk_index,
+                        currt_action,
+                        joint_indices = None,
+                        smooth_length = 50,
+                        smooth_base=0.5,
+                        smooth_ratio=2.0):
+        smooth_length = min(smooth_length, len(next_action_chunk) - target_chunk_index)
+        action_chunk_smoothed = next_action_chunk.copy()
+        for index in range(smooth_length):
+            ratio = (1 - smooth_base) * math.pow(index / smooth_length, smooth_ratio)
+            action_chunk_smoothed[joint_indices, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_smoothed[joint_indices, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action[joint_indices]
+        return action_chunk_smoothed
     @staticmethod
     @njit(fastmath=True, cache=True)
     def _smooth_velocity_transition_numba(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
@@ -913,6 +937,7 @@ class InterChunkFusion:
         current_pos,
         current_vel,
         num_control_points=6,
+        transition_length=32,
     ):
         """
         Smooths the transition between the current state and a new action chunk using a B-spline.
@@ -947,7 +972,7 @@ class InterChunkFusion:
         if transition_length <= 3:
             return next_action_chunk
 
-        smoothed_chunk = next_action_chunk.copy()
+        action_chunk_smoothed = next_action_chunk.copy()
         dt = next_timestamps[1] - next_timestamps[0] if len(next_timestamps) > 1 else 0.005
 
         # Select indices for control points, spaced evenly through the transition period.
@@ -988,8 +1013,8 @@ class InterChunkFusion:
 
                 # Replace the original action chunk with the new smoothed positions.
                 for i in range(transition_length):
-                    if start_chunk_index + i < smoothed_chunk.shape[1]:
-                        smoothed_chunk[joint_idx, start_chunk_index + i] = smoothed_positions[i]
+                    if start_chunk_index + i < action_chunk_smoothed.shape[1]:
+                        action_chunk_smoothed[joint_idx, start_chunk_index + i] = smoothed_positions[i]
 
             except Exception as e:
                 # If B-spline creation fails, fall back to simple linear interpolation.
@@ -999,11 +1024,11 @@ class InterChunkFusion:
                 for i in range(transition_length):
                     t = i / (transition_length - 1) if transition_length > 1 else 1.0
                     target_idx = min(start_chunk_index + transition_length - 1, next_action_chunk.shape[1] - 1)
-                    if start_chunk_index + i < smoothed_chunk.shape[1]:
+                    if start_chunk_index + i < action_chunk_smoothed.shape[1]:
                         # Interpolate from current position to the target position at the end of the transition.
-                        smoothed_chunk[joint_idx, start_chunk_index + i] = (1 - t) * current_pos[joint_idx] + t * next_action_chunk[joint_idx, target_idx]
+                        action_chunk_smoothed[joint_idx, start_chunk_index + i] = (1 - t) * current_pos[joint_idx] + t * next_action_chunk[joint_idx, target_idx]
 
-        return smoothed_chunk
+        return action_chunk_smoothed
 
     def _search_smooth_action(self, currt_action, currt_vel, candidate_action_chunk, search_length):
         """
