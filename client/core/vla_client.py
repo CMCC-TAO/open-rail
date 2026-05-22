@@ -52,6 +52,7 @@ class VLAClientAsync():
         self.logger = logging.getLogger(__name__)
         self.config = config
         self.rdm = rdm
+        self.inter_chunk_fuser = inter_chunk_fuser
         self.intra_chunk_smoother = intra_chunk_smoother
         self.vla_zmq = vla_zmq_client
         self.robot = robot
@@ -262,7 +263,31 @@ class VLAClientAsync():
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
-            self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted)
+            target_chunk_index = self.rdm.get_start_chunk_index(timestamps_fitted)
+            joint_indices = self.rdm._get_joint_indices(action_chunk_fitted)
+            step_indices = self.rdm._get_step_indices(action_chunk_fitted)
+            currt_action, currt_vel, currt_acc = self.rdm.get_current_state()
+            action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
+                next_action_chunk=action_chunk_fitted,
+                next_vel_chunk=vel_chunk_fitted,
+                next_acc_chunk=acc_chunk_fitted,
+                next_timestamps=timestamps_fitted,
+                target_chunk_index=target_chunk_index,
+                currt_action=currt_action,
+                currt_vel=currt_vel,
+                currt_acc=currt_acc,
+                joint_indices=joint_indices,
+                step_indices=step_indices,
+                currt_action=currt_action,
+            )
+            self.rdm.update_action_chunk_fitted_1(
+                action_chunk_smoothed=action_chunk_smoothed,
+                vel_chunk_smoothed=vel_chunk_smoothed,
+                acc_chunk_smoothed=acc_chunk_smoothed,
+                timestamps_smoothed=timestamps_fitted,
+                target_chunk_index=target_chunk_index,
+            )
+            # self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -337,20 +362,45 @@ class VLAClientAsync():
                     interp_func = interp1d(x_original, prob_progress, kind='linear', fill_value='extrapolate')
                     prob_progress = interp_func(x_target)
 
-            self.rdm.update_action_chunk_fitted(
-                action_chunk_fitted,
-                vel_chunk_fitted,
-                acc_chunk_fitted,
-                timestamps_fitted,
-                prob_progress=prob_progress,
-                inter_chunk_mode=self.config.inter_chunk.inter_chunk_mode,
-                search_length=self.config.inter_chunk.search_length,
-                smooth_action=self.config.inter_chunk.smooth_action,
-                smooth_length=self.config.inter_chunk.smooth_length,
-                smooth_base=self.config.inter_chunk.smooth_base,
-                smooth_ratio=self.config.inter_chunk.smooth_ratio,
-                gripper_offset=self.config.controller.gripper_offset,
+            target_chunk_index = self.rdm.get_start_chunk_index(timestamps_fitted)
+            joint_indices = self.rdm._get_joint_indices(action_chunk_fitted)
+            step_indices = self.rdm._get_step_indices(action_chunk_fitted)
+            currt_action, currt_vel, currt_acc = self.rdm.get_current_state()
+            action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
+                next_action_chunk=action_chunk_fitted,
+                next_vel_chunk=vel_chunk_fitted,
+                next_acc_chunk=acc_chunk_fitted,
+                next_timestamps=timestamps_fitted,
+                target_chunk_index=target_chunk_index,
+                currt_action=currt_action,
+                currt_vel=currt_vel,
+                currt_acc=currt_acc,
+                joint_indices=joint_indices,
+                step_indices=step_indices,
+                currt_action=currt_action,
             )
+            self.rdm.update_action_chunk_fitted_1(
+                action_chunk_smoothed=action_chunk_smoothed,
+                vel_chunk_smoothed=vel_chunk_smoothed,
+                acc_chunk_smoothed=acc_chunk_smoothed,
+                timestamps_smoothed=timestamps_fitted,
+                target_chunk_index=target_chunk_index,
+                prob_progress=prob_progress
+            )
+            # self.rdm.update_action_chunk_fitted(
+            #     action_chunk_fitted,
+            #     vel_chunk_fitted,
+            #     acc_chunk_fitted,
+            #     timestamps_fitted,
+            #     prob_progress=prob_progress,
+            #     inter_chunk_mode=self.config.inter_chunk.inter_chunk_mode,
+            #     search_length=self.config.inter_chunk.search_length,
+            #     smooth_action=self.config.inter_chunk.smooth_action,
+            #     smooth_length=self.config.inter_chunk.smooth_length,
+            #     smooth_base=self.config.inter_chunk.smooth_base,
+            #     smooth_ratio=self.config.inter_chunk.smooth_ratio,
+            #     gripper_offset=self.config.controller.gripper_offset,
+            # )
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()

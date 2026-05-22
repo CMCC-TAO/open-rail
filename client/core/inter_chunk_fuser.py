@@ -18,28 +18,27 @@ class InterChunkFuser:
             next_vel_chunk,
             next_acc_chunk,
             next_timestamps,
-            start_chunk_index,
+            target_chunk_index,
             currt_action,
             currt_vel,
             currt_acc,
             joint_indices= None,
             step_indices = None):
-        target_chunk_index = start_chunk_index
         if self.config.inter_chunk_mode == 'search_action':
-            target_chunk_index = self._search_smooth_action_1(
+            action_chunk_smoothed, target_chunk_index = self._search_smooth_action_1(
                 next_action_chunk,
-                start_chunk_index,
+                target_chunk_index,
                 currt_action,
                 currt_vel,
                 self.config.search_length,
                 search_step = 5)
         elif self.config.inter_chunk_mode == 'poly':
             # can NOT use with search_action at the same time
-            action_chunk_smoothed = self._poly_chunk_transition_1(
+            action_chunk_smoothed, target_chunk_index = self._poly_chunk_transition_1(
                 next_action_chunk,
                 next_vel_chunk,
                 next_timestamps,
-                start_chunk_index,
+                target_chunk_index,
                 currt_action,
                 currt_vel,
                 currt_acc,
@@ -48,10 +47,10 @@ class InterChunkFuser:
             )
         elif self.config.inter_chunk_mode == 'smooth_velocity':
             # sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
-            action_chunk_smoothed = self._smooth_velocity_transition_numba_1(
+            action_chunk_smoothed, target_chunk_index = self._smooth_velocity_transition_numba_1(
                 next_action_chunk,
                 next_timestamps,
-                start_chunk_index,
+                target_chunk_index,
                 currt_action,
                 currt_vel,
                 currt_acc,
@@ -63,12 +62,12 @@ class InterChunkFuser:
             # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
             # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
         elif self.config.inter_chunk_mode == 'min_jerk':
-            action_chunk_smoothed = self._min_jerk_chunk_transition_1(
+            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition_1(
                 next_action_chunk,
                 next_vel_chunk,
                 next_acc_chunk,
                 next_timestamps,
-                start_chunk_index,
+                target_chunk_index,
                 currt_action,
                 currt_vel,
                 currt_acc,
@@ -77,11 +76,11 @@ class InterChunkFuser:
                 transition_length=32
             )
         elif self.config.inter_chunk_mode == 'bspline':
-            action_chunk_smoothed = self._bspline_chunk_transition_1(
+            action_chunk_smoothed, target_chunk_index = self._bspline_chunk_transition_1(
                 next_action_chunk,
                 next_vel_chunk,
                 next_timestamps,
-                start_chunk_index,
+                target_chunk_index,
                 currt_action,
                 currt_vel,
                 num_control_points=6,
@@ -227,7 +226,7 @@ class InterChunkFuser:
     def _smooth_velocity_transition_numba_1(
                                     next_action_chunk,
                                     next_timestamps,
-                                    start_chunk_index,
+                                    target_chunk_index,
                                     init_pos,
                                     init_vel,
                                     init_acc,
@@ -264,7 +263,7 @@ class InterChunkFuser:
             Target joint position sequence to be tracked.
         next_timestamps : ndarray of shape (T,)
             Timestamps corresponding to the action chunk.
-        start_chunk_index : int
+        target_chunk_index : int
             Index of the first timestamp in the current chunk.
         init_pos : ndarray of shape (dof,)
             Initial joint positions.
@@ -295,7 +294,7 @@ class InterChunkFuser:
         init_pos = init_pos[joint_indices]
         init_vel = init_vel[joint_indices]
         init_acc = init_acc[joint_indices]
-        target_action_chunk = next_action_chunk[joint_indices, start_chunk_index:]
+        target_action_chunk = next_action_chunk[joint_indices, target_chunk_index:]
         dt = next_timestamps[1] - next_timestamps[0]
         dof, chunk_size = target_action_chunk.shape
 
@@ -332,8 +331,8 @@ class InterChunkFuser:
 
         # return pos_seq, vel_seq, acc_seq
         action_chunk_smoothed = next_action_chunk.copy()
-        action_chunk_smoothed[joint_indices, start_chunk_index:] = pos_seq
-        return action_chunk_smoothed 
+        action_chunk_smoothed[joint_indices, target_chunk_index:] = pos_seq
+        return action_chunk_smoothed, target_chunk_index 
 
     @staticmethod
     def _get_joint_indices(action_chunk, joint_indices=None):
@@ -462,7 +461,7 @@ class InterChunkFuser:
         next_action_chunk,
         next_vel_chunk,
         next_timestamps,
-        start_index,
+        target_chunk_index,
         current_pos,
         current_vel,
         current_acc,
@@ -483,7 +482,7 @@ class InterChunkFuser:
             next_action_chunk (np.ndarray): The upcoming chunk of actions (positions).
             next_vel_chunk (np.ndarray): The upcoming chunk of velocities.
             next_timestamps (np.ndarray): Timestamps corresponding to the action chunk.
-            start_index (int): The index in the new_action_chunk where the transition should start.
+            target_chunk_index (int): The index in the new_action_chunk where the transition should start.
             current_pos (np.ndarray): The current position of the robot joints.
             current_vel (np.ndarray): The current velocity of the robot joints.
             current_acc (np.ndarray): The current acceleration of the robot joints.
@@ -500,19 +499,19 @@ class InterChunkFuser:
 
         # Estimate the acceleration at the target index using finite differences.
         # TODO: Noisy Computing
-        new_vel = next_vel_chunk[:, start_index]
-        if start_index < next_vel_chunk.shape[1] - 1:
-            next_vel = next_vel_chunk[:, start_index + 1]
-            dt = next_timestamps[start_index + 1] - next_timestamps[start_index]
+        new_vel = next_vel_chunk[:, target_chunk_index]
+        if target_chunk_index < next_vel_chunk.shape[1] - 1:
+            next_vel = next_vel_chunk[:, target_chunk_index + 1]
+            dt = next_timestamps[target_chunk_index + 1] - next_timestamps[target_chunk_index]
             new_acc = (next_vel - new_vel) / dt if dt > 0 else np.zeros_like(new_vel)
         else:
             new_acc = np.zeros_like(new_vel)
 
         # Determine the length of the transition period.
         # transition_length = min(next_action_chunk.shape[1] // 2, next_action_chunk.shape[1] - start_index)
-        transition_length = min(poly_length, next_action_chunk.shape[1] - start_index)
+        transition_length = min(poly_length, next_action_chunk.shape[1] - target_chunk_index)
         action_chunk_smoothed = next_action_chunk.copy()
-        end_index = start_index + transition_length - 1
+        end_index = target_chunk_index + transition_length - 1
         resolved_joint_indices = self._get_joint_indices(next_action_chunk, joint_indices)
 
         # Generate the trajectory for each joint.
@@ -556,7 +555,7 @@ class InterChunkFuser:
                         + coeffs[4] * t**4
                         + coeffs[5] * t**5
                     )
-                    action_chunk_smoothed[joint_idx, start_index + i] = smoothed_pos
+                    action_chunk_smoothed[joint_idx, target_chunk_index + i] = smoothed_pos
 
             except np.linalg.LinAlgError:
                 # If the matrix A is singular, quintic solution is not possible.
@@ -572,9 +571,9 @@ class InterChunkFuser:
 
                     # Interpolate using the initial/final position and velocity.
                     smoothed_pos = h00 * p0 + h10 * v0 + h01 * pf + h11 * vf
-                    action_chunk_smoothed[joint_idx, start_index + i] = smoothed_pos
+                    action_chunk_smoothed[joint_idx, target_chunk_index + i] = smoothed_pos
 
-        return action_chunk_smoothed
+        return action_chunk_smoothed, target_chunk_index
 
     def _min_jerk_chunk_transition(self,
         new_action_chunk,
@@ -706,7 +705,7 @@ class InterChunkFuser:
         next_vel_chunk,
         next_acc_chunk,
         next_timestamps,
-        start_chunk_index,
+        target_chunk_index,
         current_pos,
         current_vel,
         current_acc,
@@ -728,7 +727,7 @@ class InterChunkFuser:
             next_vel_chunk (np.ndarray): The upcoming chunk of velocities.
             next_acc_chunk (np.ndarray): The upcoming chunk of accelerations.
             next_timestamps (np.ndarray): Timestamps corresponding to the action chunk.
-            start_chunk_index (int): The index in the next_action_chunk where the transition should start.
+            target_chunk_index (int): The index in the next_action_chunk where the transition should start.
             current_pos (np.ndarray): The current position of the robot joints.
             current_vel (np.ndarray): The current velocity of the robot joints.
             current_acc (np.ndarray): The current acceleration of the robot joints.
@@ -742,9 +741,9 @@ class InterChunkFuser:
             return next_action_chunk
 
         # Define the target state for the transition.
-        target_pos = next_action_chunk[:, start_chunk_index].copy()
-        target_vel = next_vel_chunk[:, start_chunk_index].copy()
-        target_acc = next_acc_chunk[:, start_chunk_index].copy() if next_acc_chunk is not None else np.zeros_like(target_vel)
+        target_pos = next_action_chunk[:, target_chunk_index].copy()
+        target_vel = next_vel_chunk[:, target_chunk_index].copy()
+        target_acc = next_acc_chunk[:, target_chunk_index].copy() if next_acc_chunk is not None else np.zeros_like(target_vel)
 
         # Determine which joints to apply the smoothing to.
         resolved_joint_indices = self._get_joint_indices(next_action_chunk, joint_indices)
@@ -758,7 +757,7 @@ class InterChunkFuser:
         # A larger difference results in a longer transition.
         base_transition = next_action_chunk.shape[1] // 2
         adaptive_factor = min(2.0, 0.5 + pos_diff * 2.0 + vel_diff * 1.5 + acc_diff * 0.3)
-        transition_length = min(int(base_transition * adaptive_factor), next_action_chunk.shape[1] - start_chunk_index)
+        transition_length = min(int(base_transition * adaptive_factor), next_action_chunk.shape[1] - target_chunk_index)
 
         # If the transition is too short, skip smoothing.
         if transition_length <= 1:
@@ -771,7 +770,7 @@ class InterChunkFuser:
         T = transition_length * dt
 
         # Determine the end index for the transition within the chunk.
-        end_index = min(start_chunk_index + transition_length - 1, next_action_chunk.shape[1] - 1)
+        end_index = min(target_chunk_index + transition_length - 1, next_action_chunk.shape[1] - 1)
 
         # Generate the trajectory for each joint.
         for joint_idx in resolved_joint_indices:
@@ -815,16 +814,16 @@ class InterChunkFuser:
                 if tau > blend_threshold:
                     blend_ratio = (tau - blend_threshold) / (1.0 - blend_threshold)
                     target_pos_at_i = (
-                        next_action_chunk[joint_idx, start_chunk_index + i]
-                        if (start_chunk_index + i) < next_action_chunk.shape[1]
+                        next_action_chunk[joint_idx, target_chunk_index + i]
+                        if (target_chunk_index + i) < next_action_chunk.shape[1]
                         else xf
                     )
                     smoothed_pos = (1 - blend_ratio) * smoothed_pos + blend_ratio * target_pos_at_i
 
                 # Update the action chunk with the new smoothed position.
-                if start_chunk_index + i < action_chunk_smoothed.shape[1]:
-                    action_chunk_smoothed[joint_idx, start_chunk_index + i] = smoothed_pos
-        return action_chunk_smoothed
+                if target_chunk_index + i < action_chunk_smoothed.shape[1]:
+                    action_chunk_smoothed[joint_idx, target_chunk_index + i] = smoothed_pos
+        return action_chunk_smoothed, target_chunk_index
 
     def _bspline_chunk_transition(
         self,
@@ -933,7 +932,7 @@ class InterChunkFuser:
         next_action_chunk,
         next_vel_chunk,
         next_timestamps,
-        start_chunk_index,
+        target_chunk_index,
         current_pos,
         current_vel,
         num_control_points=6,
@@ -951,7 +950,7 @@ class InterChunkFuser:
             next_action_chunk (np.ndarray): The upcoming chunk of actions (positions).
             next_vel_chunk (np.ndarray): The upcoming chunk of velocities.
             next_timestamps (np.ndarray): Timestamps corresponding to the action chunk.
-            start_chunk_index (int): The index in the next_action_chunk where the transition should start.
+            target_chunk_index (int): The index in the next_action_chunk where the transition should start.
             current_pos (np.ndarray): The current position of the robot joints.
             current_vel (np.ndarray): The current velocity of the robot joints.
             num_control_points (int, optional): The number of control points to use for the spline. Defaults to 6.
@@ -966,7 +965,7 @@ class InterChunkFuser:
 
         # Determine the length of the transition. It's a fraction of the chunk size,
         # but not longer than the remaining part of the chunk.
-        transition_length = min(next_action_chunk.shape[1] // 3, next_action_chunk.shape[1] - start_chunk_index)
+        transition_length = min(next_action_chunk.shape[1] // 3, next_action_chunk.shape[1] - target_chunk_index)
 
         # If the transition is too short, it's not worth smoothing.
         if transition_length <= 3:
@@ -989,7 +988,7 @@ class InterChunkFuser:
 
             # Subsequent control points are sampled from the new action chunk.
             for idx in control_indices[1:]:
-                actual_idx = min(start_chunk_index + idx, next_action_chunk.shape[1] - 1)
+                actual_idx = min(target_chunk_index + idx, next_action_chunk.shape[1] - 1)
                 control_points.append(next_action_chunk[joint_idx, actual_idx])
                 control_times.append(idx * dt)
 
@@ -1003,7 +1002,7 @@ class InterChunkFuser:
                 # from the new velocity chunk at the end of the transition.
                 bc_type = (
                     (1, current_vel[joint_idx]),  # (1, v) means 1st derivative is v
-                    (1, next_vel_chunk[joint_idx, min(start_chunk_index + transition_length - 1, next_vel_chunk.shape[1] - 1)]),
+                    (1, next_vel_chunk[joint_idx, min(target_chunk_index + transition_length - 1, next_vel_chunk.shape[1] - 1)]),
                 )
                 spline = make_interp_spline(control_times, control_points, k=3, bc_type=bc_type)
 
@@ -1013,8 +1012,8 @@ class InterChunkFuser:
 
                 # Replace the original action chunk with the new smoothed positions.
                 for i in range(transition_length):
-                    if start_chunk_index + i < action_chunk_smoothed.shape[1]:
-                        action_chunk_smoothed[joint_idx, start_chunk_index + i] = smoothed_positions[i]
+                    if target_chunk_index + i < action_chunk_smoothed.shape[1]:
+                        action_chunk_smoothed[joint_idx, target_chunk_index + i] = smoothed_positions[i]
 
             except Exception as e:
                 # If B-spline creation fails, fall back to simple linear interpolation.
@@ -1023,12 +1022,12 @@ class InterChunkFuser:
                     self.logger.warning(f"B-Spline failed for joint {joint_idx}: {e}, using linear interpolation")
                 for i in range(transition_length):
                     t = i / (transition_length - 1) if transition_length > 1 else 1.0
-                    target_idx = min(start_chunk_index + transition_length - 1, next_action_chunk.shape[1] - 1)
-                    if start_chunk_index + i < action_chunk_smoothed.shape[1]:
+                    target_idx = min(target_chunk_index + transition_length - 1, next_action_chunk.shape[1] - 1)
+                    if target_chunk_index + i < action_chunk_smoothed.shape[1]:
                         # Interpolate from current position to the target position at the end of the transition.
-                        action_chunk_smoothed[joint_idx, start_chunk_index + i] = (1 - t) * current_pos[joint_idx] + t * next_action_chunk[joint_idx, target_idx]
+                        action_chunk_smoothed[joint_idx, target_chunk_index + i] = (1 - t) * current_pos[joint_idx] + t * next_action_chunk[joint_idx, target_idx]
 
-        return action_chunk_smoothed
+        return action_chunk_smoothed, target_chunk_index
 
     def _search_smooth_action(self, currt_action, currt_vel, candidate_action_chunk, search_length):
         """
@@ -1094,10 +1093,10 @@ class InterChunkFuser:
 
     def _search_smooth_action_1(self,
                             next_action_chunk,
-                            start_chunk_index,
+                            target_chunk_index,
                             currt_action,
                             currt_vel,
-                            search_length,
+                            search_length=100,
                             search_step=5
                             ):
         """
@@ -1111,7 +1110,7 @@ class InterChunkFuser:
 
         Args:
             next_action_chunk (np.ndarray): The next action chunk that contains candidate future actions.
-            start_chunk_index (int): The starting index in the action chunk from which to search for a smooth transition point.
+            target_chunk_index (int): The starting index in the action chunk from which to search for a smooth transition point.
             currt_action (np.ndarray): The current action (position) of the robot.
             currt_vel (np.ndarray): The current velocity of the robot.
             candidate_action_chunk (np.ndarray): The chunk of candidate future actions.
@@ -1121,7 +1120,7 @@ class InterChunkFuser:
         Returns:
             int: The index in the candidate chunk that is best suited for a smooth transition.
         """
-        candidate_action_chunk = next_action_chunk[:, start_chunk_index : start_chunk_index + search_length]
+        candidate_action_chunk = next_action_chunk[:, target_chunk_index : target_chunk_index + search_length]
         # Identify joints that are currently in motion (velocity is above a threshold).
         valid_joints = [index for index, value in enumerate(abs(currt_vel) > 5e-3) if value]
         if not valid_joints:
@@ -1131,7 +1130,7 @@ class InterChunkFuser:
         # Filter the current state to only consider the moving joints.
         currt_action = currt_action[valid_joints]
         currt_vel = currt_vel[valid_joints]
-        target_index = 0
+        target_index_offset = 0
         valid_joint_num = len(valid_joints)
         qualified_joint_num = 0
 
@@ -1152,15 +1151,15 @@ class InterChunkFuser:
 
             # If all moving joints are qualified, we found a perfect transition point.
             if qualified_count == valid_joint_num:
-                target_index = candidate_index
+                target_index_offset = candidate_index
                 qualified_joint_num = qualified_count
                 break
 
             # Otherwise, keep track of the point with the most qualified joints found so far.
             if qualified_count > qualified_joint_num:
-                target_index = candidate_index
+                target_index_offset = candidate_index
                 qualified_joint_num = qualified_count
 
         if self.logger is not None:
-            self.logger.debug(f"Search smooth action: target_index = {target_index}, qualified dim = {qualified_joint_num}")
-        return start_chunk_index + target_index
+            self.logger.debug(f"Search smooth action: target_index_offset = {target_index_offset}, qualified dim = {qualified_joint_num}")
+        return next_action_chunk, target_chunk_index + target_index_offset
