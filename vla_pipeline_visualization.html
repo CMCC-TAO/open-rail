@@ -1,0 +1,2906 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TAO VLA 训练数据流 | 小白友好版</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #334155;
+    --border: #475569;
+    --text: #f1f5f9;
+    --text-dim: #94a3b8;
+    --blue: #3b82f6;
+    --blue-bg: rgba(59,130,246,0.15);
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.15);
+    --orange: #f59e0b;
+    --orange-bg: rgba(245,158,11,0.15);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.12);
+    --purple: #a855f7;
+    --purple-bg: rgba(168,85,247,0.15);
+    --pink: #ec4899;
+    --pink-bg: rgba(236,72,153,0.12);
+    --yellow: #eab308;
+    --yellow-bg: rgba(234,179,8,0.12);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem 1rem;
+  }
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  /* Header */
+  .header { text-align: center; margin-bottom: 3rem; }
+  .header h1 {
+    font-size: 2.2rem; font-weight: 700;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .header .subtitle { color: var(--text-dim); font-size: 1rem; margin-top: 0.3rem; }
+  .header .story-line {
+    background: var(--surface2); border-radius: 12px; padding: 1rem 1.5rem;
+    margin: 1.5rem auto 0; max-width: 700px; text-align: left;
+    border: 1px dashed var(--orange);
+  }
+  .header .story-line .label {
+    font-size: 0.75rem; color: var(--orange); font-weight: 600;
+    letter-spacing: 2px; margin-bottom: 0.3rem;
+  }
+  .header .story-line .content {
+    font-size: 0.95rem; color: var(--text); line-height: 1.7;
+  }
+  .header .story-line .content em { color: var(--orange); font-style: normal; font-weight: 600; }
+
+  /* Source badge */
+  .src-badge {
+    display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px;
+    font-size: 0.58rem; font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace;
+    margin-left: 0.2rem; letter-spacing: 0.3px;
+  }
+  .src-config { background: rgba(234,179,8,0.2); color: var(--yellow); }
+  .src-code { background: rgba(59,130,246,0.2); color: var(--blue); }
+  .src-calc { background: rgba(168,85,247,0.2); color: var(--purple); }
+  .src-doc { background: rgba(34,197,94,0.2); color: var(--green); }
+
+  .tensor-legends {
+    display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.5rem;
+    font-size: 0.7rem; color: var(--text-dim);
+  }
+  .tensor-legends span { display: inline-flex; align-items: center; gap: 0.25rem; }
+  .tensor-legends code {
+    background: var(--surface); padding: 0.05rem 0.25rem; border-radius: 3px;
+    font-size: 0.68rem;
+  }
+
+  .legend {
+    display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;
+    margin-top: 1.2rem;
+  }
+  .legend-item {
+    display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem;
+  }
+  .legend-dot {
+    width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0;
+  }
+  .legend-dot.frozen { background: var(--blue); }
+  .legend-dot.trainable { background: var(--green); }
+  .legend-dot.diffusion { background: var(--orange); }
+  .legend-dot.loss { background: var(--red); }
+  .legend-dot.grad { background: var(--purple); }
+  .legend-dot.data { background: var(--pink); }
+
+  /* Pipeline */
+  .pipeline { position: relative; }
+
+  .connector {
+    position: relative; height: 32px; display: flex; align-items: center; justify-content: center;
+  }
+  .connector::before {
+    content: ''; position: absolute; width: 3px; height: 100%;
+    background: linear-gradient(to bottom, var(--border), var(--surface2));
+  }
+  .connector::after {
+    content: '▼'; position: absolute; bottom: -4px;
+    font-size: 10px; color: var(--text-dim);
+  }
+  .connector-row {
+    display: flex; gap: 1rem; justify-content: center;
+  }
+
+  /* Module Cards */
+  .module {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.2rem 1.5rem;
+    position: relative;
+    transition: all 0.2s;
+  }
+  .module:hover {
+    border-color: var(--text-dim); transform: translateY(-1px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+  }
+  .module .tag {
+    position: absolute; top: 0; right: 0;
+    padding: 0.2rem 0.8rem; font-size: 0.7rem; font-weight: 600;
+    border-radius: 0 12px 0 8px; letter-spacing: 0.5px;
+  }
+  .module .tag.blue { background: var(--blue); color: #fff; }
+  .module .tag.green { background: var(--green); color: #000; }
+  .module .tag.orange { background: var(--orange); color: #000; }
+  .module .tag.red { background: var(--red); color: #fff; }
+  .module .tag.purple { background: var(--purple); color: #fff; }
+  .module .tag.pink { background: var(--pink); color: #fff; }
+
+  .module.blue-bg { border-left: 4px solid var(--blue); }
+  .module.green-bg { border-left: 4px solid var(--green); }
+  .module.orange-bg { border-left: 4px solid var(--orange); }
+  .module.red-bg { border-left: 4px solid var(--red); }
+  .module.purple-bg { border-left: 4px solid var(--purple); }
+  .module.pink-bg { border-left: 4px solid var(--pink); }
+
+  .module-title {
+    font-size: 1.05rem; font-weight: 600; margin-bottom: 0.2rem;
+    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
+  }
+  .module-title .badge {
+    font-size: 0.62rem; padding: 0.12rem 0.45rem; border-radius: 4px;
+    font-weight: 600;
+  }
+  .badge.frozen { background: var(--blue-bg); color: var(--blue); }
+  .badge.trainable { background: var(--green-bg); color: var(--green); }
+  .badge.code-ref {
+    background: var(--surface2); color: var(--text-dim);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+
+  /* Story bubble: real-world example */
+  .story-bubble {
+    background: rgba(245,158,11,0.08); border-left: 3px solid var(--orange);
+    border-radius: 6px; padding: 0.6rem 0.8rem;
+    margin: 0.6rem 0; font-size: 0.85rem; line-height: 1.6;
+  }
+  .story-bubble .s-label {
+    font-size: 0.65rem; color: var(--orange); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.1rem;
+  }
+
+  .module-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 0.5rem; }
+
+  /* Glossary term */
+  .glossary-term {
+    display: inline; border-bottom: 1px dashed var(--yellow);
+    color: var(--yellow); cursor: help; position: relative;
+  }
+  .glossary-term .tooltip {
+    visibility: hidden; opacity: 0;
+    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.6rem 0.8rem;
+    width: 260px; font-size: 0.78rem; font-weight: 400;
+    color: var(--text); line-height: 1.5; z-index: 99999;
+    transition: opacity 0.2s; pointer-events: none;
+    text-align: left;
+  }
+  .glossary-term:hover .tooltip { visibility: visible; opacity: 1; }
+
+  .tensor-row {
+    display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem;
+  }
+  .tensor {
+    background: var(--surface2); padding: 0.25rem 0.6rem; border-radius: 6px;
+    font-size: 0.75rem; font-family: 'SF Mono', 'Fira Code', monospace;
+    display: inline-flex; align-items: center; gap: 0.25rem;
+  }
+  .tensor .label { color: var(--text-dim); }
+  .tensor .shape { color: var(--yellow); font-weight: 500; }
+  .tensor .dim-detail {
+    font-size: 0.6rem; color: var(--text-dim); margin-left: 0.2rem;
+    font-style: normal; font-weight: 400;
+  }
+  .tensor .arrow { color: var(--text-dim); margin: 0 0.15rem; }
+
+  .formula-box {
+    background: var(--surface2); border-radius: 8px; padding: 0.8rem 1rem;
+    margin: 0.6rem 0;
+    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 0.85rem; line-height: 1.7;
+  }
+  .formula-box .highlight { color: var(--orange); font-weight: 600; }
+  .formula-box .hl-blue { color: var(--blue); }
+  .formula-box .hl-green { color: var(--green); }
+  .formula-box .hl-red { color: var(--red); }
+
+  .section-label {
+    text-align: center; margin: 1.2rem 0 0.8rem;
+    font-size: 0.78rem; color: var(--text-dim); letter-spacing: 2px;
+  }
+  .section-label span {
+    background: var(--surface); padding: 0.25rem 1rem; border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+
+  /* Summary table */
+  .summary {
+    margin-top: 3rem; background: var(--surface); border-radius: 12px;
+    border: 1px solid var(--border); overflow: hidden;
+  }
+  .summary-title {
+    padding: 1rem 1.5rem; font-weight: 600; font-size: 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .summary table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .summary th {
+    text-align: left; padding: 0.7rem 1.2rem;
+    color: var(--text-dim); font-weight: 500;
+    border-bottom: 1px solid var(--border);
+  }
+  .summary td { padding: 0.6rem 1.2rem; border-bottom: 1px solid var(--border); }
+  .summary tr:last-child td { border-bottom: none; }
+  .summary tr:hover { background: var(--surface2); }
+  .summary code { background: var(--surface2); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.75rem; }
+
+  .decision-badge {
+    display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px;
+    font-size: 0.68rem; font-weight: 600;
+  }
+  .decision-yes { background: rgba(34,197,94,0.2); color: var(--green); }
+  .decision-no { background: rgba(239,68,68,0.2); color: var(--red); }
+
+  /* Glossary section */
+  .glossary-section {
+    margin-top: 3rem; background: var(--surface); border-radius: 12px;
+    border: 1px solid var(--border); overflow: hidden;
+  }
+  .glossary-section .gl-title {
+    padding: 1rem 1.5rem; font-weight: 600; font-size: 1rem;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+  .glossary-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 0.8rem; padding: 1.2rem 1.5rem;
+  }
+  .glossary-item {
+    background: var(--surface2); border-radius: 8px; padding: 0.7rem 1rem;
+  }
+  .glossary-item .term {
+    font-weight: 600; font-size: 0.9rem;
+    margin-bottom: 0.2rem;
+  }
+  .glossary-item .def {
+    font-size: 0.78rem; color: var(--text-dim); line-height: 1.5;
+  }
+  .glossary-item .def code {
+    background: var(--surface); padding: 0.05rem 0.3rem; border-radius: 3px;
+    font-size: 0.75rem;
+  }
+
+  /* EagleVL VLM Group Box */
+  .eaglevl-group {
+    position: relative;
+    background: rgba(59,130,246,0.04);
+    border: 2px solid var(--blue);
+    border-radius: 16px;
+    padding: 2.8rem 1.2rem 0.8rem;
+    margin: 1.5rem 0;
+  }
+  .eaglevl-group-header {
+    position: absolute;
+    top: -1px; left: -1px;
+    background: var(--blue);
+    color: #fff;
+    padding: 0.35rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    border-radius: 14px 0 12px 0;
+    letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .eaglevl-group-header .sub {
+    font-weight: 400;
+    font-size: 0.68rem;
+    opacity: 0.85;
+  }
+  .eaglevl-group .section-label {
+    margin-top: -0.5rem;
+  }
+  .eaglevl-group .connector {
+    height: 24px;
+  }
+  .eaglevl-group .connector::before {
+    background: linear-gradient(to bottom, var(--blue), rgba(59,130,246,0.3));
+  }
+  .eaglevl-group .module {
+    background: rgba(30,41,59,0.7);
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem 0.5rem; }
+    .header h1 { font-size: 1.5rem; }
+    .module { padding: 1rem; }
+    .glossary-grid { grid-template-columns: 1fr; padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ==================== HEADER ==================== -->
+  <div class="header">
+    <h1>🤖 教 Unitree G1 人形机器人倒水：TAO VLA 训练全流程</h1>
+    <p class="subtitle">用"教人形机器人倒水"这个真实场景，解释每一步在干什么</p>
+
+    <!-- Core story -->
+    <div class="story-line">
+      <div class="label">📖 贯穿全文的故事</div>
+      <div class="content">
+        你是一个机器人老师。面前是一台 <em>Unitree G1 人形机器人</em>。
+        你录了一段自己 <em>用双手倒水的视频</em>：
+        <em>头部摄像头</em> 看到水壶和杯子的位置，
+        <em>左腕摄像头</em> 看到左手握住壶柄，
+        <em>右腕摄像头</em> 看到右手扶住杯子。
+        同时电脑记录了每个时刻你的 <em>14个手臂电机</em> 和 <em>12个手指自由度</em> 的数据。
+        现在你要用这段录像训练 TAO 模型，让 G1 机器人学会自己倒水。
+      </div>
+    </div>
+
+    <div class="legend">
+      <span class="legend-item"><span class="legend-dot frozen"></span> 冻结（已有知识，不改了）</span>
+      <span class="legend-item"><span class="legend-dot trainable"></span> 可训练（重点学习的）</span>
+      <span class="legend-item"><span class="legend-dot diffusion"></span> 去噪过程（从乱到准）</span>
+      <span class="legend-item"><span class="legend-dot loss"></span> 改错环节</span>
+      <span class="legend-item"><span class="legend-dot data"></span> 输入数据</span>
+    </div>
+  </div>
+
+  <!-- ==================== 工程模块总览 ==================== -->
+  <div class="module" style="margin-bottom:2rem;background:var(--surface);border-color:var(--purple);border-left:4px solid var(--purple);">
+    <div class="module-title" style="font-size:1rem;margin-bottom:0.5rem;">
+      📋 TAO 工程模块总览 — HTML 各块对应源码头
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;font-size:0.78rem;line-height:1.8;">
+
+      <!-- 左列：目录树 -->
+      <div style="flex:1.2;min-width:240px;background:var(--bg);border-radius:8px;padding:0.7rem 0.9rem;">
+        <div style="font-weight:600;color:var(--purple);margin-bottom:0.3rem;">🗂️ 关键目录与对应块号</div>
+        <pre style="font-family:'SF Mono','Fira Code',monospace;font-size:0.7rem;color:var(--text-dim);line-height:1.75;margin:0;overflow-x:auto;white-space:pre;">
+<span style="color:var(--text);font-weight:600;">src/tao/</span>
+├── <span style="color:var(--pink);font-weight:600;">data/</span>                   <span style="color:var(--text-dim);">← 块 1,2</span>
+├── <span style="color:var(--green);font-weight:600;">embodiments/</span>             <span style="color:var(--text-dim);">← 块 8</span>
+├── <span style="color:var(--orange);font-weight:600;">serving/</span>                 <span style="color:var(--text-dim);">← 生产推理 policy.py</span>
+├── <span style="color:var(--orange);font-weight:600;">configs/</span>                 <span style="color:var(--text-dim);">← 全部配置</span>
+│   ├── data_configs/         <span style="color:var(--text-dim);">← 块 1</span>
+│   └── model_configs/
+│       ├── backbone_configs/  <span style="color:var(--text-dim);">← 块 3~7</span>
+│       └── action_head_configs/ <span style="color:var(--text-dim);">← 块 9~13, alt_dit</span>
+├── <span style="color:var(--blue);font-weight:600;">model/</span>
+│   ├── <span style="color:var(--blue);font-weight:600;">archs/</span>
+│   │   ├── flow_matching_model/ <span style="color:var(--text-dim);">← 块 9</span>
+│   │   ├── flow_matching_mot_model/ <span style="color:var(--text-dim);">(占位)</span>
+│   │   ├── rl_model/           <span style="color:var(--text-dim);">(占位)</span>
+│   │   └── world_model/        <span style="color:var(--text-dim);">(占位)</span>
+│   └── <span style="color:var(--blue);font-weight:600;">modules/</span>
+│       ├── <span style="color:var(--blue);font-weight:600;">vla_modules/</span>
+│       │   ├── backbones/        <span style="color:var(--text-dim);">← 块 6,7,8</span>
+│       │   └── <span style="color:var(--orange);font-weight:600;">action_heads/</span>  <span style="color:var(--text-dim);">← 块 9~17 + shared.py + alt_dit</span>
+│       └── general_modules/
+│           ├── dit/              <span style="color:var(--text-dim);">← dit.py(DiT) + alt_dit.py(交替注意力)</span>
+│           ├── eagle_vl_2_5/     <span style="color:var(--text-dim);">← SigLIP+Qwen2.5, 224×224 tiles</span>
+│           └── eagle_vl_3/       <span style="color:var(--text-dim);">← SigLIP2+Qwen3, 448×448 tiles</span>
+├── <span style="color:var(--red);font-weight:600;">training/</span>                <span style="color:var(--text-dim);">← 训练框架(pipeline/callbacks/trainer)</span>
+└── <span style="color:var(--text-dim);">utils/</span>                   <span style="color:var(--text-dim);">← 工具函数(image/normalize/video)</span></pre>
+      </div>
+
+      <!-- 右列：映射表 -->
+      <div style="flex:1.5;min-width:260px;background:var(--bg);border-radius:8px;padding:0.7rem 0.9rem;">
+        <div style="font-weight:600;color:var(--purple);margin-bottom:0.3rem;">🔗 HTML 块 ←→ 源码对应</div>
+        <table style="width:100%;font-size:0.68rem;border-collapse:collapse;color:var(--text-dim);line-height:1.6;">
+          <tr style="color:var(--text);border-bottom:1px solid var(--border);">
+            <th style="padding:0.1rem 0.3rem;text-align:left;width:28px;">块</th>
+            <th style="padding:0.1rem 0.3rem;text-align:left;">功能</th>
+            <th style="padding:0.1rem 0.3rem;text-align:left;">关键源文件/目录</th>
+          </tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--pink);">1</span></td><td style="padding:0.08rem 0.3rem">数据加载</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">data/datasets.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--pink);">2</span></td><td style="padding:0.08rem 0.3rem">数据拆分</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">data/data_collators.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">3</span></td><td style="padding:0.08rem 0.3rem">SigLIP 视觉编码</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">eagle_vl_*/image_processing_*.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--purple);">4</span></td><td style="padding:0.08rem 0.3rem">MLP Connector 投影桥梁</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">eagle_vl_*/modeling_eagle*_vl.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">5</span></td><td style="padding:0.08rem 0.3rem">Qwen LLM 理解</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">eagle_vl_*/modeling_eagle*_vl.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">6</span></td><td style="padding:0.08rem 0.3rem">LLM 特征提取</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">backbones/ (select_layer)</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">7</span></td><td style="padding:0.08rem 0.3rem">精炼特征</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">backbones/ (MLP projector)</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">8</span></td><td style="padding:0.08rem 0.3rem">状态编码</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">backbones/ + embodiments/</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">9</span></td><td style="padding:0.08rem 0.3rem">Flow Matching</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_heads/action_head_dit.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">10</span></td><td style="padding:0.08rem 0.3rem">信息合并</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_heads/action_head_dit.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">11</span></td><td style="padding:0.08rem 0.3rem">DiT 架构</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">general_modules/dit/dit.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">12</span></td><td style="padding:0.08rem 0.3rem">解码成动作</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_heads/action_head_dit.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--red);">13</span></td><td style="padding:0.08rem 0.3rem">损失函数</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_heads/action_head_dit.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">14</span></td><td style="padding:0.08rem 0.3rem">训练vs推理</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_heads/action_head_dit.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">15</span></td><td style="padding:0.08rem 0.3rem">速度场概念</td><td style="padding:0.08rem 0.3rem;font-family:monospace;color:var(--text-dim);">(可视化概念图)</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--red);">16</span></td><td style="padding:0.08rem 0.3rem">Loss 数学</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_heads/action_head_dit.py</td></tr>
+          <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--purple);">17</span></td><td style="padding:0.08rem 0.3rem">反向传播</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_heads/action_head_dit.py</td></tr>
+        </table>
+      </div>
+
+    </div>
+
+    <div style="margin-top:0.5rem;background:var(--bg);border-radius:6px;padding:0.4rem 0.7rem;font-size:0.72rem;color:var(--text-dim);">
+      💡 <strong style="color:var(--purple);">核心规律：</strong> 
+      管道分为两段：<strong style="color:var(--blue);">块 3~8 = 感知段（EagleVL + Backbone）</strong> 将图像+指令→综合特征，
+      <strong style="color:var(--green);">块 9~17 = 动作段（Action Head）</strong> 将综合特征→具体动作。<br>
+      其中动作段（<strong>块 9~17</strong>）全部集中在
+      <code style="color:var(--orange);">model/modules/vla_modules/action_heads/action_head_dit.py</code> —— 
+      这是 Flow Matching + DiT 动作头的完整实现，是整个 VLA 管道最核心的源文件。
+      配置文件分布在 <code style="color:var(--yellow);">configs/model_configs/action_head_configs/</code>。
+    </div>
+  </div>
+
+  <!-- ==================== PIPELINE ==================== -->
+  <div class="pipeline">
+
+    <!-- ======== STEP 1 ======== -->
+    <div class="section-label"><span>📦 第 1 步：把录像喂给电脑</span></div>
+
+    <div class="module pink-bg">
+      <span class="tag pink">1</span>
+      <div class="module-title">
+        数据加载器读数据
+        <span class="badge code-ref">modeling:167-195</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        你演示倒水的过程被 <em>3 个摄像头（头部、左腕、右腕）</em> 同时拍下，
+        你说 <em>"把水倒进杯子里"</em>，
+        同时记录下每个时刻手臂 <em>14个电机（左7+右7）</em> 和 <em>灵巧手12个自由度（左6+右6）</em> 的数据。
+        一共录了 64 帧（约 6~10 秒）。
+      </div>
+
+      <div class="module-desc">
+        每次训练，模型从你的录像库中随机抽取 <strong>64 条记录</strong>（batch）。
+      </div>
+
+      <div class="tensor-row">
+                <span class="tensor"><span class="label">pixel_values（头+双腕相机画面）</span> <span class="arrow">→</span> <span class="shape">[192, 3, 224, 224]</span><span class="dim-detail">{192=64批次×3相机(头+左腕+右腕), 3=图像通道数(RGB), 224=图像宽度(像素), 224=图像高度(像素)}</span><span class="src-badge src-doc">modeling:189</span></span>
+                <span class="tensor"><span class="label">image_sizes（每张图的实际尺寸）</span> <span class="arrow">→</span> <span class="shape">[192, 2]</span><span class="dim-detail">{192=64批次×3相机, 2=(高,宽). 实际运行值[256,256]. EagleVL默认size, 但TAO已预resize到224所以无动态分块}</span><span class="src-badge src-doc">modeling:191</span></span>
+                <span class="tensor"><span class="label">input_ids（"把水倒进杯子里"转成Token数字）</span> <span class="arrow">→</span> <span class="shape">[64, 822]</span><span class="dim-detail">{64=批次大小, 822=文本Token序列长度(含图像占位符)}</span><span class="src-badge src-doc">modeling:183</span></span>
+        <span class="tensor"><span class="label" style="color:var(--yellow);font-weight:bold;">★ action（正确答案：26维电机/手指期望位置）</span> <span class="arrow">→</span> <span class="shape">[64, 64, 128]</span><span class="dim-detail">{64=批次大小, 64=连续演示帧数(动作块大小, 从老师演示中一次截取64帧), 128=填充后维度(实际26, 14手臂电机+12手指自由度, 填充到128)}</span><span class="src-badge src-doc">modeling:177</span></span>
+        <span class="tensor"><span class="label">state（当前位置+手指状态）</span> <span class="arrow">→</span> <span class="shape">[64, 1, 128]</span><span class="dim-detail">{64=批次大小, 1=单帧状态, 128=填充后状态维度(实际26, 14手臂电机位置+12手指角度, 填充到128)}</span><span class="src-badge src-doc">modeling:180</span></span>
+        <span class="tensor"><span class="label">action_mask（哪些维度有效）</span> <span class="arrow">→</span> <span class="shape">[64, 64, 128]</span><span class="dim-detail">{64=批次大小, 64=连续演示帧数(动作块大小), 128=动作维度掩码(标记26个真实维度哪些有效)}</span><span class="src-badge src-doc">modeling:195</span></span>
+      </div>
+      <div class="tensor-legends">
+        <span><span class="src-badge src-config">config</span> 64=global_batch_size</span>
+        <span><span class="src-badge src-config">config</span> 224=image_size <code>config.json:66</code></span>
+        <span><span class="src-badge src-data">data</span> 原始相机画面 640×640 → resize/crop → 224×224 <code>datasets.py:589</code></span>
+        <span><span class="src-badge src-calc" style="color:var(--red);font-weight:bold;background:var(--red-bg);">⚠ 强制降采样至224×224（简单resize，未使用动态分块，信息有丢失）</span></span>
+        <span><span class="src-badge src-config">config</span> 3=num_channels <code>config.json:71</code></span>
+        <span><span class="src-badge src-calc">calc</span> 192=64batch×3相机(头+左腕+右腕)</span>
+        <span><span class="src-badge src-doc">doc</span> 822=实际运行时的序列长度</span>
+        <span><span class="src-badge src-config">config</span> 128=max_action_dim <code>action_head:26</code></span>
+        <span><span class="src-badge src-calc">calc</span> 实际26维: 14手臂电机(左7+右7) + 12手指自由度(左6+右6), 填充到128</span>
+        <span><span class="src-badge src-config">config</span> 128=max_state_dim <code>action_head:25</code></span>
+        <span><span class="src-badge src-calc">calc</span> 实际26维状态, 填充到128</span>
+        <span><span class="src-badge src-config">config</span> 64=max_action_horizon <code>action_head:42</code></span>
+      </div>
+
+      </div>
+
+      <div style="margin-top:0.4rem;font-size:0.8rem;color:var(--text-dim);">
+        <span class="glossary-term">Tensor（张量）
+          <span class="tooltip">可以理解为"多维 Excel 表格"。1维=列表，2维=表格，3维=一叠表格。<br>例：<code>[64, 64, 32]</code> = 64条记录 × 64帧 × 32个关节维度。</span>
+        </span>
+        &nbsp;·&nbsp;
+        <span class="glossary-term">Batch（批次）
+          <span class="tooltip">一次喂给模型多少条数据。这里一次处理64条，比逐条处理效率高得多。</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="module pink-bg" style="border-left-color:var(--yellow);">
+      <div class="module-title" style="font-size:1.1rem;">
+        🦾 Unitree G1 机器人配置拆解
+      </div>
+      <div class="module-desc">
+        这是本教程使用的机器人。了解它的传感器和执行器配置，才能理解后面的每一步数据在做什么。
+      </div>
+
+      <!-- Sensor + Actuator breakdown -->
+      <div style="display:flex;gap:1rem;margin-top:0.6rem;">
+        <div style="flex:1;background:var(--surface2);border-radius:8px;padding:0.8rem;">
+          <div style="font-size:0.85rem;font-weight:600;color:var(--pink);margin-bottom:0.3rem;">📷 传感器（输入）</div>
+          <table style="width:100%;font-size:0.78rem;border-collapse:collapse;">
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">头部相机</td>
+              <td style="padding:0.3rem 0.4rem;">RGB, 640×640 → 224×224<span style="font-size:0.65rem;color:var(--text-dim);margin-left:0.3rem;">(v2.5</span><span style="font-size:0.65rem;color:var(--text-dim);">) / 448×448 (v3)</span></td>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">看全局场景：水壶、杯子、桌子位置</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">左腕相机</td>
+              <td style="padding:0.3rem 0.4rem;">RGB, 640×640 → 224×224<span style="font-size:0.65rem;color:var(--text-dim);margin-left:0.3rem;">(v2.5</span><span style="font-size:0.65rem;color:var(--text-dim);">) / 448×448 (v3)</span></td>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">看左手视角：壶柄抓握情况</td>
+            </tr>
+            <tr>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">右腕相机</td>
+              <td style="padding:0.3rem 0.4rem;">RGB, 640×640 → 224×224<span style="font-size:0.65rem;color:var(--text-dim);margin-left:0.3rem;">(v2.5</span><span style="font-size:0.65rem;color:var(--text-dim);">) / 448×448 (v3)</span></td>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">看右手视角：杯子扶握情况</td>
+            </tr>
+          </table>
+          <div style="margin-top:0.5rem;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;font-size:0.75rem;color:var(--text-dim);">
+            <strong>总像素数据量：</strong>3相机 × 224×224 × 3通道 = <strong>451,584</strong> 个数字/帧<br><span style="color:var(--red);font-size:0.7rem;font-weight:bold;">⚠ 原始相机画面 640×640 被强制降采样至 224×224（约8倍线性缩小）。像素从40万/张降至5万/张，细节信息有丢失。原因：SigLIP 视觉编码器固定输入 224×224，不支持更大分辨率；且当前管道在进入编码器前已做好降采样，未启用 EagleVL 的动态分块（max_dynamic_tiles=12）来保留原图细节。</span>
+          </div>
+        </div>
+        <div style="flex:1;background:var(--surface2);border-radius:8px;padding:0.8rem;">
+          <div style="font-size:0.85rem;font-weight:600;color:var(--green);margin-bottom:0.3rem;">⚙️ 执行器（输出）</div>
+          <table style="width:100%;font-size:0.78rem;border-collapse:collapse;">
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">左臂电机</td>
+              <td style="padding:0.3rem 0.4rem;">7个</td>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">肩×3 + 肘×2 + 腕×2</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">右臂电机</td>
+              <td style="padding:0.3rem 0.4rem;">7个</td>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">肩×3 + 肘×2 + 腕×2</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">左手灵巧手</td>
+              <td style="padding:0.3rem 0.4rem;">6自由度</td>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">每指弯曲+拇指对掌</td>
+            </tr>
+            <tr>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">右手灵巧手</td>
+              <td style="padding:0.3rem 0.4rem;">6自由度</td>
+              <td style="padding:0.3rem 0.4rem;color:var(--text-dim);">每指弯曲+拇指对掌</td>
+            </tr>
+          </table>
+          <div style="margin-top:0.5rem;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;font-size:0.75rem;">
+            <span style="color:var(--green);font-weight:600;">总执行维度：14手臂(7+7) + 12手指(6+6) = 26维</span>
+            <span style="color:var(--text-dim);">（填充到128，多余维度被掩码忽略）</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- state/action relationship -->
+      <div style="display:flex;gap:1rem;margin-top:0.6rem;">
+        <div style="flex:1;background:rgba(59,130,246,0.1);border-radius:8px;padding:0.6rem 0.8rem;">
+          <div style="font-size:0.75rem;color:var(--blue);">📌 state（当前状态）= 当前电机位置 + 手指角度</div>
+          <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.2rem;">
+            机器人自己现在是什么姿势。14个电机编码器读数 + 12个手指角度传感器。
+          </div>
+        </div>
+        <div style="flex:1;background:rgba(34,197,94,0.1);border-radius:8px;padding:0.6rem 0.8rem;">
+          <div style="font-size:0.75rem;color:var(--green);">🎯 action（目标动作）= 期望电机位置 + 期望手指角度</div>
+          <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.2rem;">
+            老师示范时每个时刻的电机位置和手指角度，共26维。模型学完后输出同样的26维命令。
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <!-- ======== SPLIT ======== -->
+    <div class="module pink-bg">
+      <span class="tag pink">2</span>
+      <div class="module-title">
+        分岔路：拆分给两个零件
+        <span class="badge code-ref">modeling:112-153</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        就像工厂流水线：<em>3路画面（头部+左腕+右腕）+ 语音</em>送到"理解部门"（Backbone），
+        <em>26维电机/手指数据</em>送到"动作部门"（Action Head），各司其职。
+      </div>
+
+      <div class="connector-row" style="margin-top:0.5rem;">
+        <div style="flex:1;padding:0.5rem;background:var(--surface2);border-radius:8px;">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--blue);">➤ 理解部门</div>
+          <div style="font-size:0.72rem;color:var(--text-dim);">画面 + 语音 → 理解场景</div>
+        </div>
+        <div style="flex:1;padding:0.5rem;background:var(--surface2);border-radius:8px;">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--green);">➤ 动作部门</div>
+          <div style="font-size:0.72rem;color:var(--text-dim);">关节角度 → 学习动作</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="eaglevl-group">
+      <div class="eaglevl-group-header">
+        🧠 EagleVL VLM <span class="sub">SigLIP + MLP Connector + Qwen3 — 完全冻结，所有机器人复用</span>
+      </div>
+
+    <!-- ======== STEP 2: BACKBONE ======== -->
+    <div class="section-label"><span>🧠 第 2 步：理解部门（Backbone，已有知识不改了）</span></div>
+
+    <div class="module blue-bg">
+      <span class="tag blue">3</span>
+      <div class="module-title">
+        SigLIP：看画面的"眼睛"
+        <span class="badge frozen">❄ 冻结（用现成的）</span>
+        <span class="badge code-ref">eagle2.5_vl:311-339</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        就像一个 <em>已经认识很多物体的专家</em>（在 ImageNet 21K 数据集上预训练过），
+        他一眼就能看出：<br>
+        "嗯，这是 <em>白色桌面</em>，上面有个 <em>红色杯子</em>，旁边还有个 <em>蓝色抹布</em>"
+      </div>
+
+      <div class="module-desc">
+        把 <span class="glossary-term">pixel（像素）
+          <span class="tooltip">图片的最小单位，一个彩色小点。224×224 的图片有 50176 个像素，每个像素有 RGB 三个通道。</span>
+        </span>
+        转成 <span class="glossary-term">特征向量
+          <span class="tooltip">一串数字（如 1152 个数字），代表图片里"有什么东西"。两个类似的图片，特征向量也类似。</span>
+        </span>
+      </div>
+
+      <div class="tensor-row">
+                <span class="tensor"><span class="label">3路相机画面</span> <span class="arrow">→</span> <span class="shape">[192, 3, 224, 224]</span><span class="dim-detail">{192=64批次×3相机(头+左腕+右腕), 3=图像通道数(RGB), 224=图像宽度(像素), 224=图像高度(像素)}</span><span class="src-badge src-doc">modeling:189</span></span>
+        <span class="tensor"><span class="arrow">→</span> <span class="label">视觉特征</span> <span class="shape">[192, 256, 1152]</span><span class="dim-detail">{192=64批次×3相机, 256=(224/14)²个图像Patch(每张图切16×16块), 1152=SigLIP隐藏层维度(每块转成特征向量)}</span></span>
+      </div>
+      <div class="tensor-legends">
+        <span><span class="src-badge src-config">config</span> 224=image_size <code>config.json:66</code></span>
+        <span><span class="src-badge src-config">config</span> 1152=SigLIP hidden_size <code>config.json:65</code></span>
+        <span><span class="src-badge src-data">data</span> 原始相机画面 640×640 → resize/crop → 224×224 <code>datasets.py:589</code></span>
+        <span><span class="src-badge src-calc" style="color:var(--red);font-weight:bold;background:var(--red-bg);">⚠ 强制降采样至224×224（简单resize，未使用动态分块，信息有丢失）</span></span>
+        <span><span class="src-badge src-calc">calc</span> 256=(224/14)² 个patch</span>
+        <span><span class="src-badge src-calc">calc</span> 192=64batch×3相机</span>
+      </div>
+
+      <!-- SigLIP ↔ EagleVL 关系说明 -->
+      <div style="margin-top:0.3rem;padding:0.35rem 0.6rem;background:var(--surface2);border-radius:6px;font-size:0.7rem;color:var(--text-dim);line-height:1.6;">
+        <span style="color:var(--yellow);font-weight:600;">💡 所以 EagleVL 到底是什么？</span>
+        <strong style="color:var(--blue);">EagleVL = 完整的视觉-语言大模型（VLM）</strong>，不是单一的视觉或语言模型：<br>
+        <code style="font-size:0.65rem;">SigLIP（视觉编码🔵） + MLP（连接🧠） + Qwen3（语言推理📖）</code><br>
+        三者打包注册为一个完整模型：<code>AutoModel → Eagle2_5_VLForConditionalGeneration</code>。
+        在 TAO 中，EagleVL 作为 <strong>Backbone（骨干网络）</strong>使用，输入画面+指令，输出综合理解特征。
+        <span class="src-badge src-code">modeling_eagle2_5_vl.py:22,55</span>
+      </div>
+
+      <!-- EagleVL3 variant (alternative backbone) -->
+      <div style="margin-top:0.8rem;background:var(--surface);border-radius:8px;padding:0.6rem 0.8rem;font-size:0.78rem;border:1px dashed var(--purple);">
+        <div style="font-weight:600;color:var(--purple);margin-bottom:0.4rem;">🔄 EagleVL3 替代方案（BackboneConfigEagleVL3）</div>
+        <table style="width:100%;font-size:0.72rem;border-collapse:collapse;">
+          <tr style="border-bottom:1px solid var(--border);color:var(--text-dim);">
+            <th style="text-align:left;padding:0.2rem 0.4rem;">特性</th>
+            <th style="text-align:left;padding:0.2rem 0.4rem;color:var(--blue);">EagleVL2.5（当前）</th>
+            <th style="text-align:left;padding:0.2rem 0.4rem;color:var(--purple);">EagleVL3（备选）</th>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;">视觉编码器</td>
+            <td style="padding:0.2rem 0.4rem;">SigLIP（siglip_vision_model）</td>
+            <td style="padding:0.2rem 0.4rem;">SigLIP2（siglip2_vision_model）</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;">Tile 大小</td>
+            <td style="padding:0.2rem 0.4rem;">224×224</td>
+            <td style="padding:0.2rem 0.4rem;">448×448</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;">每 tile 的 patch 数</td>
+            <td style="padding:0.2rem 0.4rem;">(224/14)² = 256</td>
+            <td style="padding:0.2rem 0.4rem;">(448/14)² = 1024 <span style="color:var(--text-dim);">（pixel_shuffle 后→512 tokens）</span></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;"><code>use_pixel_shuffle</code></td>
+            <td style="padding:0.2rem 0.4rem;">false</td>
+            <td style="padding:0.2rem 0.4rem;">true（视觉 token 数量减半）</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;"><code>use_thumbnail</code></td>
+            <td style="padding:0.2rem 0.4rem;">true</td>
+            <td style="padding:0.2rem 0.4rem;">false</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;"><code>dynamic_image_size</code></td>
+            <td style="padding:0.2rem 0.4rem;">true</td>
+            <td style="padding:0.2rem 0.4rem;">false（固定 448×448）</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;"><code>mlp_connector_layers</code></td>
+            <td style="padding:0.2rem 0.4rem;">1</td>
+            <td style="padding:0.2rem 0.4rem;">2</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;">LLM</td>
+            <td style="padding:0.2rem 0.4rem;">Qwen3-1.7B（28层）</td>
+            <td style="padding:0.2rem 0.4rem;">Qwen3-1.7B（28层）</td>
+          </tr>
+          <tr>
+            <td style="padding:0.2rem 0.4rem;"><code>select_layer</code></td>
+            <td style="padding:0.2rem 0.4rem;">12（裁剪 28→12 层）</td>
+            <td style="padding:0.2rem 0.4rem;">16（裁剪 28→16 层，backbone 配置覆盖）</td>
+          </tr>
+        </table>
+        <div style="margin-top:0.4rem;font-size:0.7rem;color:var(--text-dim);line-height:1.5;">
+          <span class="src-badge src-config">eagle_vl_3/config.json</span> 
+          <span class="src-badge src-config">backbone_config_eagle_vl_3.py:19</span>
+          <span class="src-badge src-config">preprocessor_config.json:32-34</span>
+          <span class="src-badge src-config">config.json:12,58-59</span><br>
+          <strong style="color:var(--red);">⚠ 注意：</strong>当前 TAO 管道在进入 VLM 处理器前已通过 torchvision 将图像 resize 到 224×224（<code>data_processors.py:661-663</code>），
+          因此 EagleVL3 处理器接收到的是 224×224 图像而非原生 448×448。EagleVL3 的 448×448 tile 能力在<a href="/home/ttt/Desktop/TAO/src/tao/model/modules/general_modules/eagle_vl_3/preprocessor_config.json" target="_blank"> preprocessor_config.json</a> 中声明但未被当前数据管道利用。
+          如需启用原生 448×448 处理，需修改数据管道的 <code>image_target_size</code>。
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <!-- MLP Connector: SigLIP ⟶ Qwen3 的特征投影桥梁 -->
+    <div class="module purple-bg">
+      <span class="tag purple">4</span>
+      <div class="module-title">
+        MLP Connector：把"画面特征"翻译成"语言模型能看懂的数字"
+        <span class="badge frozen">❄ 冻结（用现成的）</span>
+        <span class="badge code-ref">modeling_eagle2_5_vl.py:340-360</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        就像 <em>同声传译</em>：SigLIP 说的是"视觉语言"（1152维特征），
+        Qwen3 只懂"文字语言"（2048维空间）。<br>
+        MLP Connector 就是那个翻译官，
+        把 <em>视觉特征投影到语言模型的词嵌入空间</em>，让 Qwen3 能"看懂"画面。
+      </div>
+
+      <div class="module-desc">
+        <span class="glossary-term">MLP（多层感知机）
+          <span class="tooltip">Multi-Layer Perceptron，多层全连接神经网络。这里是一个 1~2 层的线性投影层，把 1152 维的视觉特征映射到 2048 维的语言嵌入空间。</span>
+        </span>
+        · 这个翻译官很"轻"：EagleVL2.5 用 <strong>1 层</strong>，EagleVL3 用 <strong>2 层</strong><br>
+        · 但它至关重要——没有它，画面特征就塞不进 Qwen3 的输入
+      </div>
+
+      <div class="tensor-row">
+        <span class="tensor"><span class="label">SigLIP 视觉特征</span> <span class="arrow">→</span> <span class="shape">[192, 256, 1152]</span><span class="dim-detail">{192=64批次×3相机, 256=224²/14²个图像patch, 1152=SigLIP隐藏维度}</span></span>
+        <span class="tensor"><span class="arrow">→</span> <span class="label">MLP 投影</span> <span class="shape">[192, 256, 2048]</span><span class="dim-detail" style="color:var(--purple);">{2048=投影到Qwen3嵌入空间, hidden_size变化: 1152→2048}</span></span>
+      </div>
+      <div class="tensor-legends">
+        <span><span class="src-badge src-config">config</span> mlp_connector_layers=1（EagleVL2.5） <code>eagle_vl_3/config.json:51</code></span>
+        <span><span class="src-badge src-config">config</span> mlp_connector_layers=2（EagleVL3） <code>eagle_vl_3/config.json:42-49</code></span>
+      </div>
+
+      <div style="margin-top:0.5rem;background:var(--surface);border-radius:6px;padding:0.5rem 0.7rem;">
+        <div style="font-size:0.72rem;font-weight:600;color:var(--purple);margin-bottom:0.2rem;">⚙️ MLP 连接器的具体操作</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.2rem 1rem;font-size:0.72rem;color:var(--text-dim);">
+          <span>① <code>hidden_state = vision_model(pixel_values)</code> — SigLIP 提取特征</span>
+          <span>② <code>vit_embeds = mlp_connector(hidden_state)</code> — MLP 投影维度</span>
+          <span>③ <code>input_embeds[image_positions] = vit_embeds</code> — 替换 &lt;image&gt; 占位符</span>
+          <span>④ <code>outputs = Qwen3(input_embeds)</code> — LLM 统一理解</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="module blue-bg">
+      <span class="tag blue">5</span>
+      <div class="module-title">
+        Qwen3-1.7B（EagleVL2.5 骨干的 LLM 部分）：看+听的"大脑"
+        <span class="badge frozen">❄ 冻结（用现成的）</span>
+        <span class="badge code-ref">eagle2.5_vl:235-269</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        把"看到"的东西和"听到"的话合并理解：<br>
+        "哦，画面里有个杯子，同时听到'把杯子拿起来'，<br>
+        所以任务是 <em>去拿那个红色杯子</em>"
+      </div>
+
+      <div class="module-desc">
+        <span class="glossary-term">LLM（大语言模型）
+          <span class="tooltip">大语言模型。就像"读过很多书的聪明人"，EagleVL2.5 使用了 Qwen3-1.7B（1.7B=17亿参数）+ SigLIP 视觉模型。<br>可以把它当成一个超级强大的"理解引擎"。</span>
+        </span>
+        <br>
+        <strong>关键操作：</strong>把"I see a <span style="color:var(--orange);">&lt;image&gt;</span> ..."中的
+        <span style="color:var(--orange);">&lt;image&gt;</span> 占位符，替换成 <strong>MLP Connector 投影后的视觉特征</strong>（2048维）。
+        这样画面和文字就在同一个空间里融合了。
+      </div>
+
+      <div class="story-bubble" style="border-left-color:var(--purple);">
+        <div class="s-label" style="color:var(--purple);">🔗 数据流回顾</div>
+        SigLIP 提取的 <strong>1152维原始视觉特征</strong> → 经过 <strong>MLP Connector</strong> 投影为 <strong>2048维</strong> → 填入 <code>&lt;image&gt;</code> 位置 → 送入 Qwen3 统一理解
+      </div>
+
+      <div class="formula-box" style="font-size:0.8rem;">
+        <span class="hl-blue">input_embeds[selected]</span> = <span class="hl-blue">vit_embeds</span>  <span style="color:var(--text-dim);">// vit_embeds=MLP(SigLIP)</span><br>
+        <span style="color:var(--text-dim);">  // 把 MLP 投影后的画面特征贴进 "我说的话" 里面</span><br>
+        <span class="hl-blue">outputs</span> = <span class="hl-blue">Qwen3(input_embeds)</span>
+        <span style="color:var(--text-dim);">  // LLM 融合理解：画面+文字一起思考</span>
+      </div>
+
+      <div style="margin-top:0.5rem;background:var(--surface);border-radius:6px;padding:0.5rem 0.7rem;">
+        <div style="font-size:0.72rem;font-weight:600;color:var(--blue);margin-bottom:0.2rem;">⚙️ Backbone 配置参数（EagleVL2.5）</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.2rem 1rem;font-size:0.72rem;color:var(--text-dim);">
+          <span><span class="src-badge src-config">config</span> <code>select_layer=12</code> — 裁剪 LLM 28 层 → 12 层（省显存）</span>
+          <span><span class="src-badge src-config">config</span> <code>tune_top_llm_layers=0/4</code> — v0 完全冻结 / v0.5 解冻最后4层</span>
+          <span><span class="src-badge src-config">config</span> SigLIP: hidden_size=1152, patch_size=14</span>
+          <span><span class="src-badge src-config">config</span> Flash Attention 2 — 支持加速</span>
+        </div>
+        <div style="margin-top:0.4rem;padding:0.4rem 0.5rem;background:var(--surface2);border-radius:6px;font-size:0.7rem;border:1px dashed var(--purple);">
+          <span style="color:var(--purple);font-weight:600;">EagleVL3 差异：</span>
+          <code>select_layer=16</code>（配置覆盖），视觉编码器 SigLIP2（无 <code>image_size</code> 字段，改用 <code>num_patches=256</code>），
+          <code>hidden_size=1152</code>，<code>patch_size=14</code>。<br>
+          <span style="color:var(--text-dim);">LLM 同为 Qwen3-1.7B，但 EagleVL3 使用更多 LLM 层（16 vs 12），且 <code>mlp_connector_layers=2</code>（vs 1）。</span>
+        </div>
+      </div>
+
+      <!-- EagleVL 模型层级说明 -->
+      <div style="margin-top:0.3rem;background:var(--surface2);border-radius:6px;padding:0.35rem 0.6rem;font-size:0.7rem;color:var(--text-dim);line-height:1.6;">
+        <span style="color:var(--yellow);font-weight:600;">🔗 回顾 EagleVL 完整架构（3部分=1个整体）：</span><br>
+        <strong style="color:var(--blue);">块 3（SigLIP）</strong> → <strong style="color:var(--purple);">MLP Connector（🔄 投影桥梁）</strong> → <strong style="color:var(--blue);">块 4（Qwen3）</strong>
+        = 
+        <strong style="color:var(--blue);">一个完整的 VLM：EagleVL</strong>。
+        三个部分全部冻结，所有机器人直接复用。
+        它被注册为 <code>transformers.AutoModel</code> 模型，<br>在 TAO 中称为 Backbone，
+        负责将 <strong>原始图像+文字指令 → 综合理解特征</strong>（输出给后续 Action Head）。
+      </div>
+    </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="module blue-bg">
+      <span class="tag blue">6</span>
+      <div class="module-title">
+        提取综合理解结果
+        <span class="badge frozen">❄ 冻结</span>
+        <span class="badge code-ref">backbone:213</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        Qwen3 理解了"去拿红色杯子"之后，产生了一串 <em>"思考结果"</em>。
+        这串结果不是告诉你"杯子是红色的"这种文字，而是 <em>机器人能看懂的数学特征</em>。
+      </div>
+
+      <div class="module-desc">
+        取 Qwen3 <strong>最后一层</strong>的输出，<span style="color:var(--red);">跳过文字输出层（lm_head）</span>。
+        这样得到的是纯特征（已融合<em>头部+左腕+右腕画面</em>和<em>"把水倒进杯子里"指令</em>的综合理解），不是文字。
+      </div>
+
+      <div class="tensor-row">
+                <span class="tensor"><span class="label">backbone_features（理解结果）</span> <span class="arrow">→</span> <span class="shape">[64, 822, 2048]</span><span class="dim-detail">{64=批次大小, 822=文本序列长度, 2048=Qwen3隐藏层维度(每个Token位置的综合理解)}</span><span class="src-badge src-doc">modeling:202</span></span>
+      </div>
+      <div class="tensor-row">
+                <span class="tensor"><span class="label">backbone_attention_mask（注意力掩码）</span> <span class="arrow">→</span> <span class="shape">[64, 822]</span><span class="dim-detail">{64=批次大小, 822=序列长度, 标记哪些Token需要参与注意力计算}</span></span>
+                <span class="tensor"><span class="label">image_mask（图像Token标记）</span> <span class="arrow">→</span> <span class="shape">[64, 822]</span><span class="dim-detail">{64=批次大小, 822=序列长度, 标记哪些位置是图像Token(用于后续处理)}</span></span>
+      </div>
+      <div class="tensor-legends">
+        <span><span class="src-badge src-config">config</span> 2048=Qwen3 hidden_size（EagleVL2.5 LLM 部分） <code>config.json:36</code></span>
+        <span><span class="src-badge src-doc">doc</span> 822=运行时序列长度</span>
+      </div>
+    </div>
+
+    <!-- ======== STEP 3: ACTION HEAD ======== -->
+    <div class="section-label"><span>⚙️ 第 3 步：动作部门（Action Head，重点学！）</span></div>
+
+    <div class="module green-bg">
+      <span class="tag green">7</span>
+      <div class="module-title">
+        精炼理解结果
+        <span class="badge trainable">🔥 可训练（学！）</span>
+        <span class="badge code-ref">action_head:223-257</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        就像你理解了"拿杯子"之后，还要<em>在脑子里过一遍</em>：
+        "我需要先伸手、再握紧、然后抬起"。这一步就是<em>把笼统的理解细化成动作规划</em>。
+      </div>
+
+      <div class="module-desc">
+        <span class="glossary-term">LayerNorm + Self-Attention
+          <span class="tooltip">LayerNorm=把数字调整到合适的范围（就像调音量到合适大小）。Self-Attention=让模型关注重要的信息（就像你关注"杯子"而不是"旁边"）。</span>
+        </span>
+      </div>
+
+          <div style="margin-top:0.4rem;font-size:0.72rem;color:var(--text-dim);background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;">
+        <span class="src-badge src-config">config</span> <code>use_vlln=True</code> — 启用 VL LayerNorm + SelfAttention 精炼（AltDiT 使用 <code>attend_text_every_n_blocks=2</code> 替代 vl_self_attention_cfg）
+        <span style="margin-left:0.8rem;"><span class="src-badge src-config">config</span> <code>add_pos_embed=True</code> — 添加位置编码</span>
+      </div>
+
+      <div class="tensor-row">
+                <span class="tensor"><span class="label">backbone_features</span> <span class="arrow">→</span> <span class="shape">[64, 822, 1536]</span><span class="dim-detail">{64=批次大小, 822=文本序列长度, 1536=投影后维度(从2048压缩到1536, input_embedding_dim)}</span></span>
+      </div>
+      <div class="tensor-legends">
+        <span><span class="src-badge src-config">config</span> 1536=input_embedding_dim <code>action_head:22</code></span>
+      </div>
+
+      <!-- 1536 统一特征空间解释 -->
+      <div style="margin-top:0.3rem;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;font-size:0.76rem;line-height:1.5;color:var(--text-dim);">
+        <div style="font-weight:600;color:var(--orange);margin-bottom:0.3rem;">🔍 为什么正好是 1536 维？</div>
+        <strong>1536 是整个 Action Head 的统一特征空间维度（input_embedding_dim）</strong>，
+        后续所有模块（state编码器、动作编码器、DiT模型）都在这个维度上操作。<br><br>
+        3 个数据组件最终会<strong>拼接成一条序列</strong>送入 DiT，因此维度必须一致：<br>
+        <table style="width:100%;font-size:0.72rem;border-collapse:collapse;margin-top:0.3rem;">
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;color:var(--green);">VL 特征（此步）</td>
+            <td style="padding:0.2rem 0.4rem;">backbone 输出 2048D → LayerNorm + Self-Attention → <strong style="color:var(--yellow);">1536D</strong></td>
+            <td style="padding:0.2rem 0.4rem;color:var(--text-dim);">在此块完成</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.2rem 0.4rem;color:var(--green);">state 特征</td>
+            <td style="padding:0.2rem 0.4rem;">26D → padding(64D) → MLP(64→1024→<strong style="color:var(--yellow);">1536</strong>)</td>
+            <td style="padding:0.2rem 0.4rem;color:var(--text-dim);">第7块完成</td>
+          </tr>
+          <tr>
+            <td style="padding:0.2rem 0.4rem;color:var(--green);">action 特征</td>
+            <td style="padding:0.2rem 0.4rem;">[B,64,128] → 动作编码器 → <strong style="color:var(--yellow);">1536D</strong></td>
+            <td style="padding:0.2rem 0.4rem;color:var(--text-dim);">第8块完成</td>
+          </tr>
+        </table>
+        <code style="display:block;margin-top:0.4rem;padding:0.3rem 0.5rem;background:var(--surface2);border-radius:4px;">
+<span style="color:var(--text-dim);">// 三者维度统一为 1536 后拼接：</span>
+sa_embs = torch.cat([state_features, action_features], dim=1)  <span style="color:var(--text-dim);">// [B, 65, 1536]</span></code>
+      </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <!-- Split: State & Action -->
+
+    <div class="module green-bg" style="border-left-color:var(--orange);">
+          <span class="tag orange">8</span>
+          <div class="module-title">
+            了解当前状态
+            <span class="badge trainable">🔥 可训练</span>
+            <span class="badge code-ref">action_head:259-276</span>
+          </div>
+
+          <div class="story-bubble">
+            <div class="s-label">🎬 现实类比</div>
+            拿杯子之前先<em>感受一下自己的手在哪</em>：
+            "我的手现在在桌子右边，距离杯子大约 30cm"。
+          </div>
+
+          <div class="module-desc">
+            把 <span class="glossary-term">state（状态）
+              <span class="tooltip">机器人当前各个关节的角度位置。就像你闭眼也能感觉到自己的手是伸直还是弯曲的。</span>
+            </span>
+            通过 <span class="glossary-term">MLP（多层感知机）
+              <span class="tooltip">Multi-Layer Perceptron，最基本的人工神经网络。像一台"万能尺寸转换器"：输入26维状态，中间扩到1024维思考空间，最终压到1536维特征输出。<br>公式：output = W₂·ReLU(W₁·x + b₁) + b₂，两层线性层中间夹ReLU激活函数。</span>
+            </span> 编码成特征。
+          </div>
+
+          <div class="tensor-row">
+                    <span class="tensor"><span class="label">当前电机位置+手指角度</span> <span class="arrow">→</span> <span class="shape">[64, 1, 128]</span><span class="dim-detail">{64=批次大小, 1=单帧状态, 128=填充后维度(实际26维: 14手臂电机位置+12手指角度, 填充到128)}</span><span class="src-badge src-doc">modeling:180</span></span>
+            <span class="tensor"><span class="label"><span class="arrow">→</span> 编码后</span> <span class="shape">[64, 1, 1536]</span><span class="dim-detail">{64=批次大小, 1=单帧状态, 1536=编码后维度(26维状态→1536维特征, input_embedding_dim)}</span></span>
+          </div>
+          <div class="tensor-legends">
+            <span><span class="src-badge src-config">config</span> 128=max_state_dim <code>action_head:25</code></span>
+            <span><span class="src-badge src-config">config</span> 1536=input_embedding_dim <code>action_head:22</code></span>
+          </div>
+        </div>
+
+    <div class="connector"></div>
+
+    <!-- block 9 was previously in right column, now standalone -->
+    <div class="module orange-bg">
+          <span class="tag orange">9</span>
+          <div class="module-title">
+            ★ 核心：Flow Matching
+            <span class="badge trainable">🔥 可训练</span>
+            <span class="badge code-ref">action_head:295-308</span>
+          </div>
+
+          <div class="story-bubble">
+            <div class="s-label">🎬 现实类比</div>
+            这步是整个训练的关键！想象一下：<br>
+            你先用 <em>随机乱画的一条线</em> 代替真正的拿杯子轨迹，
+            然后慢慢 <em>把乱画修正成正确的轨迹</em>。<br>
+            模型学的就是<strong>"怎么从乱画修正好"这个能力</strong>。
+          </div>
+
+          <div class="module-desc">
+            <span class="glossary-term">Flow Matching
+              <span class="tooltip">一种训练方法：给标准动作加不同程度的噪声（弄模糊），让模型学习"怎么还原清晰动作"。就像教学生从涂鸦逐步画成素描。</span>
+            </span><br><br>
+            <strong>三步核心公式：</strong>
+          </div>
+
+          <div class="formula-box" style="font-size:0.75rem;">
+            <span style="color:var(--text-dim);">// ① 生成随机噪声 + 随机时间步</span><br>
+            <span style="color:var(--green);">noise</span> ~ <span style="color:var(--green);">N(0, 1)</span><br>
+            <span style="color:var(--green);">t</span> ~ <span style="color:var(--green);">Beta(1.5, 1.0)</span> <span style="color:var(--text-dim);">// [0, noise_s] 范围, 0=全乱→1=完全清晰</span><br><br>
+            <span style="color:var(--text-dim);">// ② 混合：把噪声和真值按 t 比例混合</span><br>
+            <span class="highlight">noisy = (1−t)×noise + t×actions</span><br><br>
+            <span style="color:var(--text-dim);">// ③ 目标：从噪声走向真值的"修正方向"</span><br>
+            <span class="hl-red">velocity_target</span> = actions − noise <span style="color:var(--text-dim);">// ★ 真值速度(模型要学的速度场方向)</span><br>
+            <span class="hl-green">pred_velocity</span> = <span style="color:var(--orange);font-weight:600;">DiT</span>(noisy, backbone, t, state) <span style="color:var(--text-dim);">// ⭐<strong> DiT 就是速度场网络</strong>，输入噪声动作+条件，输出指向真值的速度（关于DiT的定义详见第10块）</span><br><br>
+            <span style="color:var(--text-dim);">// ── 推理时：从纯噪声开始，逐步去噪 ──</span><br>
+            <span style="color:var(--orange);">action</span> = noise <span style="color:var(--text-dim);">// 从纯噪声开始</span><br>
+            <span style="color:var(--orange);">action</span> += dt × <span style="color:var(--orange);font-weight:600;">DiT</span>(action, backbone, t, state) <span style="color:var(--text-dim);">// 逐步修正（关于DiT的定义详见第10块）</span><br><br>
+            <span style="color:var(--text-dim);">// ── 关键配置 ──</span><br>
+            <span style="color:var(--text-dim);">num_timestep_buckets=1000（时间步离散化桶数）</span><br>
+            <span style="color:var(--text-dim);">num_inference_timesteps=4（推理去噪步数）</span>
+          </div>
+
+          <!-- Beta & noise_s 解释 -->
+          <div style="margin-top:0.4rem;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;font-size:0.76rem;line-height:1.5;color:var(--text-dim);">
+            <div style="font-weight:600;color:var(--orange);margin-bottom:0.2rem;">🔍 Beta(1.5, 1.0) 和 noise_s 是什么？</div>
+
+            <strong>Beta(α=1.5, β=1.0)</strong> — 一种定义在 [0,1] 上的连续概率分布。<br>
+            α > β ⇒ 概率密度偏向 1.0，即采样值 s 更多集中在 1 附近。<br>
+            经 <code>t = (noise_s − s) / noise_s</code> 变换后：<strong>t 更多落在接近 0 的位置</strong>（嘈杂区域）。<br>
+            效果：模型花更多时间训练<strong>"从极嘈杂的噪声中恢复"</strong>——对困难样本过采样，提升鲁棒性。<br>
+            <span class="src-badge src-code">action_head_base:101</span> <code>Beta(noise_beta_alpha=1.5, noise_beta_beta=1.0)</code><br><br>
+
+            <strong>noise_s = 0.999</strong> — 时间步缩放系数，控制 t 的取值范围。<br>
+            归一化公式：<code>t = (noise_s − s) / noise_s</code>，将 t 映射到近似 [0, 1] 区间：<br>
+            • t=0 ⇒ noisy = noise（纯噪声）<br>
+            • t=1 ⇒ noisy = actions（完全清晰）<br>
+            • noise_s < 1 时 t 可略<0（当 s > noise_s 时），覆盖"略超纯噪声"的极端场景<br>
+            <span class="src-badge src-config">config</span> <code>noise_s: float = 0.999</code> action_head:38<br>
+            配合 <code>num_timestep_buckets=1000</code>：<code>t_discretized = (t × 1000).long()</code> 将连续 t 量化到离散桶。
+          </div>
+
+          <!-- 具体数值例子 -->
+          <div style="margin-top:0.5rem;background:var(--surface);border-radius:8px;padding:0.5rem 0.7rem;font-size:0.76rem;line-height:1.6;">
+            <div style="font-weight:600;color:var(--orange);margin-bottom:0.3rem;">🔢 具体数值例子（简化版：2帧×3关节）</div>
+            <div style="color:var(--text-dim);">
+
+            假设动作维度简化为 <strong>3 个关节</strong>（肩、肘、腕），预测 <strong>2 帧</strong>：<br><br>
+
+            <div style="background:var(--surface2);border-radius:6px;padding:0.4rem 0.6rem;font-family:monospace;font-size:0.72rem;">
+            <span style="color:var(--text-dim);">// ── 训练样本 ──</span><br>
+            <span style="color:var(--green);">真实动作</span>
+            = [[ 0.10,  0.20,  0.30],   <span style="color:var(--text-dim);">← 第0帧: 手腕位置</span><br>
+            <span style="margin-left:7.5rem;"> [ 0.40,  0.50,  0.60]]  </span><span style="color:var(--text-dim);">← 第1帧</span><br>
+            <span style="color:var(--green);">噪声</span>
+            = [[-0.80,  1.20,  0.50],   <span style="color:var(--text-dim);">← 随机垃圾值</span><br>
+            <span style="margin-left:4.2rem;"> [ 0.30, -0.70,  1.10]]  </span><span style="color:var(--text-dim);">← 不同噪声</span><br><br>
+
+            <span style="color:var(--text-dim);">// ── 随机抽到 t=0.3 ──</span><br>
+            <span class="highlight">noisy = 0.7×noise + 0.3×actions</span><br>
+            第0帧: 0.7×[-0.80,1.20,0.50] + 0.3×[0.10,0.20,0.30] = <span style="color:var(--blue);">[-0.53, 0.90, 0.44]</span><br>
+            第1帧: 0.7×[ 0.30,-0.70,1.10] + 0.3×[0.40,0.50,0.60] = <span style="color:var(--blue);">[ 0.33,-0.34, 0.95]</span><br><br>
+
+            <span style="color:var(--text-dim);">// ── velocity（模型要学的目标）─ 与 t 无关！──</span><br>
+            <span class="hl-red">velocity</span> = actions − noise<br>
+            第0帧: [0.10,0.20,0.30] − [-0.80,1.20,0.50] = <strong style="color:var(--red);">[ 0.90, -1.00, -0.20]</strong><br>
+            第1帧: [0.40,0.50,0.60] − [ 0.30,-0.70,1.10] = <strong style="color:var(--red);">[ 0.10,  1.20, -0.50]</strong>
+            </div>
+          </div>
+
+          <!-- velocity 与 t 无关 -->
+          <div style="margin-top:0.4rem;background:var(--surface);border-radius:8px;padding:0.5rem 0.7rem;font-size:0.76rem;line-height:1.6;">
+            <div style="font-weight:600;color:var(--orange);margin-bottom:0.2rem;">🧠 核心洞察：velocity 与 t 无关</div>
+            <div style="color:var(--text-dim);">
+            不管这条训练样本这次抽到 <strong>t=0.3</strong>（七分噪声）还是 <strong>t=0.7</strong>（三分噪声），<br>
+            要学的 <strong style="color:var(--red);">velocity 始终是 [0.90, -1.00, -0.20]</strong>，不随 t 变化！<br><br>
+            因为 velocity = actions − noise 只由<strong>终点（真值）和起点（当前噪声）</strong>决定，<br>            与<strong>走在路径上的哪个位置（t）</strong>无关。<br><br>
+
+            换句话说：模型在 <strong>整条路径上的每一个中间位置</strong> 看到的都是一样的前进方向。<br>
+            训练时随机抽 t 只是为了让模型<strong>在所有位置</strong>都见过这个方向——<br>            <span style="color:var(--text-dim);">t=0 时（纯噪声）知道往哪走，t=0.5 时（半路）也知道往哪走。</span>
+            </div>
+          </div>
+
+          <!-- 跨 epoch 覆盖 -->
+          <div style="margin-top:0.4rem;background:var(--surface);border-radius:8px;padding:0.5rem 0.7rem;font-size:0.76rem;line-height:1.6;">
+            <div style="font-weight:600;color:var(--orange);margin-bottom:0.2rem;">🔄 跨训练步覆盖：同一数据反复看 30000 次</div>
+            <div style="color:var(--text-dim);">
+            <span class="src-badge src-code">config</span> <code>max_steps=30000</code><br><br>
+
+            同一个训练样本（同一张图片 + 同一组动作）在 30000 个训练步中<strong>每次搭配不同的随机噪声和不同的 t</strong>：<br><br>
+
+            <div style="background:var(--surface2);border-radius:6px;padding:0.3rem 0.6rem;font-family:monospace;font-size:0.7rem;">
+            Step   1: 图片A → t=0.3,  噪声#1  → loss=0.02  → 权重微调<br>
+            Step  5000: 图片A → t=0.8,  噪声#5000 → loss=0.01  → 权重微调<br>
+            Step 15000: 图片A → t=0.1,  噪声#15000→ loss=0.05  → 权重微调<br>
+            Step 25000: 图片A → t=0.6,  噪声#25000→ loss=0.03  → 权重微调<br>
+            Step 30000: 图片A → t=0.9,  噪声#30000→ loss=0.01  → 权重微调
+            </div><br>
+
+            结果是：每个样本在 <strong>30000 个训练步</strong>中经历了 <strong>30000 种不同的 t</strong> ∈ [0,1] 的随机组合，<br>            覆盖了从纯噪声（t≈0）到完美动作（t≈1）的 <strong>整条路径</strong>。<br>
+            推理时无论从哪个随机噪声出发，模型都知道该往哪个方向走。<br><br>
+
+            <span style="color:var(--text-dim);">💡 类比：就像同一道数学题反复做 30000 遍，但每次题目里的数字随机变化——
+            不是为了背答案，而是为了学会<strong>任意数字组合下的解题方法</strong>。</span>
+            </div>
+          </div>
+
+          <div style="margin-top:0.3rem;font-size:0.8rem;color:var(--text-dim);">
+            <strong>关键区别：</strong>训练时已知真值算 velocity，模型学预测；<br>
+            推理时无真值，从纯噪声迭代去噪得到动作。<br>
+            <span style="color:var(--orange);font-weight:600;">详见下方「块 14 完整训练推理链路」；关于速度场的直觉理解详见下方「块 15 速度场到底长什么样」</span>
+          </div>
+        </div>
+
+    <div class="connector"></div>
+
+    <div class="module green-bg">
+      <span class="tag green">10</span>
+      <div class="module-title">
+        合并信息：状态 + 未来规划 + 动作
+        <span class="badge trainable">🔥 可训练</span>
+        <span class="badge code-ref">action_head:341-391</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        在动手之前，你把三件事记在脑子里：<br>
+        ① <em>我的手现在在哪</em>（状态）<br>
+        ② <em>接下来几步大概要怎么做</em>（未来规划）<br>
+        ③ <em>目前设想的动作轨迹</em>（噪声动作）<br>
+        合并成一条完整的"行动方案"。
+      </div>
+
+      <div class="tensor-row">
+        <span class="tensor"><span class="label">sa_embs（行动方案）</span> <span class="arrow">→</span> <span class="shape">[64, 65, 1536]</span><span class="dim-detail">{64=批次大小, 65=1(状态)+64(动作块帧), 1536=嵌入维度(input_embedding_dim)}</span></span>
+      </div>
+      <div class="tensor-legends">
+        <span><span class="src-badge src-calc">calc</span> 65=1(状态)+64(action) <code>action_head_alt_dit:118-124</code></span>
+        <span><span class="src-badge src-config">config</span> AltDiT 不使用 future_tokens，改用 attend_text_every_n_blocks=2 机制 <code>action_head:28</code></span>
+        <span><span class="src-badge src-config">config</span> 64=max_action_horizon <code>action_head:42</code></span>
+        <span><span class="src-badge src-config">config</span> 1536=input_embedding_dim <code>action_head:22</code></span>
+      </div>
+    </div>
+
+    <!-- ======== STEP 4: DiT ======== -->
+    <div class="section-label"><span>🔀 第 4 步：行动推演（DiT 模型）</span></div>
+
+    <div class="connector"></div>
+
+    <div class="module orange-bg">
+      <span class="tag orange">11</span>
+      <div class="module-title">
+        DiT：根据理解 + 状态推演最佳动作
+        <span class="badge trainable">🔥 可训练</span>
+        <span class="badge code-ref">action_head:433-459</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        就像下棋时，你<em>看着棋盘（理解结果）</em>，结合<em>当前棋局（状态）</em>，
+        在脑子里<em>推演几步怎么走最好（动作规划）</em>。<br><br>
+        <span class="glossary-term">DiT（扩散变压器）
+          <span class="tooltip">一种特殊的 AI 模型，擅长处理"序列"数据。输入是"行动方案"（sa_embs），同时参考"理解结果"（backbone_features），输出修正后的动作。就像一位经验丰富的教练，看着学员的草稿给出修改意见。</span>
+        </span>
+      </div>
+
+      <div style="margin-top:0.3rem;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;">
+        <div style="font-size:0.7rem;font-weight:600;color:var(--orange);margin-bottom:0.2rem;">⚙️ DiT 模型配置参数 <span class="src-badge src-config">action_head:diffusion_model_cfg</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.1rem 1rem;font-size:0.7rem;color:var(--text-dim);">
+          <span>• <code>num_layers=32</code> — 32 层 Transformer</span>
+          <span>• <code>num_attention_heads=32</code> — 32 注意力头</span>
+          <span>• <code>attention_head_dim=48</code> — 每头 48 维</span>
+          <span>• <code>cross_attention_dim=2048</code> — 注入 VL 特征维度</span>
+          <span>• <code>norm_type="ada_norm"</code> — 自适应层归一化</span>
+          <span>• <code>dropout=0.2</code> — 防过拟合</span>
+          <span>• <code>interleave_self_attention=True</code> — 交错自注意力</span>
+          <span>• <span class="src-badge src-config">attend_text_every_n_blocks</span> = 2 — 每 2 块交替关注文本/非文本 token</span>
+        </div>
+      </div>
+
+      <div class="tensor-row">
+        <span class="tensor"><span class="label">latent_embs（推演结果）</span> <span class="arrow">→</span> <span class="shape">[64, 65, 1024]</span><span class="dim-detail">{64=批次大小, 65=序列长度(1状态+64噪声动作), 1024=DiT隐藏层维度(hidden_size)}</span></span>
+      </div>
+      <div class="tensor-legends">
+        <span><span class="src-badge src-config">config</span> 1024=DiT hidden_size <code>action_head:21</code></span>
+        <span><span class="src-badge src-config">config</span> 1024=DiT output_dim <code>action_head:64</code></span>
+      </div>
+
+      <!-- DiT 架构详解 -->
+      <div style="margin-top:0.3rem;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;font-size:0.76rem;line-height:1.5;color:var(--text-dim);">
+        <div style="font-weight:600;color:var(--orange);margin-bottom:0.3rem;">🔍 DiT 到底长什么样？为什么不是 MLP？</div>
+        <strong>DiT（Diffusion Transformer）</strong> 是整个 Action Head 参数最多的核心网络。它不是一个简单的 MLP，而是一个 <strong>32 层的完整 Transformer</strong>（<code>dit.py:174-288</code>）：<br><br>
+        <pre style="font-size:0.68rem;line-height:1.4;color:var(--text-dim);background:var(--surface2);padding:0.3rem 0.5rem;border-radius:4px;overflow-x:auto;">
+输入 sa_embs [B, 65, 1536]          ← 状态+噪声动作（AltDiT 无 future_tokens，第9块）
+   │
+   ├─ TimestepEncoder(t)            ← 把"噪声程度t"编码成条件信号
+   │
+   ├─ 32 × BasicTransformerBlock    ← ★ 核心计算（不是MLP！）
+   │   ├─ 奇数层: Self-Attention    ← 动作序列65步之间互相"商量"
+   │   ├─ 偶数层: Cross-Attention   ← 动作序列"看"VL理解结果 [B, 822, 1536]
+   │   └─ 每层受 AdaNorm(t) 调控    ← 不同噪声程度用不同处理方式
+   │
+   ├─ LayerNorm + 条件投影           ← 自适应归一化（shift+scale受t控制）
+   └─ Linear(1536→1024)            ← 降维输出
+                                      │
+                                      ▼
+       latent_embs [B, 65, 1024] → action_decoder → pred_velocity [B, 64, 128]</pre>
+        <strong>关键设计：</strong><br>
+        • <strong>内维度 = 1536</strong>（32头 × 48维/头），正好等于 <code>input_embedding_dim</code>，保证输入直接匹配<br>
+        • <strong>交错注意力</strong>：奇数层只做自注意力（序列内部交互），偶数层做交叉注意力（看VL特征），<span class="src-badge src-config">action_head:60</span><br>
+        • <strong>AdaNorm</strong>：每层的输出受时间步 t 控制——t小（嘈杂）时强调降噪，t大（清晰）时强调细节精修<br>
+        • <strong>不是MLP</strong>：MLP只有2层线性层（无序列交互、无外部参考），DiT有32层+32头注意力+VL特征交叉引用，参数量高出几个数量级
+      </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <div class="module green-bg">
+      <span class="tag green">12</span>
+      <div class="module-title">
+        解码成实际动作
+        <span class="badge trainable">🔥 可训练</span>
+        <span class="badge code-ref">action_head:462-499</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        把脑子里的"推演"变成 <em>具体的手臂指令</em>：
+        "肩关节转 15 度，肘关节弯 30 度，手掌握紧..."
+      </div>
+
+      <div class="module-desc">
+        <span class="glossary-term">Decoder（解码器）
+          <span class="tooltip">把抽象的数字特征转成具体的、可执行的数据。就像从"靠近杯子"这个抽象概念转成"肩关节转15度"的具体数值。</span>
+        </span>
+      </div>
+
+      <div class="tensor-row">
+                <span class="tensor"><span class="label">pred_velocity（预测的修正方向）</span> <span class="arrow">→</span> <span class="shape">[64, 64, 128]</span><span class="dim-detail">{64=批次大小, 64=动作预测步数(max_action_horizon), 128=填充后维度(实际26维, 取前26维作为有效输出)}</span></span>
+      </div>
+      <div class="tensor-legends">
+        <span><span class="src-badge src-config">config</span> 64=max_action_horizon <code>action_head:42</code></span>
+        <span><span class="src-badge src-config">config</span> 128=max_action_dim <code>action_head:26</code></span>
+      </div>
+    </div>
+
+    <!-- ======== STEP 5: LOSS ======== -->
+    <div class="section-label"><span>📉 第 5 步：看看做得对不对（改错）</span></div>
+
+    <div class="connector"></div>
+
+    <div class="module red-bg">
+      <span class="tag red">13</span>
+      <div class="module-title">
+        ★ 算分：预测和正确答案差多少？
+        <span class="badge code-ref">action_head:505-544</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        你让机器人试着做一遍拿杯子，<br>
+        然后 <em>对比机器人的动作和你的示范动作</em>：<br>
+        "嗯，你 shoulder 转多了 5 度，elbow 弯少了 8 度，这里差 3 分，那里差 2 分"
+      </div>
+
+      <div class="module-desc">
+        <span class="glossary-term">MSE Loss（均方误差）
+          <span class="tooltip">Mean Squared Error，就是"预测值 - 真实值"的平方，然后平均。平方是为了让"大错误"更突出（比小错误多扣分）。<br>例：差1分→扣1分，差3分→扣9分（大错误更严重）</span>
+        </span>
+      </div>
+
+      <div class="formula-box" style="font-size:0.82rem;">
+        <span class="hl-red">错误分</span> = <em>平方差</em>(预测的修正, 正确的修正) × 有效掩码<br><br>
+        <span class="hl-red">最终分数</span> = 总分 / 有效帧数
+      </div>
+
+      <div style="margin-top:0.4rem;font-size:0.82rem;color:var(--text-dim);">
+        <span class="glossary-term">action_mask（有效掩码）
+          <span class="tooltip">有些时刻的关节数据可能是空的（没录到），action_mask=0 表示"这帧不算分"，action_mask=1 表示"这帧要算分"。就像一个考试时告诉你"这些题不算分，那些题算分"。</span>
+        </span>
+      </div>
+
+      <!-- progress_loss support -->
+      <div style="margin-top:0.3rem;background:var(--surface);border-radius:6px;padding:0.3rem 0.6rem;font-size:0.73rem;">
+        <div style="font-weight:600;color:var(--orange);margin-bottom:0.2rem;">🔍 可选：Task Progress Loss</div>
+        <div style="color:var(--text-dim);line-height:1.6;">
+          除 MSE action loss 外，还支持可选的 <strong>任务进度预测 loss</strong>（<code>TaskProgressLoss</code>）：<br>
+          • 启用条件：配置中 <code>task_progress.enabled=True</code><br>
+          • 从 DiT 输出 <code>latent_emb</code> 额外解码出 <code>progress</code> 标量<br>
+          • 与 action loss 相加得到总 loss：<code>loss += progress_loss</code><br>
+          • 推理时通过 <code>PolicyTao.get_action()</code> 返回 <code>results['progress']</code>
+        </div>
+        <div style="margin-top:0.2rem;">
+          <span class="src-badge src-code">action_head_dit:498-501,534-540</span>
+          <span class="src-badge src-code">shared.py:194-207</span>
+          <span class="src-badge src-code">serving/policy.py:86,142-143</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======== TRAINING MECHANISM DEEP DIVE ======== -->
+    <div class="section-label"><span>块 14：Flow Matching 完整训练与推理链路</span></div>
+
+    <div class="connector"></div>
+
+    <div class="module orange-bg">
+      <span class="tag orange">14</span>
+      <div class="module-title">
+        训练 vs 推理：两种模式的完整对比
+        <span class="badge code-ref">action_head:278-672</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 为什么需要两种模式？</div>
+        想象你学倒水：<br>
+        ① <em>训练时</em>：老师先做一遍，你把每一步都记下来，然后自己练习。<strong>你有正确答案可以对照</strong>。<br>
+        ② <em>推理时</em>：面前只有空杯子和水壶，没有人演示了。<strong>你只能凭学到的能力自己来</strong>。<br><br>
+        Flow Matching 的两种模式对应这个道理：训练时有真值算 velocity，推理时只能从噪声一步步修正。
+      </div>
+
+      <div style="display:flex;gap:1rem;margin-top:0.4rem;">
+        <div style="flex:1;background:var(--blue-bg);border-radius:8px;padding:0.8rem;">
+          <div style="font-size:0.9rem;font-weight:600;color:var(--blue);margin-bottom:0.5rem;">🎯 训练模式（有真值）</div>
+          <div style="background:var(--surface);border-radius:8px;padding:0.6rem;">
+            <!-- 第1行：输入 -->
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.3rem;">
+              <div style="background:rgba(239,68,68,0.2);border:1px solid var(--red);border-radius:6px;padding:0.3rem 0.5rem;text-align:center;flex:1;">
+                <div style="font-size:0.6rem;color:var(--red);font-weight:600;">纯噪声</div>
+                <div style="font-size:0.65rem;color:var(--text);">noise</div>
+              </div>
+              <div style="font-size:0.65rem;color:var(--orange);text-align:center;flex:1.2;">
+                <span style="font-weight:600;">(1−t)×noise + t×actions</span>
+              </div>
+              <div style="background:rgba(34,197,94,0.2);border:1px solid var(--green);border-radius:6px;padding:0.3rem 0.5rem;text-align:center;flex:1;">
+                <div style="font-size:0.6rem;color:var(--green);font-weight:600;">真实动作</div>
+                <div style="font-size:0.65rem;color:var(--text);">actions</div>
+              </div>
+            </div>
+            <!-- 箭头向下 -->
+            <div style="text-align:center;font-size:0.7rem;color:var(--text-dim);margin:0.2rem 0;">↓ noisy</div>
+            <!-- 第2行：DiT -->
+            <div style="background:rgba(245,158,11,0.15);border:2px solid var(--orange);border-radius:8px;padding:0.4rem;text-align:center;margin:0.1rem 0;">
+              <div style="font-size:0.65rem;font-weight:600;color:var(--orange);">🧠 DiT</div>
+              <div style="font-size:0.6rem;color:var(--text-dim);">DiT(noisy, backbone, t, state) <span style="color:var(--orange);font-size:0.58rem;">(关于DiT的定义详见第10块)</span></div>
+            </div>
+            <!-- 箭头向下 -->
+            <div style="text-align:center;font-size:0.7rem;color:var(--text-dim);margin:0.2rem 0;">↓</div>
+            <!-- 第3行：pred_velocity -->
+            <div style="background:rgba(59,130,246,0.15);border:1px solid var(--blue);border-radius:6px;padding:0.3rem 0.5rem;text-align:center;">
+              <div style="font-size:0.6rem;color:var(--blue);font-weight:600;">模型预测的修正方向</div>
+              <div style="font-size:0.65rem;color:var(--text);">pred_velocity</div>
+            </div>
+            <!-- 箭头向下 -->
+            <div style="text-align:center;font-size:0.7rem;color:var(--text-dim);margin:0.2rem 0;">↓ 对比</div>
+            <!-- 第4行：Loss -->
+            <div style="background:rgba(239,68,68,0.15);border:2px solid var(--red);border-radius:8px;padding:0.4rem;text-align:center;">
+              <div style="font-size:0.65rem;font-weight:600;color:var(--red);">📉 Loss 计算</div>
+              <div style="font-size:0.6rem;color:var(--text-dim);">MSE(pred_velocity, actions − noise)</div>
+            </div>
+          </div>
+          <div style="margin-top:0.4rem;font-size:0.75rem;color:var(--text-dim);line-height:1.6;">
+            <strong style="color:var(--blue);">关键点：</strong><br>
+            • 输入是 <strong>插值后的 noisy</strong>（不是纯噪声）<br>
+            • 目标是 <strong>velocity</strong>（从噪声到真值的修正方向）<br>
+            • t 随机采样，让模型适应各种模糊程度
+          </div>
+        </div>
+
+        <!-- Inference Mode -->
+        <div style="flex:1;background:var(--green-bg);border-radius:8px;padding:0.8rem;">
+          <div style="font-size:0.9rem;font-weight:600;color:var(--green);margin-bottom:0.5rem;">🚀 推理模式（无真值，逐步去噪）</div>
+          <div style="background:var(--surface);border-radius:8px;padding:0.6rem;">
+            <!-- 第1步：初始化 -->
+            <div style="display:flex;align-items:center;gap:0.3rem;margin-bottom:0.15rem;">
+              <div style="background:rgba(239,68,68,0.2);border:1px solid var(--red);border-radius:6px;padding:0.3rem 0.5rem;text-align:center;flex:1;">
+                <div style="font-size:0.6rem;color:var(--red);font-weight:600;">初始化</div>
+                <div style="font-size:0.65rem;color:var(--text);">action = randn()</div>
+              </div>
+              <div style="font-size:0.6rem;color:var(--text-dim);white-space:nowrap;">← 纯噪声</div>
+            </div>
+            <!-- 箭头向下 -->
+            <div style="text-align:center;font-size:0.7rem;color:var(--text-dim);margin:0.15rem 0;">↓</div>
+            <!-- 循环标记 -->
+            <div style="position:relative;border:2px dashed var(--orange);border-radius:10px;padding:0.5rem;margin:0.1rem 0;">
+              <div style="position:absolute;top:-0.5rem;right:0.5rem;background:var(--orange);color:#000;font-size:0.55rem;font-weight:600;padding:0.05rem 0.4rem;border-radius:4px;">循环 N 次（action_head:44 中 num_inference_timesteps=4）</div>
+              <!-- 第2步：DiT -->
+              <div style="background:rgba(245,158,11,0.15);border:2px solid var(--orange);border-radius:8px;padding:0.3rem;text-align:center;margin-bottom:0.3rem;">
+                <div style="font-size:0.65rem;font-weight:600;color:var(--orange);">🧠 DiT 预测</div>
+                <div style="font-size:0.6rem;color:var(--text-dim);">pred_velocity = DiT(action, backbone, t, state) <span style="color:var(--orange);font-size:0.58rem;">(关于DiT的定义详见第10块)</span></div>
+              </div>
+              <!-- 箭头向下 -->
+              <div style="text-align:center;font-size:0.7rem;color:var(--text-dim);margin:0.15rem 0;">↓</div>
+              <!-- 第3步：修正 -->
+              <div style="background:rgba(59,130,246,0.15);border:1px solid var(--blue);border-radius:6px;padding:0.3rem;text-align:center;">
+                <div style="font-size:0.6rem;color:var(--blue);font-weight:600;">逐步修正（dt=1/N）</div>
+                <div style="font-size:0.65rem;color:var(--text);">action += dt × pred_velocity</div>
+              </div>
+            </div>
+            <!-- 箭头向下 -->
+            <div style="text-align:center;font-size:0.7rem;color:var(--text-dim);margin:0.15rem 0;">↓ 最终结果</div>
+            <!-- 第4步：输出 -->
+            <div style="background:rgba(34,197,94,0.2);border:2px solid var(--green);border-radius:8px;padding:0.3rem;text-align:center;">
+              <div style="font-size:0.6rem;color:var(--green);font-weight:600;">✅ 最终动作轨迹</div>
+              <div style="font-size:0.65rem;color:var(--text);">64帧连续动作 ≈ 真实动作</div>
+            </div>
+          </div>
+          <div style="margin-top:0.4rem;font-size:0.75rem;color:var(--text-dim);line-height:1.6;">
+            <strong style="color:var(--green);">关键点：</strong><br>
+            • 从 <strong>纯噪声</strong> 开始（没有真值）<br>
+            • 每次迭代修正一小步（dt=1/步数）<br>
+            • 默认 <code>num_inference_timesteps=4</code><br>
+            • 最终输出 <strong>连续 64 帧动作</strong>
+          </div>
+
+          <!-- 为什么4步就够 -->
+          <div style="margin-top:0.6rem;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;font-size:0.76rem;line-height:1.5;color:var(--text-dim);">
+            <div style="font-weight:600;color:var(--green);margin-bottom:0.2rem;">❓ 为什么 4 步就够了？不是应该像传统扩散模型那样跑 1000 步吗？</div>
+            <strong>Flow Matching 和传统 DDPM（去噪扩散概率模型）走的是完全不同的路</strong>：<br><br>
+            <table style="width:100%;font-size:0.72rem;border-collapse:collapse;">
+              <tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:0.2rem 0.4rem;font-weight:600;color:var(--orange);">DDPM</td>
+                <td style="padding:0.2rem 0.4rem;">逐步加噪/去噪，路径是<strong>弯曲的</strong>（类似随机游走），每一步只能走很小，需要 1000 步</td>
+              </tr>
+              <tr>
+                <td style="padding:0.2rem 0.4rem;font-weight:600;color:var(--green);">Flow Matching</td>
+                <td style="padding:0.2rem 0.4rem;">直接学"从噪声到真值的直线方向"，路径是<strong>直的</strong>，4 大步就能走到底</td>
+              </tr>
+            </table><br>
+            <strong>原因拆解：</strong><br>
+            • 训练时目标 <code>velocity = actions − noise</code> 就是"连接噪声和真值的直线方向"（<code>action_head:305</code>）<br>
+            • 推理时用 <strong>欧拉积分</strong>：<code>dt = 1/4 = 0.25</code>，每次 <code>action += 0.25 × pred_velocity</code><br>
+            • 4 步之后 <code>action</code> 从纯噪声走到 ≈ 真值位置，相当于把整条直线均匀切了 4 段<br><br>
+            <span style="color:var(--text-dim);">💡 类比：DDPM 像盘山路绕 1000 个弯下山，Flow Matching 像坐直梯直接到一楼 —— 路径设计不同，步数自然差了两个数量级。</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Code reference -->
+      <div style="margin-top:0.4rem;background:var(--surface2);border-radius:6px;padding:0.4rem 0.6rem;">
+        <div style="font-size:0.72rem;font-weight:600;color:var(--orange);margin-bottom:0.2rem;">📝 源码逐行对应</div>
+        <pre style="font-size:0.68rem;line-height:1.4;color:var(--text-dim);overflow-x:auto;">
+<span style="color:var(--text-dim);"># action_head_dit.py - 训练模式 (L296-308)</span>
+noise = torch.randn(actions.shape)                              <span style="color:var(--text-dim);"># ① 生成随机噪声</span>
+t = self.sample_time(batch_size)                                <span style="color:var(--text-dim);"># ② 随机时间步 t ~ Beta分布</span>
+noisy_trajectory = (1 - t) * noise + t * actions                 <span style="color:var(--text-dim);"># ③ 插值混合</span>
+velocity = actions - noise                                       <span style="color:var(--text-dim);"># ④ 计算目标修正方向</span>
+
+<span style="color:var(--text-dim);"># action_head_dit.py - 推理模式 (L617-658)</span>
+action = torch.randn(batch_size, action_horizon, max_action_dim) <span style="color:var(--text-dim);"># 从纯噪声开始</span>
+for t in range(num_inference_timesteps):                        <span style="color:var(--text-dim);"># 逐步去噪</span>
+    pred_velocity = DiT(action, backbone_features, t, state)    <span style="color:var(--text-dim);"># 预测修正方向（关于DiT的定义详见第10块）</span>
+    action += dt * pred_velocity                                  <span style="color:var(--text-dim);"># 执行一小步修正</span></pre>
+      </div>
+
+      <!-- Serving inference section -->
+      <div style="margin-top:0.4rem;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;border:1px dashed var(--green);">
+        <div style="font-size:0.72rem;font-weight:600;color:var(--green);margin-bottom:0.2rem;">🚀 推理服务层（serving/policy.py）</div>
+        <div style="font-size:0.7rem;color:var(--text-dim);line-height:1.5;">
+          项目在 <code>serving/policy.py</code> 中提供了 <strong>PolicyTao</strong> 推理类，封装完整的推理流程：
+        </div>
+        <pre style="font-size:0.68rem;line-height:1.4;color:var(--text-dim);background:var(--surface2);border-radius:4px;padding:0.3rem 0.5rem;margin-top:0.2rem;overflow-x:auto;">
+<span style="color:var(--text-dim);"># PolicyTao 推理流程</span>
+1. <span style="color:var(--green);">加载模型与 Processor</span>
+   model = TaoFlowMatchingModel.from_pretrained(model_path)
+   processor = TaoFlowMatchingProcessor.from_pretrained(processor_path)
+
+2. <span style="color:var(--green);">将原始观测转换为 VLAStepData</span>
+   vla_step_data = VLAStepData(images, states, text, embodiment_tag)
+
+3. <span style="color:var(--green);">Processor 预处理</span>
+   → 归一化 state/action → 图像变换（torchvision/albumentations）→ VLM prompt 构建
+
+4. <span style="color:var(--green);">Collator 组装批次</span>
+   collated = processor.collator(processed_obs)  ← 调用 EagleVL 处理器（EagleVL2.5/3）
+
+5. <span style="color:var(--green);">模型推理（纯噪声 → 4步去噪）</span>
+   denoised = model.get_action(**collated_inputs)  ← num_inference_timesteps=4
+
+6. <span style="color:var(--green);">解码动作（反归一化 + 拆分子组件）</span>
+   unnormalized_action = processor.decode_action(normalized_action, embodiment_tag, state)
+
+7. <span style="color:var(--green);">返回结果</span>
+   results['action'] = casted_action  ← (B, valid_horizon, D)
+   results['progress'] = progress    ← (可选，task_progress 启用时)</pre>
+        <div style="margin-top:0.3rem;font-size:0.68rem;color:var(--text-dim);">
+          <span class="src-badge src-code">serving/policy.py</span>
+          <span class="src-badge src-code">processing_tao_flow_matching_model.py</span>
+          <span class="src-badge src-code">modeling_tao_flow_matching_model.py:get_action</span>
+        </div>
+      </div>
+   </div>
+
+    <div class="connector"></div>
+
+    <!-- ======== VELOCITY FIELD VISUALIZATION ======== -->
+    <div class="module orange-bg">
+      <span class="tag orange">15</span>
+      <div class="module-title">
+        速度场到底长什么样
+      </div>
+
+      <div style="margin-top:0.5rem;">
+        <svg width="100%" viewBox="0 0 640 300" style="display:block;background:#1a2332;border-radius:8px;padding:4px 0 0 0;">
+          <defs>
+            <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="rgba(34,197,94,0.30)"/>
+              <stop offset="30%" stop-color="rgba(34,197,94,0.12)"/>
+              <stop offset="60%" stop-color="rgba(34,197,94,0.04)"/>
+              <stop offset="100%" stop-color="rgba(34,197,94,0)"/>
+            </radialGradient>
+            <marker id="arrA" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <polygon points="0 0, 10 4, 0 8" fill="#3b82f6"/>
+            </marker>
+            <marker id="arrB" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <polygon points="0 0, 10 4, 0 8" fill="#8b5cf6"/>
+            </marker>
+            <marker id="arrC" viewBox="0 0 10 8" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+              <polygon points="0 0, 10 4, 0 8" fill="#ec4899"/>
+            </marker>
+            <marker id="arrField" viewBox="0 0 6 4" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+              <polygon points="0 0, 6 2, 0 4" fill="rgba(245,158,11,0.18)"/>
+            </marker>
+          </defs>
+
+          <rect width="640" height="300" fill="transparent"/>
+          <circle cx="240" cy="148" r="180" fill="url(#centerGlow)"/>
+          <circle cx="240" cy="148" r="110" stroke="rgba(148,163,184,0.06)" stroke-width="1" stroke-dasharray="3,5" fill="none"/>
+          <circle cx="240" cy="148" r="60" stroke="rgba(148,163,184,0.09)" stroke-width="1" stroke-dasharray="3,5" fill="none"/>
+
+          <!-- 图例（无背景框，放在右上）-->
+          <text x="520" y="10" fill="rgba(148,163,184,0.65)" font-size="7" font-weight="bold">图  例</text>
+          <circle cx="521" cy="21" r="2.5" fill="#ef4444"/>
+          <text x="528" y="24" fill="rgba(148,163,184,0.5)" font-size="6.5">噪声起点</text>
+          <line x1="518" y1="33" x2="525" y2="36" stroke="rgba(245,158,11,0.35)" stroke-width="1" marker-end="url(#arrField)"/>
+          <text x="528" y="38" fill="rgba(148,163,184,0.5)" font-size="6.5">场方向</text>
+          <line x1="518" y1="46" x2="527" y2="49" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrA)"/>
+          <text x="530" y="51" fill="rgba(148,163,184,0.5)" font-size="6.5">走一步</text>
+          <circle cx="522" cy="62" r="4" fill="rgba(34,197,94,0.15)" stroke="#22c55e" stroke-width="1.2"/>
+          <text x="529" y="65" fill="rgba(148,163,184,0.5)" font-size="6.5">目标</text>
+
+          <!-- ====== 背景速度场箭头（~60个淡橙色小箭头指向中心） ====== -->
+          <!-- y=15 (最上排，全部斜向下) -->
+          <line x1="18" y1="15" x2="30" y2="22" stroke="rgba(245,158,11,0.16)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="48" y1="15" x2="57" y2="22" stroke="rgba(245,158,11,0.18)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="78" y1="15" x2="85" y2="22" stroke="rgba(245,158,11,0.20)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="108" y1="15" x2="113" y2="22" stroke="rgba(245,158,11,0.22)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="138" y1="15" x2="141" y2="22" stroke="rgba(245,158,11,0.24)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="168" y1="15" x2="170" y2="22" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="312" y1="15" x2="310" y2="22" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="342" y1="15" x2="339" y2="22" stroke="rgba(245,158,11,0.24)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="372" y1="15" x2="368" y2="22" stroke="rgba(245,158,11,0.22)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="402" y1="15" x2="398" y2="22" stroke="rgba(245,158,11,0.20)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="432" y1="15" x2="427" y2="22" stroke="rgba(245,158,11,0.18)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="462" y1="15" x2="457" y2="22" stroke="rgba(245,158,11,0.16)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <!-- y=50 -->
+          <line x1="18" y1="50" x2="32" y2="56" stroke="rgba(245,158,11,0.20)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="48" y1="50" x2="60" y2="55" stroke="rgba(245,158,11,0.22)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="78" y1="50" x2="88" y2="54" stroke="rgba(245,158,11,0.25)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="108" y1="50" x2="116" y2="54" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="138" y1="50" x2="145" y2="53" stroke="rgba(245,158,11,0.32)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="168" y1="50" x2="173" y2="53" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="312" y1="50" x2="307" y2="53" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="342" y1="50" x2="335" y2="53" stroke="rgba(245,158,11,0.32)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="372" y1="50" x2="364" y2="54" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="402" y1="50" x2="394" y2="55" stroke="rgba(245,158,11,0.25)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="432" y1="50" x2="425" y2="56" stroke="rgba(245,158,11,0.22)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="462" y1="50" x2="454" y2="57" stroke="rgba(245,158,11,0.20)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <!-- y=85 -->
+          <line x1="18" y1="85" x2="34" y2="88" stroke="rgba(245,158,11,0.25)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="48" y1="85" x2="62" y2="87" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="78" y1="85" x2="90" y2="86" stroke="rgba(245,158,11,0.30)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="108" y1="85" x2="118" y2="86" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="138" y1="85" x2="146" y2="86" stroke="rgba(245,158,11,0.38)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="168" y1="85" x2="174" y2="86" stroke="rgba(245,158,11,0.42)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="306" y1="85" x2="300" y2="86" stroke="rgba(245,158,11,0.42)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="336" y1="85" x2="330" y2="86" stroke="rgba(245,158,11,0.38)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="366" y1="85" x2="362" y2="86" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="396" y1="85" x2="390" y2="87" stroke="rgba(245,158,11,0.30)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="426" y1="85" x2="420" y2="88" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="456" y1="85" x2="450" y2="89" stroke="rgba(245,158,11,0.25)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <!-- y=120 -->
+          <line x1="18" y1="120" x2="34" y2="120" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="48" y1="120" x2="63" y2="120" stroke="rgba(245,158,11,0.32)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="78" y1="120" x2="92" y2="119" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="108" y1="120" x2="120" y2="119" stroke="rgba(245,158,11,0.40)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="138" y1="120" x2="148" y2="119" stroke="rgba(245,158,11,0.44)" stroke-width="0.9" marker-end="url(#arrField)"/>
+          <line x1="168" y1="123" x2="176" y2="118" stroke="rgba(245,158,11,0.48)" stroke-width="0.9" marker-end="url(#arrField)"/>
+          <line x1="300" y1="123" x2="294" y2="118" stroke="rgba(245,158,11,0.48)" stroke-width="0.9" marker-end="url(#arrField)"/>
+          <line x1="330" y1="120" x2="324" y2="119" stroke="rgba(245,158,11,0.44)" stroke-width="0.9" marker-end="url(#arrField)"/>
+          <line x1="360" y1="120" x2="353" y2="119" stroke="rgba(245,158,11,0.40)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="390" y1="120" x2="383" y2="119" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="420" y1="120" x2="413" y2="120" stroke="rgba(245,158,11,0.32)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="450" y1="120" x2="443" y2="121" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <!-- y=175 -->
+          <line x1="18" y1="175" x2="34" y2="172" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="48" y1="175" x2="63" y2="172" stroke="rgba(245,158,11,0.32)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="78" y1="175" x2="92" y2="173" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="108" y1="175" x2="120" y2="173" stroke="rgba(245,158,11,0.40)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="138" y1="175" x2="148" y2="173" stroke="rgba(245,158,11,0.44)" stroke-width="0.9" marker-end="url(#arrField)"/>
+          <line x1="168" y1="172" x2="176" y2="170" stroke="rgba(245,158,11,0.48)" stroke-width="0.9" marker-end="url(#arrField)"/>
+          <line x1="300" y1="172" x2="294" y2="170" stroke="rgba(245,158,11,0.48)" stroke-width="0.9" marker-end="url(#arrField)"/>
+          <line x1="330" y1="175" x2="324" y2="173" stroke="rgba(245,158,11,0.44)" stroke-width="0.9" marker-end="url(#arrField)"/>
+          <line x1="360" y1="175" x2="353" y2="173" stroke="rgba(245,158,11,0.40)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="390" y1="175" x2="383" y2="173" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="420" y1="175" x2="413" y2="172" stroke="rgba(245,158,11,0.32)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="450" y1="175" x2="443" y2="172" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <!-- y=210 -->
+          <line x1="18" y1="210" x2="33" y2="203" stroke="rgba(245,158,11,0.25)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="48" y1="210" x2="61" y2="204" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="78" y1="210" x2="90" y2="205" stroke="rgba(245,158,11,0.30)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="108" y1="210" x2="118" y2="206" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="138" y1="210" x2="146" y2="206" stroke="rgba(245,158,11,0.38)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="168" y1="210" x2="174" y2="207" stroke="rgba(245,158,11,0.42)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="306" y1="210" x2="300" y2="207" stroke="rgba(245,158,11,0.42)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="336" y1="210" x2="330" y2="206" stroke="rgba(245,158,11,0.38)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="366" y1="210" x2="362" y2="205" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="396" y1="210" x2="390" y2="204" stroke="rgba(245,158,11,0.30)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="426" y1="210" x2="420" y2="203" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="456" y1="210" x2="450" y2="202" stroke="rgba(245,158,11,0.25)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <!-- y=245 -->
+          <line x1="18" y1="245" x2="30" y2="235" stroke="rgba(245,158,11,0.20)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="48" y1="245" x2="58" y2="236" stroke="rgba(245,158,11,0.22)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="78" y1="245" x2="86" y2="237" stroke="rgba(245,158,11,0.25)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="108" y1="245" x2="114" y2="238" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="138" y1="245" x2="143" y2="239" stroke="rgba(245,158,11,0.32)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="168" y1="245" x2="171" y2="240" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="312" y1="245" x2="308" y2="240" stroke="rgba(245,158,11,0.35)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="342" y1="245" x2="336" y2="239" stroke="rgba(245,158,11,0.32)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="372" y1="245" x2="366" y2="238" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="402" y1="245" x2="395" y2="237" stroke="rgba(245,158,11,0.25)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="432" y1="245" x2="425" y2="236" stroke="rgba(245,158,11,0.22)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="462" y1="245" x2="455" y2="235" stroke="rgba(245,158,11,0.20)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <!-- y=280 -->
+          <line x1="18" y1="280" x2="28" y2="270" stroke="rgba(245,158,11,0.16)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="48" y1="280" x2="56" y2="271" stroke="rgba(245,158,11,0.18)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="78" y1="280" x2="84" y2="272" stroke="rgba(245,158,11,0.20)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="108" y1="280" x2="112" y2="273" stroke="rgba(245,158,11,0.22)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="138" y1="280" x2="141" y2="274" stroke="rgba(245,158,11,0.24)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="168" y1="280" x2="170" y2="275" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="312" y1="280" x2="310" y2="275" stroke="rgba(245,158,11,0.28)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="342" y1="280" x2="339" y2="274" stroke="rgba(245,158,11,0.24)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="372" y1="280" x2="368" y2="273" stroke="rgba(245,158,11,0.22)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="402" y1="280" x2="397" y2="272" stroke="rgba(245,158,11,0.20)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="432" y1="280" x2="426" y2="271" stroke="rgba(245,158,11,0.18)" stroke-width="0.8" marker-end="url(#arrField)"/>
+          <line x1="462" y1="280" x2="456" y2="270" stroke="rgba(245,158,11,0.16)" stroke-width="0.8" marker-end="url(#arrField)"/>
+
+          <!-- 目标区域 -->
+          <circle cx="240" cy="148" r="22" fill="rgba(34,197,94,0.12)" stroke="#22c55e" stroke-width="2"/>
+          <circle cx="240" cy="148" r="9" fill="rgba(34,197,94,0.25)"/>
+          <text x="240" y="144" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="bold">真值</text>
+          <text x="240" y="156" text-anchor="middle" fill="#22c55e" font-size="10" font-weight="bold">动作</text>
+
+          <!-- 轨迹 A（左上→目标，蓝色） -->
+          <polyline points="22,18 65,50 125,90 190,126 232,144" stroke="#3b82f6" stroke-width="2.5" fill="none" stroke-linejoin="round" opacity="0.80"/>
+          <circle cx="22" cy="18" r="5" fill="#ef4444" opacity="0.9"/>
+          <text x="14" y="13" fill="#ef4444" font-size="8" text-anchor="end" font-weight="bold">起点 A</text>
+          <line x1="65" y1="50" x2="88" y2="64" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#arrA)"/>
+          <text x="82" y="62" fill="#3b82f6" font-size="6.5" text-anchor="middle" opacity="0.85">步</text>
+          <line x1="125" y1="90" x2="148" y2="103" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#arrA)"/>
+          <text x="145" y="102" fill="#3b82f6" font-size="6.5" text-anchor="middle" opacity="0.85">步</text>
+          <line x1="190" y1="126" x2="205" y2="133" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#arrA)"/>
+          <text x="206" y="136" fill="#3b82f6" font-size="6.5" text-anchor="middle" opacity="0.85">步</text>
+
+          <!-- 轨迹 B（右→目标，紫色） -->
+          <polyline points="510,20 468,55 410,96 348,130 250,146" stroke="#8b5cf6" stroke-width="2.5" fill="none" stroke-linejoin="round" opacity="0.80"/>
+          <circle cx="510" cy="20" r="5" fill="#ef4444" opacity="0.9"/>
+          <text x="518" y="16" fill="#ef4444" font-size="8" text-anchor="start" font-weight="bold">起点 B</text>
+          <line x1="468" y1="55" x2="445" y2="70" stroke="#8b5cf6" stroke-width="2.5" marker-end="url(#arrB)"/>
+          <line x1="410" y1="96" x2="390" y2="107" stroke="#8b5cf6" stroke-width="2.5" marker-end="url(#arrB)"/>
+          <line x1="348" y1="130" x2="332" y2="137" stroke="#8b5cf6" stroke-width="2.5" marker-end="url(#arrB)"/>
+
+          <!-- 轨迹 C（左下→目标，粉色） -->
+          <polyline points="20,278 52,240 100,202 168,170 232,152" stroke="#ec4899" stroke-width="2.5" fill="none" stroke-linejoin="round" opacity="0.80"/>
+          <circle cx="20" cy="278" r="5" fill="#ef4444" opacity="0.9"/>
+          <text x="11" y="288" fill="#ef4444" font-size="8" text-anchor="end" font-weight="bold">起点 C</text>
+          <line x1="52" y1="240" x2="68" y2="226" stroke="#ec4899" stroke-width="2.5" marker-end="url(#arrC)"/>
+          <line x1="100" y1="202" x2="118" y2="190" stroke="#ec4899" stroke-width="2.5" marker-end="url(#arrC)"/>
+          <line x1="168" y1="170" x2="188" y2="162" stroke="#ec4899" stroke-width="2.5" marker-end="url(#arrC)"/>
+
+          <!-- 底部说明 -->
+          <text x="6" y="297" fill="rgba(148,163,184,0.40)" font-size="7">🔵 离目标远→箭头长（大修正） &nbsp;|&nbsp; 🟢 离目标近→箭头短（微调） &nbsp;|&nbsp; 🟡 全图淡橙小箭头 = 速度场 v(·) 在动作空间各点的方向</text>
+        </svg>
+      </div>
+
+      <div style="display:flex;gap:1rem;margin-top:0.4rem;font-size:0.76rem;line-height:1.5;color:var(--text-dim);">
+        <div style="flex:1;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;">
+          <span style="color:var(--green);font-weight:600;">🎯 核心直觉</span><br>
+          想象你在<strong>黑暗的操场</strong>上，不知道家在哪。但<strong>每个位置的地面都画了一个箭头</strong>指向家的方向。<br>
+          — 远时箭头<strong style="color:#3b82f6;">长</strong>（大跨步）<br>
+          — 近时箭头<strong style="color:#22c55e;">短</strong>（小碎步）<br>
+          这个「每个位置→方向的映射」就是<strong>速度场</strong>。
+        </div>
+        <div style="flex:1;background:var(--surface);border-radius:6px;padding:0.4rem 0.6rem;">
+          <span style="color:var(--orange);font-weight:600;">🔗 对应代码</span><br>
+          🟡 背景淡箭头 = 速度场<code>v(·)</code>的"全貌"<br>
+          🔵 彩色轨迹 = 推理时<code>for t in range(4)</code>的实际路径<br>
+          ➡ 每一步 = <code>action += dt × pred_velocity</code><br>
+          🟢 走到中心 = 预测动作 ≈ 真值动作
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <!-- ======== STEP 5: BACKWARD ADDITIONAL LOSS DETAIL ======== -->
+    <div class="module red-bg">
+      <span class="tag red">15</span>
+      <div class="module-title">
+        Loss 函数的完整数学表达
+        <span class="badge code-ref">action_head:530-533</span>
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 一句话</div>
+        <strong>Loss = 预测的修正方向与真实的修正方向的差的平方（只算有效维度）</strong>
+      </div>
+
+      <div class="formula-box" style="font-size:0.82rem;">
+        <span style="color:var(--text-dim);"># Python 代码：action_head_dit.py L530-533</span><br><br>
+        <span class="hl-red">action_loss</span> = F.mse_loss(pred_velocity, velocity, reduction='none')<br>
+        <span style="color:var(--text-dim);">// 每个位置的平方差，shape=[64, 64, 128]</span><br><br>
+        <span class="hl-red">action_loss</span> = action_loss * action_mask<br>
+        <span style="color:var(--text-dim);">// 乘以掩码：填充的维度为0（不算分）</span><br><br>
+        <span class="hl-red">loss</span> = action_loss.sum() / action_mask.sum()<br>
+        <span style="color:var(--text-dim);">// 最终损失 = 总分 ÷ 有效帧数</span><br><br>
+        <span class="highlight">详细拆解：</span><br>
+        &nbsp;&nbsp;pred_velocity[0, 5, 0] = 0.12 &nbsp; velocity[0, 5, 0] = 0.08<br>
+        &nbsp;&nbsp;差 = (0.12-0.08)² = 0.0016 &nbsp; 乘 mask=1 &nbsp; 算分 ✔<br>
+        &nbsp;&nbsp;pred_velocity[0, 5, 30] = 0.05 &nbsp; mask[0, 5, 30] = 0 &nbsp; 不算分 ✘<br>
+        &nbsp;&nbsp;<span style="color:var(--text-dim);">（第30维是填充维度，实际G1只有26维）</span>
+      </div>
+
+      <div style="margin-top:0.5rem;font-size:0.8rem;color:var(--text-dim);">
+        <strong>维度级别的 loss 拆解：</strong>
+        <ul style="margin-top:0.2rem;padding-left:1.2rem;line-height:1.7;">
+          <li><strong>第1维（batch）</strong>：64条记录分别算loss，然后平均</li>
+          <li><strong>第2维（action_horizon）</strong>：64帧中，后部帧如果是padding（episode不够长），mask=0不算分</li>
+          <li><strong>第3维（action_dim）</strong>：128维中，只有前26维（14臂+12指）mask=1，后102个padding维mask=0</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="connector"></div>
+
+    <!-- ======== STEP 6: BACKWARD ======== -->
+    <div class="section-label"><span>🔁 第 6 步：根据分数调整参数（学习）</span></div>
+
+    <div class="connector"></div>
+
+    <div class="module purple-bg">
+      <span class="tag purple">16</span>
+      <div class="module-title">
+        根据错误反向调整
+      </div>
+
+      <div class="story-bubble">
+        <div class="s-label">🎬 现实类比</div>
+        就像你教孩子投篮：<br>
+        "你投偏了5度，下次把瞄准方向<em>往左调一点</em>"<br>
+        就这样一次次微调，越来越准。<br><br>
+        计算机也是同样的道理：<em>算一下"偏了多少" → 反向调整参数 → 下次更准</em>
+      </div>
+
+      <div style="display:flex;gap:1rem;margin-top:0.8rem;">
+        <div style="flex:1;padding:0.8rem;background:var(--green-bg);border-radius:8px;">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--green);margin-bottom:0.3rem;">✅ 这些部分会被调整</div>
+          <div style="font-size:0.75rem;color:var(--text-dim);">
+            • DiT 模型（动作推演网络）<br>
+            • State Encoder（状态编码器）<br>
+            • Action Encoder（动作编码器）<br>
+            • Action Decoder（解码器）<br>
+            • 可学习嵌入（未来规划）
+          </div>
+        </div>
+        <div style="flex:1;padding:0.8rem;background:var(--blue-bg);border-radius:8px;">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--blue);margin-bottom:0.3rem;">❄ 这些不动（冻结）</div>
+          <div style="font-size:0.75rem;color:var(--text-dim);">
+            • SigLIP（视觉识别，冻结）<br>
+            • Qwen3-1.7B（EagleVL2.5 LLM 部分，冻结）<br>
+            • 其他通用视觉/语言能力
+          </div>
+          <div style="margin-top:0.4rem;font-size:0.7rem;color:var(--text-dim);">
+            <span class="glossary-term">冻结（Frozen）
+              <span class="tooltip">这部分参数训练时不动。因为 Qwen3 和 SigLIP 已经在大规模数据上训练好了，有很好的通用理解能力。冻结它们就像"在很棒的课本上学知识"，不需要重写课本。</span>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== GLOSSARY ==================== -->
+  <div class="glossary-section">
+    <div class="gl-title">📖 小白版术语速查表</div>
+    <div class="glossary-grid">
+      <div class="glossary-item">
+        <div class="term" style="color:var(--yellow);">Tensor（张量）</div>
+        <div class="def">多维数据容器。就像 Excel：1维=一行数字，2维=表格，3维=一叠表格。<code>[64, 64, 32]</code> = 64条 × 64帧 × 32个数字。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--blue);">Backbone（骨干网络）</div>
+        <div class="def">模型的"感知和理解"部分，包含视觉(SigLIP)和语言(Qwen3)。它的工作是：看懂画面、听懂指令、融合理解。训练时冻结不动。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--green);">Action Head（动作头）</div>
+        <div class="def">模型的"动作执行"部分。它的工作是：根据 backbone 的理解 + 当前机器人状态，输出<strong>26维电机/手指期望值</strong>（14手臂电机+12灵巧手自由度）。训练时主要更新它。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--orange);">Flow Matching</div>
+        <div class="def">训练方法：对标准动作加噪声（弄模糊），让模型学习"从模糊恢复清晰"。推理时从纯噪声开始逐步去噪得到动作。核心公式：<code>noisy = (1-t)×noise + t×action</code></div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--orange);">DiT（扩散变压器）</div>
+        <div class="def">核心动作推演网络。输入"行动方案"（状态+动作序列）和"理解结果"（视觉语言特征），输出修正后的动作预测。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--red);">MSE Loss（均方误差）</div>
+        <div class="def">衡量预测好坏的标准。计算"预测值-真实值"的平方再平均。数值越小越准，训练的目标就是让这个值不断降低。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--purple);">Gradient Descent（梯度下降）</div>
+        <div class="def">学习的方法。计算"方向偏了多少"，然后往反方向调整参数。就像投篮不够高，下次投高一点。每步都调整，越来越准。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--blue);">冻结（Frozen）</div>
+        <div class="def">训练时不动这部分参数。项目里 SigLIP 和 Qwen3-1.7B（EagleVL2.5 骨干的 LLM 部分）都是冻结的，因为它们已经在大数据上学好了通用知识，不需要为倒水任务重新学"怎么看东西"。v0模式全部冻结，v0.5模式解冻LLM最后4层。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--pink);">Batch（批次）</div>
+        <div class="def">一次性喂给模型的数据条数。项目用 batch=64，即每次处理64条记录。批量处理比逐条处理效率高。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--text-dim);">Feature / Embedding（特征 / 嵌入）</div>
+        <div class="def">把图片、文字转成"计算机看得懂"的数字串。比如"杯子"这个图片 → [0.3, -0.5, 0.8, ...] 几百个数字。相似的图片有相似的数字串。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--yellow);">224×224</div>
+        <div class="def">图片分辨率。224像素宽×224像素高，约5万个像素点。原始相机拍的是 640×640（约40万像素），数据加载时被强制降采样至 224×224。原因是 SigLIP 视觉编码器固定吃 224×224 的输入，而管道未启用 EagleVL 的动态分块机制来保留原图细节。这是精度 vs 显存/速度的取舍。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--orange);">action_chunk（动作块）</div>
+        <div class="def">一次预测未来多少步动作。本项目默认 64 步（约2秒，假设30fps）。这样 G1 机器人不是"走一步看一步"，而是规划一整段<strong>26维</strong>连续动作（手臂14维+手指12维）。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--green);">自由度 (DoF)</div>
+        <div class="def">独立可控制的运动方向。G1 灵巧手每只手 <strong>6个自由度</strong>（5根手指弯曲 + 拇指对掌），双手共12个。加上手臂14个电机，总共 <strong>26个自由度</strong>。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--pink);">灵巧手 (Dex Hand)</div>
+        <div class="def">像人手一样能灵活抓握的机械手。G1 左右手各一只，每只6个自由度，可以完成<strong>握壶柄、扶杯子、捏开关</strong>等精细操作。比传统夹爪灵活得多。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--yellow);">填充 (Padding)</div>
+        <div class="def">不同机器人的维度不同（8~26维），为了让模型能同时处理它们，把维度填充到固定值：action填充到128，state填充到128。多余的维度用 <code>action_mask=0</code> 告诉模型"这部分不算"。就像用标准信封装不同大小的照片，空位塞纸板固定。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--purple);">v0 / v0.5 模式</div>
+        <div class="def">项目提供两种训练配置。<strong>v0</strong>（蓝色）：LLM完全冻结，只训练Action Head，速度更快、更省显存。<strong>v0.5</strong>（绿色）：解冻LLM最后4层微调，精度更高、泛化更好。数据量大时推荐 v0.5。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--purple);">AltDiT（交替 DiT）</div>
+        <div class="def">DiT 的变体，在交叉注意力层中<strong>分离图像 token 和非图像 token</strong>。交替处理文本信息和非文本特征（state/action），每 N 块切换一次（<code>attend_text_every_n_blocks=2</code>）。v0.5 模式下使用。对应代码：<code>alt_dit.py</code>。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--blue);">SelfAttentionTransformer</div>
+        <div class="def">仅包含自注意力层的 Transformer，不带交叉注意力。用于 Action Head 中替代 DiT 的精炼/降噪步骤。来自 <code>shared.py:87-154</code>，基于 diffusers 的 <code>ModelMixin</code>。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--orange);">TaskProgressLoss</div>
+        <div class="def">可选的辅助 loss，预测任务完成进度（0~1 标量）。从 DiT 的 <code>latent_emb</code> 额外解码出 <code>progress</code>，与 action MSE loss 相加。启用条件：<code>task_progress.enabled=True</code>。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--text-dim);">Pixel Shuffle（像素重排）</div>
+        <div class="def">将通道维度的信息重排到空间维度，达到降采样效果。EagleVL3 用它将视觉 token 数量减半（<code>use_pixel_shuffle=true, downsample_ratio=0.5</code>）。1024 patches → 512 tokens，减少进入 LLM 的视觉序列长度。</div>
+      </div>
+      <div class="glossary-item">
+        <div class="term" style="color:var(--text-dim);">SigLIP2</div>
+        <div class="def">EagleVL3 使用的视觉编码器，相比 SigLIP 支持更大分辨率（原生 448×448 tile）、带窗口注意力和 RoPE 的改进架构。patch_size=14, hidden_size=1152, 27 层 Transformer。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DECISION TABLE ==================== -->
+  <div class="summary">
+    <div class="summary-title">📊 关键决策参考表</div>
+    <table>
+      <thead>
+        <tr>
+          <th>决策点</th>
+          <th>v0 默认值</th>
+          <th>可配置项</th>
+          <th>A100/H100 适配</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>哪些参数训练？</td>
+          <td>仅 Action Head</td>
+          <td><code>freeze_module_list</code></td>
+          <td><span class="decision-badge decision-yes">✅ 显存充足</span></td>
+        </tr>
+        <tr>
+          <td>LLM 层数</td>
+          <td>12 层</td>
+          <td><code>select_layer</code></td>
+          <td><span class="decision-badge decision-yes">✅ 完全可用</span></td>
+        </tr>
+        <tr>
+          <td>微调 LLM 层</td>
+          <td>0 层</td>
+          <td><code>tune_top_llm_layers</code></td>
+          <td><span class="decision-badge decision-yes">✅ 显存充足</span></td>
+        </tr>
+        <tr>
+          <td>梯度检查点</td>
+          <td>关</td>
+          <td><code>gradient_checkpointing</code></td>
+          <td><span class="decision-badge decision-yes">✅ 推荐开启</span></td>
+        </tr>
+        <tr>
+          <td>语言泛化</td>
+          <td>仅小写+去标点</td>
+          <td><code>formalize_language</code></td>
+          <td><span class="decision-badge decision-no">⚠️ 需数据增强</span></td>
+        </tr>
+        <tr>
+          <td>视觉增强</td>
+          <td>color_jitter / 旋转 / 裁剪</td>
+          <td><code>color_jitter_params</code></td>
+          <td><span class="decision-badge decision-yes">✅ 项目已有</span></td>
+        </tr>
+        <tr>
+          <td>图像增强库</td>
+          <td>torchvision（默认）</td>
+          <td><code>use_albumentations</code></td>
+          <td><span class="decision-badge decision-yes">✅ albumentations 可用</span></td>
+        </tr>
+        <tr>
+          <td>Backbone 选型</td>
+          <td>EagleVL2.5</td>
+          <td><code>model_name</code></td>
+          <td><span class="decision-badge decision-yes">✅ EagleVL3 可选</span></td>
+        </tr>
+        <tr>
+          <td>Action Head 选型</td>
+          <td>DiT（action_head_dit）</td>
+          <td><code>action_head_config</code></td>
+          <td><span class="decision-badge decision-yes">✅ AltDiT 可选</span></td>
+        </tr>
+        <tr>
+          <td>动作模式</td>
+          <td>绝对动作</td>
+          <td><code>relative_chunking</code></td>
+          <td><span class="decision-badge decision-yes">✅ 相对/绝对均支持</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== ROBOT COMPARISON ==================== -->
+  <div class="summary">
+    <div class="summary-title">🤖 项目支持机器人对比表（Embodiment 注册表）</div>
+    <table>
+      <thead>
+        <tr>
+          <th>机器人</th>
+          <th>相机数</th>
+          <th>相机位置</th>
+          <th>state 维度</th>
+          <th>action 维度</th>
+          <th>动作 horizon</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="background:rgba(245,158,11,0.08);">
+          <td><strong style="color:var(--orange);">🦾 Unitree G1</strong></td>
+          <td>3</td>
+          <td>头部+左腕+右腕</td>
+          <td><strong>26</strong> (7+7+6+6)</td>
+          <td><strong>26</strong> (7+7+6+6)</td>
+          <td><strong>64</strong></td>
+          <td><strong>本教程示例</strong> · 人形机器人 · 14臂电机+12指自由度</td>
+        </tr>
+        <tr>
+          <td>a2d_gripper</td>
+          <td>3</td>
+          <td>头顶+左+右</td>
+          <td>16 (7+7+1+1)</td>
+          <td>16 (7+7+1+1)</td>
+          <td>50</td>
+          <td>双臂夹爪 · 无灵巧手</td>
+        </tr>
+        <tr>
+          <td>a2d_hand</td>
+          <td>3</td>
+          <td>头顶+左+右</td>
+          <td>26 (7+7+6+6)</td>
+          <td>26 (7+7+6+6)</td>
+          <td><strong>64</strong></td>
+          <td>双臂+双手 · 有灵巧手</td>
+        </tr>
+        <tr>
+          <td>ALOHA</td>
+          <td>3</td>
+          <td>头顶+左+右</td>
+          <td>14 (6+1+6+1)</td>
+          <td>14 (6+1+6+1)</td>
+          <td>50</td>
+          <td>远程操作双臂</td>
+        </tr>
+        <tr>
+          <td>Franka</td>
+          <td>3</td>
+          <td>头顶+左+右</td>
+          <td>8 (7+1)</td>
+          <td>8 (7+1)</td>
+          <td>50</td>
+          <td>单臂协作机器人</td>
+        </tr>
+        <tr>
+          <td>gr1</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>AltDiT 额外注册 · 人形机器人</td>
+        </tr>
+        <tr>
+          <td>behavior_r1_pro</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>AltDiT 额外注册</td>
+        </tr>
+        <tr>
+          <td>robocasa_panda_omron</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>—</td>
+          <td>AltDiT 额外注册</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:0.5rem 1.2rem;font-size:0.75rem;color:var(--text-dim);border-top:1px solid var(--border);">
+      <strong>关键点：</strong>所有机器人都使用 <strong>3相机</strong> 配置，区别在于 state/action 维度不同。
+      维度通过填充(padding)统一到 <code>max_state_dim=128</code> 和 <code>max_action_dim=128</code>，
+      因此 backbone 和 DiT 模型可以共用，只需换 embodiment 配置即可适配不同机器人。
+      注册表路径：<code>src/tao/embodiments/</code>
+    </div>
+  </div>
+
+  <!-- ==================== v0 vs v0.5 ==================== -->
+  <div class="summary">
+    <div class="summary-title">🔄 训练模式对比：v0 vs v0.5</div>
+    <div style="padding:0.8rem 1.2rem;font-size:0.82rem;color:var(--text-dim);border-bottom:1px solid var(--border);">
+      项目提供两种训练模式。区别在于 <strong>Backbone（Qwen3 LLM）</strong> 是否部分解冻微调。
+    </div>
+
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);">
+      <!-- v0 column -->
+      <div style="flex:1;padding:1rem 1.2rem;border-right:1px solid var(--border);">
+        <div style="font-size:0.95rem;font-weight:600;color:var(--blue);margin-bottom:0.5rem;">🔵 v0 模式（完全冻结）</div>
+        <ul style="font-size:0.8rem;line-height:1.8;padding-left:1.2rem;color:var(--text);">
+          <li><code>tune_top_llm_layers=0</code> — LLM <strong>完全冻结</strong></li>
+          <li>只有 Action Head 更新参数</li>
+          <li>显存占用低（~6-8GB/卡）</li>
+          <li>训练速度快</li>
+          <li>适合快速验证、数据量少的情况</li>
+        </ul>
+        <div style="margin-top:0.6rem;background:var(--blue-bg);border-radius:6px;padding:0.5rem;">
+          <div style="font-size:0.75rem;font-weight:600;color:var(--blue);">参数更新范围</div>
+          <div style="font-size:0.72rem;margin-top:0.2rem;line-height:1.6;">
+            🟢 DiT + State Encoder + Action Encoder/Decoder<br>
+            🔵 SigLIP（冻结）<br>
+            🔵 Qwen3-1.7B（EagleVL2.5 LLM 部分）全部28层（冻结）<br>
+            🔵 仅使用12层（select_layer=12）
+          </div>
+        </div>
+      </div>
+
+      <!-- v0.5 column -->
+      <div style="flex:1;padding:1rem 1.2rem;">
+        <div style="font-size:0.95rem;font-weight:600;color:var(--green);margin-bottom:0.5rem;">🟢 v0.5 模式（部分微调 LLM）</div>
+        <ul style="font-size:0.8rem;line-height:1.8;padding-left:1.2rem;color:var(--text);">
+          <li><code>tune_top_llm_layers=4</code> — LLM 最后<strong>4层解冻</strong></li>
+          <li>Action Head + LLM 后4层一起更新</li>
+          <li>显存占用稍高（~8-10GB/卡）</li>
+          <li>训练速度略慢</li>
+          <li>适合数据量大、需要更好泛化的情况</li>
+        </ul>
+        <div style="margin-top:0.6rem;background:var(--green-bg);border-radius:6px;padding:0.5rem;">
+          <div style="font-size:0.75rem;font-weight:600;color:var(--green);">参数更新范围</div>
+          <div style="font-size:0.72rem;margin-top:0.2rem;line-height:1.6;">
+            🟢 DiT + State Encoder + Action Encoder/Decoder<br>
+            🔵 SigLIP（冻结）<br>
+            🟢 Qwen3-1.7B（EagleVL3 LLM 部分）最后4层（解冻）+ 前24层（冻结）<br>
+            🔵 使用16层（select_layer=16）+ 额外微调最后4层
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detailed comparison -->
+    <div style="padding:0.8rem 1.2rem;">
+      <table style="width:100%;font-size:0.78rem;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);">
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--text-dim);font-weight:500;">配置项</th>
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--blue);font-weight:500;">v0</th>
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--green);font-weight:500;">v0.5</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>tune_top_llm_layers</code></td>
+            <td style="padding:0.4rem 0.6rem;">0</td>
+            <td style="padding:0.4rem 0.6rem;">4</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;">可训练参数量</td>
+            <td style="padding:0.4rem 0.6rem;"><strong>~9.81M</strong>（仅 Action Head）</td>
+            <td style="padding:0.4rem 0.6rem;"><strong>~217M</strong>（Action Head + LLM 后4层）</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>max_action_horizon</code></td>
+            <td style="padding:0.4rem 0.6rem;">50</td>
+            <td style="padding:0.4rem 0.6rem;">50</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>batch_size</code></td>
+            <td style="padding:0.4rem 0.6rem;">64</td>
+            <td style="padding:0.4rem 0.6rem;">64</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>max_steps</code></td>
+            <td style="padding:0.4rem 0.6rem;">10000</td>
+            <td style="padding:0.4rem 0.6rem;">10000</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>learning_rate</code></td>
+            <td style="padding:0.4rem 0.6rem;">1e-4</td>
+            <td style="padding:0.4rem 0.6rem;">1e-4</td>
+          </tr>
+          <tr>
+            <td style="padding:0.4rem 0.6rem;">适用场景</td>
+            <td style="padding:0.4rem 0.6rem;">快速实验、数据量少、验证想法</td>
+            <td style="padding:0.4rem 0.6rem;">正式训练、数据量大、追求更好泛化</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="padding:0.5rem 1.2rem 0.8rem;font-size:0.75rem;color:var(--text-dim);border-top:1px solid var(--border);">
+      <strong>💡 建议：</strong>首次训练先用 v0 模式验证数据通路正确，再切换到 v0.5 模式做正式训练。
+      v0.5 通过解冻 LLM 最后4层，让模型学习任务相关的语言理解微调，
+      在数据量充足时通常能提升 5-15% 的成功率。
+    </div>
+  </div>
+
+  <!-- ==================== SLURM ==================== -->
+  <div class="summary">
+    <div class="summary-title">🖥️ SLURM 集群训练流程</div>
+    <div style="padding:0.8rem 1.2rem;font-size:0.82rem;color:var(--text-dim);border-bottom:1px solid var(--border);">
+      项目使用 SLURM（Simple Linux Utility for Resource Management）进行分布式训练调度。
+      通过 <code>sbatch script_slurm_v0.sh</code> 提交任务，SLURM 自动分配 GPU 和节点并启动训练。
+    </div>
+
+    <!-- SLURM Job Header -->
+    <div style="padding:0.8rem 1.2rem;border-bottom:1px solid var(--border);">
+      <div style="font-size:0.85rem;font-weight:600;color:var(--purple);margin-bottom:0.4rem;">📋 SLURM Job 配置（#SBATCH 头部）</div>
+      <pre style="font-size:0.75rem;line-height:1.6;background:var(--surface2);border-radius:6px;padding:0.6rem;overflow-x:auto;color:var(--text);">
+<span style="color:var(--text-dim);">#!/bin/bash
+#SBATCH --job-name=tao-finetune    # 任务名称</span>
+#SBATCH --nodes=1                   <span style="color:var(--text-dim);"># 使用 1 台服务器节点</span>
+#SBATCH --ntasks-per-node=1         <span style="color:var(--text-dim);"># 每节点 1 个任务</span>
+#SBATCH --gres=gpu:8                <span style="color:var(--text-dim);"># 每节点申请 8 张 GPU</span>
+#SBATCH --output=slurm_logs/job_%j.out  <span style="color:var(--text-dim);"># 标准输出日志</span>
+#SBATCH --error=slurm_logs/job_%j.err   <span style="color:var(--text-dim);"># 错误日志</span></pre>
+      <div style="margin-top:0.4rem;font-size:0.72rem;color:var(--text-dim);">
+        <span class="src-badge src-config">v0</span> 对应 <code>scripts/script_slurm_v0.sh</code> ·
+        <span class="src-badge src-config">v0.5</span> 对应 <code>scripts/script_slurm_v0d5.sh</code>
+      </div>
+    </div>
+
+    <!-- Distributed Training Flow -->
+    <div style="padding:0.8rem 1.2rem;border-bottom:1px solid var(--border);">
+      <div style="font-size:0.85rem;font-weight:600;color:var(--purple);margin-bottom:0.4rem;">🔁 分布式训练启动流程（torchrun + SLURM）</div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;background:var(--surface2);border-radius:8px;padding:0.6rem;text-align:center;">
+          <div style="font-size:0.7rem;color:var(--orange);font-weight:600;">Step 1</div>
+          <div style="font-size:0.75rem;margin-top:0.2rem;">sbatch 提交</div>
+          <div style="font-size:0.65rem;color:var(--text-dim);"><code>sbatch slurm_v0.sh</code></div>
+        </div>
+        <div style="display:flex;align-items:center;color:var(--text-dim);font-size:0.7rem;">→</div>
+        <div style="flex:1;min-width:180px;background:var(--surface2);border-radius:8px;padding:0.6rem;text-align:center;">
+          <div style="font-size:0.7rem;color:var(--orange);font-weight:600;">Step 2</div>
+          <div style="font-size:0.75rem;margin-top:0.2rem;">SLURM 分配资源</div>
+          <div style="font-size:0.65rem;color:var(--text-dim);">A100/H100 · 1节点</div>
+        </div>
+        <div style="display:flex;align-items:center;color:var(--text-dim);font-size:0.7rem;">→</div>
+        <div style="flex:1;min-width:180px;background:var(--surface2);border-radius:8px;padding:0.6rem;text-align:center;">
+          <div style="font-size:0.7rem;color:var(--orange);font-weight:600;">Step 3</div>
+          <div style="font-size:0.75rem;margin-top:0.2rem;">torchrun 启动</div>
+          <div style="font-size:0.65rem;color:var(--text-dim);">8进程分布式训练</div>
+        </div>
+        <div style="display:flex;align-items:center;color:var(--text-dim);font-size:0.7rem;">→</div>
+        <div style="flex:1;min-width:180px;background:var(--surface2);border-radius:8px;padding:0.6rem;text-align:center;">
+          <div style="font-size:0.7rem;color:var(--orange);font-weight:600;">Step 4</div>
+          <div style="font-size:0.75rem;margin-top:0.2rem;">训练开始</div>
+          <div style="font-size:0.65rem;color:var(--text-dim);">输出到 EXP_DIR</div>
+        </div>
+      </div>
+
+      <div style="margin-top:0.6rem;background:var(--surface);border-radius:6px;padding:0.5rem;">
+        <div style="font-size:0.72rem;font-weight:600;color:var(--orange);">🔑 分布式通信关键变量</div>
+        <pre style="font-size:0.7rem;line-height:1.6;margin-top:0.2rem;color:var(--text-dim);">
+<span style="color:var(--text-dim);"># script_slurm_v0.sh:13-15 — 自动计算通信地址</span>
+export <span style="color:var(--green);">MASTER_PORT</span>=$$(20000 + <span style="color:var(--text-dim);">SLURM_JOBID尾号</span>)  <span style="color:var(--text-dim);"># 避免端口冲突</span>
+export <span style="color:var(--green);">MASTER_ADDR</span>=<span style="color:var(--text-dim);">第一个节点的hostname</span>         <span style="color:var(--text-dim);"># 主节点地址</span>
+export <span style="color:var(--green);">GPU_PER_NODE</span>=8                          <span style="color:var(--text-dim);"># 从CUDA_VISIBLE_DEVICES计算</span></pre>
+      </div>
+
+      <div style="margin-top:0.4rem;font-size:0.72rem;color:var(--text-dim);">
+        <strong>训练完整性保障：</strong><code>srun --kill-on-bad-exit=1</code> 确保任一 GPU 进程异常退出时整任务停掉，避免数据不一致。
+      </div>
+    </div>
+
+    <!-- Key Params Table -->
+    <div style="padding:0.8rem 1.2rem;border-bottom:1px solid var(--border);">
+      <div style="font-size:0.85rem;font-weight:600;color:var(--purple);margin-bottom:0.4rem;">📊 关键训练参数（v0 vs v0.5）</div>
+      <table style="width:100%;font-size:0.78rem;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);">
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--text-dim);font-weight:500;">参数</th>
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--blue);font-weight:500;">v0 (script_slurm_v0.sh)</th>
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--green);font-weight:500;">v0.5 (script_slurm_v0d5.sh)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>Backbone 配置</code></td>
+            <td style="padding:0.4rem 0.6rem;">默认（EagleVL2.5：Qwen3-1.7B + SigLIP）</td>
+            <td style="padding:0.4rem 0.6rem;"><code>BackboneConfigEagleVL3</code></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>Action Head 配置</code></td>
+            <td style="padding:0.4rem 0.6rem;">默认 DiT</td>
+            <td style="padding:0.4rem 0.6rem;"><code>ActionHeadConfigAltDiT</code></td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>tune_top_llm_layers</code></td>
+            <td style="padding:0.4rem 0.6rem;">0（LLM 完全冻结）</td>
+            <td style="padding:0.4rem 0.6rem;">4（LLM 后4层解冻）</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>max_action_horizon</code></td>
+            <td style="padding:0.4rem 0.6rem;">50</td>
+            <td style="padding:0.4rem 0.6rem;">50</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>batch_size</code></td>
+            <td style="padding:0.4rem 0.6rem;">64（global）</td>
+            <td style="padding:0.4rem 0.6rem;">64（global）</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>max_steps</code></td>
+            <td style="padding:0.4rem 0.6rem;">10000</td>
+            <td style="padding:0.4rem 0.6rem;">10000</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>adam_beta1</code></td>
+            <td style="padding:0.4rem 0.6rem;">0.95</td>
+            <td style="padding:0.4rem 0.6rem;">0.9</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>base_dir</code></td>
+            <td style="padding:0.4rem 0.6rem;">/shared_checkpoints/tao/v0</td>
+            <td style="padding:0.4rem 0.6rem;">/shared_checkpoints/tao/v0d5</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.4rem 0.6rem;"><code>episode_sampling_rate</code></td>
+            <td style="padding:0.4rem 0.6rem;">0.1</td>
+            <td style="padding:0.4rem 0.6rem;">0.1</td>
+          </tr>
+          <tr>
+            <td style="padding:0.4rem 0.6rem;"><code>color_jitter</code></td>
+            <td style="padding:0.4rem 0.6rem;">亮度0.3/对比0.4/饱和0.5/色相0.08</td>
+            <td style="padding:0.4rem 0.6rem;">亮度0.1/对比0.1/饱和0.1/色相0.1</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Run Command Example -->
+    <div style="padding:0.8rem 1.2rem;">
+      <div style="font-size:0.85rem;font-weight:600;color:var(--purple);margin-bottom:0.4rem;">🚀 实际启动命令</div>
+      <pre style="font-size:0.72rem;line-height:1.6;background:var(--surface2);border-radius:6px;padding:0.6rem;overflow-x:auto;color:var(--text);">
+<span style="color:var(--text-dim);"># 启动 v0 训练</span>
+sbatch scripts/script_slurm_v0.sh
+
+<span style="color:var(--text-dim);"># 启动 v0.5 训练</span>
+sbatch scripts/script_slurm_v0d5.sh
+
+<span style="color:var(--text-dim);"># 查看任务状态</span>
+squeue -u $USER
+
+<span style="color:var(--text-dim);"># 查看实时日志</span>
+tail -f slurm_logs/job_&lt;JOBID&gt;.out
+
+<span style="color:var(--text-dim);"># 取消任务</span>
+scancel &lt;JOBID&gt;               </pre>
+      <div style="margin-top:0.4rem;font-size:0.72rem;color:var(--text-dim);">
+        <strong>📁 输出目录：</strong><code>/data/users/wangye/checkpoints/tao_v0_20240514_120000_n8_b64_s10000/</code><br>
+        <strong>📝 实验命名：</strong><code>{exp_desc}_{timestamp}_n{GPU数}_b{batch}_s{steps}</code><br>
+        <strong>💾 检查点：</strong>每 <code>save_steps=10000</code> 步保存一次模型权重和优化器状态
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== CODE ENTRY ==================== -->
+  <div class="section-label"><span>📂 代码入口与配置系统</span></div>
+
+  <div class="summary">
+    <div class="summary-title">🚀 训练启动流程（scripts/train.py）</div>
+    <div style="padding:0.8rem 1.2rem;font-size:0.82rem;color:var(--text-dim);border-bottom:1px solid var(--border);">
+      <code>jsonargparse</code> CLI 解析 → 配置组装 → Pipeline 逐级准备 → Trainer 执行
+    </div>
+    <div style="padding:0.8rem 1.2rem;border-bottom:1px solid var(--border);">
+      <pre style="font-size:0.75rem;line-height:1.7;background:var(--surface2);border-radius:6px;padding:0.6rem;overflow-x:auto;color:var(--text);">
+<span style="color:var(--text-dim);">scripts/train.py</span>
+  └─ Config.from_cli()
+       └─ TaoCLI（jsonargparse）
+            └─ 解析 --model / --data / --training 参数
+                 └─ 返回 Config 对象（含 model, data, training 三个子配置）
+                      └─ PipelineTaoFlowMatchingModel.before_training()
+                           ├─ prepare_experiment()      <span style="color:var(--text-dim);"># 分布式、日志、seed、目录、配置保存、swanlab</span>
+                           ├─ prepare_processor()        <span style="color:var(--text-dim);"># 初始化 TaoFlowMatchingProcessor</span>
+                           ├─ prepare_datasets()         <span style="color:var(--text-dim);"># 创建 ShardedMixtureDataset</span>
+                           ├─ prepare_model()            <span style="color:var(--text-dim);"># 初始化/加载 TaoFlowMatchingModel</span>
+                           └─ prepare_trainer()          <span style="color:var(--text-dim);"># HuggingFace Trainer + 回调</span>
+                           └─ trainer.train()</pre>
+    </div>
+  </div>
+
+  <div style="margin-top:1.2rem;">
+    <div class="summary">
+      <div class="summary-title">📐 配置三层结构</div>
+      <div style="padding:0.8rem 1.2rem;">
+        <div style="display:flex;flex-direction:column;gap:0.6rem;">
+
+          <div style="background:var(--surface2);border-radius:8px;padding:0.8rem;">
+            <div style="font-size:0.85rem;font-weight:600;color:var(--orange);margin-bottom:0.3rem;">🎯 <code>TaoFlowMatchingModelConfig</code>（顶层模型配置）</div>
+            <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.7;">
+              • <code>backbone_config</code>: EagleVL2.5（Qwen3-1.7B + SigLIP）/ EagleVL3 可选<br>
+              • <code>action_head_config</code>: DiT / AltDiT 可选<br>
+              • 图像增强: <code>use_albumentations</code>, <code>color_jitter_params</code>, <code>random_rotation_angle</code><br>
+              • <code>formalize_language</code>: bool（仅小写+去标点，不支持同义词泛化）
+            </div>
+          </div>
+
+          <div style="background:var(--surface2);border-radius:8px;padding:0.8rem;">
+            <div style="font-size:0.85rem;font-weight:600;color:var(--blue);margin-bottom:0.3rem;">📊 <code>DataConfigShardedMixtureDataset</code>（数据配置）</div>
+            <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.7;">
+              • <code>dataset_paths</code>, <code>embodiment_tags</code> — 核心必填参数<br>
+              • <code>num_shards_per_epoch=100000</code>, <code>shard_size=1024</code>, <code>episode_sampling_rate=0.1</code><br>
+              • <code>video_backend="decord"</code>（默认 decord，支持 torchcodec）<br>
+              • <code>multiprocessing_context="fork"</code>
+            </div>
+          </div>
+
+          <div style="background:var(--surface2);border-radius:8px;padding:0.8rem;">
+            <div style="font-size:0.85rem;font-weight:600;color:var(--green);margin-bottom:0.3rem;">⚙️ <code>TrainingConfig</code>（训练配置）</div>
+            <div style="font-size:0.78rem;color:var(--text-dim);line-height:1.7;">
+              • <code>global_batch_size=64</code>, <code>max_steps=30000</code>, <code>learning_rate=1e-4</code><br>
+              • <code>bf16=True</code>, <code>tf32=True</code>, <code>deepspeed_stage=2</code><br>
+              • <code>optim="adamw_torch_fused"</code>, <code>adam_beta1=0.95</code>, <code>adam_beta2=0.999</code><br>
+              • <code>num_gpus=1</code>, <code>dataloader_num_workers=2</code><br>
+              • <code>use_swanlab=False</code>（实验追踪），<code>save_vl_model=False</code>（不保存 VL 权重省空间）
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DATASET STRUCTURE ==================== -->
+  <div class="summary" style="margin-top:1.2rem;">
+    <div class="summary-title">📁 数据集目录结构（LeRobot 格式）</div>
+    <div style="padding:0.8rem 1.2rem;border-bottom:1px solid var(--border);">
+      <pre style="font-size:0.75rem;line-height:1.6;background:var(--surface2);border-radius:6px;padding:0.6rem;overflow-x:auto;color:var(--text);">
+dataset_root/
+  ├── meta/
+  │   ├── info.json        <span style="color:var(--text-dim);"># features 定义（dtype, shape）、data_path 模式、fps</span>
+  │   ├── episodes.jsonl   <span style="color:var(--text-dim);"># 每行：{episode_index, length}</span>
+  │   ├── tasks.jsonl      <span style="color:var(--text-dim);"># {task_index, task}</span>
+  │   ├── stats.json       <span style="color:var(--text-dim);"># 归一化统计量（计算后生成）</span>
+  │   └── stats_relative.json <span style="color:var(--text-dim);"># 相对动作统计量（可选）</span>
+  └── data/
+      └── chunk-000/
+          ├── episode_000000.parquet  <span style="color:var(--text-dim);"># 表格数据（state, action, task_index）</span>
+          └── ...
+  └── videos/
+      └── chunk-000/
+          ├── observation.images.top_head/episode_000000.mp4
+          └── ...</pre>
+      <div style="margin-top:0.4rem;font-size:0.78rem;color:var(--text-dim);">
+        <strong>前置条件：</strong>训练前必须先生成归一化统计文件（<code>stats.json</code>），否则数据加载报错。<br>
+        <strong>生成命令：</strong><code>python scripts/compute_norm_stats.py --dataset_paths [...] --embodiment_tags [...]</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DATA PROCESSING FLOW ==================== -->
+  <div class="summary" style="margin-top:1.2rem;">
+    <div class="summary-title">🔧 数据处理流程（7 步）</div>
+    <div style="padding:0.8rem 1.2rem;">
+      <div style="display:flex;flex-direction:column;gap:0.4rem;">
+
+        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+          <div style="background:var(--orange);color:#000;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">1</div>
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;font-weight:600;">归一化 <span class="src-badge src-calc">StateActionProcessor.apply()</span></div>
+            <div style="font-size:0.75rem;color:var(--text-dim);">min_max / mean_std 归一化 + sin_cos 编码。将不同机器人量纲统一。</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+          <div style="background:var(--orange);color:#000;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">2</div>
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;font-weight:600;">动作填充 <span class="src-badge src-calc">max_action_dim=128 × max_action_horizon=64</span></div>
+            <div style="font-size:0.75rem;color:var(--text-dim);">padding 到固定维度 + 生成 <code>action_mask</code> 标记有效维度。</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+          <div style="background:var(--orange);color:#000;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">3</div>
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;font-weight:600;">状态填充 <span class="src-badge src-calc">max_state_dim=128</span></div>
+            <div style="font-size:0.75rem;color:var(--text-dim);">state 也 padding 到固定维度（实际 26→填充到 128）。</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+          <div style="background:var(--orange);color:#000;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">4</div>
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;font-weight:600;">图像变换 <span class="src-badge src-calc">albumentations</span></div>
+            <div style="font-size:0.75rem;color:var(--text-dim);">Resize → (RandomCrop/CenterCrop) → Resize。使用 <code>ReplayCompose</code> 保持多视角一致性（头部+左腕+右腕同一变换）。</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+          <div style="background:var(--orange);color:#000;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">5</div>
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;font-weight:600;">语言处理 <span class="src-badge src-config">formalize_language=True</span></div>
+            <div style="font-size:0.75rem;color:var(--text-dim);">lower() + 去标点。仅做基本清洗，不支持同义词替换或语义增强。</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+          <div style="background:var(--orange);color:#000;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">6</div>
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;font-weight:600;">VLM Prompt 构建 <span class="src-badge src-doc">processing:apply_chat_template</span></div>
+            <div style="font-size:0.75rem;color:var(--text-dim);">构造 <code>&lt;image&gt;...&lt;image&gt;instruction</code> 格式，将图像占位符插入文本指令。</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.5rem;align-items:flex-start;">
+          <div style="background:var(--orange);color:#000;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;">7</div>
+          <div style="flex:1;">
+            <div style="font-size:0.82rem;font-weight:600;">Collator 组装批次 <span class="src-badge src-doc">TaoFlowMatchingDataCollator</span></div>
+            <div style="font-size:0.75rem;color:var(--text-dim);">padding + batch stack，输出最终 tensor 批次供模型消费。</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== DATASET SHARDING ==================== -->
+  <div class="summary" style="margin-top:1.2rem;">
+    <div class="summary-title">🔄 数据集分片与混合</div>
+    <div style="padding:0.8rem 1.2rem;border-bottom:1px solid var(--border);">
+      <div style="display:flex;gap:1rem;">
+
+        <div style="flex:1;background:var(--surface2);border-radius:8px;padding:0.8rem;">
+          <div style="font-size:0.85rem;font-weight:600;color:var(--blue);margin-bottom:0.3rem;">📦 ShardedSingleStepDataset</div>
+          <div style="font-size:0.75rem;color:var(--text-dim);line-height:1.6;">
+            • 每个 step 独立采样<br>
+            • 按 <code>episode_sampling_rate(0.1)</code> 分片 → 贪心平衡分配到 shard<br>
+            • 每个 shard ≈ <code>shard_size(1024)</code> steps
+          </div>
+        </div>
+
+        <div style="flex:1;background:var(--surface2);border-radius:8px;padding:0.8rem;">
+          <div style="font-size:0.85rem;font-weight:600;color:var(--green);margin-bottom:0.3rem;">🔀 ShardedMixtureDataset</div>
+          <div style="font-size:0.75rem;color:var(--text-dim);line-height:1.6;">
+            • 多数据集加权随机采样（按 shard 大小归一化权重）<br>
+            • <code>ThreadPoolExecutor</code> 后台预缓存下一个 shard<br>
+            • 支持 DDP 多进程多 worker 分片<br>
+            • 多 embodiment 统计量合并（<code>merge_statistics</code>）
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div style="padding:0.6rem 1.2rem;font-size:0.75rem;color:var(--text-dim);">
+      <strong>归一化统计量计算</strong>（<code>scripts/compute_norm_stats.py</code>）：扫描所有 parquet → 提取 float 特征 → 计算 mean, std, min, max, q01, q99 → 支持 absolute/relative 两种模式 → 写入 <code>meta/stats.json</code>
+    </div>
+  </div>
+
+  <!-- ==================== EMBODIMENT SYSTEM ==================== -->
+  <div class="summary" style="margin-top:1.2rem;">
+    <div class="summary-title">🏗️ Embodiment 系统详解</div>
+    <div style="padding:0.8rem 1.2rem;border-bottom:1px solid var(--border);">
+      <div style="font-size:0.82rem;color:var(--text-dim);">
+        注册路径：<code>src/tao/embodiments/</code>。每个 embodiment 定义三部分：
+      </div>
+      <div style="display:flex;gap:1rem;margin-top:0.6rem;">
+
+        <div style="flex:1;background:var(--surface2);border-radius:8px;padding:0.6rem;">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--pink);margin-bottom:0.2rem;">① <code>observations</code></div>
+          <div style="font-size:0.72rem;color:var(--text-dim);">原始数据 key → 统一 key 映射（摄像头、state、action、instruction）</div>
+        </div>
+
+        <div style="flex:1;background:var(--surface2);border-radius:8px;padding:0.6rem;">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--blue);margin-bottom:0.2rem;">② <code>indices</code></div>
+          <div style="font-size:0.72rem;color:var(--text-dim);">state/action 子组件切分（start/end）+ delta_indices（时间偏移）</div>
+        </div>
+
+        <div style="flex:1;background:var(--surface2);border-radius:8px;padding:0.6rem;">
+          <div style="font-size:0.82rem;font-weight:600;color:var(--green);margin-bottom:0.2rem;">③ <code>transformations</code></div>
+          <div style="font-size:0.72rem;color:var(--text-dim);">每子组件归一化方式：min_max / mean_std / sin_cos</div>
+        </div>
+
+      </div>
+
+      <div style="margin-top:0.5rem;font-size:0.78rem;color:var(--text-dim);">
+        <strong>完整注册表（含未展示机器人）：</strong>UR5、ti5_t170c、arx5 也已注册，但未提供完整维度信息。详见 <code>src/tao/embodiments/</code>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== NEW ROBOT: EMBODIMENT CONFIG EXAMPLE ==================== -->
+  <div class="summary" style="margin-top:1.2rem;">
+    <div class="summary-title" style="color:var(--green);">🆕 新机器人适配指南：Embodiment 配置示例</div>
+
+    <div style="padding:0.8rem 1.2rem;border-bottom:1px solid var(--border);">
+      <div style="font-size:0.82rem;color:var(--text-dim);line-height:1.6;">
+        当你采集了一个新机器人的数据，<strong>EagleVL（块 3+4）完全不用动</strong>，
+        但你需要写一份 <strong style="color:var(--green);">Embodiment 配置</strong>来告诉 TAO 你的机器人长什么样。
+        下面以 Franka（单臂协作机器人） 的完整配置为例逐行拆解。
+        源文件：<code>src/tao/embodiments/franka.py</code>
+      </div>
+    </div>
+
+    <div style="padding:0.8rem 1.2rem 0;font-size:0.82rem;color:var(--text-dim);">
+
+      <!-- Section A: observations -->
+      <div style="margin-bottom:0.6rem;background:var(--surface2);border-radius:8px;overflow:hidden;">
+        <div style="background:rgba(236,72,153,0.15);padding:0.5rem 0.8rem;font-weight:600;font-size:0.78rem;color:var(--pink);">
+          1️⃣ observations — 你的机器人有哪些传感器？
+        </div>
+        <pre style="font-size:0.72rem;line-height:1.65;padding:0.6rem 0.8rem;margin:0;overflow-x:auto;color:var(--text);background:var(--bg);">
+<span style="color:var(--text-dim);"># 告诉 TAO：你的数据文件里，每个 key 对应什么</span>
+observations = {
+    <span style="color:var(--text-dim);"># 摄像头：有几个？叫什么名字？</span>
+    <span style="color:var(--pink);">'video'</span>: {
+        <span style="color:var(--orange);">'base_image'</span>:        <span style="color:var(--green);">'observation.images.main_realsense_rgb'</span>,    <span style="color:var(--text-dim);">← 主摄像头（场景视角）</span>
+        <span style="color:var(--orange);">'left_wrist_image'</span>:  <span style="color:var(--green);">'observation.images.handeye_realsense_rgb'</span>,  <span style="color:var(--text-dim);">← 左腕摄像头</span>
+        <span style="color:var(--orange);">'right_wrist_image'</span>: <span style="color:var(--green);">'observation.images.side_realsense_rgb'</span>,   <span style="color:var(--text-dim);">← 右腕摄像头</span>
+    },<span style="color:var(--text-dim);">  ← 注意：所有机器人统一用 3 相机配置</span>
+
+    <span style="color:var(--text-dim);"># 状态（关节角度）：从哪个字段读？</span>
+    <span style="color:var(--blue);">'state'</span>: [<span style="color:var(--green);">'observation.state'</span>],  <span style="color:var(--text-dim);">← 列表，多个字段会自动拼接</span>
+
+    <span style="color:var(--text-dim);"># 动作（期望关节位）：从哪个字段读？</span>
+    <span style="color:var(--green);">'action'</span>: [<span style="color:var(--green);">'action'</span>],
+
+    <span style="color:var(--text-dim);"># 指令（任务描述）：从哪个字段读？</span>
+    <span style="color:var(--orange);">'instruction'</span>: <span style="color:var(--green);">'task_index'</span>,  <span style="color:var(--text-dim);">← 从 tasks.jsonl 读取任务描述</span>
+}</pre>
+        <div style="padding:0.3rem 0.8rem 0.5rem;font-size:0.7rem;color:var(--text-dim);background:var(--bg);border-top:1px solid var(--border);">
+          💡 关键：数据文件（parquet）中是什么字段名，就写什么。
+          统一映射到 <code>video</code>/<code>state</code>/<code>action</code>/<code>instruction</code> 四个标准 key。
+        </div>
+      </div>
+
+      <!-- Section B: indices -->
+      <div style="margin-bottom:0.6rem;background:var(--surface2);border-radius:8px;overflow:hidden;">
+        <div style="background:rgba(59,130,246,0.15);padding:0.5rem 0.8rem;font-weight:600;font-size:0.78rem;color:var(--blue);">
+          2️⃣ indices — 状态/动作的维度怎么切分？
+        </div>
+        <pre style="font-size:0.72rem;line-height:1.65;padding:0.6rem 0.8rem;margin:0;overflow-x:auto;color:var(--text);background:var(--bg);">
+<span style="color:var(--text-dim);"># 告诉 TAO：你的机器人的关节维度是怎么排列的</span>
+indices = {
+    <span style="color:var(--blue);">'state'</span>: {
+        <span style="color:var(--text-dim);"># 子组件切分：左臂占 [0,7)，夹爪占 [7,8)</span>
+        <span style="color:var(--orange);">'sub_components'</span>: {
+            <span style="color:var(--green);">'left_arm'</span>: {<span style="color:var(--yellow);">'start'</span>: 0, <span style="color:var(--yellow);">'end'</span>: 7},   <span style="color:var(--text-dim);">← Franka 左臂 7 个关节电机</span>
+            <span style="color:var(--green);">'left_eef'</span>: {<span style="color:var(--yellow);">'start'</span>: 7, <span style="color:var(--yellow);">'end'</span>: 8},   <span style="color:var(--text-dim);">← 夹爪 1 个自由度</span>
+        },  <span style="color:var(--text-dim);">← 总维度 = 8，会被填充到 max_state_dim=128</span>
+        <span style="color:var(--orange);">'delta_indices'</span>: [0],  <span style="color:var(--text-dim);">← 取当前帧的 state（不是时序的）</span>
+    },
+
+    <span style="color:var(--green);">'action'</span>: {
+        <span style="color:var(--orange);">'sub_components'</span>: {
+            <span style="color:var(--green);">'left_arm'</span>: {<span style="color:var(--yellow);">'start'</span>: 0, <span style="color:var(--yellow);">'end'</span>: 7},
+            <span style="color:var(--green);">'left_eef'</span>: {<span style="color:var(--yellow);">'start'</span>: 7, <span style="color:var(--yellow);">'end'</span>: 8},
+        },
+        <span style="color:var(--orange);">'delta_indices'</span>: [0..49],  <span style="color:var(--text-dim);">← 取未来 50 帧作为 action chunk</span>
+        <span style="color:var(--orange);">'relative_mask'</span>: [7, -1],  <span style="color:var(--text-dim);">← 第 7 维（夹爪）用相对动作，其余用绝对</span>
+    },
+
+    <span style="color:var(--pink);">'video'</span>: { <span style="color:var(--orange);">'delta_indices'</span>: [0] },        <span style="color:var(--text-dim);">← 取当前帧的图像</span>
+    <span style="color:var(--orange);">'instruction'</span>: { <span style="color:var(--orange);">'delta_indices'</span>: [0] },  <span style="color:var(--text-dim);">← 取当前帧的指令</span>
+}</pre>
+        <div style="padding:0.3rem 0.8rem 0.5rem;font-size:0.7rem;color:var(--text-dim);background:var(--bg);border-top:1px solid var(--border);">
+          💡 <code>sub_components</code> 决定了你的机器人的实际维度；
+          <code>delta_indices</code> 控制取哪些时域帧（[0]=单帧，[0..49]=未来50帧时序块）。
+          不同机器人的维度差异会在数据加载时自动 padding 到统一空间。
+        </div>
+      </div>
+
+      <!-- Section C: transformations -->
+      <div style="margin-bottom:0.6rem;background:var(--surface2);border-radius:8px;overflow:hidden;">
+        <div style="background:rgba(34,197,94,0.15);padding:0.5rem 0.8rem;font-weight:600;font-size:0.78rem;color:var(--green);">
+          3️⃣ transformations — 每个组件怎么归一化？
+        </div>
+        <pre style="font-size:0.72rem;line-height:1.65;padding:0.6rem 0.8rem;margin:0;overflow-x:auto;color:var(--text);background:var(--bg);">
+<span style="color:var(--text-dim);"># 告诉 TAO：每个子组件用什么归一化方法</span>
+transformations = {
+    <span style="color:var(--blue);">'state'</span>: {
+        <span style="color:var(--orange);">'sub_components'</span>: {
+            <span style="color:var(--green);">'left_arm'</span>: <span style="color:var(--yellow);">'min_max'</span>,   <span style="color:var(--text-dim);">← 关节角度用 min_max 归一化</span>
+            <span style="color:var(--green);">'left_eef'</span>: <span style="color:var(--yellow);">'min_max'</span>,  <span style="color:var(--text-dim);">← 夹爪也用 min_max</span>
+        }
+    },
+    <span style="color:var(--green);">'action'</span>: {
+        <span style="color:var(--orange);">'sub_components'</span>: {
+            <span style="color:var(--green);">'left_arm'</span>: <span style="color:var(--yellow);">'min_max'</span>,
+            <span style="color:var(--green);">'left_eef'</span>: <span style="color:var(--yellow);">'min_max'</span>,
+        }
+    },
+}</pre>
+        <div style="padding:0.3rem 0.8rem 0.5rem;font-size:0.7rem;color:var(--text-dim);background:var(--bg);border-top:1px solid var(--border);">
+          💡 可选：<code>min_max</code>（根据 stats.json 的 min/max 归一化）、<code>mean_std</code>（Z-score）、<code>sin_cos</code>（角度循环编码）。
+          不同子组件可以用不同的方式。
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Dual-arm comparison -->
+    <div style="padding:0.6rem 1.2rem 0.8rem;border-top:1px solid var(--border);">
+      <div style="font-size:0.82rem;font-weight:600;color:var(--purple);margin-bottom:0.4rem;">🔄 对比：双臂机器人（a2d_gripper）的维度配置差异</div>
+      <table style="width:100%;font-size:0.78rem;border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);">
+            <th style="text-align:left;padding:0.4rem 0.6rem;font-weight:500;color:var(--text-dim);">配置项</th>
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--blue);font-weight:500;">Franka（单臂）</th>
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--pink);font-weight:500;">a2d_gripper（双臂）</th>
+            <th style="text-align:left;padding:0.4rem 0.6rem;color:var(--orange);font-weight:500;">Unitree G1（双灵巧手）</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.3rem 0.6rem;">总 action 维度</td>
+            <td style="padding:0.3rem 0.6rem;"><strong>8</strong> (7臂+1夹爪)</td>
+            <td style="padding:0.3rem 0.6rem;"><strong>16</strong> (7+7+1+1)</td>
+            <td style="padding:0.3rem 0.6rem;"><strong>26</strong> (7+7+6+6)</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.3rem 0.6rem;">左臂</td>
+            <td style="padding:0.3rem 0.6rem;">left_arm (0,7)</td>
+            <td style="padding:0.3rem 0.6rem;">left_arm (0,7)</td>
+            <td style="padding:0.3rem 0.6rem;">left_arm (0,7)</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.3rem 0.6rem;">右臂</td>
+            <td style="padding:0.3rem 0.6rem;">—</td>
+            <td style="padding:0.3rem 0.6rem;">right_arm (7,14)</td>
+            <td style="padding:0.3rem 0.6rem;">right_arm (7,14)</td>
+          </tr>
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:0.3rem 0.6rem;">夹爪 / 灵巧手</td>
+            <td style="padding:0.3rem 0.6rem;">left_eef (7,8)</td>
+            <td style="padding:0.3rem 0.6rem;">left_eef (14,15) + right_eef (15,16)</td>
+            <td style="padding:0.3rem 0.6rem;">left_hand (14,20) + right_hand (20,26)</td>
+          </tr>
+          <tr>
+            <td style="padding:0.3rem 0.6rem;">归一化示例</td>
+            <td style="padding:0.3rem 0.6rem;">arm: min_max, eef: min_max</td>
+            <td style="padding:0.3rem 0.6rem;">arm: min_max, eef: min_max</td>
+            <td style="padding:0.3rem 0.6rem;">arm: mean_std, hand: min_max</td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:0.4rem;font-size:0.72rem;color:var(--text-dim);line-height:1.6;">
+        <span class="src-badge src-code">embodiments/</span>
+        <strong>编写新机器人的步骤：</strong>
+        ① 在 <code>src/tao/embodiments/</code> 下新建 <code>your_robot.py</code>
+        ② 按照 Franka 的模板，填写你的 <code>observations</code>、<code>indices</code>、<code>transformations</code>
+        ③ 用 <code>@EMBODIMENTS.register("YourRobotName")</code> 注册
+        ④ 在 <code>__init__.py</code> 中 import 你的类
+        ⑤ 训练时用 <code>--data.embodiment_tags [YourRobotName]</code> 指定
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== REGISTRY ==================== -->
+  <div class="summary" style="margin-top:1.2rem;">
+    <div class="summary-title">📋 全局注册表系统</div>
+    <div style="padding:0.8rem 1.2rem;">
+      <div style="font-size:0.82rem;color:var(--text-dim);margin-bottom:0.5rem;">
+        路径 <code>src/tao/registry.py</code> — 支持 <code>auto_discover(package_name)</code> 自动扫描注册所有模块
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:0.4rem;">
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--pink);font-weight:600;">EMBODIMENTS</span>
+          <span style="color:var(--text-dim);font-size:0.72rem;"> — 机器人定义</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);">@EMBODIMENTS.register("name")</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--blue);font-weight:600;">DATASETS</span>
+          <span style="color:var(--text-dim);font-size:0.72rem;"> — 数据集类</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);">@DATASETS.register("name")</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--purple);font-weight:600;">MODELS</span>
+          <span style="color:var(--text-dim);font-size:0.72rem;"> — 模型类</span>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--green);font-weight:600;">BACKBONES</span>
+          <span style="color:var(--text-dim);font-size:0.72rem;"> — 骨干网络</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);">@BACKBONES.register("name")</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--orange);font-weight:600;">ACTION_HEADS</span>
+          <span style="color:var(--text-dim);font-size:0.72rem;"> — 动作头</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);">@ACTION_HEADS.register("name")</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--red);font-weight:600;">PIPELINES</span>
+          <span style="color:var(--text-dim);font-size:0.72rem;"> — 训练管线</span>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== HARDWARE COMPATIBILITY ==================== -->
+  <div class="section-label"><span>💻 硬件兼容性指南</span></div>
+
+  <div class="summary">
+    <div class="summary-title">硬件兼容性</div>
+    <table>
+      <thead>
+        <tr>
+          <th>硬件</th>
+          <th>兼容性</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>NVIDIA H100</td>
+          <td><span class="decision-badge decision-yes">✅ 首选</span></td>
+          <td>原生支持 FlashAttention + BF16</td>
+        </tr>
+        <tr>
+          <td>A100 (80GB)</td>
+          <td><span class="decision-badge decision-yes">✅</span></td>
+          <td>支持 FlashAttention</td>
+        </tr>
+        <tr>
+          <td>华为昇腾</td>
+          <td><span class="decision-badge decision-no">❌ 不支持</span></td>
+          <td>依赖 CUDA + FlashAttention + NCCL，无适配计划</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="padding:0.5rem 1.2rem;font-size:0.75rem;color:var(--text-dim);border-top:1px solid var(--border);">
+      <strong>环境约束：</strong>Python == 3.10.* · 集群脚本 conda 环境名 <code>lingtao</code>
+    </div>
+  </div>
+
+  <!-- ==================== PITFALLS ==================== -->
+  <div class="section-label"><span>⚠️ 已知陷阱与注意事项</span></div>
+
+  <div class="summary">
+    <div class="summary-title">数据相关</div>
+    <div style="padding:0.8rem 1.2rem;">
+      <ul style="font-size:0.8rem;line-height:1.8;padding-left:1.2rem;color:var(--text);">
+        <li>训练前<strong>必须</strong>先生成归一化统计文件（<code>stats.json</code>），否则数据加载会报 assert 错误</li>
+        <li>数据集必须是 LeRobot 格式：<code>meta/info.json</code>, <code>data/*/*.parquet</code>, <code>videos/*/</code></li>
+        <li><code>formalize_language</code> 仅做 <strong>lower() + 去标点</strong>，不支持同义词替换或语义增强</li>
+        <li>换语言的一个字可能导致输出异常——这是训练数据覆盖不足的问题，非模型设计缺陷</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="summary" style="margin-top:0.6rem;">
+    <div class="summary-title">训练与分布式相关</div>
+    <div style="padding:0.8rem 1.2rem;">
+      <ul style="font-size:0.8rem;line-height:1.8;padding-left:1.2rem;color:var(--text);">
+        <li><strong>Backbone 默认完全冻结</strong>（<code>freeze_module_list=["model"]</code>），只有 Action Head 更新参数</li>
+        <li>HuggingFace Trainer 自动调用 <code>model.train()</code>，会覆盖冻结模块的 eval() 状态。Action Head 通过 <code>set_frozen_modules_to_eval_mode()</code> 修复</li>
+        <li>恢复训练通过 <strong>reseeding</strong> 实现（不是 skip data）：<code>new_seed = seed + global_step</code></li>
+        <li>DiT 来自 <code>diffusers</code> 库的 <code>ModelMixin</code>，不是 HuggingFace 标准模型</li>
+        <li>视觉编码器的梯度保持通过 <strong>dummy term trick</strong> 实现（<code>0 × param.sum()</code> 加到 backbone_features 上）</li>
+        <li><strong>SLURM：</strong>MASTER_PORT=20000+JOBID尾号 · 使用 <code>torchrun</code> 非 <code>torch.distributed.launch</code> · DeepSpeed ZeRO-2 默认 · <code>multiprocessing_context="fork"</code> · <code>persistent_workers=True</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="summary" style="margin-top:0.6rem;">
+    <div class="summary-title">配置与推理相关</div>
+    <div style="padding:0.8rem 1.2rem;">
+      <ul style="font-size:0.8rem;line-height:1.8;padding-left:1.2rem;color:var(--text);">
+        <li><code>jsonargparse</code> 将未显式传入的参数用默认值填充，修改默认值时可能不被记录到配置文件中</li>
+        <li><code>TaoFlowMatchingModelConfig.__post_init__</code> 中 <code>backbone_config=None</code> 会静默使用默认 <code>BackboneConfigEagleVL25</code></li>
+        <li>Processor 配置中 <code>image_crop_size</code> 和 <code>image_target_size</code> 通常都是 [224, 224]</li>
+        <li>检查点保存时 <strong>不保存 VL 模型</strong>（<code>save_vl_model=False</code>），只保存 Action Head 和配置</li>
+        <li>推理使用 <code>model.get_action()</code> 而非 <code>model.forward()</code>，默认 <code>num_inference_timesteps=4</code> 步去噪</li>
+        <li>支持相对动作（<code>relative_chunking</code>）和绝对动作两种模式</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ==================== FUTURE DIRECTIONS ==================== -->
+  <div class="section-label"><span>🗺️ 下次深挖方向</span></div>
+
+  <div class="summary">
+    <div style="padding:0.8rem 1.2rem;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.4rem;">
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--orange);font-weight:600;">AltDiT</span>
+          <span style="color:var(--text-dim);font-size:0.72rem;"> — 交替分割图像/非图像 token 注意力</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);"><code>src/tao/model/modules/general_modules/dit/alt_dit.py</code></div>
+          <div style="font-size:0.6rem;color:var(--text-dim);">交叉注意力层按 <code>attend_text_every_n_blocks=2</code> 交替关注文本/非文本 token。v0.5 使用的 AltDiT 架构。</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--blue);font-weight:600;">EagleVL3</span>
+          <span style="color:var(--text-dim);font-size:0.72rem;"> — 更新的骨干网络</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);"><code>src/tao/model/modules/general_modules/eagle_vl_3/</code></div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--purple);font-weight:600;">世界模型 / RL 模型</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);"><code>src/tao/model/archs/world_model/</code> / <code>rl_model/</code></div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--green);font-weight:600;">离线评估工具</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);"><code>tools/evaluate_offline.py</code> / <code>loss_visualization.py</code></div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--pink);font-weight:600;">数据增强</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);"><code>src/tao/utils/image.py</code> — FractionalRandomCrop, LetterBoxTransform</div>
+        </div>
+
+        <div style="background:var(--surface2);border-radius:6px;padding:0.5rem 0.7rem;">
+          <span style="color:var(--yellow);font-weight:600;">服务部署</span>
+          <div style="font-size:0.65rem;color:var(--text-dim);"><code>src/tao/serving/policy.py</code> — 推理服务层</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-top:2rem;padding:1rem;color:var(--text-dim);font-size:0.8rem;">
+    基于 TAO 项目源码逐行映射 · 以 Unitree G1 人形机器人倒水任务贯穿全流程<br>
+    hover 黄色下划线名词查看小白解释 · 全部信息已整合至此文档<br>
+    <span style="font-size:0.7rem;">Python==3.10 · src 布局 · jsonargparse 配置驱动 · DiT + Flow Matching + MSE Loss</span>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unitree G1 VLA 训练指南</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .quick-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8f9fa;
+        }
+
+        .info-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+            overflow-wrap: break-word;
+            word-wrap: break-word;
+        }
+
+        .info-card h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.1em;
+        }
+
+        .info-card code {
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            color: #d63384;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+            display: block;
+            line-height: 1.5;
+            margin: 8px 0;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .step {
+            margin-bottom: 40px;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .step:hover {
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .step-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .step-header h2 {
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+        }
+
+        .step-number {
+            background: white;
+            color: #667eea;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 15px;
+            font-size: 1.2em;
+        }
+
+        .toggle-icon {
+            font-size: 1.5em;
+            transition: transform 0.3s;
+        }
+
+        .step.active .toggle-icon {
+            transform: rotate(180deg);
+        }
+
+        .step-content {
+            padding: 30px;
+            display: none;
+        }
+
+        .step.active .step-content {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            overflow-x: auto;
+            position: relative;
+        }
+
+        .code-block pre {
+            margin: 0;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 5px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.85em;
+            transition: background 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: #764ba2;
+        }
+
+        .copy-btn.copied {
+            background: #28a745;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .warning strong {
+            color: #856404;
+        }
+
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .success strong {
+            color: #155724;
+        }
+
+        .tip {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+
+        .tip strong {
+            color: #0c5460;
+        }
+
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+
+        li {
+            margin: 8px 0;
+            line-height: 1.6;
+        }
+
+        .file-tree {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Consolas', monospace;
+            margin: 15px 0;
+        }
+
+        .file-tree div {
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .footer {
+            background: #f8f9fa;
+            padding: 30px;
+            text-align: center;
+            color: #6c757d;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .step-header h2 {
+                font-size: 1.2em;
+            }
+
+            .quick-info {
+                grid-template-columns: 1fr;
+            }
+
+            .info-card code {
+                font-size: 0.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Unitree G1 VLA 训练指南</h1>
+            <p>在集群上使用TAO框架训练Unitree G1机器人的视觉-语言-动作模型</p>
+        </div>
+
+        <div class="quick-info">
+            <div class="info-card">
+                <h3>📍 预训练模型路径</h3>
+                <code>/data/shared_checkpoints/tao/v0d5</code>
+                <p style="margin-top: 10px; font-size: 0.9em; color: #6c757d;">推荐使用v0d5版本（Eagle VL 3）</p>
+            </div>
+            <div class="info-card">
+                <h3>🎯 DINO特征提取器</h3>
+                <code>/data/shared_checkpoints/dino/dinov2-large</code>
+                <p style="margin-top: 10px; font-size: 0.9em; color: #6c757d;">用于视觉特征提取</p>
+            </div>
+            <div class="info-card">
+                <h3>💾 Conda环境</h3>
+                <code>lingtao</code>
+                <p style="margin-top: 10px; font-size: 0.9em; color: #6c757d;">位于 /data/miniconda3/envs/lingtao</p>
+            </div>
+            <div class="info-card">
+                <h3>📊 输出目录</h3>
+                <code>/data/users/tiantaotao/checkpoints</code>
+                <p style="margin-top: 10px; font-size: 0.9em; color: #6c757d;">训练结果保存位置</p>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Step 1 -->
+            <div class="step active">
+                <div class="step-header" onclick="toggleStep(this)">
+                    <h2><span class="step-number">1</span>前置准备</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="step-content">
+                    <h3>1.1 确认环境</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 激活conda环境
+conda activate lingtao
+
+# 验证TAO是否安装
+python -c "import tao; print('✅ TAO imported successfully')"
+
+# 检查GPU可用性
+nvidia-smi</pre>
+                    </div>
+
+                    <h3>1.2 确认预训练模型存在</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># TAO v0d5预训练模型（推荐）
+ls -lah /data/shared_checkpoints/tao/v0d5/
+
+# DINOv2特征提取器
+ls -lah /data/shared_checkpoints/dino/dinov2-large/</pre>
+                    </div>
+
+                    <div class="success">
+                        <strong>✅ 预期输出:</strong>
+                        <ul>
+                            <li>TAO v0d5: 包含 model-*.safetensors, config.json, processor/</li>
+                            <li>DINOv2: 包含 model.safetensors, pytorch_model.bin</li>
+                        </ul>
+                    </div>
+
+                    <h3>1.3 准备Unitree G1数据集</h3>
+                    <div class="file-tree">
+                        <div>📁 /path/to/unitree_g1_dataset/</div>
+                        <div style="padding-left: 40px;">├── 📁 task_001/</div>
+                        <div style="padding-left: 60px;">│   ├── 📁 meta/</div>
+                        <div style="padding-left: 60px;">│   │   ├── info.json</div>
+                        <div style="padding-left: 60px;">│   │   └── episodes.jsonl</div>
+                        <div style="padding-left: 60px;">│   ├── 📁 data/</div>
+                        <div style="padding-left: 60px;">│   │   └── chunk-000/episode_000000.parquet</div>
+                        <div style="padding-left: 60px;">│   └── 📁 videos/</div>
+                        <div style="padding-left: 40px;">└── 📁 task_002/</div>
+                    </div>
+
+                    <div class="warning">
+                        <strong>⚠️ 关键要求:</strong>
+                        <ul>
+                            <li>数据集必须包含 <code>observation.state</code> 和 <code>action</code> 字段</li>
+                            <li>图像字段命名如 <code>observation.images.camera_name</code></li>
+                            <li>每个task是一个独立的lerobot数据集</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="step">
+                <div class="step-header" onclick="toggleStep(this)">
+                    <h2><span class="step-number">2</span>创建Unitree G1 Embodiment配置</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="step-content">
+                    <h3>2.1 分析你的数据集结构</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>python &lt;&lt; 'EOF'
+import pandas as pd
+import os
+
+# 替换为你的实际路径
+dataset_path = "/path/to/your/unitree_g1_dataset/task_001"
+parquet_file = os.path.join(dataset_path, "data/chunk-000/episode_000000.parquet")
+
+if os.path.exists(parquet_file):
+    df = pd.read_parquet(parquet_file)
+    print("=== Columns ===")
+    print(df.columns.tolist())
+    print("\n=== First row sample ===")
+    for col in df.columns[:5]:
+        print(f"{col}: {df[col].iloc[0]}")
+else:
+    print(f"File not found: {parquet_file}")
+EOF</pre>
+                    </div>
+
+                    <h3>2.2 创建配置文件</h3>
+                    <p>创建文件: <code>/home/ttt/Desktop/TAO/src/tao/embodiments/unitree_g1.py</code></p>
+                    
+                    <div class="tip">
+                        <strong>💡 提示:</strong> 完整代码请参考 <a href="UNITREE_G1_TRAINING_GUIDE.md" target="_blank">详细文档</a> 中的第二步
+                    </div>
+
+                    <div class="warning">
+                        <strong>⚠️ 重要:</strong> 你需要根据实际的Unitree G1数据修改：
+                        <ul>
+                            <li>图像字段名 (<code>observation.images.xxx</code>)</li>
+                            <li>State和action的维度（通过上面的Python脚本查看）</li>
+                            <li>子组件划分 (left_arm, right_arm等)</li>
+                            <li><code>relative_mask</code> 的长度要与子组件数量一致</li>
+                        </ul>
+                    </div>
+
+                    <h3>2.3 注册配置到模块</h3>
+                    <p>编辑 <code>/home/ttt/Desktop/TAO/src/tao/embodiments/__init__.py</code>，添加对 UnitreeG1Config 的导入：</p>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 在现有导入后面添加
+from .unitree_g1 import UnitreeG1Config
+
+# 并在__all__列表中添加
+__all__ = [
+    # ... 现有项 ...
+    "UnitreeG1Config"
+]</pre>
+                    </div>
+
+                    <div class="warning">
+                        <strong>⚠️ 重要:</strong> 必须更新 <code>__init__.py</code>，否则训练时 <code>EMBODIMENTS.get("unitree_g1")</code> 会报 "Key not found" 错误，因为 <code>@EMBODIMENTS.register("unitree_g1")</code> 装饰器只有在模块被导入时才会执行。
+                    </div>
+
+                    <h3>2.4 验证配置</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>cd /home/ttt/Desktop/TAO
+python -c "from tao.embodiments.unitree_g1 import UnitreeG1Config; print('✅ Unitree G1 config loaded successfully')"</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="step">
+                <div class="step-header" onclick="toggleStep(this)">
+                    <h2><span class="step-number">3</span>计算归一化统计信息</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="step-content">
+                    <h3>3.1 修改统计脚本</h3>
+                    <p>编辑 <code>/home/ttt/Desktop/TAO/scripts/script_compute_norm_stats.sh</code></p>
+                    
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 修改以下部分
+EMBODIMENT_TAG_LIST=("unitree_g1")
+
+unitree_g1=(
+    "/path/to/your/unitree_g1_dataset/task_001"
+    "/path/to/your/unitree_g1_dataset/task_002"
+    "/path/to/your/unitree_g1_dataset/task_003"
+)</pre>
+                    </div>
+
+                    <h3>3.2 运行统计脚本</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>cd /home/ttt/Desktop/TAO/scripts
+chmod +x script_compute_norm_stats.sh
+bash script_compute_norm_stats.sh</pre>
+                    </div>
+
+                    <div class="success">
+                        <strong>✅ 预期输出:</strong>
+                        <ul>
+                            <li>会在每个数据集目录下生成 <code>statistics.json</code> 文件</li>
+                            <li>包含state和action的min/max或mean/std统计信息</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4 -->
+            <div class="step">
+                <div class="step-header" onclick="toggleStep(this)">
+                    <h2><span class="step-number">4</span>修改训练脚本</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="step-content">
+                    <h3>4.1 使用推荐的v0d5配置</h3>
+                    <p>编辑 <code>/home/ttt/Desktop/TAO/scripts/script_slurm_v0d5.sh</code></p>
+
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 修改以下关键部分
+OUTPUT_DIR="/data/users/tiantaotao/checkpoints"
+
+EMBODIMENT_TAG_LIST=("unitree_g1")
+
+unitree_g1=(
+    "/path/to/your/unitree_g1_dataset/task_001"
+    "/path/to/your/unitree_g1_dataset/task_002"
+)
+
+BASE_DIR="/data/shared_checkpoints/tao/v0d5"  # 使用v0d5</pre>
+                    </div>
+
+                    <h3>4.2 关键参数说明</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>参数</th>
+                                <th>默认值</th>
+                                <th>说明</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>MAX_STEPS</code></td>
+                                <td>10000</td>
+                                <td>总训练步数</td>
+                            </tr>
+                            <tr>
+                                <td><code>SAVE_STEPS</code></td>
+                                <td>5000</td>
+                                <td>保存checkpoint的间隔</td>
+                            </tr>
+                            <tr>
+                                <td><code>BATCH_SIZE</code></td>
+                                <td>32</td>
+                                <td>每个GPU的batch size</td>
+                            </tr>
+                            <tr>
+                                <td><code>LEARNING_RATE</code></td>
+                                <td>0.0001</td>
+                                <td>学习率</td>
+                            </tr>
+                            <tr>
+                                <td><code>TUNE_TOP_LLM_LAYERS</code></td>
+                                <td>4</td>
+                                <td>微调顶层LLM层数（0=不微调）</td>
+                            </tr>
+                            <tr>
+                                <td><code>EPISODE_SAMPLING_RATE</code></td>
+                                <td>0.1</td>
+                                <td>数据采样率（1.0=全部数据）</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Step 5 -->
+            <div class="step">
+                <div class="step-header" onclick="toggleStep(this)">
+                    <h2><span class="step-number">5</span>提交训练任务</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="step-content">
+                    <h3>5.1 创建日志目录</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>mkdir -p /home/ttt/Desktop/TAO/slurm_logs</pre>
+                    </div>
+
+                    <h3>5.2 提交任务</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>cd /home/ttt/Desktop/TAO/scripts
+sbatch script_slurm_v0d5.sh</pre>
+                    </div>
+
+                    <div class="success">
+                        <strong>✅ 预期输出:</strong> <code>Submitted batch job XXXXX</code>
+                    </div>
+
+                    <h3>5.3 查看任务状态</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 查看所有任务
+squeue -u tiantaotao
+
+# 查看特定任务
+squeue -j XXXXX</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 6 -->
+            <div class="step">
+                <div class="step-header" onclick="toggleStep(this)">
+                    <h2><span class="step-number">6</span>监控训练进度</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="step-content">
+                    <h3>6.1 实时查看日志</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 查看最新任务的日志
+tail -f /home/ttt/Desktop/TAO/slurm_logs/job_XXXXX.out
+
+# 或者使用less查看
+less /home/ttt/Desktop/TAO/slurm_logs/job_XXXXX.out</pre>
+                    </div>
+
+                    <h3>6.2 关键日志指标</h3>
+                    <div class="code-block">
+                        <pre>{'loss': 0.0064, 'grad_norm': 0.0237, 'learning_rate': 4.6e-09, 'epoch': 1.0}
+{'loss': 0.0028, 'grad_norm': 0.0427, 'learning_rate': 2.7e-12, 'epoch': 1.0}</pre>
+                    </div>
+
+                    <div class="tip">
+                        <strong>💡 监控要点:</strong>
+                        <ul>
+                            <li><strong>loss</strong>: 应该逐渐下降并收敛</li>
+                            <li><strong>grad_norm</strong>: 梯度范数，应该在合理范围内（&lt;1.0）</li>
+                            <li><strong>learning_rate</strong>: 学习率会逐渐衰减</li>
+                            <li><strong>epoch</strong>: 当前训练轮次</li>
+                        </ul>
+                    </div>
+
+                    <h3>6.3 检查checkpoint</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 查看输出目录
+ls -lah /data/users/tiantaotao/checkpoints/tao_v0d5_unitree_g1_*/
+
+# 查看checkpoint
+ls -lah /data/users/tiantaotao/checkpoints/tao_v0d5_unitree_g1_*/checkpoint-*/</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 7 -->
+            <div class="step">
+                <div class="step-header" onclick="toggleStep(this)">
+                    <h2><span class="step-number">7</span>获取训练结果</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="step-content">
+                    <h3>7.1 训练完成后</h3>
+                    <div class="file-tree">
+                        <div>📁 /data/users/tiantaotao/checkpoints/</div>
+                        <div style="padding-left: 40px;">└── 📁 tao_v0d5_unitree_g1_20260520_145000_n8_b32_s10000/</div>
+                        <div style="padding-left: 60px;">├── 📁 checkpoint-5000/</div>
+                        <div style="padding-left: 80px;">│   ├── model-*.safetensors</div>
+                        <div style="padding-left: 80px;">│   ├── config.json</div>
+                        <div style="padding-left: 80px;">│   └── training_args.bin</div>
+                        <div style="padding-left: 60px;">├── 📁 checkpoint-10000/  ← 最终checkpoint</div>
+                        <div style="padding-left: 80px;">│   ├── model-*.safetensors</div>
+                        <div style="padding-left: 80px;">│   ├── config.json</div>
+                        <div style="padding-left: 80px;">│   └── ...</div>
+                        <div style="padding-left: 60px;">├── config.json</div>
+                        <div style="padding-left: 60px;">├── experiment_cfg/</div>
+                        <div style="padding-left: 60px;">└── processor/</div>
+                    </div>
+
+                    <h3>7.2 使用训练好的模型</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>from transformers import AutoModel
+
+# 加载训练好的模型
+model_path = "/data/users/tiantaotao/checkpoints/tao_v0d5_unitree_g1_.../checkpoint-10000"
+model = AutoModel.from_pretrained(model_path, trust_remote_code=True)</pre>
+                    </div>
+
+                    <h3>7.3 备份模型</h3>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 复制到你自己的目录
+cp -r /data/users/tiantaotao/checkpoints/tao_v0d5_unitree_g1_* ~/my_models/
+
+# 或者压缩保存
+tar -czf unitree_g1_model.tar.gz /data/users/tiantaotao/checkpoints/tao_v0d5_unitree_g1_*/checkpoint-10000/</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 8 -->
+            <div class="step">
+                <div class="step-header" onclick="toggleStep(this)">
+                    <h2><span class="step-number">8</span>常见问题</h2>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="step-content">
+                    <h3>Q1: Eagle模型找不到怎么办？</h3>
+                    <div class="tip">
+                        <strong>💡 解决方案:</strong> Eagle VL模型会在首次运行时自动从HuggingFace下载。如果网络不好，可以提前下载：
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>python &lt;&lt; 'EOF'
+from transformers import AutoModel
+model = AutoModel.from_pretrained("NVEagle/eagle_er-qwen3_1_7B-Siglip2_400M_stage1_5_128gpu_er_v7_1mlp_nops", trust_remote_code=True)
+EOF</pre>
+                    </div>
+
+                    <h3>Q2: 显存不足怎么办？</h3>
+                    <div class="tip">
+                        <strong>💡 解决方案:</strong> 减小batch size或启用梯度累积：
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre># 修改script_slurm_v0d5.sh
+BATCH_SIZE=16  # 从32降到16</pre>
+                    </div>
+
+                    <h3>Q3: Loss不下降怎么办？</h3>
+                    <div class="warning">
+                        <strong>⚠️ 检查以下几点:</strong>
+                        <ul>
+                            <li>数据集是否正确（字段名、维度匹配）</li>
+                            <li>归一化统计信息是否正确计算</li>
+                            <li>学习率是否合适（尝试调整为0.00005）</li>
+                            <li>增加训练步数</li>
+                        </ul>
+                    </div>
+
+                    <h3>Q4: 如何继续训练（从checkpoint恢复）？</h3>
+                    <div class="tip">
+                        <strong>💡 解决方案:</strong> 修改训练脚本，添加resume参数：
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>CMD="torchrun ... train.py \
+    ... \
+    --training.resume_from_checkpoint /data/users/tiantaotao/checkpoints/xxx/checkpoint-5000 \
+    ..."</pre>
+                    </div>
+
+                    <h3>Q5: 如何评估训练好的模型？</h3>
+                    <div class="tip">
+                        <strong>💡 解决方案:</strong> 使用TAO的评估工具：
+                    </div>
+                    <div class="code-block">
+                        <button class="copy-btn" onclick="copyCode(this)">复制</button>
+                        <pre>cd /home/ttt/Desktop/TAO/tools
+python evaluate_offline.py \
+    --model_path /data/users/tiantaotao/checkpoints/xxx/checkpoint-10000 \
+    --dataset_path /path/to/test/dataset \
+    --embodiment_tag unitree_g1</pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>📞 获取帮助: 查看slurm错误日志 <code>cat slurm_logs/job_XXXXX.err</code></p>
+            <p style="margin-top: 10px;">祝你训练顺利！🎉</p>
+        </div>
+    </div>
+
+    <script>
+        // Toggle step content
+        function toggleStep(header) {
+            const step = header.parentElement;
+            step.classList.toggle('active');
+        }
+
+        // Copy code function
+        function copyCode(btn) {
+            const codeBlock = btn.nextElementSibling;
+            const code = codeBlock.textContent;
+            
+            navigator.clipboard.writeText(code).then(() => {
+                btn.textContent = '已复制!';
+                btn.classList.add('copied');
+                
+                setTimeout(() => {
+                    btn.textContent = '复制';
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                btn.textContent = '复制失败';
+            });
+        }
+
+        // Initialize first step as active
+        document.addEventListener('DOMContentLoaded', () => {
+            const firstStep = document.querySelector('.step');
+            if (firstStep) {
+                firstStep.classList.add('active');
+            }
+        });
+    </script>
+</body>
+</html>
