@@ -6,7 +6,7 @@ from ml_collections import ConfigDict
 from scipy.interpolate import make_interp_spline
 
 
-class InterChunkFusion:
+class InterChunkFuser:
     """Independent inter-chunk fusion utilities for action trajectory transition."""
 
     def __init__(self, config: ConfigDict):

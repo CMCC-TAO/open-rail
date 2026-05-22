@@ -16,6 +16,7 @@ from client.utils import misc
 from client.utils.util import run_time_decorator, parse_action_layout
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
+from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.save_lerobot import LeRobotDatasetWriter
@@ -32,7 +33,12 @@ class VLAClientAsync():
     - Real-time robot control
     - Data recording for dataset creation
     """
-    def __init__(self, config: ConfigDict, rdm: RealtimeDataManager, intra_chunk_smoother: IntraChunkSmoother, vla_zmq_client: ZMQClient, robot: None):
+    def __init__(self, config: ConfigDict,
+                rdm: RealtimeDataManager,
+                inter_chunk_fuser: InterChunkFuser,
+                intra_chunk_smoother: IntraChunkSmoother,
+                vla_zmq_client: ZMQClient,
+                robot: None):
         """Initialize the VLA Client.
         
         Args:

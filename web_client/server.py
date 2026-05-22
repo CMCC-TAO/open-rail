@@ -24,6 +24,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
+from client.core import inter_chunk_fuser
+
 try:
     import psutil
     _HAS_PSUTIL = True
@@ -51,6 +53,7 @@ from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
 from conf.logging_conf import setup_logging
 from client.core.zmq_client import ZMQClient
+from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.utils.util import load_user_config, apply_user_config
@@ -932,6 +935,7 @@ async def start_client():
             vla_zmq_client = ZMQClient(cfg.vla_zmq)
             robot = _get_robot(cfg)
             rdm = RealtimeDataManager(cfg.rdm)
+            inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
             intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
 
             if cfg.inter_chunk.inter_chunk_mode == 'sync':
@@ -940,8 +944,13 @@ async def start_client():
                                    vla_zmq_client=vla_zmq_client, robot=robot)
             else:
                 from client.core.vla_client import VLAClientAsync
-                vla_client = VLAClientAsync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
-                                    vla_zmq_client=vla_zmq_client, robot=robot)
+                vla_client = VLAClientAsync(
+                    config=cfg,
+                    rdm=rdm,
+                    inter_chunk_fuser=inter_chunk_fuser,
+                    intra_chunk_smoother=intra_chunk_smoother,
+                    vla_zmq_client=vla_zmq_client,
+                    robot=robot)
 
             client_state.vla_client = vla_client
             client_state.robot = robot

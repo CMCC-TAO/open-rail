@@ -9,7 +9,7 @@ from collections import deque
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index, parse_action_layout
-from client.core.inter_chunk_fusion import InterChunkFusion
+from client.core.inter_chunk_fuser import InterChunkFuser
 
 
 class RealtimeDataManager():
@@ -65,7 +65,7 @@ class RealtimeDataManager():
         self.sync_running = False
 
         # Inter-chunk transition / fusion helper
-        self.inter_chunk_fusion = InterChunkFusion(config=self.rdm_config)
+        self.inter_chunk_fusion = InterChunkFuser(config=self.rdm_config)
 
     def add_infer_count(self):
         """Add one to infer count for each inference step.
@@ -473,6 +473,49 @@ class RealtimeDataManager():
                         chunk_length = self.action_chunk_fitted.shape[-1]
                         self.action_chunk_fitted[step_indices, -gripper_offset:] = action_chunk_fitted[step_indices, :chunk_length + gripper_offset]
 
+    def update_action_chunk_fitted_1(self,
+                                action_chunk_smoothed,
+                                vel_chunk_smoothed,
+                                acc_chunk_smoothed,
+                                timestamps_smoothed,
+                                target_chunk_index,
+                                prob_progress=None):
+        """Update action chunk with the new fitted action chunk.
+
+        Args:
+            action_chunk_smoothed (np.array): Smoothed action chunk to update.
+            vel_chunk_smoothed (np.array): Smoothed velocity chunk to update.
+            acc_chunk_smoothed (np.array): Smoothed accelerated velocity chunk to update.
+            timestamps_smoothed ()
+            target_chunk_index
+            prob_progress (np.array, optional): Array of prob_progress values aligned with action chunk. Defaults to None.
+        """
+        with self.polynomial_thread_lock:
+            self.action_chunk_index = target_chunk_index
+            self.action_chunk_fitted = action_chunk_smoothed
+            self.vel_chunk_fitted = vel_chunk_smoothed
+            self.acc_chunk_fitted = acc_chunk_smoothed
+            self.timestamps_fitted = timestamps_smoothed
+            self.prob_progress = prob_progress
+
+    def get_start_chunk_index(self, next_timestamps):
+        start_chunk_index = 0
+        time_offset = self.start_ctrl_marker - self.observe_marker
+        self.logger.debug(f'total inference time: {time_offset:.3f}s')
+        
+        for index in range(len(next_timestamps)):
+            if next_timestamps[index] > time_offset:
+                start_chunk_index = index
+                break
+        return start_chunk_index
+
+    def get_current_state(self):
+        # TODO: Consider the inter chunk fusion time offset
+        with self.polynomial_thread_lock:
+            currt_act = self.action_chunk_fitted[:, self.action_chunk_index].copy()
+            currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
+            currt_acc = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else np.zeros_like(currt_vel)
+        return currt_act, currt_vel, currt_acc
     def get_action_fitted(self):
         """Get the current action (fitted and raw) indexed by action_chunk_index.
 
