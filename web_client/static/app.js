@@ -2542,6 +2542,26 @@ function startTrajUpdateTimer() {
   }, intervalMs);
 }
 
+function syncCenterPanelCollapseUi() {
+  const langBody = $('lang-body');
+  const langBtn = $('btn-lang-collapse');
+  const trajBody = $('traj-body');
+  const trajBtn = $('btn-traj-collapse');
+
+  if (langBtn && langBody) {
+    const langCollapsed = langBody.classList.contains('collapsed');
+    // Language panel: swap icons for Collapse/Expand as requested.
+    langBtn.textContent = langCollapsed ? '▼' : '▲';
+    langBtn.title = langCollapsed ? 'Expand' : 'Collapse';
+  }
+
+  if (trajBtn && trajBody) {
+    const trajCollapsed = trajBody.classList.contains('collapsed');
+    trajBtn.textContent = trajCollapsed ? '▲' : '▼';
+    trajBtn.title = trajCollapsed ? 'Expand' : 'Collapse';
+  }
+}
+
 /* ── Wire trajectory controls ── */
 function setupTrajPanel() {
   // Source checkboxes: toggle independently; all can be deselected
@@ -2642,15 +2662,16 @@ function setupTrajPanel() {
 
   // Collapse
   $('btn-traj-collapse').addEventListener('click', () => {
-    const body     = $('traj-body');
-    const btn      = $('btn-traj-collapse');
-    const panelT   = $('panel-traj');
-    const panelL   = $('panel-lang');
+    const body = $('traj-body');
+    const panelT = $('panel-traj');
+    const panelL = $('panel-lang');
     const collapsed = body.classList.toggle('collapsed');
     panelT.classList.toggle('body-collapsed', collapsed);
     panelL.classList.toggle('expanded', collapsed);
-    btn.textContent = collapsed ? '▲' : '▼';
+    syncCenterPanelCollapseUi();
   });
+
+  syncCenterPanelCollapseUi();
 
   // Select all / none
   $('btn-joints-all').addEventListener('click', () => {
@@ -2925,10 +2946,23 @@ function wireEvents() {
 
   // Language Command panel collapse
   $('btn-lang-collapse').addEventListener('click', () => {
-    const body = $('lang-body');
-    const btn  = $('btn-lang-collapse');
-    const collapsed = body.classList.toggle('collapsed');
-    btn.textContent = collapsed ? '▲' : '▼';
+    const langBody = $('lang-body');
+    const trajBody = $('traj-body');
+    const panelT = $('panel-traj');
+    const panelL = $('panel-lang');
+
+    // If trajectory is collapsed, this click should restore both panels to normal layout.
+    if (trajBody.classList.contains('collapsed')) {
+      trajBody.classList.remove('collapsed');
+      langBody.classList.remove('collapsed');
+      panelT.classList.remove('body-collapsed');
+      panelL.classList.remove('expanded');
+      syncCenterPanelCollapseUi();
+      return;
+    }
+
+    langBody.classList.toggle('collapsed');
+    syncCenterPanelCollapseUi();
   });
 
   // Manual robot control
