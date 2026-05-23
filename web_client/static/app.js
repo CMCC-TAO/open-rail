@@ -511,7 +511,7 @@ function renderJointsGrouped(side, values) {
 /**
  * Update button states and status badge.
  * @param {boolean} running  - Whether the vla_client process is alive.
- * @param {boolean} paused   - Whether inference/robot commands are stopped (is_running_action=False).
+ * @param {boolean} paused   - Whether observe/inference/control execution is paused.
  *
  * Button availability matrix:
  *   State            | Start/Stop | Pause/Resume | Reset

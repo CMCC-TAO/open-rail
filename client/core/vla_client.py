@@ -59,7 +59,9 @@ class VLAClientAsync():
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.is_running = False
-        self.is_running_action = True
+        self.is_observe_thread_running = True
+        self.is_inference_thread_running = True
+        self.is_control_thread_running = True
         self.language_tasks = self._load_language_tasks(getattr(self.config.language, 'file_path', ''))
         self.language = self._sync_language_from_config()
         self.allow_language_switch = True  # Flag to control automatic language switching
@@ -191,7 +193,7 @@ class VLAClientAsync():
         - Records data if recording is enabled
         """
         while self.is_running:
-            if not self.is_running_action:
+            if not self.is_observe_thread_running:
                 time.sleep(0.001)
                 continue
             observations = self.robot.retrieve_observation()
@@ -307,7 +309,7 @@ class VLAClientAsync():
         - Updates trajectory fitting with smoothing and search options
         - Computes timing statistics
         """
-        if not self.is_running_action:
+        if not self.is_inference_thread_running:
             return
         
         # Get observation data (thread-safe function, no lock needed)
@@ -416,7 +418,7 @@ class VLAClientAsync():
         - Update visualization if enabled
         - Update monitoring information
         """
-        if not self.is_running_action:
+        if not self.is_control_thread_running:
             return
 
         action_fitted, action_raw, vel_fitted, acc_fitted = self.rdm.get_action_fitted()
@@ -445,7 +447,7 @@ class VLAClientAsync():
             if prob_progress is not None:
                 self.info_act['current_prob_progress'] = prob_progress
 
-            if self.config.record.switch and self.is_running_action and self.is_running:
+            if self.config.record.switch and self.is_control_thread_running and self.is_running:
                 self.dataset_write.async_write_action(action_fitted, time.perf_counter())
             
             self.info_act['action'] = action_fitted.shape
@@ -678,16 +680,20 @@ class VLAClientAsync():
         self.logger.info('VLA client started.')
     
     def pause(self):
-        """Pause inference and robot commands without releasing resources."""
-        self.is_running_action = False
+        """Pause observation, inference and control without releasing resources."""
+        self.is_observe_thread_running = False
+        self.is_inference_thread_running = False
+        self.is_control_thread_running = False
         self.logger.info('VLA client paused.')
 
     def resume(self):
-        """Resume inference and robot commands."""
-        if self.is_running_action:
+        """Resume observation, inference and control."""
+        if self.is_observe_thread_running and self.is_inference_thread_running and self.is_control_thread_running:
             return
         # self.inference_first()
-        self.is_running_action = True
+        self.is_observe_thread_running = True
+        self.is_inference_thread_running = True
+        self.is_control_thread_running = True
         self.logger.info('VLA client resumed.')
 
     def stop(self):
@@ -741,7 +747,7 @@ class VLAClientAsync():
 
     def _inference_thread_fun(self):
         while self.is_running:
-            if not self.is_running_action:
+            if not self.is_inference_thread_running:
                 time.sleep(0.001)
                 continue
 

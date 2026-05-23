@@ -484,6 +484,19 @@ async def _stats_push_loop():
             logger.debug(f"stats push error: {e}")
 
 
+def _is_vla_client_paused(vla_client) -> bool:
+    """Return whether vla_client is paused across observe/inference/control threads."""
+    if hasattr(vla_client, "is_observe_thread_running") and hasattr(vla_client, "is_inference_thread_running") and hasattr(vla_client, "is_control_thread_running"):
+        return not (
+            bool(vla_client.is_observe_thread_running)
+            and bool(vla_client.is_inference_thread_running)
+            and bool(vla_client.is_control_thread_running)
+        )
+    if hasattr(vla_client, "is_running_action"):
+        return not bool(vla_client.is_running_action)
+    return False
+
+
 def _collect_stats() -> dict:
     """Gather runtime stats from the running vla_client."""
     base = {
@@ -512,7 +525,7 @@ def _collect_stats() -> dict:
         return base
 
     try:
-        base["paused"]          = not bool(vla_client.is_running_action)
+        base["paused"]          = _is_vla_client_paused(vla_client)
         base["infer_count"]     = int(vla_client.rdm.infer_count)
         base["avg_infer_time"]  = float(vla_client.rdm.avg_infer_time)
         base["avg_traj_time"]   = float(vla_client.rdm.avg_traj_time)
@@ -995,7 +1008,14 @@ def _resume_vla_client(vla_client):
         vla_client.resume()
     else:
         vla_client.inference_first()
-        vla_client.is_running_action = True
+        if hasattr(vla_client, "is_observe_thread_running"):
+            vla_client.is_observe_thread_running = True
+        if hasattr(vla_client, "is_inference_thread_running"):
+            vla_client.is_inference_thread_running = True
+        if hasattr(vla_client, "is_control_thread_running"):
+            vla_client.is_control_thread_running = True
+        if hasattr(vla_client, "is_running_action"):
+            vla_client.is_running_action = True
 
 
 @app.post("/api/client/pause")
