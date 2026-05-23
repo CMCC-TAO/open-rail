@@ -119,6 +119,7 @@ class InterChunkFuser:
         acc_chunk_smoothed = next_acc_chunk.copy()
         acc_chunk_smoothed[joint_indices, target_chunk_index:] = acc_future 
 
+        self.logger.debug(f"smooth_action={self.config.smooth_action}, smooth_length={self.config.smooth_length}, smooth_base={self.config.smooth_base}, smooth ratio={self.config.smooth_ratio}")
         # weighted smoothing
         if self.config.smooth_action:
             action_chunk_smoothed = self._weighted_smoothing(
@@ -140,11 +141,14 @@ class InterChunkFuser:
                         smooth_length = 50,
                         smooth_base=0.5,
                         smooth_ratio=2.0):
-        smooth_length = min(smooth_length, len(next_action_chunk) - target_chunk_index)
+        next_chunk_length = next_action_chunk.shape[1]
+        self.logger.debug(f"Starting weighted smoothing, next_chunk_length={next_chunk_length}, target_chunk_index={target_chunk_index}")
+        smooth_length = min(smooth_length, next_chunk_length - target_chunk_index)
         action_chunk_smoothed = next_action_chunk.copy()
         for index in range(smooth_length):
             ratio = (1 - smooth_base) * math.pow(index / smooth_length, smooth_ratio)
             action_chunk_smoothed[joint_indices, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_smoothed[joint_indices, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action[joint_indices]
+            # self.logger.debug(f"Smoothing action chunk {target_chunk_index + index} with ratio {ratio}")
         return action_chunk_smoothed
     @staticmethod
     @njit(fastmath=True, cache=True)
