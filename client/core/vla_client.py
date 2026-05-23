@@ -2,12 +2,12 @@ import cv2
 import os
 import json
 import time
-from datetime import datetime
 import threading
 import logging
 import numpy as np
-from ml_collections import ConfigDict
+from datetime import datetime
 from collections import deque
+from ml_collections import ConfigDict
 from scipy.interpolate import CubicSpline, interp1d
 
 from concurrent.futures import ThreadPoolExecutor
@@ -264,21 +264,20 @@ class VLAClientAsync():
             # Record control timestamp
             self.rdm.set_control_time_marker()
             target_chunk_index = self.rdm.get_start_chunk_index(timestamps_fitted)
-            joint_indices = self.rdm._get_joint_indices(action_chunk_fitted)
-            step_indices = self.rdm._get_step_indices(action_chunk_fitted)
-            currt_action, currt_vel, currt_acc = self.rdm.get_current_state()
+            # joint_indices = self.rdm._get_joint_indices(action_chunk_fitted)
+            # step_indices = self.rdm._get_step_indices(action_chunk_fitted)
+            # currt_action, currt_vel, currt_acc = self.rdm.get_current_state()
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
                 next_action_chunk=action_chunk_fitted,
                 next_vel_chunk=vel_chunk_fitted,
                 next_acc_chunk=acc_chunk_fitted,
                 next_timestamps=timestamps_fitted,
                 target_chunk_index=target_chunk_index,
-                currt_action=currt_action,
-                currt_vel=currt_vel,
-                currt_acc=currt_acc,
-                joint_indices=joint_indices,
-                step_indices=step_indices,
-                currt_action=currt_action,
+                currt_action=None,
+                currt_vel=None,
+                currt_acc=None,
+                joint_indices=None,
+                step_indices=None,
             )
             self.rdm.update_action_chunk_fitted_1(
                 action_chunk_smoothed=action_chunk_smoothed,
@@ -377,7 +376,6 @@ class VLAClientAsync():
                 currt_acc=currt_acc,
                 joint_indices=joint_indices,
                 step_indices=step_indices,
-                currt_action=currt_action,
             )
             self.rdm.update_action_chunk_fitted_1(
                 action_chunk_smoothed=action_chunk_smoothed,

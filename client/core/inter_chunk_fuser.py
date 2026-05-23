@@ -1,9 +1,11 @@
 import logging
 import math
+from shlex import join
 import numpy as np
 from numba import njit
 from ml_collections import ConfigDict
 from scipy.interpolate import make_interp_spline
+from client.utils.util import run_time_decorator
 
 
 class InterChunkFuser:
@@ -13,17 +15,30 @@ class InterChunkFuser:
         self.logger = logging.getLogger(__name__)
         self.config = config
 
+    @run_time_decorator
     def process(self, 
             next_action_chunk,
             next_vel_chunk,
             next_acc_chunk,
             next_timestamps,
             target_chunk_index,
-            currt_action,
-            currt_vel,
-            currt_acc,
+            currt_action=None,
+            currt_vel=None,
+            currt_acc=None,
             joint_indices= None,
             step_indices = None):
+        # process first inference
+        if currt_action is None and currt_vel is None and currt_acc is None:
+            next_vel_chunk = np.zeros_like(next_action_chunk)
+            next_vel_chunk[:, 1:] = (next_action_chunk[:, 1:] - next_action_chunk[:, :-1]) / (next_timestamps[1] - next_timestamps[0])
+            next_vel_chunk[:, 0] = next_vel_chunk[:, 1]
+
+            next_acc_chunk = np.zeros_like(next_acc_chunk)
+            next_acc_chunk[:, 1:] = (next_vel_chunk[:, 1:] - next_vel_chunk[:, :-1]) / (next_timestamps[1] - next_timestamps[0])
+            next_acc_chunk[:, 0] = next_acc_chunk[:, 1]
+            
+            return next_action_chunk, next_vel_chunk, next_acc_chunk, target_chunk_index
+
         if self.config.inter_chunk_mode == 'search_action':
             action_chunk_smoothed, target_chunk_index = self._search_smooth_action_1(
                 next_action_chunk,
@@ -221,9 +236,9 @@ class InterChunkFuser:
 
         return pos_seq, vel_seq, acc_seq
 
-    @staticmethod
-    @njit(fastmath=True, cache=True)
-    def _smooth_velocity_transition_numba_1(
+    # @staticmethod
+    # @njit(fastmath=True, cache=True)
+    def _smooth_velocity_transition_numba_1(self,
                                     next_action_chunk,
                                     next_timestamps,
                                     target_chunk_index,
@@ -508,8 +523,8 @@ class InterChunkFuser:
             new_acc = np.zeros_like(new_vel)
 
         # Determine the length of the transition period.
-        # transition_length = min(next_action_chunk.shape[1] // 2, next_action_chunk.shape[1] - start_index)
-        transition_length = min(poly_length, next_action_chunk.shape[1] - target_chunk_index)
+        transition_length = min(next_action_chunk.shape[1] // 2, next_action_chunk.shape[1] - target_chunk_index)
+        # transition_length = min(poly_length, next_action_chunk.shape[1] - target_chunk_index)
         action_chunk_smoothed = next_action_chunk.copy()
         end_index = target_chunk_index + transition_length - 1
         resolved_joint_indices = self._get_joint_indices(next_action_chunk, joint_indices)
@@ -1125,7 +1140,7 @@ class InterChunkFuser:
         valid_joints = [index for index, value in enumerate(abs(currt_vel) > 5e-3) if value]
         if not valid_joints:
             # If no joints are moving, any point is fine, so start from the beginning.
-            return 0
+            return next_action_chunk, 0
 
         # Filter the current state to only consider the moving joints.
         currt_action = currt_action[valid_joints]
