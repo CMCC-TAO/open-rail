@@ -2663,8 +2663,21 @@ function setupTrajPanel() {
   // Collapse
   $('btn-traj-collapse').addEventListener('click', () => {
     const body = $('traj-body');
+    const langBody = $('lang-body');
     const panelT = $('panel-traj');
     const panelL = $('panel-lang');
+
+    // If Language panel is collapsed while Trajectory is normal,
+    // this click should restore both panels to normal size.
+    if (!body.classList.contains('collapsed') && langBody.classList.contains('collapsed')) {
+      langBody.classList.remove('collapsed');
+      body.classList.remove('collapsed');
+      panelT.classList.remove('body-collapsed');
+      panelL.classList.remove('expanded');
+      syncCenterPanelCollapseUi();
+      return;
+    }
+
     const collapsed = body.classList.toggle('collapsed');
     panelT.classList.toggle('body-collapsed', collapsed);
     panelL.classList.toggle('expanded', collapsed);
