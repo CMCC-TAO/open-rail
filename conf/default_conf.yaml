@@ -9,7 +9,7 @@ controller:
 inter_chunk:
   inter_chunk_mode: search_action
   search_length: 100
-  smooth_action: true
+  smooth_action: false
   smooth_base: 0.0
   smooth_length: 50
   smooth_ratio: 0.75

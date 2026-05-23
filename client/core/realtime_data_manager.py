@@ -36,6 +36,8 @@ class RealtimeDataManager():
         self.action_thread_lock = threading.Lock()
         self.observe_thread_lock = threading.Lock()
         self.polynomial_thread_lock = threading.Lock()
+        # Condition variable to wait/notify on polynomial/action index updates
+        self.polynomial_cond = threading.Condition(self.polynomial_thread_lock)
         
         # Timestamp of the first observe data for inference
         self.init_observe_timestamp = None
@@ -350,6 +352,8 @@ class RealtimeDataManager():
                 self.acc_chunk_fitted = acc_chunk_fitted
                 self.timestamps_fitted = timestamps_fitted
                 self.prob_progress = prob_progress
+                # notify waiters that new fitted action chunk is available
+                self.polynomial_cond.notify_all()
 
         else: # update action chunk fitted secondly;
             # Calculate time offset from observation to trajectory fitting completion
@@ -472,6 +476,8 @@ class RealtimeDataManager():
                     else:
                         chunk_length = self.action_chunk_fitted.shape[-1]
                         self.action_chunk_fitted[step_indices, -gripper_offset:] = action_chunk_fitted[step_indices, :chunk_length + gripper_offset]
+                # notify waiters that action chunk state updated
+                self.polynomial_cond.notify_all()
 
     def update_action_chunk_fitted_1(self,
                                 action_chunk_smoothed,
@@ -497,6 +503,8 @@ class RealtimeDataManager():
             self.acc_chunk_fitted = acc_chunk_smoothed
             self.timestamps_fitted = timestamps_smoothed
             self.prob_progress = prob_progress
+            # notify waiters about the updated fitted chunk
+            self.polynomial_cond.notify_all()
 
     def get_start_chunk_index(self, next_timestamps):
         start_chunk_index = 0
@@ -526,6 +534,8 @@ class RealtimeDataManager():
             if self.action_chunk_index is None:
                 return None, None, None, None
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
+            # notify any waiter that the action index advanced
+            self.polynomial_cond.notify_all()
             # print(self.action_chunk_fitted.shape, len(self.action_chunks), self.action_chunks[0].shape, "!"*50)
             action_raw_index = int(self.action_chunk_index/(self.action_chunk_fitted.shape[1]/len(self.action_chunks)))
             action_raw_index = min(action_raw_index, len(self.action_chunks)-1)
@@ -614,5 +624,44 @@ class RealtimeDataManager():
             self.acc_chunk_fitted = None
             self.timestamps_fitted = None
             self.action_chunk_index = None
+            # notify waiters that action data has been cleared
+            self.polynomial_cond.notify_all()
             
         self.logger.debug("Action data cleared for fresh inference")
+
+    def wait_for_next(self, mode: str = 'sync', wait_time: float = 0.01) -> bool:
+        """Wait for next action/frame according to mode.
+
+        Args:
+            mode (str): 'async' -> sleep for `wait_time`; 'sync' -> block until the fitted
+                        action chunk index reaches the last available index.
+            wait_time (float): Sleep time for async mode (seconds).
+
+        Returns:
+            bool: True if the wait condition was satisfied (or sleep completed). False if
+                  there was no fitted action chunk to wait on.
+        """
+        start_time = time.perf_counter()
+        result = False
+        if mode == 'async':
+            time.sleep(wait_time)
+            result = True
+        elif mode == 'sync':
+            with self.polynomial_cond:
+                if self.action_chunk_fitted is None:
+                    result = False
+                else:
+                    target_index = max(0, self.action_chunk_fitted.shape[1] - 1)
+                    self.polynomial_cond.wait_for(
+                        lambda: (self.action_chunk_index is not None
+                                 and self.action_chunk_fitted is not None
+                                 and self.action_chunk_index >= target_index)
+                    )
+                    result = True
+        else:
+            raise ValueError("mode must be 'async' or 'sync'")
+
+        actual_wait_time = (time.perf_counter() - start_time) * 1000.0
+        self.logger.info(f"mode={mode}, real_wait_time={actual_wait_time:.3f}ms.")
+        return result
+
