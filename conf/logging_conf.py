@@ -135,7 +135,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "level": "DEBUG",
                 "propagate": False,
             },
-            "client.core.inter_chunk_fusion": {
+            "client.core.inter_chunk_fuser": {
                 "handlers": ["file"],
                 "level": "DEBUG",
                 "propagate": False,

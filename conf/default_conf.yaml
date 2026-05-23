@@ -7,11 +7,11 @@ controller:
   strategy: step
   wait_time: 250
 inter_chunk:
-  inter_chunk_mode: bspline
+  inter_chunk_mode: search_action
   search_length: 100
-  smooth_action: false
+  smooth_action: true
   smooth_base: 0.0
-  smooth_length: 150
+  smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
   action_layout:
