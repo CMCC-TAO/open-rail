@@ -491,7 +491,7 @@ class RealtimeDataManager():
             prob_progress (np.array, optional): Array of prob_progress values aligned with action chunk. Defaults to None.
         """
         with self.polynomial_thread_lock:
-            self.action_chunk_index = target_chunk_index
+            self.action_chunk_index = target_chunk_index if self.action_chunk_index is not None else 0
             self.action_chunk_fitted = action_chunk_smoothed
             self.vel_chunk_fitted = vel_chunk_smoothed
             self.acc_chunk_fitted = acc_chunk_smoothed
@@ -512,9 +512,9 @@ class RealtimeDataManager():
     def get_current_state(self):
         # TODO: Consider the inter chunk fusion time offset
         with self.polynomial_thread_lock:
-            currt_act = self.action_chunk_fitted[:, self.action_chunk_index].copy()
-            currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy()
-            currt_acc = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else np.zeros_like(currt_vel)
+            currt_act = self.action_chunk_fitted[:, self.action_chunk_index].copy() if self.action_chunk_fitted is not None else None
+            currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy() if self.vel_chunk_fitted is not None else None
+            currt_acc = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else None
         return currt_act, currt_vel, currt_acc
     def get_action_fitted(self):
         """Get the current action (fitted and raw) indexed by action_chunk_index.
