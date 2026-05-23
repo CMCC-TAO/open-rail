@@ -116,6 +116,35 @@ def wheel_control_loop(robot):
         robot.execute_action({'wheel': wheel_pos})
         time.sleep(0.05)
 
+
+def pause_vla_client_actions(vla_client):
+    if hasattr(vla_client, 'pause'):
+        vla_client.pause()
+        return
+    if hasattr(vla_client, 'is_observe_thread_running'):
+        vla_client.is_observe_thread_running = False
+    if hasattr(vla_client, 'is_inference_thread_running'):
+        vla_client.is_inference_thread_running = False
+    if hasattr(vla_client, 'is_control_thread_running'):
+        vla_client.is_control_thread_running = False
+    if hasattr(vla_client, 'is_running_action'):
+        vla_client.is_running_action = False
+
+
+def resume_vla_client_actions(vla_client):
+    if hasattr(vla_client, 'resume'):
+        vla_client.resume()
+        return
+    if hasattr(vla_client, 'is_observe_thread_running'):
+        vla_client.is_observe_thread_running = True
+    if hasattr(vla_client, 'is_inference_thread_running'):
+        vla_client.is_inference_thread_running = True
+    if hasattr(vla_client, 'is_control_thread_running'):
+        vla_client.is_control_thread_running = True
+    if hasattr(vla_client, 'is_running_action'):
+        vla_client.is_running_action = True
+
+
 def handle_user_input(vla_client, robot, live):
     """Handle user input
     
@@ -126,7 +155,7 @@ def handle_user_input(vla_client, robot, live):
         live.stop()
     
     try:
-        vla_client.is_running_action = False
+        pause_vla_client_actions(vla_client)
         cmd = input('\nProgram paused, please enter command, press Enter to continue:\nr: reset robot\nc: control robot\nl: modify language instruction\ns: save data (if recording enabled)\nd: delete data (if recording enabled)\nq: quit\n')
         
         if cmd == 'l':
@@ -224,7 +253,7 @@ def handle_user_input(vla_client, robot, live):
             return False  # Signal to quit
         
         vla_client.inference_first() # avoid pause/restart shaking
-        vla_client.is_running_action = True
+        resume_vla_client_actions(vla_client)
         return True  # Continue running
         
     finally:
