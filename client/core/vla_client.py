@@ -101,11 +101,11 @@ class VLAClientAsync():
             # Initialize the dataset writer with the provided recording configuration
             self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
 
-        # Create Visualization WebSocket server
-        self.websocket_server = VLAWebSocketServer.get_instance()
+        # Create visualization WebSocket server for live image and trajectory updates
+        self.visualization_server = VLAWebSocketServer.get_instance()
         camera_cfg = getattr(getattr(self.config, 'visual', None), 'camera', None)
         if camera_cfg is not None:
-            self.websocket_server.update_camera_open_config(camera_cfg)
+            self.visualization_server.update_camera_open_config(camera_cfg)
         self.vis_global_step = 0
         self.vis_idx_count = 0
         self.vis_origin_chunk_action = None
@@ -560,7 +560,7 @@ class VLAClientAsync():
             processed_imgs[key] = processed
 
         # Send images to visualization interface
-        self.websocket_server.update_image_data(processed_imgs)
+        self.visualization_server.update_image_data(processed_imgs)
 
         return encoded_imgs
 
@@ -655,35 +655,61 @@ class VLAClientAsync():
                 return msg
             self.logger.warning(f"Drop stale response with unmatched request_id: {meta.get('request_id')}")
 
+    def start_observe(self):
+        self.is_running = True
+        self.is_observe_thread_running = True
+        if not self.observe_thread.is_alive():
+            self.observe_thread.start()
+
+    def stop_observe(self):
+        self.is_observe_thread_running = False
+
+    def start_inference(self):
+        self.is_running = True
+        self.is_inference_thread_running = True
+        if not self.inference_thread.is_alive():
+            self.inference_thread.start()
+
+    def stop_inference(self):
+        self.is_inference_thread_running = False
+
+    def start_control(self):
+        self.is_running = True
+        self.is_control_thread_running = True
+        if not self.control_thread_timer._thread.is_alive():
+            self.control_thread_timer.start()
+
+    def stop_control(self):
+        self.is_control_thread_running = False
+
     def run(self):
         """Start the VLA client and all associated threads.
-        
+
         This method initializes and starts the observation, control, and inference
         threads for real-time robot operation. It uses thread locks to ensure
         thread-safe startup and begins the main control loop.
         """
         with self.thread_lock:
             self.is_running = True
-    
-        # Start threads
-        self.observe_thread.start()
-        self.inference_thread.start()
-        self.control_thread_timer.start()
-        self.websocket_server.run()
+
+        self.start_observe()
+        self.start_inference()
+        self.start_control()
+        self.visualization_server.run()
 
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.start()
 
         if self.config.record_exp_data:
             self.data_write_thread.start()
-        
+
         self.logger.info('VLA client started.')
-    
+
     def pause(self):
         """Pause observation, inference and control without releasing resources."""
-        self.is_observe_thread_running = False
-        self.is_inference_thread_running = False
-        self.is_control_thread_running = False
+        self.stop_observe()
+        self.stop_inference()
+        self.stop_control()
         self.logger.info('VLA client paused.')
 
     def resume(self):
@@ -691,9 +717,9 @@ class VLAClientAsync():
         if self.is_observe_thread_running and self.is_inference_thread_running and self.is_control_thread_running:
             return
         # self.inference_first()
-        self.is_observe_thread_running = True
-        self.is_inference_thread_running = True
-        self.is_control_thread_running = True
+        self.start_observe()
+        self.start_inference()
+        self.start_control()
         self.logger.info('VLA client resumed.')
 
     def stop(self):
@@ -713,18 +739,21 @@ class VLAClientAsync():
         with self.thread_lock:
             self.is_running = False
         
-        self.observe_thread.join(timeout=1.0)
-        self.inference_thread.join(timeout=1.0)
+        if self.observe_thread.is_alive():
+            self.observe_thread.join(timeout=1.0)
+        if self.inference_thread.is_alive():
+            self.inference_thread.join(timeout=1.0)
 
-        if self.config.show_action_cams_qt:
+        if self.config.show_action_cams_qt and self.vis_action_cams_thread.is_alive():
             self.vis_action_cams_thread.join(timeout=1.0)
-        
-        if self.config.record_exp_data:
+
+        if self.config.record_exp_data and self.data_write_thread.is_alive():
             self.data_write_thread.join(timeout=1.0)
-        
+
         # Stop and join control thread timer
-        self.control_thread_timer.stop()
-        self.control_thread_timer.join(timeout=1.0)
+        if self.control_thread_timer._thread.is_alive():
+            self.control_thread_timer.stop()
+            self.control_thread_timer.join(timeout=1.0)
         
         if self.config.record.switch:
             time.sleep(1)
@@ -736,7 +765,7 @@ class VLAClientAsync():
                 self.vis_action_cams_zmq.close()
             except Exception:
                 pass
-        self.websocket_server.stop_server()
+        self.visualization_server.stop_server()
 
         # close file IO writer
         if self.config.record_exp_data:
@@ -886,7 +915,7 @@ class VLAClientAsync():
             self.vis_prev_origin_idx = origin_idx
 
         if list_data:
-            self.websocket_server.update_chart_data(list_data)
+            self.visualization_server.update_chart_data(list_data)
             self.vis_global_step += 1
             self.vis_idx_count += 1
 

@@ -679,7 +679,7 @@ async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
         return {"status": "ok", "applied": False}
 
     vla_client = client_state.vla_client
-    ws_server = getattr(vla_client, "websocket_server", None) if vla_client is not None else None
+    ws_server = getattr(vla_client, "visualization_server", None) if vla_client is not None else None
     if ws_server is None:
         return {"status": "ok", "applied": False}
 
@@ -713,7 +713,7 @@ async def patch_config(req: ConfigPatchRequest):
         try:
             if any(k.startswith("visual.camera.") for k in flat.keys()):
                 cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
-                ws_server = getattr(client_state.vla_client, "websocket_server", None)
+                ws_server = getattr(client_state.vla_client, "visualization_server", None)
                 if ws_server is not None and cam_cfg is not None:
                     ws_server.update_camera_open_config(cam_cfg)
         except Exception as e:
@@ -752,7 +752,7 @@ async def load_config_file(req: ConfigFileRequest):
     if client_state.running and client_state.vla_client is not None:
         try:
             cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
-            ws_server = getattr(client_state.vla_client, "websocket_server", None)
+            ws_server = getattr(client_state.vla_client, "visualization_server", None)
             if ws_server is not None and cam_cfg is not None:
                 ws_server.update_camera_open_config(cam_cfg)
         except Exception as e:

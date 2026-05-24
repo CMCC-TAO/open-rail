@@ -93,11 +93,11 @@ class VLAClientSync():
             # Initialize the dataset writer with the provided recording configuration
             self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
 
-        # Create Visualization WebSocket server
-        self.websocket_server = VLAWebSocketServer.get_instance()
+        # Create visualization WebSocket server for live image and trajectory updates
+        self.visualization_server = VLAWebSocketServer.get_instance()
         camera_cfg = getattr(getattr(self.config, 'visual', None), 'camera', None)
         if camera_cfg is not None:
-            self.websocket_server.update_camera_open_config(camera_cfg)
+            self.visualization_server.update_camera_open_config(camera_cfg)
         self.vis_global_step = 0
         self.vis_idx_count = 0
         self.vis_origin_chunk_action = None
@@ -349,7 +349,7 @@ class VLAClientSync():
             processed_imgs[key] = processed
 
         # Send images to visualization interface
-        self.websocket_server.update_image_data(processed_imgs)
+        self.visualization_server.update_image_data(processed_imgs)
 
         return encoded_imgs
 
@@ -466,7 +466,7 @@ class VLAClientSync():
         self.observe_thread.start()
         self.inference_thread.start()
         self.control_thread_timer.start()
-        self.websocket_server.run()
+        self.visualization_server.run()
 
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.start()
@@ -527,7 +527,7 @@ class VLAClientSync():
                 self.vis_action_cams_zmq.close()
             except Exception:
                 pass
-        self.websocket_server.stop_server()
+        self.visualization_server.stop_server()
 
         # close file IO writer
         for f in self.files.values():
@@ -660,7 +660,7 @@ class VLAClientSync():
         self.vis_prev_action_vel = action_vel
         self.vis_prev_state = state_np
         self.vis_prev_state_vel = state_vel
-        self.websocket_server.update_chart_data(list_data)
+        self.visualization_server.update_chart_data(list_data)
         self.vis_global_step += 1
         self.vis_idx_count += 1
 
