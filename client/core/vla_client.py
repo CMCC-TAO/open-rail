@@ -682,6 +682,11 @@ class VLAClientAsync():
     def stop_control(self):
         self.is_control_thread_running = False
 
+    def start_visualize(self):
+        self.visualization_server.run()
+    def stop_visualize(self):
+        self.visualization_server.stop_server()
+
     def run(self):
         """Start the VLA client and all associated threads.
 
@@ -695,7 +700,7 @@ class VLAClientAsync():
         self.start_observe()
         self.start_inference()
         self.start_control()
-        self.visualization_server.run()
+        self.start_visualize()
 
         if self.config.show_action_cams_qt:
             self.vis_action_cams_thread.start()
