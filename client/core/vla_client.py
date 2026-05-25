@@ -107,12 +107,8 @@ class VLAClientAsync():
         if camera_cfg is not None:
             self.visualization_server.update_camera_open_config(camera_cfg)
         self.vis_global_step = 0
-        self.vis_idx_count = 0
-        self.vis_origin_chunk_action = None
-        self.vis_ratio = (1.0 / self.config.observer.fps) / (self.config.intra_chunk.fitting_time_step / 1000.0) # (64 - 1) * ratio -> 420
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
-        self.vis_prev_origin_idx = None
 
         # The zmq client to communicate with action-camera visualization server
         if self.config.show_action_cams_qt:
@@ -250,8 +246,6 @@ class VLAClientAsync():
             # Get current data timestamp and update timestamps
             action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
             self.rdm.set_observe_time_marker(loc_timestamp)
-            self.vis_idx_count = 0
-            self.vis_origin_chunk_action = action_chunk
             
             # Add action data (thread-safe function, no lock needed)
             self.rdm.set_init_observe_timestamp(timestamp=timestamp_chunk[0])
@@ -329,8 +323,6 @@ class VLAClientAsync():
             # Get current data timestamp and update timestamps
             action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
             self.rdm.set_observe_time_marker(loc_timestamp)
-            self.vis_idx_count = 0
-            self.vis_origin_chunk_action = action_chunk
             
             # Add action data (thread-safe function, no lock needed)
             self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
@@ -882,9 +874,7 @@ class VLAClientAsync():
             })
 
         # Origin (raw action) series
-        origin_idx = self.vis_idx_count // int(self.vis_ratio) + 4
-        has_origin_chunk = self.vis_origin_chunk_action is not None
-        if action_raw is not None and has_origin_chunk and (self.vis_idx_count % int(self.vis_ratio) == 0 and origin_idx < len(self.vis_origin_chunk_action)):
+        if action_raw is not None:
             origin_np = np.asarray(action_raw)
             list_data.append({
                 'tab': 'position',
@@ -918,12 +908,10 @@ class VLAClientAsync():
             })
             self.vis_prev_origin = origin_np
             self.vis_prev_origin_vel = origin_vel
-            self.vis_prev_origin_idx = origin_idx
 
         if list_data:
             self.visualization_server.update_chart_data(list_data)
             self.vis_global_step += 1
-            self.vis_idx_count += 1
 
         # Update previous values only for available inputs
         if action_np is not None:
