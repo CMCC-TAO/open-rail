@@ -837,6 +837,7 @@ class VLAClientAsync():
                 'joints_y': state_np.tolist()
             })
 
+        # TODO: use real velocity/acceleration
         # Velocity/acceleration for state (derived from state)
         state_vel = None
         state_acc = None
