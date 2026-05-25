@@ -110,6 +110,7 @@ class ClientState:
         self.ws_lock = threading.Lock()
         self._broadcast_task: Optional[asyncio.Task] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self.paused_thread_state: Optional[dict] = None
 
 client_state = ClientState()
 
@@ -502,6 +503,9 @@ def _collect_stats() -> dict:
     base = {
         "running": client_state.running,
         "paused": False,
+        "observe_running": False,
+        "inference_running": False,
+        "control_running": False,
         "infer_count": 0,
         "avg_infer_time": 0.0,
         "avg_traj_time": 0.0,
@@ -526,6 +530,9 @@ def _collect_stats() -> dict:
 
     try:
         base["paused"]          = _is_vla_client_paused(vla_client)
+        base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", not base["paused"]))
+        base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", not base["paused"]))
+        base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", not base["paused"]))
         base["infer_count"]     = int(vla_client.rdm.infer_count)
         base["avg_infer_time"]  = float(vla_client.rdm.avg_infer_time)
         base["avg_traj_time"]   = float(vla_client.rdm.avg_traj_time)
@@ -918,57 +925,60 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: client control
 # ─────────────────────────────────────────────────────────────────────────────
+def _ensure_vla_client_created():
+    with client_state.lock:
+        if client_state.vla_client is not None:
+            return client_state.vla_client
+
+    cfg = client_state.config if client_state.config is not None else get_client_config()
+    client_state.config = cfg
+
+    robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
+    if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
+        cfg.rdm.action_layout = robot_cfg.action_layout
+        cfg.intra_chunk.action_layout = robot_cfg.action_layout
+
+    vla_zmq_client = ZMQClient(cfg.vla_zmq)
+    robot = _get_robot(cfg)
+    rdm = RealtimeDataManager(cfg.rdm)
+    inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
+    intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
+
+    if cfg.inter_chunk.inter_chunk_mode == 'sync':
+        from client.core.vla_client_sync import VLAClientSync
+        vla_client = VLAClientSync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
+                           vla_zmq_client=vla_zmq_client, robot=robot)
+    else:
+        from client.core.vla_client import VLAClientAsync
+        vla_client = VLAClientAsync(
+            config=cfg,
+            rdm=rdm,
+            inter_chunk_fuser=inter_chunk_fuser,
+            intra_chunk_smoother=intra_chunk_smoother,
+            vla_zmq_client=vla_zmq_client,
+            robot=robot)
+
+    with client_state.lock:
+        client_state.vla_client = vla_client
+        client_state.robot = robot
+    return vla_client
+
+
 @app.post("/api/client/start")
 async def start_client():
-    """Initialise and start the VLA client (non-blocking)."""
-    # Lock prevents concurrent requests from both passing the running guard
-    with client_state.lock:
-        if client_state.running:
-            raise HTTPException(400, "Client is already running.")
-        # Set eagerly inside the lock so a second concurrent request is rejected
-        # before the worker thread is even created.
-        client_state.running = True
-
-    # get_running_loop() is the correct API inside a running coroutine (Python 3.10+)
+    """Create vla_client if needed, then run it in worker thread (non-blocking)."""
     loop = asyncio.get_running_loop()
     client_state._loop = loop
 
+    vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+
+    with client_state.lock:
+        if client_state.running:
+            return {"status": "ok", "message": "Client already started."}
+        client_state.running = True
+
     def _run_in_thread():
         try:
-            # setup_logging("client.log")
-            cfg = client_state.config if client_state.config is not None else get_client_config()
-            client_state.config = cfg
-
-            # Apply action_layout from robot config
-            robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
-            if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
-                cfg.rdm.action_layout = robot_cfg.action_layout
-                cfg.intra_chunk.action_layout = robot_cfg.action_layout
-
-            vla_zmq_client = ZMQClient(cfg.vla_zmq)
-            robot = _get_robot(cfg)
-            rdm = RealtimeDataManager(cfg.rdm)
-            inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
-            intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
-
-            if cfg.inter_chunk.inter_chunk_mode == 'sync':
-                from client.core.vla_client_sync import VLAClientSync
-                vla_client = VLAClientSync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
-                                   vla_zmq_client=vla_zmq_client, robot=robot)
-            else:
-                from client.core.vla_client import VLAClientAsync
-                vla_client = VLAClientAsync(
-                    config=cfg,
-                    rdm=rdm,
-                    inter_chunk_fuser=inter_chunk_fuser,
-                    intra_chunk_smoother=intra_chunk_smoother,
-                    vla_zmq_client=vla_zmq_client,
-                    robot=robot)
-
-            client_state.vla_client = vla_client
-            client_state.robot = robot
-
-            # Broadcast "started" immediately before entering the blocking vla_client.run()
             asyncio.run_coroutine_threadsafe(
                 _broadcast({"type": "status", "data": {"running": True, "message": "Client started."}}),
                 loop
@@ -976,7 +986,6 @@ async def start_client():
 
             vla_client.run()
 
-            # Keep alive until externally stopped
             while client_state.running:
                 time.sleep(0.1)
 
@@ -996,47 +1005,187 @@ async def start_client():
     return {"status": "ok", "message": "Client starting…"}
 
 
-def _pause_vla_client(vla_client):
-    if hasattr(vla_client, "pause"):
-        vla_client.pause()
-    else:
-        vla_client.stop()
+def _thread_state(vla_client) -> dict:
+    if hasattr(vla_client, "is_observe_thread_running") and hasattr(vla_client, "is_inference_thread_running") and hasattr(vla_client, "is_control_thread_running"):
+        state = {
+            "observe_running": bool(vla_client.is_observe_thread_running),
+            "inference_running": bool(vla_client.is_inference_thread_running),
+            "control_running": bool(vla_client.is_control_thread_running),
+        }
+        print(f"_thread_state detected thread states: {state}")
+        return state
+    # if hasattr(vla_client, "is_running_action"):
+    #     running = bool(vla_client.is_running_action)
+    #     return {
+    #         "observe_running": running,
+    #         "inference_running": running,
+    #         "control_running": running,
+    #     }
+    return {
+        "observe_running": True,
+        "inference_running": True,
+        "control_running": True,
+    }
 
 
-def _resume_vla_client(vla_client):
-    if hasattr(vla_client, "resume"):
-        vla_client.resume()
-    else:
-        vla_client.inference_first()
-        if hasattr(vla_client, "is_observe_thread_running"):
-            vla_client.is_observe_thread_running = True
-        if hasattr(vla_client, "is_inference_thread_running"):
-            vla_client.is_inference_thread_running = True
-        if hasattr(vla_client, "is_control_thread_running"):
-            vla_client.is_control_thread_running = True
-        if hasattr(vla_client, "is_running_action"):
-            vla_client.is_running_action = True
+def _status_payload(vla_client, message: str, running: bool = True) -> dict:
+    state = _thread_state(vla_client)
+    return {
+        "running": running,
+        "paused": not (state["observe_running"] and state["inference_running"] and state["control_running"]),
+        "observe_running": state["observe_running"],
+        "inference_running": state["inference_running"],
+        "control_running": state["control_running"],
+        "message": message,
+    }
 
+
+def _start_observe(vla_client):
+    if hasattr(vla_client, "start_observe"):
+        vla_client.start_observe()
+    elif hasattr(vla_client, "start_observe_thread"):
+        vla_client.start_observe_thread()
+
+    if hasattr(vla_client, "start_visualize"):
+        vla_client.start_visualize()
+
+
+def _stop_observe(vla_client):
+    if hasattr(vla_client, "stop_observe"):
+        vla_client.stop_observe()
+    elif hasattr(vla_client, "is_observe_thread_running"):
+        vla_client.is_observe_thread_running = False
+
+
+def _start_inference(vla_client):
+    if hasattr(vla_client, "start_inference"):
+        vla_client.start_inference()
+    elif hasattr(vla_client, "start_inference_thread"):
+        vla_client.start_inference_thread()
+
+
+def _stop_inference(vla_client):
+    if hasattr(vla_client, "stop_inference"):
+        vla_client.stop_inference()
+    elif hasattr(vla_client, "is_inference_thread_running"):
+        vla_client.is_inference_thread_running = False
+
+
+def _start_control(vla_client):
+    if hasattr(vla_client, "start_control"):
+        vla_client.start_control()
+    elif hasattr(vla_client, "start_control_thread"):
+        vla_client.start_control_thread()
+
+
+def _stop_control(vla_client):
+    if hasattr(vla_client, "stop_control"):
+        vla_client.stop_control()
+    elif hasattr(vla_client, "is_control_thread_running"):
+        vla_client.is_control_thread_running = False
+
+
+def _pause_vla_client(vla_client) -> dict:
+    state = _thread_state(vla_client)
+    print(f"_pause_vla_client with state: {state}")
+    if state.get("observe_running", False):
+        _stop_observe(vla_client)
+    if state.get("inference_running", False):
+        _stop_inference(vla_client)
+    if state.get("control_running", False):
+        _stop_control(vla_client)
+    return state
+
+
+def _resume_vla_client(vla_client, state: Optional[dict] = None):
+    # if state is None:
+    #     state = {
+    #         "observe_running": True,
+    #         "inference_running": True,
+    #         "control_running": True,
+    #     }
+    print(f"_resume_vla_client with state: {state}")
+    if hasattr(vla_client, "is_observe_thread_running") and hasattr(vla_client, "is_inference_thread_running") and hasattr(vla_client, "is_control_thread_running"):
+        if state.get("observe_running", False):
+            _start_observe(vla_client)
+
+        if state.get("inference_running", False):
+            _start_inference(vla_client)
+
+        if state.get("control_running", False):
+            _start_control(vla_client)
+        return
 
 @app.post("/api/client/pause")
 async def pause_client():
-    """Pause inference and robot commands without releasing resources."""
+    """Pause observe/inference/control without releasing resources."""
     vla_client = client_state.vla_client
     if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
-    _pause_vla_client(vla_client)
-    await _broadcast({"type": "status", "data": {"running": True, "paused": True, "message": "Client paused."}})   
+
+    paused_state = _pause_vla_client(vla_client)
+    with client_state.lock:
+        client_state.paused_thread_state = paused_state
+
+    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True)})
     return {"status": "ok"}
 
 
 @app.post("/api/client/resume")
 async def resume_client():
-    """Resume inference and robot commands."""
+    """Resume observe/inference/control to the exact state before pause."""
     vla_client = client_state.vla_client
     if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
-    _resume_vla_client(vla_client)
-    await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
+
+    with client_state.lock:
+        restore_state = client_state.paused_thread_state
+
+    _resume_vla_client(vla_client, restore_state)
+
+    with client_state.lock:
+        client_state.paused_thread_state = None
+
+    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client resumed.", running=True)})
+    return {"status": "ok"}
+
+
+@app.post("/api/client/observe/start")
+async def start_observe_only():
+    vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+
+    with client_state.lock:
+        client_state.running = True
+        client_state.paused_thread_state = None
+
+    _start_observe(vla_client)
+    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Observe started.", running=True)})
+    return {"status": "ok"}
+
+
+@app.post("/api/client/infer/start")
+async def start_infer_only():
+    vla_client = client_state.vla_client
+    if vla_client is None or not client_state.running:
+        raise HTTPException(400, "Client is not running.")
+    if not bool(getattr(vla_client, "is_observe_thread_running", True)):
+        raise HTTPException(400, "Observe is not running. Start Observe first.")
+    _start_inference(vla_client)
+    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Inference started.", running=True)})
+    return {"status": "ok"}
+
+
+@app.post("/api/client/control/start")
+async def start_control_only():
+    vla_client = client_state.vla_client
+    if vla_client is None or not client_state.running:
+        raise HTTPException(400, "Client is not running.")
+    if not bool(getattr(vla_client, "is_observe_thread_running", True)):
+        raise HTTPException(400, "Observe is not running. Start Observe first.")
+    if not bool(getattr(vla_client, "is_inference_thread_running", True)):
+        raise HTTPException(400, "Inference is not running. Start Infer first.")
+    _start_control(vla_client)
+    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Control started.", running=True)})
     return {"status": "ok"}
 
 
@@ -1063,6 +1212,7 @@ def _cleanup():
         client_state.vla_client = None
         client_state.robot = None
         client_state.running = False
+        client_state.paused_thread_state = None
 
     if vla_client is not None:
         try:
