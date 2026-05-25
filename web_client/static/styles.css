@@ -491,6 +491,7 @@ html, body {
 
 /* Keep Start/Stop button width stable while text toggles */
 #btn-start { min-width: 84px; text-align: center; }
+#btn-observe, #btn-infer, #btn-control { min-width: 72px; text-align: center; }
 .btn-primary { background: rgba(9,105,218,.08); border-color: var(--accent); color: var(--accent); }
 .btn-primary:hover { background: rgba(9,105,218,.16); }
 .btn-success { background: rgba(26,127,55,.08); border-color: var(--success); color: var(--success); }
