@@ -1004,7 +1004,7 @@ def _thread_state(vla_client) -> dict:
         "inference_running": bool(getattr(vla_client, "is_inference_thread_running", False)),
         "control_running": bool(getattr(vla_client, "is_control_thread_running", False)),
     }
-    print(f"_thread_state detected thread states: {state}")
+    # print(f"_thread_state detected thread states: {state}")
     return state
 
 
@@ -1068,7 +1068,7 @@ def _stop_control(vla_client):
 
 def _pause_vla_client(vla_client) -> dict:
     state = _thread_state(vla_client)
-    print(f"_pause_vla_client with state: {state}")
+    # print(f"_pause_vla_client with state: {state}")
     if state.get("observe_running", False):
         _stop_observe(vla_client)
     if state.get("inference_running", False):
