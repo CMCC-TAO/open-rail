@@ -486,16 +486,9 @@ async def _stats_push_loop():
 
 
 def _is_vla_client_paused(vla_client) -> bool:
-    """Return whether vla_client is paused across observe/inference/control threads."""
-    if hasattr(vla_client, "is_observe_thread_running") and hasattr(vla_client, "is_inference_thread_running") and hasattr(vla_client, "is_control_thread_running"):
-        return not (
-            bool(vla_client.is_observe_thread_running)
-            and bool(vla_client.is_inference_thread_running)
-            and bool(vla_client.is_control_thread_running)
-        )
-    if hasattr(vla_client, "is_running_action"):
-        return not bool(vla_client.is_running_action)
-    return False
+    """Return explicit pause state triggered by /api/client/pause."""
+    with client_state.lock:
+        return bool(client_state.running and (client_state.paused_thread_state is not None))
 
 
 def _collect_stats() -> dict:
@@ -523,16 +516,16 @@ def _collect_stats() -> dict:
     }
     with client_state.lock:
         vla_client = client_state.vla_client
+        base["paused"] = bool(client_state.running and (client_state.paused_thread_state is not None))
     base.update(_collect_resource_stats())
 
     if vla_client is None:
         return base
 
     try:
-        base["paused"]          = _is_vla_client_paused(vla_client)
-        base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", not base["paused"]))
-        base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", not base["paused"]))
-        base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", not base["paused"]))
+        base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", False))
+        base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", False))
+        base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", False))
         base["infer_count"]     = int(vla_client.rdm.infer_count)
         base["avg_infer_time"]  = float(vla_client.rdm.avg_infer_time)
         base["avg_traj_time"]   = float(vla_client.rdm.avg_traj_time)
@@ -1006,33 +999,21 @@ async def start_client():
 
 
 def _thread_state(vla_client) -> dict:
-    if hasattr(vla_client, "is_observe_thread_running") and hasattr(vla_client, "is_inference_thread_running") and hasattr(vla_client, "is_control_thread_running"):
-        state = {
-            "observe_running": bool(vla_client.is_observe_thread_running),
-            "inference_running": bool(vla_client.is_inference_thread_running),
-            "control_running": bool(vla_client.is_control_thread_running),
-        }
-        print(f"_thread_state detected thread states: {state}")
-        return state
-    # if hasattr(vla_client, "is_running_action"):
-    #     running = bool(vla_client.is_running_action)
-    #     return {
-    #         "observe_running": running,
-    #         "inference_running": running,
-    #         "control_running": running,
-    #     }
-    return {
-        "observe_running": True,
-        "inference_running": True,
-        "control_running": True,
+    state = {
+        "observe_running": bool(getattr(vla_client, "is_observe_thread_running", False)),
+        "inference_running": bool(getattr(vla_client, "is_inference_thread_running", False)),
+        "control_running": bool(getattr(vla_client, "is_control_thread_running", False)),
     }
+    print(f"_thread_state detected thread states: {state}")
+    return state
 
 
 def _status_payload(vla_client, message: str, running: bool = True) -> dict:
     state = _thread_state(vla_client)
+    paused = _is_vla_client_paused(vla_client)
     return {
         "running": running,
-        "paused": not (state["observe_running"] and state["inference_running"] and state["control_running"]),
+        "paused": paused,
         "observe_running": state["observe_running"],
         "inference_running": state["inference_running"],
         "control_running": state["control_running"],
@@ -1168,7 +1149,7 @@ async def start_infer_only():
     vla_client = client_state.vla_client
     if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
-    if not bool(getattr(vla_client, "is_observe_thread_running", True)):
+    if not bool(getattr(vla_client, "is_observe_thread_running", False)):
         raise HTTPException(400, "Observe is not running. Start Observe first.")
     _start_inference(vla_client)
     await _broadcast({"type": "status", "data": _status_payload(vla_client, "Inference started.", running=True)})
@@ -1180,9 +1161,9 @@ async def start_control_only():
     vla_client = client_state.vla_client
     if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
-    if not bool(getattr(vla_client, "is_observe_thread_running", True)):
+    if not bool(getattr(vla_client, "is_observe_thread_running", False)):
         raise HTTPException(400, "Observe is not running. Start Observe first.")
-    if not bool(getattr(vla_client, "is_inference_thread_running", True)):
+    if not bool(getattr(vla_client, "is_inference_thread_running", False)):
         raise HTTPException(400, "Inference is not running. Start Infer first.")
     _start_control(vla_client)
     await _broadcast({"type": "status", "data": _status_payload(vla_client, "Control started.", running=True)})
