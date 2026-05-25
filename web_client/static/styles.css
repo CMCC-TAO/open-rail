@@ -118,7 +118,7 @@ html, body {
 /* ── Monitor panel header: title left, button groups right ── */
 .monitor-header {
   display: flex; align-items: center; gap: 6px;
-  padding: 5px 10px; flex-wrap: nowrap;
+  padding: 5px 0px; flex-wrap: nowrap;
 }
 .monitor-title { font-weight: 600; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0; }
 /* Spacer pushes all button groups to the right */
@@ -141,21 +141,28 @@ html, body {
 .replay-path-display:not(:empty) { border-color: var(--border); background: var(--bg); }
 
 /* Monitor resource usage group */
-.monitor-resource-group { gap: 2px; }
+.monitor-resource-group {
+  display: grid;
+  grid-template-columns: repeat(2, 72px);
+  grid-template-rows: repeat(2, 16px);
+  gap: 1px 2px;
+  align-content: center;
+}
 .resource-pill {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
-  padding: 1px 6px;
-  line-height: 16px;
-  width: 70px;
-  min-width: 70px;
-  max-width: 70px;
-  flex: 0 0 70px;
+  padding: 0 4px;
+  line-height: 9px;
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  height: 16px;
+  min-height: 16px;
   display: grid;
-  grid-template-columns: 12px 1fr;
+  grid-template-columns: 16px 1fr;
   align-items: center;
   gap: 1px;
   white-space: nowrap;
