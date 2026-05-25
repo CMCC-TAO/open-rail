@@ -1139,9 +1139,18 @@ async def start_observe_only():
         client_state.running = True
         client_state.paused_thread_state = None
 
-    _start_observe(vla_client)
-    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Observe started.", running=True)})
-    return {"status": "ok"}
+    if bool(getattr(vla_client, "is_observe_thread_running", False)):
+        _stop_control(vla_client)
+        _stop_inference(vla_client)
+        _stop_observe(vla_client)
+        message = "Observe stopped."
+    else:
+        _start_observe(vla_client)
+        message = "Observe started."
+
+    payload = _status_payload(vla_client, message, running=True)
+    await _broadcast({"type": "status", "data": payload})
+    return {"status": "ok", "data": payload}
 
 
 @app.post("/api/client/infer/start")
@@ -1151,9 +1160,21 @@ async def start_infer_only():
         raise HTTPException(400, "Client is not running.")
     if not bool(getattr(vla_client, "is_observe_thread_running", False)):
         raise HTTPException(400, "Observe is not running. Start Observe first.")
-    _start_inference(vla_client)
-    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Inference started.", running=True)})
-    return {"status": "ok"}
+
+    with client_state.lock:
+        client_state.paused_thread_state = None
+
+    if bool(getattr(vla_client, "is_inference_thread_running", False)):
+        _stop_control(vla_client)
+        _stop_inference(vla_client)
+        message = "Inference stopped."
+    else:
+        _start_inference(vla_client)
+        message = "Inference started."
+
+    payload = _status_payload(vla_client, message, running=True)
+    await _broadcast({"type": "status", "data": payload})
+    return {"status": "ok", "data": payload}
 
 
 @app.post("/api/client/control/start")
@@ -1165,9 +1186,20 @@ async def start_control_only():
         raise HTTPException(400, "Observe is not running. Start Observe first.")
     if not bool(getattr(vla_client, "is_inference_thread_running", False)):
         raise HTTPException(400, "Inference is not running. Start Infer first.")
-    _start_control(vla_client)
-    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Control started.", running=True)})
-    return {"status": "ok"}
+
+    with client_state.lock:
+        client_state.paused_thread_state = None
+
+    if bool(getattr(vla_client, "is_control_thread_running", False)):
+        _stop_control(vla_client)
+        message = "Control stopped."
+    else:
+        _start_control(vla_client)
+        message = "Control started."
+
+    payload = _status_payload(vla_client, message, running=True)
+    await _broadcast({"type": "status", "data": payload})
+    return {"status": "ok", "data": payload}
 
 
 @app.post("/api/client/stop")

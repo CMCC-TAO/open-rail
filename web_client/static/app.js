@@ -2908,10 +2908,13 @@ function wireEvents() {
 
   $('btn-observe').addEventListener('click', async () => {
     try {
-      await apiFetch('/api/client/observe/start', { method: 'POST' });
-      App.isObserveRunning = true;
-      App.isInferenceRunning = false;
-      App.isControlRunning = false;
+      const res = await apiFetch('/api/client/observe/start', { method: 'POST' });
+      const data = res?.data;
+      if (data) {
+        App.isObserveRunning = !!data.observe_running;
+        App.isInferenceRunning = !!data.inference_running;
+        App.isControlRunning = !!data.control_running;
+      }
       connectCamWS();
       syncRuntimeCameraConfig();
       setThreadControlUI();
@@ -2921,8 +2924,13 @@ function wireEvents() {
   $('btn-infer').addEventListener('click', async () => {
     if (!App.isObserveRunning) return;
     try {
-      await apiFetch('/api/client/infer/start', { method: 'POST' });
-      App.isInferenceRunning = true;
+      const res = await apiFetch('/api/client/infer/start', { method: 'POST' });
+      const data = res?.data;
+      if (data) {
+        App.isObserveRunning = !!data.observe_running;
+        App.isInferenceRunning = !!data.inference_running;
+        App.isControlRunning = !!data.control_running;
+      }
       setThreadControlUI();
     } catch (_) { /* toasted */ }
   });
@@ -2930,8 +2938,13 @@ function wireEvents() {
   $('btn-control').addEventListener('click', async () => {
     if (!App.isObserveRunning || !App.isInferenceRunning) return;
     try {
-      await apiFetch('/api/client/control/start', { method: 'POST' });
-      App.isControlRunning = true;
+      const res = await apiFetch('/api/client/control/start', { method: 'POST' });
+      const data = res?.data;
+      if (data) {
+        App.isObserveRunning = !!data.observe_running;
+        App.isInferenceRunning = !!data.inference_running;
+        App.isControlRunning = !!data.control_running;
+      }
       setThreadControlUI();
     } catch (_) { /* toasted */ }
   });
