@@ -14,6 +14,9 @@
  *   POST /api/client/stop
  *   POST /api/client/pause
  *   POST /api/client/resume
+ *   POST /api/client/observe/start
+ *   POST /api/client/infer/start
+ *   POST /api/client/control/start
  *   POST /api/client/command     { command, params }
  */
 
@@ -72,6 +75,9 @@ const App = {
   reconnectTimer: null,
   isRunning: null,   // null = uninitialised; set on first stats push
   isPaused: false,   // true when client is paused (inference/commands paused but resources alive)
+  isObserveRunning: false,
+  isInferenceRunning: false,
+  isControlRunning: false,
 
   // Camera WebSocket (port 8765 — VLAWebSocketServer)
   camWs: null,
@@ -233,7 +239,15 @@ function disconnectCamWS() {
 function handleWSMessage(msg) {
   switch (msg.type) {
     case 'stats':  renderStats(msg.data); break;
-    case 'status': toast(msg.data.message, msg.data.running || msg.data.paused ? 'ok' : 'warn'); setRunningUI(msg.data.running, msg.data.paused ?? false); break;
+    case 'status':
+      if (msg?.data) {
+        if (typeof msg.data.observe_running === 'boolean') App.isObserveRunning = msg.data.observe_running;
+        if (typeof msg.data.inference_running === 'boolean') App.isInferenceRunning = msg.data.inference_running;
+        if (typeof msg.data.control_running === 'boolean') App.isControlRunning = msg.data.control_running;
+      }
+      toast(msg.data.message, msg.data.running || msg.data.paused ? 'ok' : 'warn');
+      setRunningUI(msg.data.running, msg.data.paused ?? false);
+      break;
     case 'error':  toast(msg.data.message, 'error'); setRunningUI(false, false); break;
     case 'pong':   break;
   }
@@ -331,6 +345,9 @@ function getDefaultAction() { if (!_defaultActionCache) _defaultActionCache = _m
 //  Stats rendering
 // ═══════════════════════════════════════════════════════
 function renderStats(data) {
+  App.isObserveRunning = !!(data?.observe_running ?? (data?.running && !data?.paused));
+  App.isInferenceRunning = !!(data?.inference_running ?? (data?.running && !data?.paused));
+  App.isControlRunning = !!(data?.control_running ?? (data?.running && !data?.paused));
   setRunningUI(data.running, data.paused ?? false);
 
   $('val-infer-count').textContent = data.infer_count ?? '–';
@@ -536,8 +553,31 @@ async function syncRuntimeCameraConfig() {
   }
 }
 
+function setThreadControlUI() {
+  const btnObserve = $('btn-observe');
+  const btnInfer = $('btn-infer');
+  const btnControl = $('btn-control');
+  if (!btnObserve || !btnInfer || !btnControl) return;
+
+  const running = !!App.isRunning;
+  const observeRunning = !!App.isObserveRunning;
+  const inferenceRunning = !!App.isInferenceRunning;
+  const controlRunning = !!App.isControlRunning;
+
+  btnObserve.disabled = false;
+  btnInfer.disabled = !running || !observeRunning;
+  btnControl.disabled = !running || !observeRunning || !inferenceRunning;
+
+  btnObserve.className = `btn btn-xs${observeRunning ? ' btn-active' : ''}`;
+  btnInfer.className = `btn btn-xs${inferenceRunning ? ' btn-active' : ''}`;
+  btnControl.className = `btn btn-xs${controlRunning ? ' btn-active' : ''}`;
+}
+
 function setRunningUI(running, paused = false) {
-  if (App.isRunning === running && App.isPaused === paused) return;
+  if (App.isRunning === running && App.isPaused === paused) {
+    setThreadControlUI();
+    return;
+  }
   const wasRunning = App.isRunning === true;
   App.isRunning = running;
   App.isPaused  = paused;
@@ -591,6 +631,7 @@ function setRunningUI(running, paused = false) {
   }
 
   $('btn-reset').disabled = !running;             // available in both running states
+  setThreadControlUI();
 
   // Persist visual state only when transitioning from running -> stopped.
   // Avoid startup/status-sync overwriting config before user interaction.
@@ -2865,30 +2906,34 @@ function wireEvents() {
     toast('Robot reset initiated.', 'info');
   });
 
-  // Replay — folder picker triggers load
-  $('replay-folder-input').addEventListener('change', async (e) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    // Derive folder path from the first file's webkitRelativePath or path
-    const first = files[0];
-    let folderPath = '';
-    if (first.path) {
-      // Electron / NW.js: absolute path available
-      folderPath = first.path.replace(/[\\/][^\\/]+$/, '');
-    } else if (first.webkitRelativePath) {
-      // Browser: use the top-level folder name only (server resolves relative)
-      folderPath = first.webkitRelativePath.split('/')[0];
-    } else {
-      folderPath = first.name;
-    }
-    // Show path pill
-    const pill = $('replay-path-display');
-    if (pill) { pill.textContent = folderPath; pill.title = folderPath; }
+  $('btn-observe').addEventListener('click', async () => {
     try {
-      await apiFetch('/api/client/command', { method: 'POST', body: JSON.stringify({ command: 'replay', params: { path: folderPath } }) });
-      toast(`Replay loaded: ${folderPath}`, 'ok', 3000);
+      await apiFetch('/api/client/observe/start', { method: 'POST' });
+      App.isObserveRunning = true;
+      App.isInferenceRunning = false;
+      App.isControlRunning = false;
+      connectCamWS();
+      syncRuntimeCameraConfig();
+      setThreadControlUI();
     } catch (_) { /* toasted */ }
-    e.target.value = '';
+  });
+
+  $('btn-infer').addEventListener('click', async () => {
+    if (!App.isObserveRunning) return;
+    try {
+      await apiFetch('/api/client/infer/start', { method: 'POST' });
+      App.isInferenceRunning = true;
+      setThreadControlUI();
+    } catch (_) { /* toasted */ }
+  });
+
+  $('btn-control').addEventListener('click', async () => {
+    if (!App.isObserveRunning || !App.isInferenceRunning) return;
+    try {
+      await apiFetch('/api/client/control/start', { method: 'POST' });
+      App.isControlRunning = true;
+      setThreadControlUI();
+    } catch (_) { /* toasted */ }
   });
 
   // Language Command panel — JSON file picker

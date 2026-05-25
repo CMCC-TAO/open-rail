@@ -59,9 +59,9 @@ class VLAClientAsync():
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.is_running = False
-        self.is_observe_thread_running = True
-        self.is_inference_thread_running = True
-        self.is_control_thread_running = True
+        self.is_observe_thread_running = False
+        self.is_inference_thread_running = False
+        self.is_control_thread_running = False
         self.language_tasks = self._load_language_tasks(getattr(self.config.language, 'file_path', ''))
         self.language = self._sync_language_from_config()
         self.allow_language_switch = True  # Flag to control automatic language switching
