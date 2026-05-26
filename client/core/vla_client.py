@@ -77,8 +77,8 @@ class VLAClientAsync():
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.config.observer.period = 1.0 / self.config.observer.fps
-        control_period_ms = float(self.config.controller.period)
-        self.control_thread_timer = MultiThreadTimer(control_period_ms, self._control_thread_fun)
+        self.control_thread_timer = MultiThreadTimer(float(self.config.controller.period), self._control_thread_fun)
+        self.visualize_thread_timer = MultiThreadTimer(float(self.config.controller.period), self._visualize_thread_fun)
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
@@ -349,7 +349,7 @@ class VLAClientAsync():
                         self._advance_language_subtask()
                     prob_progress = None
                 else:
-                    # prob_progress: (64,), interplot prob_progress to (420,)
+                    # prob_progress: (64,), interpolate prob_progress to (420,)
                     original_len, target_len = len(prob_progress), action_chunk_fitted.shape[1]
                     x_original, x_target = np.linspace(0, 1, original_len), np.linspace(0, 1, target_len)
                     interp_func = interp1d(x_original, prob_progress, kind='linear', fill_value='extrapolate')
@@ -359,17 +359,18 @@ class VLAClientAsync():
             joint_indices = self.rdm._get_joint_indices(action_chunk_fitted)
             step_indices = self.rdm._get_step_indices(action_chunk_fitted)
             currt_action, currt_vel, currt_acc = self.rdm.get_current_state()
+            # Use inter chunk fusion when control thread is running, otherwise use intra chunk smoother output directly for visualization and monitoring
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
                 next_action_chunk=action_chunk_fitted,
                 next_vel_chunk=vel_chunk_fitted,
                 next_acc_chunk=acc_chunk_fitted,
                 next_timestamps=timestamps_fitted,
                 target_chunk_index=target_chunk_index,
-                currt_action=currt_action,
-                currt_vel=currt_vel,
-                currt_acc=currt_acc,
-                joint_indices=joint_indices,
-                step_indices=step_indices,
+                currt_action=currt_action if self.is_control_thread_running else None,
+                currt_vel=currt_vel if self.is_control_thread_running else None,
+                currt_acc=currt_acc if self.is_control_thread_running else None,
+                joint_indices=joint_indices if self.is_control_thread_running else None,
+                step_indices=step_indices if self.is_control_thread_running else None,
             )
             self.rdm.update_action_chunk_fitted_1(
                 action_chunk_smoothed=action_chunk_smoothed,
@@ -447,6 +448,16 @@ class VLAClientAsync():
         current_state = getattr(self.robot, 'current_state', None)
         self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw, current_state)
 
+    def _visualize_thread_fun(self):
+        # Send state data to visualization server for live plotting when control thread is not running
+        if not self.is_control_thread_running:
+            current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
+            action_fitted, action_raw, vel_fitted, acc_fitted = self.rdm.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
+            self.vis_action_state(action_fitted=action_fitted,
+                                vel_fitted=vel_fitted,
+                                acc_fitted=acc_fitted,
+                                action_raw=action_raw,
+                                current_state=current_state)
     # @run_time_decorator
     def _traj_fitting(self, num_samples):
         """Perform trajectory fitting for robot actions.
@@ -676,8 +687,13 @@ class VLAClientAsync():
 
     def start_visualize(self):
         self.visualization_server.run()
+        if not self.visualize_thread_timer._thread.is_alive():
+            self.visualize_thread_timer.start()
     def stop_visualize(self):
         self.visualization_server.stop_server()
+        if self.visualize_thread_timer._thread.is_alive():
+            self.visualize_thread_timer.stop()
+            # self.visualize_thread_timer.join(timeout=1.0)
 
     def run(self):
         """Start the VLA client and all associated threads.
@@ -791,7 +807,7 @@ class VLAClientAsync():
             # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
             # symbol = '=' * 10
 
-    def vis_action_state(self, action_fitted, vel_fitted, acc_fitted, action_raw, current_state):
+    def vis_action_state(self, action_fitted=None, vel_fitted=None, acc_fitted=None, action_raw=None, current_state=None):
         """
         Visualize action and state data for debugging and monitoring.
 
