@@ -65,6 +65,7 @@ class RealtimeDataManager():
 
         # Syncchronous Runing Flag
         self.sync_running = False
+        self.mode = 'control'
 
         # Inter-chunk transition / fusion helper
         self.inter_chunk_fusion = InterChunkFuser(config=self.rdm_config)
@@ -524,7 +525,7 @@ class RealtimeDataManager():
             currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy() if self.vel_chunk_fitted is not None else None
             currt_acc = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else None
         return currt_act, currt_vel, currt_acc
-    def get_action_fitted(self):
+    def get_action_fitted(self, mode='control'):
         """Get the current action (fitted and raw) indexed by action_chunk_index.
 
         Returns:
@@ -533,6 +534,10 @@ class RealtimeDataManager():
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:
                 return None, None, None, None
+            if self.mode != 'control' and mode == 'control':
+                print(f"Switching to control mode, current action_chunk_index={self.action_chunk_index}, reset action_chunk_index to 0.")
+                self.action_chunk_index = 0
+            self.mode = mode
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
             # notify any waiter that the action index advanced
             self.polynomial_cond.notify_all()

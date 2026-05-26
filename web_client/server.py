@@ -1085,7 +1085,7 @@ def _resume_vla_client(vla_client, state: Optional[dict] = None):
     #         "inference_running": True,
     #         "control_running": True,
     #     }
-    print(f"_resume_vla_client with state: {state}")
+    # print(f"_resume_vla_client with state: {state}")
     if hasattr(vla_client, "is_observe_thread_running") and hasattr(vla_client, "is_inference_thread_running") and hasattr(vla_client, "is_control_thread_running"):
         if state.get("observe_running", False):
             _start_observe(vla_client)
