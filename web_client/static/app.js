@@ -572,9 +572,13 @@ function setThreadControlUI() {
   btnInfer.className = `btn btn-xs${inferenceRunning ? ' btn-active' : ''}`;
   btnControl.className = `btn btn-xs${controlRunning ? ' btn-active' : ''}`;
 
-  btnObserve.innerHTML = `<span class="thread-btn-main">Observe</span><span class="thread-btn-sub">${observeRunning ? 'Stop' : 'Start'}</span>`;
-  btnInfer.innerHTML = `<span class="thread-btn-main">Infer</span><span class="thread-btn-sub">${inferenceRunning ? 'Stop' : 'Start'}</span>`;
-  btnControl.innerHTML = `<span class="thread-btn-main">Control</span><span class="thread-btn-sub">${controlRunning ? 'Stop' : 'Start'}</span>`;
+  const observeSub = btnObserve.querySelector('.thread-btn-sub');
+  const inferSub = btnInfer.querySelector('.thread-btn-sub');
+  const controlSub = btnControl.querySelector('.thread-btn-sub');
+
+  if (observeSub) observeSub.textContent = observeRunning ? 'Stop' : 'Start';
+  if (inferSub) inferSub.textContent = inferenceRunning ? 'Stop' : 'Start';
+  if (controlSub) controlSub.textContent = controlRunning ? 'Stop' : 'Start';
 }
 
 function setRunningUI(running, paused = false) {

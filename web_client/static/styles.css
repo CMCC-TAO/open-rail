@@ -514,11 +514,13 @@ html, body {
 .thread-btn-main {
   font-size: 11px;
   line-height: 1;
+  pointer-events: none;
 }
 .thread-btn-sub {
   font-size: 8px;
   line-height: 1;
   opacity: .75;
+  pointer-events: none;
 }
 .btn-primary { background: rgba(9,105,218,.08); border-color: var(--accent); color: var(--accent); }
 .btn-primary:hover { background: rgba(9,105,218,.16); }
