@@ -341,6 +341,25 @@ def _config_to_dict(cfg) -> dict:
     return {}
 
 
+def _normalize_record_features_cam(cfg_dict: dict) -> dict:
+    """Normalize legacy nested record.info.features.cam.* into dotted cam.* keys."""
+    if not isinstance(cfg_dict, dict):
+        return cfg_dict
+
+    features = (
+        cfg_dict.get("record", {})
+        .get("info", {})
+        .get("features", {})
+    )
+    if isinstance(features, dict):
+        cam = features.get("cam")
+        if isinstance(cam, dict):
+            features.pop("cam", None)
+            for cam_key, cam_val in cam.items():
+                features[f"cam.{cam_key}"] = cam_val
+    return cfg_dict
+
+
 def _apply_flat_patch_old(config, patch: dict):
     """Apply a flat {dot.separated.key: value} patch to config."""
     from ml_collections import ConfigDict
@@ -371,65 +390,76 @@ def _apply_flat_patch_old(config, patch: dict):
             logger.warning(f"Failed to patch config key '{dotkey}': {e}")
 
 def _apply_flat_patch(config, patch: dict):
-    """Apply a flat {dot.separated.key: value} patch to config."""
+    """Apply a flat {dot.separated.key: value} patch to config.
+
+    Supports ConfigDicts with dotted keys (allow_dotted_keys=True), e.g.:
+    - record.info.features.cam.hand_left.dtype  -> features['cam.hand_left']['dtype']
+    - ...video_info.video.fps                   -> video_info['video.fps']
+    """
     from ml_collections import ConfigDict
+    import enum
 
-    def _set_nested(obj, keys, value):
-        current = obj
-        for k in keys[:-1]:
-            # Try to access the next level
-            next_level = None
-            # 1. Try dict/key access first (works for both dict and ConfigDict)
-            if isinstance(current, dict):
-                if k in current:
-                    next_level = current[k]
-                else:
-                    # Auto-create intermediate dict/ConfigDict if missing
-                    if isinstance(current, ConfigDict):
-                        current[k] = ConfigDict()
-                    else:
-                        current[k] = {}
-                    next_level = current[k]
-            else:
-                # Fallback for other objects (unlikely in this config structure)
-                try:
-                    next_level = getattr(current, k)
-                except AttributeError:
-                    setattr(current, k, {})
-                    next_level = getattr(current, k)
-            
+    def _dict_get(obj, key, default=None):
+        if isinstance(obj, dict):
+            return obj.get(key, default)
+        return getattr(obj, key, default)
+
+    def _dict_set(obj, key, value):
+        if isinstance(obj, dict):
+            obj[key] = value
+        else:
+            setattr(obj, key, value)
+
+    def _iter_keys(obj):
+        if isinstance(obj, dict):
+            return list(obj.keys())
+        return []
+
+    def _resolve_segment(current, parts, start_idx):
+        """Pick longest matching key segment at current level.
+
+        Example: parts=['cam','hand_left','dtype'] and current has key 'cam.hand_left'
+        => returns ('cam.hand_left', 2)
+        """
+        keys = set(_iter_keys(current))
+        if keys:
+            for end_idx in range(len(parts), start_idx, -1):
+                candidate = '.'.join(parts[start_idx:end_idx])
+                if candidate in keys:
+                    return candidate, end_idx
+        # fallback: plain segment
+        return parts[start_idx], start_idx + 1
+
+    def _set_with_dotted_support(root, dotkey, value):
+        parts = dotkey.split('.')
+        current = root
+        idx = 0
+
+        # walk to parent container
+        while idx < len(parts) - 1:
+            seg, next_idx = _resolve_segment(current, parts, idx)
+            next_level = _dict_get(current, seg, None)
+            if next_level is None:
+                next_level = ConfigDict() if isinstance(current, ConfigDict) else {}
+                _dict_set(current, seg, next_level)
             current = next_level
+            idx = next_idx
 
-        # Set the final leaf value
-        leaf_key = keys[-1]
-        
-        # Enum coercion logic
-        current_val = None
-        if isinstance(current, dict):
-            current_val = current.get(leaf_key)
-        else:
-            current_val = getattr(current, leaf_key, None)
+        # resolve leaf key (prefer existing dotted leaf if present)
+        leaf, _ = _resolve_segment(current, parts, idx)
+        current_val = _dict_get(current, leaf, None)
+        if isinstance(current_val, enum.Enum):
+            ec = current_val.__class__
+            try:
+                value = ec(value)
+            except Exception:
+                pass
 
-        if current_val is not None and hasattr(current_val, '__class__'):
-            # Check if it's an Enum
-            import enum
-            if isinstance(current_val, enum.Enum):
-                ec = current_val.__class__
-                try:
-                    value = ec(value)
-                except Exception:
-                    pass
-        
-        # Assign value
-        if isinstance(current, dict):
-            current[leaf_key] = value
-        else:
-            setattr(current, leaf_key, value)
+        _dict_set(current, leaf, value)
 
     for dotkey, value in patch.items():
-        keys = dotkey.split('.')
         try:
-            _set_nested(config, keys, value)
+            _set_with_dotted_support(config, dotkey, value)
         except Exception as e:
             logger.warning(f"Failed to patch config key '{dotkey}': {e}")
 # 建议放在 _get_robot 函数定义的上方
@@ -658,7 +688,8 @@ async def get_config():
     if client_state.config is None:
         cfg = get_client_config()
         client_state.config = cfg
-    return {"status": "ok", "config": _config_to_dict(client_state.config)}
+    cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
+    return {"status": "ok", "config": cfg_dict}
 
 
 class ConfigPatchRequest(BaseModel):
@@ -719,7 +750,8 @@ async def patch_config(req: ConfigPatchRequest):
         except Exception as e:
             logger.warning(f"Runtime camera config sync failed: {e}")
 
-    return {"status": "ok", "config": _config_to_dict(client_state.config)}
+    cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
+    return {"status": "ok", "config": cfg_dict}
 
 
 class ConfigFileRequest(BaseModel):
@@ -763,7 +795,8 @@ async def load_config_file(req: ConfigFileRequest):
     #     raise HTTPException(400, f"Failed to load config from: {p}")
     # base_cfg = get_client_config()
     # client_state.config = apply_user_config(base_cfg, user_cfg)
-    return {"status": "ok", "config": _config_to_dict(client_state.config)}
+    cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
+    return {"status": "ok", "config": cfg_dict}
 
 
 @app.post("/api/config/save_file")
@@ -784,7 +817,7 @@ async def save_config_file(req: ConfigFileRequest):
         save_path.resolve().relative_to(ROOT.resolve())
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
-    cfg_dict = _config_to_dict(client_state.config)
+    cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     if save_path.suffix in (".yaml", ".yml"):
         content = _dict_to_user_conf_yaml(cfg_dict)
     else:

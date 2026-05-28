@@ -54,6 +54,7 @@ class LeRobotDatasetWriter:
         # self.logger.addHandler(ch)
         # Configuration and path setup
         self.config = record_config
+        self._normalize_record_features_cam()
         self.logger.info(f"config: {self.config}")
         print(f"config: {self.config}")
         self.save_path = self.config["save_path"]
@@ -88,7 +89,7 @@ class LeRobotDatasetWriter:
         # Extract camera-related keys from features in the config
         self.camera_name_list = []
         for key in self.config["info"]["features"].keys():
-            if "cam" in key:
+            if str(key).startswith("cam."):
                 self.camera_name_list.append(key)
 
         self.action_shape = self.config["info"]["features"]["action"]['shape'][0]
@@ -124,6 +125,37 @@ class LeRobotDatasetWriter:
             self.writer_thread.start()
         except Exception as e:
             self.logger.error(f"Failed to start writer_thread: {e}")
+
+    def _normalize_record_features_cam(self) -> None:
+        """Remove legacy 'cam' subgroup and keep only expected dotted camera keys."""
+        info = self.config.get("info") if isinstance(self.config, (dict, ConfigDict)) else None
+        if not isinstance(info, (dict, ConfigDict)):
+            return
+
+        features = info.get("features") if isinstance(info, (dict, ConfigDict)) else None
+        if not isinstance(features, (dict, ConfigDict)):
+            return
+
+        allowed = {"cam.hand_left", "cam.hand_right", "cam.head"}
+
+        cam_group = features.get("cam")
+        if isinstance(cam_group, (dict, ConfigDict)):
+            for short_key, value in cam_group.items():
+                dotted_key = f"cam.{short_key}"
+                if dotted_key in allowed:
+                    features[dotted_key] = value
+            try:
+                del features["cam"]
+            except Exception:
+                pass
+
+        for key in list(features.keys()):
+            if str(key).startswith("cam.") and str(key) not in allowed:
+                try:
+                    del features[key]
+                except Exception:
+                    pass
+
     def async_write_obs(self,observations: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float):
         """
         Asynchronously writes observation data into the dataset.
@@ -534,6 +566,7 @@ class LeRobotDatasetWriter:
         
         # Update the dataset info in the config using the loaded JSON data
         self.config["info"] = ConfigDict(data, allow_dotted_keys=True)
+        self._normalize_record_features_cam()
 
         # Print a success message indicating that the meta files have updated the config
         self.logger.info("update self.config info success")
@@ -625,6 +658,7 @@ class LeRobotDatasetWriter:
         self.config['info']["total_frames"] = self.total_frames
         self.config['info']["total_videos"] += len(self.camera_name_list)
         self.config['info']["splits"] = {"test": f"0:{self.shared_data.counter.value }"}
+        self._normalize_record_features_cam()
 
         with open(info_file_path, 'w') as f:
             json.dump(self.config['info'].to_dict(), f, indent=2, default=str)
