@@ -653,7 +653,7 @@ function setRunningUI(running, paused = false) {
 // ═══════════════════════════════════════════════════════
 
 // Keys to exclude from the config tree (handled separately or rendered via createLangLinkRow)
-const CONFIG_EXCLUDED_KEYS = new Set(['language']);
+const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record']);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
@@ -773,6 +773,27 @@ function renderConfigTree(cfg) {
   const root = $('config-tree');
   root.innerHTML = '';
   buildTree(cfg, '', root);
+}
+
+function syncRecordingSwitchUI() {
+  const enabled = !!(App.config && App.config.record && App.config.record.switch);
+  const btnStart = $('btn-recording-start');
+  const btnStop = $('btn-recording-stop');
+  if (!btnStart || !btnStop) return;
+
+  btnStart.disabled = enabled;
+  btnStop.disabled = !enabled;
+  btnStart.className = enabled ? 'btn btn-sm' : 'btn btn-sm btn-success';
+  btnStop.className = enabled ? 'btn btn-sm btn-danger' : 'btn btn-sm';
+}
+
+function renderRecordingConfigTree(cfg = App.config) {
+  const root = $('recording-config-tree');
+  if (!root) return;
+  root.innerHTML = '';
+  const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : {};
+  buildTree(recordCfg, 'record', root);
+  syncRecordingSwitchUI();
 }
 
 function buildTree_old(obj, prefix, parentEl) {
@@ -1225,6 +1246,12 @@ function onCfgChange(dotKey, input, originalValue) {
   }
   input.style.borderColor = '';
   App.pendingPatch[dotKey] = parsed;
+  if (dotKey === 'record.switch') {
+    if (!App.config || typeof App.config !== 'object') App.config = {};
+    if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+    App.config.record.switch = !!parsed;
+    syncRecordingSwitchUI();
+  }
   markPending();
 }
 
@@ -1871,6 +1898,7 @@ async function loadConfigFromServer() {
     App.pendingPatch = {};
     clearPending();
     renderConfigTree(App.config);
+    renderRecordingConfigTree(App.config);
     applyVisualConfig(App.config);
     // Apply language-related UI state from config (task/sub-task/auto/threshold)
     applyLangConfigSelection();
@@ -2280,20 +2308,53 @@ function setupLeftPanelAccordion() {
   setExpanded('config-body', 'init');
 }
 
+async function setRecordSwitch(enable) {
+  const target = !!enable;
+  const current = !!(App.config && App.config.record && App.config.record.switch);
+  if (current === target) {
+    syncRecordingSwitchUI();
+    return;
+  }
+
+  const res = await apiFetch('/api/config/patch', {
+    method: 'POST',
+    body: JSON.stringify({ patch: { 'record.switch': target } }),
+  });
+  App.config = res.config || App.config;
+  delete App.pendingPatch['record.switch'];
+  if (!Object.keys(App.pendingPatch).length) clearPending();
+  renderRecordingConfigTree(App.config);
+}
+
 function setupRecordingPanel() {
   $('btn-recording-start')?.addEventListener('click', async () => {
     const saveItems = getRecordingSaveItems();
-    await sendCommand('record', { enable: true, save_items: saveItems });
-    toast('Recording started.', 'ok');
+    try {
+      await setRecordSwitch(true);
+      await apiFetch('/api/client/command', {
+        method: 'POST',
+        body: JSON.stringify({ command: 'record', params: { enable: true, save_items: saveItems } }),
+      });
+      toast('Recording started.', 'ok');
+      syncRecordingSwitchUI();
+    } catch (_) { /* toasted */ }
   });
 
   $('btn-recording-stop')?.addEventListener('click', async () => {
     const saveItems = getRecordingSaveItems();
-    await sendCommand('record', { enable: false, save_items: saveItems });
-    toast('Recording stopped.', 'warn');
-    await refreshRecordingFileList();
+    try {
+      await apiFetch('/api/client/command', {
+        method: 'POST',
+        body: JSON.stringify({ command: 'record', params: { enable: false, save_items: saveItems } }),
+      });
+      await setRecordSwitch(false);
+      toast('Recording stopped.', 'warn');
+      syncRecordingSwitchUI();
+      await refreshRecordingFileList();
+    } catch (_) { /* toasted */ }
   });
 
+  syncRecordingSwitchUI();
   refreshRecordingFileList();
   if (App.recordingListTimer) clearInterval(App.recordingListTimer);
   App.recordingListTimer = setInterval(refreshRecordingFileList, 5000);
@@ -2836,6 +2897,7 @@ function wireEvents() {
       App.config = res.config || {}; App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
+      renderRecordingConfigTree(App.config);
       await loadDefaultLangFile();
       applyLangConfigSelection();
       applyVisualConfig(App.config);
@@ -2885,6 +2947,7 @@ function wireEvents() {
       App.config = res.config || {}; App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
+      renderRecordingConfigTree(App.config);
       await loadDefaultLangFile();
       applyLangConfigSelection();
       applyVisualConfig(App.config);

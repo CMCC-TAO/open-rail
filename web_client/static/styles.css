@@ -394,7 +394,12 @@ html, body {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+}
+
+.recording-controls .btn {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .recording-options {
@@ -429,11 +434,34 @@ html, body {
   cursor: pointer;
 }
 
+.recording-config-wrap,
 .recording-file-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   padding: 6px;
+}
+
+.recording-config-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 6px;
+}
+
+.recording-config-tree {
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.recording-config-tree .cfg-key {
+  min-width: 112px;
 }
 
 .recording-file-title {
