@@ -783,13 +783,31 @@ function buildTree_old(obj, prefix, parentEl) {
     // Skip excluded keys at root level
     if (!prefix && CONFIG_EXCLUDED_KEYS.has(key)) continue;
 
+    const dotKey = prefix ? `${prefix}.${key}` : key;
     const isGroup = val !== null && typeof val === 'object' && !Array.isArray(val);
+
+    // Record -> info -> features: flatten legacy nested cam group into dotted keys
+    // (cam.hand_left / cam.hand_right / cam.head) so no standalone "cam" subgroup appears.
+    if (prefix === 'record.info.features' && key === 'cam' && isGroup) {
+      for (const [camKey, camVal] of Object.entries(val)) {
+        const mergedKey = `cam.${camKey}`;
+        const mergedDotKey = `${prefix}.${mergedKey}`;
+        const mergedIsGroup = camVal !== null && typeof camVal === 'object' && !Array.isArray(camVal);
+        if (mergedIsGroup) {
+          subGroupEntries.push([mergedKey, camVal]);
+        } else {
+          if (CONFIG_HIDDEN_DOT_KEYS.has(mergedDotKey)) continue;
+          parentEl.appendChild(createCfgRow(mergedDotKey, mergedKey, camVal));
+        }
+      }
+      continue;
+    }
+
     if (isGroup) {
       subGroupEntries.push([key, val]);
     } else if (!prefix) {
       basicEntries.push([key, val]);
     } else {
-      const dotKey = `${prefix}.${key}`;
       if (CONFIG_HIDDEN_DOT_KEYS.has(dotKey)) continue;
       parentEl.appendChild(createCfgRow(dotKey, key, val));
     }
@@ -840,13 +858,31 @@ function buildTree(obj, prefix, parentEl) {
     // Skip excluded keys at root level
     if (!prefix && CONFIG_EXCLUDED_KEYS.has(key)) continue;
 
+    const dotKey = prefix ? `${prefix}.${key}` : key;
     const isGroup = val !== null && typeof val === 'object' && !Array.isArray(val);
+
+    // Record -> info -> features: flatten legacy nested cam group into dotted keys
+    // (cam.hand_left / cam.hand_right / cam.head) so no standalone "cam" subgroup appears.
+    if (prefix === 'record.info.features' && key === 'cam' && isGroup) {
+      for (const [camKey, camVal] of Object.entries(val)) {
+        const mergedKey = `cam.${camKey}`;
+        const mergedDotKey = `${prefix}.${mergedKey}`;
+        const mergedIsGroup = camVal !== null && typeof camVal === 'object' && !Array.isArray(camVal);
+        if (mergedIsGroup) {
+          subGroupEntries.push([mergedKey, camVal]);
+        } else {
+          if (CONFIG_HIDDEN_DOT_KEYS.has(mergedDotKey)) continue;
+          parentEl.appendChild(createCfgRow(mergedDotKey, mergedKey, camVal));
+        }
+      }
+      continue;
+    }
+
     if (isGroup) {
       subGroupEntries.push([key, val]);
     } else if (!prefix) {
       basicEntries.push([key, val]);
     } else {
-      const dotKey = `${prefix}.${key}`;
       if (CONFIG_HIDDEN_DOT_KEYS.has(dotKey)) continue;
       parentEl.appendChild(createCfgRow(dotKey, key, val));
     }
