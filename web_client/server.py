@@ -1324,14 +1324,18 @@ async def client_command(req: CommandRequest):
             if not isinstance(save_items, list):
                 save_items = []
 
+            # Keep command and config switch fully linked.
+            client_state.config.record.switch = enable
             client_state.config.record_exp_data = ('ExpData' in save_items)
 
-            if not client_state.config.record.switch:
-                if enable:
-                    raise HTTPException(400, "record.switch is false in config; enable recording in config first.")
-            elif not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
-                raise HTTPException(400, "Recorder is not initialized.")
-            else:
+            if enable and (not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None):
+                try:
+                    from client.core.save_lerobot import LeRobotDatasetWriter
+                    vla_client.dataset_write = LeRobotDatasetWriter(record_config=client_state.config.record)
+                except Exception as e:
+                    raise HTTPException(500, f"Failed to initialize recorder: {e}")
+
+            if hasattr(vla_client, "dataset_write") and vla_client.dataset_write is not None:
                 vla_client.dataset_write.shared_data.stop.value = (not enable)
 
         elif cmd == "save_data":
