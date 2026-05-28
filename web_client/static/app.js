@@ -126,6 +126,7 @@ const App = {
 
   recordingListTimer: null,
   latestState: [],
+  isRecording: false,
 };
 
 // ═══════════════════════════════════════════════════════
@@ -646,6 +647,11 @@ function setRunningUI(running, paused = false) {
   if (!running && wasRunning) {
     schedulePersistVisualState(0);
   }
+
+  if (!running) {
+    App.isRecording = false;
+  }
+  syncRecordingSwitchUI();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -776,15 +782,16 @@ function renderConfigTree(cfg) {
 }
 
 function syncRecordingSwitchUI() {
-  const enabled = !!(App.config && App.config.record && App.config.record.switch);
+  const running = !!App.isRunning;
+  const recording = !!App.isRecording;
   const btnStart = $('btn-recording-start');
   const btnStop = $('btn-recording-stop');
   if (!btnStart || !btnStop) return;
 
-  btnStart.disabled = enabled;
-  btnStop.disabled = !enabled;
-  btnStart.className = enabled ? 'btn btn-sm' : 'btn btn-sm btn-success';
-  btnStop.className = enabled ? 'btn btn-sm btn-danger' : 'btn btn-sm';
+  btnStart.disabled = !running || recording;
+  btnStop.disabled = !running || !recording;
+  btnStart.className = (!running || recording) ? 'btn btn-sm' : 'btn btn-sm btn-success';
+  btnStop.className = (running && recording) ? 'btn btn-sm btn-danger' : 'btn btn-sm';
 }
 
 function renderRecordingConfigTree(cfg = App.config) {
@@ -2328,16 +2335,26 @@ async function setRecordSwitch(enable) {
 
 function setupRecordingPanel() {
   $('btn-recording-start')?.addEventListener('click', async () => {
+    if (!App.isRunning) {
+      toast('Client is not running.', 'warn');
+      syncRecordingSwitchUI();
+      return;
+    }
+
     const saveItems = getRecordingSaveItems();
     try {
-      await setRecordSwitch(true);
       await apiFetch('/api/client/command', {
         method: 'POST',
         body: JSON.stringify({ command: 'record', params: { enable: true, save_items: saveItems } }),
       });
+      App.isRecording = true;
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+      App.config.record.switch = true;
+      renderRecordingConfigTree(App.config);
       toast('Recording started.', 'ok');
-      syncRecordingSwitchUI();
     } catch (_) { /* toasted */ }
+    syncRecordingSwitchUI();
   });
 
   $('btn-recording-stop')?.addEventListener('click', async () => {
@@ -2347,11 +2364,15 @@ function setupRecordingPanel() {
         method: 'POST',
         body: JSON.stringify({ command: 'record', params: { enable: false, save_items: saveItems } }),
       });
-      await setRecordSwitch(false);
+      App.isRecording = false;
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+      App.config.record.switch = false;
+      renderRecordingConfigTree(App.config);
       toast('Recording stopped.', 'warn');
-      syncRecordingSwitchUI();
       await refreshRecordingFileList();
     } catch (_) { /* toasted */ }
+    syncRecordingSwitchUI();
   });
 
   syncRecordingSwitchUI();
