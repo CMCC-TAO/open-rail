@@ -11,6 +11,7 @@ import pyarrow.parquet as pq
 import pandas as pd
 import threading
 from multiprocessing import Process, Manager,Queue
+from queue import Empty
 from typing import Any, Dict, List, Optional, Union
 import copy
 import logging
@@ -54,9 +55,10 @@ class LeRobotDatasetWriter:
         # self.logger.addHandler(ch)
         # Configuration and path setup
         self.config = record_config
+        # print(f"Initial config: {self.config}")
         self._normalize_record_features_cam()
-        self.logger.info(f"config: {self.config}")
-        print(f"config: {self.config}")
+        # self.logger.info(f"config: {self.config}")
+        # print(f"config: {self.config}")
         self.save_path = self.config["save_path"]
         self.save_meta_path = os.path.join(self.save_path, 'meta')
 
@@ -138,7 +140,9 @@ class LeRobotDatasetWriter:
 
         allowed = {"cam.hand_left", "cam.hand_right", "cam.head"}
 
+        # print(f"features={features}")
         cam_group = features.get("cam")
+        # print(f"cam_group={cam_group}")
         if isinstance(cam_group, (dict, ConfigDict)):
             for short_key, value in cam_group.items():
                 dotted_key = f"cam.{short_key}"
@@ -201,10 +205,13 @@ class LeRobotDatasetWriter:
                 f"Observation timestamp is not increasing: previous={self.obs_time[-1]}, current={timestamp}"
         #check state shape 
         if state['obs.state'].shape[0] != self.state_shape:
-            self.logger.warning(f"obs shape {state['obs.state'].shape[0]} is not correct, config shape is {self.state_shape} , add 0 to the action")
-            assert state['obs.state'].shape[0] <= self.state_shape, \
-            f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
-            action = np.concatenate([action, np.zeros(self.state_shape-state['obs.state'].shape[0])], axis=0)
+            # self.logger.warning(f"obs shape {state['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
+            # assert state['obs.state'].shape[0] <= self.state_shape, \
+            # f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
+            state['obs.state'] = np.concatenate([
+                state['obs.state'],
+                np.zeros(self.state_shape - state['obs.state'].shape[0], dtype=state['obs.state'].dtype)
+            ], axis=0)
         if self.shared_data.start_write_time.value:
             self.obs_time.append(timestamp)
             with self.lock:
@@ -263,9 +270,24 @@ class LeRobotDatasetWriter:
         self.logger.info("waiting for record_queue")
 
         try:
+            heartbeat_ts = time.time()
             while not self.shared_data.close.value:
                 time.sleep(0.1)
                 while not self.shared_data.stop.value:
+                    now = time.time()
+                    if now - heartbeat_ts >= 2.0:
+                        try:
+                            qsize = self.record_queue.qsize()
+                        except Exception:
+                            qsize = -1
+                        self.logger.info(
+                            f"write-loop heartbeat: stop={self.shared_data.stop.value}, "
+                            f"start_write={self.shared_data.start_write_time.value}, "
+                            f"init_write={self.shared_data.init_write.value}, "
+                            f"queue_size={qsize}, cached_records={len(self.shared_data.episode_parquet_list)}"
+                        )
+                        heartbeat_ts = now
+
                     if self.shared_data.init_write.value:
                         self.logger.info("init_write")
                         self.videos_writer = self.gener_video_write_dict()
@@ -283,7 +305,10 @@ class LeRobotDatasetWriter:
                         if self.record_queue.empty():
                             time.sleep(0.01)
                             continue
-                        one_step_state_and_action_list = self.record_queue.get(timeout=0.5)
+                        try:
+                            one_step_state_and_action_list = self.record_queue.get(timeout=0.5)
+                        except Empty:
+                            continue
                     # self.logger.info(f"Get one step state and action from queue")
                     step_state, step_action = one_step_state_and_action_list[0], one_step_state_and_action_list[1]
                     step_language = step_state['language_instruction']
@@ -301,14 +326,20 @@ class LeRobotDatasetWriter:
                     
                     # Write image frames to video files
                     for camera_name in self.camera_name_list:
-                        start_time= time.perf_counter()
-                        if self.camera_shape_dict[camera_name] != step_state[camera_name].shape:
-                            self.logger.warning(f'{camera_name} shape mismatch')
-                            self.logger.warning(f"{camera_name} current shape :{step_state[camera_name].shape}")
-                            self.logger.warning(f"{camera_name} save MP4 shape :{self.camera_shape_dict[camera_name]}")
-                        # print(f"check using time : {(time.perf_counter()-start_time)*1000} ms")
-                        self.videos_writer[camera_name].write(step_state[camera_name])
-                        # print(f"{camera_name} shape :{step_state[camera_name].shape}")
+                        expected_shape = self.camera_shape_dict[camera_name]
+                        raw_frame = step_state.get(camera_name)
+                        frame = self._prepare_video_frame(raw_frame, expected_shape)
+                        if frame is None:
+                            self.logger.warning(f"{camera_name} frame invalid, skip this frame")
+                            continue
+
+                        writer = self.videos_writer.get(camera_name)
+                        if writer is None or (not writer.isOpened()):
+                            self.logger.error(f"Video writer is not opened for {camera_name}, skip write")
+                            continue
+
+                        writer.write(frame)
+                        self.logger.info(f"{camera_name} writes a frame.")
                     # Construct record dictionary for Parquet file
                     record = {
                         'observation.state': step_state['obs.state'].tolist(),
@@ -324,9 +355,18 @@ class LeRobotDatasetWriter:
                     
                     # Update counters
                     frame_index += 1
+                    if frame_index % 120 == 0:
+                        self.logger.info(
+                            f"write-loop progress: episode={self.shared_data.counter.value}, "
+                            f"frame_index={frame_index}, cached_records={len(self.shared_data.episode_parquet_list)}"
+                        )
                     # print('Write successful ——————————————————')
-                
+
                     # self.logger.info('write process stopped!!! ')
+
+                # stop recording for current episode: flush video files immediately
+                self.release_writers()
+                self.videos_writer = {}
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
         
         except KeyboardInterrupt:
@@ -498,7 +538,7 @@ class LeRobotDatasetWriter:
         while not self.record_queue.empty():
             try:
                 self.record_queue.get_nowait()
-            except Queue.Empty:
+            except Empty:
                 break
         self.logger.info("record_queue clear")
     def checkdir_and_update_config(self):
@@ -583,6 +623,42 @@ class LeRobotDatasetWriter:
                 if task_name not in self.shared_data.task_language_dict:
                     self.shared_data.task_language_dict[task_name] = task_index
 
+    def _prepare_video_frame(self, frame: Any, expected_shape: tuple[int, int, int]) -> Optional[np.ndarray]:
+        """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
+        if isinstance(frame, Image.Image):
+            frame = np.array(frame)
+        if not isinstance(frame, np.ndarray):
+            return None
+
+        if frame.ndim == 2:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+        elif frame.ndim == 3 and frame.shape[0] in (1, 3, 4) and frame.shape[-1] not in (1, 3, 4):
+            frame = np.transpose(frame, (1, 2, 0))
+
+        if frame.ndim != 3:
+            return None
+
+        if frame.shape[2] == 1:
+            frame = np.repeat(frame, 3, axis=2)
+        elif frame.shape[2] >= 4:
+            frame = frame[:, :, :3]
+
+        exp_h, exp_w = expected_shape[0], expected_shape[1]
+        if frame.shape[0] != exp_h or frame.shape[1] != exp_w:
+            frame = cv2.resize(frame, (exp_w, exp_h), interpolation=cv2.INTER_LINEAR)
+
+        if frame.dtype != np.uint8:
+            if np.issubdtype(frame.dtype, np.floating):
+                max_val = float(np.nanmax(frame)) if frame.size else 0.0
+                if max_val <= 1.0:
+                    frame = np.clip(frame * 255.0, 0, 255).astype(np.uint8)
+                else:
+                    frame = np.clip(frame, 0, 255).astype(np.uint8)
+            else:
+                frame = np.clip(frame, 0, 255).astype(np.uint8)
+
+        return np.ascontiguousarray(frame)
+
     def gener_video_write_dict(self) -> Dict[str, Any]:
         """
         Generates video writers for each camera stream.
@@ -594,17 +670,32 @@ class LeRobotDatasetWriter:
         """
         filename = f"{'episode'}_{self.shared_data.counter.value:06d}.{'mp4'}"
         video_write_dict = {}
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         self.camera_shape_dict = {}
+        fps = float(self.config['info'].get('fps', 30))
+
         for camera_name in self.camera_name_list:
-            print(f"camera_name: {camera_name}")
             shape_list = self.config['info']["features"][camera_name]["shape"]
-            height, width = shape_list[0],shape_list[1]
+            height, width = int(shape_list[0]), int(shape_list[1])
             os.makedirs(os.path.join(self.save_video_path, camera_name), exist_ok=True)
             video_path = os.path.join(self.save_video_path, camera_name, filename)
             self.shared_data.save_video_path_list.append(video_path)
             self.camera_shape_dict[camera_name] = tuple(shape_list)
-            video_write_dict[camera_name] = cv2.VideoWriter(video_path, fourcc, 30.0, (width, height))
+
+            writer = None
+            for codec in ('mp4v', 'avc1', 'XVID', 'MJPG'):
+                fourcc = cv2.VideoWriter_fourcc(*codec)
+                candidate = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
+                if candidate is not None and candidate.isOpened():
+                    writer = candidate
+                    break
+                if candidate is not None:
+                    candidate.release()
+
+            if writer is None:
+                raise RuntimeError(f"Failed to open VideoWriter for {camera_name}: {video_path}")
+
+            video_write_dict[camera_name] = writer
+
         return video_write_dict
     
     def init_parquet_content(self):
@@ -623,23 +714,23 @@ class LeRobotDatasetWriter:
         ('timestamp', pa.float64())
          ])
     def release_writers(self):
-        """
-        Initializes the schema for the Parquet file.
-
-        Defines the structure of the Parquet table including observation, action, timestamps, and metadata.
-        """
-        for writer in self.videos_writer.values():
+        """Release all opened video writers safely."""
+        videos_writer = getattr(self, 'videos_writer', None)
+        if not videos_writer:
+            return
+        for writer in videos_writer.values():
             writer.release()
         self.logger.info("All video writers released.")
     
     def write_parquet_file(self):
-        """ Writes the Parquet file containing the collected data.   """
-        print('parquet',list(self.shared_data.episode_parquet_list)[0])
+        """Writes the Parquet file containing the collected data."""
         try:
-            df = pd.DataFrame(list(self.shared_data.episode_parquet_list))
-            # print(df)
+            records = list(self.shared_data.episode_parquet_list)
+            if not records:
+                self.logger.warning("No episode records to write, parquet will be empty.")
+                return
+            df = pd.DataFrame(records)
             table = pa.Table.from_pandas(df, schema=self.schema)
-            # Write to parquet file
             self.parquet_writer.write_table(table)
         finally:
             self.parquet_writer.close()

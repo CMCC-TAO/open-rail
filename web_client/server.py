@@ -405,6 +405,7 @@ def _apply_flat_patch(config, patch: dict):
         return getattr(obj, key, default)
 
     def _dict_set(obj, key, value):
+        # print(f"_dict_set: key={key}, value={value}")
         if isinstance(obj, dict):
             obj[key] = value
         else:
@@ -432,12 +433,16 @@ def _apply_flat_patch(config, patch: dict):
 
     def _set_with_dotted_support(root, dotkey, value):
         parts = dotkey.split('.')
+        # if "cam" in dotkey:
+        #     print(f"_set_with_dotted_support: dotkey={dotkey}, root={root.record.info.features.keys()}")
         current = root
         idx = 0
 
         # walk to parent container
         while idx < len(parts) - 1:
             seg, next_idx = _resolve_segment(current, parts, idx)
+            # if "cam" in dotkey:
+            #     print(f"  _set_with_dotted_support: seg={seg}, next_idx={next_idx}")
             next_level = _dict_get(current, seg, None)
             if next_level is None:
                 next_level = ConfigDict() if isinstance(current, ConfigDict) else {}
@@ -458,10 +463,13 @@ def _apply_flat_patch(config, patch: dict):
         _dict_set(current, leaf, value)
 
     for dotkey, value in patch.items():
+        # print(f"Applying patch: {dotkey} = {value}")
+        # print(f"current config before dotted support: {config}")
         try:
             _set_with_dotted_support(config, dotkey, value)
         except Exception as e:
             logger.warning(f"Failed to patch config key '{dotkey}': {e}")
+        # print(f"current config after dotted support: {config}")
 # 建议放在 _get_robot 函数定义的上方
 robot_instance = None
 
@@ -861,7 +869,10 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
         return out
 
     flat = _flatten(data)
+    print(f"config patch: {flat}")
+    print(f"config before flat patch: {config.record.info.features.keys()}")
     _apply_flat_patch(config, flat)
+    # print(f"config after flat patch: {config}")
     logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
 
 
@@ -957,6 +968,7 @@ def _ensure_vla_client_created():
             return client_state.vla_client
 
     cfg = client_state.config if client_state.config is not None else get_client_config()
+    # print(f"Using config: {cfg}")
     client_state.config = cfg
 
     robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
@@ -1339,12 +1351,14 @@ async def client_command(req: CommandRequest):
                 vla_client.dataset_write.shared_data.stop.value = (not enable)
 
         elif cmd == "save_data":
-            if client_state.config.record.switch:
-                vla_client.dataset_write.save_writed_data()
+            if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
+                raise HTTPException(400, "Recorder is not initialized.")
+            vla_client.dataset_write.save_writed_data()
 
         elif cmd == "discard_data":
-            if client_state.config.record.switch:
-                vla_client.dataset_write.abandon_record_data()
+            if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
+                raise HTTPException(400, "Recorder is not initialized.")
+            vla_client.dataset_write.abandon_record_data()
 
         elif cmd == "arm":
             pos = params.get("pos", [0.0] * 14)
