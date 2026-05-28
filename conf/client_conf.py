@@ -45,6 +45,7 @@ def get_client_config():
     #     'Grasp the bottle selected by the finger with the nearer gripper and pass it to the hand carefully. If and only if the bottle is caught by hand, release the gripper.',
     #     'default language instruction',
     # ]
+    print("finish generating client.record config: {config.record}")
     return config
 
 def get_rdm_config() -> ConfigDict:

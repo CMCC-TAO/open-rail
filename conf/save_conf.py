@@ -81,6 +81,8 @@ def get_record_data_config() -> ConfigDict:
         "names": None
     })
 
+    # print(f"Generated record data config: {config}")
+
     return config
 
 def generate_image_feature_config(width: int = 1280, height: int = 720, fps: float = 30.0) -> ConfigDict:
