@@ -40,20 +40,22 @@ class LeRobotDatasetWriter:
         """
         # Define logger
         self.logger = logging.getLogger(__name__)
-        # Set logger level to INFO
-        self.logger.setLevel(logging.INFO)
+        # # Set logger level to INFO
+        # self.logger.setLevel(logging.INFO)
 
-        # Create a handler for console output
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)  # Set handler level to INFO
-        # Define log format and add to handler
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        ch.setFormatter(formatter)
+        # # Create a handler for console output
+        # ch = logging.StreamHandler()
+        # ch.setLevel(logging.INFO)  # Set handler level to INFO
+        # # Define log format and add to handler
+        # formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        # ch.setFormatter(formatter)
 
-        # Add handler to logger
-        self.logger.addHandler(ch)
+        # # Add handler to logger
+        # self.logger.addHandler(ch)
         # Configuration and path setup
         self.config = record_config
+        self.logger.info(f"config: {self.config}")
+        print(f"config: {self.config}")
         self.save_path = self.config["save_path"]
         self.save_meta_path = os.path.join(self.save_path, 'meta')
 
@@ -133,7 +135,7 @@ class LeRobotDatasetWriter:
             language (str): The language instruction associated with the observation.
             time_now (int | float): The current timestamp.
         """
-        self.record_obs_executor.submit(self.add_obs, observations, language_instruction,timestamp)
+        self.record_obs_executor.submit(self.add_obs, observations, language_instruction, timestamp)
 
     def async_write_action(self,action: np.ndarray, timestamp: int | float) -> None:
         """
@@ -562,6 +564,7 @@ class LeRobotDatasetWriter:
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         self.camera_shape_dict = {}
         for camera_name in self.camera_name_list:
+            print(f"camera_name: {camera_name}")
             shape_list = self.config['info']["features"][camera_name]["shape"]
             height, width = shape_list[0],shape_list[1]
             os.makedirs(os.path.join(self.save_video_path, camera_name), exist_ok=True)

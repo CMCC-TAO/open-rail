@@ -97,9 +97,8 @@ class VLAClientAsync():
         self.infer_thread_lock = threading.Lock()
         self._request_id = 0
 
-        if self.config.record.switch:
-            # Initialize the dataset writer with the provided recording configuration
-            self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
+        # Initialize the dataset writer with the provided recording configuration
+        self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
 
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualization_server = VLAWebSocketServer.get_instance()
@@ -195,7 +194,7 @@ class VLAClientAsync():
             observations = self.robot.retrieve_observation()
             if observations is not None:
                 if self.config.record.switch :
-                    self.dataset_write.async_write_obs(observations,self.language,time.perf_counter())
+                    self.dataset_write.async_write_obs(observations, self.language, time.perf_counter())
                 data = self._process_data(observations)
                 self.rdm.add_observe_data(data)
             time.sleep(0.001)
