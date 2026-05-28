@@ -56,7 +56,7 @@ class LeRobotDatasetWriter:
         # Configuration and path setup
         self.config = record_config
         # print(f"Initial config: {self.config}")
-        self._normalize_record_features_cam()
+        # self._normalize_record_features_cam()
         # self.logger.info(f"config: {self.config}")
         # print(f"config: {self.config}")
         self.save_path = self.config["save_path"]
@@ -128,37 +128,37 @@ class LeRobotDatasetWriter:
         except Exception as e:
             self.logger.error(f"Failed to start writer_thread: {e}")
 
-    def _normalize_record_features_cam(self) -> None:
-        """Remove legacy 'cam' subgroup and keep only expected dotted camera keys."""
-        info = self.config.get("info") if isinstance(self.config, (dict, ConfigDict)) else None
-        if not isinstance(info, (dict, ConfigDict)):
-            return
+    # def _normalize_record_features_cam(self) -> None:
+    #     """Remove legacy 'cam' subgroup and keep only expected dotted camera keys."""
+    #     info = self.config.get("info") if isinstance(self.config, (dict, ConfigDict)) else None
+    #     if not isinstance(info, (dict, ConfigDict)):
+    #         return
 
-        features = info.get("features") if isinstance(info, (dict, ConfigDict)) else None
-        if not isinstance(features, (dict, ConfigDict)):
-            return
+    #     features = info.get("features") if isinstance(info, (dict, ConfigDict)) else None
+    #     if not isinstance(features, (dict, ConfigDict)):
+    #         return
 
-        allowed = {"cam.hand_left", "cam.hand_right", "cam.head"}
+    #     allowed = {"cam.hand_left", "cam.hand_right", "cam.head"}
 
-        # print(f"features={features}")
-        cam_group = features.get("cam")
-        # print(f"cam_group={cam_group}")
-        if isinstance(cam_group, (dict, ConfigDict)):
-            for short_key, value in cam_group.items():
-                dotted_key = f"cam.{short_key}"
-                if dotted_key in allowed:
-                    features[dotted_key] = value
-            try:
-                del features["cam"]
-            except Exception:
-                pass
+    #     # print(f"features={features}")
+    #     cam_group = features.get("cam")
+    #     # print(f"cam_group={cam_group}")
+    #     if isinstance(cam_group, (dict, ConfigDict)):
+    #         for short_key, value in cam_group.items():
+    #             dotted_key = f"cam.{short_key}"
+    #             if dotted_key in allowed:
+    #                 features[dotted_key] = value
+    #         try:
+    #             del features["cam"]
+    #         except Exception:
+    #             pass
 
-        for key in list(features.keys()):
-            if str(key).startswith("cam.") and str(key) not in allowed:
-                try:
-                    del features[key]
-                except Exception:
-                    pass
+    #     for key in list(features.keys()):
+    #         if str(key).startswith("cam.") and str(key) not in allowed:
+    #             try:
+    #                 del features[key]
+    #             except Exception:
+    #                 pass
 
     def async_write_obs(self,observations: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float):
         """
@@ -296,18 +296,21 @@ class LeRobotDatasetWriter:
                         frame_index = 0
                         self.shared_data.init_write.value = False
                     # Skip if queue is empty
-                    if not self.shared_data.start_write_time.value:
-                        time.sleep(0.01)
-                        continue
+                    # if not self.shared_data.start_write_time.value:
+                    #     self.logger.info("start_write_time not set, waiting for data...")
+                    #     time.sleep(0.01)
+                    #     continue
                     # print(111)
                     # Get state and action data from queue
                     with self.lock:
                         if self.record_queue.empty():
                             time.sleep(0.01)
+                            self.logger.info("Record queue empty, waiting for data...")
                             continue
                         try:
                             one_step_state_and_action_list = self.record_queue.get(timeout=0.5)
                         except Empty:
+                            self.logger.info("Record queue empty, waiting for data...")
                             continue
                     # self.logger.info(f"Get one step state and action from queue")
                     step_state, step_action = one_step_state_and_action_list[0], one_step_state_and_action_list[1]
@@ -606,7 +609,7 @@ class LeRobotDatasetWriter:
         
         # Update the dataset info in the config using the loaded JSON data
         self.config["info"] = ConfigDict(data, allow_dotted_keys=True)
-        self._normalize_record_features_cam()
+        # self._normalize_record_features_cam()
 
         # Print a success message indicating that the meta files have updated the config
         self.logger.info("update self.config info success")
@@ -749,7 +752,7 @@ class LeRobotDatasetWriter:
         self.config['info']["total_frames"] = self.total_frames
         self.config['info']["total_videos"] += len(self.camera_name_list)
         self.config['info']["splits"] = {"test": f"0:{self.shared_data.counter.value }"}
-        self._normalize_record_features_cam()
+        # self._normalize_record_features_cam()
 
         with open(info_file_path, 'w') as f:
             json.dump(self.config['info'].to_dict(), f, indent=2, default=str)

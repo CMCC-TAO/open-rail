@@ -14,15 +14,6 @@ inter_chunk:
   smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
-  action_layout:
-    arm:
-      end: 14
-      policy: gradual
-      start: 0
-    gripper:
-      end: 16
-      policy: stepwise
-      start: 14
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
@@ -44,17 +35,7 @@ language:
   task_progress_threshold: 0.87
 observer:
   fps: 30
-  period: 0.03333333333333333
 rdm:
-  action_layout:
-    arm:
-      end: 14
-      policy: gradual
-      start: 0
-    gripper:
-      end: 16
-      policy: stepwise
-      start: 14
   max_len: 100
   record_data: false
 record:
@@ -71,14 +52,13 @@ record:
         dtype: video
         info:
           has_audio: false
-          video:
-            channels: 3
-            codec: mpeg4
-            fps: 30.0
-            height: 480
-            is_depth_map: false
-            pix_fmt: yuv420p
-            width: 848
+          video.channels: 3
+          video.codec: mpeg4
+          video.fps: 30.0
+          video.height: 480
+          video.is_depth_map: false
+          video.pix_fmt: yuv420p
+          video.width: 848
         names:
         - height
         - width
@@ -89,23 +69,21 @@ record:
         - 3
         video_info:
           has_audio: false
-          video:
-            codec: av1
-            fps: 30.0
-            is_depth_map: false
-            pix_fmt: yuv420p
+          video.codec: av1
+          video.fps: 30.0
+          video.is_depth_map: false
+          video.pix_fmt: yuv420p
       cam.hand_right:
         dtype: video
         info:
           has_audio: false
-          video:
-            channels: 3
-            codec: mpeg4
-            fps: 30.0
-            height: 480
-            is_depth_map: false
-            pix_fmt: yuv420p
-            width: 848
+          video.channels: 3
+          video.codec: mpeg4
+          video.fps: 30.0
+          video.height: 480
+          video.is_depth_map: false
+          video.pix_fmt: yuv420p
+          video.width: 848
         names:
         - height
         - width
@@ -116,23 +94,21 @@ record:
         - 3
         video_info:
           has_audio: false
-          video:
-            codec: av1
-            fps: 30.0
-            is_depth_map: false
-            pix_fmt: yuv420p
+          video.codec: av1
+          video.fps: 30.0
+          video.is_depth_map: false
+          video.pix_fmt: yuv420p
       cam.head:
         dtype: video
         info:
           has_audio: false
-          video:
-            channels: 3
-            codec: mpeg4
-            fps: 30.0
-            height: 720
-            is_depth_map: false
-            pix_fmt: yuv420p
-            width: 1280
+          video.channels: 3
+          video.codec: mpeg4
+          video.fps: 30.0
+          video.height: 720
+          video.is_depth_map: false
+          video.pix_fmt: yuv420p
+          video.width: 1280
         names:
         - height
         - width
@@ -143,11 +119,10 @@ record:
         - 3
         video_info:
           has_audio: false
-          video:
-            codec: av1
-            fps: 30.0
-            is_depth_map: false
-            pix_fmt: yuv420p
+          video.codec: av1
+          video.fps: 30.0
+          video.is_depth_map: false
+          video.pix_fmt: yuv420p
       episode_index:
         dtype: int64
         names: null
@@ -163,11 +138,6 @@ record:
         names: null
         shape:
         - 1
-      observation:
-        state:
-          dtype: float32
-          shape:
-          - 20
       observation.state:
         dtype: float32
         shape:

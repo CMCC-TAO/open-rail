@@ -69,11 +69,13 @@ async def _lifespan(_: FastAPI):
     # ── startup ──
     setup_logging("client.log")
     client_state.config = get_client_config()
+    # print(f"Initial client config: {client_state.config}")
     if DEFAULT_YAML.exists():
         try:
             _apply_yaml_config(client_state.config, DEFAULT_YAML)
         except Exception as e:
             logger.warning(f"Failed to apply yaml conf: {e}")
+    # print(f"Final client config: {client_state.config}")
     asyncio.create_task(_stats_push_loop())
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
@@ -389,87 +391,71 @@ def _apply_flat_patch_old(config, patch: dict):
         except Exception as e:
             logger.warning(f"Failed to patch config key '{dotkey}': {e}")
 
-def _apply_flat_patch(config, patch: dict):
-    """Apply a flat {dot.separated.key: value} patch to config.
-
-    Supports ConfigDicts with dotted keys (allow_dotted_keys=True), e.g.:
-    - record.info.features.cam.hand_left.dtype  -> features['cam.hand_left']['dtype']
-    - ...video_info.video.fps                   -> video_info['video.fps']
-    """
-    from ml_collections import ConfigDict
+def _apply_flat_patch_new(config, patch: dict):
+    """Apply flat patch only to existing config leaf keys (no new key creation)."""
     import enum
+    from ml_collections import ConfigDict
 
-    def _dict_get(obj, key, default=None):
-        if isinstance(obj, dict):
-            return obj.get(key, default)
+    if not isinstance(patch, dict) or config is None:
+        return
+
+    def _is_mapping(obj):
+        return isinstance(obj, (dict, ConfigDict))
+
+    def _iter_keys(obj):
+        if not _is_mapping(obj):
+            return []
+        return list(obj.keys())
+
+    def _get(obj, key, default=None):
+        if _is_mapping(obj):
+            if isinstance(obj, dict):
+                return obj.get(key, default)
+            return obj[key] if key in obj else default
         return getattr(obj, key, default)
 
-    def _dict_set(obj, key, value):
-        # print(f"_dict_set: key={key}, value={value}")
-        if isinstance(obj, dict):
+    def _set(obj, key, value):
+        if _is_mapping(obj):
             obj[key] = value
         else:
             setattr(obj, key, value)
 
-    def _iter_keys(obj):
-        if isinstance(obj, dict):
-            return list(obj.keys())
-        return []
+    def _walk_leaf_paths(node, prefix=""):
+        if not _is_mapping(node):
+            return
 
-    def _resolve_segment(current, parts, start_idx):
-        """Pick longest matching key segment at current level.
+        for key in _iter_keys(node):
+            child = _get(node, key, None)
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if _is_mapping(child):
+                yield from _walk_leaf_paths(child, path)
+            else:
+                yield path, node, key, child
 
-        Example: parts=['cam','hand_left','dtype'] and current has key 'cam.hand_left'
-        => returns ('cam.hand_left', 2)
-        """
-        keys = set(_iter_keys(current))
-        if keys:
-            for end_idx in range(len(parts), start_idx, -1):
-                candidate = '.'.join(parts[start_idx:end_idx])
-                if candidate in keys:
-                    return candidate, end_idx
-        # fallback: plain segment
-        return parts[start_idx], start_idx + 1
+    applied = 0
+    for dotkey, parent, leaf_key, current_val in _walk_leaf_paths(config):
+        if dotkey not in patch:
+            continue
 
-    def _set_with_dotted_support(root, dotkey, value):
-        parts = dotkey.split('.')
-        # if "cam" in dotkey:
-        #     print(f"_set_with_dotted_support: dotkey={dotkey}, root={root.record.info.features.keys()}")
-        current = root
-        idx = 0
-
-        # walk to parent container
-        while idx < len(parts) - 1:
-            seg, next_idx = _resolve_segment(current, parts, idx)
-            # if "cam" in dotkey:
-            #     print(f"  _set_with_dotted_support: seg={seg}, next_idx={next_idx}")
-            next_level = _dict_get(current, seg, None)
-            if next_level is None:
-                next_level = ConfigDict() if isinstance(current, ConfigDict) else {}
-                _dict_set(current, seg, next_level)
-            current = next_level
-            idx = next_idx
-
-        # resolve leaf key (prefer existing dotted leaf if present)
-        leaf, _ = _resolve_segment(current, parts, idx)
-        current_val = _dict_get(current, leaf, None)
+        value = patch[dotkey]
         if isinstance(current_val, enum.Enum):
-            ec = current_val.__class__
+            enum_cls = current_val.__class__
             try:
-                value = ec(value)
+                value = enum_cls(value)
             except Exception:
                 pass
 
-        _dict_set(current, leaf, value)
-
-    for dotkey, value in patch.items():
-        # print(f"Applying patch: {dotkey} = {value}")
-        # print(f"current config before dotted support: {config}")
         try:
-            _set_with_dotted_support(config, dotkey, value)
+            _set(parent, leaf_key, value)
+            applied += 1
         except Exception as e:
             logger.warning(f"Failed to patch config key '{dotkey}': {e}")
-        # print(f"current config after dotted support: {config}")
+
+    dropped = [k for k in patch.keys() if k not in {p for p, _, _, _ in _walk_leaf_paths(config)}]
+    if dropped:
+        logger.debug(f"Ignored non-existing config keys in patch: {dropped}")
+
+    logger.info(f"Applied config patch keys: {applied}/{len(patch)}")
 # 建议放在 _get_robot 函数定义的上方
 robot_instance = None
 
@@ -745,7 +731,7 @@ async def patch_config(req: ConfigPatchRequest):
 
     flat = _flatten(req.patch)
     with client_state.lock:
-        _apply_flat_patch(client_state.config, flat)
+        _apply_flat_patch_new(client_state.config, flat)
 
     # Runtime side-effects for keys that need explicit push
     if client_state.running and client_state.vla_client is not None:
@@ -850,7 +836,7 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
                 k = k.strip(); v = v.strip()
                 if v and not v.startswith('#'):
                     patch[k] = v
-        _apply_flat_patch(config, patch)
+        _apply_flat_patch_new(config, patch)
         return
 
     text = yaml_conf_path.read_text(encoding="utf-8")
@@ -869,10 +855,14 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
         return out
 
     flat = _flatten(data)
-    print(f"config patch: {flat}")
-    print(f"config before flat patch: {config.record.info.features.keys()}")
-    _apply_flat_patch(config, flat)
+    # print(f"config patch: {flat}")
+    # cam_head = config.record.info.features.get('cam.head')
+    # print(f"config before flat patch: {config.record.info.features.keys()}")
+    # print(f"config before flat patch: {cam_head}")
+    _apply_flat_patch_new(config, flat)
     # print(f"config after flat patch: {config}")
+    # print(f"config after flat patch: {config.record.info.features.keys()}")
+    # print(f"config after flat patch: {cam_head}")
     logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
 
 
