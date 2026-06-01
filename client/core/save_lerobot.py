@@ -59,7 +59,8 @@ class LeRobotDatasetWriter:
         self.record_action_executor = ThreadPoolExecutor(max_workers=4)
 
         # Writer process initialization
-        self.writer_process = Process(target=self._write_process_fun, daemon=True)
+        self.writer_process = None
+        self._closed = False
 
     def _init_shared_data(self):
         """
@@ -131,9 +132,9 @@ class LeRobotDatasetWriter:
         # Load info.json and update dataset info
         info_file_path = os.path.join(self.meta_dir, 'info.json')
         self._update_dataset_info_from_meta_file(info_file_path)
-        self.shared_data.total_frames = self.config['info']['total_frames']
-        self.shared_data.episode_index = self.config['info']['total_episodes']
-        self.shared_data.episode_chunk = self.config['info']['total_episodes'] // self.config['info']['chunks_size']
+        self.shared_data.total_frames.value = int(self.config['info']['total_frames'])
+        self.shared_data.episode_index.value = int(self.config['info']['total_episodes'])
+        self.shared_data.episode_chunk.value = int(self.config['info']['total_episodes']) // int(self.config['info']['chunks_size'])
 
         # Load tasks.jsonl and update task languages
         task_file_path = os.path.join(self.meta_dir, 'tasks.jsonl')
@@ -210,6 +211,7 @@ class LeRobotDatasetWriter:
         try:
             self.shared_data.running.value = True
             self._clear_queues()
+            self.writer_process = Process(target=self._write_process_fun, daemon=True)
             self.writer_process.start()
             self.logger.info("Writer process started successfully.")
         except Exception as e:
@@ -224,14 +226,16 @@ class LeRobotDatasetWriter:
         if self.shared_data.running.value:
             self.shared_data.running.value = False
             self.logger.info("Signaled writer process to stop.")
-            if self.writer_process.is_alive():
-                self.writer_process.join(timeout=2)
-                if self.writer_process.is_alive():
-                    self.logger.warning("Writer thread still alive after timeout, terminating...")
-                    self.writer_process.terminate()
-                    self.writer_process.join()
-        else:
-            self.logger.warning("stop_recording called but writer process is not running.")
+
+        wp = getattr(self, "writer_process", None)
+        if wp is not None and wp.is_alive():
+            wp.join(timeout=2)
+            if wp.is_alive():
+                self.logger.warning("Writer thread still alive after timeout, terminating...")
+                wp.terminate()
+                wp.join(timeout=1)
+        elif wp is None:
+            self.logger.debug("stop_recording called but writer process is not initialized.")
     def _add_observation_fun(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
@@ -261,7 +265,7 @@ class LeRobotDatasetWriter:
         observation['language_instruction'] = language_instruction
         # check state shape 
         if observation['obs.state'].shape[0] != self.state_shape:
-            self.logger.warning(f"obs shape {observation['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
+            # self.logger.warning(f"obs shape {observation['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
             # assert state['obs.state'].shape[0] <= self.state_shape, \
             # f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
             observation['obs.state'] = np.concatenate([
@@ -285,7 +289,7 @@ class LeRobotDatasetWriter:
         # check action shape 
         if action.shape[0]!= self.action_shape:
             # self.logger.warning(f"Action shape {action.shape[0]} is not correct, config shape is {self.action_shape} , add 0 to the action")
-            self.logger.warning(f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}")
+            # self.logger.warning(f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}")
             action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)
         self.action_frame_queue.append((action, timestamp))
 
@@ -313,6 +317,7 @@ class LeRobotDatasetWriter:
             episode_chunk = self.shared_data.episode_chunk.value
             episode_index = self.shared_data.episode_index.value
             total_frames = self.shared_data.total_frames.value
+            self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}")
             self.video_writers = self._create_video_writer(
                 episode_chunk=episode_chunk,
                 episode_index=episode_index
@@ -329,7 +334,7 @@ class LeRobotDatasetWriter:
             episode_task_list = []
             step_task_index = 0
             # Use a thread to write parquet file
-            write_parquet_thread = threading.Thread(self._write_parquet_fun, daemon = True)
+            write_parquet_thread = threading.Thread(target=self._write_parquet_fun, daemon=True)
             try:
                 write_parquet_thread.start()
             except Exception as e:
@@ -360,7 +365,9 @@ class LeRobotDatasetWriter:
                 for camera_name in self.camera_name_list:
                     expected_shape = self.camera_shape_dict[camera_name]
                     raw_frame = step_state.get(camera_name)
+                    # self.logger.info(f"step_state: {step_state.keys()}")
                     frame = self._prepare_video_frame(raw_frame, expected_shape)
+                    # self.logger.info(f"expected_shape: {expected_shape}")
                     if frame is None:
                         self.logger.warning(f"{camera_name} frame invalid, skip this frame")
                         continue
@@ -371,7 +378,7 @@ class LeRobotDatasetWriter:
                         continue
 
                     writer.write(frame)
-                    self.logger.info(f"{camera_name} writes a frame.")
+                    self.logger.info(f"{camera_name} writes a frame with expected_shape {expected_shape}.")
                 # Construct record dictionary for Parquet file
                 parquet_frame = {
                     'observation.state': step_state['obs.state'].tolist(),
@@ -387,7 +394,7 @@ class LeRobotDatasetWriter:
                 
                 # Update counters
                 frame_index += 1
-                if frame_index % 120 == 0:
+                if frame_index % 30 == 0:
                     self.logger.info(
                         f"write-loop progress: episode={self.shared_data.episode_index.value}, "
                         f"frame_index={frame_index}, cached_records={len(self.parquet_frame_list)}"
@@ -412,7 +419,7 @@ class LeRobotDatasetWriter:
             # self.release_writers()
         
         except Exception as e:
-            self.logger.error(f"Writing thread exited with exception: {e}")
+            self.logger.error(f"Writing thread exited with exception: {e.__traceback__}")
             # self.release_writers()
         
         finally:
@@ -442,42 +449,47 @@ class LeRobotDatasetWriter:
     #     return output_dict
 
     def close(self):
-        """
-        Gracefully shuts down the writer and finalizes data writing.
+        """Release all dataset writer resources safely and idempotently."""
+        self.logger.info("Closing LeRobotDatasetWriter...")
+        if getattr(self, "_closed", False):
+            return
+        self._closed = True
 
-        This method signals the writer thread to stop by setting the 'stop' flag,
-        releases all video writers, increments the episode counter, updates the total
-        number of frames, and triggers the finalization process (`end_write`) to save
-        all buffered data to disk.
+        self.logger.info("Closing LeRobotDatasetWriter...")
+        try:
+            self.stop_recording()
+        except Exception:
+            self.logger.debug("stop_recording failed during close", exc_info=True)
 
-        Should be called when ending data collection to ensure all data is flushed
-        and resources are properly released.
-        """
-        # self.shared_data.stop.value = True
-        # self.shared_data.close.value = True
-        # time.sleep(1)
-        # print(f"[Main] Writer alive? {self.writer_process.is_alive()}")
-        self.shared_data.running.value = False
-        # self.record_obs_executor.shutdown(wait=True)
-        # self.record_action_executor.shutdown(wait=True)
-        if self.writer_process.is_alive():
-            self.writer_process.join(timeout=2)
-            if self.writer_process.is_alive():
-                self.logger.warning("Writer thread still alive after timeout, terminating...")
-                self.writer_process.terminate()
-                self.writer_process.join()
+        self.logger.info("Closing LeRobotDatasetWriter, recording stopped.")
+        try:
+            if getattr(self, "record_obs_executor", None) is not None:
+                self.record_obs_executor.shutdown(wait=True, cancel_futures=True)
+        except Exception:
+            self.logger.debug("record_obs_executor shutdown failed", exc_info=True)
+        self.logger.info("Closing LeRobotDatasetWriter, observation executor shutdown.")
 
-        # self.end_write()
+        try:
+            if getattr(self, "record_action_executor", None) is not None:
+                self.record_action_executor.shutdown(wait=True, cancel_futures=True)
+        except Exception:
+            self.logger.debug("record_action_executor shutdown failed", exc_info=True)
+        self.logger.info("Closing LeRobotDatasetWriter, action executor shutdown.")
 
-        # Clean up resources
-        # if self.record_queue:
-        #     self.record_queue.close()
-        #     self.record_queue.join_thread()
+        try:
+            if getattr(self, "record_queue", None) is not None:
+                self.record_queue.close()
+                self.record_queue.cancel_join_thread()
+        except Exception:
+            self.logger.debug("record_queue close/join failed", exc_info=True)
+        self.logger.info("Closing LeRobotDatasetWriter, record queue closed.")
+        try:
+            if getattr(self, "manager", None) is not None:
+                self.manager.shutdown()
+        except Exception:
+            self.logger.debug("manager shutdown failed", exc_info=True)
 
-        # if self.manager:
-        #     self.manager.shutdown()
-
-        # self.logger.info("LeRobotDatasetWriter closed successfully.")
+        self.logger.info("LeRobotDatasetWriter closed successfully.")
         
     
     # def save_writed_data(self):
@@ -651,7 +663,7 @@ class LeRobotDatasetWriter:
         save_video_path = os.path.join(self.save_path, 'videos', f'chunk-{episode_chunk:03d}')
         filename = f"{'episode'}_{episode_index:06d}.{'mp4'}"
         video_write_dict = {}
-        self.camera_shape_dict = {}
+        # self.camera_shape_dict = {}
         fps = float(self.config['info'].get('fps', 30))
 
         for camera_name in self.camera_name_list:
@@ -674,6 +686,7 @@ class LeRobotDatasetWriter:
                 raise RuntimeError(f"Failed to open VideoWriter for {camera_name}: {video_path}")
 
             video_write_dict[camera_name] = writer
+        self.logger.info(f"create video writer: {save_video_path}")
         return video_write_dict
     
     def _create_parquet_writer(self, episode_chunk: int = 0, episode_index: int = 0):
@@ -706,9 +719,11 @@ class LeRobotDatasetWriter:
         if not video_writers:
             return
         for writer in video_writers.values():
-            writer.close()
-            writer.release()
-        video_writers = {}
+            try:
+                writer.release()
+            except Exception:
+                self.logger.debug("Video writer release() failed", exc_info=True)
+        self.video_writers = {}
         self.logger.info("All video writers released.")
     
     # def write_parquet_file(self):
