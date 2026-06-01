@@ -1287,7 +1287,7 @@ async def client_status():
 #  REST: runtime commands (replaces Enter-key menu in run_client.py)
 # ─────────────────────────────────────────────────────────────────────────────
 class CommandRequest(BaseModel):
-    command: str          # reset / resume / set_language / record / save_data / discard_data / arm / gripper / head / waist / wheel
+    command: str          # reset / resume / set_language / start_recording / stop_recording / arm / gripper / head / waist / wheel
     params: dict = {}
 
 
@@ -1320,35 +1320,25 @@ async def client_command(req: CommandRequest):
             robot.reset_robot(mode='default')
             _resume_vla_client(vla_client)
 
-        elif cmd == "record":
-            enable = bool(params.get("enable", True))
+        elif cmd == "start_recording":
             save_items = params.get("save_items", [])
             if not isinstance(save_items, list):
                 save_items = []
-
-            # Keep command and config switch fully linked.
-            client_state.config.record.switch = enable
+            client_state.config.record.switch = True
             client_state.config.record_exp_data = ('ExpData' in save_items)
-
-            if enable and (not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None):
+            if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
                 try:
                     from client.core.save_lerobot import LeRobotDatasetWriter
                     vla_client.dataset_write = LeRobotDatasetWriter(record_config=client_state.config.record)
                 except Exception as e:
                     raise HTTPException(500, f"Failed to initialize recorder: {e}")
+            vla_client.dataset_write.start_recording()
 
-            if hasattr(vla_client, "dataset_write") and vla_client.dataset_write is not None:
-                vla_client.dataset_write.shared_data.stop.value = (not enable)
-
-        elif cmd == "save_data":
+        elif cmd == "stop_recording":
             if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
                 raise HTTPException(400, "Recorder is not initialized.")
-            vla_client.dataset_write.save_writed_data()
-
-        elif cmd == "discard_data":
-            if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
-                raise HTTPException(400, "Recorder is not initialized.")
-            vla_client.dataset_write.abandon_record_data()
+            vla_client.dataset_write.stop_recording()
+            client_state.config.record.switch = False
 
         elif cmd == "arm":
             pos = params.get("pos", [0.0] * 14)

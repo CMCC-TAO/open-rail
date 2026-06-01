@@ -2345,7 +2345,7 @@ function setupRecordingPanel() {
     try {
       await apiFetch('/api/client/command', {
         method: 'POST',
-        body: JSON.stringify({ command: 'record', params: { enable: true, save_items: saveItems } }),
+        body: JSON.stringify({ command: 'start_recording', params: { save_items: saveItems } }),
       });
       App.isRecording = true;
       if (!App.config || typeof App.config !== 'object') App.config = {};
@@ -2358,19 +2358,10 @@ function setupRecordingPanel() {
   });
 
   $('btn-recording-stop')?.addEventListener('click', async () => {
-    const saveItems = getRecordingSaveItems();
-    const keepEpisode = saveItems.includes('Episode');
     try {
-      // 1) finalize current recording data first (save/discard)
       await apiFetch('/api/client/command', {
         method: 'POST',
-        body: JSON.stringify({ command: keepEpisode ? 'save_data' : 'discard_data', params: {} }),
-      });
-
-      // 2) then stop recording switch
-      await apiFetch('/api/client/command', {
-        method: 'POST',
-        body: JSON.stringify({ command: 'record', params: { enable: false, save_items: saveItems } }),
+        body: JSON.stringify({ command: 'stop_recording', params: {} }),
       });
 
       App.isRecording = false;
@@ -2378,7 +2369,7 @@ function setupRecordingPanel() {
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
       App.config.record.switch = false;
       renderRecordingConfigTree(App.config);
-      toast(keepEpisode ? 'Recording stopped and saved.' : 'Recording stopped and discarded.', 'warn');
+      toast('Recording stopped.', 'warn');
       await refreshRecordingFileList();
     } catch (_) { /* toasted */ }
     syncRecordingSwitchUI();
