@@ -194,7 +194,7 @@ class VLAClientAsync():
             observations = self.robot.retrieve_observation()
             if observations is not None:
                 if self.config.record.switch :
-                    self.dataset_write.async_write_obs(observations, self.language, time.perf_counter())
+                    self.dataset_write.add_observation_async(observations, self.language, time.perf_counter())
                 data = self._process_data(observations)
                 self.rdm.add_observe_data(data)
             time.sleep(0.001)
@@ -440,7 +440,7 @@ class VLAClientAsync():
                 self.info_act['current_prob_progress'] = prob_progress
 
             if self.config.record.switch and self.is_control_thread_running and self.is_running:
-                self.dataset_write.async_write_action(action_fitted, time.perf_counter())
+                self.dataset_write.add_action_async(action_fitted, time.perf_counter())
             
             self.info_act['action'] = action_fitted.shape
 

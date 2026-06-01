@@ -14,6 +14,15 @@ inter_chunk:
   smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      start: 14
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
@@ -35,7 +44,17 @@ language:
   task_progress_threshold: 0.87
 observer:
   fps: 30
+  period: 0.03333333333333333
 rdm:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      start: 14
   max_len: 100
   record_data: false
 record:
@@ -155,14 +174,14 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      test: 0:2
     total_chunks: 1
-    total_episodes: 0
-    total_frames: 0
+    total_episodes: 3
+    total_frames: 585
     total_tasks: 0
-    total_videos: 0
+    total_videos: 9
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
-  save_path: ./data/output/test
+  save_path: /home/robot/Gits/work/embodiedai/vla_infer/data/output/test
   switch: false
 record_exp_data: false
 robots:
