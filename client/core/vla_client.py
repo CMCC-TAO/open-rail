@@ -767,10 +767,9 @@ class VLAClientAsync():
             self.control_thread_timer.stop()
             self.control_thread_timer.join(timeout=1.0)
         
-        if self.config.record.switch:
-            # time.sleep(1)
-            self.dataset_write.stop_recording()
-        
+        if hasattr(self, 'dataset_write') and self.dataset_write is not None:
+            self.dataset_write.close()
+
         self.vla_zmq.close()
         if self.config.show_action_cams_qt:
             try:
