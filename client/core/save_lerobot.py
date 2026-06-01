@@ -634,6 +634,10 @@ class LeRobotDatasetWriter:
         elif frame.shape[2] >= 4:
             frame = frame[:, :, :3]
 
+        # Convert RGB frames to BGR for OpenCV VideoWriter compatibility
+        if frame.shape[2] == 3:
+            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
         exp_h, exp_w = expected_shape[0], expected_shape[1]
         if frame.shape[0] != exp_h or frame.shape[1] != exp_w:
             frame = cv2.resize(frame, (exp_w, exp_h), interpolation=cv2.INTER_LINEAR)
