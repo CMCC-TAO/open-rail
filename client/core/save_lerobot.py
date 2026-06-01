@@ -42,6 +42,7 @@ class LeRobotDatasetWriter:
         self.logger = logging.getLogger(__name__)
         self.config = record_config
         self._init_shared_data()
+        self.task_language_dict = {}
         meta_dir_exists = self._check_meta_path_and_dir(self.config["save_path"])
         if meta_dir_exists:
             self._update_config_from_meta_file()
@@ -77,13 +78,12 @@ class LeRobotDatasetWriter:
         self.shared_data.total_frames = self.manager.Value('i', 0)
         self.shared_data.episode_chunk = self.manager.Value('i', 0)
         self.shared_data.episode_index = self.manager.Value('i', 0)
-        self.shared_data.total_frames = self.manager.Value('i', 0)
         self.shared_data.running = self.manager.Value('b', False)
-        self.shared_data.episode_parquet_list = self.manager.list()
+        # self.shared_data.episode_parquet_list = self.manager.list()
         self.shared_data.save_video_path_list = self.manager.list()
         # Task and language information storage
-        self.shared_data.episode_task_list = self.manager.list()
-        self.shared_data.task_language_dict = self.manager.dict()
+        # self.shared_data.episode_task_list = self.manager.list()
+        # self.shared_data.task_language_dict = self.manager.dict()
     
     def _check_meta_path_and_dir(self, save_path: str) -> bool:
         # save_path_cfg = str(self.config["save_path"])
@@ -161,16 +161,20 @@ class LeRobotDatasetWriter:
         with open(file_path, 'r') as file:
             for line in file:
                 data = json.loads(line)
-                self.task_index = data['task_index']
-                self.task_name = data['tasks'] 
-                # if task_name not in self.shared_data.task_language_dict:
-                #     self.shared_data.task_language_dict[task_name] = task_index
+                task_index = data['task_index']
+                task_name = data['tasks'] 
+                if task_name not in self.task_language_dict:
+                    self.task_language_dict[task_name] = task_index
+        self.logger.info(f"Update task languages from meta task file success, task_language_dict={self.task_language_dict}.")
     
     def _parse_config_info_features(self, features_config: ConfigDict) -> None:
         self.camera_name_list = []
-        for key in features_config.keys():
-            if str(key).startswith("cam."):
-                self.camera_name_list.append(key)
+        self.camera_shape_dict = {}
+        for camera_name in features_config.keys():
+            if str(camera_name).startswith("cam."):
+                self.camera_name_list.append(camera_name)
+            shape_list = features_config[camera_name]["shape"]
+            self.camera_shape_dict[camera_name] = tuple(shape_list)
 
         self.action_shape = features_config["action"]['shape'][0]
         self.state_shape = features_config["observation.state"]['shape'][0]
@@ -210,6 +214,24 @@ class LeRobotDatasetWriter:
             self.logger.info("Writer process started successfully.")
         except Exception as e:
             self.logger.error(f"Failed to start writer_process: {e}")
+    def stop_recording(self):
+        """
+        Stops the recording process by signaling the writer process to terminate.
+
+        This method sets the 'running' flag to False, which should cause the writer process
+        to finish processing any remaining data and exit gracefully.
+        """
+        if self.shared_data.running.value:
+            self.shared_data.running.value = False
+            self.logger.info("Signaled writer process to stop.")
+            if self.writer_process.is_alive():
+                self.writer_process.join(timeout=2)
+                if self.writer_process.is_alive():
+                    self.logger.warning("Writer thread still alive after timeout, terminating...")
+                    self.writer_process.terminate()
+                    self.writer_process.join()
+        else:
+            self.logger.warning("stop_recording called but writer process is not running.")
     def _add_observation_fun(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
@@ -304,6 +326,8 @@ class LeRobotDatasetWriter:
             # copy task dict
             # self.shared_data.last_task_language_dict = self.copy_shared_data_dict(self.shared_data.task_language_dict)
             frame_index = 0
+            episode_task_list = []
+            step_task_index = 0
             # Use a thread to write parquet file
             write_parquet_thread = threading.Thread(self._write_parquet_fun, daemon = True)
             try:
@@ -321,16 +345,16 @@ class LeRobotDatasetWriter:
                     continue
                 step_language = step_state['language_instruction']
                 
-                # # Track new language instructions per episode
-                # if step_language not in self.shared_data.episode_task_list:
-                #     self.shared_data.episode_task_list.append(step_language)
+                # Track new language instructions per episode
+                if step_language not in episode_task_list:
+                    episode_task_list.append(step_language)
                 
-                # # Assign task index based on unique language instruction
-                # if step_language not in self.shared_data.task_language_dict.keys():
-                #     step_task_index = len(self.shared_data.task_language_dict.keys())
-                #     self.shared_data.task_language_dict[step_language] = step_task_index
-                # else:
-                #     step_task_index = self.shared_data.task_language_dict[step_language]
+                # Assign task index based on unique language instruction
+                if step_language not in self.task_language_dict.keys():
+                    step_task_index = len(self.task_language_dict.keys())
+                    self.task_language_dict[step_language] = step_task_index
+                else:
+                    step_task_index = self.task_language_dict[step_language]
                 
                 # Write image frames to video files
                 for camera_name in self.camera_name_list:
@@ -366,28 +390,34 @@ class LeRobotDatasetWriter:
                 if frame_index % 120 == 0:
                     self.logger.info(
                         f"write-loop progress: episode={self.shared_data.episode_index.value}, "
-                        f"frame_index={frame_index}, cached_records={len(self.shared_data.episode_parquet_list)}"
+                        f"frame_index={frame_index}, cached_records={len(self.parquet_frame_list)}"
                     )
                 # print('Write successful ——————————————————')
 
                 # self.logger.info('write process stopped!!! ')
-
+            self.shared_data.episode_index.value = episode_index + 1
+            self.shared_data.total_frames.value = total_frames + frame_index
+            self._write_meta_files(total_frames=self.shared_data.total_frames.value,
+                                total_episodes=self.shared_data.episode_index.value,
+                                episode_length=frame_index,
+                                episode_task_list=episode_task_list)
             # stop recording for current episode: flush video files immediately
-            self.release_video_writers()
             write_parquet_thread.join(timeout=1.0)
+            self._release_video_writers()
+            # self._clear_queues()
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
         
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
-            self.release_writers()
+            # self.release_writers()
         
         except Exception as e:
             self.logger.error(f"Writing thread exited with exception: {e}")
-            self.release_writers()
+            # self.release_writers()
         
         finally:
             self.logger.info("Writing thread exited.")
-            self.release_writers()
+            # self.release_writers()
 
     # def end_write(self):
     #     """
@@ -402,14 +432,15 @@ class LeRobotDatasetWriter:
     #     if os.path.exists(self.parquet_file_path):
     #         os.remove(self.parquet_file_path)
     
-    def copy_shared_data_dict(self,input_dict):
-        """
+    # def copy_shared_data_dict(self,input_dict):
+    #     """
         
-        """
-        output_dict = self.manager.dict()
-        for key, value in input_dict.items():
-            output_dict[key] = value
-        return output_dict
+    #     """
+    #     output_dict = self.manager.dict()
+    #     for key, value in input_dict.items():
+    #         output_dict[key] = value
+    #     return output_dict
+
     def close(self):
         """
         Gracefully shuts down the writer and finalizes data writing.
@@ -427,8 +458,8 @@ class LeRobotDatasetWriter:
         # time.sleep(1)
         # print(f"[Main] Writer alive? {self.writer_process.is_alive()}")
         self.shared_data.running.value = False
-        self.record_obs_executor.shutdown(wait=True)
-        self.record_action_executor.shutdown(wait=True)
+        # self.record_obs_executor.shutdown(wait=True)
+        # self.record_action_executor.shutdown(wait=True)
         if self.writer_process.is_alive():
             self.writer_process.join(timeout=2)
             if self.writer_process.is_alive():
@@ -439,49 +470,50 @@ class LeRobotDatasetWriter:
         # self.end_write()
 
         # Clean up resources
-        if self.record_queue:
-            self.record_queue.close()
-            self.record_queue.join_thread()
+        # if self.record_queue:
+        #     self.record_queue.close()
+        #     self.record_queue.join_thread()
 
-        if self.manager:
-            self.manager.shutdown()
+        # if self.manager:
+        #     self.manager.shutdown()
 
-        self.logger.info("LeRobotDatasetWriter closed successfully.")
+        # self.logger.info("LeRobotDatasetWriter closed successfully.")
         
     
-    def save_writed_data(self):
-        """
-        Gracefully shuts down the writer and finalizes data writing.
+    # def save_writed_data(self):
+    #     """
+    #     Gracefully shuts down the writer and finalizes data writing.
 
-        This method signals the writer thread to stop by setting the 'stop' flag,
-        releases all video writers, increments the episode counter, updates the total
-        number of frames, and triggers the finalization process (`end_write`) to save
-        all buffered data to disk.
+    #     This method signals the writer thread to stop by setting the 'stop' flag,
+    #     releases all video writers, increments the episode counter, updates the total
+    #     number of frames, and triggers the finalization process (`end_write`) to save
+    #     all buffered data to disk.
 
-        Should be called when ending data collection to ensure all data is flushed
-        and resources are properly released.
-        """
-        print(f"save_writed_data called, writer alive? {self.writer_process.is_alive()}")
-        # stop record
-        # self.shared_data.stop.value = True
+    #     Should be called when ending data collection to ensure all data is flushed
+    #     and resources are properly released.
+    #     """
+    #     print(f"save_writed_data called, writer alive? {self.writer_process.is_alive()}")
+    #     # stop record
+    #     # self.shared_data.stop.value = True
 
-        time.sleep(1)
-        # self.writer_process.join(timeout=1)
-        ## The relevant variables increase
-        # self.logger.info(f"LAST writer_process IS alive: {self.writer_process.is_alive()}")
-        # self.episode_length = len(self.shared_data.episode_parquet_list) 
-        # self.total_frames += len(self.shared_data.episode_parquet_list)
-        # Write to parquet file
-        # self.write_parquet_file()
-        # Write meta files
-        self.write_meta_files()
-        # clean record data
-        self.clean_record_data()
-        self.logger.info("Abandon the current recording data and start a new one.")
-        self.clean_record_data()
-        # self.shared_data.counter.value += 1
+    #     time.sleep(1)
+    #     # self.writer_process.join(timeout=1)
+    #     ## The relevant variables increase
+    #     # self.logger.info(f"LAST writer_process IS alive: {self.writer_process.is_alive()}")
+    #     # self.episode_length = len(self.shared_data.episode_parquet_list) 
+    #     # self.total_frames += len(self.shared_data.episode_parquet_list)
+    #     # Write to parquet file
+    #     # self.write_parquet_file()
+    #     # Write meta files
+    #     # self.write_meta_files()
+    #     # clean record data
+    #     # self.clean_record_data()
+    #     self.logger.info("Abandon the current recording data and start a new one.")
+    #     # self.clean_record_data()
+    #     # self.shared_data.counter.value += 1
         
-        self.shared_data.save_video_path_list = self.manager.list()
+    #     # self.shared_data.save_video_path_list = self.manager.list()
+
     # def abandon_record_data(self):
     #     """
     #     Abandon the current recording data and start a new one.
@@ -493,7 +525,7 @@ class LeRobotDatasetWriter:
     #     # clean record data
     #     self.logger.info("Abandon the current recording data and start a new one.")
     #     self.clean_record_data()
-        
+
     #     # modify task language equals last task language
     #     # print(f'last task language: {self.shared_data.last_task_language_dict}')
     #     self.shared_data.task_language_dict = self.copy_shared_data_dict(self.shared_data.last_task_language_dict)
@@ -508,31 +540,31 @@ class LeRobotDatasetWriter:
     #     self.shared_data.stop.value = False
         
 
-    def clean_record_data(self):
-        """ 
-        Clean up the record data.
-        """
-        del self.shared_data.save_video_path_list[:]
-        del self.shared_data.episode_parquet_list[:]
-                # clean episode task list
-        del self.shared_data.episode_task_list[:]
-        self.obs_time.clear()
-        self.action_list.clear()
-        self.action_time.clear()
-        ## clean queues (record_queue + action_frame_queue)
-        self._clear_queues()
-        self.logger.info("cleaning data finished")
+    # def clean_record_data(self):
+    #     """ 
+    #     Clean up the record data.
+    #     """
+    #     del self.shared_data.save_video_path_list[:]
+    #     # del self.shared_data.episode_parquet_list[:]
+    #             # clean episode task list
+    #     # del self.shared_data.episode_task_list[:]
+    #     # self.obs_time.clear()
+    #     # self.action_list.clear()
+    #     # self.action_time.clear()
+    #     ## clean queues (record_queue + action_frame_queue)
+    #     self._clear_queues()
+    #     self.logger.info("cleaning data finished")
 
-    def clear_record_queue(self):
-        """
-        clear record queue
-        """
-        while not self.record_queue.empty():
-            try:
-                self.record_queue.get_nowait()
-            except Empty:
-                break
-        self.logger.info("record_queue clear")
+    # def clear_record_queue(self):
+    #     """
+    #     clear record queue
+    #     """
+    #     while not self.record_queue.empty():
+    #         try:
+    #             self.record_queue.get_nowait()
+    #         except Empty:
+    #             break
+    #     self.logger.info("record_queue is clear.")
 
     def _clear_queues(self):
         """
@@ -623,12 +655,11 @@ class LeRobotDatasetWriter:
         fps = float(self.config['info'].get('fps', 30))
 
         for camera_name in self.camera_name_list:
-            shape_list = self.config['info']["features"][camera_name]["shape"]
+            shape_list = self.camera_shape_dict[camera_name]
             height, width = int(shape_list[0]), int(shape_list[1])
-            os.makedirs(os.path.join(self.save_video_path, camera_name), exist_ok=True)
-            video_path = os.path.join(self.save_video_path, camera_name, filename)
+            os.makedirs(os.path.join(save_video_path, camera_name), exist_ok=True)
+            video_path = os.path.join(save_video_path, camera_name, filename)
             self.shared_data.save_video_path_list.append(video_path)
-            self.camera_shape_dict[camera_name] = tuple(shape_list)
 
             writer = None
             for codec in ('mp4v', 'avc1', 'XVID', 'MJPG'):
@@ -639,12 +670,10 @@ class LeRobotDatasetWriter:
                     break
                 if candidate is not None:
                     candidate.release()
-
             if writer is None:
                 raise RuntimeError(f"Failed to open VideoWriter for {camera_name}: {video_path}")
 
             video_write_dict[camera_name] = writer
-
         return video_write_dict
     
     def _create_parquet_writer(self, episode_chunk: int = 0, episode_index: int = 0):
@@ -660,8 +689,8 @@ class LeRobotDatasetWriter:
         ('frame_index', pa.int32()),
         ('index', pa.int32()),
         ('task_index', pa.int32()),
-        ('timestamp', pa.float64())
-         ])
+        ('timestamp', pa.float64())])
+
         parquet_file_path = os.path.join(
             self.save_path,
             self.config['info']['data_path'].format(episode_chunk=episode_chunk, episode_index=episode_index)
@@ -670,7 +699,8 @@ class LeRobotDatasetWriter:
         parquet_writer = pq.ParquetWriter(parquet_file_path, parquet_schema)
         # return parquet_schema, parquet_file_path, parquet_writer
         return parquet_schema, parquet_writer
-    def release_video_writers(self):
+
+    def _release_video_writers(self):
         """Release all opened video writers safely."""
         video_writers = getattr(self, 'video_writers', None)
         if not video_writers:
@@ -724,7 +754,7 @@ class LeRobotDatasetWriter:
         self.logger.info(f"Successfully wrote Parquet file.")
             
 
-    def write_meta_files(self):
+    def _write_meta_files(self, total_episodes: int, total_frames: int, episode_length: int, episode_task_list: list[str]):
         """
         Writes metadata files including info.json, episodes.jsonl, and tasks.jsonl.
 
@@ -735,10 +765,10 @@ class LeRobotDatasetWriter:
 
             # Write info.json file (always overwrite to keep metadata in sync)
             info_file_path = os.path.join(self.meta_dir, 'info.json')
-            self.config['info']["total_episodes"] = self.shared_data.counter.value + 1
-            self.config['info']["total_frames"] = self.total_frames
+            self.config['info']["total_episodes"] = total_episodes
+            self.config['info']["total_frames"] = total_frames
             self.config['info']["total_videos"] += len(self.camera_name_list)
-            self.config['info']["splits"] = {"test": f"0:{self.shared_data.counter.value}"}
+            self.config['info']["splits"] = {"test": f"0:{total_episodes-1}"}
 
             with open(info_file_path, 'w', encoding='utf-8') as f:
                 json.dump(self.config['info'].to_dict(), f, indent=2, ensure_ascii=False, default=str)
@@ -748,9 +778,9 @@ class LeRobotDatasetWriter:
             # Write episodes.jsonl file
             episodes_file_path = os.path.join(self.meta_dir, 'episodes.jsonl')
             episodes_content = {
-                "episode_index": self.config['info']["total_episodes"] - 1,
-                "tasks": list(self.shared_data.episode_task_list),
-                "length": self.episode_length
+                "episode_index": total_episodes - 1,
+                "tasks": episode_task_list,
+                "length": episode_length
             }
             with open(episodes_file_path, 'a', encoding='utf-8') as f:
                 f.write(json.dumps(episodes_content, ensure_ascii=False) + '\n')
@@ -760,14 +790,14 @@ class LeRobotDatasetWriter:
             # Write tasks.jsonl file
             tasks_file_path = os.path.join(self.meta_dir, 'tasks.jsonl')
             with open(tasks_file_path, 'w', encoding='utf-8') as f:
-                for task_language in self.shared_data.task_language_dict.keys():
+                for task_language in self.task_language_dict.keys():
                     tasks_content = {
-                        "task_index": self.shared_data.task_language_dict[task_language],
+                        "task_index": self.task_language_dict[task_language],
                         "tasks": task_language
                     }
                     f.write(json.dumps(tasks_content, ensure_ascii=False) + '\n')
-
             self.logger.info(f"tasks.jsonl has been written to: {tasks_file_path}")
+
         except Exception as e:
             tb = traceback.format_exc()
             self.logger.error(f"Exception in write_meta_files: {e}\n{tb}")
