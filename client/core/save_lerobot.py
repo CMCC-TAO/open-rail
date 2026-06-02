@@ -93,7 +93,20 @@ class LeRobotDatasetParser:
         )
         return (self.dataset_root / rel).exists()
 
-    def parse_episode_records(self) -> List[Dict[str, Any]]:
+    def get_chunk_ids(self) -> List[int]:
+        if not self.data_dir.exists():
+            return []
+        ids: List[int] = []
+        for p in self.data_dir.iterdir():
+            if not p.is_dir():
+                continue
+            m = re.fullmatch(r"chunk-(\d{3})", p.name)
+            if not m:
+                continue
+            ids.append(int(m.group(1)))
+        return sorted(set(ids))
+
+    def parse_episode_records(self, chunk_id: Optional[int] = None) -> List[Dict[str, Any]]:
         if not self.data_dir.exists():
             return []
 
@@ -106,15 +119,20 @@ class LeRobotDatasetParser:
             m = pattern.search(rel_data)
             if not m:
                 continue
-            chunk_id = int(m.group(1))
+            cur_chunk_id = int(m.group(1))
+            if chunk_id is not None and cur_chunk_id != int(chunk_id):
+                continue
+
             episode_index = int(m.group(2))
             frames = int(self.episode_length_map.get(episode_index, self._parquet_num_rows(parquet_path)))
             duration_sec = round((frames / self.fps), 1) if self.fps > 0 else 0.0
-            videos_ok = all(self._video_exists(chunk_id, episode_index, key) for key in self.video_keys)
+            videos_ok = all(self._video_exists(cur_chunk_id, episode_index, key) for key in self.video_keys)
 
             records.append({
-                "id": f"chunk-{chunk_id:03d}/episode_{episode_index:06d}",
-                "chunk": chunk_id,
+                "id": f"chunk-{cur_chunk_id:03d}/episode_{episode_index:06d}",
+                "name": f"episode_{episode_index:06d}",
+                "chunk": cur_chunk_id,
+                "chunk_str": f"{cur_chunk_id:03d}",
                 "episode_index": episode_index,
                 "frames": frames,
                 "duration_sec": duration_sec,
@@ -122,7 +140,7 @@ class LeRobotDatasetParser:
                 "complete": bool(meta_ok and videos_ok),
             })
 
-        records.sort(key=lambda x: (x["chunk"], x["episode_index"]), reverse=True)
+        records.sort(key=lambda x: x["episode_index"], reverse=True)
         return records
 
 
