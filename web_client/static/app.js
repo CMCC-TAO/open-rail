@@ -140,7 +140,7 @@ function toast(msg, type = 'info', duration = 3500) {
   el.textContent = msg;
   $('toast-container').appendChild(el);
   setTimeout(() => {
-    el.style.animation = 'fadeOut .3s forwards';
+    el.style.animation = 'fadeOut .2s forwards';
     el.addEventListener('animationend', () => el.remove());
   }, duration);
 }
