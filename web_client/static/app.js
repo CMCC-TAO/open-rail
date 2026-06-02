@@ -126,6 +126,7 @@ const App = {
 
   recordingListTimer: null,
   recordingTask: null,
+  recordingTasksSnapshot: [],
   latestState: [],
   isRecording: false,
 };
@@ -2201,7 +2202,6 @@ function getRecordingSaveItems() {
 
 function renderRecordingFileList(data) {
   const listEl = $('recording-file-list');
-  const baseEl = $('recording-base-dir');
   const taskSel = $('recording-task-select');
   if (!listEl) return;
 
@@ -2210,9 +2210,15 @@ function renderRecordingFileList(data) {
   const serverSelectedTask = typeof data?.selected_task === 'string' ? data.selected_task : '';
 
   if (taskSel) {
-    const selectedTask = tasks.includes(App.recordingTask)
-      ? App.recordingTask
-      : (tasks.includes(serverSelectedTask) ? serverSelectedTask : (tasks[0] || ''));
+    const prevTasks = Array.isArray(App.recordingTasksSnapshot) ? App.recordingTasksSnapshot : [];
+    const prevSet = new Set(prevTasks);
+    const addedTasks = tasks.filter(name => !prevSet.has(name));
+
+    const selectedTask = addedTasks.length > 0
+      ? addedTasks[0]
+      : (tasks.includes(App.recordingTask)
+        ? App.recordingTask
+        : (tasks.includes(serverSelectedTask) ? serverSelectedTask : (tasks[0] || '')));
 
     taskSel.innerHTML = tasks
       .map(name => {
@@ -2227,11 +2233,7 @@ function renderRecordingFileList(data) {
     taskSel.disabled = tasks.length === 0;
     taskSel.value = selectedTask;
     App.recordingTask = selectedTask || null;
-  }
-
-  if (baseEl) {
-    const baseDir = data?.base_dir || '';
-    baseEl.textContent = App.recordingTask ? `${baseDir}/${App.recordingTask}` : baseDir;
+    App.recordingTasksSnapshot = tasks.slice();
   }
 
   if (!files.length) {
@@ -2254,9 +2256,16 @@ function renderRecordingFileList(data) {
 
 async function refreshRecordingFileList() {
   try {
-    const qs = App.recordingTask ? `?task=${encodeURIComponent(App.recordingTask)}` : '';
+    const requestedTask = App.recordingTask;
+    const qs = requestedTask ? `?task=${encodeURIComponent(requestedTask)}` : '';
     const res = await apiFetch(`/api/recording/files${qs}`);
     renderRecordingFileList(res);
+
+    if ((App.recordingTask || '') !== (requestedTask || '')) {
+      const qs2 = App.recordingTask ? `?task=${encodeURIComponent(App.recordingTask)}` : '';
+      const res2 = await apiFetch(`/api/recording/files${qs2}`);
+      renderRecordingFileList(res2);
+    }
   } catch (_) { /* toasted */ }
 }
 
