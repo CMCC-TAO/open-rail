@@ -466,6 +466,39 @@ html, body {
   min-width: 112px;
 }
 
+.recording-file-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.recording-file-filter-label {
+  flex: 0 0 44px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+.recording-task-select {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  padding: 0 6px;
+  outline: none;
+}
+
+.recording-task-select:focus {
+  border-color: var(--accent);
+}
+
 .recording-file-title {
   display: flex;
   align-items: baseline;
