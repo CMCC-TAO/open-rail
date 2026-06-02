@@ -1326,12 +1326,18 @@ async def client_command(req: CommandRequest):
                 save_items = []
             client_state.config.record.switch = True
             client_state.config.record_exp_data = ('ExpData' in save_items)
+            task_id = getattr(getattr(client_state.config, "language", None), "task_id", None)
             if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
                 try:
                     from client.core.save_lerobot import LeRobotDatasetWriter
-                    vla_client.dataset_write = LeRobotDatasetWriter(record_config=client_state.config.record)
+                    vla_client.dataset_write = LeRobotDatasetWriter(
+                        record_config=client_state.config.record,
+                        task=task_id,
+                    )
                 except Exception as e:
                     raise HTTPException(500, f"Failed to initialize recorder: {e}")
+            else:
+                vla_client.dataset_write.set_task(task_id)
             vla_client.dataset_write.start_recording()
 
         elif cmd == "stop_recording":
