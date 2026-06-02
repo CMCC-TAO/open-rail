@@ -127,6 +127,8 @@ const App = {
   recordingListTimer: null,
   recordingTask: null,
   recordingTasksSnapshot: [],
+  recordingEpisodeId: null,
+  recordingEpisodeSnapshot: [],
   latestState: [],
   isRecording: false,
 };
@@ -2205,7 +2207,9 @@ function renderRecordingFileList(data) {
   const taskSel = $('recording-task-select');
   if (!listEl) return;
 
-  const files = Array.isArray(data?.files) ? data.files : [];
+  const episodes = Array.isArray(data?.episodes)
+    ? data.episodes
+    : (Array.isArray(data?.files) ? data.files : []);
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
   const serverSelectedTask = typeof data?.selected_task === 'string' ? data.selected_task : '';
 
@@ -2236,22 +2240,52 @@ function renderRecordingFileList(data) {
     App.recordingTasksSnapshot = tasks.slice();
   }
 
-  if (!files.length) {
+  if (!episodes.length) {
+    App.recordingEpisodeSnapshot = [];
+    App.recordingEpisodeId = null;
     listEl.innerHTML = '<div class="recording-file-item empty">(empty)</div>';
     return;
   }
 
-  const top = files.slice(0, 200);
+  const top = episodes.slice(0, 500);
+  const episodeIds = top
+    .map(ep => String(ep?.id || ''))
+    .filter(Boolean);
+  const prevEpisodeIds = Array.isArray(App.recordingEpisodeSnapshot) ? App.recordingEpisodeSnapshot : [];
+  const prevEpisodeSet = new Set(prevEpisodeIds);
+  const addedEpisodeIds = episodeIds.filter(id => !prevEpisodeSet.has(id));
+
+  let selectedEpisodeId = App.recordingEpisodeId;
+  if (addedEpisodeIds.length > 0) {
+    selectedEpisodeId = addedEpisodeIds[0];
+  } else if (!episodeIds.includes(selectedEpisodeId)) {
+    selectedEpisodeId = episodeIds[0] || null;
+  }
+  App.recordingEpisodeId = selectedEpisodeId;
+  App.recordingEpisodeSnapshot = episodeIds;
+
   listEl.innerHTML = top
     .map(item => {
-      const name = typeof item === 'string' ? item : (item.path || item.name || '');
-      const safe = String(name)
+      const id = String(item?.id || '');
+      const safeId = id
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;');
-      return `<div class="recording-file-item" title="${safe}">${safe}</div>`;
+      const frames = Number.isFinite(Number(item?.frames)) ? Number(item.frames) : 0;
+      const duration = Number.isFinite(Number(item?.duration_sec)) ? Number(item.duration_sec) : 0;
+      const activeCls = id === selectedEpisodeId ? ' active' : '';
+      return `<div class="recording-file-item${activeCls}" data-episode-id="${safeId}" title="${safeId}"><span class="recording-file-item-name">${safeId}</span><span class="recording-file-item-meta">${frames} / ${duration.toFixed(1)}s</span></div>`;
     })
     .join('');
+
+  listEl.querySelectorAll('.recording-file-item[data-episode-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-episode-id') || null;
+      App.recordingEpisodeId = id;
+      listEl.querySelectorAll('.recording-file-item.active').forEach(node => node.classList.remove('active'));
+      el.classList.add('active');
+    });
+  });
 }
 
 async function refreshRecordingFileList() {
