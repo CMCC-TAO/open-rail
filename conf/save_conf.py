@@ -9,7 +9,7 @@ def get_record_data_config() -> ConfigDict:
     Returns:
         ConfigDict: Configuration dictionary for data recording containing:
             - switch: Enable/disable data recording
-            - save_path: Root directory for saved data
+            - save_dir: Relative directory under project root for saved data
             - info: Metadata including dataset version, robot type, statistics
             - features: Data feature definitions for cameras, actions, states
     """
@@ -17,7 +17,7 @@ def get_record_data_config() -> ConfigDict:
 
     # Base path and version info
     config.switch = False  # Enable/disable data recording
-    config.save_path = "./data/output/test"  # Root directory for saved data
+    config.save_dir = "data/recording"  # Relative to project root
     config.info = ConfigDict(allow_dotted_keys=True)
     config.info.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
     config.info.robot_type = "a2d"  # Type of robot used

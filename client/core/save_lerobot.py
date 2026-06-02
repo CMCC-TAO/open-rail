@@ -18,6 +18,7 @@ import logging
 from io import StringIO
 from concurrent.futures import ThreadPoolExecutor
 import traceback
+from datetime import datetime
 class LeRobotDatasetWriter:
     """
     A class to manage writing robotic observation and action data to disk in a structured format.
@@ -27,7 +28,7 @@ class LeRobotDatasetWriter:
     operations and writes data into Parquet files along with corresponding video recordings.
     """
 
-    def __init__(self, record_config: ConfigDict ) -> None:
+    def __init__(self, record_config: ConfigDict, task: Optional[str] = None) -> None:
         """
         Initializes the LeRobotDatasetWriter instance with the given configuration.
 
@@ -43,9 +44,15 @@ class LeRobotDatasetWriter:
         self.config = record_config
         self._init_shared_data()
         self.task_language_dict = {}
-        meta_dir_exists = self._check_meta_path_and_dir(self.config["save_path"])
-        if meta_dir_exists:
+
+        save_dir = self.config.get("save_dir", "data/recording")
+        meta_required_file_exists = self._check_meta_path_and_dir(save_dir=save_dir, task=task)
+        if meta_required_file_exists:
             self._update_config_from_meta_file()
+        else:
+            self.config['info']["total_episodes"] = 0
+            self.config['info']["total_frames"] = 0
+            self.config['info']["total_videos"] = 0
         self._parse_config_info_features(self.config["info"]["features"])
 
         # Shared Queue
@@ -77,6 +84,7 @@ class LeRobotDatasetWriter:
         # self.shared_data.close = self.manager.Value('b', False)
         # self.shared_data.init_write = self.manager.Value('b', True)
         self.shared_data.total_frames = self.manager.Value('i', 0)
+        self.shared_data.total_videos = self.manager.Value('i', 0)
         self.shared_data.episode_chunk = self.manager.Value('i', 0)
         self.shared_data.episode_index = self.manager.Value('i', 0)
         self.shared_data.running = self.manager.Value('b', False)
@@ -86,21 +94,69 @@ class LeRobotDatasetWriter:
         # self.shared_data.episode_task_list = self.manager.list()
         # self.shared_data.task_language_dict = self.manager.dict()
     
-    def _check_meta_path_and_dir(self, save_path: str) -> bool:
-        # save_path_cfg = str(self.config["save_path"])
+    def _sanitize_task_name(self, task: Optional[str]) -> str:
+        task_name = str(task).strip() if task is not None else ""
+        if not task_name:
+            task_name = "default"
+        for ch in ('/', '\\', ' ', ':'):
+            task_name = task_name.replace(ch, '_')
+        return task_name
+
+    def _build_full_save_path(self, save_dir: str, task: Optional[str]) -> str:
         self.project_root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        self.logger.debug(f"save path from config: {save_path}, project_root_path: {self.project_root_path}")
-        self.save_path = os.path.abspath(
-            save_path if os.path.isabs(save_path) else os.path.join(self.project_root_path, save_path)
-        )
-        self.logger.debug(f"save path from config: {save_path}, project_root_path: {self.project_root_path}")
-        self.config["save_path"] = self.save_path
-        # TODO: support for chunk-001
+        rel_save_dir = str(save_dir or "data/recording").strip().lstrip('/').lstrip('\\')
+        date_str = datetime.now().strftime("%Y%m%d")
+        task_name = self._sanitize_task_name(task)
+        self.current_task = task_name
+        return os.path.join(self.project_root_path, rel_save_dir, task_name + '_' + date_str)
+
+    def _check_meta_path_and_dir(self, save_dir: str, task: Optional[str]) -> bool:
+        self.save_dir = str(save_dir or "data/recording")
+        self.config["save_dir"] = self.save_dir
+
+        self.save_path = self._build_full_save_path(self.save_dir, task)
         self.meta_dir = os.path.join(self.save_path, 'meta')
+
         if not os.path.exists(self.meta_dir):
-            # Create directories
             os.makedirs(self.meta_dir, exist_ok=True)
             self.logger.info(f"{self.meta_dir} not exists, create it")
+            return False
+        return self._check_required_meta_files()
+
+    def set_task(self, task: Optional[str]) -> None:
+        """Update save path by task/date before a new recording starts."""
+        if self.shared_data.running.value:
+            self.logger.warning("set_task ignored because recording is running")
+            return
+
+        date_str = datetime.now().strftime("%Y%m%d")
+        task_name = self._sanitize_task_name(task)
+        candidate_dir = task_name + '_' + date_str
+        if self.current_task == task_name and os.path.exists(os.path.join(self.project_root_path, self.save_dir, candidate_dir)):
+            self.logger.info(f"set_task with the same task name {task_name} and existing directory, reuse it.")
+            return
+        save_dir = self.config.get("save_dir", "data/recording")
+        meta_required_file_exists = self._check_meta_path_and_dir(save_dir=save_dir, task=task)
+        if meta_required_file_exists:
+            self._update_config_from_meta_file()
+        else:
+            self.config['info']["total_episodes"] = 0
+            self.config['info']["total_frames"] = 0
+            self.config['info']["total_videos"] = 0
+    
+    def _check_required_meta_files(self, required_files: List[str] = ['info.json', 'episodes.jsonl', 'tasks.jsonl']) -> bool:
+        # Check for required files
+        missing_files = []
+
+        for filename in required_files:
+            file_path = os.path.join(self.meta_dir, filename)
+            if not os.path.exists(file_path):
+                missing_files.append(filename)
+
+        # Raise error if any required file is missing
+        if missing_files:
+            self.logger.warning(f"{self.meta_dir} is missing the following required files: {', '.join(missing_files)}")
+            # assert False, "Missing required meta files."
             return False
         else:
             return True
@@ -116,25 +172,12 @@ class LeRobotDatasetWriter:
             AssertionError: If any of the required files are missing in the existing directory.
         """
         
-        # Check for required files
-        required_files = ['info.json', 'episodes.jsonl', 'tasks.jsonl']
-        missing_files = []
-
-        for filename in required_files:
-            file_path = os.path.join(self.meta_dir, filename)
-            if not os.path.exists(file_path):
-                missing_files.append(filename)
-
-        # Raise error if any required file is missing
-        if missing_files:
-            self.logger.error(f"{self.meta_dir} is missing the following required files: {', '.join(missing_files)}")
-            assert False, "Missing required meta files."
-            return
 
         # Load info.json and update dataset info
         info_file_path = os.path.join(self.meta_dir, 'info.json')
         self._update_dataset_info_from_meta_file(info_file_path)
         self.shared_data.total_frames.value = int(self.config['info']['total_frames'])
+        self.shared_data.total_videos.value = int(self.config['info']['total_videos'])
         self.shared_data.episode_index.value = int(self.config['info']['total_episodes'])
         self.shared_data.episode_chunk.value = int(self.config['info']['total_episodes']) // int(self.config['info']['chunks_size'])
 
@@ -319,6 +362,7 @@ class LeRobotDatasetWriter:
             episode_chunk = self.shared_data.episode_chunk.value
             episode_index = self.shared_data.episode_index.value
             total_frames = self.shared_data.total_frames.value
+            total_videos = self.shared_data.total_videos.value
             self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}")
             self.video_writers = self._create_video_writer(
                 episode_chunk=episode_chunk,
@@ -398,7 +442,7 @@ class LeRobotDatasetWriter:
                 frame_index += 1
                 if frame_index % 30 == 0:
                     self.logger.info(
-                        f"write-loop progress: episode={self.shared_data.episode_index.value}, "
+                        f"write-loop progress: episode={episode_index}, "
                         f"frame_index={frame_index}, cached_records={len(self.parquet_frame_list)}"
                     )
                 # print('Write successful ——————————————————')
@@ -406,13 +450,16 @@ class LeRobotDatasetWriter:
                 # self.logger.info('write process stopped!!! ')
             self.shared_data.episode_index.value = episode_index + 1
             self.shared_data.total_frames.value = total_frames + frame_index
+            self.shared_data.total_videos.value = total_videos + len(self.camera_name_list)
             self._write_meta_files(total_frames=self.shared_data.total_frames.value,
                                 total_episodes=self.shared_data.episode_index.value,
                                 episode_length=frame_index,
+                                total_videos=self.shared_data.total_videos.value,
                                 episode_task_list=episode_task_list)
             # stop recording for current episode: flush video files immediately
-            write_parquet_thread.join(timeout=1.0)
+            write_parquet_thread.join(timeout=2.0)
             self._release_video_writers()
+            self._release_parquet_writer()
             # self._clear_queues()
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
         
@@ -732,6 +779,13 @@ class LeRobotDatasetWriter:
         self.video_writers = {}
         self.logger.info("All video writers released.")
     
+    def _release_parquet_writer(self):
+        """Release opened parquet writer safely."""
+        parquet_writer = getattr(self, 'parquet_writer', None)
+        if not parquet_writer:
+            parquet_writer.close()
+            parquet_writer = None
+            self.logger.info(f"Successfully wrote Parquet file.")
     # def write_parquet_file(self):
     #     """Writes the Parquet file containing the collected data."""
     #     try:
@@ -775,7 +829,7 @@ class LeRobotDatasetWriter:
         self.logger.info(f"Successfully wrote Parquet file.")
             
 
-    def _write_meta_files(self, total_episodes: int, total_frames: int, episode_length: int, episode_task_list: list[str]):
+    def _write_meta_files(self, total_episodes: int, total_frames: int, episode_length: int, total_videos: int, episode_task_list: list[str]):
         """
         Writes metadata files including info.json, episodes.jsonl, and tasks.jsonl.
 
@@ -788,7 +842,7 @@ class LeRobotDatasetWriter:
             info_file_path = os.path.join(self.meta_dir, 'info.json')
             self.config['info']["total_episodes"] = total_episodes
             self.config['info']["total_frames"] = total_frames
-            self.config['info']["total_videos"] += len(self.camera_name_list)
+            self.config['info']["total_videos"] = total_videos
             self.config['info']["splits"] = {"test": f"0:{total_episodes-1}"}
 
             with open(info_file_path, 'w', encoding='utf-8') as f:

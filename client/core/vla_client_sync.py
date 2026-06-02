@@ -91,7 +91,10 @@ class VLAClientSync():
 
         if self.config.record.switch:
             # Initialize the dataset writer with the provided recording configuration
-            self.dataset_write = LeRobotDatasetWriter(record_config=self.config.record)
+            self.dataset_write = LeRobotDatasetWriter(
+                record_config=self.config.record,
+                task=getattr(self.config.language, 'task_id', None)
+            )
 
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualization_server = VLAWebSocketServer.get_instance()
