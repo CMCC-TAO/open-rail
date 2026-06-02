@@ -607,10 +607,7 @@ async def get_conf_dir():
 
 @app.get("/api/recording/files")
 async def get_recording_files(task: Optional[str] = None):
-    """List recording task folders and files under selected task.
-
-    Base directory priority: data/recoding (legacy typo) -> data/recording.
-    """
+    """List recording task folders and parsed LeRobot episode records."""
     recoding_dir = ROOT / "data" / "recoding"
     fallback_dir = ROOT / "data" / "recording"
     base_dir = recoding_dir if (recoding_dir.exists() or not fallback_dir.exists()) else fallback_dir
@@ -621,27 +618,22 @@ async def get_recording_files(task: Optional[str] = None):
             "base_dir": str(base_dir.relative_to(ROOT)),
             "tasks": [],
             "selected_task": "",
+            "episodes": [],
             "files": [],
         }
 
     tasks = []
-    files = []
+    episodes = []
     try:
         tasks = sorted([p.name for p in base_dir.iterdir() if p.is_dir()], reverse=True)
-
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
+
         if selected_task:
+            from client.core.save_lerobot import LeRobotDatasetParser
+
             task_dir = base_dir / selected_task
-            for p in task_dir.rglob("*"):
-                if not p.is_file():
-                    continue
-                st = p.stat()
-                files.append({
-                    "path": str(p.relative_to(task_dir)),
-                    "size": st.st_size,
-                    "mtime": st.st_mtime,
-                })
-            files.sort(key=lambda x: x["mtime"], reverse=True)
+            parser = LeRobotDatasetParser(str(task_dir), logger=logger)
+            episodes = parser.parse_episode_records()
     except Exception as e:
         raise HTTPException(500, f"Failed to list recording files: {e}")
 
@@ -650,7 +642,8 @@ async def get_recording_files(task: Optional[str] = None):
         "base_dir": str(base_dir.relative_to(ROOT)),
         "tasks": tasks,
         "selected_task": selected_task,
-        "files": files,
+        "episodes": episodes,
+        "files": episodes,
     }
 
 

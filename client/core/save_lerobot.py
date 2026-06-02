@@ -1,4 +1,6 @@
 import os
+import re
+from pathlib import Path
 import numpy as np
 from PIL import Image
 import json
@@ -19,6 +21,111 @@ from io import StringIO
 from concurrent.futures import ThreadPoolExecutor
 import traceback
 from datetime import datetime
+class LeRobotDatasetParser:
+    """Parse LeRobot dataset episodes from one task recording directory."""
+
+    def __init__(self, dataset_root: str, logger: Optional[logging.Logger] = None) -> None:
+        self.dataset_root = Path(dataset_root)
+        self.logger = logger or logging.getLogger(__name__)
+        self.meta_dir = self.dataset_root / "meta"
+        self.data_dir = self.dataset_root / "data"
+        self.info = self._load_info()
+        self.fps = float(self.info.get("fps", 30) or 30)
+        self.chunks_size = int(self.info.get("chunks_size", 1000) or 1000)
+        self.video_keys = self._get_video_keys(self.info)
+        self.episode_length_map = self._load_episode_length_map()
+
+    def _load_info(self) -> dict:
+        info_path = self.meta_dir / "info.json"
+        if not info_path.exists():
+            return {}
+        try:
+            with info_path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            self.logger.warning("Failed to parse info.json: %s", info_path, exc_info=True)
+            return {}
+
+    def _load_episode_length_map(self) -> Dict[int, int]:
+        episodes_path = self.meta_dir / "episodes.jsonl"
+        mapping: Dict[int, int] = {}
+        if not episodes_path.exists():
+            return mapping
+        try:
+            with episodes_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.strip()
+                    if not s:
+                        continue
+                    data = json.loads(s)
+                    ep_idx = int(data.get("episode_index", -1))
+                    ep_len = int(data.get("length", -1))
+                    if ep_idx >= 0 and ep_len >= 0:
+                        mapping[ep_idx] = ep_len
+        except Exception:
+            self.logger.warning("Failed to parse episodes.jsonl: %s", episodes_path, exc_info=True)
+        return mapping
+
+    @staticmethod
+    def _get_video_keys(info: dict) -> List[str]:
+        features = info.get("features", {}) if isinstance(info, dict) else {}
+        keys: List[str] = []
+        for key, value in features.items():
+            if isinstance(value, dict) and value.get("dtype") == "video":
+                keys.append(key)
+        return keys
+
+    def _parquet_num_rows(self, parquet_path: Path) -> int:
+        try:
+            return int(pq.ParquetFile(parquet_path).metadata.num_rows)
+        except Exception:
+            return 0
+
+    def _video_exists(self, chunk_id: int, episode_index: int, video_key: str) -> bool:
+        video_fmt = self.info.get(
+            "video_path",
+            "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
+        )
+        rel = video_fmt.format(
+            episode_chunk=chunk_id,
+            episode_index=episode_index,
+            video_key=video_key,
+        )
+        return (self.dataset_root / rel).exists()
+
+    def parse_episode_records(self) -> List[Dict[str, Any]]:
+        if not self.data_dir.exists():
+            return []
+
+        pattern = re.compile(r"chunk-(\d{3})/episode_(\d{6})\.parquet$")
+        meta_ok = all((self.meta_dir / name).exists() for name in ("info.json", "episodes.jsonl", "tasks.jsonl"))
+        records: List[Dict[str, Any]] = []
+
+        for parquet_path in self.data_dir.rglob("episode_*.parquet"):
+            rel_data = parquet_path.relative_to(self.data_dir).as_posix()
+            m = pattern.search(rel_data)
+            if not m:
+                continue
+            chunk_id = int(m.group(1))
+            episode_index = int(m.group(2))
+            frames = int(self.episode_length_map.get(episode_index, self._parquet_num_rows(parquet_path)))
+            duration_sec = round((frames / self.fps), 1) if self.fps > 0 else 0.0
+            videos_ok = all(self._video_exists(chunk_id, episode_index, key) for key in self.video_keys)
+
+            records.append({
+                "id": f"chunk-{chunk_id:03d}/episode_{episode_index:06d}",
+                "chunk": chunk_id,
+                "episode_index": episode_index,
+                "frames": frames,
+                "duration_sec": duration_sec,
+                "parquet_relpath": str(parquet_path.relative_to(self.dataset_root)),
+                "complete": bool(meta_ok and videos_ok),
+            })
+
+        records.sort(key=lambda x: (x["chunk"], x["episode_index"]), reverse=True)
+        return records
+
+
 class LeRobotDatasetWriter:
     """
     A class to manage writing robotic observation and action data to disk in a structured format.
