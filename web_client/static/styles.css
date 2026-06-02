@@ -501,7 +501,8 @@ html, body {
 
 .recording-file-title {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
   font-size: 10px;
   font-weight: 700;
@@ -509,6 +510,35 @@ html, body {
   text-transform: uppercase;
   letter-spacing: .4px;
   margin-bottom: 6px;
+}
+
+.recording-chunk-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recording-chunk-filter-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .3px;
+}
+
+.recording-chunk-select {
+  height: 22px;
+  min-width: 68px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  padding: 0 6px;
+  outline: none;
+}
+
+.recording-chunk-select:focus {
+  border-color: var(--accent);
 }
 
 .recording-file-wrap {

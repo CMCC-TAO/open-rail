@@ -127,6 +127,8 @@ const App = {
   recordingListTimer: null,
   recordingTask: null,
   recordingTasksSnapshot: [],
+  recordingChunk: null,
+  recordingChunksSnapshot: [],
   recordingEpisodeId: null,
   recordingEpisodeSnapshot: [],
   latestState: [],
@@ -2205,13 +2207,16 @@ function getRecordingSaveItems() {
 function renderRecordingFileList(data) {
   const listEl = $('recording-file-list');
   const taskSel = $('recording-task-select');
+  const chunkSel = $('recording-chunk-select');
   if (!listEl) return;
 
   const episodes = Array.isArray(data?.episodes)
     ? data.episodes
     : (Array.isArray(data?.files) ? data.files : []);
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+  const chunks = Array.isArray(data?.chunks) ? data.chunks : [];
   const serverSelectedTask = typeof data?.selected_task === 'string' ? data.selected_task : '';
+  const serverSelectedChunk = typeof data?.selected_chunk === 'string' ? data.selected_chunk : '';
 
   if (taskSel) {
     const prevTasks = Array.isArray(App.recordingTasksSnapshot) ? App.recordingTasksSnapshot : [];
@@ -2240,6 +2245,33 @@ function renderRecordingFileList(data) {
     App.recordingTasksSnapshot = tasks.slice();
   }
 
+  if (chunkSel) {
+    const prevChunks = Array.isArray(App.recordingChunksSnapshot) ? App.recordingChunksSnapshot : [];
+    const prevSet = new Set(prevChunks);
+    const addedChunks = chunks.filter(name => !prevSet.has(name));
+
+    const selectedChunk = addedChunks.length > 0
+      ? addedChunks[0]
+      : (chunks.includes(App.recordingChunk)
+        ? App.recordingChunk
+        : (chunks.includes(serverSelectedChunk) ? serverSelectedChunk : (chunks[chunks.length - 1] || '')));
+
+    chunkSel.innerHTML = chunks
+      .map(name => {
+        const safe = String(name)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;');
+        return `<option value="${safe}">${safe}</option>`;
+      })
+      .join('');
+
+    chunkSel.disabled = chunks.length === 0;
+    chunkSel.value = selectedChunk;
+    App.recordingChunk = selectedChunk || null;
+    App.recordingChunksSnapshot = chunks.slice();
+  }
+
   if (!episodes.length) {
     App.recordingEpisodeSnapshot = [];
     App.recordingEpisodeId = null;
@@ -2249,7 +2281,7 @@ function renderRecordingFileList(data) {
 
   const top = episodes.slice(0, 500);
   const episodeIds = top
-    .map(ep => String(ep?.id || ''))
+    .map(ep => String(ep?.id || ep?.name || ''))
     .filter(Boolean);
   const prevEpisodeIds = Array.isArray(App.recordingEpisodeSnapshot) ? App.recordingEpisodeSnapshot : [];
   const prevEpisodeSet = new Set(prevEpisodeIds);
@@ -2266,15 +2298,20 @@ function renderRecordingFileList(data) {
 
   listEl.innerHTML = top
     .map(item => {
-      const id = String(item?.id || '');
+      const id = String(item?.id || item?.name || '');
+      const name = String(item?.name || id.replace(/^chunk-\d{3}\//, ''));
       const safeId = id
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;');
+      const safeName = name
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;');
       const frames = Number.isFinite(Number(item?.frames)) ? Number(item.frames) : 0;
       const duration = Number.isFinite(Number(item?.duration_sec)) ? Number(item.duration_sec) : 0;
       const activeCls = id === selectedEpisodeId ? ' active' : '';
-      return `<div class="recording-file-item${activeCls}" data-episode-id="${safeId}" title="${safeId}"><span class="recording-file-item-name">${safeId}</span><span class="recording-file-item-meta">${frames} / ${duration.toFixed(1)}s</span></div>`;
+      return `<div class="recording-file-item${activeCls}" data-episode-id="${safeId}" title="${safeName}"><span class="recording-file-item-name">${safeName}</span><span class="recording-file-item-meta">${frames} | ${duration.toFixed(1)}s</span></div>`;
     })
     .join('');
 
@@ -2291,13 +2328,22 @@ function renderRecordingFileList(data) {
 async function refreshRecordingFileList() {
   try {
     const requestedTask = App.recordingTask;
-    const qs = requestedTask ? `?task=${encodeURIComponent(requestedTask)}` : '';
-    const res = await apiFetch(`/api/recording/files${qs}`);
+    const requestedChunk = App.recordingChunk;
+    const params = new URLSearchParams();
+    if (requestedTask) params.set('task', requestedTask);
+    if (requestedChunk) params.set('chunk', requestedChunk);
+
+    const q = params.toString();
+    const res = await apiFetch(`/api/recording/files${q ? `?${q}` : ''}`);
     renderRecordingFileList(res);
 
-    if ((App.recordingTask || '') !== (requestedTask || '')) {
-      const qs2 = App.recordingTask ? `?task=${encodeURIComponent(App.recordingTask)}` : '';
-      const res2 = await apiFetch(`/api/recording/files${qs2}`);
+    const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
+    if (changed) {
+      const params2 = new URLSearchParams();
+      if (App.recordingTask) params2.set('task', App.recordingTask);
+      if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
+      const q2 = params2.toString();
+      const res2 = await apiFetch(`/api/recording/files${q2 ? `?${q2}` : ''}`);
       renderRecordingFileList(res2);
     }
   } catch (_) { /* toasted */ }
@@ -2450,6 +2496,14 @@ function setupRecordingPanel() {
   const taskSel = $('recording-task-select');
   taskSel?.addEventListener('change', async () => {
     App.recordingTask = taskSel.value || null;
+    App.recordingChunk = null;
+    App.recordingChunksSnapshot = [];
+    await refreshRecordingFileList();
+  });
+
+  const chunkSel = $('recording-chunk-select');
+  chunkSel?.addEventListener('change', async () => {
+    App.recordingChunk = chunkSel.value || null;
     await refreshRecordingFileList();
   });
 

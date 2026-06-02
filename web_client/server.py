@@ -606,7 +606,7 @@ async def get_conf_dir():
 
 
 @app.get("/api/recording/files")
-async def get_recording_files(task: Optional[str] = None):
+async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] = None):
     """List recording task folders and parsed LeRobot episode records."""
     recoding_dir = ROOT / "data" / "recoding"
     fallback_dir = ROOT / "data" / "recording"
@@ -618,12 +618,16 @@ async def get_recording_files(task: Optional[str] = None):
             "base_dir": str(base_dir.relative_to(ROOT)),
             "tasks": [],
             "selected_task": "",
+            "chunks": [],
+            "selected_chunk": "",
             "episodes": [],
             "files": [],
         }
 
     tasks = []
     episodes = []
+    chunk_values: list[str] = []
+    selected_chunk = ""
     try:
         tasks = sorted([p.name for p in base_dir.iterdir() if p.is_dir()], reverse=True)
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
@@ -633,7 +637,13 @@ async def get_recording_files(task: Optional[str] = None):
 
             task_dir = base_dir / selected_task
             parser = LeRobotDatasetParser(str(task_dir), logger=logger)
-            episodes = parser.parse_episode_records()
+            chunk_ids = parser.get_chunk_ids()
+            chunk_values = [f"{x:03d}" for x in chunk_ids]
+            if chunk_values:
+                selected_chunk = chunk if chunk in chunk_values else chunk_values[-1]
+                episodes = parser.parse_episode_records(chunk_id=int(selected_chunk))
+            else:
+                episodes = parser.parse_episode_records()
     except Exception as e:
         raise HTTPException(500, f"Failed to list recording files: {e}")
 
@@ -642,6 +652,8 @@ async def get_recording_files(task: Optional[str] = None):
         "base_dir": str(base_dir.relative_to(ROOT)),
         "tasks": tasks,
         "selected_task": selected_task,
+        "chunks": chunk_values,
+        "selected_chunk": selected_chunk,
         "episodes": episodes,
         "files": episodes,
     }
