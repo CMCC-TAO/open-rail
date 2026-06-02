@@ -1314,7 +1314,7 @@ async def client_status():
 # ─────────────────────────────────────────────────────────────────────────────
 class CommandRequest(BaseModel):
     command: str          # reset / resume / set_language / start_recording / stop_recording / arm / gripper / head / waist / wheel
-    params: dict = {}
+    params: Optional[dict] = None
 
 
 @app.post("/api/client/command")
@@ -1325,26 +1325,26 @@ async def client_command(req: CommandRequest):
         raise HTTPException(400, "Client is not running.")
 
     cmd = req.command
-    params = req.params
+    params = req.params if isinstance(req.params, dict) else {}
 
     try:
         if cmd == "reset":
             # Pause first before resetting robot to initial position
-            _pause_vla_client(vla_client)
+            paused_state = _pause_vla_client(vla_client)
             robot.reset_robot(mode='default')
-            _resume_vla_client(vla_client)
+            _resume_vla_client(vla_client, paused_state)  # Resume with the same thread state as before reset
             await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
 
-        elif cmd == "resume":
-            _resume_vla_client(vla_client)
-            await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
+        # elif cmd == "resume":
+        #     _resume_vla_client(vla_client)
+        #     await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
 
         elif cmd == "set_language":
             lang = params.get("language", "")
+            paused_state = _pause_vla_client(vla_client)
             vla_client.language = lang
-            _pause_vla_client(vla_client)
-            robot.reset_robot(mode='default')
-            _resume_vla_client(vla_client)
+            # robot.reset_robot(mode='default')
+            _resume_vla_client(vla_client, paused_state)
 
         elif cmd == "start_recording":
             save_items = params.get("save_items", [])

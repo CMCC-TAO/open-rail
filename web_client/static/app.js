@@ -3271,7 +3271,7 @@ function wireEvents() {
 
     // 3. Send language command to robot
     await sendCommand('set_language', { language: lang });
-    toast('Language updated & robot reset.', 'info');
+    toast('Language command updated.', 'info');
   });
   $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
 
