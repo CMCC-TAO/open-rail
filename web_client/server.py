@@ -627,9 +627,7 @@ async def get_recording_files(task: Optional[str] = None):
     tasks = []
     files = []
     try:
-        task_dirs = [p for p in base_dir.iterdir() if p.is_dir()]
-        task_dirs.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
-        tasks = [p.name for p in task_dirs]
+        tasks = sorted([p.name for p in base_dir.iterdir() if p.is_dir()], reverse=True)
 
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
         if selected_task:

@@ -511,16 +511,17 @@ html, body {
   margin-bottom: 6px;
 }
 
-.recording-base-dir {
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--accent);
+.recording-file-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .recording-file-list {
-  min-height: 96px;
-  max-height: 140px;
+  flex: 1 1 auto;
+  min-height: 220px;
+  max-height: none;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
