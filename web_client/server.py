@@ -606,31 +606,54 @@ async def get_conf_dir():
 
 
 @app.get("/api/recording/files")
-async def get_recording_files():
-    """List files under data/recoding by default (fallback: data/recording)."""
+async def get_recording_files(task: Optional[str] = None):
+    """List recording task folders and files under selected task.
+
+    Base directory priority: data/recoding (legacy typo) -> data/recording.
+    """
     recoding_dir = ROOT / "data" / "recoding"
     fallback_dir = ROOT / "data" / "recording"
     base_dir = recoding_dir if (recoding_dir.exists() or not fallback_dir.exists()) else fallback_dir
 
     if not base_dir.exists():
-        return {"status": "ok", "base_dir": str(base_dir.relative_to(ROOT)), "files": []}
+        return {
+            "status": "ok",
+            "base_dir": str(base_dir.relative_to(ROOT)),
+            "tasks": [],
+            "selected_task": "",
+            "files": [],
+        }
 
+    tasks = []
     files = []
     try:
-        for p in base_dir.rglob("*"):
-            if not p.is_file():
-                continue
-            st = p.stat()
-            files.append({
-                "path": str(p.relative_to(base_dir)),
-                "size": st.st_size,
-                "mtime": st.st_mtime,
-            })
-        files.sort(key=lambda x: x["mtime"], reverse=True)
+        task_dirs = [p for p in base_dir.iterdir() if p.is_dir()]
+        task_dirs.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
+        tasks = [p.name for p in task_dirs]
+
+        selected_task = task if task in tasks else (tasks[0] if tasks else "")
+        if selected_task:
+            task_dir = base_dir / selected_task
+            for p in task_dir.rglob("*"):
+                if not p.is_file():
+                    continue
+                st = p.stat()
+                files.append({
+                    "path": str(p.relative_to(task_dir)),
+                    "size": st.st_size,
+                    "mtime": st.st_mtime,
+                })
+            files.sort(key=lambda x: x["mtime"], reverse=True)
     except Exception as e:
         raise HTTPException(500, f"Failed to list recording files: {e}")
 
-    return {"status": "ok", "base_dir": str(base_dir.relative_to(ROOT)), "files": files}
+    return {
+        "status": "ok",
+        "base_dir": str(base_dir.relative_to(ROOT)),
+        "tasks": tasks,
+        "selected_task": selected_task,
+        "files": files,
+    }
 
 
 @app.get("/api/default_lang_file")

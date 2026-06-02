@@ -125,6 +125,7 @@ const App = {
   },
 
   recordingListTimer: null,
+  recordingTask: null,
   latestState: [],
   isRecording: false,
 };
@@ -2201,10 +2202,37 @@ function getRecordingSaveItems() {
 function renderRecordingFileList(data) {
   const listEl = $('recording-file-list');
   const baseEl = $('recording-base-dir');
+  const taskSel = $('recording-task-select');
   if (!listEl) return;
 
   const files = Array.isArray(data?.files) ? data.files : [];
-  if (baseEl) baseEl.textContent = data?.base_dir || '';
+  const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
+  const serverSelectedTask = typeof data?.selected_task === 'string' ? data.selected_task : '';
+
+  if (taskSel) {
+    const selectedTask = tasks.includes(App.recordingTask)
+      ? App.recordingTask
+      : (tasks.includes(serverSelectedTask) ? serverSelectedTask : (tasks[0] || ''));
+
+    taskSel.innerHTML = tasks
+      .map(name => {
+        const safe = String(name)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;');
+        return `<option value="${safe}">${safe}</option>`;
+      })
+      .join('');
+
+    taskSel.disabled = tasks.length === 0;
+    taskSel.value = selectedTask;
+    App.recordingTask = selectedTask || null;
+  }
+
+  if (baseEl) {
+    const baseDir = data?.base_dir || '';
+    baseEl.textContent = App.recordingTask ? `${baseDir}/${App.recordingTask}` : baseDir;
+  }
 
   if (!files.length) {
     listEl.innerHTML = '<div class="recording-file-item empty">(empty)</div>';
@@ -2226,7 +2254,8 @@ function renderRecordingFileList(data) {
 
 async function refreshRecordingFileList() {
   try {
-    const res = await apiFetch('/api/recording/files');
+    const qs = App.recordingTask ? `?task=${encodeURIComponent(App.recordingTask)}` : '';
+    const res = await apiFetch(`/api/recording/files${qs}`);
     renderRecordingFileList(res);
   } catch (_) { /* toasted */ }
 }
@@ -2373,6 +2402,12 @@ function setupRecordingPanel() {
       await refreshRecordingFileList();
     } catch (_) { /* toasted */ }
     syncRecordingSwitchUI();
+  });
+
+  const taskSel = $('recording-task-select');
+  taskSel?.addEventListener('change', async () => {
+    App.recordingTask = taskSel.value || null;
+    await refreshRecordingFileList();
   });
 
   syncRecordingSwitchUI();
