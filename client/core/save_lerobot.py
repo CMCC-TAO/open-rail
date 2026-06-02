@@ -89,9 +89,11 @@ class LeRobotDatasetWriter:
     def _check_meta_path_and_dir(self, save_path: str) -> bool:
         # save_path_cfg = str(self.config["save_path"])
         self.project_root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        self.logger.debug(f"save path from config: {save_path}, project_root_path: {self.project_root_path}")
         self.save_path = os.path.abspath(
             save_path if os.path.isabs(save_path) else os.path.join(self.project_root_path, save_path)
         )
+        self.logger.debug(f"save path from config: {save_path}, project_root_path: {self.project_root_path}")
         self.config["save_path"] = self.save_path
         # TODO: support for chunk-001
         self.meta_dir = os.path.join(self.save_path, 'meta')
