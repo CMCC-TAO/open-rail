@@ -143,6 +143,91 @@ class LeRobotDatasetParser:
         records.sort(key=lambda x: x["episode_index"], reverse=True)
         return records
 
+    @staticmethod
+    def _parse_episode_id(episode_id: str) -> tuple[int, int]:
+        m = re.fullmatch(r"chunk-(\d{3})/episode_(\d{6})", str(episode_id or "").strip())
+        if not m:
+            raise ValueError(f"Invalid episode id: {episode_id}")
+        return int(m.group(1)), int(m.group(2))
+
+    def delete_episode(self, episode_id: str) -> Dict[str, Any]:
+        chunk_id, episode_index = self._parse_episode_id(episode_id)
+
+        parquet_path = self.data_dir / f"chunk-{chunk_id:03d}" / f"episode_{episode_index:06d}.parquet"
+        removed_paths: List[str] = []
+
+        if parquet_path.exists():
+            parquet_path.unlink()
+            removed_paths.append(str(parquet_path.relative_to(self.dataset_root)))
+
+        video_fmt = self.info.get(
+            "video_path",
+            "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
+        )
+        for video_key in self.video_keys:
+            rel = video_fmt.format(
+                episode_chunk=chunk_id,
+                episode_index=episode_index,
+                video_key=video_key,
+            )
+            video_path = self.dataset_root / rel
+            if video_path.exists():
+                video_path.unlink()
+                removed_paths.append(str(video_path.relative_to(self.dataset_root)))
+
+        episodes_path = self.meta_dir / "episodes.jsonl"
+        remaining_episode_rows: List[Dict[str, Any]] = []
+        removed_meta_rows = 0
+        if episodes_path.exists():
+            with episodes_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.strip()
+                    if not s:
+                        continue
+                    try:
+                        row = json.loads(s)
+                    except Exception:
+                        continue
+                    if int(row.get("episode_index", -1)) == episode_index:
+                        removed_meta_rows += 1
+                        continue
+                    remaining_episode_rows.append(row)
+
+        with episodes_path.open("w", encoding="utf-8") as f:
+            for row in remaining_episode_rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        remaining_indices = sorted({int(r.get("episode_index", -1)) for r in remaining_episode_rows if int(r.get("episode_index", -1)) >= 0})
+        remaining_frames = sum(max(0, int(r.get("length", 0) or 0)) for r in remaining_episode_rows)
+        next_episode_index = (max(remaining_indices) + 1) if remaining_indices else 0
+        splits_text = "0:-1" if next_episode_index <= 0 else f"0:{next_episode_index - 1}"
+
+        info_path = self.meta_dir / "info.json"
+        info = self._load_info()
+        info["total_episodes"] = int(next_episode_index)
+        info["total_frames"] = int(remaining_frames)
+        info["total_videos"] = int(len(remaining_indices) * len(self.video_keys))
+        info["total_chunks"] = int(len(self.get_chunk_ids()))
+        info["splits"] = {"test": splits_text}
+        with info_path.open("w", encoding="utf-8") as f:
+            json.dump(info, f, indent=2, ensure_ascii=False)
+
+        self.info = info
+        self.episode_length_map = {
+            int(r.get("episode_index", -1)): int(r.get("length", 0) or 0)
+            for r in remaining_episode_rows
+            if int(r.get("episode_index", -1)) >= 0
+        }
+
+        deleted = bool(removed_paths or removed_meta_rows > 0)
+        return {
+            "deleted": deleted,
+            "episode_id": f"chunk-{chunk_id:03d}/episode_{episode_index:06d}",
+            "removed_file_count": len(removed_paths),
+            "removed_meta_count": removed_meta_rows,
+            "removed_paths": removed_paths,
+        }
+
 
 class LeRobotDatasetWriter:
     """
