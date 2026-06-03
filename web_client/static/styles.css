@@ -605,21 +605,28 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border: 1px solid var(--border);
+  width: 16px;
+  height: 16px;
+  border: 1px solid transparent;
   border-radius: 4px;
-  background: var(--bg);
-  color: var(--danger);
-  font-size: 10px;
+  background: transparent;
+  color: #ff4d4f;
+  line-height: 1;
   cursor: pointer;
   visibility: hidden;
   pointer-events: none;
 }
 
+.recording-file-item-delete-icon {
+  width: 10px;
+  height: 10px;
+  display: block;
+  fill: currentColor;
+}
+
 .recording-file-item-delete:hover {
-  background: rgba(248,81,73,.08);
-  border-color: var(--danger);
+  background: rgba(255,77,79,.10);
+  border-color: rgba(255,77,79,.45);
 }
 
 .recording-file-item.active .recording-file-item-meta {
@@ -629,6 +636,8 @@ html, body {
 .recording-file-item.active .recording-file-item-delete {
   visibility: visible;
   pointer-events: auto;
+  background: transparent;
+  border-color: rgba(255,77,79,.35);
 }
 
 .recording-file-item.empty {
