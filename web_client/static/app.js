@@ -2311,7 +2311,7 @@ function renderRecordingFileList(data) {
       const frames = Number.isFinite(Number(item?.frames)) ? Number(item.frames) : 0;
       const duration = Number.isFinite(Number(item?.duration_sec)) ? Number(item.duration_sec) : 0;
       const activeCls = id === selectedEpisodeId ? ' active' : '';
-      return `<div class="recording-file-item${activeCls}" data-episode-id="${safeId}" title="${safeName}"><span class="recording-file-item-name">${safeName}</span><span class="recording-file-item-meta">${frames} | ${duration.toFixed(1)}s</span></div>`;
+      return `<div class="recording-file-item${activeCls}" data-episode-id="${safeId}" title="${safeName}"><span class="recording-file-item-name">${safeName}</span><span class="recording-file-item-meta">${frames} | ${duration.toFixed(1)}s</span><span class="recording-file-item-actions"><button class="recording-file-item-delete" data-episode-id="${safeId}" title="Delete episode" aria-label="Delete episode">🗑</button></span></div>`;
     })
     .join('');
 
@@ -2323,6 +2323,33 @@ function renderRecordingFileList(data) {
       el.classList.add('active');
     });
   });
+
+  listEl.querySelectorAll('.recording-file-item-delete[data-episode-id]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const episodeId = btn.getAttribute('data-episode-id') || '';
+      const row = btn.closest('.recording-file-item');
+      if (!episodeId || !row || !row.classList.contains('active')) return;
+      await deleteRecordingEpisode(episodeId);
+    });
+  });
+}
+
+async function deleteRecordingEpisode(episodeId) {
+  if (!App.recordingTask || !episodeId) return;
+  const ok = window.confirm(`Delete ${episodeId} ? This cannot be undone.`);
+  if (!ok) return;
+
+  try {
+    await apiFetch('/api/recording/episode', {
+      method: 'DELETE',
+      body: JSON.stringify({ task: App.recordingTask, episode_id: episodeId }),
+    });
+    if (App.recordingEpisodeId === episodeId) App.recordingEpisodeId = null;
+    toast(`Deleted ${episodeId}.`, 'ok', 1800);
+    await refreshRecordingFileList();
+  } catch (_) { /* toasted */ }
 }
 
 async function refreshRecordingFileList() {

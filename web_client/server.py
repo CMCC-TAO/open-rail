@@ -659,6 +659,47 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
     }
 
 
+class RecordingEpisodeDeleteRequest(BaseModel):
+    task: str
+    episode_id: str
+
+
+@app.delete("/api/recording/episode")
+async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
+    recoding_dir = ROOT / "data" / "recoding"
+    fallback_dir = ROOT / "data" / "recording"
+    base_dir = recoding_dir if (recoding_dir.exists() or not fallback_dir.exists()) else fallback_dir
+
+    if not base_dir.exists():
+        raise HTTPException(404, "Recording directory does not exist.")
+
+    task = str(req.task or "").strip()
+    if not task:
+        raise HTTPException(400, "Task is required.")
+
+    task_dir = (base_dir / task).resolve()
+    try:
+        task_dir.relative_to(base_dir.resolve())
+    except ValueError:
+        raise HTTPException(400, "Task path is outside recording directory.")
+
+    if not task_dir.exists() or not task_dir.is_dir():
+        raise HTTPException(404, f"Task directory not found: {task}")
+
+    try:
+        from client.core.save_lerobot import LeRobotDatasetParser
+
+        parser = LeRobotDatasetParser(str(task_dir), logger=logger)
+        result = parser.delete_episode(req.episode_id)
+        if not result.get("deleted"):
+            raise HTTPException(404, f"Episode not found: {req.episode_id}")
+        return {"status": "ok", "result": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Failed to delete recording episode: {e}")
+
+
 @app.get("/api/default_lang_file")
 async def get_default_lang_file():
     """Return the path and contents of the default language command JSON file."""

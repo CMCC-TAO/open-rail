@@ -563,7 +563,6 @@ html, body {
 .recording-file-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   color: var(--text);
   line-height: 1.5;
@@ -582,7 +581,7 @@ html, body {
 }
 
 .recording-file-item-name {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -591,12 +590,45 @@ html, body {
 
 .recording-file-item-meta {
   flex: 0 0 auto;
+  margin-left: 10px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
+.recording-file-item-actions {
+  flex: 0 0 22px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.recording-file-item-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--danger);
+  font-size: 10px;
+  cursor: pointer;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.recording-file-item-delete:hover {
+  background: rgba(248,81,73,.08);
+  border-color: var(--danger);
+}
+
 .recording-file-item.active .recording-file-item-meta {
   color: var(--accent);
+}
+
+.recording-file-item.active .recording-file-item-delete {
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .recording-file-item.empty {
