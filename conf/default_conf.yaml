@@ -232,7 +232,7 @@ robots:
     hand_type: gripper
     repo_id: task_39_only1
     root: /home/robot/Music/task_39_only1
-  type: mock
+  type: a2d
 show_action_cams_qt: false
 vis_action_length: 1000
 vis_zmq:
