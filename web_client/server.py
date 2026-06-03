@@ -1065,7 +1065,22 @@ async def start_client():
     loop = asyncio.get_running_loop()
     client_state._loop = loop
 
-    vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+    try:
+        vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+    except Exception as e:
+        err = traceback.format_exc()
+        logger.error(f"Client init error:\n{err}")
+        with client_state.lock:
+            client_state.running = False
+            client_state.vla_client = None
+            client_state.robot = None
+            client_state.paused_thread_state = None
+        raise HTTPException(500, f"Failed to initialize client: {e}")
+
+    if vla_client is None:
+        with client_state.lock:
+            client_state.running = False
+        raise HTTPException(500, "Failed to initialize client: vla_client is None")
 
     with client_state.lock:
         if client_state.running:
