@@ -256,7 +256,13 @@ class VLAClientAsync():
             # Record trajectory fitting timestamp
             self.rdm.set_traj_time_marker()
             timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk)
+            prob_progress = None
+            if 'ext' in action_data and 'prob_progress' in action_data['ext']:
+                prob_progress = action_data['ext']['prob_progress']
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
+                timestamps,
+                action_chunk,
+                task_progress=prob_progress)
             # action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
 
             # Record control timestamp
@@ -283,6 +289,7 @@ class VLAClientAsync():
                 acc_chunk_smoothed=acc_chunk_smoothed,
                 timestamps_smoothed=timestamps_fitted,
                 target_chunk_index=target_chunk_index,
+                prob_progress=task_progress_fitted
             )
             # self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted)
 
@@ -333,29 +340,16 @@ class VLAClientAsync():
             self.rdm.set_traj_time_marker()
 
             timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk)
+            prob_progress = None
+            if 'ext' in action_data and 'prob_progress' in action_data['ext']:
+                prob_progress = action_data['ext']['prob_progress']
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk, task_progress=prob_progress)
             # action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
             
             # Get prob_progress from action data if available
-            # TODO: fix language command auto change
-            prob_progress = None
-            if 'ext' in action_data and 'prob_progress' in action_data['ext']:
-                prob_progress = action_data['ext']['prob_progress']
-                # Check if prob_progress length > 1 to enable alignment processing
-                if not (isinstance(prob_progress, np.ndarray) and len(prob_progress) > 1):
-                    self.info_act['current_prob_progress'] = prob_progress
-                    if prob_progress >= self.config.language.task_progress_threshold and self.allow_language_switch and self.config.language.auto_mode:
-                        self._advance_language_subtask()
-                    prob_progress = None
-                else:
-                    # prob_progress: (64,), interpolate prob_progress to (420,)
-                    original_len, target_len = len(prob_progress), action_chunk_fitted.shape[1]
-                    x_original, x_target = np.linspace(0, 1, original_len), np.linspace(0, 1, target_len)
-                    interp_func = interp1d(x_original, prob_progress, kind='linear', fill_value='extrapolate')
-                    prob_progress = interp_func(x_target)
 
             target_chunk_index = self.rdm.get_start_chunk_index(timestamps_fitted)
             joint_indices = self.rdm._get_joint_indices(action_chunk_fitted)
@@ -380,7 +374,7 @@ class VLAClientAsync():
                 acc_chunk_smoothed=acc_chunk_smoothed,
                 timestamps_smoothed=timestamps_fitted,
                 target_chunk_index=target_chunk_index,
-                prob_progress=prob_progress
+                prob_progress=task_progress_fitted
             )
             # self.rdm.update_action_chunk_fitted(
             #     action_chunk_fitted,

@@ -7,22 +7,13 @@ controller:
   strategy: step
   wait_time: 250
 inter_chunk:
-  inter_chunk_mode: search_action
+  inter_chunk_mode: poly
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
   smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
-  action_layout:
-    arm:
-      end: 14
-      policy: gradual
-      start: 0
-    gripper:
-      end: 16
-      policy: stepwise
-      start: 14
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
@@ -39,22 +30,12 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 1
-  task_id: point_bottle
+  sub_task_id: 0
+  task_id: table_bussing
   task_progress_threshold: 0.87
 observer:
   fps: 30
-  period: 0.03333333333333333
 rdm:
-  action_layout:
-    arm:
-      end: 14
-      policy: gradual
-      start: 0
-    gripper:
-      end: 16
-      policy: stepwise
-      start: 14
   max_len: 100
   record_data: false
 record:
@@ -174,12 +155,12 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      test: 0:4
+      valid: 0:100
     total_chunks: 1
-    total_episodes: 5
-    total_frames: 2559
+    total_episodes: 6
+    total_frames: 2836
     total_tasks: 0
-    total_videos: 15
+    total_videos: 18
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   save_dir: data/recording
   switch: false
@@ -251,7 +232,7 @@ robots:
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
     hand_type: gripper
     repo_id: task_39_only1
-  type: a2d
+  type: mock
 show_action_cams_qt: false
 vis_action_length: 1000
 vis_zmq:
@@ -272,15 +253,10 @@ visual:
   trajectory:
     play: true
     selected_joints:
-    - 0
-    - 1
-    - 2
     - 3
-    - 4
-    - 5
     source:
-    - ActionFitted
     - ActionRaw
+    - ActionFitted
     - State
     update_interval_ms: 50
     window_span_sec: 8.0
