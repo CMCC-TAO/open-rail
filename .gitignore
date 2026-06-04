@@ -5,6 +5,7 @@ python3.10.INFO
 .marscode
 data/
 data/recording
+.conda/
 
 # Distribution / packaging
 .Python

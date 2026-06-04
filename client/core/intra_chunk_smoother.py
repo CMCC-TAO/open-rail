@@ -37,7 +37,7 @@ class IntraChunkSmoother():
         
         self.frame = 0
 
-    def process(self, timestamps, action_chunk):
+    def process(self, timestamps, action_chunk, task_progress=None):
         """Perform trajectory fitting for robot actions.
         
         This method retrieves action chunks from the real-time data manager,
@@ -60,8 +60,11 @@ class IntraChunkSmoother():
         if self.config.intra_chunk_mode == 'raw':
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_raw(
                 timestamps=timestamps, 
-                action_chunk=action_chunk
+                action_chunk=action_chunk,
+                start_time=start_time,
+                end_time=end_time
             ) 
+            task_progress_fitted = task_progress  # directly use the original task progress without interpolation
         elif self.config.intra_chunk_mode == 'interpolation':
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_interpolation(
                 timestamps=timestamps,
@@ -69,6 +72,25 @@ class IntraChunkSmoother():
                 start_time=start_time,
                 end_time=end_time
             )
+            task_progress_fitted = self._task_progress_interpolation(
+                timestamps=timestamps,
+                task_progress=task_progress,
+                start_time=start_time,
+                end_time=end_time
+            ) if task_progress is not None else None
+        elif self.config.intra_chunk_mode == 'fitting':
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
+                timestamps=timestamps, 
+                action_chunk=action_chunk, 
+                start_time=start_time, 
+                end_time=end_time 
+            )
+            task_progress_fitted = self._task_progress_interpolation(
+                timestamps=timestamps,
+                task_progress=task_progress,
+                start_time=start_time,
+                end_time=end_time
+            ) if task_progress is not None else None
         else:  # fit mode (default)
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
                 timestamps=timestamps, 
@@ -76,7 +98,13 @@ class IntraChunkSmoother():
                 start_time=start_time, 
                 end_time=end_time 
             )
-        return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted
+            task_progress_fitted = self._task_progress_interpolation(
+                timestamps=timestamps,
+                task_progress=task_progress,
+                start_time=start_time,
+                end_time=end_time
+            ) if task_progress is not None else None
+        return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted
 
     def _joint_traj_fitting(self, timestamps, joint_chunk, index, start_time, end_time, deg = 5, time_step = 0.001):
         """Fit a joint trajectory using polynomial fitting with deg parameter and return the fitted trajectory defined by start_time, end_time and time_step.
@@ -232,7 +260,7 @@ class IntraChunkSmoother():
         return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
     
     @run_time_decorator
-    def _traj_raw(self, timestamps, action_chunk):
+    def _traj_raw(self, timestamps, action_chunk, start_time, end_time):
         """Return raw trajectories without fitting for both joints and grippers.
         
         Args:
@@ -284,6 +312,22 @@ class IntraChunkSmoother():
             vel_fitted[j] = cubic_spline(timestamps_fitted, 1)  # 1st derivative
             acc_fitted[j] = cubic_spline(timestamps_fitted, 2)  # 2nd derivative
         return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
+    
+    def _task_progress_interpolation(self, timestamps, task_progress, start_time, end_time):
+        """Interpolate task progress using linear interpolation.
+        
+        Args:
+            timestamps (np.array): Timestamps for the task progress data.
+            task_progress (np.array): Task progress data to be interpolated.
+            start_time (float): Start time for the interpolated task progress.
+            end_time (float): End time for the interpolated task progress.
+        """
+        time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
+        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        interp_1d = interp1d(timestamps, task_progress, kind='linear', bounds_error=False, fill_value='extrapolate')
+        task_progress_fitted = interp_1d(timestamps_fitted)
+        self.logger.debug(f"Task progress interpolation: original task progress: {task_progress}, fitted task progress: {task_progress_fitted}")
+        return task_progress_fitted
 
 if __name__ == '__main__':
     import os
