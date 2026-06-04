@@ -279,6 +279,10 @@ class LeRobotDatasetWriter:
         self.writer_process = None
         self._closed = False
 
+        # Session id used to drop stale async tasks across stop/start cycles.
+        self._session_lock = threading.Lock()
+        self._recording_session_id = 0
+
     def _init_shared_data(self):
         """
         Initializes shared data variables for multiprocessing.
@@ -434,6 +438,15 @@ class LeRobotDatasetWriter:
 
         self.action_shape = features_config["action"]['shape'][0]
         self.state_shape = features_config["observation.state"]['shape'][0]
+    def _get_recording_session_id(self) -> int:
+        with self._session_lock:
+            return self._recording_session_id
+
+    def _bump_recording_session_id(self) -> int:
+        with self._session_lock:
+            self._recording_session_id += 1
+            return self._recording_session_id
+
     def add_observation_async(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float):
         """
         Asynchronously writes observation data into the dataset.
@@ -445,7 +458,8 @@ class LeRobotDatasetWriter:
             language (str): The language instruction associated with the observation.
             time_now (int | float): The current timestamp.
         """
-        self.record_obs_executor.submit(self._add_observation_fun, observation, language_instruction, timestamp)
+        session_id = self._get_recording_session_id()
+        self.record_obs_executor.submit(self._add_observation_fun, observation, language_instruction, timestamp, session_id)
 
     def add_action_async(self, action: np.ndarray, timestamp: int | float) -> None:
         """
@@ -454,7 +468,8 @@ class LeRobotDatasetWriter:
         Args:
             action (np.ndarray): A dictionary containing action data from the environment.
         """
-        self.record_action_executor.submit(self._add_action_fun, action, timestamp)
+        session_id = self._get_recording_session_id()
+        self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
     
     def start_recording(self):
         """
@@ -464,13 +479,15 @@ class LeRobotDatasetWriter:
         the writer process is running and ready to handle incoming data.
         """
         try:
+            session_id = self._bump_recording_session_id()
             self.shared_data.running.value = True
             self._clear_queues()
             self.writer_process = Process(target=self._write_process_fun, daemon=True)
             self.writer_process.start()
-            self.logger.info("Writer process started successfully.")
+            self.logger.info(f"Writer process started successfully. session_id={session_id}")
         except Exception as e:
             self.logger.error(f"Failed to start writer_process: {e}")
+
     def stop_recording(self):
         """
         Stops the recording process by signaling the writer process to terminate.
@@ -482,6 +499,9 @@ class LeRobotDatasetWriter:
             self.shared_data.running.value = False
             self.logger.info("Signaled writer process to stop.")
 
+        # Invalidate already-submitted async tasks from previous recording cycle.
+        self._bump_recording_session_id()
+
         wp = getattr(self, "writer_process", None)
         if wp is not None and wp.is_alive():
             wp.join(timeout=2)
@@ -491,7 +511,10 @@ class LeRobotDatasetWriter:
                 wp.join(timeout=1)
         elif wp is None:
             self.logger.debug("stop_recording called but writer process is not initialized.")
-    def _add_observation_fun(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float) -> None:
+
+        self.writer_process = None
+        self._clear_queues()
+    def _add_observation_fun(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float, session_id: int) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
 
@@ -508,6 +531,9 @@ class LeRobotDatasetWriter:
         Raises:
             AssertionError: If the provided timestamp is not greater than the last recorded timestamp.
         """
+        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
+            return
+
         # When action_frame_queue is empty, discard the observation frame
         action = None
         with self.action_lock:
@@ -527,10 +553,13 @@ class LeRobotDatasetWriter:
                 observation['obs.state'],
                 np.zeros(self.state_shape - observation['obs.state'].shape[0], dtype=observation['obs.state'].dtype)
             ], axis=0)
+        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
+            return
+
         self.record_queue.put((observation, action))
                 # print(f"Write successful: {timestamp}")
 
-    def _add_action_fun(self, action: np.ndarray, timestamp: int | float) -> None:
+    def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int) -> None:
         """
         Process and store the action data along with its timestamp.
 
@@ -541,6 +570,9 @@ class LeRobotDatasetWriter:
         Raises:
             AssertionError: If the provided timestamp is not strictly increasing compared to the last recorded one.
         """
+        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
+            return
+
         # check action shape 
         if action.shape[0]!= self.action_shape:
             # self.logger.warning(f"Action shape {action.shape[0]} is not correct, config shape is {self.action_shape} , add 0 to the action")
