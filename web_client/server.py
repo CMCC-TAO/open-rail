@@ -456,14 +456,20 @@ def _apply_flat_patch_new(config, patch: dict):
         logger.debug(f"Ignored non-existing config keys in patch: {dropped}")
 
     logger.info(f"Applied config patch keys: {applied}/{len(patch)}")
-# 建议放在 _get_robot 函数定义的上方
 robot_instance = None
 
 def _get_robot(config):
     global robot_instance
+
+    # Always create a fresh robot instance on each Start to avoid reusing
+    # possibly closed/invalid A2D SDK resources.
     if robot_instance is not None:
-        logger.info("Robot instance already exists, reusing it.")
-        return robot_instance
+        try:
+            robot_instance.close()
+        except Exception:
+            pass
+        robot_instance = None
+
     if config.robots.type == RobotType.A2D:
         from client.robots.a2d.body_robot import RobotBody
         robot_instance = RobotBody(config)
@@ -1020,12 +1026,13 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
 #  REST: client control
 # ─────────────────────────────────────────────────────────────────────────────
 def _ensure_vla_client_created():
+    global robot_instance
+
     with client_state.lock:
         if client_state.vla_client is not None:
             return client_state.vla_client
 
     cfg = client_state.config if client_state.config is not None else get_client_config()
-    # print(f"Using config: {cfg}")
     client_state.config = cfg
 
     robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
@@ -1033,25 +1040,48 @@ def _ensure_vla_client_created():
         cfg.rdm.action_layout = robot_cfg.action_layout
         cfg.intra_chunk.action_layout = robot_cfg.action_layout
 
-    vla_zmq_client = ZMQClient(cfg.vla_zmq)
-    robot = _get_robot(cfg)
-    rdm = RealtimeDataManager(cfg.rdm)
-    inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
-    intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
+    vla_zmq_client = None
+    robot = None
+    try:
+        vla_zmq_client = ZMQClient(cfg.vla_zmq)
+        robot = _get_robot(cfg)
+        rdm = RealtimeDataManager(cfg.rdm)
+        inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
+        intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
 
-    if cfg.inter_chunk.inter_chunk_mode == 'sync':
-        from client.core.vla_client_sync import VLAClientSync
-        vla_client = VLAClientSync(config=cfg, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother,
-                           vla_zmq_client=vla_zmq_client, robot=robot)
-    else:
-        from client.core.vla_client import VLAClientAsync
-        vla_client = VLAClientAsync(
-            config=cfg,
-            rdm=rdm,
-            inter_chunk_fuser=inter_chunk_fuser,
-            intra_chunk_smoother=intra_chunk_smoother,
-            vla_zmq_client=vla_zmq_client,
-            robot=robot)
+        if cfg.inter_chunk.inter_chunk_mode == 'sync':
+            from client.core.vla_client_sync import VLAClientSync
+            vla_client = VLAClientSync(
+                config=cfg,
+                rdm=rdm,
+                intra_chunk_smoother=intra_chunk_smoother,
+                vla_zmq_client=vla_zmq_client,
+                robot=robot,
+            )
+        else:
+            from client.core.vla_client import VLAClientAsync
+            vla_client = VLAClientAsync(
+                config=cfg,
+                rdm=rdm,
+                inter_chunk_fuser=inter_chunk_fuser,
+                intra_chunk_smoother=intra_chunk_smoother,
+                vla_zmq_client=vla_zmq_client,
+                robot=robot,
+            )
+    except Exception:
+        if vla_zmq_client is not None:
+            try:
+                vla_zmq_client.close()
+            except Exception:
+                pass
+        if robot is not None:
+            try:
+                robot.close()
+            except Exception:
+                pass
+        if robot_instance is robot:
+            robot_instance = None
+        raise
 
     with client_state.lock:
         client_state.vla_client = vla_client
@@ -1356,8 +1386,7 @@ def _cleanup():
         except Exception:
             pass
 
-    if robot_instance is robot:
-        robot_instance = None
+    robot_instance = None
 
 
 @app.get("/api/client/status")

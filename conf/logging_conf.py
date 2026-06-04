@@ -160,6 +160,21 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "level": "DEBUG",
                 "propagate": False,
             },
+            "websockets": {
+                "handlers": ["file"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "websockets.server": {
+                "handlers": ["file"],
+                "level": "INFO",
+                "propagate": False,
+            },
+            "websockets.server.protocol": {
+                "handlers": ["file"],
+                "level": "INFO",
+                "propagate": False,
+            },
             "scripts.show_lerobot_data.show_data_qt": {
                 "handlers": ["file"],
                 "level": "DEBUG",
