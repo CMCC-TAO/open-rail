@@ -82,7 +82,9 @@ async def _lifespan(_: FastAPI):
     yield
     # ── shutdown ──
     _shutdown_stop_if_running()
-    _cleanup_with_timeout(force_release_robot=True, timeout_s=8.0)
+    # Avoid closing low-level robot SDK from a detached daemon cleanup thread,
+    # which can crash (segfault) during interpreter shutdown.
+    _cleanup(force_release_robot=True, skip_robot_close_if_threads_alive=True)
 
 app = FastAPI(title="VLA Web Client", version="1.0.0", lifespan=_lifespan)
 
@@ -114,6 +116,7 @@ class ClientState:
         self._broadcast_task: Optional[asyncio.Task] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self.paused_thread_state: Optional[dict] = None
+        self.worker_thread: Optional[threading.Thread] = None
 
 client_state = ClientState()
 
@@ -688,7 +691,10 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
     chunk_values: list[str] = []
     selected_chunk = ""
     try:
-        tasks = sorted([p.name for p in base_dir.iterdir() if p.is_dir()], reverse=True)
+        task_dirs = [p for p in base_dir.iterdir() if p.is_dir()]
+        # Default task order: newest first by modification time (fallback by name).
+        task_dirs.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
+        tasks = [p.name for p in task_dirs]
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
 
         if selected_task:
@@ -1193,8 +1199,13 @@ async def start_client():
             )
         finally:
             _cleanup()
+            with client_state.lock:
+                if client_state.worker_thread is threading.current_thread():
+                    client_state.worker_thread = None
 
-    t = threading.Thread(target=_run_in_thread, daemon=True, name="vla-client")
+    t = threading.Thread(target=_run_in_thread, daemon=False, name="vla-client")
+    with client_state.lock:
+        client_state.worker_thread = t
     t.start()
     return {"status": "ok", "message": "Client starting…"}
 
@@ -1412,9 +1423,29 @@ async def stop_client():
     if not is_active:
         raise HTTPException(400, "Client is not running.")
 
+    await asyncio.to_thread(_join_worker_thread, 5.0)
     await asyncio.to_thread(_cleanup)
     await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped."}})
     return {"status": "ok"}
+
+
+def _join_worker_thread(timeout_s: float = 5.0):
+    with client_state.lock:
+        worker = client_state.worker_thread
+
+    if worker is None:
+        return
+
+    if worker is threading.current_thread():
+        return
+
+    worker.join(timeout=max(0.1, float(timeout_s)))
+    if worker.is_alive():
+        logger.warning("VLA worker thread is still alive after join timeout.")
+    else:
+        with client_state.lock:
+            if client_state.worker_thread is worker:
+                client_state.worker_thread = None
 
 
 def _shutdown_stop_if_running():
@@ -1422,22 +1453,37 @@ def _shutdown_stop_if_running():
     with client_state.lock:
         vla_client = client_state.vla_client
         running = bool(client_state.running and vla_client is not None)
-
-    if not running or vla_client is None:
-        return
-
-    logger.info("Client is running during shutdown; execute stop sequence first.")
-    try:
-        _pause_vla_client(vla_client)
-    except Exception:
-        logger.debug("Failed to pause client during shutdown stop sequence.", exc_info=True)
-
-    with client_state.lock:
         client_state.running = False
         client_state.paused_thread_state = None
 
+    if running and vla_client is not None:
+        logger.info("Client is running during shutdown; execute stop sequence first.")
+        try:
+            _pause_vla_client(vla_client)
+        except Exception:
+            logger.debug("Failed to pause client during shutdown stop sequence.", exc_info=True)
 
-def _cleanup(force_release_robot: bool = False):
+    _join_worker_thread(timeout_s=5.0)
+
+
+def _has_alive_vla_threads(vla_client) -> bool:
+    if vla_client is None:
+        return False
+
+    for name in ("observe_thread", "inference_thread", "vis_action_cams_thread", "data_write_thread"):
+        t = getattr(vla_client, name, None)
+        if t is not None and hasattr(t, "is_alive") and t.is_alive():
+            return True
+
+    ctrl_timer = getattr(vla_client, "control_thread_timer", None)
+    ctrl_thread = getattr(ctrl_timer, "_thread", None)
+    if ctrl_thread is not None and hasattr(ctrl_thread, "is_alive") and ctrl_thread.is_alive():
+        return True
+
+    return False
+
+
+def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_alive: bool = True):
     global robot_instance
 
     if not _cleanup_guard.acquire(blocking=False):
@@ -1458,16 +1504,23 @@ def _cleanup(force_release_robot: bool = False):
             except Exception:
                 pass
 
+        threads_alive = _has_alive_vla_threads(vla_client)
+
         keep_robot_alive = False
         if robot is not None and not force_release_robot:
             module_name = getattr(robot.__class__, "__module__", "")
             keep_robot_alive = module_name.endswith("client.robots.a2d.body_robot")
 
         if robot is not None and not keep_robot_alive:
-            try:
-                robot.close()
-            except Exception:
-                pass
+            should_close_robot = not (skip_robot_close_if_threads_alive and threads_alive)
+            if should_close_robot:
+                try:
+                    robot.close()
+                except Exception:
+                    pass
+            else:
+                logger.warning("Skip robot.close(): VLA worker threads are still alive during shutdown.")
+                keep_robot_alive = True
 
         if keep_robot_alive:
             robot_instance = robot
@@ -1477,11 +1530,15 @@ def _cleanup(force_release_robot: bool = False):
         # On process shutdown, client_state.robot may already be None while a reused
         # robot instance is still cached globally. Ensure it is released as well.
         if force_release_robot and robot_instance is not None:
-            try:
-                robot_instance.close()
-            except Exception:
-                pass
-            robot_instance = None
+            should_close_cached_robot = not (skip_robot_close_if_threads_alive and threads_alive)
+            if should_close_cached_robot:
+                try:
+                    robot_instance.close()
+                except Exception:
+                    pass
+                robot_instance = None
+            else:
+                logger.warning("Skip cached robot.close(): VLA worker threads are still alive during shutdown.")
     finally:
         _cleanup_guard.release()
 
@@ -1571,6 +1628,8 @@ async def client_command(req: CommandRequest):
             else:
                 vla_client.dataset_write.set_task(task_id)
             vla_client.dataset_write.start_recording()
+            current_recording_task = str(getattr(vla_client.dataset_write, "current_task", "") or "")
+            return {"status": "ok", "command": cmd, "recording_task": current_recording_task}
 
         elif cmd == "stop_recording":
             if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
