@@ -53,8 +53,8 @@ def get_mock_config():
         # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
         # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
     }
-    config.root = '/home/robot/Music/task_39_only1'
-    # config.root = '/home/robot/Music'
+    config.dataset_path = '/home/robot/Music/task_39_only1'
+    # config.dataset_path = '/home/robot/Music'
     config.repo_id = 'task_39_only1'
     return config
 

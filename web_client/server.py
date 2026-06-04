@@ -14,6 +14,7 @@ import asyncio
 import json
 import logging
 import logging.config
+import os
 import shutil
 import subprocess
 import sys
@@ -80,8 +81,8 @@ async def _lifespan(_: FastAPI):
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
     # ── shutdown ──
-    if client_state.running:
-        _cleanup()
+    _shutdown_stop_if_running()
+    _cleanup_with_timeout(force_release_robot=True, timeout_s=8.0)
 
 app = FastAPI(title="VLA Web Client", version="1.0.0", lifespan=_lifespan)
 
@@ -457,28 +458,37 @@ def _apply_flat_patch_new(config, patch: dict):
 
     logger.info(f"Applied config patch keys: {applied}/{len(patch)}")
 robot_instance = None
+_cleanup_guard = threading.Lock()
 
 def _get_robot(config):
     global robot_instance
 
-    # Always create a fresh robot instance on each Start to avoid reusing
-    # possibly closed/invalid A2D SDK resources.
+    robot_type = config.robots.type
+
+    # Reuse existing robot instance when the type matches.
+    # This avoids re-initializing A2D DDS node after stop/start cycles.
     if robot_instance is not None:
+        module_name = getattr(robot_instance.__class__, "__module__", "")
+        if robot_type == RobotType.A2D and module_name.endswith("client.robots.a2d.body_robot"):
+            return robot_instance, True
+        if robot_type == RobotType.MOCK and module_name.endswith("client.robots.mock.body_robot"):
+            return robot_instance, True
+
         try:
             robot_instance.close()
         except Exception:
             pass
         robot_instance = None
 
-    if config.robots.type == RobotType.A2D:
+    if robot_type == RobotType.A2D:
         from client.robots.a2d.body_robot import RobotBody
         robot_instance = RobotBody(config)
-    elif config.robots.type == RobotType.MOCK:
+    elif robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
         robot_instance = RobotBody(config)
     else:
-        raise ValueError(f"Unsupported robot type: {config.robots.type}")
-    return robot_instance
+        raise ValueError(f"Unsupported robot type: {robot_type}")
+    return robot_instance, False
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -609,6 +619,49 @@ async def get_conf_dir():
     """Return the absolute path of the project conf/ directory."""
     conf_dir = ROOT / "conf"
     return {"status": "ok", "path": str(conf_dir)}
+
+
+@app.get("/api/fs/select_directory")
+async def select_directory():
+    """Open a native directory chooser and return an absolute path."""
+    selected = ""
+
+    has_gui = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    if has_gui and shutil.which("zenity"):
+        try:
+            proc = subprocess.run(
+                ["zenity", "--file-selection", "--directory", "--title=Select Dataset Directory"],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                check=False,
+            )
+            if proc.returncode == 0:
+                selected = proc.stdout.strip()
+            elif proc.returncode not in (0, 1):
+                logger.warning(f"zenity directory picker failed: {proc.stderr.strip()}")
+        except Exception as e:
+            logger.warning(f"zenity directory picker exception: {e}")
+
+    if not selected:
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            selected = filedialog.askdirectory(title="Select Dataset Directory") or ""
+            root.destroy()
+        except Exception as e:
+            logger.warning(f"tk directory picker failed: {e}")
+
+    selected = str(selected).strip()
+    if not selected:
+        return {"status": "cancelled", "path": ""}
+
+    p = Path(selected).expanduser().resolve()
+    return {"status": "ok", "path": str(p)}
 
 
 @app.get("/api/recording/files")
@@ -1042,9 +1095,10 @@ def _ensure_vla_client_created():
 
     vla_zmq_client = None
     robot = None
+    reused_robot = False
     try:
         vla_zmq_client = ZMQClient(cfg.vla_zmq)
-        robot = _get_robot(cfg)
+        robot, reused_robot = _get_robot(cfg)
         rdm = RealtimeDataManager(cfg.rdm)
         inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
         intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
@@ -1074,13 +1128,13 @@ def _ensure_vla_client_created():
                 vla_zmq_client.close()
             except Exception:
                 pass
-        if robot is not None:
+        if robot is not None and not reused_robot:
             try:
                 robot.close()
             except Exception:
                 pass
-        if robot_instance is robot:
-            robot_instance = None
+            if robot_instance is robot:
+                robot_instance = None
         raise
 
     with client_state.lock:
@@ -1363,30 +1417,97 @@ async def stop_client():
     return {"status": "ok"}
 
 
-def _cleanup():
-    global robot_instance
-
+def _shutdown_stop_if_running():
+    """On Ctrl-C shutdown, mimic stop command before final cleanup."""
     with client_state.lock:
         vla_client = client_state.vla_client
-        robot = client_state.robot
-        client_state.vla_client = None
-        client_state.robot = None
+        running = bool(client_state.running and vla_client is not None)
+
+    if not running or vla_client is None:
+        return
+
+    logger.info("Client is running during shutdown; execute stop sequence first.")
+    try:
+        _pause_vla_client(vla_client)
+    except Exception:
+        logger.debug("Failed to pause client during shutdown stop sequence.", exc_info=True)
+
+    with client_state.lock:
         client_state.running = False
         client_state.paused_thread_state = None
 
-    if vla_client is not None:
-        try:
-            vla_client.close()
-        except Exception:
-            pass
 
-    if robot is not None:
-        try:
-            robot.close()
-        except Exception:
-            pass
+def _cleanup(force_release_robot: bool = False):
+    global robot_instance
 
-    robot_instance = None
+    if not _cleanup_guard.acquire(blocking=False):
+        return
+
+    try:
+        with client_state.lock:
+            vla_client = client_state.vla_client
+            robot = client_state.robot
+            client_state.vla_client = None
+            client_state.robot = None
+            client_state.running = False
+            client_state.paused_thread_state = None
+
+        if vla_client is not None:
+            try:
+                vla_client.close()
+            except Exception:
+                pass
+
+        keep_robot_alive = False
+        if robot is not None and not force_release_robot:
+            module_name = getattr(robot.__class__, "__module__", "")
+            keep_robot_alive = module_name.endswith("client.robots.a2d.body_robot")
+
+        if robot is not None and not keep_robot_alive:
+            try:
+                robot.close()
+            except Exception:
+                pass
+
+        if keep_robot_alive:
+            robot_instance = robot
+        elif robot_instance is robot:
+            robot_instance = None
+
+        # On process shutdown, client_state.robot may already be None while a reused
+        # robot instance is still cached globally. Ensure it is released as well.
+        if force_release_robot and robot_instance is not None:
+            try:
+                robot_instance.close()
+            except Exception:
+                pass
+            robot_instance = None
+    finally:
+        _cleanup_guard.release()
+
+
+def _cleanup_with_timeout(force_release_robot: bool = False, timeout_s: float = 8.0):
+    """Run cleanup in a daemon thread and bound shutdown wait time.
+
+    This prevents Ctrl-C shutdown from hanging forever when low-level robot/DDS
+    release blocks unexpectedly.
+    """
+    cleanup_error: dict[str, Exception] = {}
+
+    def _run_cleanup():
+        try:
+            _cleanup(force_release_robot=force_release_robot)
+        except Exception as e:
+            cleanup_error["err"] = e
+
+    t = threading.Thread(target=_run_cleanup, name="web-client-cleanup", daemon=True)
+    t.start()
+    t.join(timeout=max(0.1, float(timeout_s)))
+
+    if t.is_alive():
+        logger.error("Cleanup timed out during shutdown; forcing process exit path.")
+    elif "err" in cleanup_error:
+        logger.error(f"Cleanup failed during shutdown: {cleanup_error['err']}")
 
 
 @app.get("/api/client/status")
