@@ -3117,13 +3117,14 @@ function wireEvents() {
   $('conf-search').addEventListener('input', e => filterConfigTree(e.target.value));
 
   $('btn-apply-config').addEventListener('click', async () => {
-    if (!Object.keys(App.pendingPatch).length) { toast('No pending changes.', 'warn', 2000); return; }
+    const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };
+    if (!Object.keys(patchToApply).length) { toast('No pending changes.', 'warn', 2000); return; }
 
     const uiState = captureConfigTreeUiState();
     const restoreConfigTreeState = () => restoreConfigTreeUiState(uiState);
 
     try {
-      const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
+      const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
       App.config = res.config || {}; App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
@@ -3167,12 +3168,17 @@ function wireEvents() {
       try { await apiFetch('/api/client/stop', { method: 'POST' }); } catch (e) { /* toasted */ }
       return;
     }
-    if (Object.keys(App.pendingPatch).length) {
+
+    const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };
+    if (Object.keys(patchToApply).length) {
       try {
-        await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
-        App.pendingPatch = {}; clearPending();
+        const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
+        App.config = res.config || App.config;
+        App.pendingPatch = {};
+        clearPending();
       } catch (e) { return; }
     }
+
     try { await apiFetch('/api/client/start', { method: 'POST' }); toast('Client starting…', 'info'); } catch (e) { /* toasted */ }
   });
 
