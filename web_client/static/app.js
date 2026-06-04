@@ -1147,6 +1147,81 @@ function createCfgRow(dotKey, label, value) {
   // Extract the bare key name (last segment) for option lookup
   const bareKey = dotKey.includes('.') ? dotKey.split('.').pop() : dotKey;
 
+  if (dotKey === 'robots.mock.dataset_path') {
+    row.style.flexDirection = 'column';
+    row.style.alignItems = 'stretch';
+    row.style.gap = '4px';
+
+    const topLine = document.createElement('div');
+    topLine.style.display = 'flex';
+    topLine.style.alignItems = 'center';
+    topLine.style.justifyContent = 'space-between';
+    topLine.style.gap = '8px';
+
+    keyEl.style.minWidth = '0';
+
+    const pathEl = document.createElement('div');
+    pathEl.textContent = value === null ? '' : String(value);
+    pathEl.title = value === null ? '' : String(value);
+    pathEl.style.width = '100%';
+    pathEl.style.whiteSpace = 'nowrap';
+    pathEl.style.overflow = 'hidden';
+    pathEl.style.textOverflow = 'ellipsis';
+    pathEl.style.fontSize = '10px';
+    pathEl.style.lineHeight = '1.2';
+    pathEl.style.background = 'transparent';
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn btn-xs';
+    btn.textContent = 'Browse';
+
+    btn.addEventListener('click', async () => {
+      let selectedPath = '';
+      try {
+        const pickRes = await apiFetch('/api/fs/select_directory');
+        selectedPath = String(pickRes?.path || '').trim();
+      } catch (_) {
+        return;
+      }
+      if (!selectedPath) return;
+
+      pathEl.textContent = selectedPath;
+      pathEl.title = selectedPath;
+
+      try {
+        const patchRes = await apiFetch('/api/config/patch', {
+          method: 'POST',
+          body: JSON.stringify({ patch: { [dotKey]: selectedPath } }),
+        });
+        App.config = patchRes.config || App.config;
+        delete App.pendingPatch[dotKey];
+        if (!Object.keys(App.pendingPatch).length) clearPending();
+
+        const display = $('conf-path-display');
+        const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+        if (cfgPath) {
+          await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
+        }
+
+        renderConfigTree(App.config);
+        renderRecordingConfigTree(App.config);
+        toast('dataset_path updated.', 'ok', 2000);
+      } catch (_) {
+        App.pendingPatch[dotKey] = selectedPath;
+        markPending();
+      }
+    });
+
+    topLine.appendChild(keyEl);
+    topLine.appendChild(btn);
+
+    valEl.appendChild(pathEl);
+    row.appendChild(topLine);
+    row.appendChild(valEl);
+    return row;
+  }
+
   let input;
   const multiSelectOptions = getCfgMultiSelectOptions(dotKey);
   if (multiSelectOptions) {

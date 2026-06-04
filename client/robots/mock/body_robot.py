@@ -43,8 +43,10 @@ class RobotBody(RobotBase):
         self._io_lock = threading.Lock()
 
         try:
-            root = self.cfg['root']
-            parquet_glob = os.path.join(root, 'data', 'chunk-*', 'episode_*.parquet')
+            dataset_path = self.cfg.get('dataset_path', self.cfg.get('root', ''))
+            if not dataset_path:
+                raise ValueError('mock.dataset_path is empty')
+            parquet_glob = os.path.join(dataset_path, 'data', 'chunk-*', 'episode_*.parquet')
             parquet_files = sorted(glob.glob(parquet_glob))
             if not parquet_files:
                 raise FileNotFoundError(f'未找到离线数据: {parquet_glob}')
@@ -58,7 +60,7 @@ class RobotBody(RobotBase):
 
             self._load_episode(0)
 
-            meta_info_path = os.path.join(root, 'meta', 'info.json')
+            meta_info_path = os.path.join(dataset_path, 'meta', 'info.json')
             if os.path.exists(meta_info_path):
                 try:
                     import json
@@ -94,7 +96,7 @@ class RobotBody(RobotBase):
 
         for _, video_key in self.cfg['camera']['names'].items():
             video_path = os.path.join(
-                self.cfg['root'],
+                self.cfg.get('dataset_path', self.cfg.get('root', '')),
                 'videos',
                 f'chunk-{chunk_id:03d}',
                 video_key,
