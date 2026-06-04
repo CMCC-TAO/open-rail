@@ -1629,7 +1629,19 @@ async def client_command(req: CommandRequest):
                 vla_client.dataset_write.set_task(task_id)
             vla_client.dataset_write.start_recording()
             current_recording_task = str(getattr(vla_client.dataset_write, "current_task", "") or "")
-            return {"status": "ok", "command": cmd, "recording_task": current_recording_task}
+            current_recording_dir = ""
+            try:
+                save_path = str(getattr(vla_client.dataset_write, "save_path", "") or "")
+                if save_path:
+                    current_recording_dir = Path(save_path).name
+            except Exception:
+                current_recording_dir = ""
+            return {
+                "status": "ok",
+                "command": cmd,
+                "recording_task": current_recording_task,
+                "recording_task_dir": current_recording_dir,
+            }
 
         elif cmd == "stop_recording":
             if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:

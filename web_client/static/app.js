@@ -702,6 +702,12 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visual.trajectory.window_span_sec',
 ]);
 
+// Read-only keys in config tree UI (display only, not editable in panel)
+const CONFIG_READONLY_DOT_KEYS = new Set([
+  'record.save_dir',
+  'record.switch',
+]);
+
 function getCfgMultiSelectOptions(dotKey) {
   if (dotKey === 'visual.trajectory.source') {
     return [
@@ -1279,8 +1285,13 @@ function createCfgRow(dotKey, label, value) {
   }
 
   input.className = 'input-text';
-  input.addEventListener('input',  () => onCfgChange(dotKey, input, value));
-  input.addEventListener('change', () => onCfgChange(dotKey, input, value));
+  if (CONFIG_READONLY_DOT_KEYS.has(dotKey)) {
+    input.disabled = true;
+    input.title = `${dotKey} is managed by runtime actions and is read-only here.`;
+  } else {
+    input.addEventListener('input',  () => onCfgChange(dotKey, input, value));
+    input.addEventListener('change', () => onCfgChange(dotKey, input, value));
+  }
   valEl.appendChild(input);
   row.appendChild(keyEl);
   row.appendChild(valEl);
@@ -2313,10 +2324,15 @@ function renderRecordingFileList(data) {
     const prevSet = new Set(prevTasks);
     const addedTasks = tasks.filter(name => !prevSet.has(name));
 
+    const requestedTask = String(App.recordingTask || '').trim();
+    const prefixedTask = requestedTask
+      ? (tasks.find(name => name === requestedTask || name.startsWith(`${requestedTask}_`)) || '')
+      : '';
+
     const selectedTask = addedTasks.length > 0
       ? addedTasks[0]
-      : (tasks.includes(App.recordingTask)
-        ? App.recordingTask
+      : (prefixedTask
+        ? prefixedTask
         : (tasks.includes(serverSelectedTask) ? serverSelectedTask : (tasks[0] || '')));
 
     taskSel.innerHTML = tasks
@@ -2582,8 +2598,14 @@ function setupRecordingPanel() {
         method: 'POST',
         body: JSON.stringify({ command: 'start_recording', params: { save_items: saveItems } }),
       });
+      const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
       const currentTask = typeof res?.recording_task === 'string' ? res.recording_task : '';
-      if (currentTask) {
+      if (currentTaskDir) {
+        App.recordingTask = currentTaskDir;
+        App.recordingChunk = null;
+        App.recordingChunksSnapshot = [];
+      } else if (currentTask) {
+        // Fallback for older backend: select newest dir with task prefix.
         App.recordingTask = currentTask;
         App.recordingChunk = null;
         App.recordingChunksSnapshot = [];
