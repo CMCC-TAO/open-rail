@@ -855,11 +855,16 @@ class VLAClientAsync():
                 state_vel = np.zeros_like(state_np)
                 state_acc = np.zeros_like(state_np)
             else:
-                state_vel = (state_np - self.vis_prev_state) / dt_ctrl
-                if self.vis_prev_state_vel is None:
+                try:
+                    state_vel = (state_np - self.vis_prev_state) / dt_ctrl
+                    if self.vis_prev_state_vel is None:
+                        state_acc = np.zeros_like(state_np)
+                    else:
+                        state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
+                except Exception as e:
+                    self.logger.warning(f"Error computing state velocity/acceleration: {e}")
+                    state_vel = np.zeros_like(state_np)
                     state_acc = np.zeros_like(state_np)
-                else:
-                    state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
 
             list_data.append({
                 'tab': 'velocity',
