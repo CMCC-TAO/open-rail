@@ -557,7 +557,7 @@ class VLAClientSync():
         Args:
             action_fitted: Predicted action values for robot joints
             vel_fitted: Predicted velocity values (of action_fitted) for robot joints
-            aacc_fittedction: Predicted acceleration values (of action_fitted) for robot joints
+            acc_fitted: Predicted acceleration values (of action_fitted) for robot joints
         """
         # # Update action_fitted velocity and acceleration ==================================================================
         list_data = [{
