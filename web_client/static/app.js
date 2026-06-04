@@ -1619,16 +1619,31 @@ function setupLangPanel() {
     await persistLanguagePatch({ 'language.task_progress_threshold': value });
   };
 
-  // Task select → rebuild subtask list + sync Config panel selects only (no pendingPatch yet)
+  // Task select → rebuild subtask list and default to first sub-task.
   if (taskSel) {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
       App.langAuto.lastProgress = null;
-      const cfgTaskSel = $('cfg-language-task');
-      if (cfgTaskSel && cfgTaskSel.value !== taskSel.value) {
-        cfgTaskSel.value = taskSel.value;
-        syncLangIndexOptions(taskSel.value, 0);
+
+      // Default select first sub-task after task switch.
+      const taskName = taskSel.value;
+      const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+      if (subtaskSel) {
+        if (subtaskSel.options.length > 0) {
+          subtaskSel.selectedIndex = 0;
+          subtaskSel.value = '0';
+        } else {
+          subtaskSel.value = '';
+        }
       }
+      $('lang-cmd-text').value = subtasks[0] ?? '';
+
+      // Sync Config panel selects to task + first sub-task.
+      const cfgTaskSel = $('cfg-language-task');
+      if (cfgTaskSel) cfgTaskSel.value = taskSel.value;
+      syncLangIndexOptions(taskSel.value, 0);
+      const cfgIdxSel = $('cfg-language-index');
+      if (cfgIdxSel) cfgIdxSel.value = '0';
     });
   }
 
@@ -2563,15 +2578,23 @@ function setupRecordingPanel() {
 
     const saveItems = getRecordingSaveItems();
     try {
-      await apiFetch('/api/client/command', {
+      const res = await apiFetch('/api/client/command', {
         method: 'POST',
         body: JSON.stringify({ command: 'start_recording', params: { save_items: saveItems } }),
       });
+      const currentTask = typeof res?.recording_task === 'string' ? res.recording_task : '';
+      if (currentTask) {
+        App.recordingTask = currentTask;
+        App.recordingChunk = null;
+        App.recordingChunksSnapshot = [];
+      }
+
       App.isRecording = true;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
       App.config.record.switch = true;
       renderRecordingConfigTree(App.config);
+      await refreshRecordingFileList();
       toast('Recording started.', 'ok');
     } catch (_) { /* toasted */ }
     syncRecordingSwitchUI();

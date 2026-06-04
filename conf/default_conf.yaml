@@ -14,6 +14,15 @@ inter_chunk:
   smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      start: 14
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
@@ -30,12 +39,22 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 0
+  sub_task_id: 1
   task_id: point_bottle
   task_progress_threshold: 0.87
 observer:
   fps: 30
+  period: 0.03333333333333333
 rdm:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      start: 14
   max_len: 100
   record_data: false
 record:
@@ -155,7 +174,7 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      test: 0:3
     total_chunks: 1
     total_episodes: 4
     total_frames: 2007

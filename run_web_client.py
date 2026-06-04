@@ -14,6 +14,8 @@ Port layout:
 """
 
 import argparse
+import os
+import sys
 
 import uvicorn
 
@@ -33,10 +35,28 @@ def kill_port(port):
 if __name__ == '__main__':
     args = parse_args()
     kill_port(port=args.port)
-    uvicorn.run(
-        "web_client.server:app",
-        host=args.host,
-        port=args.port,
-        reload=args.reload,
-        log_level="info",
-    )
+
+    exit_code = 0
+    try:
+        uvicorn.run(
+            "web_client.server:app",
+            host=args.host,
+            port=args.port,
+            reload=args.reload,
+            log_level="info",
+        )
+    except KeyboardInterrupt:
+        exit_code = 0
+    except Exception:
+        exit_code = 1
+        raise
+    finally:
+        # Some native robot SDK resources may segfault during CPython finalization.
+        # After uvicorn shutdown completes, force immediate process exit to avoid it.
+        if not args.reload:
+            try:
+                sys.stdout.flush()
+                sys.stderr.flush()
+            except Exception:
+                pass
+            os._exit(exit_code)
