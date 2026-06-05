@@ -435,6 +435,11 @@ class VLAClientAsync():
             prob_progress = self.rdm.get_prob_progress()
             if prob_progress is not None:
                 self.info_act['current_prob_progress'] = prob_progress
+                if self.config.language.auto_mode == True and self.allow_language_switch:
+                    # Automatically switch language instruction based on prob_progress changes
+                    if prob_progress > self.config.language.task_progress_threshold:
+                        self._advance_language_subtask()
+                        self.logger.info(f'Auto-switched to next language sub-task: {self.language}')
 
             if self.config.record.switch and self.is_control_thread_running and self.is_running:
                 self.dataset_write.add_action_async(action_fitted, time.perf_counter())
