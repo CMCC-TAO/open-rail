@@ -31,7 +31,7 @@ language:
   auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: table_bussing
+  task_id: tea_master
   task_progress_threshold: 0.87
 observer:
   fps: 30
@@ -157,10 +157,10 @@ record:
     splits:
       valid: 0:100
     total_chunks: 1
-    total_episodes: 6
-    total_frames: 2836
+    total_episodes: 0
+    total_frames: 0
     total_tasks: 0
-    total_videos: 18
+    total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   save_dir: data/recording
   switch: false
@@ -253,7 +253,7 @@ visual:
   trajectory:
     play: true
     selected_joints:
-    - 3
+    - 7
     source:
     - ActionRaw
     - ActionFitted

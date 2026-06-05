@@ -64,7 +64,6 @@ class VLAClientAsync():
         self.is_control_thread_running = False
         self.language_tasks = self._load_language_tasks(getattr(self.config.language, 'file_path', ''))
         self.language = self._sync_language_from_config()
-        self.allow_language_switch = True  # Flag to control automatic language switching
         
         # Define image preprocess function
         if self.config.vision.preprocess != 'none':
@@ -122,7 +121,7 @@ class VLAClientAsync():
         self.info_current_action = [0.0] * action_dim
         self.info_current_state = [0.0] * action_dim
         self.info_obs, self.info_act = {}, {}
-        self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
+        # self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
 
         # Record data (action, velocity, acceleration) thread
         if self.config.record_exp_data:
@@ -198,6 +197,7 @@ class VLAClientAsync():
             if observations is not None:
                 if self.config.record.switch :
                     self.dataset_write.add_observation_async(observations, self.language, time.perf_counter())
+                # Decide whether to change language instruction based on the task progress predicted by the VLA model
                 data = self._process_data(observations)
                 self.rdm.add_observe_data(data)
             time.sleep(0.001)
@@ -213,10 +213,6 @@ class VLAClientAsync():
         - Initializes trajectory fitting and control timestamps
         - Sets up the fitted action chunk for control
         """
-        # Disable automatic language switching during reset (but don't save/restore language)
-        # saved_language = self.language
-        self.allow_language_switch = False
-        
         # Wait for observation changes after reset, then retrieve fresh obs for inference
         observations, cnt = None, 0
         while observations is None or cnt < 3:
@@ -296,10 +292,6 @@ class VLAClientAsync():
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
             self.rdm.compute_avg_traj_time()
-            
-        # Re-enable automatic language switching
-        # self.language = saved_language
-        self.allow_language_switch = True
     
     # @run_time_decorator
     def inference_step(self):
@@ -435,11 +427,11 @@ class VLAClientAsync():
             prob_progress = self.rdm.get_prob_progress()
             if prob_progress is not None:
                 self.info_act['current_prob_progress'] = prob_progress
-                if self.config.language.auto_mode == True and self.allow_language_switch:
+                if self.config.language.auto_mode == True:
                     # Automatically switch language instruction based on prob_progress changes
                     if prob_progress > self.config.language.task_progress_threshold:
                         self._advance_language_subtask()
-                        self.logger.info(f'Auto-switched to next language sub-task: {self.language}')
+                        self.logger.info(f'Auto-switched to next language sub-task with task progress = {prob_progress:.2f}, threshold = {self.config.language.task_progress_threshold}')
 
             if self.config.record.switch and self.is_control_thread_running and self.is_running:
                 self.dataset_write.add_action_async(action_fitted, time.perf_counter())
@@ -569,6 +561,7 @@ class VLAClientAsync():
         return encoded_imgs
 
     # @run_time_decorator
+    # TODO: rename to pack_data
     def _process_data(self, frame):
         """Process observation data by adding local timestamp, encoding images and adding task name.
 
