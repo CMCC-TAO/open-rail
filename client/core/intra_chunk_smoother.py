@@ -1,6 +1,4 @@
-import time
-import queue
-import threading
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline, interp1d
@@ -20,6 +18,7 @@ class IntraChunkSmoother():
         Args:
             config (ConfigDict): Configuration parameters for trajectory generation.
         """
+        self.logger = logging.getLogger(__name__)
         self.config = config
         self.action_layout = dict(config.action_layout) if hasattr(config, 'action_layout') else {}
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)

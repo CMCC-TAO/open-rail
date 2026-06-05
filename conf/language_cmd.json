@@ -19,5 +19,11 @@
   "point_bottle": [
     "[POINT_BOTTLE] [RIGHT_ARM] With the right arm, point to the bottle on the table.",
     "[POINT_BOTTLE] [LEFT_ARM] Using the left arm, point to the bottle on the table."
+  ],
+  "tea_master": [
+    "[PRIMARY_ARM=RIGHT]Take tea leaves",
+    "[PRIMARY_ARM=RIGHT]Add water",
+    "[PRIMARY_ARM=LEFT] Put the kettle",
+    "[PRIMARY_ARM=LEFT] Divide tea"
   ]
 }

@@ -4,7 +4,7 @@ python-multipart>=0.0.9
 diffusers==0.32.2
 einops==0.8.2
 evaluate==0.4.6
-huggingface_hub==0.29.3
+huggingface_hub==0.30.0
 ipython==8.12.3
 # lerobot==0.4.4
 matplotlib==3.10.9
