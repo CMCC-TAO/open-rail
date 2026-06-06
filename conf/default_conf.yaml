@@ -14,6 +14,15 @@ inter_chunk:
   smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      start: 14
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
@@ -36,7 +45,17 @@ language:
   task_progress_win_size: 10
 observer:
   fps: 30
+  period: 0.03333333333333333
 rdm:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      start: 14
   max_len: 100
   record_data: false
 record:

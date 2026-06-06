@@ -525,6 +525,7 @@ async def _stats_push_loop():
             continue
         try:
             stats = _collect_stats()
+            print("Debug: pushing stats to WS clients.")
             await _broadcast({"type": "stats", "data": stats})
         except Exception as e:
             logger.debug(f"stats push error: {e}")
@@ -581,7 +582,9 @@ def _collect_stats() -> dict:
         base["info_act"]        = {k: str(v) for k, v in vla_client.info_act.items()}
         try:
             base["current_prob_progress"] = float(vla_client.info_act.get("current_prob_progress", 0.0))
+            print(f"Debug: current_prob_progress value: {vla_client.info_act.get('current_prob_progress')}")
         except Exception:
+            print(f"Warning: invalid current_prob_progress value: {vla_client.info_act.get('current_prob_progress')}")
             base["current_prob_progress"] = 0.0
         base["debug_info"]      = str(vla_client.debug_info)
         # base["config_snapshot"] = {
