@@ -359,6 +359,8 @@ class VLAClientAsync():
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
             self.rdm.compute_avg_traj_time()
+            if self.config.language.auto_mode == True:
+                self.task_language_manager.reset_task_progress()
         else:
             self.logger.warning("No observe data, skip inference.")
 
@@ -400,11 +402,11 @@ class VLAClientAsync():
             prob_progress = self.rdm.get_prob_progress()
             if prob_progress is not None:
                 self.info_act['current_prob_progress'] = prob_progress
+                # print(f"current prob_progress: {prob_progress}")
                 if self.config.language.auto_mode == True:
                     # Automatically switch language instruction based on prob_progress changes
-                    if prob_progress > self.config.language.task_progress_threshold:
-                        self._advance_language_subtask()
-                        self.logger.info(f'Auto-switched to next language sub-task with task progress = {prob_progress:.2f}, threshold = {self.config.language.task_progress_threshold}')
+                    self.task_language_manager.add_task_progress(progress=prob_progress)
+                    self.task_language_manager.advance_subtask()
 
             if self.config.record.switch and self.is_control_thread_running and self.is_running:
                 self.dataset_write.add_action_async(action_fitted, time.perf_counter())

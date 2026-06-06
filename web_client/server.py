@@ -1128,6 +1128,7 @@ def _ensure_vla_client_created():
                 rdm=rdm,
                 inter_chunk_fuser=inter_chunk_fuser,
                 intra_chunk_smoother=intra_chunk_smoother,
+                task_language_manager=task_language_manager,
                 vla_zmq_client=vla_zmq_client,
                 robot=robot,
             )
