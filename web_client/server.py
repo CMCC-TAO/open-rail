@@ -40,6 +40,7 @@ try:
 except ImportError:
     _HAS_YAML = False
 
+from client.core import task_language_manager
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -57,6 +58,7 @@ from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
+from client.core.task_language_manager import TaskLanguageManager
 from client.utils.util import load_user_config, apply_user_config
 
 logger = logging.getLogger(__name__)
@@ -1108,6 +1110,7 @@ def _ensure_vla_client_created():
         rdm = RealtimeDataManager(cfg.rdm)
         inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
         intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
+        task_language_manager = TaskLanguageManager(config=cfg.language)
 
         if cfg.inter_chunk.inter_chunk_mode == 'sync':
             from client.core.vla_client_sync import VLAClientSync
