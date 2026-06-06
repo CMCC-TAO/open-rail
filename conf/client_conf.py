@@ -164,7 +164,8 @@ def get_language_config() -> ConfigDict:
     config.task_id = 'pour_tea'
     config.sub_task_id = 1
     config.auto_mode = True  # If True, automatically switch language instructions based on probability threshold
-    config.task_progress_threshold = 9.9  # Probability threshold for switching language instructions
+    config.task_progress_threshold = 0.9  # Probability threshold for switching language instructions
+    config.task_progress_win_size = 10 # Sliding window size to compute average task progress
     return config
 
 def get_vision_config() -> ConfigDict:

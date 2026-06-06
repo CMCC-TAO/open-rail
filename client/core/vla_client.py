@@ -19,6 +19,7 @@ from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
+from client.core.task_language_manager import TaskLanguageManager
 from client.core.save_lerobot import LeRobotDatasetWriter
 from visual.websocket_server import VLAWebSocketServer
 
@@ -37,6 +38,7 @@ class VLAClientAsync():
                 rdm: RealtimeDataManager,
                 inter_chunk_fuser: InterChunkFuser,
                 intra_chunk_smoother: IntraChunkSmoother,
+                task_language_manager: TaskLanguageManager,
                 vla_zmq_client: ZMQClient,
                 robot: None):
         """Initialize the VLA Client.
@@ -54,6 +56,7 @@ class VLAClientAsync():
         self.rdm = rdm
         self.inter_chunk_fuser = inter_chunk_fuser
         self.intra_chunk_smoother = intra_chunk_smoother
+        self.task_language_manager = task_language_manager
         self.vla_zmq = vla_zmq_client
         self.robot = robot
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
@@ -62,8 +65,6 @@ class VLAClientAsync():
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
         self.is_control_thread_running = False
-        self.language_tasks = self._load_language_tasks(getattr(self.config.language, 'file_path', ''))
-        self.language = self._sync_language_from_config()
         
         # Define image preprocess function
         if self.config.vision.preprocess != 'none':
@@ -152,34 +153,6 @@ class VLAClientAsync():
             self.logger.warning(f'Failed to load language command file: {target_path}, error: {e}')
         return {}
 
-    def _sync_language_from_config(self) -> str:
-        task_id = getattr(self.config.language, 'task_id', '')
-        sub_task_id = int(getattr(self.config.language, 'sub_task_id', 0))
-        task_cmds = self.language_tasks.get(task_id, [])
-
-        if not task_cmds and self.language_tasks:
-            task_id = next(iter(self.language_tasks.keys()))
-            self.config.language.task_id = task_id
-            task_cmds = self.language_tasks.get(task_id, [])
-
-        if not task_cmds:
-            self.config.language.sub_task_id = 0
-            return ''
-
-        sub_task_id = max(0, min(sub_task_id, len(task_cmds) - 1))
-        self.config.language.sub_task_id = sub_task_id
-        return task_cmds[sub_task_id]
-
-    def _advance_language_subtask(self):
-        task_id = getattr(self.config.language, 'task_id', '')
-        task_cmds = self.language_tasks.get(task_id, [])
-        if not task_cmds:
-            return
-        sub_task_id = int(getattr(self.config.language, 'sub_task_id', 0))
-        sub_task_id = (sub_task_id + 1) % len(task_cmds)
-        self.config.language.sub_task_id = sub_task_id
-        self.language = task_cmds[sub_task_id]
-
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
         
@@ -196,7 +169,7 @@ class VLAClientAsync():
             observations = self.robot.retrieve_observation()
             if observations is not None:
                 if self.config.record.switch :
-                    self.dataset_write.add_observation_async(observations, self.language, time.perf_counter())
+                    self.dataset_write.add_observation_async(observations, self.task_language_manager.get_current_language(), time.perf_counter())
                 # Decide whether to change language instruction based on the task progress predicted by the VLA model
                 data = self._process_data(observations)
                 self.rdm.add_observe_data(data)
@@ -585,7 +558,7 @@ class VLAClientAsync():
             'obs': {
                 **encoded_imgs,
                 'state': frame['obs.state'],
-                'language': [self.language],
+                'language': [self.task_language_manager.get_current_language()],
             },
         }
         return data
