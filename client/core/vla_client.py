@@ -282,6 +282,10 @@ class VLAClientAsync():
         
         # Get observation data (thread-safe function, no lock needed)
         data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
+        if isinstance(data, dict):
+            currt_language_instruction = data.get("obs", {}).get("language")[0]
+        else:
+            currt_language_instruction = data[1].get("obs", {}).get("language")[0]
         # print(f"data keys: {data.keys() if data is not None else None}, infer_count: {self.rdm.infer_count}")
         if data is not None:
             # Record inference start timestamp
@@ -360,7 +364,10 @@ class VLAClientAsync():
             self.rdm.compute_avg_infer_time()
             self.rdm.compute_avg_traj_time()
             if self.config.language.auto_mode == True:
-                self.task_language_manager.reset_task_progress()
+                self.task_language_manager.reset_task_progress(
+                    language_instruction=currt_language_instruction,
+                    task_progress_next=task_progress_fitted
+                )
         else:
             self.logger.warning("No observe data, skip inference.")
 
