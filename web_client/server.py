@@ -1189,15 +1189,14 @@ async def start_client():
 
     def _run_in_thread():
         try:
+            vla_client.run()
             asyncio.run_coroutine_threadsafe(
                 _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
                 loop
             )
 
-            vla_client.run()
-
             while client_state.running:
-                time.sleep(0.1)
+                time.sleep(0.25)
 
         except Exception as e:
             err = traceback.format_exc()
