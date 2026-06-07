@@ -363,7 +363,7 @@ function renderStats(data) {
   $('val-traj-time').textContent   = data.avg_traj_time != null
     ? (data.avg_traj_time * 1000).toFixed(1) + ' ms' : '–';
 
-  updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress);
+  updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
 
   const cpuVal = Number(data.cpu_usage);
   const gpuVal = Number(data.gpu_usage);
@@ -428,7 +428,7 @@ function renderJoints(containerId, values) {
   });
 }
 
-function updateTaskProgress(rawProgress) {
+function updateTaskProgress(rawProgress, subTaskId = null) {
   const fillEl = $('task-progress-fill');
   const valueEl = $('task-progress-value');
   if (!fillEl || !valueEl) return;
@@ -437,56 +437,63 @@ function updateTaskProgress(rawProgress) {
   if (!Number.isFinite(parsed)) {
     fillEl.style.width = '0%';
     valueEl.textContent = '--';
-    App.langAuto.lastProgress = null;
+    // App.langAuto.lastProgress = null;
     return;
   }
 
   const clamped = Math.max(0, Math.min(1, parsed));
   fillEl.style.width = `${(clamped * 100).toFixed(1)}%`;
   valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
-  maybeAutoSwitchLanguageByProgress(clamped);
+  renderSubTask(subTaskId);
 }
 
-function maybeAutoSwitchLanguageByProgress(progress01) {
+function renderSubTask(subTaskId = null) {
+  // console.log('renderSubTask called', { subTaskId });
+
   const autoChk = $('chk-lang-auto-mode');
   if (!autoChk || !autoChk.checked) {
-    App.langAuto.lastProgress = progress01;
+    // console.log('renderSubTask skipped: auto mode disabled or checkbox not found');
+    return;
+  }
+
+  if (subTaskId === null || subTaskId === undefined) {
+    // console.log('renderSubTask skipped: no subTaskId provided');
     return;
   }
 
   const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
   const textEl = $('lang-cmd-text');
-  if (!taskSel || !subtaskSel || !textEl) return;
-
-  const taskName = taskSel.value;
-  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  const n = subtasks.length;
-  if (n <= 1) {
-    App.langAuto.lastProgress = progress01;
+  if (!taskSel || !subtaskSel || !textEl) {
+    // console.warn('renderSubTask aborted: missing DOM elements', { taskSel, subtaskSel, textEl });
     return;
   }
 
-  const prev = App.langAuto.lastProgress;
-  App.langAuto.lastProgress = progress01;
-  if (!Number.isFinite(prev)) return;
+  const taskName = taskSel.value;
+  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  if (!Array.isArray(subtasks) || subtasks.length === 0) {
+    // console.warn('renderSubTask aborted: no subtasks available', { taskName, subtasks });
+    return;
+  }
 
   let curIdx = parseInt(subtaskSel.value, 10);
   if (!Number.isFinite(curIdx) || curIdx < 0) curIdx = 0;
 
-  let nextIdx = curIdx;
-  while (nextIdx < n - 1) {
-    const threshold = (nextIdx + 1) / n;
-    if (prev < threshold && progress01 >= threshold) nextIdx += 1;
-    else break;
+  if (subTaskId === curIdx) {
+    // console.log('renderSubTask no-op: target subTaskId equals current', { subTaskId, curIdx });
+    return;
   }
 
-  if (nextIdx === curIdx) return;
+  if (subTaskId < 0 || subTaskId >= subtasks.length) {
+    console.warn('renderSubTask aborted: subTaskId out of range', { subTaskId, length: subtasks.length });
+    return;
+  }
 
-  subtaskSel.value = String(nextIdx);
+  // console.log('renderSubTask switching subtask', { from: curIdx, to: subTaskId, taskName, subtaskText: subtasks[subTaskId] });
+  subtaskSel.value = String(subTaskId);
   subtaskSel.dispatchEvent(new Event('change'));
 
-  const lang = subtasks[nextIdx];
+  const lang = subtasks[subTaskId];
   if (typeof lang === 'string' && lang.trim()) {
     textEl.value = lang;
     sendCommand('set_language', { language: lang });
@@ -1634,7 +1641,7 @@ function setupLangPanel() {
   if (taskSel) {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
-      App.langAuto.lastProgress = null;
+      // App.langAuto.lastProgress = null;
 
       // Default select first sub-task after task switch.
       const taskName = taskSel.value;
@@ -1676,7 +1683,7 @@ function setupLangPanel() {
 
   if (autoChk) {
     autoChk.addEventListener('change', async () => {
-      App.langAuto.lastProgress = null;
+      // App.langAuto.lastProgress = null;
       const enabled = !!autoChk.checked;
       setThresholdEditable(enabled);
       await persistLanguagePatch({ 'language.auto_mode': enabled });

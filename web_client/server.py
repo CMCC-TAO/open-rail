@@ -525,7 +525,7 @@ async def _stats_push_loop():
             continue
         try:
             stats = _collect_stats()
-            print("Debug: pushing stats to WS clients.")
+            # print("Debug: pushing stats to WS clients.")
             await _broadcast({"type": "stats", "data": stats})
         except Exception as e:
             logger.debug(f"stats push error: {e}")
@@ -575,18 +575,19 @@ def _collect_stats() -> dict:
         base["infer_count"]     = int(vla_client.rdm.infer_count)
         base["avg_infer_time"]  = float(vla_client.rdm.avg_infer_time)
         base["avg_traj_time"]   = float(vla_client.rdm.avg_traj_time)
-        base["language"]        = str(vla_client.language)
+        base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
         base["current_state"]   = [round(float(x), 4) for x in vla_client.info_current_state]
         base["current_action"]  = [round(float(x), 4) for x in vla_client.info_current_action]
         base["info_obs"]        = {k: str(v) for k, v in vla_client.info_obs.items()}
         base["info_act"]        = {k: str(v) for k, v in vla_client.info_act.items()}
         try:
             base["current_prob_progress"] = float(vla_client.info_act.get("current_prob_progress", 0.0))
-            print(f"Debug: current_prob_progress value: {vla_client.info_act.get('current_prob_progress')}")
-        except Exception:
-            print(f"Warning: invalid current_prob_progress value: {vla_client.info_act.get('current_prob_progress')}")
+            base["sub_task_id"] = int(vla_client.config.language.sub_task_id) if hasattr(vla_client.config.language, 'sub_task_id') else None
+            # print(f"Debug: sub_task_id: {vla_client.config.language.sub_task_id}")
+        except Exception as e:
             base["current_prob_progress"] = 0.0
-        base["debug_info"]      = str(vla_client.debug_info)
+            logger.error("Failed to parse current_prob_progress from info_act: {e}")
+        # base["debug_info"]      = str(vla_client.debug_info)
         # base["config_snapshot"] = {
         #     "fps":              cfg.observer.fps,
         #     "wait_time":        cfg.controller.wait_time,
@@ -599,7 +600,8 @@ def _collect_stats() -> dict:
         #     "task_progress_threshold": cfg.task_progress_threshold,
         # }
     except Exception as e:
-        base["debug_info"] = f"stats error: {e}"
+        # base["debug_info"] = f"stats error: {e}"
+        logger.error(f"Failed to collect stats: {e}")
     return base
 
 
@@ -1612,7 +1614,8 @@ async def client_command(req: CommandRequest):
         elif cmd == "set_language":
             lang = params.get("language", "")
             paused_state = _pause_vla_client(vla_client)
-            vla_client.language = lang
+            vla_client.task_language_manager.currt_language_instruction = lang
+            # print(f"SET LANGUAGE Debug sub_task_id={vla_client.task_language_manager.currt_language_instruction}")
             # robot.reset_robot(mode='default')
             _resume_vla_client(vla_client, paused_state)
 

@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import numpy as np
 from collections import deque
 from typing import Deque, Dict, List, Optional
 from ml_collections import ConfigDict
@@ -25,6 +26,7 @@ class TaskLanguageManager:
         self.currt_language_instruction: str = self._sync_language_from_config()
         self.task_progress_queue: Deque[float] = deque()
         self.ready_for_advance: bool = True
+        self.sub_task_id_tmp: int = int(getattr(self.config, "sub_task_id", 0))
         self.logger.info(f"Task language manager inited. tasks={self.task_language_map}, currt_language_instruction={self.currt_language_instruction}")
 
     def _resolve_task_file_path(self, file_path: str) -> str:
@@ -74,6 +76,7 @@ class TaskLanguageManager:
         # Check if ready for advance based on task progress
         if self.ready_for_advance:
             avg_task_progress = self._average_task_progress(win_size=self.config.task_progress_win_size if hasattr(self.config, "task_progress_win_size") else 10)
+            # self.logger.debug(f"Avg task progress: {avg_task_progress:.2f}")
             task_progress_threshold = getattr(self.config, "task_progress_threshold", 0.9)
             if avg_task_progress >= task_progress_threshold:
                 self.ready_for_advance = False  # Reset advance flag until next threshold is reached
@@ -85,7 +88,7 @@ class TaskLanguageManager:
 
                 sub_task_id = int(getattr(self.config, "sub_task_id", 0))
                 sub_task_id = (sub_task_id + 1) % len(task_cmds)
-                self.config.sub_task_id = sub_task_id
+                self.sub_task_id_tmp = sub_task_id
                 self.currt_language_instruction = task_cmds[sub_task_id]
             # else:
             #     self.logger.debug(f"Not ready for advance. Avg task progress: {avg_task_progress:.2f}")
@@ -101,10 +104,18 @@ class TaskLanguageManager:
         """Add a new task progress value to the queue."""
         self.task_progress_queue.append(progress)
 
-    def reset_task_progress(self) -> None:
-        """Clear task progress queue and allow advance again."""
-        self.task_progress_queue.clear()
-        self.ready_for_advance = True
+    def reset_task_progress(self, language_instruction: str, task_progress_next: np.array) -> None:
+        """After advanced to next sub-task, clear task progress queue and wait for advancing again."""
+        if self.ready_for_advance == False and language_instruction == self.currt_language_instruction:
+            # Compute task progress for the next sub-task based on the provided task_progress_next array
+            length = min(len(task_progress_next), getattr(self.config, "task_progress_win_size", 10))
+            avg_task_progress_next = np.mean(task_progress_next[:length]) if length > 0 else 0.0
+            if avg_task_progress_next < getattr(self.config, "task_progress_threshold", 0.9) / 10:
+                # Only reset if the next sub-task progress is very low, indicating a new sub-task has started
+                self.logger.info(f"Resetting task progress for next subtask. Initial avg progress: {avg_task_progress_next:.2f}")
+                self.config.sub_task_id = self.sub_task_id_tmp  # Sign the sub_task_id to the new one
+                self.task_progress_queue.clear()
+                self.ready_for_advance = True
 
     def _average_task_progress(self, win_size: int) -> float:
         """Return average of the latest win_size task progress values, or 0.0 if not enough data."""
