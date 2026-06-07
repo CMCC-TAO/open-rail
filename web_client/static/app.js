@@ -700,6 +700,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.sub_task_id',
   'language.auto_mode',
   'language.task_progress_threshold',
+  'language.task_progress_win_size',
   'visual.camera.connect_when_running',
   'visual.camera.open_head',
   'visual.camera.open_wrist_left',
@@ -1573,11 +1574,13 @@ function setupLangPanel() {
   const subtaskSel = $('lang-subtask-select');
   const autoChk = $('chk-lang-auto-mode');
   const thresholdInput = $('inp-lang-threshold');
+  const winSizeInput = $('inp-lang-win-size');
   let thresholdSaveTimer = null;
+  let winSizeSaveTimer = null;
 
-  const setThresholdEditable = (enabled) => {
-    if (!thresholdInput) return;
-    thresholdInput.disabled = !enabled;
+  const setAutoModeEditable = (enabled) => {
+    if (thresholdInput) thresholdInput.disabled = !enabled;
+    if (winSizeInput) winSizeInput.disabled = !enabled;
   };
 
   const getConfigSavePath = () => {
@@ -1637,6 +1640,18 @@ function setupLangPanel() {
     await persistLanguagePatch({ 'language.task_progress_threshold': value });
   };
 
+  const commitWinSize = async () => {
+    if (!winSizeInput || winSizeInput.disabled) return;
+    const raw = winSizeInput.value.trim();
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value <= 0) {
+      winSizeInput.style.borderColor = 'var(--danger)';
+      return;
+    }
+    winSizeInput.style.borderColor = '';
+    await persistLanguagePatch({ 'language.task_progress_win_size': value });
+  };
+
   // Task select → rebuild subtask list and default to first sub-task.
   if (taskSel) {
     taskSel.addEventListener('change', () => {
@@ -1685,7 +1700,7 @@ function setupLangPanel() {
     autoChk.addEventListener('change', async () => {
       // App.langAuto.lastProgress = null;
       const enabled = !!autoChk.checked;
-      setThresholdEditable(enabled);
+      setAutoModeEditable(enabled);
       await persistLanguagePatch({ 'language.auto_mode': enabled });
     });
   }
@@ -1720,7 +1735,37 @@ function setupLangPanel() {
     });
   }
 
-  setThresholdEditable(!!(autoChk && autoChk.checked));
+  if (winSizeInput) {
+    winSizeInput.addEventListener('input', () => {
+      const value = Number(winSizeInput.value.trim());
+      winSizeInput.style.borderColor = (Number.isInteger(value) && value > 0) ? '' : 'var(--danger)';
+      if (winSizeInput.disabled || !Number.isInteger(value) || value <= 0) return;
+      if (winSizeSaveTimer) clearTimeout(winSizeSaveTimer);
+      winSizeSaveTimer = setTimeout(() => {
+        winSizeSaveTimer = null;
+        commitWinSize();
+      }, 300);
+    });
+
+    winSizeInput.addEventListener('change', async () => {
+      if (winSizeSaveTimer) {
+        clearTimeout(winSizeSaveTimer);
+        winSizeSaveTimer = null;
+      }
+      await commitWinSize();
+    });
+
+    winSizeInput.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      if (winSizeSaveTimer) {
+        clearTimeout(winSizeSaveTimer);
+        winSizeSaveTimer = null;
+      }
+      await commitWinSize();
+    });
+  }
+
+  setAutoModeEditable(!!(autoChk && autoChk.checked));
 }
 
 // ═══════════════════════════════════════════════════════
@@ -2021,8 +2066,9 @@ async function loadConfigFromServer() {
     renderConfigTree(App.config);
     renderRecordingConfigTree(App.config);
     applyVisualConfig(App.config);
-    // Apply language-related UI state from config (task/sub-task/auto/threshold)
-    applyLangConfigSelection();
+    // Apply language-related UI state from config (task/sub-task/auto/threshold/win_size)
+    // On initial startup from YAML config, default sub-task to first entry.
+    applyLangConfigSelection(true);
     // Set default path display on startup
     const display = $('conf-path-display');
     if (display && !display.dataset.fullPath) {
@@ -2064,16 +2110,24 @@ async function loadDefaultLangFile() {
  * and Config panel selects to reflect App.config.task_id / sub_task_id.
  * Also fills lang-cmd-text with the corresponding instruction.
  */
-function applyLangConfigSelection() {
+function applyLangConfigSelection(forceFirstSubtask = false) {
   const task = App.config && App.config.language && App.config.language.task_id;
-  const index = (App.config && App.config.language && App.config.language.sub_task_id != null) ? App.config.language.sub_task_id : 0;
+  const rawIndex = (App.config && App.config.language && App.config.language.sub_task_id != null) ? App.config.language.sub_task_id : 0;
+  let index = Number(rawIndex);
+  if (!Number.isFinite(index)) index = 0;
+  if (forceFirstSubtask) index = 0;
+
   const autoModeRaw = App.config && App.config.language && App.config.language.auto_mode;
   const autoMode = (autoModeRaw === true || autoModeRaw === 'true' || autoModeRaw === 1 || autoModeRaw === '1');
   const thresholdRaw = App.config && App.config.language && App.config.language.task_progress_threshold;
   const threshold = Number(thresholdRaw);
+  const winSizeRaw = App.config && App.config.language && App.config.language.task_progress_win_size;
+  const winSize = Number(winSizeRaw);
 
   const autoChk = $('chk-lang-auto-mode');
   if (autoChk) autoChk.checked = autoMode;
+
+  const editable = !!(autoChk ? autoChk.checked : autoMode);
 
   const thresholdInput = $('inp-lang-threshold');
   if (thresholdInput) {
@@ -2082,14 +2136,27 @@ function applyLangConfigSelection() {
       ? threshold
       : (Number.isFinite(fallback) ? fallback : 0.95);
     thresholdInput.value = String(displayThreshold);
-    thresholdInput.disabled = !(autoChk ? !!autoChk.checked : autoMode);
+    thresholdInput.disabled = !editable;
     thresholdInput.style.borderColor = '';
+  }
+
+  const winSizeInput = $('inp-lang-win-size');
+  if (winSizeInput) {
+    const fallback = Number(winSizeInput.value);
+    const displayWinSize = (Number.isInteger(winSize) && winSize > 0)
+      ? winSize
+      : ((Number.isInteger(fallback) && fallback > 0) ? fallback : 10);
+    winSizeInput.value = String(displayWinSize);
+    winSizeInput.disabled = !editable;
+    winSizeInput.style.borderColor = '';
   }
 
   // Sync Lang Panel Task select
   const taskSel = $('lang-task-select');
   if (taskSel && task && LangCmd.tasks[task]) {
     taskSel.value = task;
+  } else if (taskSel && taskSel.options.length > 0 && !taskSel.value) {
+    taskSel.selectedIndex = 0;
   }
 
   // Rebuild subtask list for the selected task
@@ -2097,17 +2164,29 @@ function applyLangConfigSelection() {
 
   // Sync Lang Panel Sub-task select
   const subtaskSel = $('lang-subtask-select');
+  const taskName = taskSel ? taskSel.value : null;
+  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  const safeIndex = subtasks.length > 0
+    ? Math.max(0, Math.min(index, subtasks.length - 1))
+    : -1;
+
   if (subtaskSel) {
-    subtaskSel.value = index;
-    const taskName = taskSel ? taskSel.value : null;
-    const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-    if (subtasks[index] !== undefined) {
-      $('lang-cmd-text').value = subtasks[index];
+    if (safeIndex >= 0) {
+      subtaskSel.value = String(safeIndex);
+      $('lang-cmd-text').value = subtasks[safeIndex] ?? '';
+    } else {
+      subtaskSel.value = '';
+      $('lang-cmd-text').value = '';
     }
   }
 
+  if (App.config && App.config.language && safeIndex >= 0) {
+    App.config.language.task_id = taskName || App.config.language.task_id;
+    App.config.language.sub_task_id = safeIndex;
+  }
+
   // Sync Config panel selects
-  syncLangTaskOptions(task, index);
+  syncLangTaskOptions(taskName || task, safeIndex >= 0 ? safeIndex : 0);
 }
 
 // ═══════════════════════════════════════════════════════
@@ -3828,5 +3907,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initConfDir().then(async () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
+    applyLangConfigSelection(true);
   });
 });
