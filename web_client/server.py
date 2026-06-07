@@ -1213,7 +1213,7 @@ async def start_client():
                 if client_state.worker_thread is threading.current_thread():
                     client_state.worker_thread = None
 
-    t = threading.Thread(target=_run_in_thread, daemon=False, name="vla-client")
+    t = threading.Thread(target=_run_in_thread, daemon=True, name="vla-client")
     with client_state.lock:
         client_state.worker_thread = t
     t.start()
@@ -1330,7 +1330,7 @@ async def pause_client():
     with client_state.lock:
         client_state.paused_thread_state = paused_state
 
-    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True)})
+    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=False)})
     return {"status": "ok"}
 
 
