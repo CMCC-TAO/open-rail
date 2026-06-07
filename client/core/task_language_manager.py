@@ -119,6 +119,7 @@ class TaskLanguageManager:
 
     def _average_task_progress(self, win_size: int) -> float:
         """Return average of the latest win_size task progress values, or 0.0 if not enough data."""
+        # print(f"Debug: window size for average task progress: {win_size}")
         if len(self.task_progress_queue) < win_size:
             return 0.0
         latest_values = list(self.task_progress_queue)[-win_size:]
