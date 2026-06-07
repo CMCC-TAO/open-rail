@@ -1190,7 +1190,7 @@ async def start_client():
     def _run_in_thread():
         try:
             asyncio.run_coroutine_threadsafe(
-                _broadcast({"type": "status", "data": {"running": True, "message": "Client started."}}),
+                _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
                 loop
             )
 
