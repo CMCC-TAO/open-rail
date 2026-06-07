@@ -3421,9 +3421,11 @@ function wireEvents() {
   $('btn-pause').addEventListener('click', async () => {
     try {
       if (App.isPaused) {
+        toast('Client resuming.', 'ok');
         await apiFetch('/api/client/resume', { method: 'POST' });
         // toast('Client resumed.', 'ok');
       } else {
+        toast('Client pausing.', 'ok');
         await apiFetch('/api/client/pause', { method: 'POST' });
         // toast('Client paused.', 'warn');
       }
