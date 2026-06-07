@@ -1329,7 +1329,7 @@ async def pause_client():
     with client_state.lock:
         client_state.paused_thread_state = paused_state
 
-    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=False)})
+    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True)})
     return {"status": "ok"}
 
 

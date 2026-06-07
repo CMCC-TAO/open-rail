@@ -3397,40 +3397,70 @@ function wireEvents() {
 
   // Client control
   $('btn-start').addEventListener('click', async () => {
-    if (App.isRunning) {
-      try { await apiFetch('/api/client/stop', { method: 'POST' }); } catch (e) { /* toasted */ }
-      return;
-    }
+    const btnStart = $('btn-start');
+    const btnPause = $('btn-pause');
+    
+    // Prevent duplicate rapid clicks
+    if (btnStart.dataset.pending === '1') return;
+    btnStart.dataset.pending = '1';
+    btnStart.disabled = true;
+    if (btnPause) btnPause.disabled = true;
 
     try {
+      if (App.isRunning) {
+        // Stop request
+        try { await apiFetch('/api/client/stop', { method: 'POST' }); } catch (e) { /* toasted */ }
+        return;
+      }
+
+      // Apply config patch BEFORE starting
+      const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };
+      if (Object.keys(patchToApply).length) {
+        try {
+          const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
+          App.config = res.config || App.config;
+          App.pendingPatch = {};
+          clearPending();
+        } catch (e) { 
+          delete btnStart.dataset.pending;
+          setRunningUI(App.isRunning, App.isPaused);
+          return;
+        }
+      }
+
+      // Now start client
       toast('Client starting…', 'info');
       await apiFetch('/api/client/start', { method: 'POST' });
     } catch (e) { /* toasted */ }
-
-    const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };
-    if (Object.keys(patchToApply).length) {
-      try {
-        const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
-        App.config = res.config || App.config;
-        App.pendingPatch = {};
-        clearPending();
-      } catch (e) { return; }
+    finally {
+      delete btnStart.dataset.pending;
+      // Re-sync UI state (status broadcast will update, but unlock buttons)
+      setRunningUI(App.isRunning, App.isPaused);
     }
-
   });
 
   $('btn-pause').addEventListener('click', async () => {
+    const btnPause = $('btn-pause');
+    
+    // Prevent duplicate rapid clicks
+    if (btnPause.dataset.pending === '1') return;
+    btnPause.dataset.pending = '1';
+    btnPause.disabled = true;
+
     try {
       if (App.isPaused) {
-        toast('Client resuming.', 'ok');
+        // toast('Client resuming…', 'info');
         await apiFetch('/api/client/resume', { method: 'POST' });
-        // toast('Client resumed.', 'ok');
       } else {
-        toast('Client pausing.', 'ok');
+        // toast('Client pausing…', 'info');
         await apiFetch('/api/client/pause', { method: 'POST' });
-        // toast('Client paused.', 'warn');
       }
     } catch (e) { /* toasted */ }
+    finally {
+      delete btnPause.dataset.pending;
+      // Re-sync UI state  
+      setRunningUI(App.isRunning, App.isPaused);
+    }
   });
 
   $('btn-reset').addEventListener('click',  async () => {
