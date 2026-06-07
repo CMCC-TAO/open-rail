@@ -3402,6 +3402,11 @@ function wireEvents() {
       return;
     }
 
+    try {
+      toast('Client starting…', 'info');
+      await apiFetch('/api/client/start', { method: 'POST' });
+    } catch (e) { /* toasted */ }
+
     const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };
     if (Object.keys(patchToApply).length) {
       try {
@@ -3412,10 +3417,6 @@ function wireEvents() {
       } catch (e) { return; }
     }
 
-    try {
-      toast('Client starting…', 'info');
-      await apiFetch('/api/client/start', { method: 'POST' });
-    } catch (e) { /* toasted */ }
   });
 
   $('btn-pause').addEventListener('click', async () => {
