@@ -1002,6 +1002,7 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
     # print(f"config after flat patch: {config}")
     # print(f"config after flat patch: {config.record.info.features.keys()}")
     # print(f"config after flat patch: {cam_head}")
+    config.language.sub_task_id = 0  # reset sub_task_id to avoid invalid value after patch
     logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
 
 
@@ -1429,7 +1430,10 @@ async def stop_client():
     with client_state.lock:
         is_active = client_state.running or (client_state.vla_client is not None)
         client_state.running = False
+    # is_active = client_state.running or (client_state.vla_client is not None)
+    # client_state.running = False
     if not is_active:
+        print(f"Debug: stop_client called but client is not active (running={client_state.running})")
         raise HTTPException(400, "Client is not running.")
 
     await asyncio.to_thread(_join_worker_thread, 5.0)

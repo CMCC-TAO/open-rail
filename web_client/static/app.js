@@ -3412,7 +3412,10 @@ function wireEvents() {
       } catch (e) { return; }
     }
 
-    try { await apiFetch('/api/client/start', { method: 'POST' }); toast('Client starting…', 'info'); } catch (e) { /* toasted */ }
+    try {
+      toast('Client starting…', 'info');
+      await apiFetch('/api/client/start', { method: 'POST' });
+    } catch (e) { /* toasted */ }
   });
 
   $('btn-pause').addEventListener('click', async () => {
