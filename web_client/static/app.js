@@ -2568,6 +2568,35 @@ async function refreshRecordingFileList() {
   } catch (_) { /* toasted */ }
 }
 
+function isRecordingPanelExpanded() {
+  const body = $('recording-body');
+  return !!body && !body.classList.contains('collapsed');
+}
+
+function stopRecordingFileListPolling() {
+  if (App.recordingListTimer) {
+    clearInterval(App.recordingListTimer);
+    App.recordingListTimer = null;
+  }
+}
+
+function startRecordingFileListPolling() {
+  if (App.recordingListTimer) return;
+  App.recordingListTimer = setInterval(() => {
+    if (!isRecordingPanelExpanded()) return;
+    refreshRecordingFileList();
+  }, 5000);
+}
+
+function syncRecordingFileListPolling() {
+  if (isRecordingPanelExpanded()) {
+    refreshRecordingFileList();
+    startRecordingFileListPolling();
+  } else {
+    stopRecordingFileListPolling();
+  }
+}
+
 function setupLeftPanelAccordion() {
   const panels = [
     { panelId: 'panel-config',    headerId: 'panel-config-header',    bodyId: 'config-body',    btnId: 'btn-config-collapse' },
@@ -2604,7 +2633,7 @@ function setupLeftPanelAccordion() {
     });
 
     currentExpandedBodyId = targetBodyId;
-    if (targetBodyId === 'recording-body') refreshRecordingFileList();
+    syncRecordingFileListPolling();
   };
 
   const togglePanel = (bodyId) => {
@@ -2741,9 +2770,7 @@ function setupRecordingPanel() {
   });
 
   syncRecordingSwitchUI();
-  refreshRecordingFileList();
-  if (App.recordingListTimer) clearInterval(App.recordingListTimer);
-  App.recordingListTimer = setInterval(refreshRecordingFileList, 5000);
+  syncRecordingFileListPolling();
 }
 
 // ═══════════════════════════════════════════════════════
