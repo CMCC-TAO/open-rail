@@ -1194,25 +1194,20 @@ async def _bg_start_client():
         await _broadcast({"type": "error", "data": {"message": f"Failed to initialize client: {e}", "trace": err}})
         return
 
-    should_abort = False
     with client_state.lock:
         client_state.starting = False
         if client_state.stopping:
             logger.warning("Client start aborted because stop was requested during initialization.")
+            try:
+                vla_client.close()
+            except Exception:
+                pass
             client_state.vla_client = None
             client_state.robot = None
-            should_abort = True
-        elif client_state.running:
             return
-        else:
-            client_state.running = True
-
-    if should_abort:
-        try:
-            vla_client.close()
-        except Exception:
-            pass
-        return
+        if client_state.running:
+            return
+        client_state.running = True
 
     def _run_in_thread():
         try:
@@ -1445,10 +1440,8 @@ async def _bg_toggle_control_and_broadcast(vla_client):
 @app.post("/api/client/pause")
 async def pause_client():
     """Pause observe/inference/control without releasing resources."""
-    with client_state.lock:
-        vla_client = client_state.vla_client
-        running = client_state.running
-    if vla_client is None or not running:
+    vla_client = client_state.vla_client
+    if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
 
     asyncio.create_task(_bg_pause_and_broadcast(vla_client))
@@ -1458,10 +1451,8 @@ async def pause_client():
 @app.post("/api/client/resume")
 async def resume_client():
     """Resume observe/inference/control to the exact state before pause."""
-    with client_state.lock:
-        vla_client = client_state.vla_client
-        running = client_state.running
-    if vla_client is None or not running:
+    vla_client = client_state.vla_client
+    if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
 
     asyncio.create_task(_bg_resume_and_broadcast(vla_client))
@@ -1504,8 +1495,6 @@ async def start_control_only():
 async def stop_client():
     """Stop client quickly; release heavy native resources in background."""
     with client_state.lock:
-        if client_state.stopping:
-            return {"status": "ok", "message": "Client is already stopping."}
         is_active = client_state.running or (client_state.vla_client is not None) or getattr(client_state, "starting", False)
         client_state.running = False
         client_state.paused_thread_state = None

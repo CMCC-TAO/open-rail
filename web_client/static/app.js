@@ -78,6 +78,7 @@ const App = {
   isObserveRunning: false,
   isInferenceRunning: false,
   isControlRunning: false,
+  currentFetchController: null,
 
   // Camera WebSocket (port 8765 — VLAWebSocketServer)
   camWs: null,
@@ -125,8 +126,6 @@ const App = {
   },
 
   recordingListTimer: null,
-  recordingListInFlight: false,
-  statusPollInFlight: false,
   recordingTask: null,
   recordingTasksSnapshot: [],
   recordingChunk: null,
@@ -154,27 +153,51 @@ function toast(msg, type = 'info', duration = 3500) {
 }
 
 async function apiFetch(url, opts = {}) {
-  const { timeoutMs = 1250, ...fetchOpts } = opts || {};
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 1250));
+  const { timeoutMs = 5000, expectJson = true, signal: externalSignal = null, ...fetchOpts } = opts || {};
+  const startTime = performance.now();
+  const controller = externalSignal ? null : new AbortController();
+  const signal = externalSignal || controller.signal;
+  const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000)) : null;
+
   try {
     const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
+      headers: fetchOpts.headers || { 'Content-Type': 'application/json' },
+      signal,
       ...fetchOpts,
     });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.detail || JSON.stringify(json));
-    return json;
+
+    const elapsed = performance.now() - startTime;
+    const contentType = String(res.headers.get('content-type') || '').toLowerCase();
+    let json = null;
+    if (expectJson && contentType.includes('application/json')) {
+      try {
+        json = await res.json();
+      } catch (parseErr) {
+        console.warn('[apiFetch] failed to parse JSON', { url, parseErr });
+      }
+    }
+
+    if (!res.ok) {
+      const errorMessage = json && (json.detail || json.message) ? (json.detail || json.message) : `${res.status} ${res.statusText}`;
+      console.error('[apiFetch] request failed', { url, status: res.status, statusText: res.statusText, elapsedMs: elapsed.toFixed(1), body: json });
+      throw new Error(errorMessage);
+    }
+
+    const responseLog = { url, status: res.status, statusText: res.statusText, elapsedMs: elapsed.toFixed(1), body: json };
+    console.debug('[apiFetch] request success', responseLog);
+    return json !== null ? json : { status: res.status, statusText: res.statusText };
   } catch (e) {
+    const elapsed = performance.now() - startTime;
+    const errLog = { url, elapsedMs: elapsed.toFixed(1), error: e && e.message ? e.message : e };
+    console.error('[apiFetch] request error', errLog);
     if (e && e.name === 'AbortError') {
-      toast(`Request timeout: ${url}`, 'error');
+      toast(`Request aborted: ${url}`, 'error');
     } else {
-      toast(e.message, 'error');
+      toast(e && e.message ? e.message : String(e), 'error');
     }
     throw e;
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -2561,8 +2584,6 @@ async function deleteRecordingEpisode(episodeId) {
 }
 
 async function refreshRecordingFileList() {
-  if (App.recordingListInFlight) return;
-  App.recordingListInFlight = true;
   try {
     const requestedTask = App.recordingTask;
     const requestedChunk = App.recordingChunk;
@@ -2571,7 +2592,7 @@ async function refreshRecordingFileList() {
     if (requestedChunk) params.set('chunk', requestedChunk);
 
     const q = params.toString();
-    const res = await apiFetch(`/api/recording/files${q ? `?${q}` : ''}`, { timeoutMs: 4000 });
+    const res = await apiFetch(`/api/recording/files${q ? `?${q}` : ''}`);
     renderRecordingFileList(res);
 
     const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
@@ -2580,13 +2601,10 @@ async function refreshRecordingFileList() {
       if (App.recordingTask) params2.set('task', App.recordingTask);
       if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
       const q2 = params2.toString();
-      const res2 = await apiFetch(`/api/recording/files${q2 ? `?${q2}` : ''}`, { timeoutMs: 4000 });
+      const res2 = await apiFetch(`/api/recording/files${q2 ? `?${q2}` : ''}`);
       renderRecordingFileList(res2);
     }
   } catch (_) { /* toasted */ }
-  finally {
-    App.recordingListInFlight = false;
-  }
 }
 
 function isRecordingPanelExpanded() {
@@ -3462,24 +3480,31 @@ function wireEvents() {
 
   $('btn-pause').addEventListener('click', async () => {
     const btnPause = $('btn-pause');
-    
+
     // Prevent duplicate rapid clicks
     if (btnPause.dataset.pending === '1') return;
     btnPause.dataset.pending = '1';
     btnPause.disabled = true;
 
+    if (App.currentFetchController) {
+      try { App.currentFetchController.abort(); } catch (_) {}
+      App.currentFetchController = null;
+    }
+
+    const controller = new AbortController();
+    App.currentFetchController = controller;
+
     try {
       if (App.isPaused) {
-        // toast('Client resuming…', 'info');
-        await apiFetch('/api/client/resume', { method: 'POST' });
+        await apiFetch('/api/client/resume', { method: 'POST', timeoutMs: 5000, signal: controller.signal });
       } else {
-        // toast('Client pausing…', 'info');
-        await apiFetch('/api/client/pause', { method: 'POST' });
+        await apiFetch('/api/client/pause', { method: 'POST', timeoutMs: 5000, signal: controller.signal });
       }
     } catch (e) { /* toasted */ }
     finally {
       delete btnPause.dataset.pending;
-      // Re-sync UI state  
+      if (App.currentFetchController === controller) App.currentFetchController = null;
+      // Re-sync UI state
       setRunningUI(App.isRunning, App.isPaused);
     }
   });
@@ -3489,51 +3514,61 @@ function wireEvents() {
     toast('Robot reset initiated.', 'info');
   });
 
-  $('btn-observe').addEventListener('click', () => {
-    // Fire-and-forget: don't await potentially long/blocking server work.
-    apiFetch('/api/client/observe/start', { method: 'POST' })
-      .then((res) => {
-        const data = res?.data;
-        if (data) {
-          App.isObserveRunning = !!data.observe_running;
-          App.isInferenceRunning = !!data.inference_running;
-          App.isControlRunning = !!data.control_running;
-        }
-        connectCamWS();
-        // syncRuntimeCameraConfig();
-        setThreadControlUI();
-      })
-      .catch(() => { /* toasted */ });
+  $('btn-observe').addEventListener('click', async () => {
+    if (App.currentFetchController) {
+      try { App.currentFetchController.abort(); } catch (_) {}
+      App.currentFetchController = null;
+    }
+
+    const controller = new AbortController();
+    App.currentFetchController = controller;
+
+    try {
+      const res = await apiFetch('/api/client/observe/start', { method: 'POST', timeoutMs: 5000, signal: controller.signal });
+      const data = res?.data;
+      if (data) {
+        App.isObserveRunning = !!data.observe_running;
+        App.isInferenceRunning = !!data.inference_running;
+        App.isControlRunning = !!data.control_running;
+      }
+      connectCamWS();
+      // syncRuntimeCameraConfig();
+      setThreadControlUI();
+    } catch (e) {
+      if (e && e.name === 'AbortError') {
+        toast('Observe request cancelled.', 'warn');
+      }
+    } finally {
+      if (App.currentFetchController === controller) App.currentFetchController = null;
+    }
   });
 
-  $('btn-infer').addEventListener('click', () => {
+  $('btn-infer').addEventListener('click', async () => {
     if (!App.isObserveRunning) return;
-    apiFetch('/api/client/infer/start', { method: 'POST' })
-      .then((res) => {
-        const data = res?.data;
-        if (data) {
-          App.isObserveRunning = !!data.observe_running;
-          App.isInferenceRunning = !!data.inference_running;
-          App.isControlRunning = !!data.control_running;
-        }
-        setThreadControlUI();
-      })
-      .catch(() => { /* toasted */ });
+    try {
+      const res = await apiFetch('/api/client/infer/start', { method: 'POST', timeoutMs: 5000 });
+      const data = res?.data;
+      if (data) {
+        App.isObserveRunning = !!data.observe_running;
+        App.isInferenceRunning = !!data.inference_running;
+        App.isControlRunning = !!data.control_running;
+      }
+      setThreadControlUI();
+    } catch (_) { /* toasted */ }
   });
 
-  $('btn-control').addEventListener('click', () => {
+  $('btn-control').addEventListener('click', async () => {
     if (!App.isObserveRunning || !App.isInferenceRunning) return;
-    apiFetch('/api/client/control/start', { method: 'POST' })
-      .then((res) => {
-        const data = res?.data;
-        if (data) {
-          App.isObserveRunning = !!data.observe_running;
-          App.isInferenceRunning = !!data.inference_running;
-          App.isControlRunning = !!data.control_running;
-        }
-        setThreadControlUI();
-      })
-      .catch(() => { /* toasted */ });
+    try {
+      const res = await apiFetch('/api/client/control/start', { method: 'POST', timeoutMs: 5000 });
+      const data = res?.data;
+      if (data) {
+        App.isObserveRunning = !!data.observe_running;
+        App.isInferenceRunning = !!data.inference_running;
+        App.isControlRunning = !!data.control_running;
+      }
+      setThreadControlUI();
+    } catch (_) { /* toasted */ }
   });
 
   // Language Command panel — JSON file picker
@@ -3969,15 +4004,12 @@ async function sendCommand(command, params = {}) {
 // ═══════════════════════════════════════════════════════
 function startStatusPoll() {
   setInterval(async () => {
-    if (App.wsAlive || App.statusPollInFlight) return;
-    App.statusPollInFlight = true;
+    if (App.wsAlive) return;
     try {
-      const json = await apiFetch('/api/client/status', { timeoutMs: 3000 });
+      const res  = await fetch('/api/client/status');
+      const json = await res.json();
       if (json.data) renderStats(json.data);
     } catch (e) { /* ignore */ }
-    finally {
-      App.statusPollInFlight = false;
-    }
   }, 1000);
 }
 
