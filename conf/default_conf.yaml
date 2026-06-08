@@ -38,7 +38,7 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 3
+  sub_task_id: 1
   task_id: tea_master
   task_progress_threshold: 0.95
   task_progress_win_size: 10
@@ -56,7 +56,7 @@ rdm:
       policy: stepwise
       start: 14
   max_len: 100
-  mode: async
+  mode: sync
   record_data: false
 record:
   info:
@@ -271,7 +271,7 @@ visual:
   trajectory:
     play: true
     selected_joints:
-    - 0
+    - 8
     source:
     - ActionRaw
     - ActionFitted
