@@ -12,7 +12,6 @@ from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
 from conf.logging_conf import setup_logging
 from client.core.vla_client import VLAClientAsync
-from client.core.vla_client_sync import VLAClientSync
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -283,17 +282,14 @@ if __name__ == "__main__":
     rdm = RealtimeDataManager(config.rdm)
     inter_chunk_fuser = InterChunkFuser(config=config.inter_chunk)
     intra_chunk_smoother = IntraChunkSmoother(config=config.intra_chunk)
-    if config.inter_chunk.inter_chunk_mode == 'sync':
-        vla_client = VLAClientSync(config=config, rdm=rdm, intra_chunk_smoother=intra_chunk_smoother, vla_zmq_client=vla_zmq_client, robot=robot)
-    else:
-        vla_client = VLAClientAsync(
-            config=config,
-            rdm=rdm,
-            inter_chunk_fuser=inter_chunk_fuser,
-            intra_chunk_smoother=intra_chunk_smoother,
-            vla_zmq_client=vla_zmq_client,
-            robot=robot)
-
+    vla_client = VLAClientAsync(
+        config=config,
+        rdm=rdm,
+        inter_chunk_fuser=inter_chunk_fuser,
+        intra_chunk_smoother=intra_chunk_smoother,
+        vla_zmq_client=vla_zmq_client,
+        robot=robot
+        )
 
     # extra
     if args.extra_dispatch_mode[0] != '0':
