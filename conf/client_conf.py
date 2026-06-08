@@ -32,7 +32,6 @@ def get_client_config():
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
     config.vis_zmq = get_vis_zmq_config()
-    config.vis_action_length = 1000
     config.visual = get_visual_config()
     config.record = get_record_data_config()  # Data recording configuration
     config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
