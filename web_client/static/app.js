@@ -152,16 +152,27 @@ function toast(msg, type = 'info', duration = 3500) {
 }
 
 async function apiFetch(url, opts = {}) {
+  const { timeoutMs = 1250, ...fetchOpts } = opts || {};
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 1250));
   try {
     const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json' }, ...opts,
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      ...fetchOpts,
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.detail || JSON.stringify(json));
     return json;
   } catch (e) {
-    toast(e.message, 'error');
+    if (e && e.name === 'AbortError') {
+      toast(`Request timeout: ${url}`, 'error');
+    } else {
+      toast(e.message, 'error');
+    }
     throw e;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -595,40 +606,10 @@ function setThreadControlUI() {
   if (controlSub) controlSub.textContent = controlRunning ? 'Stop' : 'Start';
 }
 
-function setRunningUI(running, paused = false) {
-  if (App.isRunning === running && App.isPaused === paused) {
-    setThreadControlUI();
-    return;
-  }
-  const wasRunning = App.isRunning === true;
-  App.isRunning = running;
-  App.isPaused  = paused;
-
-  // Camera Visual: connect dedicated WS server when running
-  if (running) {
-    connectCamWS();
-    syncRuntimeCameraConfig();
-  } else {
-    disconnectCamWS();
-  }
-
-  // Status badge
-  let badgeText, badgeClass;
-  if (!running) {
-    badgeText  = 'STOPPED';
-    badgeClass = 'stopped';
-  } else if (paused) {
-    badgeText  = 'PAUSED';
-    badgeClass = 'paused';
-  } else {
-    badgeText  = 'RUNNING';
-    badgeClass = 'running';
-  }
-  $('status-badge').textContent = badgeText;
-  $('status-badge').className   = `status-badge ${badgeClass}`;
-
-  // btn-start toggles Start/Stop
+function syncStartPauseButtons(running, paused = false) {
   const btnStart = $('btn-start');
+  const btnPause = $('btn-pause');
+
   if (running) {
     btnStart.textContent = '■ Stop';
     btnStart.className = 'btn btn-danger btn-sm';
@@ -636,11 +617,7 @@ function setRunningUI(running, paused = false) {
     btnStart.textContent = '▶ Start';
     btnStart.className = 'btn btn-success btn-sm';
   }
-  btnStart.disabled = false;
 
-  // Pause button toggles Pause/Resume while running
-  const btnPause = $('btn-pause');
-  btnPause.disabled = !running;
   if (!running) {
     btnPause.textContent = '⏸ Pause';
     btnPause.className = 'btn btn-danger  btn-sm';
@@ -652,19 +629,55 @@ function setRunningUI(running, paused = false) {
     btnPause.className = 'btn btn-danger  btn-sm';
   }
 
+  btnStart.disabled = btnStart.dataset.pending === '1';
+  btnPause.disabled = (btnPause.dataset.pending === '1') || !running;
+}
+
+function setRunningUI(running, paused = false) {
+  const unchanged = (App.isRunning === running && App.isPaused === paused);
+  const wasRunning = App.isRunning === true;
+  App.isRunning = running;
+  App.isPaused  = paused;
+
+  if (!unchanged) {
+    // Camera Visual: connect dedicated WS server when running
+    if (running) {
+      connectCamWS();
+      syncRuntimeCameraConfig();
+    } else {
+      disconnectCamWS();
+    }
+
+    // Status badge
+    let badgeText, badgeClass;
+    if (!running) {
+      badgeText  = 'STOPPED';
+      badgeClass = 'stopped';
+    } else if (paused) {
+      badgeText  = 'PAUSED';
+      badgeClass = 'paused';
+    } else {
+      badgeText  = 'RUNNING';
+      badgeClass = 'running';
+    }
+    $('status-badge').textContent = badgeText;
+    $('status-badge').className   = `status-badge ${badgeClass}`;
+
+    // Persist visual state only when transitioning from running -> stopped.
+    // Avoid startup/status-sync overwriting config before user interaction.
+    if (!running && wasRunning) {
+      schedulePersistVisualState(0);
+    }
+
+    if (!running) {
+      App.isRecording = false;
+    }
+    syncRecordingSwitchUI();
+  }
+
+  syncStartPauseButtons(running, paused);
   $('btn-reset').disabled = !running;             // available in both running states
   setThreadControlUI();
-
-  // Persist visual state only when transitioning from running -> stopped.
-  // Avoid startup/status-sync overwriting config before user interaction.
-  if (!running && wasRunning) {
-    schedulePersistVisualState(0);
-  }
-
-  if (!running) {
-    App.isRecording = false;
-  }
-  syncRecordingSwitchUI();
 }
 
 // ═══════════════════════════════════════════════════════
