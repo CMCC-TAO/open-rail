@@ -205,7 +205,6 @@ class VLAClientAsync():
                 timestamps,
                 action_chunk,
                 task_progress=prob_progress)
-            # action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
@@ -285,7 +284,6 @@ class VLAClientAsync():
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
                 prob_progress = action_data['ext']['prob_progress']
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk, task_progress=prob_progress)
-            # action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(num_samples=self.config.intra_chunk.fitting_num_samples)
 
             # Record control timestamp
             self.rdm.set_control_time_marker()
@@ -378,73 +376,6 @@ class VLAClientAsync():
                                 acc_fitted=acc_fitted,
                                 action_raw=action_raw,
                                 current_state=current_state)
-    # @run_time_decorator
-    def _traj_fitting(self, num_samples):
-        """Perform trajectory fitting for robot actions.
-        
-        This method retrieves action chunks from the real-time data manager,
-        performs polynomial fitting using the trajectory generator to create
-        smooth trajectories for robot control.
-        
-        Args:
-            num_samples (int): Number of action samples to use for fitting
-            
-        Returns:
-            tuple: A tuple containing:
-                - action_chunk_fitted (np.ndarray): Fitted action trajectory
-                - vel_chunk_fitted (np.ndarray): Fitted velocity trajectory  
-                - timestamps_fitted (np.ndarray): Corresponding timestamps
-        """
-        timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
-        self.logger.debug(f'timestamps for fitting: {timestamps[::10]}')
-        
-        start_time = timestamps[0]
-        end_time = timestamps[-1]
-        
-        if self.config.intra_chunk.intra_chunk_mode == 'raw':
-            action_chunk_fitted = action_chunk
-            vel_chunk_fitted = np.zeros_like(action_chunk)
-            acc_chunk_fitted = np.zeros_like(action_chunk)
-            timestamps_fitted = timestamps  # original sparse timestamps
-        elif self.config.intra_chunk.intra_chunk_mode == 'interpolation':
-            # Use CubicSpline interpolation for sparse raw chunks
-            action_chunk = np.asarray(action_chunk)
-            timestamps = np.asarray(timestamps)
-            
-            # Create dense timestamps for interpolation
-            time_step = self.config.intra_chunk.fitting_time_step / 1000  # convert ms to seconds
-            timestamps_fitted = np.arange(start_time, end_time, time_step)
-            
-            # Interpolate each joint dimension using CubicSpline
-            n_joints = action_chunk.shape[0]
-            action_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            vel_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            acc_chunk_fitted = np.zeros((n_joints, len(timestamps_fitted)))
-            
-            step_index_set = set(self.step_indices)
-            for j in range(n_joints):
-                # Gripper and head dimensions use zero-order hold interpolation (step-like)
-                if j in step_index_set:
-                    interp_func = interp1d(timestamps, action_chunk[j], kind='previous', bounds_error=False, fill_value='extrapolate')
-                    action_chunk_fitted[j] = interp_func(timestamps_fitted)
-                    vel_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
-                    acc_chunk_fitted[j] = np.zeros(len(timestamps_fitted))
-                    continue
-                cs = CubicSpline(timestamps, action_chunk[j])
-                action_chunk_fitted[j] = cs(timestamps_fitted)
-                vel_chunk_fitted[j] = cs(timestamps_fitted, 1)  # 1st derivative
-                acc_chunk_fitted[j] = cs(timestamps_fitted, 2)  # 2nd derivative
-        else:  # fit mode (default)
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self.intra_chunk_smoother._traj_fitting(
-                timestamps=timestamps, 
-                action_chunk=action_chunk, 
-                start_time=start_time, 
-                end_time=end_time, 
-                # deg=self.config.intra_chunk.fitting_deg, 
-                # time_step=self.config.intra_chunk.fitting_time_step / 1000
-            )
-        return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted
-
     def _process_image(self, key, value):
         """Process image data by padding, resize and encoding.
 
