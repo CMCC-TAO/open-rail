@@ -233,7 +233,6 @@ class VLAClientAsync():
                 target_chunk_index=target_chunk_index,
                 prob_progress=task_progress_fitted
             )
-            # self.rdm.update_action_chunk_fitted(action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted)
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
@@ -318,20 +317,6 @@ class VLAClientAsync():
                 target_chunk_index=target_chunk_index,
                 prob_progress=task_progress_fitted
             )
-            # self.rdm.update_action_chunk_fitted(
-            #     action_chunk_fitted,
-            #     vel_chunk_fitted,
-            #     acc_chunk_fitted,
-            #     timestamps_fitted,
-            #     prob_progress=prob_progress,
-            #     inter_chunk_mode=self.config.inter_chunk.inter_chunk_mode,
-            #     search_length=self.config.inter_chunk.search_length,
-            #     smooth_action=self.config.inter_chunk.smooth_action,
-            #     smooth_length=self.config.inter_chunk.smooth_length,
-            #     smooth_base=self.config.inter_chunk.smooth_base,
-            #     smooth_ratio=self.config.inter_chunk.smooth_ratio,
-            #     gripper_offset=self.config.controller.gripper_offset,
-            # )
 
             # Compute average inference and trajectory fitting times
             self.rdm.compute_avg_infer_time()
