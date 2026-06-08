@@ -120,6 +120,7 @@ class ClientState:
         self.config = None
         self.running = False
         self.starting = False
+        self.stopping = False
         self.lock = threading.Lock()
         self.ws_clients: set[WebSocket] = set()
         self.ws_lock = threading.Lock()
@@ -1184,6 +1185,8 @@ async def start_client():
     with client_state.lock:
         if client_state.running:
             return {"status": "ok", "message": "Client already started."}
+        if getattr(client_state, "stopping", False):
+            return {"status": "ok", "message": "Client is stopping. Please retry shortly."}
         if getattr(client_state, "starting", False):
             return {"status": "ok", "message": "Client is already starting."}
         client_state.starting = True
@@ -1452,20 +1455,30 @@ async def start_control_only():
 
 @app.post("/api/client/stop")
 async def stop_client():
-    """Fully stop client threads and release all resources."""
+    """Stop client quickly; release heavy native resources in background."""
     with client_state.lock:
         is_active = client_state.running or (client_state.vla_client is not None)
         client_state.running = False
-    # is_active = client_state.running or (client_state.vla_client is not None)
-    # client_state.running = False
+        client_state.paused_thread_state = None
+        client_state.stopping = bool(is_active)
+
     if not is_active:
         print(f"Debug: stop_client called but client is not active (running={client_state.running})")
         raise HTTPException(400, "Client is not running.")
 
-    await asyncio.to_thread(_join_worker_thread, 5.0)
-    await asyncio.to_thread(_cleanup)
-    await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped."}})
+    asyncio.create_task(_stop_cleanup_background())
+    await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopping."}})
     return {"status": "ok"}
+
+
+async def _stop_cleanup_background():
+    try:
+        await asyncio.to_thread(_join_worker_thread, 5.0)
+        await asyncio.to_thread(_cleanup)
+        await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped."}})
+    finally:
+        with client_state.lock:
+            client_state.stopping = False
 
 
 def _join_worker_thread(timeout_s: float = 5.0):
@@ -1514,10 +1527,10 @@ def _has_alive_vla_threads(vla_client) -> bool:
         if t is not None and hasattr(t, "is_alive") and t.is_alive():
             return True
 
-    ctrl_timer = getattr(vla_client, "control_thread_timer", None)
-    ctrl_thread = getattr(ctrl_timer, "_thread", None)
-    if ctrl_thread is not None and hasattr(ctrl_thread, "is_alive") and ctrl_thread.is_alive():
-        return True
+    for timer_name in ("control_thread_timer", "visualize_thread_timer"):
+        timer = getattr(vla_client, timer_name, None)
+        if timer is not None and hasattr(timer, "is_alive") and timer.is_alive():
+            return True
 
     return False
 
@@ -1536,6 +1549,7 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
             client_state.robot = None
             client_state.running = False
             client_state.paused_thread_state = None
+            client_state.stopping = False
 
         if vla_client is not None:
             try:

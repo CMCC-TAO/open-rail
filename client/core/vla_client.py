@@ -536,7 +536,7 @@ class VLAClientAsync():
     def start_control(self):
         self.is_running = True
         self.is_control_thread_running = True
-        if not self.control_thread_timer._thread.is_alive():
+        if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
 
     def stop_control(self):
@@ -544,13 +544,12 @@ class VLAClientAsync():
 
     def start_visualize(self):
         self.visualization_server.run()
-        if not self.visualize_thread_timer._thread.is_alive():
+        if not self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.start()
     def stop_visualize(self):
         self.visualization_server.stop_server()
-        if self.visualize_thread_timer._thread.is_alive():
-            self.visualize_thread_timer.stop()
-            # self.visualize_thread_timer.join(timeout=1.0)
+        if self.visualize_thread_timer.is_alive():
+            self.visualize_thread_timer.stop(timeout=1.0)
 
     def run(self):
         """Start the VLA client and all associated threads.
@@ -602,16 +601,20 @@ class VLAClientAsync():
         """
         with self.thread_lock:
             self.is_running = False
+            self.is_observe_thread_running = False
+            self.is_inference_thread_running = False
+            self.is_control_thread_running = False
         
         if self.observe_thread.is_alive():
             self.observe_thread.join(timeout=1.0)
         if self.inference_thread.is_alive():
             self.inference_thread.join(timeout=1.0)
 
-        # Stop and join control thread timer
-        if self.control_thread_timer._thread.is_alive():
-            self.control_thread_timer.stop()
-            self.control_thread_timer.join(timeout=1.0)
+        # Stop and join timer threads
+        if self.control_thread_timer.is_alive():
+            self.control_thread_timer.stop(timeout=1.0)
+        if self.visualize_thread_timer.is_alive():
+            self.visualize_thread_timer.stop(timeout=1.0)
         
         if hasattr(self, 'dataset_write') and self.dataset_write is not None:
             self.dataset_write.close()

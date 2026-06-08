@@ -40,9 +40,15 @@ class VLAWebSocketServer:
         
         # 数据存储
         self.latest_imgs: Optional[Dict] = None
+        self.latest_imgs_seq = 0
+        self.sent_imgs_seq = -1
         self.latest_chart_data: List[Dict] = []
         self.camera_open = {0: True, 1: True, 2: True}  # 0=head, 1=left wrist, 2=right wrist
         self.data_lock = threading.Lock()
+        self.camera_send_interval = 1.0 / 30.0
+        self.chart_send_interval = 1.0 / 30.0
+        self._last_camera_send_ts = 0.0
+        self._last_chart_send_ts = 0.0
         
         # 数据发送队列
         self.data_send_queue = []
@@ -89,6 +95,7 @@ class VLAWebSocketServer:
 
         with self.data_lock:
             self.latest_imgs = imgs.copy()
+            self.latest_imgs_seq += 1
         # print(f"图像数据已更新，包含摄像头: {list(imgs.keys())}")
 
     def update_chart_data(self, data: List[Dict]):
@@ -160,15 +167,19 @@ class VLAWebSocketServer:
         if not self.clients:
             # print(f"No client is connected.")
             return
-        if not self.latest_imgs:
-            # print(f"No latest images.")
+
+        now = time.time()
+        if now - self._last_camera_send_ts < self.camera_send_interval:
             return
         
         disconnected_clients = set()
         
-        # 获取最新的图像数据
+        # 获取最新的图像数据。只发送新帧，避免以 100Hz 反复编码同一帧占满 CPU/GIL。
         with self.data_lock:
-            imgs = self.latest_imgs.copy() if self.latest_imgs else {}
+            if not self.latest_imgs or self.latest_imgs_seq == self.sent_imgs_seq:
+                return
+            imgs = self.latest_imgs.copy()
+            img_seq = self.latest_imgs_seq
             camera_open = self.camera_open.copy()
 
         sent_camera_ids = set()
@@ -230,6 +241,9 @@ class VLAWebSocketServer:
                         
             except Exception as e:
                 print(f"处理图像数据失败 {camera_key}: {e}")
+        self._last_camera_send_ts = now
+        with self.data_lock:
+            self.sent_imgs_seq = max(self.sent_imgs_seq, img_seq)
         # print(f"已发送摄像头数据，包含摄像头: {list(imgs.keys())}")
         # 清理断开的客户端
         for client in disconnected_clients:
@@ -239,6 +253,10 @@ class VLAWebSocketServer:
         """发送图表数据"""
         if not self.clients or not self.data_send_queue:
             return
+        now = time.time()
+        if now - self._last_chart_send_ts < self.chart_send_interval:
+            return
+        self._last_chart_send_ts = now
         
         disconnected_clients = set()
         
@@ -334,7 +352,7 @@ class VLAWebSocketServer:
                 
                 # 发送图表数据
                 await self.send_chart_data()
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0.02)
                 
             except Exception as e:
                 print(f"数据发送循环错误: {e}")
