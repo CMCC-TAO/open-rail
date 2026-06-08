@@ -178,9 +178,23 @@ function beginFetchRequest() {
 async function apiFetch(url, opts = {}) {
   const { timeoutMs = 3000, expectJson = true, suppressToast = false, suppressAbortToast = false, signal: externalSignal = null, ...fetchOpts } = opts || {};
   const startTime = performance.now();
-  const controller = externalSignal ? null : new AbortController();
-  const signal = externalSignal || controller.signal;
-  const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 3000)) : null;
+
+  // Always wrap an external AbortSignal in a local controller so timeouts still apply.
+  const controller = new AbortController();
+  const signal = controller.signal;
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      signal.__manualAbort = externalSignal.__manualAbort || false;
+      controller.abort();
+    } else {
+      externalSignal.addEventListener('abort', () => {
+        signal.__manualAbort = externalSignal.__manualAbort || false;
+        controller.abort();
+      }, { once: true });
+    }
+  }
+
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 3000));
 
   try {
     const res = await fetch(url, {
