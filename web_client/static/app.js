@@ -152,9 +152,9 @@ function toast(msg, type = 'info', duration = 3500) {
 }
 
 async function apiFetch(url, opts = {}) {
-  const { timeoutMs = 2250, ...fetchOpts } = opts || {};
+  const { timeoutMs = 5000, ...fetchOpts } = opts || {};
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 2250));
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000));
   try {
     const res = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
@@ -3444,7 +3444,7 @@ function wireEvents() {
 
       // Now start client
       toast('Client starting…', 'info');
-      await apiFetch('/api/client/start', { method: 'POST' });
+      await apiFetch('/api/client/start', { method: 'POST', timeoutMs: 15000 });
     } catch (e) { /* toasted */ }
     finally {
       delete btnStart.dataset.pending;

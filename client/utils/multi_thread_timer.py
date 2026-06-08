@@ -1,68 +1,75 @@
+import logging
 import threading
 import time
 
+
 class MultiThreadTimer:
-    """Multi-threaded timer that executes callbacks at specified intervals.
-    
-    This timer runs callbacks in separate threads to avoid blocking the main timer loop.
-    """
-    
+    """Periodic timer that runs callbacks without creating unbounded threads."""
+
     def __init__(self, interval, callback, *args, **kwargs):
-        """Initialize the multi-thread timer.
-        
+        """Initialize the timer.
+
         Args:
             interval (float): Time interval between calls (milliseconds)
-            callback (callable): Callback function to run in new thread
+            callback (callable): Callback function
             *args: Positional arguments for the callback function
             **kwargs: Keyword arguments for the callback function
         """
-        self.interval = interval
+        self.interval = float(interval)
         self.callback = callback
         self.args = args
         self.kwargs = kwargs
         self._stop_event = threading.Event()
-        self._thread = threading.Thread(target=self._run)
-        self._thread.daemon = True
+        self._thread = None
+        self._lock = threading.Lock()
+        self._logger = logging.getLogger(__name__)
 
     def _run(self):
+        interval_s = max(0.001, self.interval / 1000.0)
         while not self._stop_event.is_set():
-            start_time = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-            # Start callback function in a new thread
-            t = threading.Thread(target=self.callback, args=self.args, kwargs=self.kwargs)
-            t.start()
-            end_time = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-            elapsed_time = end_time - start_time
-            time.sleep(max(0.0, self.interval/1000.0 - elapsed_time/1e9))
+            start_time = time.perf_counter()
+            try:
+                self.callback(*self.args, **self.kwargs)
+            except Exception:
+                self._logger.exception("MultiThreadTimer callback failed")
+
+            elapsed = time.perf_counter() - start_time
+            wait_s = max(0.0, interval_s - elapsed)
+            if self._stop_event.wait(wait_s):
+                break
 
     def start(self):
-        """Start the timer."""
-        self._thread.start()
-    
-    def join(self, timeout=None):
-        """Wait for the timer thread to complete.
-        
-        Args:
-            timeout (float, optional): Maximum time to wait in seconds
-        """
-        self._thread.join(timeout=timeout)
+        """Start the timer if it is not already running."""
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                return
+            self._stop_event.clear()
+            self._thread = threading.Thread(target=self._run, daemon=True)
+            self._thread.start()
 
-    def stop(self):
+    def is_alive(self):
+        return self._thread is not None and self._thread.is_alive()
+
+    def join(self, timeout=None):
+        """Wait for the timer thread to complete."""
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=timeout)
+
+    def stop(self, timeout=None):
         """Stop the timer and wait for completion."""
         self._stop_event.set()
-        self._thread.join()
+        self.join(timeout=timeout)
+
 
 # Example function
 def my_task():
     """Example task function for demonstration."""
     print(f"[{time.time()}] Task executing...")
 
+
 if __name__ == "__main__":
-    # Use multi-thread timer
     timer = MultiThreadTimer(1, my_task)
     timer.start()
-
-    # Stop after running for 10 seconds
-    # time.sleep(10)
-    # timer.stop()
     timer.join()
     print("Timer stopped")
