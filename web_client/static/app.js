@@ -152,9 +152,9 @@ function toast(msg, type = 'info', duration = 3500) {
 }
 
 async function apiFetch(url, opts = {}) {
-  const { timeoutMs = 5000, ...fetchOpts } = opts || {};
+  const { timeoutMs = 1250, ...fetchOpts } = opts || {};
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000));
+  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 1250));
   try {
     const res = await fetch(url, {
       headers: { 'Content-Type': 'application/json' },
@@ -643,7 +643,7 @@ function setRunningUI(running, paused = false) {
     // Camera Visual: connect dedicated WS server when running
     if (running) {
       connectCamWS();
-      syncRuntimeCameraConfig();
+      // syncRuntimeCameraConfig();
     } else {
       disconnectCamWS();
     }
@@ -1945,7 +1945,7 @@ function applyVisualConfig(cfg = App.config) {
 
   if (App.isRunning) {
     connectCamWS();
-    syncRuntimeCameraConfig();
+    // syncRuntimeCameraConfig();
   }
 }
 
@@ -3492,7 +3492,7 @@ function wireEvents() {
         App.isControlRunning = !!data.control_running;
       }
       connectCamWS();
-      syncRuntimeCameraConfig();
+      // syncRuntimeCameraConfig();
       setThreadControlUI();
     } catch (_) { /* toasted */ }
   });
