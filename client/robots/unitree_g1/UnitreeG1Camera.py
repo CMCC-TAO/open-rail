@@ -8,6 +8,17 @@ import threading
 import time
 from collections import deque
 
+_DEBUG_PRINT_INTERVAL = 1.0
+_last_debug_time = 0.0
+
+
+def _dprint(msg):
+    global _last_debug_time
+    now = time.time()
+    if now - _last_debug_time >= _DEBUG_PRINT_INTERVAL:
+        print(f"[DBG UnitreeG1Camera] {msg}")
+        _last_debug_time = now
+
 # 如果使用显示窗口，默认不强制 offscreen 平台，避免 Qt 插件初始化失败
 if "QT_QPA_PLATFORM" in os.environ:
     os.environ.pop("QT_QPA_PLATFORM")
@@ -24,6 +35,11 @@ class UnitreeG1Camera(Node):
         self.topic_head = "/head/color/image"
         self.topic_left = "/left/color/image"
         self.topic_right = "/right/color/image"
+
+        print(f"[DBG UnitreeG1Camera] Subscribed topics:")
+        print(f"[DBG UnitreeG1Camera]   - {self.topic_head}")
+        print(f"[DBG UnitreeG1Camera]   - {self.topic_left}")
+        print(f"[DBG UnitreeG1Camera]   - {self.topic_right}")
 
         # 缓存队列
         self.queue_head = deque(maxlen=queue_size)
@@ -43,26 +59,32 @@ class UnitreeG1Camera(Node):
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_head.append((img, ts))
+        _dprint(f"_cb_head: ts={ts:.6f}, img.shape={img.shape}")
 
     def _cb_left(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_left.append((img, ts))
+        _dprint(f"_cb_left: ts={ts:.6f}, img.shape={img.shape}")
 
     def _cb_right(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_right.append((img, ts))
+        _dprint(f"_cb_right: ts={ts:.6f}, img.shape={img.shape}")
 
     # 外部获取图像，以头部相机时间戳对齐左右腕
     def get_latest_image(self):
+        qs = f"head={len(self.queue_head)} left={len(self.queue_left)} right={len(self.queue_right)}"
         if not self.queue_head:
+            _dprint(f"get_latest_image FAIL: queue_head empty ({qs})")
             return None
         head_img, head_ts = self.queue_head[-1]
         left_img, left_ts = self._find_closest(self.queue_left, head_ts)
         right_img, right_ts = self._find_closest(self.queue_right, head_ts)
+        _dprint(f"get_latest_image OK: head_ts={head_ts:.6f} ({qs})")
         return [head_img, head_ts, left_img, left_ts, right_img, right_ts]
 
     def _find_closest(self, queue, target_ts):

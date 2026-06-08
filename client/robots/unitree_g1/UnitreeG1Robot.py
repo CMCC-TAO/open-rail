@@ -8,6 +8,17 @@ import threading
 import time
 import numpy as np
 
+_DEBUG_PRINT_INTERVAL = 1.0
+_last_debug_time = 0.0
+
+
+def _dprint(msg):
+    global _last_debug_time
+    now = time.time()
+    if now - _last_debug_time >= _DEBUG_PRINT_INTERVAL:
+        print(f"[DBG UnitreeG1Robot] {msg}")
+        _last_debug_time = now
+
 
 class UnitreeG1Robot(Node):
     """Unitree G1 机器人 ROS2 驱动（纯 ROS2 模式，纯灵巧手，无夹爪/腿部）
@@ -36,6 +47,12 @@ class UnitreeG1Robot(Node):
         self.topic_right_arm_cmd = "/right_arm/joint_pos"
         self.topic_left_hand_cmd = "/left_hand/set_angle"
         self.topic_right_hand_cmd = "/right_hand/set_angle"
+
+        print(f"[DBG UnitreeG1Robot] Subscribed topics:")
+        print(f"[DBG UnitreeG1Robot]   - {self.topic_joint_states}")
+        print(f"[DBG UnitreeG1Robot]   - {self.topic_left_hand}")
+        print(f"[DBG UnitreeG1Robot]   - {self.topic_right_hand}")
+        print(f"[DBG UnitreeG1Robot]   (pubs: {self.topic_left_arm_cmd}, {self.topic_right_arm_cmd}, {self.topic_left_hand_cmd}, {self.topic_right_hand_cmd})")
 
         # 最新状态缓存
         self.latest_left_arm = None
@@ -75,11 +92,11 @@ class UnitreeG1Robot(Node):
         # 固定关节名
         self.left_arm_joint_names = [
             "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
-            "left_elbow_pitch_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint",
+            "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint",
         ]
         self.right_arm_joint_names = [
             "right_shoulder_pitch_joint", "right_shoulder_roll_joint", "right_shoulder_yaw_joint",
-            "right_elbow_pitch_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint",
+            "right_elbow_joint", "right_wrist_roll_joint", "right_wrist_pitch_joint", "right_wrist_yaw_joint",
         ]
         self.hand_joint_names = ["little_finger", "ring_finger", "middle_finger", "index_finger", "thumb_bend", "thumb_rotate"]
 
@@ -181,33 +198,51 @@ class UnitreeG1Robot(Node):
                 right_positions.append(msg.position[name_to_idx[name]])
 
         # 构造合成 JointState 保持下游兼容
-        if len(left_positions) == len(self.left_arm_joint_names):
+        la_ok = len(left_positions) == len(self.left_arm_joint_names)
+        ra_ok = len(right_positions) == len(self.right_arm_joint_names)
+        if la_ok:
             left_msg = JointState()
             left_msg.header = msg.header
             left_msg.name = list(self.left_arm_joint_names)
             left_msg.position = [float(p) for p in left_positions]
             self.latest_left_arm = (left_msg, ts)
 
-        if len(right_positions) == len(self.right_arm_joint_names):
+        if ra_ok:
             right_msg = JointState()
             right_msg.header = msg.header
             right_msg.name = list(self.right_arm_joint_names)
             right_msg.position = [float(p) for p in right_positions]
             self.latest_right_arm = (right_msg, ts)
 
+        if la_ok and ra_ok:
+            _dprint(f"_cb_joint_states OK: ts={ts:.6f}, la={left_positions[:3]}..., ra={right_positions[:3]}...")
+        elif not la_ok and not ra_ok:
+            _dprint(f"_cb_joint_states BOTH FAIL: la_found={len(left_positions)}/{len(self.left_arm_joint_names)} "
+                    f"ra_found={len(right_positions)}/{len(self.right_arm_joint_names)} "
+                    f"topic_joint_names={list(msg.name)}")
+        elif not la_ok:
+            _dprint(f"_cb_joint_states LEFT FAIL: la_found={len(left_positions)}/{len(self.left_arm_joint_names)}")
+        else:
+            _dprint(f"_cb_joint_states RIGHT FAIL: ra_found={len(right_positions)}/{len(self.right_arm_joint_names)}")
+
     def _cb_left_hand(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         self.latest_left_hand = (msg, ts)
+        _dprint(f"_cb_left_hand received: ts={ts:.6f}, positions={msg.position[:3]}...")
 
     def _cb_right_hand(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         self.latest_right_hand = (msg, ts)
+        _dprint(f"_cb_right_hand received: ts={ts:.6f}, positions={msg.position[:3]}...")
 
     # ======================
     # 采样线程
     # ======================
     def _sample_loop(self):
+        print("[DBG UnitreeG1Robot] _sample_loop started")
+        loop_count = 0
         while self.running:
+            loop_count += 1
             # ######################
             # 修改: 时间戳去重（浮点比较使用 1ms 阈值）
             # ######################
@@ -232,6 +267,11 @@ class UnitreeG1Robot(Node):
                 if abs(ts - self._last_queue_ts_right_hand) > eps:
                     self.queue_right_hand.append(self.latest_right_hand)
                     self._last_queue_ts_right_hand = ts
+            if loop_count % 500 == 0:
+                _dprint(f"queues: left_arm={len(self.queue_left_arm)} right_arm={len(self.queue_right_arm)} "
+                        f"left_hand={len(self.queue_left_hand)} right_hand={len(self.queue_right_hand)} "
+                        f"latest: la={'Y' if self.latest_left_arm else 'N'} ra={'Y' if self.latest_right_arm else 'N'} "
+                        f"lh={'Y' if self.latest_left_hand else 'N'} rh={'Y' if self.latest_right_hand else 'N'}")
             time.sleep(0.002)
 
     # ======================
