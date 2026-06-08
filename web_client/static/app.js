@@ -3474,7 +3474,7 @@ function wireEvents() {
     try {
       if (App.isRunning) {
         // Stop request
-        try { await apiFetch('/api/client/stop', { method: 'POST' }); } catch (e) { /* toasted */ }
+        try { await apiFetch('/api/client/stop', { method: 'POST', timeoutMs: 3000 }); } catch (e) { /* toasted */ }
         return;
       }
 
