@@ -34,15 +34,8 @@ def get_client_config():
     config.vis_zmq = get_vis_zmq_config()
     config.visual = get_visual_config()
     config.record = get_record_data_config()  # Data recording configuration
-    # config.show_img = False  # Enable/disable image display
-    # config.intra_chunk.strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.vision = get_vision_config()
     config.language = get_language_config()
-    # config.language = [
-    #     'Grasp the bottle selected by the finger with the nearer gripper and pass it to the hand carefully. If and only if the bottle is caught by hand, release the gripper.',
-    #     'default language instruction',
-    # ]
-    # print("finish generating client.record config: {config.record}")
     return config
 
 def get_rdm_config() -> ConfigDict:
@@ -57,6 +50,7 @@ def get_rdm_config() -> ConfigDict:
             - record_data: Flag to enable/disable data recording
     """
     config = ConfigDict()
+    config.mode = 'async'  # inference mode, choices = ('async', 'sync')
     config.max_len = 100  # Maximum length of observation data sequence buffer
     config.record_data = False  # Enable/disable data recording
     return config
@@ -111,13 +105,11 @@ def get_controller_config() -> ConfigDict:
         ConfigDict: Configuration dictionary for Controller containing:
             - wait_time: Time delay for robot controller in milliseconds
             - period: Control period for robot control in milliseconds
-            - strategy: Control strategy type
             - gripper_offset: Gripper command forward offset with respect to arm command in frames
     """
     config = ConfigDict()
-    config.wait_time = 200  # Wait time for the next inference step in millisecond. Note: robot to hesitate, increase it.
+    config.wait_time = 200  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
     config.period = 3.75   # Control period for sending command to robot in milliseconds
-    config.strategy = 'step'  # Control strategy, choices = ('step', 'realtime', 'fusion')
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
     return config
 
