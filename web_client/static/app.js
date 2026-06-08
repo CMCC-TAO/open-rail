@@ -153,12 +153,34 @@ function toast(msg, type = 'info', duration = 3500) {
   }, duration);
 }
 
+function abortCurrentFetchRequest() {
+  if (App.currentFetchController) {
+    try {
+      if (App.currentFetchController.signal) {
+        App.currentFetchController.signal.__manualAbort = true;
+      }
+      App.currentFetchController.abort();
+    } catch (_) {
+      // ignore abort errors
+    }
+    App.currentFetchController = null;
+  }
+}
+
+function beginFetchRequest() {
+  abortCurrentFetchRequest();
+  const controller = new AbortController();
+  controller.signal.__manualAbort = false;
+  App.currentFetchController = controller;
+  return controller;
+}
+
 async function apiFetch(url, opts = {}) {
-  const { timeoutMs = 5000, expectJson = true, signal: externalSignal = null, ...fetchOpts } = opts || {};
+  const { timeoutMs = 3000, expectJson = true, suppressToast = false, suppressAbortToast = false, signal: externalSignal = null, ...fetchOpts } = opts || {};
   const startTime = performance.now();
   const controller = externalSignal ? null : new AbortController();
   const signal = externalSignal || controller.signal;
-  const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 5000)) : null;
+  const timer = controller ? setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 3000)) : null;
 
   try {
     const res = await fetch(url, {
@@ -189,11 +211,14 @@ async function apiFetch(url, opts = {}) {
     return json !== null ? json : { status: res.status, statusText: res.statusText };
   } catch (e) {
     const elapsed = performance.now() - startTime;
-    const errLog = { url, elapsedMs: elapsed.toFixed(1), error: e && e.message ? e.message : e };
+    const abortWasManual = signal && signal.__manualAbort;
+    const errLog = { url, elapsedMs: elapsed.toFixed(1), error: e && e.message ? e.message : e, abortWasManual };
     console.error('[apiFetch] request error', errLog);
     if (e && e.name === 'AbortError') {
-      toast(`Request aborted: ${url}`, 'error');
-    } else {
+      if (!suppressToast && !abortWasManual && !suppressAbortToast) {
+        toast(`Request aborted: ${url}`, 'error');
+      }
+    } else if (!suppressToast) {
       toast(e && e.message ? e.message : String(e), 'error');
     }
     throw e;
@@ -3480,32 +3505,17 @@ function wireEvents() {
   });
 
   $('btn-pause').addEventListener('click', async () => {
-    const btnPause = $('btn-pause');
-
-    // Prevent duplicate rapid clicks
-    if (btnPause.dataset.pending === '1') return;
-    btnPause.dataset.pending = '1';
-    btnPause.disabled = true;
-
-    if (App.currentFetchController) {
-      try { App.currentFetchController.abort(); } catch (_) {}
-      App.currentFetchController = null;
-    }
-
-    const controller = new AbortController();
-    App.currentFetchController = controller;
+    const controller = beginFetchRequest();
 
     try {
       if (App.isPaused) {
-        await apiFetch('/api/client/resume', { method: 'POST', timeoutMs: 5000, signal: controller.signal });
+        await apiFetch('/api/client/resume', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       } else {
-        await apiFetch('/api/client/pause', { method: 'POST', timeoutMs: 5000, signal: controller.signal });
+        await apiFetch('/api/client/pause', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       }
     } catch (e) { /* toasted */ }
     finally {
-      delete btnPause.dataset.pending;
       if (App.currentFetchController === controller) App.currentFetchController = null;
-      // Re-sync UI state
       setRunningUI(App.isRunning, App.isPaused);
     }
   });
@@ -3518,20 +3528,11 @@ function wireEvents() {
   $('btn-observe').addEventListener('click', async () => {
     const btnObserve = $('btn-observe');
     if (!btnObserve) return;
-    if (btnObserve.dataset.pending === '1') return;
-    btnObserve.dataset.pending = '1';
-    btnObserve.disabled = true;
 
-    if (App.currentFetchController) {
-      try { App.currentFetchController.abort(); } catch (_) {}
-      App.currentFetchController = null;
-    }
-
-    const controller = new AbortController();
-    App.currentFetchController = controller;
+    const controller = beginFetchRequest();
 
     try {
-      const res = await apiFetch('/api/client/observe/start', { method: 'POST', timeoutMs: 5000, signal: controller.signal });
+      const res = await apiFetch('/api/client/observe/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       const data = res?.data;
       if (data) {
         App.isObserveRunning = !!data.observe_running;
@@ -3543,12 +3544,10 @@ function wireEvents() {
       setThreadControlUI();
     } catch (e) {
       if (e && e.name === 'AbortError') {
-        toast('Observe request cancelled.', 'warn');
+        // manual abort from repeated click; keep silent.
       }
     } finally {
       if (App.currentFetchController === controller) App.currentFetchController = null;
-      delete btnObserve.dataset.pending;
-      btnObserve.disabled = false;
       setThreadControlUI();
     }
   });
@@ -3556,12 +3555,11 @@ function wireEvents() {
   $('btn-infer').addEventListener('click', async () => {
     const btnInfer = $('btn-infer');
     if (!btnInfer || !App.isObserveRunning) return;
-    if (btnInfer.dataset.pending === '1') return;
-    btnInfer.dataset.pending = '1';
-    btnInfer.disabled = true;
+
+    const controller = beginFetchRequest();
 
     try {
-      const res = await apiFetch('/api/client/infer/start', { method: 'POST', timeoutMs: 5000 });
+      const res = await apiFetch('/api/client/infer/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       const data = res?.data;
       if (data) {
         App.isObserveRunning = !!data.observe_running;
@@ -3571,7 +3569,7 @@ function wireEvents() {
       setThreadControlUI();
     } catch (_) { /* toasted */ }
     finally {
-      delete btnInfer.dataset.pending;
+      if (App.currentFetchController === controller) App.currentFetchController = null;
       setThreadControlUI();
     }
   });
@@ -3579,12 +3577,11 @@ function wireEvents() {
   $('btn-control').addEventListener('click', async () => {
     const btnControl = $('btn-control');
     if (!btnControl || !App.isObserveRunning || !App.isInferenceRunning) return;
-    if (btnControl.dataset.pending === '1') return;
-    btnControl.dataset.pending = '1';
-    btnControl.disabled = true;
+
+    const controller = beginFetchRequest();
 
     try {
-      const res = await apiFetch('/api/client/control/start', { method: 'POST', timeoutMs: 5000 });
+      const res = await apiFetch('/api/client/control/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       const data = res?.data;
       if (data) {
         App.isObserveRunning = !!data.observe_running;
@@ -3594,7 +3591,7 @@ function wireEvents() {
       setThreadControlUI();
     } catch (_) { /* toasted */ }
     finally {
-      delete btnControl.dataset.pending;
+      if (App.currentFetchController === controller) App.currentFetchController = null;
       setThreadControlUI();
     }
   });
@@ -4035,7 +4032,7 @@ function startStatusPoll() {
     if (App.wsAlive || App.statusPollInFlight) return;
     App.statusPollInFlight = true;
     try {
-      const json = await apiFetch('/api/client/status', { timeoutMs: 1000 });
+      const json = await apiFetch('/api/client/status', { timeoutMs: 3000, suppressToast: true });
       if (json && json.data) renderStats(json.data);
     } catch (e) { /* ignore */ }
     finally {
@@ -4048,7 +4045,6 @@ function startStatusPoll() {
 //  Init
 // ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
-  wireEvents();
   setupCameraPanel();
   setupTrajPanel();
   setupLangPanel();
@@ -4058,6 +4054,7 @@ document.addEventListener('DOMContentLoaded', () => {
   buildJointSelector(TRAJ_JOINT_COUNT);  // pre-build fixed 14-joint selector
   connectWS();
   startStatusPoll();
+  wireEvents();
   initConfDir().then(async () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
