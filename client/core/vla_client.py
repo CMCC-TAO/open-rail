@@ -83,6 +83,9 @@ class VLAClientAsync():
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
 
+        # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
+        self._img_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_enc")
+
         # Inference variables
         self.infer_count = 0
         self.infer_flag = False
@@ -346,12 +349,14 @@ class VLAClientAsync():
 
             self.robot.control_robot(action_fitted)
 
-            self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
+            with self.show_thread_lock:
+                self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
             # Only use alignment processing if prob_progress array length > 1
             prob_progress = self.rdm.get_prob_progress()
             if prob_progress is not None:
-                self.info_act['current_prob_progress'] = prob_progress
+                with self.show_thread_lock:
+                    self.info_act['current_prob_progress'] = prob_progress
                 # print(f"current prob_progress: {prob_progress}")
                 if self.config.language.auto_mode == True:
                     # Automatically switch language instruction based on prob_progress changes
@@ -361,7 +366,8 @@ class VLAClientAsync():
             if self.config.record.switch and self.is_control_thread_running and self.is_running:
                 self.dataset_write.add_action_async(action_fitted, time.perf_counter())
             
-            self.info_act['action'] = action_fitted.shape
+            with self.show_thread_lock:
+                self.info_act['action'] = action_fitted.shape
 
         current_state = getattr(self.robot, 'current_state', None)
         self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw, current_state)
@@ -404,10 +410,9 @@ class VLAClientAsync():
             dict: The encoded images with key and values.
         """
         cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
-        # Use thread pool to parallel process all cameras
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(self._process_image, key, value) for key, value in cam_items]
-            results = [future.result() for future in futures] # Wait for all tasks to complete
+        # Use shared thread pool to parallel process all cameras (avoid per-frame pool creation)
+        futures = [self._img_executor.submit(self._process_image, key, value) for key, value in cam_items]
+        results = [future.result() for future in futures]  # Wait for all tasks to complete
         encoded_imgs, processed_imgs = {}, {}
         for key, processed, encoded in results:
             encoded_imgs[key] = encoded
@@ -432,10 +437,10 @@ class VLAClientAsync():
         loc_timestamp = time.perf_counter()
         encoded_imgs = self._thread_process_image(frame)
         
-        if 'obs.state' in frame and frame['obs.state'] is not None:
-            self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
-
-        self.info_obs['state'] = frame['obs.state'].shape
+        with self.show_thread_lock:
+            if 'obs.state' in frame and frame['obs.state'] is not None:
+                self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
+            self.info_obs['state'] = frame['obs.state'].shape
         data = {
             'type': 'vla_obs',
             'ref_timestamp': frame['ref_timestamp'],
@@ -613,6 +618,9 @@ class VLAClientAsync():
 
         self.vla_zmq.close()
         self.visualization_server.stop_server()
+
+        if hasattr(self, '_img_executor') and self._img_executor is not None:
+            self._img_executor.shutdown(wait=False)
 
         self.logger.info('Inference client closed.')
 
