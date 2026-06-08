@@ -694,13 +694,13 @@ class VLAClientAsync():
             if self.rdm.infer_count == 0:
                 self.inference_first()
                 # time.sleep(self.config.controller.wait_time/1000)
-                self.rdm.wait_for_next(mode='async', wait_time=self.config.controller.wait_time/1000)
+                self.rdm.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
                 # self.rdm.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
             else:
                 self.inference_step()
                 # self.inferenceFirstThreadFun()
                 # time.sleep(self.config.controller.wait_time/1000)
-                self.rdm.wait_for_next(mode='async', wait_time=self.config.controller.wait_time/1000)
+                self.rdm.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
                 # self.rdm.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
             # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
             # symbol = '=' * 10

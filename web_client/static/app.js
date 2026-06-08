@@ -682,17 +682,18 @@ const BASIC_SUBGROUPS = {
 
 // Select options for specific keys
 const CONFIG_SELECT_OPTIONS = {
-  inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync'],
+  inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline'],
   intra_chunk_mode: ['raw', 'interpolation', 'fitting'],
   fitting_deg: [3, 4, 5, 6],
   preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
-  type: ['a2d', 'mock']
+  type: ['a2d', 'mock'],
+  mode: ['async', 'sync']
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
   'fitting_num_samples', 'search_length', 'smooth_length', 'gripper_offset',
-  'fps', 'height', 'width', 'update_interval_ms',
+  'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim'
 ]);
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
