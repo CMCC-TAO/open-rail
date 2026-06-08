@@ -125,6 +125,8 @@ const App = {
   },
 
   recordingListTimer: null,
+  recordingListInFlight: false,
+  statusPollInFlight: false,
   recordingTask: null,
   recordingTasksSnapshot: [],
   recordingChunk: null,
@@ -2559,6 +2561,8 @@ async function deleteRecordingEpisode(episodeId) {
 }
 
 async function refreshRecordingFileList() {
+  if (App.recordingListInFlight) return;
+  App.recordingListInFlight = true;
   try {
     const requestedTask = App.recordingTask;
     const requestedChunk = App.recordingChunk;
@@ -2567,7 +2571,7 @@ async function refreshRecordingFileList() {
     if (requestedChunk) params.set('chunk', requestedChunk);
 
     const q = params.toString();
-    const res = await apiFetch(`/api/recording/files${q ? `?${q}` : ''}`);
+    const res = await apiFetch(`/api/recording/files${q ? `?${q}` : ''}`, { timeoutMs: 4000 });
     renderRecordingFileList(res);
 
     const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
@@ -2576,10 +2580,13 @@ async function refreshRecordingFileList() {
       if (App.recordingTask) params2.set('task', App.recordingTask);
       if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
       const q2 = params2.toString();
-      const res2 = await apiFetch(`/api/recording/files${q2 ? `?${q2}` : ''}`);
+      const res2 = await apiFetch(`/api/recording/files${q2 ? `?${q2}` : ''}`, { timeoutMs: 4000 });
       renderRecordingFileList(res2);
     }
   } catch (_) { /* toasted */ }
+  finally {
+    App.recordingListInFlight = false;
+  }
 }
 
 function isRecordingPanelExpanded() {
@@ -3958,12 +3965,15 @@ async function sendCommand(command, params = {}) {
 // ═══════════════════════════════════════════════════════
 function startStatusPoll() {
   setInterval(async () => {
-    if (App.wsAlive) return;
+    if (App.wsAlive || App.statusPollInFlight) return;
+    App.statusPollInFlight = true;
     try {
-      const res  = await fetch('/api/client/status');
-      const json = await res.json();
+      const json = await apiFetch('/api/client/status', { timeoutMs: 3000 });
       if (json.data) renderStats(json.data);
     } catch (e) { /* ignore */ }
+    finally {
+      App.statusPollInFlight = false;
+    }
   }, 1000);
 }
 
