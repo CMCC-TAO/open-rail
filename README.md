@@ -162,7 +162,7 @@ The server handles VLA model inference and provides results to clients.
    the web interface is used for visualization by default. You can directly access localhost:8080 to view the real-time data. The web interface is shown below:
 
    ![vis_demo](data/media/vis_demo.gif)
-   <!-- <video src="data/media/vis_demo.mp4" controls></video> -->
+   <video src="data/media/vis_demo.mp4" controls></video>
 
 #### 2.5.2 QT-based visualization
  To enable action-camera visualization based on QT, first set:

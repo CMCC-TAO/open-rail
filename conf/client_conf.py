@@ -35,7 +35,6 @@ def get_client_config():
     config.vis_action_length = 1000
     config.visual = get_visual_config()
     config.record = get_record_data_config()  # Data recording configuration
-    config.show_action_cams_qt = False  # QT-based action-camera visualization. If set as True, run /client/utils/vis_action_camera.py.py to launch the visualization server
     config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     # config.show_img = False  # Enable/disable image display
     # config.intra_chunk.strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')

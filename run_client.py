@@ -57,7 +57,6 @@ def parse_args():
     parser.add_argument('--search_length', type=int, help='Forward search length')
     parser.add_argument('--intra_chunk_mode', type=str, choices=['raw', 'interpolation', 'fitting'], help='Intra-chunk processing mode: interpolation=process with interpolation')
     parser.add_argument('--inter_chunk_mode', type=str, choices=['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync'], help='The method to bridge action chunks')
-    parser.add_argument('--show_action_cams_qt', action='store_true', help='Show action and camera images visualization based on QT')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
     parser.add_argument('--task_progress_threshold', type=float, help='Probability threshold for switching language instructions')
@@ -90,8 +89,6 @@ def override_config_with_args(config, args):
         config.inter_chunk.search_length = args.search_length
     if args.inter_chunk_mode is not None:
         config.inter_chunk.inter_chunk_mode = args.inter_chunk_mode
-    if args.show_action_cams_qt:
-        config.show_action_cams_qt = True
     if args.record:
         config.record.switch = True
     if args.robots_type is not None:
