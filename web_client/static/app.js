@@ -4035,13 +4035,13 @@ function startStatusPoll() {
     if (App.wsAlive || App.statusPollInFlight) return;
     App.statusPollInFlight = true;
     try {
-      const json = await apiFetch('/api/client/status', { timeoutMs: 3000 });
+      const json = await apiFetch('/api/client/status', { timeoutMs: 1000 });
       if (json && json.data) renderStats(json.data);
     } catch (e) { /* ignore */ }
     finally {
       App.statusPollInFlight = false;
     }
-  }, 1000);
+  }, 4000);
 }
 
 // ═══════════════════════════════════════════════════════
