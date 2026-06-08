@@ -1118,26 +1118,16 @@ def _ensure_vla_client_created():
         intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
         task_language_manager = TaskLanguageManager(config=cfg.language)
 
-        if cfg.inter_chunk.inter_chunk_mode == 'sync':
-            from client.core.vla_client_sync import VLAClientSync
-            vla_client = VLAClientSync(
-                config=cfg,
-                rdm=rdm,
-                intra_chunk_smoother=intra_chunk_smoother,
-                vla_zmq_client=vla_zmq_client,
-                robot=robot,
-            )
-        else:
-            from client.core.vla_client import VLAClientAsync
-            vla_client = VLAClientAsync(
-                config=cfg,
-                rdm=rdm,
-                inter_chunk_fuser=inter_chunk_fuser,
-                intra_chunk_smoother=intra_chunk_smoother,
-                task_language_manager=task_language_manager,
-                vla_zmq_client=vla_zmq_client,
-                robot=robot,
-            )
+        from client.core.vla_client import VLAClientAsync
+        vla_client = VLAClientAsync(
+            config=cfg,
+            rdm=rdm,
+            inter_chunk_fuser=inter_chunk_fuser,
+            intra_chunk_smoother=intra_chunk_smoother,
+            task_language_manager=task_language_manager,
+            vla_zmq_client=vla_zmq_client,
+            robot=robot,
+        )
     except Exception:
         if vla_zmq_client is not None:
             try:
