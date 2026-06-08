@@ -1627,7 +1627,7 @@ async def client_command(req: CommandRequest):
             if not isinstance(save_items, list):
                 save_items = []
             client_state.config.record.switch = True
-            client_state.config.record_exp_data = ('ExpData' in save_items)
+            client_state.config.record.record_exp_data = ('ExpData' in save_items)
             task_id = getattr(getattr(client_state.config, "language", None), "task_id", None)
             if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
                 try:

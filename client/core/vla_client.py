@@ -112,21 +112,6 @@ class VLAClientAsync():
         self.info_obs, self.info_act = {}, {}
         # self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
 
-        # Record data (action, velocity, acceleration) thread
-        if self.config.record_exp_data:
-            date_str = datetime.now().strftime("%Y%m%d%H%M%S")
-            out_dir = os.path.join("tmp", date_str)
-            os.makedirs(out_dir, exist_ok=True)
-            self.files = {
-                'action': open(os.path.join(out_dir, 'action.txt'), 'a'),
-                'velocity': open(os.path.join(out_dir, 'velocilty.txt'), 'a'),
-                'acceleration': open(os.path.join(out_dir, 'acceleration.txt'), 'a')
-            }
-            self.data_write_thread = threading.Thread(target=self._writer_thread)
-            self.act_write_buffer = deque(maxlen=1000)
-            self.vel_write_buffer = deque(maxlen=1000)
-            self.acc_write_buffer = deque(maxlen=1000)
-
     def _load_language_tasks(self, file_path: str) -> dict:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         target_path = file_path if os.path.isabs(file_path) else os.path.join(root_dir, 'conf', file_path)
@@ -377,12 +362,6 @@ class VLAClientAsync():
         if action_fitted is not None:
 
             self.robot.control_robot(action_fitted)
-
-            # tmp data buffer writing
-            if self.config.record_exp_data:
-                self.act_write_buffer.append(action_fitted)
-                self.vel_write_buffer.append(vel_fitted)
-                self.acc_write_buffer.append(acc_fitted)
 
             self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
@@ -667,9 +646,6 @@ class VLAClientAsync():
         self.start_control()
         self.start_visualize()
 
-        if self.config.record_exp_data:
-            self.data_write_thread.start()
-
         self.logger.info('VLA client started.')
 
     def pause(self):
@@ -711,9 +687,6 @@ class VLAClientAsync():
         if self.inference_thread.is_alive():
             self.inference_thread.join(timeout=1.0)
 
-        if self.config.record_exp_data and self.data_write_thread.is_alive():
-            self.data_write_thread.join(timeout=1.0)
-
         # Stop and join control thread timer
         if self.control_thread_timer._thread.is_alive():
             self.control_thread_timer.stop()
@@ -724,11 +697,6 @@ class VLAClientAsync():
 
         self.vla_zmq.close()
         self.visualization_server.stop_server()
-
-        # close file IO writer
-        if self.config.record_exp_data:
-            for f in self.files.values():
-                f.close()
 
         self.logger.info('Inference client closed.')
 
