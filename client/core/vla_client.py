@@ -83,13 +83,6 @@ class VLAClientAsync():
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
 
-        # visualization buffer and thread lock
-        self.act_exe_fitted_buffer = deque(maxlen=self.config.vis_action_length)
-        self.act_exe_raw_buffer = deque(maxlen=self.config.vis_action_length)
-        self.vel_exe_fitted_buffer = deque(maxlen=self.config.vis_action_length)
-        self.acc_exe_fitted_buffer = deque(maxlen=self.config.vis_action_length)
-        self.vis_action_lock = threading.Lock()
-        
         # Inference variables
         self.infer_count = 0
         self.infer_flag = False
@@ -112,11 +105,6 @@ class VLAClientAsync():
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
 
-        # The zmq client to communicate with action-camera visualization server
-        if self.config.show_action_cams_qt:
-            self.vis_action_cams_zmq = ZMQClient(config.vis_zmq)
-            self.vis_action_cams_thread = threading.Thread(target=self.send_action_cams_to_vis_server, daemon=True)
-        
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         action_dim = self.action_dim if self.action_dim > 0 else 16
         self.info_current_action = [0.0] * action_dim
@@ -395,13 +383,6 @@ class VLAClientAsync():
                 self.act_write_buffer.append(action_fitted)
                 self.vel_write_buffer.append(vel_fitted)
                 self.acc_write_buffer.append(acc_fitted)
-
-            with self.vis_action_lock:
-                if self.config.show_action_cams_qt:
-                    self.act_exe_fitted_buffer.append(action_fitted)
-                    self.act_exe_raw_buffer.append(action_raw)
-                    self.vel_exe_fitted_buffer.append(vel_fitted)
-                    self.acc_exe_fitted_buffer.append(acc_fitted)
 
             self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
@@ -686,9 +667,6 @@ class VLAClientAsync():
         self.start_control()
         self.start_visualize()
 
-        if self.config.show_action_cams_qt:
-            self.vis_action_cams_thread.start()
-
         if self.config.record_exp_data:
             self.data_write_thread.start()
 
@@ -733,9 +711,6 @@ class VLAClientAsync():
         if self.inference_thread.is_alive():
             self.inference_thread.join(timeout=1.0)
 
-        if self.config.show_action_cams_qt and self.vis_action_cams_thread.is_alive():
-            self.vis_action_cams_thread.join(timeout=1.0)
-
         if self.config.record_exp_data and self.data_write_thread.is_alive():
             self.data_write_thread.join(timeout=1.0)
 
@@ -748,11 +723,6 @@ class VLAClientAsync():
             self.dataset_write.close()
 
         self.vla_zmq.close()
-        if self.config.show_action_cams_qt:
-            try:
-                self.vis_action_cams_zmq.close()
-            except Exception:
-                pass
         self.visualization_server.stop_server()
 
         # close file IO writer
@@ -919,33 +889,6 @@ class VLAClientAsync():
         if state_vel is not None:
             self.vis_prev_state_vel = state_vel
 
-    def send_action_cams_to_vis_server(self):
-        """
-        This method sends actions and camera images to
-        the visualization system via ZMQ.
-        """
-        while self.is_running:
-
-            if self.config.show_action_cams_qt:
-
-                with self.vis_action_lock:
-                    current_actions_fitted = self.act_exe_fitted_buffer.copy()
-                    current_actions_raw = self.act_exe_raw_buffer.copy()
-                    # self.act_exe_fitted_buffer.clear()
-                    # self.act_exe_raw_buffer.clear()
-
-                data = self.rdm.read_observe_data()
-    
-                if data is not None:
-                    data['actions_fitted'] = current_actions_fitted
-                    data['actions_raw'] = current_actions_raw
-                    #============= sending to action-camera visualization server ================
-                    try:
-                        self.vis_action_cams_zmq.sendMessage(data)
-                    except zmq.Again:
-                        print("Send failed, action-camera visualization server probably offline")
-
-            time.sleep(0.02)
     def _writer_thread(self):
         while self.is_running:
             # print("_writer_thread")
