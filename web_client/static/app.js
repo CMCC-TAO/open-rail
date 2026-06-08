@@ -3489,47 +3489,51 @@ function wireEvents() {
     toast('Robot reset initiated.', 'info');
   });
 
-  $('btn-observe').addEventListener('click', async () => {
-    try {
-      const res = await apiFetch('/api/client/observe/start', { method: 'POST' });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
-      connectCamWS();
-      // syncRuntimeCameraConfig();
-      setThreadControlUI();
-    } catch (_) { /* toasted */ }
+  $('btn-observe').addEventListener('click', () => {
+    // Fire-and-forget: don't await potentially long/blocking server work.
+    apiFetch('/api/client/observe/start', { method: 'POST' })
+      .then((res) => {
+        const data = res?.data;
+        if (data) {
+          App.isObserveRunning = !!data.observe_running;
+          App.isInferenceRunning = !!data.inference_running;
+          App.isControlRunning = !!data.control_running;
+        }
+        connectCamWS();
+        // syncRuntimeCameraConfig();
+        setThreadControlUI();
+      })
+      .catch(() => { /* toasted */ });
   });
 
-  $('btn-infer').addEventListener('click', async () => {
+  $('btn-infer').addEventListener('click', () => {
     if (!App.isObserveRunning) return;
-    try {
-      const res = await apiFetch('/api/client/infer/start', { method: 'POST' });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
-      setThreadControlUI();
-    } catch (_) { /* toasted */ }
+    apiFetch('/api/client/infer/start', { method: 'POST' })
+      .then((res) => {
+        const data = res?.data;
+        if (data) {
+          App.isObserveRunning = !!data.observe_running;
+          App.isInferenceRunning = !!data.inference_running;
+          App.isControlRunning = !!data.control_running;
+        }
+        setThreadControlUI();
+      })
+      .catch(() => { /* toasted */ });
   });
 
-  $('btn-control').addEventListener('click', async () => {
+  $('btn-control').addEventListener('click', () => {
     if (!App.isObserveRunning || !App.isInferenceRunning) return;
-    try {
-      const res = await apiFetch('/api/client/control/start', { method: 'POST' });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
-      setThreadControlUI();
-    } catch (_) { /* toasted */ }
+    apiFetch('/api/client/control/start', { method: 'POST' })
+      .then((res) => {
+        const data = res?.data;
+        if (data) {
+          App.isObserveRunning = !!data.observe_running;
+          App.isInferenceRunning = !!data.inference_running;
+          App.isControlRunning = !!data.control_running;
+        }
+        setThreadControlUI();
+      })
+      .catch(() => { /* toasted */ });
   });
 
   // Language Command panel — JSON file picker
