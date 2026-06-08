@@ -586,15 +586,16 @@ def _collect_stats() -> dict:
         base["avg_traj_time"]   = float(vla_client.rdm.avg_traj_time)
         base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
         # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
-        acquired = vla_client.show_thread_lock.acquire(timeout=0.05)
+        # acquired = vla_client.show_thread_lock.acquire(timeout=0.05)
         try:
             current_state  = list(vla_client.info_current_state)
             current_action = list(vla_client.info_current_action)
             info_obs = dict(vla_client.info_obs)
             info_act = dict(vla_client.info_act)
         finally:
-            if acquired:
-                vla_client.show_thread_lock.release()
+            pass
+            # if acquired:
+            #     vla_client.show_thread_lock.release()
         base["current_state"]   = [round(float(x), 4) for x in current_state]
         base["current_action"]  = [round(float(x), 4) for x in current_action]
         base["info_obs"]        = {k: str(v) for k, v in info_obs.items()}
