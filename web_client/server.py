@@ -847,7 +847,7 @@ async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
     if ws_server is None:
         return {"status": "ok", "applied": False}
 
-    ws_server.update_camera_open_config(payload)
+    await asyncio.to_thread(ws_server.update_camera_open_config, payload)
     return {"status": "ok", "applied": True, "camera_cfg": payload}
 
 
@@ -869,21 +869,29 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
-    with client_state.lock:
+
+    acquired = client_state.lock.acquire(timeout=2.0)
+    if not acquired:
+        raise HTTPException(503, "Config is busy. Please retry.")
+    try:
         _apply_flat_patch_new(client_state.config, flat)
+        running = bool(client_state.running and client_state.vla_client is not None)
+        vla_client = client_state.vla_client
+        cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
+        cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
+    finally:
+        client_state.lock.release()
 
     # Runtime side-effects for keys that need explicit push
-    if client_state.running and client_state.vla_client is not None:
+    if running:
         try:
             if any(k.startswith("visual.camera.") for k in flat.keys()):
-                cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
-                ws_server = getattr(client_state.vla_client, "visualization_server", None)
+                ws_server = getattr(vla_client, "visualization_server", None)
                 if ws_server is not None and cam_cfg is not None:
-                    ws_server.update_camera_open_config(cam_cfg)
+                    await asyncio.to_thread(ws_server.update_camera_open_config, cam_cfg)
         except Exception as e:
             logger.warning(f"Runtime camera config sync failed: {e}")
 
-    cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     return {"status": "ok", "config": cfg_dict}
 
 
@@ -919,7 +927,7 @@ async def load_config_file(req: ConfigFileRequest):
             cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
             ws_server = getattr(client_state.vla_client, "visualization_server", None)
             if ws_server is not None and cam_cfg is not None:
-                ws_server.update_camera_open_config(cam_cfg)
+                await asyncio.to_thread(ws_server.update_camera_open_config, cam_cfg)
         except Exception as e:
             logger.warning(f"Runtime camera config sync after load failed: {e}")
 
@@ -1315,7 +1323,7 @@ async def pause_client():
     if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
 
-    paused_state = _pause_vla_client(vla_client)
+    paused_state = await asyncio.to_thread(_pause_vla_client, vla_client)
     with client_state.lock:
         client_state.paused_thread_state = paused_state
 
@@ -1333,7 +1341,7 @@ async def resume_client():
     with client_state.lock:
         restore_state = client_state.paused_thread_state
 
-    _resume_vla_client(vla_client, restore_state)
+    await asyncio.to_thread(_resume_vla_client, vla_client, restore_state)
 
     with client_state.lock:
         client_state.paused_thread_state = None
@@ -1351,12 +1359,12 @@ async def start_observe_only():
         client_state.paused_thread_state = None
 
     if bool(getattr(vla_client, "is_observe_thread_running", False)):
-        _stop_control(vla_client)
-        _stop_inference(vla_client)
-        _stop_observe(vla_client)
+        await asyncio.to_thread(_stop_control, vla_client)
+        await asyncio.to_thread(_stop_inference, vla_client)
+        await asyncio.to_thread(_stop_observe, vla_client)
         message = "Observe stopped."
     else:
-        _start_observe(vla_client)
+        await asyncio.to_thread(_start_observe, vla_client)
         message = "Observe started."
 
     payload = _status_payload(vla_client, message, running=True)
@@ -1376,11 +1384,11 @@ async def start_infer_only():
         client_state.paused_thread_state = None
 
     if bool(getattr(vla_client, "is_inference_thread_running", False)):
-        _stop_control(vla_client)
-        _stop_inference(vla_client)
+        await asyncio.to_thread(_stop_control, vla_client)
+        await asyncio.to_thread(_stop_inference, vla_client)
         message = "Inference stopped."
     else:
-        _start_inference(vla_client)
+        await asyncio.to_thread(_start_inference, vla_client)
         message = "Inference started."
 
     payload = _status_payload(vla_client, message, running=True)
@@ -1402,10 +1410,10 @@ async def start_control_only():
         client_state.paused_thread_state = None
 
     if bool(getattr(vla_client, "is_control_thread_running", False)):
-        _stop_control(vla_client)
+        await asyncio.to_thread(_stop_control, vla_client)
         message = "Control stopped."
     else:
-        _start_control(vla_client)
+        await asyncio.to_thread(_start_control, vla_client)
         message = "Control started."
 
     payload = _status_payload(vla_client, message, running=True)
