@@ -18,6 +18,7 @@ def get_record_data_config() -> ConfigDict:
     # Base path and version info
     config.switch = False  # Enable/disable data recording
     config.save_dir = "data/recording"  # Relative to project root
+    config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     config.info = ConfigDict(allow_dotted_keys=True)
     config.info.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
     config.info.robot_type = "a2d"  # Type of robot used

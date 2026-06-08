@@ -184,7 +184,7 @@ record:
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   save_dir: data/recording
   switch: false
-record_exp_data: false
+  record_exp_data: false
 robots:
   a2d:
     action_layout:

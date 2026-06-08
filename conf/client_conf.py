@@ -34,7 +34,6 @@ def get_client_config():
     config.vis_zmq = get_vis_zmq_config()
     config.visual = get_visual_config()
     config.record = get_record_data_config()  # Data recording configuration
-    config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     # config.show_img = False  # Enable/disable image display
     # config.intra_chunk.strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.vision = get_vision_config()
