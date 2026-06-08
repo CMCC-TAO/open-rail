@@ -112,6 +112,7 @@ class ClientState:
         self.robot = None
         self.config = None
         self.running = False
+        self.starting = False
         self.lock = threading.Lock()
         self.ws_clients: set[WebSocket] = set()
         self.ws_lock = threading.Lock()
@@ -524,7 +525,7 @@ async def _stats_push_loop():
         if not client_state.ws_clients:
             continue
         try:
-            stats = _collect_stats()
+            stats = await asyncio.to_thread(_collect_stats)
             # print("Debug: pushing stats to WS clients.")
             await _broadcast({"type": "stats", "data": stats})
         except Exception as e:
@@ -1163,6 +1164,13 @@ async def start_client():
     loop = asyncio.get_running_loop()
     client_state._loop = loop
 
+    with client_state.lock:
+        if client_state.running:
+            return {"status": "ok", "message": "Client already started."}
+        if getattr(client_state, "starting", False):
+            return {"status": "ok", "message": "Client is already starting."}
+        client_state.starting = True
+
     try:
         vla_client = await asyncio.to_thread(_ensure_vla_client_created)
     except Exception as e:
@@ -1173,7 +1181,11 @@ async def start_client():
             client_state.vla_client = None
             client_state.robot = None
             client_state.paused_thread_state = None
+            client_state.starting = False
         raise HTTPException(500, f"Failed to initialize client: {e}")
+    finally:
+        with client_state.lock:
+            client_state.starting = False
 
     if vla_client is None:
         with client_state.lock:
@@ -1579,7 +1591,8 @@ def _cleanup_with_timeout(force_release_robot: bool = False, timeout_s: float = 
 
 @app.get("/api/client/status")
 async def client_status():
-    return {"status": "ok", "data": _collect_stats()}
+    stats = await asyncio.to_thread(_collect_stats)
+    return {"status": "ok", "data": stats}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1701,7 +1714,8 @@ async def websocket_endpoint(ws: WebSocket):
         client_state.ws_clients.add(ws)
 
     # Push current client_state immediately on connect
-    await ws.send_text(json.dumps({"type": "stats", "data": _collect_stats()}))
+    stats = await asyncio.to_thread(_collect_stats)
+    await ws.send_text(json.dumps({"type": "stats", "data": stats}))
 
     try:
         while True:
