@@ -79,6 +79,7 @@ const App = {
   isInferenceRunning: false,
   isControlRunning: false,
   currentFetchController: null,
+  statusPollInFlight: false,
 
   // Camera WebSocket (port 8765 — VLAWebSocketServer)
   camWs: null,
@@ -3515,6 +3516,12 @@ function wireEvents() {
   });
 
   $('btn-observe').addEventListener('click', async () => {
+    const btnObserve = $('btn-observe');
+    if (!btnObserve) return;
+    if (btnObserve.dataset.pending === '1') return;
+    btnObserve.dataset.pending = '1';
+    btnObserve.disabled = true;
+
     if (App.currentFetchController) {
       try { App.currentFetchController.abort(); } catch (_) {}
       App.currentFetchController = null;
@@ -3540,11 +3547,19 @@ function wireEvents() {
       }
     } finally {
       if (App.currentFetchController === controller) App.currentFetchController = null;
+      delete btnObserve.dataset.pending;
+      btnObserve.disabled = false;
+      setThreadControlUI();
     }
   });
 
   $('btn-infer').addEventListener('click', async () => {
-    if (!App.isObserveRunning) return;
+    const btnInfer = $('btn-infer');
+    if (!btnInfer || !App.isObserveRunning) return;
+    if (btnInfer.dataset.pending === '1') return;
+    btnInfer.dataset.pending = '1';
+    btnInfer.disabled = true;
+
     try {
       const res = await apiFetch('/api/client/infer/start', { method: 'POST', timeoutMs: 5000 });
       const data = res?.data;
@@ -3555,10 +3570,19 @@ function wireEvents() {
       }
       setThreadControlUI();
     } catch (_) { /* toasted */ }
+    finally {
+      delete btnInfer.dataset.pending;
+      setThreadControlUI();
+    }
   });
 
   $('btn-control').addEventListener('click', async () => {
-    if (!App.isObserveRunning || !App.isInferenceRunning) return;
+    const btnControl = $('btn-control');
+    if (!btnControl || !App.isObserveRunning || !App.isInferenceRunning) return;
+    if (btnControl.dataset.pending === '1') return;
+    btnControl.dataset.pending = '1';
+    btnControl.disabled = true;
+
     try {
       const res = await apiFetch('/api/client/control/start', { method: 'POST', timeoutMs: 5000 });
       const data = res?.data;
@@ -3569,6 +3593,10 @@ function wireEvents() {
       }
       setThreadControlUI();
     } catch (_) { /* toasted */ }
+    finally {
+      delete btnControl.dataset.pending;
+      setThreadControlUI();
+    }
   });
 
   // Language Command panel — JSON file picker
@@ -4004,12 +4032,15 @@ async function sendCommand(command, params = {}) {
 // ═══════════════════════════════════════════════════════
 function startStatusPoll() {
   setInterval(async () => {
-    if (App.wsAlive) return;
+    if (App.wsAlive || App.statusPollInFlight) return;
+    App.statusPollInFlight = true;
     try {
-      const res  = await fetch('/api/client/status');
-      const json = await res.json();
-      if (json.data) renderStats(json.data);
+      const json = await apiFetch('/api/client/status', { timeoutMs: 3000 });
+      if (json && json.data) renderStats(json.data);
     } catch (e) { /* ignore */ }
+    finally {
+      App.statusPollInFlight = false;
+    }
   }, 1000);
 }
 
