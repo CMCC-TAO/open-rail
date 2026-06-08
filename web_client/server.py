@@ -1176,20 +1176,9 @@ def _ensure_vla_client_created():
     return vla_client
 
 
-@app.post("/api/client/start")
-async def start_client():
-    """Create vla_client if needed, then run it in worker thread (non-blocking)."""
+async def _bg_start_client():
     loop = asyncio.get_running_loop()
     client_state._loop = loop
-
-    with client_state.lock:
-        if client_state.running:
-            return {"status": "ok", "message": "Client already started."}
-        if getattr(client_state, "stopping", False):
-            return {"status": "ok", "message": "Client is stopping. Please retry shortly."}
-        if getattr(client_state, "starting", False):
-            return {"status": "ok", "message": "Client is already starting."}
-        client_state.starting = True
 
     try:
         vla_client = await asyncio.to_thread(_ensure_vla_client_created)
@@ -1202,19 +1191,22 @@ async def start_client():
             client_state.robot = None
             client_state.paused_thread_state = None
             client_state.starting = False
-        raise HTTPException(500, f"Failed to initialize client: {e}")
-    finally:
-        with client_state.lock:
-            client_state.starting = False
-
-    if vla_client is None:
-        with client_state.lock:
-            client_state.running = False
-        raise HTTPException(500, "Failed to initialize client: vla_client is None")
+        await _broadcast({"type": "error", "data": {"message": f"Failed to initialize client: {e}", "trace": err}})
+        return
 
     with client_state.lock:
+        client_state.starting = False
+        if client_state.stopping:
+            logger.warning("Client start aborted because stop was requested during initialization.")
+            try:
+                vla_client.close()
+            except Exception:
+                pass
+            client_state.vla_client = None
+            client_state.robot = None
+            return
         if client_state.running:
-            return {"status": "ok", "message": "Client already started."}
+            return
         client_state.running = True
 
     def _run_in_thread():
@@ -1246,6 +1238,21 @@ async def start_client():
     with client_state.lock:
         client_state.worker_thread = t
     t.start()
+
+
+@app.post("/api/client/start")
+async def start_client():
+    """Create vla_client if needed, then run it in worker thread (non-blocking)."""
+    with client_state.lock:
+        if client_state.running:
+            return {"status": "ok", "message": "Client already started."}
+        if getattr(client_state, "stopping", False):
+            return {"status": "ok", "message": "Client is stopping. Please retry shortly."}
+        if getattr(client_state, "starting", False):
+            return {"status": "ok", "message": "Client is already starting."}
+        client_state.starting = True
+
+    asyncio.create_task(_bg_start_client())
     return {"status": "ok", "message": "Client starting…"}
 
 
@@ -1348,6 +1355,88 @@ def _resume_vla_client(vla_client, state: Optional[dict] = None):
             _start_control(vla_client)
         return
 
+# Background helpers to avoid blocking the asyncio thread
+async def _bg_pause_and_broadcast(vla_client):
+    try:
+        paused_state = await asyncio.to_thread(_pause_vla_client, vla_client)
+        with client_state.lock:
+            client_state.paused_thread_state = paused_state
+        await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True)})
+    except Exception as e:
+        logger.warning(f"_bg_pause_and_broadcast failed: {e}")
+
+
+async def _bg_resume_and_broadcast(vla_client):
+    try:
+        with client_state.lock:
+            restore_state = client_state.paused_thread_state
+        await asyncio.to_thread(_resume_vla_client, vla_client, restore_state)
+        with client_state.lock:
+            client_state.paused_thread_state = None
+        await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client resumed.", running=True)})
+    except Exception as e:
+        logger.warning(f"_bg_resume_and_broadcast failed: {e}")
+
+
+async def _bg_toggle_observe_and_broadcast():
+    try:
+        vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+        with client_state.lock:
+            client_state.running = True
+            client_state.paused_thread_state = None
+
+        if bool(getattr(vla_client, "is_observe_thread_running", False)):
+            await asyncio.to_thread(_stop_control, vla_client)
+            await asyncio.to_thread(_stop_inference, vla_client)
+            await asyncio.to_thread(_stop_observe, vla_client)
+            message = "Observe stopped."
+        else:
+            await asyncio.to_thread(_start_observe, vla_client)
+            message = "Observe started."
+
+        payload = _status_payload(vla_client, message, running=True)
+        await _broadcast({"type": "status", "data": payload})
+    except Exception as e:
+        logger.warning(f"_bg_toggle_observe_and_broadcast failed: {e}")
+
+
+async def _bg_toggle_infer_and_broadcast(vla_client):
+    try:
+        with client_state.lock:
+            client_state.paused_thread_state = None
+
+        if bool(getattr(vla_client, "is_inference_thread_running", False)):
+            await asyncio.to_thread(_stop_control, vla_client)
+            await asyncio.to_thread(_stop_inference, vla_client)
+            message = "Inference stopped."
+        else:
+            await asyncio.to_thread(_start_inference, vla_client)
+            message = "Inference started."
+
+        payload = _status_payload(vla_client, message, running=True)
+        await _broadcast({"type": "status", "data": payload})
+    except Exception as e:
+        logger.warning(f"_bg_toggle_infer_and_broadcast failed: {e}")
+
+
+async def _bg_toggle_control_and_broadcast(vla_client):
+    try:
+        with client_state.lock:
+            client_state.paused_thread_state = None
+
+        if bool(getattr(vla_client, "is_control_thread_running", False)):
+            await asyncio.to_thread(_stop_control, vla_client)
+            message = "Control stopped."
+        else:
+            await asyncio.to_thread(_start_control, vla_client)
+            message = "Control started."
+
+        payload = _status_payload(vla_client, message, running=True)
+        await _broadcast({"type": "status", "data": payload})
+    except Exception as e:
+        logger.warning(f"_bg_toggle_control_and_broadcast failed: {e}")
+
+
 @app.post("/api/client/pause")
 async def pause_client():
     """Pause observe/inference/control without releasing resources."""
@@ -1355,12 +1444,8 @@ async def pause_client():
     if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
 
-    paused_state = await asyncio.to_thread(_pause_vla_client, vla_client)
-    with client_state.lock:
-        client_state.paused_thread_state = paused_state
-
-    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True)})
-    return {"status": "ok"}
+    asyncio.create_task(_bg_pause_and_broadcast(vla_client))
+    return {"status": "ok", "message": "Pausing scheduled."}
 
 
 @app.post("/api/client/resume")
@@ -1370,38 +1455,14 @@ async def resume_client():
     if vla_client is None or not client_state.running:
         raise HTTPException(400, "Client is not running.")
 
-    with client_state.lock:
-        restore_state = client_state.paused_thread_state
-
-    await asyncio.to_thread(_resume_vla_client, vla_client, restore_state)
-
-    with client_state.lock:
-        client_state.paused_thread_state = None
-
-    await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client resumed.", running=True)})
-    return {"status": "ok"}
+    asyncio.create_task(_bg_resume_and_broadcast(vla_client))
+    return {"status": "ok", "message": "Resume scheduled."}
 
 
 @app.post("/api/client/observe/start")
 async def start_observe_only():
-    vla_client = await asyncio.to_thread(_ensure_vla_client_created)
-
-    with client_state.lock:
-        client_state.running = True
-        client_state.paused_thread_state = None
-
-    if bool(getattr(vla_client, "is_observe_thread_running", False)):
-        await asyncio.to_thread(_stop_control, vla_client)
-        await asyncio.to_thread(_stop_inference, vla_client)
-        await asyncio.to_thread(_stop_observe, vla_client)
-        message = "Observe stopped."
-    else:
-        await asyncio.to_thread(_start_observe, vla_client)
-        message = "Observe started."
-
-    payload = _status_payload(vla_client, message, running=True)
-    await _broadcast({"type": "status", "data": payload})
-    return {"status": "ok", "data": payload}
+    asyncio.create_task(_bg_toggle_observe_and_broadcast())
+    return {"status": "ok", "message": "Observe toggle scheduled."}
 
 
 @app.post("/api/client/infer/start")
@@ -1412,20 +1473,8 @@ async def start_infer_only():
     if not bool(getattr(vla_client, "is_observe_thread_running", False)):
         raise HTTPException(400, "Observe is not running. Start Observe first.")
 
-    with client_state.lock:
-        client_state.paused_thread_state = None
-
-    if bool(getattr(vla_client, "is_inference_thread_running", False)):
-        await asyncio.to_thread(_stop_control, vla_client)
-        await asyncio.to_thread(_stop_inference, vla_client)
-        message = "Inference stopped."
-    else:
-        await asyncio.to_thread(_start_inference, vla_client)
-        message = "Inference started."
-
-    payload = _status_payload(vla_client, message, running=True)
-    await _broadcast({"type": "status", "data": payload})
-    return {"status": "ok", "data": payload}
+    asyncio.create_task(_bg_toggle_infer_and_broadcast(vla_client))
+    return {"status": "ok", "message": "Inference toggle scheduled."}
 
 
 @app.post("/api/client/control/start")
@@ -1438,38 +1487,26 @@ async def start_control_only():
     if not bool(getattr(vla_client, "is_inference_thread_running", False)):
         raise HTTPException(400, "Inference is not running. Start Infer first.")
 
-    with client_state.lock:
-        client_state.paused_thread_state = None
-
-    if bool(getattr(vla_client, "is_control_thread_running", False)):
-        await asyncio.to_thread(_stop_control, vla_client)
-        message = "Control stopped."
-    else:
-        await asyncio.to_thread(_start_control, vla_client)
-        message = "Control started."
-
-    payload = _status_payload(vla_client, message, running=True)
-    await _broadcast({"type": "status", "data": payload})
-    return {"status": "ok", "data": payload}
+    asyncio.create_task(_bg_toggle_control_and_broadcast(vla_client))
+    return {"status": "ok", "message": "Control toggle scheduled."}
 
 
 @app.post("/api/client/stop")
 async def stop_client():
     """Stop client quickly; release heavy native resources in background."""
     with client_state.lock:
-        is_active = client_state.running or (client_state.vla_client is not None)
+        is_active = client_state.running or (client_state.vla_client is not None) or getattr(client_state, "starting", False)
         client_state.running = False
         client_state.paused_thread_state = None
         client_state.stopping = bool(is_active)
 
     if not is_active:
-        print(f"Debug: stop_client called but client is not active (running={client_state.running})")
+        print(f"Debug: stop_client called but client is not active (running={client_state.running}, starting={getattr(client_state, 'starting', False)})")
         raise HTTPException(400, "Client is not running.")
 
     asyncio.create_task(_stop_cleanup_background())
     await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopping."}})
     return {"status": "ok"}
-
 
 async def _stop_cleanup_background():
     try:

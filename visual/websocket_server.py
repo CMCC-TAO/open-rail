@@ -9,6 +9,7 @@ from typing import Dict, List, Set, Optional
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import os
 import cv2
+from concurrent.futures import ThreadPoolExecutor
 
 # 限制 OpenCV 线程，降低与解码端并发冲突概率
 cv2.setNumThreads(1)
@@ -55,6 +56,8 @@ class VLAWebSocketServer:
         
         # 服务器实例
         self.server = None
+        self._img_executor = None
+        self._create_img_executor()
 
         self._run_http_server_thread()
 
@@ -197,19 +200,10 @@ class VLAWebSocketServer:
 
                 # 将numpy数组转换为bytes
                 if isinstance(img, np.ndarray):
-                    # img = cv2.resize(img, (w // 2, h // 2))  # 降低分辨率以减少数据量
-                    if 'depth.' in camera_key:
-                        img_depth_norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-                        img_for_encode = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
-                    else:
-                        # 避免 cv2.cvtColor 额外并发调用；同时统一到 uint8，防止 CV_64F 导致编码异常
-                        img_uint8 = img if img.dtype == np.uint8 else np.clip(img, 0, 255).astype(np.uint8)
-                        img_for_encode = img_uint8[:, :, ::-1] if img_uint8.ndim == 3 and img_uint8.shape[2] == 3 else img_uint8
-                    encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                    ok, enc = cv2.imencode('.jpg', img_for_encode, encode_params)
-                    if not ok:
+                    loop = asyncio.get_running_loop()
+                    frame_bytes = await loop.run_in_executor(self._img_executor, self._encode_frame, img, camera_key)
+                    if frame_bytes is None:
                         continue
-                    frame_bytes = enc.tobytes()
                 else:
                     frame_bytes = img
 
@@ -394,6 +388,27 @@ class VLAWebSocketServer:
             self.server.close()
             print("VLA WebSocket服务器已停止")
 
+    def _create_img_executor(self):
+        if getattr(self, '_img_executor', None) is None or getattr(self._img_executor, '_shutdown', False):
+            self._img_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vis_img_enc")
+
+    def _encode_frame(self, img, camera_key):
+        try:
+            if 'depth.' in camera_key:
+                img_depth_norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                img_for_encode = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
+            else:
+                img_uint8 = img if img.dtype == np.uint8 else np.clip(img, 0, 255).astype(np.uint8)
+                img_for_encode = img_uint8[:, :, ::-1] if img_uint8.ndim == 3 and img_uint8.shape[2] == 3 else img_uint8
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
+            ok, enc = cv2.imencode('.jpg', img_for_encode, encode_params)
+            if not ok:
+                return None
+            return enc.tobytes()
+        except Exception as e:
+            print(f"图像编码失败: {e}")
+            return None
+
     def _run_loop_server(self):
         """Run WebSocket server in asyncio event loop"""
         try:
@@ -409,6 +424,7 @@ class VLAWebSocketServer:
     def run(self):
         if hasattr(self, 'websocket_thread') and self.websocket_thread and self.websocket_thread.is_alive():
             return
+        self._create_img_executor()
         self.websocket_thread = threading.Thread(
             target=self._run_loop_server,
             daemon=True
