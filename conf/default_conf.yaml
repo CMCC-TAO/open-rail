@@ -253,7 +253,6 @@ robots:
     hand_type: gripper
     repo_id: task_39_only1
   type: mock
-vis_action_length: 1000
 vis_zmq:
   client_addr: tcp://localhost:7788
   server_addr: tcp://*:7788
