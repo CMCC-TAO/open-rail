@@ -6,7 +6,7 @@ controller:
   period: 3.75
   wait_time: 250
 inter_chunk:
-  inter_chunk_mode: poly
+  inter_chunk_mode: search_action
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
@@ -56,7 +56,7 @@ rdm:
       policy: stepwise
       start: 14
   max_len: 100
-  mode: sync
+  mode: async
   record_data: false
 record:
   info:
@@ -264,12 +264,12 @@ vision:
   - 640
 visual:
   camera:
-    open_head: false
-    open_wrist_left: false
-    open_wrist_right: false
+    open_head: true
+    open_wrist_left: true
+    open_wrist_right: true
     update_interval_ms: 33
   trajectory:
-    play: false
+    play: true
     selected_joints:
     - 8
     source:

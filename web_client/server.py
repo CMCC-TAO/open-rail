@@ -13,7 +13,6 @@ Architecture:
 import asyncio
 import json
 import logging
-import logging.config
 import os
 import shutil
 import subprocess
@@ -22,10 +21,9 @@ import threading
 import time
 import traceback
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
-
-from client.core import inter_chunk_fuser
 
 try:
     import psutil
@@ -79,6 +77,14 @@ async def _lifespan(_: FastAPI):
         except Exception as e:
             logger.warning(f"Failed to apply yaml conf: {e}")
     # print(f"Final client config: {client_state.config}")
+
+    # Use a dedicated thread pool for the asyncio event loop so that
+    # asyncio.to_thread() tasks are never queued behind business threads
+    # (image encoding, ZMQ, robot SDK) that compete for the GIL.
+    _api_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="api_worker")
+    loop = asyncio.get_running_loop()
+    loop.set_default_executor(_api_executor)
+
     asyncio.create_task(_stats_push_loop())
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
@@ -87,6 +93,7 @@ async def _lifespan(_: FastAPI):
     # Avoid closing low-level robot SDK from a detached daemon cleanup thread,
     # which can crash (segfault) during interpreter shutdown.
     _cleanup(force_release_robot=True, skip_robot_close_if_threads_alive=True)
+    _api_executor.shutdown(wait=False)
 
 app = FastAPI(title="VLA Web Client", version="1.0.0", lifespan=_lifespan)
 
@@ -577,12 +584,22 @@ def _collect_stats() -> dict:
         base["avg_infer_time"]  = float(vla_client.rdm.avg_infer_time)
         base["avg_traj_time"]   = float(vla_client.rdm.avg_traj_time)
         base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
-        base["current_state"]   = [round(float(x), 4) for x in vla_client.info_current_state]
-        base["current_action"]  = [round(float(x), 4) for x in vla_client.info_current_action]
-        base["info_obs"]        = {k: str(v) for k, v in vla_client.info_obs.items()}
-        base["info_act"]        = {k: str(v) for k, v in vla_client.info_act.items()}
+        # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
+        acquired = vla_client.show_thread_lock.acquire(timeout=0.05)
         try:
-            base["current_prob_progress"] = float(vla_client.info_act.get("current_prob_progress", 0.0))
+            current_state  = list(vla_client.info_current_state)
+            current_action = list(vla_client.info_current_action)
+            info_obs = dict(vla_client.info_obs)
+            info_act = dict(vla_client.info_act)
+        finally:
+            if acquired:
+                vla_client.show_thread_lock.release()
+        base["current_state"]   = [round(float(x), 4) for x in current_state]
+        base["current_action"]  = [round(float(x), 4) for x in current_action]
+        base["info_obs"]        = {k: str(v) for k, v in info_obs.items()}
+        base["info_act"]        = {k: str(v) for k, v in info_act.items()}
+        try:
+            base["current_prob_progress"] = float(info_act.get("current_prob_progress", 0.0))
             base["sub_task_id"] = int(vla_client.config.language.sub_task_id) if hasattr(vla_client.config.language, 'sub_task_id') else None
             # print(f"Debug: sub_task_id: {vla_client.config.language.sub_task_id}")
         except Exception as e:
