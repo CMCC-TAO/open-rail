@@ -166,12 +166,12 @@ class VLAClientAsync():
         observations, cnt = None, 0
         while observations is None or cnt < 3:
             # time.sleep(0.2)
-            self.rdm.clear_action_data()
+            self.rdm.clear()
             observations = self.robot.retrieve_observation()
             cnt += 1
 
         if observations is not None:
-            self.rdm.clear_action_data()
+            self.rdm.clear()
             data = self._process_data(observations)
             self.rdm.add_observe_data(data)
             # Clear action data to ensure fresh action retrieval
@@ -227,7 +227,7 @@ class VLAClientAsync():
                 joint_indices=None,
                 step_indices=None,
             )
-            self.rdm.update_action_chunk_fitted_1(
+            self.rdm.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
                 vel_chunk_smoothed=vel_chunk_smoothed,
                 acc_chunk_smoothed=acc_chunk_smoothed,
@@ -310,7 +310,7 @@ class VLAClientAsync():
                 joint_indices=joint_indices if self.is_control_thread_running else None,
                 step_indices=step_indices if self.is_control_thread_running else None,
             )
-            self.rdm.update_action_chunk_fitted_1(
+            self.rdm.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
                 vel_chunk_smoothed=vel_chunk_smoothed,
                 acc_chunk_smoothed=acc_chunk_smoothed,
@@ -588,6 +588,7 @@ class VLAClientAsync():
     def stop(self):
         """Backward-compatible alias of pause()."""
         self.pause()
+        self.rdm.clear()
 
     def close(self):
         """Close the VLA client and clean up all resources.
