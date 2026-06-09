@@ -86,6 +86,7 @@ async def _lifespan(_: FastAPI):
     loop.set_default_executor(_api_executor)
 
     asyncio.create_task(_stats_push_loop())
+    _ensure_vla_client_created()
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
     # ── shutdown ──
@@ -1381,21 +1382,22 @@ async def _bg_resume_and_broadcast(vla_client):
 
 async def _bg_toggle_observe_and_broadcast():
     try:
-        vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+        # vla_client = await asyncio.to_thread(_ensure_vla_client_created)
         with client_state.lock:
             client_state.running = True
             client_state.paused_thread_state = None
-
-        if bool(getattr(vla_client, "is_observe_thread_running", False)):
-            await asyncio.to_thread(_stop_control, vla_client)
-            await asyncio.to_thread(_stop_inference, vla_client)
-            await asyncio.to_thread(_stop_observe, vla_client)
+        # Stop
+        if bool(getattr(client_state.vla_client, "is_observe_thread_running", False)):
+            await asyncio.to_thread(_stop_control, client_state.vla_client)
+            await asyncio.to_thread(_stop_inference, client_state.vla_client)
+            await asyncio.to_thread(_stop_observe, client_state.vla_client)
             message = "Observe stopped."
+        # Start
         else:
-            await asyncio.to_thread(_start_observe, vla_client)
+            await asyncio.to_thread(_start_observe, client_state.vla_client)
             message = "Observe started."
 
-        payload = _status_payload(vla_client, message, running=True)
+        payload = _status_payload(client_state.vla_client, message, running=True)
         await _broadcast({"type": "status", "data": payload})
     except Exception as e:
         logger.warning(f"_bg_toggle_observe_and_broadcast failed: {e}")
