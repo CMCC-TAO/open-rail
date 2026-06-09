@@ -38,7 +38,7 @@ try:
 except ImportError:
     _HAS_YAML = False
 
-from client.core import task_language_manager
+from client.core import task_language_manager, vla_client
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -1183,7 +1183,7 @@ async def _bg_start_client():
     client_state._loop = loop
 
     try:
-        vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+        vla_client = client_state.vla_client
     except Exception as e:
         err = traceback.format_exc()
         logger.error(f"Client init error:\n{err}")
@@ -1277,6 +1277,21 @@ def _status_payload(vla_client, message: str, running: bool = True) -> dict:
         "observe_running": state["observe_running"],
         "inference_running": state["inference_running"],
         "control_running": state["control_running"],
+        "message": message,
+    }
+
+def _status_abnormal(message: str,
+                    running: bool = False,
+                    paused: bool = False,
+                    observe_running: bool = False,
+                    inference_running: bool = False,
+                    control_running: bool = False) -> dict:
+    return {
+        "running": running,
+        "paused": paused,
+        "observe_running": observe_running,
+        "inference_running": inference_running,
+        "control_running": control_running,
         "message": message,
     }
 
@@ -1383,21 +1398,35 @@ async def _bg_resume_and_broadcast(vla_client):
 async def _bg_toggle_observe_and_broadcast():
     try:
         # vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+        vla_client = client_state.vla_client
+        if vla_client == None:
+            with client_state.lock:
+                client_state.running = False
+            result = _status_abnormal(message='VLA Client instance is None.',
+                                    running=False,
+                                    paused=False,
+                                    observe_running=False,
+                                    inference_running=False,
+                                    control_running=False,
+                                    )
+            await _broadcast({"type": "status", "data": result})
+            raise HTTPException(400, "Client is none.")
+        
         with client_state.lock:
             client_state.running = True
             client_state.paused_thread_state = None
         # Stop
-        if bool(getattr(client_state.vla_client, "is_observe_thread_running", False)):
-            await asyncio.to_thread(_stop_control, client_state.vla_client)
-            await asyncio.to_thread(_stop_inference, client_state.vla_client)
-            await asyncio.to_thread(_stop_observe, client_state.vla_client)
+        if bool(getattr(vla_client, "is_observe_thread_running", False)):
+            await asyncio.to_thread(_stop_control,   vla_client)
+            await asyncio.to_thread(_stop_inference, vla_client)
+            await asyncio.to_thread(_stop_observe,   vla_client)
             message = "Observe stopped."
         # Start
         else:
-            await asyncio.to_thread(_start_observe, client_state.vla_client)
+            await asyncio.to_thread(_start_observe, vla_client)
             message = "Observe started."
 
-        payload = _status_payload(client_state.vla_client, message, running=True)
+        payload = _status_payload(vla_client, message, running=True)
         await _broadcast({"type": "status", "data": payload})
     except Exception as e:
         logger.warning(f"_bg_toggle_observe_and_broadcast failed: {e}")
@@ -1585,7 +1614,7 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
         with client_state.lock:
             vla_client = client_state.vla_client
             robot = client_state.robot
-            client_state.vla_client = None
+            # client_state.vla_client = None
             client_state.robot = None
             client_state.running = False
             client_state.paused_thread_state = None
@@ -1593,7 +1622,7 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
 
         if vla_client is not None:
             try:
-                vla_client.close()
+                vla_client.stop()
             except Exception:
                 pass
 
