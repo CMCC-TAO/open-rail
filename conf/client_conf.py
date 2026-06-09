@@ -43,7 +43,7 @@ def get_client_config():
     config.traj_strategy = 'fitting'  # Trajectory strategy, choices = ('fitting', 'interpolation')
     config.fitting_num_samples = 64
     config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
-    config.fitting_deg = 4  # Polynomial fitting degree
+    config.fitting_deg = 3  # Polynomial fitting degree (reduced from 5 to avoid Runge phenomenon oscillation)
     config.intra_chunk_mode = 'fit'  # intra-chunk processing mode, choices = ('raw', 'raw_ipt', 'fit')
     config.inter_chunk_mode = 'min_jerk'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync')
     config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
@@ -58,7 +58,7 @@ def get_client_config():
     config.preprocess_size = [640, 640] # [height, width]
     # Language instruction options, default index 0
     config.language = [
-        'Grasp the bottle selected by the finger with the nearer gripper and pass it to the hand carefully. If and only if the bottle is caught by hand, release the gripper.',
+        'Use one hand to grab one bottle from a pile of Wahaha drinks.',
         'default language instruction',
     ]
     config.thre_prob_progress = 9.9  # Probability threshold for switching language instructions

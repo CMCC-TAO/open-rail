@@ -180,10 +180,10 @@ def test_robot_body():
     print("=" * 60)
 
     default_action = (
-        [-1.6819, 1.5263, 2.2737, -0.2362, -0.5204, 0.1292, 0.1906]  # left arm
-        + [1.3119, 1.4473, -1.6156, -1.6655, 0.4101, -0.2252, 0.3232]  # right arm
-        + [1000.0] * 6  # left hand (all -1000 = disabled)
-        + [650.0, 650.0, 650.0, 650.0, 650.0, 250.0]  # right hand
+        [0.0] * 7    # left arm
+        + [0.0] * 7  # right arm
+        + [0.0] * 6  # left hand
+        + [0.0] * 6  # right hand
     )
 
     mock_config = {

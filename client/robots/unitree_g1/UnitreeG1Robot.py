@@ -8,6 +8,80 @@ import threading
 import time
 import numpy as np
 
+
+# ==============================================
+# 手臂关节 **相对** 限位（弧度/控制步）
+# 含义：单步 action 与当前 state 的最大允许偏差
+#
+# 数据源：训练集 stats_relative.json 统计分析
+#   推理步 delta = max(5 * avg_std, range * 0.3)
+#   控制步 delta = 推理步 delta / RATIO
+#
+# 考虑 G1 关节执行精度（跟踪误差 ~0.01-0.03 rad），
+# delta 下限设为 ~0.015 rad，避免：
+#   1. 跟踪误差 > delta 导致 action 被持续 clamp，手臂不动
+#   2. 编码器噪声在边界处引发抖动
+# wrist 关节运动范围大，delta 适当放宽到 0.050 rad
+# ==============================================
+# 控制频率与推理频率之比
+_CONTROL_INFER_RATIO = 9  # 30Hz(~33.3ms) / 267Hz(3.75ms)
+
+#                        lsp     lsr     lsy     le      lwr     lwp     lwy
+_LEFT_ARM_DELTA_LIMITS = [0.015, 0.015, 0.015, 0.015, 0.050, 0.025, 0.020]
+
+#                         rsp     rsr     rsy     re      rwr     rwp     rwy
+_RIGHT_ARM_DELTA_LIMITS = [0.020, 0.015, 0.015, 0.015, 0.050, 0.025, 0.020]
+
+# 绝对安全限幅（最终兜底，防止相对限位失效时飞出）
+_LEFT_ARM_ABS_LIMITS = [
+    (-0.80, 0.80),   # left_shoulder_pitch
+    (-0.15, 0.25),   # left_shoulder_roll
+    (-0.50, 0.36),   # left_shoulder_yaw
+    (-0.50, 1.35),   # left_elbow
+    (-0.50, 0.86),   # left_wrist_roll
+    (-1.36, 0.40),   # left_wrist_pitch
+    (-0.58, 1.16),   # left_wrist_yaw
+]
+_RIGHT_ARM_ABS_LIMITS = [
+    (-0.80, 0.80),   # right_shoulder_pitch
+    (-0.52, 0.10),   # right_shoulder_roll
+    (-0.48, 0.42),   # right_shoulder_yaw
+    (-0.70, 1.30),   # right_elbow
+    (-0.73, 0.45),   # right_wrist_roll
+    (-1.28, 0.36),   # right_wrist_pitch
+    (-0.80, 0.60),   # right_wrist_yaw
+]
+
+
+def _clamp_arm_actions(action: np.ndarray, current_arm_state: np.ndarray = None) -> np.ndarray:
+    """对 26 维动作中的手臂部分做 **相对** 限幅裁剪
+
+    在 current_arm_state 基础上限制单步最大偏差，防止手臂一次性动太多。
+    同时保留绝对限幅作为安全兜底。
+
+    Args:
+        action: 26 维动作向量 [左臂7, 右臂7, 左手6, 右手6]
+        current_arm_state: 14 维当前手臂状态 [左臂7, 右臂7]；为 None 时仅做绝对限幅
+    """
+    if current_arm_state is not None and len(current_arm_state) >= 14:
+        # —— 相对限幅：action 不能偏离当前 state 超过 delta ——
+        for i, delta in enumerate(_LEFT_ARM_DELTA_LIMITS):
+            lo = current_arm_state[i] - delta
+            hi = current_arm_state[i] + delta
+            action[i] = np.clip(action[i], lo, hi)
+        for i, delta in enumerate(_RIGHT_ARM_DELTA_LIMITS):
+            lo = current_arm_state[7 + i] - delta
+            hi = current_arm_state[7 + i] + delta
+            action[7 + i] = np.clip(action[7 + i], lo, hi)
+
+    # —— 绝对限幅兜底 ——
+    for i, (lo, hi) in enumerate(_LEFT_ARM_ABS_LIMITS):
+        action[i] = np.clip(action[i], lo, hi)
+    for i, (lo, hi) in enumerate(_RIGHT_ARM_ABS_LIMITS):
+        action[7 + i] = np.clip(action[7 + i], lo, hi)
+
+    return action
+
 _DEBUG_PRINT_INTERVAL = 1.0
 _last_debug_time = 0.0
 
@@ -45,8 +119,8 @@ class UnitreeG1Robot(Node):
         # ======================
         self.topic_left_arm_cmd = "/left_arm/joint_pos"
         self.topic_right_arm_cmd = "/right_arm/joint_pos"
-        self.topic_left_hand_cmd = "/left_hand/set_angle"
-        self.topic_right_hand_cmd = "/right_hand/set_angle"
+        self.topic_left_hand_cmd = "/left_hand_cmd"
+        self.topic_right_hand_cmd = "/right_hand_cmd"
 
         print(f"[DBG UnitreeG1Robot] Subscribed topics:")
         print(f"[DBG UnitreeG1Robot]   - {self.topic_joint_states}")
@@ -119,6 +193,24 @@ class UnitreeG1Robot(Node):
 
         self.get_logger().info("UnitreeG1Robot ready")
 
+    def _get_current_arm_state(self) -> np.ndarray:
+        """从 ROS2 回调缓存中获取当前 14 维手臂关节位置 [左臂7, 右臂7]
+
+        Returns:
+            np.ndarray or None: 14 维关节位置；数据缺失时返回 None
+        """
+        la = self.latest_left_arm
+        ra = self.latest_right_arm
+        if la is None or ra is None:
+            return None
+        la_msg, _ = la
+        ra_msg, _ = ra
+        if la_msg is None or ra_msg is None:
+            return None
+        if not la_msg.position or not ra_msg.position:
+            return None
+        return np.array(list(la_msg.position) + list(ra_msg.position), dtype=float)
+
     # ======================
     # 【核心控制函数】26 维动作输入
     # ======================
@@ -129,6 +221,11 @@ class UnitreeG1Robot(Node):
             action (array-like): [左臂7, 右臂7, 左手6, 右手6]
         """
         action = np.asarray(action).flatten()
+
+        # 相对限幅保护：在当前手臂状态基础上限制单步最大偏差
+        current_arm = self._get_current_arm_state()
+        action = _clamp_arm_actions(action, current_arm)
+
         left_arm_act = action[0:7]
         right_arm_act = action[7:14]
         left_hand_act = action[14:20]
@@ -179,6 +276,7 @@ class UnitreeG1Robot(Node):
     # ======================
     # 订阅回调
     # ======================
+
     def _cb_joint_states(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 

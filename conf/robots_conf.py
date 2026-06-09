@@ -59,7 +59,13 @@ def get_mock_config():
     return config
 
 def get_unitree_g1_config():
-    """Generate configuration template for Unitree G1 robot.
+    """Generate configuration for Unitree G1 humanoid robot.
+
+    Unitree G1 使用 26 维动作/状态接口:
+        action[0:7]   -> 左臂 (7 关节)
+        action[7:14]  -> 右臂 (7 关节)
+        action[14:20] -> 左手 (6 手指)
+        action[20:26] -> 右手 (6 手指)
 
     Returns:
         ConfigDict: Configuration dictionary for unitree_g1 robot adapter.
@@ -74,7 +80,17 @@ def get_unitree_g1_config():
         'hand_right': 'hand_right',
     }
     config.proprio_names = ['arm', 'hand']
-    config.reset_robot_pos = [0.0] * 26
+    # 默认复位姿态，请根据实际机器人修改此值
+    config.reset_robot_pos = [
+        # 左臂 (7)
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        # 右臂 (7)
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        # 左手 (6)
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        # 右手 (6)
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+    ]
     config.action_layout = {
         'arm': {'start': 0, 'end': 14, 'policy': 'joint'},
         'hand': {'start': 14, 'end': 26, 'policy': 'hand'},
@@ -90,12 +106,13 @@ def get_robots_config():
     
     Returns:
         ConfigDict: Configuration dictionary containing:
-            - type: Default robot type to use
+            - type: Default robot type to use (default: unitree_g1)
             - a2d: A2D robot configuration
             - mock: Mock robot configuration for testing
+            - unitree_g1: Unitree G1 robot configuration
     """
     config = ConfigDict()
-    config.type = RobotType.A2D
+    config.type = RobotType.UNITREE_G1  # 默认使用 Unitree G1 机器人
     config.a2d = get_a2d_config()
     config.mock = get_mock_config()
     config.unitree_g1 = get_unitree_g1_config()

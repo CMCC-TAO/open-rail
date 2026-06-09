@@ -20,7 +20,7 @@ def get_record_data_config() -> ConfigDict:
     config.save_path = "./data/output/test"  # Root directory for saved data
     config.info = ConfigDict(allow_dotted_keys=True)
     config.info.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
-    config.info.robot_type = "a2d"  # Type of robot used
+    config.info.robot_type = "unitree_g1"  # Type of robot used
 
     # Data statistics (initialized to 0)
     config.info.total_episodes = 0
@@ -49,11 +49,11 @@ def get_record_data_config() -> ConfigDict:
     # Other features
     config.info.features['observation.state'] = ConfigDict({
         "dtype": "float32",
-        "shape": [20]
+        "shape": [26]  # G1: 14 arm joints + 12 hand fingers
     })
     config.info.features['action'] = ConfigDict({
         "dtype": "float32",
-        "shape": [22]
+        "shape": [26]  # G1: 14 arm joints + 12 hand fingers
     })
     config.info.features['episode_index'] = ConfigDict({
         "dtype": "int64",
