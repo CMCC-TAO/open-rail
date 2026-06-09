@@ -25,12 +25,26 @@
 // ═══════════════════════════════════════════════════════
 //  Constants
 // ═══════════════════════════════════════════════════════
-const WS_URL    = `ws://${location.host}/ws`;
+const WS_SCHEME = location.protocol === 'https:' ? 'wss' : 'ws';
+
+function resolveWsHostname(hostname) {
+  const normalized = String(hostname || '').trim().toLowerCase();
+  if (!normalized || normalized === '0.0.0.0' || normalized === '::' || normalized === '[::]' || normalized === '::0') {
+    return '127.0.0.1';
+  }
+  return hostname;
+}
+
+const WS_HOSTNAME = resolveWsHostname(location.hostname);
+const WS_PORT = location.port ? `:${location.port}` : '';
+const WS_URL = `${WS_SCHEME}://${WS_HOSTNAME}${WS_PORT}/ws`;
 const RECONNECT = 3000;
+const WS_CONNECT_TIMEOUT_MS = 5000;
 
 // Visual WebSocket — connects to VLAWebSocketServer (port 8765) for camera frames
-const CAM_WS_URL       = `ws://${location.hostname}:8765`;
+const CAM_WS_URL = `${WS_SCHEME}://${WS_HOSTNAME}:8765`;
 const CAM_WS_RECONNECT = 3000;
+const CAM_WS_CONNECT_TIMEOUT_MS = 5000;
 
 // Trajectory x-axis window span (seconds).
 // Historical mapping: old point-count window used 600 points with fitting_time_step=3.75ms => 2.25s.
@@ -73,6 +87,7 @@ const App = {
   ws: null,
   wsAlive: false,
   reconnectTimer: null,
+  wsConnectTimeoutTimer: null,
   isRunning: null,   // null = uninitialised; set on first stats push
   isPaused: false,   // true when client is paused (inference/commands paused but resources alive)
   isObserveRunning: false,
@@ -85,6 +100,7 @@ const App = {
   camWs: null,
   camWsAlive: false,
   camWsReconnectTimer: null,
+  camWsConnectTimeoutTimer: null,
 
   config: {},
   pendingPatch: {},
@@ -248,7 +264,15 @@ function connectWS() {
   if (App.ws && App.ws.readyState <= 1) return;
   App.ws = new WebSocket(WS_URL);
 
+  clearTimeout(App.wsConnectTimeoutTimer);
+  App.wsConnectTimeoutTimer = setTimeout(() => {
+    if (App.ws && App.ws.readyState === WebSocket.CONNECTING) {
+      try { App.ws.close(); } catch (_) {}
+    }
+  }, WS_CONNECT_TIMEOUT_MS);
+
   App.ws.onopen = () => {
+    clearTimeout(App.wsConnectTimeoutTimer);
     App.wsAlive = true;
     updateWSIndicator(true);
     clearTimeout(App.reconnectTimer);
@@ -262,6 +286,7 @@ function connectWS() {
   };
 
   App.ws.onclose = () => {
+    clearTimeout(App.wsConnectTimeoutTimer);
     App.wsAlive = false;
     updateWSIndicator(false);
     clearInterval(App._pingTimer);
@@ -279,7 +304,15 @@ function connectCamWS() {
   App.camWs = new WebSocket(CAM_WS_URL);
   App.camWs.binaryType = 'arraybuffer';
 
+  clearTimeout(App.camWsConnectTimeoutTimer);
+  App.camWsConnectTimeoutTimer = setTimeout(() => {
+    if (App.camWs && App.camWs.readyState === WebSocket.CONNECTING) {
+      try { App.camWs.close(); } catch (_) {}
+    }
+  }, CAM_WS_CONNECT_TIMEOUT_MS);
+
   App.camWs.onopen = () => {
+    clearTimeout(App.camWsConnectTimeoutTimer);
     App.camWsAlive = true;
     clearTimeout(App.camWsReconnectTimer);
   };
@@ -298,6 +331,7 @@ function connectCamWS() {
   };
 
   App.camWs.onclose = () => {
+    clearTimeout(App.camWsConnectTimeoutTimer);
     App.camWsAlive = false;
     if (App.isRunning) {
       App.camWsReconnectTimer = setTimeout(connectCamWS, CAM_WS_RECONNECT);
@@ -311,6 +345,7 @@ function connectCamWS() {
 
 function disconnectCamWS() {
   clearTimeout(App.camWsReconnectTimer);
+  clearTimeout(App.camWsConnectTimeoutTimer);
   if (App.camWs) {
     App.camWs.onclose = null; // prevent auto-reconnect after manual close
     App.camWs.close();
@@ -3488,7 +3523,13 @@ function wireEvents() {
     try {
       if (App.isRunning) {
         // Stop request
-        try { await apiFetch('/api/client/stop', { method: 'POST', timeoutMs: 3000 }); } catch (e) { /* toasted */ }
+        const prevPaused = App.isPaused;
+        setRunningUI(false, false);
+        try {
+          await apiFetch('/api/client/stop', { method: 'POST', timeoutMs: 8000 });
+        } catch (e) {
+          setRunningUI(true, prevPaused);
+        }
         return;
       }
 
@@ -3555,7 +3596,7 @@ function wireEvents() {
       }
       connectCamWS();
       // syncRuntimeCameraConfig();
-      setThreadControlUI();
+      // setThreadControlUI();
     } catch (e) {
       if (e && e.name === 'AbortError') {
         // manual abort from repeated click; keep silent.
