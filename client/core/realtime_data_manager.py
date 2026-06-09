@@ -115,7 +115,7 @@ class RealtimeDataManager():
         """
         # self.last_infer_time = self.currt_infer_time
         currt_infer_time = self.start_traj_marker - self.start_infer_marker
-        self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count
+        self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
         self.logger.debug(f'avg infer time: {self.avg_infer_time:.4f}s')
         # print(f"avg infer time: {self.avg_infer_time}, infer count: {self.infer_count}")
 
@@ -124,7 +124,8 @@ class RealtimeDataManager():
         """
         # self.last_traj_time = self.currt_traj_time
         currt_traj_time = self.start_ctrl_marker - self.start_traj_marker
-        self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count
+        self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count if self.infer_count > 0 else currt_traj_time
+        self.logger.debug(f'avg traj time: {self.avg_traj_time:.4f}s')
         # self.logger.debug(f'avg traj time: {self.avg_traj_time}')
 
     def _get_joint_indices(self, action_chunk):
@@ -394,7 +395,7 @@ class RealtimeDataManager():
         """
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None or self.prob_progress is None:
-                return None
+                return 0
             # Ensure index is within bounds
             index = min(self.action_chunk_index, len(self.prob_progress) - 1)
             return self.prob_progress[index]
@@ -465,6 +466,7 @@ class RealtimeDataManager():
             self.acc_chunk_fitted = None
             self.timestamps_fitted = None
             self.action_chunk_index = None
+            self.prob_progress = None
             # notify waiters that action data has been cleared
             self.polynomial_cond.notify_all()
             

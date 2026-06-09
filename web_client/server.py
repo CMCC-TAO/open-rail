@@ -1707,8 +1707,8 @@ class CommandRequest(BaseModel):
 async def client_command(req: CommandRequest):
     vla_client = client_state.vla_client
     robot = client_state.robot
-    if vla_client is None or not client_state.running:
-        raise HTTPException(400, "Client is not running.")
+    if vla_client is None:
+        raise HTTPException(400, f"Client is None. Bad request: {req.command}")
 
     cmd = req.command
     params = req.params if isinstance(req.params, dict) else {}
