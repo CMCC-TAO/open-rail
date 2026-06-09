@@ -87,7 +87,6 @@ class VLAClientAsync():
         self._img_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_enc")
 
         # Inference variables
-        self.infer_count = 0
         self.infer_flag = False
         self.wait_frame_count = 0
         self.infer_thread_lock = threading.Lock()
@@ -114,20 +113,6 @@ class VLAClientAsync():
         self.info_current_state = [0.0] * action_dim
         self.info_obs, self.info_act = {}, {}
         # self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
-
-    def _load_language_tasks(self, file_path: str) -> dict:
-        root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        target_path = file_path if os.path.isabs(file_path) else os.path.join(root_dir, 'conf', file_path)
-        try:
-            with open(target_path, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                return {'Default': [x for x in data if isinstance(x, str)]}
-            if isinstance(data, dict):
-                return {k: [x for x in v if isinstance(x, str)] for k, v in data.items() if isinstance(v, list)}
-        except Exception as e:
-            self.logger.warning(f'Failed to load language command file: {target_path}, error: {e}')
-        return {}
 
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
@@ -269,7 +254,11 @@ class VLAClientAsync():
             
             # Send data for inference and wait for results
             result = self._request_inference(data, timeout_ms=500)
-            if result is None or 'data' not in result:
+            if result is None:
+                self.logger.warning("Inference result is None.")
+                return
+            if 'data' not in result:
+                self.logger.warning("Inference result doesn't have data.")
                 return
             self.rdm.add_infer_count()
             action_data = result['data']
@@ -285,6 +274,9 @@ class VLAClientAsync():
             self.rdm.set_traj_time_marker()
 
             timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
+            if timestamps is None:
+                self.logger.warning("Return None when pop action chunk from rdm.")
+                return
             prob_progress = None
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
                 prob_progress = action_data['ext']['prob_progress']
@@ -591,9 +583,12 @@ class VLAClientAsync():
 
     def stop(self):
         """Backward-compatible alias of pause()."""
+        self.pause()
+        time.sleep(self.rdm.avg_infer_time * 1.5) # make sure inference thread is stopped.
         self.task_language_manager.reset()
         self.rdm.clear()
-        self.pause()
+        with self.show_thread_lock:
+            self.info_act['current_prob_progress'] = 0.0
         # TODO: Robot reset
 
     def close(self):
