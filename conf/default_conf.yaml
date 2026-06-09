@@ -38,7 +38,7 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 1
+  sub_task_id: 0
   task_id: tea_master
   task_progress_threshold: 0.95
   task_progress_win_size: 10
@@ -56,7 +56,7 @@ rdm:
       policy: stepwise
       start: 14
   max_len: 100
-  mode: sync
+  mode: async
   record_data: false
 record:
   info:

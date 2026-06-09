@@ -258,8 +258,10 @@ class VLAClientAsync():
         data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
         if isinstance(data, dict):
             currt_language_instruction = data.get("obs", {}).get("language")[0]
-        else:
+        elif isinstance(data, list):
             currt_language_instruction = data[1].get("obs", {}).get("language")[0]
+        else:
+            currt_language_instruction = ''
         # print(f"data keys: {data.keys() if data is not None else None}, infer_count: {self.rdm.infer_count}")
         if data is not None:
             # Record inference start timestamp
@@ -352,16 +354,6 @@ class VLAClientAsync():
             with self.show_thread_lock:
                 self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
-            # Only use alignment processing if prob_progress array length > 1
-            prob_progress = self.rdm.get_prob_progress()
-            if prob_progress is not None:
-                with self.show_thread_lock:
-                    self.info_act['current_prob_progress'] = prob_progress
-                # print(f"current prob_progress: {prob_progress}")
-                if self.config.language.auto_mode == True:
-                    # Automatically switch language instruction based on prob_progress changes
-                    self.task_language_manager.add_task_progress(progress=prob_progress)
-                    self.task_language_manager.advance_subtask()
 
             if self.config.record.switch and self.is_control_thread_running and self.is_running:
                 self.dataset_write.add_action_async(action_fitted, time.perf_counter())
@@ -369,6 +361,16 @@ class VLAClientAsync():
             with self.show_thread_lock:
                 self.info_act['action'] = action_fitted.shape
 
+        # Only use alignment processing if prob_progress array length > 1
+        prob_progress = self.rdm.get_prob_progress()
+        if prob_progress is not None:
+            with self.show_thread_lock:
+                self.info_act['current_prob_progress'] = prob_progress
+            # print(f"current prob_progress: {prob_progress}")
+            if self.config.language.auto_mode == True:
+                # Automatically switch language instruction based on prob_progress changes
+                self.task_language_manager.add_task_progress(progress=prob_progress)
+                self.task_language_manager.advance_subtask()
         current_state = getattr(self.robot, 'current_state', None)
         self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw, current_state)
 
@@ -573,6 +575,7 @@ class VLAClientAsync():
         self.stop_observe()
         self.stop_inference()
         self.stop_control()
+        self.stop_visualize()
         self.logger.info('VLA client paused.')
 
     def resume(self):
@@ -583,12 +586,15 @@ class VLAClientAsync():
         self.start_observe()
         self.start_inference()
         self.start_control()
+        self.start_visualize()
         self.logger.info('VLA client resumed.')
 
     def stop(self):
         """Backward-compatible alias of pause()."""
-        self.pause()
+        self.task_language_manager.reset()
         self.rdm.clear()
+        self.pause()
+        # TODO: Robot reset
 
     def close(self):
         """Close the VLA client and clean up all resources.

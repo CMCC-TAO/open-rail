@@ -29,6 +29,12 @@ class TaskLanguageManager:
         self.sub_task_id_tmp: int = int(getattr(self.config, "sub_task_id", 0))
         self.logger.info(f"Task language manager inited. tasks={self.task_language_map}, currt_language_instruction={self.currt_language_instruction}")
 
+    def reset(self) -> None:
+        setattr(self.config, "sub_task_id", 0)
+        self.task_progress_queue.clear()
+        self.ready_for_advance=True
+        self.sub_task_id_tmp=0
+        self.currt_language_instruction: str = self._sync_language_from_config()
     def _resolve_task_file_path(self, file_path: str) -> str:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return file_path if os.path.isabs(file_path) else os.path.join(root_dir, "conf", file_path)
