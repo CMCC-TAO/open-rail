@@ -315,7 +315,7 @@ class RealtimeDataManager():
                 end_index = min(self.action_chunk_index + index_offset + num_samples, total_len)
                 return self.timestamps_fitted[start_index:end_index], self.action_chunk_fitted[:, start_index:end_index]
     
-    def update_action_chunk_fitted_1(self,
+    def update_action_chunk_fitted(self,
                                 action_chunk_smoothed,
                                 vel_chunk_smoothed,
                                 acc_chunk_smoothed,
@@ -447,7 +447,7 @@ class RealtimeDataManager():
         else:
             return None
     
-    def clear_action_data(self):
+    def clear(self):
         """Clear all action-related data to ensure fresh action retrieval.
         
         This method resets action chunks, fitted trajectories, and related indices
@@ -456,6 +456,7 @@ class RealtimeDataManager():
         with self.action_thread_lock:
             self.action_chunks = []
             self.timestamp_chunks = []
+            self.infer_count = 0
         
         with self.polynomial_thread_lock:
             self.observe_buffer.clear()
