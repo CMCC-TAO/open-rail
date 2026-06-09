@@ -1692,6 +1692,7 @@ def _cleanup_with_timeout(force_release_robot: bool = False, timeout_s: float = 
 @app.get("/api/client/status")
 async def client_status():
     stats = await asyncio.to_thread(_collect_stats)
+    # print(f"Debug: {stats}")
     return {"status": "ok", "data": stats}
 
 

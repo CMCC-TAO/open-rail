@@ -395,6 +395,7 @@ class RealtimeDataManager():
         """
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None or self.prob_progress is None:
+                # print(f"Debug: return task progress when none.")
                 return 0
             # Ensure index is within bounds
             index = min(self.action_chunk_index, len(self.prob_progress) - 1)
@@ -470,7 +471,7 @@ class RealtimeDataManager():
             # notify waiters that action data has been cleared
             self.polynomial_cond.notify_all()
             
-        self.logger.debug("Action data cleared for fresh inference")
+        self.logger.debug("All data cleared for fresh inference")
 
     def wait_for_next(self, mode: str = 'sync', wait_time: float = 0.01) -> bool:
         """Wait for next action/frame according to mode.

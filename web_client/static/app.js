@@ -3530,6 +3530,12 @@ function wireEvents() {
         } catch (e) {
           setRunningUI(true, prevPaused);
         }
+        finally {
+          try {
+            const json = await apiFetch('/api/client/status', { timeoutMs: 3000, suppressToast: true });
+            if (json && json.data) renderStats(json.data);
+          } catch (e) { /* ignore */ }
+        }
         return;
       }
 
