@@ -27,10 +27,10 @@ import numpy as np
 _CONTROL_INFER_RATIO = 9  # 30Hz(~33.3ms) / 267Hz(3.75ms)
 
 #                        lsp     lsr     lsy     le      lwr     lwp     lwy
-_LEFT_ARM_DELTA_LIMITS = [0.015, 0.015, 0.015, 0.015, 0.050, 0.025, 0.020]
+_LEFT_ARM_DELTA_LIMITS = [0.15, 0.15, 0.15, 0.15, 0.50, 0.25, 0.20]
 
 #                         rsp     rsr     rsy     re      rwr     rwp     rwy
-_RIGHT_ARM_DELTA_LIMITS = [0.020, 0.015, 0.015, 0.015, 0.050, 0.025, 0.020]
+_RIGHT_ARM_DELTA_LIMITS = [0.20, 0.15, 0.15, 0.15, 0.50, 0.25, 0.20]
 
 # 绝对安全限幅（最终兜底，防止相对限位失效时飞出）
 _LEFT_ARM_ABS_LIMITS = [

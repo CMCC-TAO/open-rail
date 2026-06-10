@@ -81,7 +81,7 @@ class OneHandGraspHandler(AbstractTaskHandler):
                 language_instruction=instruction,
                 robot_body=robot_body,
                 reset_robot=True,
-                fixed_duration=8.0,  # GR00T 模型不返回 prob_progress，固定运行 8 秒
+                fixed_duration=30.0,  # GR00T 模型不返回 prob_progress，固定运行 20 秒
             )
             return result
 

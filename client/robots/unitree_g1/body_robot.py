@@ -83,18 +83,40 @@ class RobotBody(RobotBase):
         target_pose = np.array(target_pose)
 
         # 使用 ruckig 平滑规划前 14 维（左右臂）
-        current_obs = self.retrieve_observation()
+        # 重试读取观测：最多等待 1s，确保取到有效当前状态再规划轨迹
+        current_obs = None
+        for _ in range(10):
+            current_obs = self.retrieve_observation()
+            if current_obs is not None:
+                break
+            time.sleep(0.1)
+
         if current_obs is not None:
             current_positions = current_obs["obs.state"][:14]
             target_positions = target_pose[:14]
             dis = np.abs(current_positions - target_positions)
             if np.any(dis > np.deg2rad(0.01)):
-                trajs = self.ruckig_planning(current_positions, target_positions)
-                for traj in trajs:
+                # 以较低速度规划手臂轨迹，确保平滑过渡
+                trajs = self.ruckig_planning(
+                    current_positions, target_positions,
+                    max_velocity=0.5, max_acceleration=0.3, max_jerk=1.0,
+                )
+                n_points = len(trajs)
+                # 获取手部当前状态用于线性插值
+                left_hand_current = current_obs["obs.state"][14:20]
+                right_hand_current = current_obs["obs.state"][20:26]
+                left_hand_target = target_pose[14:20]
+                right_hand_target = target_pose[20:26]
+
+                for i, traj in enumerate(trajs):
+                    t = (i + 1) / n_points  # 进度 0→1
                     tmp = target_pose.copy()
                     tmp[:14] = traj
+                    # 手部线性插值：从当前值平滑过渡到目标值
+                    tmp[14:20] = left_hand_current + t * (left_hand_target - left_hand_current)
+                    tmp[20:26] = right_hand_current + t * (right_hand_target - right_hand_current)
                     self.robot.send_robot_action(tmp)
-                    time.sleep(0.01)
+                    time.sleep(0.02)  # 50Hz 下发，进一步降低速度
             else:
                 self.robot.send_robot_action(target_pose)
         else:

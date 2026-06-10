@@ -42,7 +42,8 @@ class RobotBase():
         """
         raise NotImplementedError('reset_robot is not implemented')
 
-    def ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):
+    def ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01,
+                       max_velocity=2.0, max_acceleration=1.0, max_jerk=5.0):
         """
         Trajectory planning using Ruckig
         Args:
@@ -50,6 +51,9 @@ class RobotBase():
             target_pose: target joint pose
             dof: degrees of freedom
             interval: time interval
+            max_velocity: max velocity per joint (rad/s)
+            max_acceleration: max acceleration per joint (rad/s²)
+            max_jerk: max jerk per joint (rad/s³)
         Returns:
             list of trajectory points
         """
@@ -68,9 +72,9 @@ class RobotBase():
         rk_input.target_acceleration = [0.0] * dof
         
         # Set motion constraints
-        rk_input.max_velocity = [2.0] * dof
-        rk_input.max_acceleration = [1.0] * dof
-        rk_input.max_jerk = [5.0] * dof
+        rk_input.max_velocity = [max_velocity] * dof
+        rk_input.max_acceleration = [max_acceleration] * dof
+        rk_input.max_jerk = [max_jerk] * dof
         
         # Generate trajectory
         trajs = []
