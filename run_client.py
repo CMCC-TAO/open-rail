@@ -279,12 +279,12 @@ if __name__ == "__main__":
     if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
         config.rdm.action_layout = robot_cfg.action_layout
         config.intra_chunk.action_layout = robot_cfg.action_layout
-    rdm = RealtimeDataManager(config.rdm)
+    realtime_data_manager = RealtimeDataManager(config.rdm)
     inter_chunk_fuser = InterChunkFuser(config=config.inter_chunk)
     intra_chunk_smoother = IntraChunkSmoother(config=config.intra_chunk)
     vla_client = VLAClientAsync(
         config=config,
-        rdm=rdm,
+        realtime_data_manager=realtime_data_manager,
         inter_chunk_fuser=inter_chunk_fuser,
         intra_chunk_smoother=intra_chunk_smoother,
         vla_zmq_client=vla_zmq_client,
@@ -320,7 +320,7 @@ if __name__ == "__main__":
                 terminal_size = console.size
                 live.update(create_layout(info, terminal_size))
             elif args.debug:
-                print(f"\rinfer_count: {vla_client.rdm.infer_count}, avg_infer_time: {vla_client.rdm.avg_infer_time: .4f}s, "
+                print(f"\rinfer_count: {vla_client.realtime_data_manager.infer_count}, avg_infer_time: {vla_client.realtime_data_manager.avg_infer_time: .4f}s, "
                         f"task_info: {vla_client.language}", end='')
 
             # Check for user input using select

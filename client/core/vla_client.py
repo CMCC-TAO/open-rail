@@ -1,15 +1,9 @@
 import cv2
-import os
-import json
 import time
 import threading
 import logging
 import numpy as np
-from datetime import datetime
-from collections import deque
 from ml_collections import ConfigDict
-from scipy.interpolate import CubicSpline, interp1d
-
 from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc
@@ -35,7 +29,7 @@ class VLAClientAsync():
     - Data recording for dataset creation
     """
     def __init__(self, config: ConfigDict,
-                rdm: RealtimeDataManager,
+                realtime_data_manager: RealtimeDataManager,
                 inter_chunk_fuser: InterChunkFuser,
                 intra_chunk_smoother: IntraChunkSmoother,
                 task_language_manager: TaskLanguageManager,
@@ -45,7 +39,7 @@ class VLAClientAsync():
         
         Args:
             config (ConfigDict): Configuration dictionary containing all system parameters
-            rdm (RealtimeDataManager): Real-time data manager for handling observation and action data
+            realtime_data_manager (RealtimeDataManager): Real-time data manager for handling observation and action data
             intra_chunk_smoother (IntraChunkSmoother): Intra-chunk smoother for action smoothing and fitting
             zmq_client (ZMQClient): ZMQ client for communication with VLA inference server
             vis_action_cams_zmq_client (ZMQClient): ZMQ client for communication with camera-action visualization server
@@ -53,7 +47,7 @@ class VLAClientAsync():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
-        self.rdm = rdm
+        self.realtime_data_manager = realtime_data_manager
         self.inter_chunk_fuser = inter_chunk_fuser
         self.intra_chunk_smoother = intra_chunk_smoother
         self.task_language_manager = task_language_manager
@@ -82,14 +76,12 @@ class VLAClientAsync():
         
         self.thread_lock = threading.Lock()
         self.show_thread_lock = threading.Lock()
+        self.infer_thread_lock = threading.Lock()
 
         # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
         self._img_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_enc")
 
         # Inference variables
-        self.infer_flag = False
-        self.wait_frame_count = 0
-        self.infer_thread_lock = threading.Lock()
         self._request_id = 0
 
         # Initialize the dataset writer with the provided recording configuration
@@ -133,7 +125,7 @@ class VLAClientAsync():
                     self.dataset_write.add_observation_async(observations, self.task_language_manager.get_current_language(), time.perf_counter())
                 # Decide whether to change language instruction based on the task progress predicted by the VLA model
                 data = self._process_data(observations)
-                self.rdm.add_observe_data(data)
+                self.realtime_data_manager.add_observe_data(data)
             time.sleep(0.001)
     
     @run_time_decorator
@@ -151,41 +143,41 @@ class VLAClientAsync():
         observations, cnt = None, 0
         while observations is None or cnt < 3:
             # time.sleep(0.2)
-            self.rdm.clear()
+            self.realtime_data_manager.clear()
             observations = self.robot.retrieve_observation()
             cnt += 1
 
         if observations is not None:
-            self.rdm.clear()
+            self.realtime_data_manager.clear()
             data = self._process_data(observations)
-            self.rdm.add_observe_data(data)
+            self.realtime_data_manager.add_observe_data(data)
             # Clear action data to ensure fresh action retrieval
         
         # Get observation data (thread-safe function, no lock needed)
-        data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
+        data = self.realtime_data_manager.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
         if data is not None:
             # Record inference start timestamp for control timestamp updates
-            self.rdm.set_infer_time_marker()
+            self.realtime_data_manager.set_infer_time_marker()
             
             # Send data for inference and wait for results
             result = self._request_inference(data, timeout_ms=500)
             if result is None or 'data' not in result:
                 return
-            self.rdm.add_infer_count()
+            self.realtime_data_manager.add_infer_count()
 
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
             action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
-            self.rdm.set_observe_time_marker(loc_timestamp)
+            self.realtime_data_manager.set_observe_time_marker(loc_timestamp)
             
             # Add action data (thread-safe function, no lock needed)
-            self.rdm.set_init_observe_timestamp(timestamp=timestamp_chunk[0])
-            self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
+            self.realtime_data_manager.set_init_observe_timestamp(timestamp=timestamp_chunk[0])
+            self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
             # Record trajectory fitting timestamp
-            self.rdm.set_traj_time_marker()
-            timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
+            self.realtime_data_manager.set_traj_time_marker()
+            timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
             prob_progress = None
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
                 prob_progress = action_data['ext']['prob_progress']
@@ -195,11 +187,11 @@ class VLAClientAsync():
                 task_progress=prob_progress)
 
             # Record control timestamp
-            self.rdm.set_control_time_marker()
-            target_chunk_index = self.rdm.get_start_chunk_index(timestamps_fitted)
-            # joint_indices = self.rdm._get_joint_indices(action_chunk_fitted)
-            # step_indices = self.rdm._get_step_indices(action_chunk_fitted)
-            # currt_action, currt_vel, currt_acc = self.rdm.get_current_state()
+            self.realtime_data_manager.set_control_time_marker()
+            target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
+            # joint_indices = self.realtime_data_manager._get_joint_indices(action_chunk_fitted)
+            # step_indices = self.realtime_data_manager._get_step_indices(action_chunk_fitted)
+            # currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
                 next_action_chunk=action_chunk_fitted,
                 next_vel_chunk=vel_chunk_fitted,
@@ -212,7 +204,7 @@ class VLAClientAsync():
                 joint_indices=None,
                 step_indices=None,
             )
-            self.rdm.update_action_chunk_fitted(
+            self.realtime_data_manager.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
                 vel_chunk_smoothed=vel_chunk_smoothed,
                 acc_chunk_smoothed=acc_chunk_smoothed,
@@ -222,8 +214,8 @@ class VLAClientAsync():
             )
 
             # Compute average inference and trajectory fitting times
-            self.rdm.compute_avg_infer_time()
-            self.rdm.compute_avg_traj_time()
+            self.realtime_data_manager.compute_avg_infer_time()
+            self.realtime_data_manager.compute_avg_traj_time()
     
     # @run_time_decorator
     def inference_step(self):
@@ -240,42 +232,42 @@ class VLAClientAsync():
             return
         
         # Get observation data (thread-safe function, no lock needed)
-        data = self.rdm.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
+        data = self.realtime_data_manager.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
         if isinstance(data, dict):
             currt_language_instruction = data.get("obs", {}).get("language")[0]
         elif isinstance(data, list):
             currt_language_instruction = data[1].get("obs", {}).get("language")[0]
         else:
             currt_language_instruction = ''
-        # print(f"data keys: {data.keys() if data is not None else None}, infer_count: {self.rdm.infer_count}")
+        # print(f"data keys: {data.keys() if data is not None else None}, infer_count: {self.realtime_data_manager.infer_count}")
         if data is not None:
             # Record inference start timestamp
-            self.rdm.set_infer_time_marker()
+            self.realtime_data_manager.set_infer_time_marker()
             
             # Send data for inference and wait for results
-            result = self._request_inference(data, timeout_ms=500)
+            result = self._request_inference(data, timeout_ms = 500)
             if result is None:
                 self.logger.warning("Inference result is None.")
                 return
             if 'data' not in result:
                 self.logger.warning("Inference result doesn't have data.")
                 return
-            self.rdm.add_infer_count()
+            self.realtime_data_manager.add_infer_count()
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
             action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
-            self.rdm.set_observe_time_marker(loc_timestamp)
+            self.realtime_data_manager.set_observe_time_marker(loc_timestamp)
             
             # Add action data (thread-safe function, no lock needed)
-            self.rdm.update_action_chunk_raw(action_chunk, timestamp_chunk)
+            self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
             # Record trajectory fitting timestamp
-            self.rdm.set_traj_time_marker()
+            self.realtime_data_manager.set_traj_time_marker()
 
-            timestamps, action_chunk = self.rdm.pop_action_chunk(time_offset=0.0)
+            timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
             if timestamps is None:
-                self.logger.warning("Return None when pop action chunk from rdm.")
+                self.logger.warning("Return None when pop action chunk from realtime_data_manager.")
                 return
             prob_progress = None
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
@@ -283,14 +275,14 @@ class VLAClientAsync():
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk, task_progress=prob_progress)
 
             # Record control timestamp
-            self.rdm.set_control_time_marker()
+            self.realtime_data_manager.set_control_time_marker()
             
             # Get prob_progress from action data if available
 
-            target_chunk_index = self.rdm.get_start_chunk_index(timestamps_fitted)
-            joint_indices = self.rdm._get_joint_indices(action_chunk_fitted)
-            step_indices = self.rdm._get_step_indices(action_chunk_fitted)
-            currt_action, currt_vel, currt_acc = self.rdm.get_current_state()
+            target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
+            joint_indices = self.realtime_data_manager._get_joint_indices(action_chunk_fitted)
+            step_indices = self.realtime_data_manager._get_step_indices(action_chunk_fitted)
+            currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
             # Use inter chunk fusion when control thread is running, otherwise use intra chunk smoother output directly for visualization and monitoring
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
                 next_action_chunk=action_chunk_fitted,
@@ -304,7 +296,7 @@ class VLAClientAsync():
                 joint_indices=joint_indices if self.is_control_thread_running else None,
                 step_indices=step_indices if self.is_control_thread_running else None,
             )
-            self.rdm.update_action_chunk_fitted(
+            self.realtime_data_manager.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
                 vel_chunk_smoothed=vel_chunk_smoothed,
                 acc_chunk_smoothed=acc_chunk_smoothed,
@@ -314,8 +306,8 @@ class VLAClientAsync():
             )
 
             # Compute average inference and trajectory fitting times
-            self.rdm.compute_avg_infer_time()
-            self.rdm.compute_avg_traj_time()
+            self.realtime_data_manager.compute_avg_infer_time()
+            self.realtime_data_manager.compute_avg_traj_time()
             if self.config.language.auto_mode == True:
                 self.task_language_manager.reset_task_progress(
                     language_instruction=currt_language_instruction,
@@ -337,7 +329,7 @@ class VLAClientAsync():
         if not self.is_control_thread_running:
             return
 
-        action_fitted, action_raw, vel_fitted, acc_fitted = self.rdm.get_action_fitted()
+        action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
 
         if action_fitted is not None:
 
@@ -354,7 +346,7 @@ class VLAClientAsync():
                 self.info_act['action'] = action_fitted.shape
 
         # Only use alignment processing if prob_progress array length > 1
-        prob_progress = self.rdm.get_prob_progress()
+        prob_progress = self.realtime_data_manager.get_prob_progress()
         if prob_progress is not None:
             with self.show_thread_lock:
                 self.info_act['current_prob_progress'] = prob_progress
@@ -370,7 +362,7 @@ class VLAClientAsync():
         # Send state data to visualization server for live plotting when control thread is not running
         if not self.is_control_thread_running:
             current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
-            action_fitted, action_raw, vel_fitted, acc_fitted = self.rdm.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
+            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
             self.vis_action_state(action_fitted=action_fitted,
                                 vel_fitted=vel_fitted,
                                 acc_fitted=acc_fitted,
@@ -448,7 +440,7 @@ class VLAClientAsync():
         return data
 
     @run_time_decorator
-    def _process_action_chunk(self, action):
+    def _process_action_chunk(self, action_raw:dict):
         """Process an action chunk by generating reference timestamp chunk and passing local timestamp.
 
         This method processes the inference result from the VLA server by:
@@ -469,12 +461,12 @@ class VLAClientAsync():
         """
         action_chunk = []
         timestamp_chunk = []
-        action_type = action['type']
+        action_type = action_raw['type']
         
         if action_type == 'vla_action':
-            pred_action = action['pred_action']
-            ref_timestamp = action['ref_timestamp']
-            loc_timestamp = action['loc_timestamp']
+            pred_action = action_raw['pred_action']
+            ref_timestamp = action_raw['ref_timestamp']
+            loc_timestamp = action_raw['loc_timestamp']
             # Generate action and timestamp chunks
             for index, action in enumerate(pred_action):
                 action_chunk.append(action)
@@ -584,9 +576,9 @@ class VLAClientAsync():
     def stop(self):
         """Backward-compatible alias of pause()."""
         self.pause()
-        time.sleep(self.rdm.avg_infer_time * 1.5) # make sure inference thread is stopped.
+        time.sleep(self.realtime_data_manager.avg_infer_time * 1.5) # make sure inference thread is stopped.
         self.task_language_manager.reset()
-        self.rdm.clear()
+        self.realtime_data_manager.clear()
         with self.show_thread_lock:
             self.info_act['current_prob_progress'] = 0.0
         # TODO: Robot reset
@@ -635,18 +627,18 @@ class VLAClientAsync():
                 time.sleep(0.001)
                 continue
 
-            if self.rdm.infer_count == 0:
+            if self.realtime_data_manager.infer_count == 0:
                 self.inference_first()
                 # time.sleep(self.config.controller.wait_time/1000)
-                self.rdm.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
-                # self.rdm.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
+                self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
+                # self.realtime_data_manager.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
             else:
                 self.inference_step()
                 # self.inferenceFirstThreadFun()
                 # time.sleep(self.config.controller.wait_time/1000)
-                self.rdm.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
-                # self.rdm.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
-            # print(f'\rInference count: {self.rdm.infer_count}, current infer time: {self.rdm.start_traj_marker-self.rdm.start_infer_marker:.4f}s, current traj time: {self.rdm.start_ctrl_marker-self.rdm.start_traj_marker:.4f}s', end='', flush=True)
+                self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
+                # self.realtime_data_manager.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
+            # print(f'\rInference count: {self.realtime_data_manager.infer_count}, current infer time: {self.realtime_data_manager.start_traj_marker-self.realtime_data_manager.start_infer_marker:.4f}s, current traj time: {self.realtime_data_manager.start_ctrl_marker-self.realtime_data_manager.start_traj_marker:.4f}s', end='', flush=True)
             # symbol = '=' * 10
 
     def vis_action_state(self, action_fitted=None, vel_fitted=None, acc_fitted=None, action_raw=None, current_state=None):
@@ -785,31 +777,6 @@ class VLAClientAsync():
             self.vis_prev_state = state_np
         if state_vel is not None:
             self.vis_prev_state_vel = state_vel
-
-    def _writer_thread(self):
-        while self.is_running:
-            # print("_writer_thread")
-            if not self.act_write_buffer:
-                time.sleep(0.001)
-                continue
-            else:
-                af = self.act_write_buffer.popleft()
-                vf = self.vel_write_buffer.popleft()
-                ac = self.acc_write_buffer.popleft()
-
-            # Ensure they are numpy arrays
-            af = np.asarray(af)
-            vf = np.asarray(vf)
-            ac = np.asarray(ac)
-
-            # Flatten into a single line for writing to each file
-            line_af = ','.join(f'{x:.6f}' for x in af) + '\n'
-            line_vf = ','.join(f'{x:.6f}' for x in vf) + '\n'
-            line_ac = ','.join(f'{x:.6f}' for x in ac) + '\n'
-
-            self.files['action'].write(line_af)
-            self.files['velocity'].write(line_vf)
-            self.files['acceleration'].write(line_ac)
 
 if __name__ == "__main__":
     pass
