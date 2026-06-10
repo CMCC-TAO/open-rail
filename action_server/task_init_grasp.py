@@ -68,31 +68,26 @@ INIT_GRASP_POSE = np.array([
 
 
 def _linear_interpolate(current: np.ndarray, target: np.ndarray,
-                        max_step_rad: float = 0.005,
-                        min_steps: int = 50,
-                        max_steps: int = 500) -> list:
-    """生成线性插值轨迹
-
-    每个关节步长不超过 max_step_rad，确保运动平滑。
+                        num_steps: int = 800) -> list:
+    """生成线性插值轨迹（按固定步数均分）
 
     Args:
-        current:    当前关节角度 (ndarray)
-        target:     目标关节角度 (ndarray)
-        max_step_rad: 单步最大弧度变化
-        min_steps:    最少插值步数
-        max_steps:    最多插值步数（防死循环）
+        current:   当前关节角度 (ndarray)
+        target:    目标关节角度 (ndarray)
+        num_steps: 插值总步数
 
     Returns:
-        list[ndarray]: 插值轨迹点序列
+        list[ndarray]: 共 num_steps 个插值点
     """
+    if num_steps < 1:
+        return [target.copy()]
+
     displacement = target - current
     max_disp = float(np.max(np.abs(displacement)))
 
-    # 如果差异极小，直接返回目标
+    # 差异极小，直接返回目标
     if max_disp < 1e-6:
         return [target.copy()]
-
-    num_steps = int(max(min(max_steps, max_disp / max_step_rad), min_steps))
 
     return [
         current + (i / num_steps) * displacement
@@ -146,30 +141,43 @@ class InitGraspHandler(AbstractTaskHandler):
             current_arm = current_state[:14]
             target_arm = target_pose[:14]
 
+            # 固定时长 3 秒，按 267Hz 下发
+            DURATION = 3.0
+            CONTROL_HZ = 267
+            STEP_SLEEP = 1.0 / CONTROL_HZ
+            NUM_STEPS = int(DURATION * CONTROL_HZ)
+
             # 判断是否需要平滑规划
             arm_diff = np.abs(current_arm - target_arm)
             if np.any(arm_diff > np.deg2rad(0.01)):
-                # 使用线性插值平滑过渡
-                trajs = _linear_interpolate(current_arm, target_arm)
-                n_points = len(trajs)
-                self.send_feedback(goal_handle, 50,
-                                   f"轨迹规划完成, 共 {n_points} 个插值点")
+                # 关闭相对限幅，让大范围期望轨迹可以完整下发
+                robot_body.robot.enable_relative_clamp = False
+                try:
+                    # 使用线性插值平滑过渡
+                    trajs = _linear_interpolate(current_arm, target_arm,
+                                                num_steps=NUM_STEPS)
+                    n_points = len(trajs)
+                    self.send_feedback(goal_handle, 50,
+                                       f"轨迹规划完成, 3s@{CONTROL_HZ}Hz = {n_points} 个插值点")
 
-                # 逐步执行轨迹（带进度反馈）
-                report_interval = max(1, n_points // 20)  # 约每 5% 报告一次
-                for i, traj in enumerate(trajs):
-                    tmp = target_pose.copy()
-                    tmp[:14] = traj
-                    robot_body.robot.send_robot_action(tmp)
-                    time.sleep(0.01)
+                    # 逐步执行轨迹（带进度反馈）
+                    report_interval = max(1, n_points // 20)  # 约每 5% 报告一次
+                    for i, traj in enumerate(trajs):
+                        tmp = target_pose.copy()
+                        tmp[:14] = traj
+                        robot_body.robot.send_robot_action(tmp)
+                        time.sleep(STEP_SLEEP)
 
-                    # 定期发送进度反馈
-                    if i % report_interval == 0 or i == n_points - 1:
-                        pct = int(50 + (i + 1) / n_points * 40)
-                        self.send_feedback(
-                            goal_handle, pct,
-                            f"正在过渡到准备姿态... [{i + 1}/{n_points}]",
-                        )
+                        # 定期发送进度反馈
+                        if i % report_interval == 0 or i == n_points - 1:
+                            pct = int(50 + (i + 1) / n_points * 40)
+                            self.send_feedback(
+                                goal_handle, pct,
+                                f"正在过渡到准备姿态... [{i + 1}/{n_points}]",
+                            )
+                finally:
+                    # 恢复相对限幅，防止后续 VLA 推理输出失控
+                    robot_body.robot.enable_relative_clamp = True
             else:
                 # 差异很小，直接发送目标姿态
                 robot_body.robot.send_robot_action(target_pose)

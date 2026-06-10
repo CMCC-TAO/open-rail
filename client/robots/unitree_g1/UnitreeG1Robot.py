@@ -53,17 +53,20 @@ _RIGHT_ARM_ABS_LIMITS = [
 ]
 
 
-def _clamp_arm_actions(action: np.ndarray, current_arm_state: np.ndarray = None) -> np.ndarray:
-    """对 26 维动作中的手臂部分做 **相对** 限幅裁剪
+def _clamp_arm_actions(action: np.ndarray, current_arm_state: np.ndarray = None,
+                       enable_relative: bool = True,
+                       enable_absolute: bool = True) -> np.ndarray:
+    """对 26 维动作中的手臂部分做限幅裁剪
 
-    在 current_arm_state 基础上限制单步最大偏差，防止手臂一次性动太多。
-    同时保留绝对限幅作为安全兜底。
+    支持两路独立开关，默认均开启以保持向后兼容。
 
     Args:
         action: 26 维动作向量 [左臂7, 右臂7, 左手6, 右手6]
-        current_arm_state: 14 维当前手臂状态 [左臂7, 右臂7]；为 None 时仅做绝对限幅
+        current_arm_state: 14 维当前手臂状态；为 None 时仅做绝对限幅
+        enable_relative:   是否启用相对限幅（单步 delta 保护）
+        enable_absolute:   是否启用绝对限幅（安全兜底）
     """
-    if current_arm_state is not None and len(current_arm_state) >= 14:
+    if enable_relative and current_arm_state is not None and len(current_arm_state) >= 14:
         # —— 相对限幅：action 不能偏离当前 state 超过 delta ——
         for i, delta in enumerate(_LEFT_ARM_DELTA_LIMITS):
             lo = current_arm_state[i] - delta
@@ -74,11 +77,12 @@ def _clamp_arm_actions(action: np.ndarray, current_arm_state: np.ndarray = None)
             hi = current_arm_state[7 + i] + delta
             action[7 + i] = np.clip(action[7 + i], lo, hi)
 
-    # —— 绝对限幅兜底 ——
-    for i, (lo, hi) in enumerate(_LEFT_ARM_ABS_LIMITS):
-        action[i] = np.clip(action[i], lo, hi)
-    for i, (lo, hi) in enumerate(_RIGHT_ARM_ABS_LIMITS):
-        action[7 + i] = np.clip(action[7 + i], lo, hi)
+    if enable_absolute:
+        # —— 绝对限幅兜底 ——
+        for i, (lo, hi) in enumerate(_LEFT_ARM_ABS_LIMITS):
+            action[i] = np.clip(action[i], lo, hi)
+        for i, (lo, hi) in enumerate(_RIGHT_ARM_ABS_LIMITS):
+            action[7 + i] = np.clip(action[7 + i], lo, hi)
 
     return action
 
@@ -177,6 +181,12 @@ class UnitreeG1Robot(Node):
         self.current_left_hand_state = None
         self.current_right_hand_state = None
 
+        # ======================
+        # 限幅开关（默认全开，保持向后兼容）
+        # ======================
+        self.enable_relative_clamp = True   # 相对限幅（单步 delta 保护）
+        self.enable_absolute_clamp = True   # 绝对限幅（安全兜底）
+
         self.running = True
 
         # ######################
@@ -224,7 +234,11 @@ class UnitreeG1Robot(Node):
 
         # 相对限幅保护：在当前手臂状态基础上限制单步最大偏差
         current_arm = self._get_current_arm_state()
-        action = _clamp_arm_actions(action, current_arm)
+        action = _clamp_arm_actions(
+            action, current_arm,
+            enable_relative=self.enable_relative_clamp,
+            enable_absolute=self.enable_absolute_clamp,
+        )
 
         left_arm_act = action[0:7]
         right_arm_act = action[7:14]
