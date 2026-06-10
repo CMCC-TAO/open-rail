@@ -37,6 +37,14 @@ class VLAContext:
         from conf.client_conf import get_client_config
 
         self.config = get_client_config()
+
+        # 将机器人专属 action_layout 传播到 rdm / traj 子配置
+        # （与 run_client.py 的初始化逻辑对齐）
+        robot_cfg = getattr(self.config.robots, self.config.robots.type.value, None)
+        if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
+            self.config.rdm.action_layout = robot_cfg.action_layout
+            self.config.traj.action_layout = robot_cfg.action_layout
+
         self._robot_body = None  # 懒加载
 
     # ================================================================

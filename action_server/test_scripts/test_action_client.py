@@ -42,6 +42,15 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
+    "2": {
+        "name": "one hand grasb",
+        "desc": "单手抓取 — 使用 VLA 模型抓取指定目标（如 Wahaha）",
+        "params": {
+            "task": "one hand grasb",
+            "target": "Wahaha",
+            "waypoint": "none",
+        },
+    },
 }
 
 
@@ -185,14 +194,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1 / q): ').strip().lower()
+        choice = input('请选择任务编号 (1-2 / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-2 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]

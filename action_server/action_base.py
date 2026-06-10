@@ -188,9 +188,10 @@ def run_vla_inference(
         vla_client.is_running_action = False
 
         send_vla_feedback(goal_handle, 10, "正在启动 VLA 推理...")
-        vla_client.inference_first()
-        vla_client.is_running_action = True
-        vla_client.run()
+        vla_client.run()                    # 先启动观察/控制/WebSocket 线程
+        time.sleep(0.5)                     # 等待观测数据积累
+        vla_client.inference_first()        # 首帧推理
+        vla_client.is_running_action = True # 允许推理线程持续推理
     except Exception as e:
         return TaskResult(False, error_code=5,
                           error_message=f'Failed to start inference: {str(e)}')

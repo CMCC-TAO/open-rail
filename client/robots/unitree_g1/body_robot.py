@@ -24,7 +24,7 @@ class RobotBody(RobotBase):
 
         # 统一自旋线程
         self.running = True
-        self._start_spin_thread()
+        self._spin_thread = self._start_spin_thread()
 
         # 状态缓存
         self.current_timestamp = 0
@@ -41,8 +41,9 @@ class RobotBody(RobotBase):
                     rclpy.spin_once(self.robot, timeout_sec=0.005)
                 except Exception:
                     pass  # spin 异常不中断线程
-        spin_thread = threading.Thread(target=spin_worker, daemon=True)
-        spin_thread.start()
+        t = threading.Thread(target=spin_worker, daemon=True)
+        t.start()
+        return t
 
     # ==================================================================
     # 控制机器人（26 维动作）
@@ -158,7 +159,10 @@ class RobotBody(RobotBase):
     # ==================================================================
     def close(self):
         self.running = False
-        time.sleep(0.1)  # 给自旋线程一个机会退出
+
+        # 等待 spin 线程完全退出，避免销毁节点时 wait set 竞争
+        if hasattr(self, '_spin_thread') and self._spin_thread.is_alive():
+            self._spin_thread.join(timeout=1.0)
 
         # ######################
         # 新增: 停止机器人采样线程

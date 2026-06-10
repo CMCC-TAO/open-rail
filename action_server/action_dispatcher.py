@@ -95,6 +95,12 @@ class VLAActionDispatcher(Node):
         except ImportError as e:
             self.get_logger().warn(f'Failed to load init_grasp handler: {e}')
 
+        try:
+            from action_server.task_on_hand_grasp import OneHandGraspHandler
+            self.register_handler(OneHandGraspHandler())
+        except ImportError as e:
+            self.get_logger().warn(f'Failed to load one_hand_grasp handler: {e}')
+
     # ================================================================
     # Action 回调
     # ================================================================
@@ -212,7 +218,14 @@ def main(args=None):
     dispatcher = None
     try:
         dispatcher = VLAActionDispatcher()
-        rclpy.spin(dispatcher)
+        # 使用 spin_once 循环替代 rclpy.spin()
+        # 原因: execute_callback 中懒加载 ROS2 节点会导致 wait set 竞争，
+        # spin() 会直接抛异常退出，而 spin_once 循环可以容忍单次错误继续运行。
+        while rclpy.ok():
+            try:
+                rclpy.spin_once(dispatcher, timeout_sec=0.1)
+            except Exception as e:
+                dispatcher.get_logger().warn(f'Spin error (recovered): {e}')
     except KeyboardInterrupt:
         print('\nShutting down VLA Action Dispatcher...')
     except Exception as e:
