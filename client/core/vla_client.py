@@ -14,9 +14,9 @@ from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
+from client.core.visualize_server import VisualizeServer
 from client.core.save_lerobot import LeRobotDatasetWriter
 from client.robots.base_robot import RobotBase
-from visual.websocket_server import VLAWebSocketServer
 
 
 class VLAClientAsync():
@@ -90,7 +90,7 @@ class VLAClientAsync():
         )
 
         # Create visualization WebSocket server for live image and trajectory updates
-        self.visualization_server = VLAWebSocketServer.get_instance()
+        self.visualization_server = VisualizeServer.get_instance()
         camera_cfg = getattr(getattr(self.config, 'visual', None), 'camera', None)
         if camera_cfg is not None:
             self.visualization_server.update_camera_open_config(camera_cfg)

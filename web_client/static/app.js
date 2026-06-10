@@ -41,7 +41,7 @@ const WS_URL = `${WS_SCHEME}://${WS_HOSTNAME}${WS_PORT}/ws`;
 const RECONNECT = 3000;
 const WS_CONNECT_TIMEOUT_MS = 5000;
 
-// Visual WebSocket — connects to VLAWebSocketServer (port 8765) for camera frames
+// Visual WebSocket — connects to VisualizeServer (port 8765) for camera frames
 const CAM_WS_URL = `${WS_SCHEME}://${WS_HOSTNAME}:8765`;
 const CAM_WS_RECONNECT = 3000;
 const CAM_WS_CONNECT_TIMEOUT_MS = 5000;
@@ -96,7 +96,7 @@ const App = {
   currentFetchController: null,
   statusPollInFlight: false,
 
-  // Camera WebSocket (port 8765 — VLAWebSocketServer)
+  // Camera WebSocket (port 8765 — VisualizeServer)
   camWs: null,
   camWsAlive: false,
   camWsReconnectTimer: null,
@@ -297,7 +297,7 @@ function connectWS() {
 }
 
 // ═══════════════════════════════════════════════════════
-//  Camera WebSocket (VLAWebSocketServer — port 8765)
+//  Camera WebSocket (VisualizeServer — port 8765)
 // ═══════════════════════════════════════════════════════
 function connectCamWS() {
   if (App.camWs && App.camWs.readyState <= 1) return;

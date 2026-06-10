@@ -6,16 +6,15 @@ import numpy as np
 import time
 import threading
 from typing import Dict, List, Set, Optional
-from http.server import HTTPServer, SimpleHTTPRequestHandler
 import os
 import cv2
 from concurrent.futures import ThreadPoolExecutor
 
-# 限制 OpenCV 线程，降低与解码端并发冲突概率
+# Limits threads used in OpenCV to avoid conflicts.
 cv2.setNumThreads(1)
 
 
-class VLAWebSocketServer:
+class VisualizeServer:
     _instance = None
     _lock = threading.Lock()
     _initialized = False
@@ -59,33 +58,13 @@ class VLAWebSocketServer:
         self._img_executor = None
         self._create_img_executor()
 
-        self._run_http_server_thread()
-
     @classmethod
     def get_instance(cls, host='0.0.0.0', port=8765):
         return cls(host=host, port=port)
 
     def kill_port(self, port):
         os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
-
-    def _start_http_server(self, port=8080, directory=None):
-        if directory:
-            os.chdir(directory)  # 切换到指定目录
-        
-        # 创建HTTP服务器
-        server = HTTPServer(('localhost', port), SimpleHTTPRequestHandler)
-        print(f"web服务器启动在 http://localhost:{port}, 根目录: {directory or os.getcwd()}")
-        server.serve_forever()
-
-    def _run_http_server_thread(self, port=8080, directory=os.path.dirname(os.path.abspath(__file__))):
-        """在单独线程中运行HTTP服务器"""
-        http_thread = threading.Thread(
-            target=self._start_http_server,
-            args=(port, directory),
-            daemon=True
-        )
-        http_thread.start()
-        
+ 
     def update_image_data(self, imgs: Dict, camera_cfg=None):
         """更新图像数据
 
@@ -433,7 +412,7 @@ class VLAWebSocketServer:
 
 def main():
     """主函数 - 用于测试"""
-    server = VLAWebSocketServer.get_instance()
+    server = VisualizeServer.get_instance()
     
     try:
         asyncio.run(server.start_server())
