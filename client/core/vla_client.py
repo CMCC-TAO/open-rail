@@ -90,7 +90,7 @@ class VLAClientAsync():
         )
 
         # Create visualization WebSocket server for live image and trajectory updates
-        self.visualization_server = VisualizeServer.get_instance()
+        self.visualization_server = VisualizeServer()
         camera_cfg = getattr(getattr(self.config, 'visual', None), 'camera', None)
         if camera_cfg is not None:
             self.visualization_server.update_camera_open_config(camera_cfg)
@@ -133,7 +133,7 @@ class VLAClientAsync():
         self.is_control_thread_running = False
 
     def start_visualize(self):
-        self.visualization_server.run()
+        self.visualization_server.start_server()
         if not self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.start()
     def stop_visualize(self):

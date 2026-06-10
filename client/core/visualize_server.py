@@ -2,6 +2,7 @@
 import asyncio
 import websockets
 import json
+import logging
 import numpy as np
 import time
 import threading
@@ -14,31 +15,20 @@ from concurrent.futures import ThreadPoolExecutor
 cv2.setNumThreads(1)
 
 
+
 class VisualizeServer:
-    _instance = None
-    _lock = threading.Lock()
-    _initialized = False
-
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    cls._instance = super().__new__(cls)
-        return cls._instance
-
     def __init__(self, host='0.0.0.0', port=8765):
-        if self.__class__._initialized:
-            return
-        self.__class__._initialized = True
-         # 设置 OpenCV 线程数为 1，避免多线程问题
-        # cv2.setNumThreads(1)
+        # Use a stable logger name so logging_conf.py mapping always matches,
+        # including script/uvicorn execution paths.
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("Initializing VisualizeServer on %s:%d", host, port)
         self.kill_port(port)
         self.host = host
         self.port = port
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = False
-        
-        # 数据存储
+
+        # Data storage
         self.latest_imgs: Optional[Dict] = None
         self.latest_imgs_seq = 0
         self.sent_imgs_seq = -1
@@ -49,28 +39,24 @@ class VisualizeServer:
         self.chart_send_interval = 1.0 / 30.0
         self._last_camera_send_ts = 0.0
         self._last_chart_send_ts = 0.0
-        
-        # 数据发送队列
+
+        # Data send queue
         self.data_send_queue = []
-        
-        # 服务器实例
+
+        # Server instance
         self.server = None
         self._img_executor = None
         self._create_img_executor()
 
-    @classmethod
-    def get_instance(cls, host='0.0.0.0', port=8765):
-        return cls(host=host, port=port)
-
     def kill_port(self, port):
-        os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
- 
+        os.system(f'kill -9 $(lsof -t -i:{port})')
+
     def update_image_data(self, imgs: Dict, camera_cfg=None):
-        """更新图像数据
+        """Update image data.
 
         Args:
-            imgs (Dict): 图像数据，key为摄像头标识，value为图像数据
-            camera_cfg: 相机显示配置，支持 open_head/open_wrist_left/open_wrist_right
+            imgs (Dict): Image data dict, key is camera identifier, value is image array.
+            camera_cfg: Camera display config, supports open_head/open_wrist_left/open_wrist_right.
         """
         if camera_cfg is not None:
             self.update_camera_open_config(camera_cfg)
@@ -78,46 +64,44 @@ class VisualizeServer:
         with self.data_lock:
             self.latest_imgs = imgs.copy()
             self.latest_imgs_seq += 1
-        # print(f"图像数据已更新，包含摄像头: {list(imgs.keys())}")
 
     def update_chart_data(self, data: List[Dict]):
-        """更新图表数据
-        
+        """Update chart data.
+
         Args:
-            data (List[Dict]): 数据列表，每个元素为 {'tab': 'position|velocity|acceleration', 'type': 'origin|action|state', 'x': step, 'joints_y': values}
+            data (List[Dict]): Data list, each element is
+                {'tab': 'position|velocity|acceleration',
+                 'type': 'origin|action|state',
+                 'x': step, 'joints_y': values}.
         """
         with self.data_lock:
             for dt in data:
-                # 添加时间戳
                 timestamp = time.time()
                 dt_with_ts = {**dt, 'timestamp': timestamp}
                 self.data_send_queue.append(dt_with_ts)
 
-            # 保持队列大小，避免内存溢出
+            # Keep queue bounded to avoid memory overflow
             if len(self.data_send_queue) > 1000:
                 self.data_send_queue = self.data_send_queue[-500:]
-        
-        # print(f"chart_data: {self.data_send_queue}")
-    
+
     async def register_client(self, websocket):
-        """注册新客户端"""
+        """Register a new WebSocket client."""
         self.clients.add(websocket)
-        print(f"客户端已连接，当前连接数: {len(self.clients)}")
-        
-        # 发送初始配置信息
+        self.logger.info("Client connected. Active connections: %d", len(self.clients))
+
         config_message = {
             'type': 'config',
             'data': {
-                'cameras': [],  # 将在有数据时动态更新
-                'joints': []    # 将在有数据时动态更新
+                'cameras': [],   # Updated dynamically when data arrives
+                'joints': []     # Updated dynamically when data arrives
             }
         }
         await websocket.send(json.dumps(config_message))
-    
+
     async def unregister_client(self, websocket):
-        """注销客户端"""
+        """Unregister a WebSocket client."""
         self.clients.discard(websocket)
-        print(f"客户端已断开，当前连接数: {len(self.clients)}")
+        self.logger.info("Client disconnected. Active connections: %d", len(self.clients))
 
     @staticmethod
     def _cfg_get(cfg, key, default=False):
@@ -145,18 +129,17 @@ class VisualizeServer:
             self.camera_open[2] = self._cfg_get(camera_cfg, 'open_wrist_right', True)
 
     async def send_camera_data(self):
-        """发送摄像头数据 - 使用二进制传输优化性能"""
+        """Send camera frames to all clients using binary transport."""
         if not self.clients:
-            # print(f"No client is connected.")
             return
 
         now = time.time()
         if now - self._last_camera_send_ts < self.camera_send_interval:
             return
-        
+
         disconnected_clients = set()
-        
-        # 获取最新的图像数据。只发送新帧，避免以 100Hz 反复编码同一帧占满 CPU/GIL。
+
+        # Snapshot latest images; skip if no new frame since last send.
         with self.data_lock:
             if not self.latest_imgs or self.latest_imgs_seq == self.sent_imgs_seq:
                 return
@@ -166,7 +149,6 @@ class VisualizeServer:
 
         sent_camera_ids = set()
 
-        # 为每个摄像头发送单独的二进制消息
         for camera_key, img in imgs.items():
             try:
                 camera_id = self._camera_id_from_key(camera_key)
@@ -177,10 +159,11 @@ class VisualizeServer:
                 if not camera_open.get(camera_id, True):
                     continue
 
-                # 将numpy数组转换为bytes
                 if isinstance(img, np.ndarray):
                     loop = asyncio.get_running_loop()
-                    frame_bytes = await loop.run_in_executor(self._img_executor, self._encode_frame, img, camera_key)
+                    frame_bytes = await loop.run_in_executor(
+                        self._img_executor, self._encode_frame, img, camera_key
+                    )
                     if frame_bytes is None:
                         continue
                 else:
@@ -188,92 +171,74 @@ class VisualizeServer:
 
                 sent_camera_ids.add(camera_id)
 
-                # 创建消息头（JSON格式）
                 header = {
                     'type': 'camera_data_binary',
                     'camera_id': camera_id,
                     'timestamp': time.time(),
                     'data_size': len(frame_bytes)
                 }
-                header_json = json.dumps(header)
-                header_bytes = header_json.encode('utf-8')
-                
-                # 创建完整消息：头部长度(4字节) + 头部 + 图像数据
+                header_bytes = json.dumps(header).encode('utf-8')
                 header_length = len(header_bytes)
                 message = header_length.to_bytes(4, byteorder='big') + header_bytes + frame_bytes
-                
-                # 发送给所有客户端
+
                 for client in self.clients.copy():
                     try:
                         await client.send(message)
                     except websockets.exceptions.ConnectionClosed:
                         disconnected_clients.add(client)
                     except Exception as e:
-                        print(f"发送图像数据失败: {e}")
+                        self.logger.warning("Failed to send camera frame to client: %s", e)
                         disconnected_clients.add(client)
-                        
+
             except Exception as e:
-                print(f"处理图像数据失败 {camera_key}: {e}")
+                self.logger.warning("Failed to process camera data for key '%s': %s", camera_key, e)
+
         self._last_camera_send_ts = now
         with self.data_lock:
             self.sent_imgs_seq = max(self.sent_imgs_seq, img_seq)
-        # print(f"已发送摄像头数据，包含摄像头: {list(imgs.keys())}")
-        # 清理断开的客户端
+
         for client in disconnected_clients:
             await self.unregister_client(client)
-    
+
     async def send_chart_data(self):
-        """发送图表数据"""
+        """Send chart (joint trajectory) data to all clients."""
         if not self.clients or not self.data_send_queue:
             return
         now = time.time()
         if now - self._last_chart_send_ts < self.chart_send_interval:
             return
         self._last_chart_send_ts = now
-        
+
         disconnected_clients = set()
-        
-        # 获取待发送的数据
+
         with self.data_lock:
             data_to_send = self.data_send_queue.copy()
             self.data_send_queue.clear()
-        
-        # 发送数据
+
         for data_packet in data_to_send:
-            message = {
-                'type': 'joint_data',
-                'data': data_packet
-            }
-            message_json = json.dumps(message)
-            
+            message_json = json.dumps({'type': 'joint_data', 'data': data_packet})
+
             for client in self.clients.copy():
                 try:
                     await client.send(message_json)
                 except websockets.exceptions.ConnectionClosed:
                     disconnected_clients.add(client)
                 except Exception as e:
-                    print(f"发送图表数据失败: {e}")
+                    self.logger.warning("Failed to send chart data to client: %s", e)
                     disconnected_clients.add(client)
-        
-        # 清理断开的客户端
+
         for client in disconnected_clients:
             await self.unregister_client(client)
-    
+
     async def handle_client_message(self, websocket, message):
-        """处理客户端消息"""
+        """Parse and dispatch a message received from a client."""
         try:
             data = json.loads(message)
             message_type = data.get('type')
-            
+
             if message_type == 'ping':
-                # 响应心跳
-                response = {
-                    'type': 'pong',
-                    'timestamp': time.time()
-                }
-                await websocket.send(json.dumps(response))
+                await websocket.send(json.dumps({'type': 'pong', 'timestamp': time.time()}))
             elif message_type == 'get_status':
-                # 返回服务器状态
                 status = {
                     'type': 'status',
                     'data': {
@@ -284,27 +249,25 @@ class VisualizeServer:
                 }
                 await websocket.send(json.dumps(status))
             elif message_type == 'control_command':
-                # 处理控制命令
                 await self.handle_control_command(data.get('command'), data.get('params', {}))
-                # 发送确认响应
                 response = {
                     'type': 'command_response',
                     'command': data.get('command'),
                     'status': 'received'
                 }
                 await websocket.send(json.dumps(response))
-                
+
         except json.JSONDecodeError:
-            print("收到无效的JSON消息")
+            self.logger.warning("Received invalid JSON message from client.")
         except Exception as e:
-            print(f"处理客户端消息失败: {e}")
-    
+            self.logger.error("Error handling client message: %s", e)
+
     async def handle_control_command(self, command, params):
-        """处理控制命令"""
-        print(f"收到控制命令: {command} with params: {params}")
-    
+        """Handle a control command received from a client."""
+        self.logger.info("Received control command: %s, params: %s", command, params)
+
     async def client_handler(self, websocket):
-        """处理客户端连接"""
+        """Manage the lifecycle of a single client connection."""
         await self.register_client(websocket)
         try:
             async for message in websocket:
@@ -312,60 +275,61 @@ class VisualizeServer:
         except websockets.exceptions.ConnectionClosed:
             pass
         except Exception as e:
-            print(f"客户端处理错误: {e}")
+            self.logger.error("Client handler error: %s", e)
         finally:
             await self.unregister_client(websocket)
-    
+
     async def data_sender(self):
-        """数据发送循环"""
+        """Main data-sending loop: camera frames and chart data at up to 50 Hz."""
         while self.running:
             try:
-                # 发送摄像头数据
                 await self.send_camera_data()
-                
-                # 发送图表数据
                 await self.send_chart_data()
                 await asyncio.sleep(0.02)
-                
             except Exception as e:
-                print(f"数据发送循环错误: {e}")
+                self.logger.error("Data sender loop error: %s", e)
                 await asyncio.sleep(1)
-    
-    async def start_server(self):
-        """启动WebSocket服务器"""
+    async def _server_running(self):
+        """Start the WebSocket server and the data-sending loop."""
         self.running = True
-        
-        # 启动WebSocket服务器
-        self.server = await websockets.serve(
+        self._shutdown_event = asyncio.Event()
+
+        async with websockets.serve(
             self.client_handler,
             self.host,
             self.port,
-            max_size=10 * 1024 * 1024,  # 10MB max message size
+            max_size=10 * 1024 * 1024,
             ping_interval=20,
             ping_timeout=10
-        )
-        
-        print(f"VLA WebSocket服务器已启动: ws://{self.host}:{self.port}")
-        
-        # 启动数据发送任务
-        data_sender_task = asyncio.create_task(self.data_sender())
-        
-        try:
-            # 等待服务器关闭
-            await self.server.wait_closed()
-        finally:
-            data_sender_task.cancel()
+        ) as server:
+            self.server = server
+            self.logger.info("Visualize Server started: ws://%s:%d", self.host, self.port)
+            
+            data_sender_task = asyncio.create_task(self.data_sender())
             try:
-                await data_sender_task
-            except asyncio.CancelledError:
-                pass
-    
+                # 使用 Event 替代 wait_closed，通过 set() 优雅退出
+                await self._shutdown_event.wait()
+            finally:
+                data_sender_task.cancel()
+                try:
+                    await data_sender_task
+                except asyncio.CancelledError:
+                    pass
+
     def stop_server(self):
-        """停止WebSocket服务器"""
+        """Stop the WebSocket server."""
         self.running = False
         if self.server:
-            self.server.close()
-            print("VLA WebSocket服务器已停止")
+            # 触发事件通知异步循环退出
+            if hasattr(self, '_shutdown_event') and self._shutdown_event.is_set() is False:
+                self._shutdown_event.set()
+            self.logger.info("Visualize Server stop signal sent.")
+    # def stop_server(self):
+    #     """Stop the WebSocket server."""
+    #     self.running = False
+    #     if self.server:
+    #         self.server.close()
+    #         self.logger.info("Visualize Serverstopped.")
 
     def _create_img_executor(self):
         if getattr(self, '_img_executor', None) is None or getattr(self._img_executor, '_shutdown', False):
@@ -378,47 +342,51 @@ class VisualizeServer:
                 img_for_encode = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
             else:
                 img_uint8 = img if img.dtype == np.uint8 else np.clip(img, 0, 255).astype(np.uint8)
-                img_for_encode = img_uint8[:, :, ::-1] if img_uint8.ndim == 3 and img_uint8.shape[2] == 3 else img_uint8
+                img_for_encode = (
+                    img_uint8[:, :, ::-1]
+                    if img_uint8.ndim == 3 and img_uint8.shape[2] == 3
+                    else img_uint8
+                )
             encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
             ok, enc = cv2.imencode('.jpg', img_for_encode, encode_params)
             if not ok:
                 return None
             return enc.tobytes()
         except Exception as e:
-            print(f"图像编码失败: {e}")
+            self.logger.error("Image encoding failed for key '%s': %s", camera_key, e)
             return None
-
-    def _run_loop_server(self):
-        """Run WebSocket server in asyncio event loop"""
+    def _main_thread_fun(self):
+        """Run the Visualize Server in a dedicated asyncio event loop (background thread)."""
         try:
-            # Create new event loop for this thread
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            # Run the server
-            loop.run_until_complete(self.start_server())
+            asyncio.run(self._server_running())
         except Exception as e:
-            print(f"WebSocket server error: {e}")
+            self.logger.error("Visualize server error: %s", e)
 
-    def run(self):
-        if hasattr(self, 'websocket_thread') and self.websocket_thread and self.websocket_thread.is_alive():
+    def start_server(self):
+        """Start the server in a background daemon thread (idempotent)."""
+        if hasattr(self, 'main_thread') and self.main_thread and self.main_thread.is_alive():
             return
         self._create_img_executor()
-        self.websocket_thread = threading.Thread(
-            target=self._run_loop_server,
+        self.main_thread = threading.Thread(
+            target=self._main_thread_fun,
             daemon=True
         )
-        self.websocket_thread.start()
+        self.main_thread.start()
+
 
 def main():
-    """主函数 - 用于测试"""
-    server = VisualizeServer.get_instance()
-    
+    """Entry point for standalone testing."""
+    from conf.logging_conf import setup_logging
+
+    setup_logging("client.log", "client.core.visualize_server")
+
+    server = VisualizeServer()
     try:
         asyncio.run(server.start_server())
     except KeyboardInterrupt:
-        print("收到中断信号，正在关闭服务器...")
+        server.logger.info("Interrupt received, shutting down server.")
         server.stop_server()
+
 
 if __name__ == "__main__":
     main()

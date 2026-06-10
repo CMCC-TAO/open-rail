@@ -107,7 +107,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
         },
         "handlers": {
             "console": {
-                "level": "WARNING",
+                "level": "INFO",
                 "class": "logging.StreamHandler",
                 "formatter": "standard",
             },
@@ -137,6 +137,11 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
             },
             "client.core.task_language_manager": {
                 "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "client.core.visualize_server": {
+                "handlers": ["console", "file"],
                 "level": "DEBUG",
                 "propagate": False,
             },
