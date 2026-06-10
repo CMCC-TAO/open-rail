@@ -35,9 +35,12 @@ class RobotBody(RobotBase):
 
     def _start_spin_thread(self):
         def spin_worker():
-            while self.running:
-                rclpy.spin_once(self.camera, timeout_sec=0.005)
-                rclpy.spin_once(self.robot, timeout_sec=0.005)
+            while self.running and rclpy.ok():
+                try:
+                    rclpy.spin_once(self.camera, timeout_sec=0.005)
+                    rclpy.spin_once(self.robot, timeout_sec=0.005)
+                except Exception:
+                    pass  # spin 异常不中断线程
         spin_thread = threading.Thread(target=spin_worker, daemon=True)
         spin_thread.start()
 

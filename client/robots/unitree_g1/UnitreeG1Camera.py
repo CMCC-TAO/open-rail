@@ -8,11 +8,14 @@ import threading
 import time
 from collections import deque
 
+_DEBUG_ENABLED = False          # 开关：True=打印, False=静默
 _DEBUG_PRINT_INTERVAL = 1.0
 _last_debug_time = 0.0
 
 
 def _dprint(msg):
+    if not _DEBUG_ENABLED:
+        return
     global _last_debug_time
     now = time.time()
     if now - _last_debug_time >= _DEBUG_PRINT_INTERVAL:
