@@ -111,8 +111,8 @@ class UnitreeG1Robot(Node):
         action[20:26] -> 右手 (6 手指)
     """
 
-    def __init__(self):
-        super().__init__("unitree_g1_robot_node")
+    def __init__(self, ros_context=None):
+        super().__init__("unitree_g1_robot_node", context=ros_context)
 
         # ======================
         # 订阅话题（状态读取）

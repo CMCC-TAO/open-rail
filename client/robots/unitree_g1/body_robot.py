@@ -10,17 +10,25 @@ import threading
 
 
 class RobotBody(RobotBase):
-    """Unitree G1 机器人业务层（纯 ROS2 + 26 维灵巧手）"""
+    """Unitree G1 机器人业务层（纯 ROS2 + 26 维灵巧手）
 
-    def __init__(self, config):
+    使用独立 rclpy.Context 隔离 Camera/Robot 节点的 wait set，
+    避免与外部 dispatcher 共享 context 导致 "wait set index too big" 错误。
+    """
+
+    def __init__(self, config, ros_context=None):
         super().__init__()
         self.cfg, self.ori_cfg = config["robots"]["unitree_g1"], config
 
-        if not rclpy.ok():
-            rclpy.init()
+        # 使用外部传入的 context，或创建独立 context（隔离 wait set）
+        self._ros_context = ros_context  # 由外部管理生命周期（VLAContext）
+        if self._ros_context is None:
+            self._ros_context = rclpy.Context()
+            if not self._ros_context.ok():
+                self._ros_context.init()
 
-        self.camera = Camera()
-        self.robot = Robot()
+        self.camera = Camera(ros_context=self._ros_context)
+        self.robot = Robot(ros_context=self._ros_context)
 
         # 统一自旋线程
         self.running = True
@@ -35,7 +43,7 @@ class RobotBody(RobotBase):
 
     def _start_spin_thread(self):
         def spin_worker():
-            while self.running and rclpy.ok():
+            while self.running and self._ros_context.ok():
                 try:
                     rclpy.spin_once(self.camera, timeout_sec=0.005)
                     rclpy.spin_once(self.robot, timeout_sec=0.005)

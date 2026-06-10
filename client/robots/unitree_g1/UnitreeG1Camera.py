@@ -28,8 +28,8 @@ if "QT_QPA_PLATFORM" in os.environ:
 cv2.setNumThreads(1)
 
 class UnitreeG1Camera(Node):
-    def __init__(self, queue_size=30, fps=100):
-        super().__init__("unitree_g1_camera_node")
+    def __init__(self, queue_size=30, fps=100, ros_context=None):
+        super().__init__("unitree_g1_camera_node", context=ros_context)
         self.bridge = CvBridge()
         self.fps = fps
         self.period = 1.0 / fps

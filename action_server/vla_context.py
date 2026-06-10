@@ -31,6 +31,9 @@ class VLAContext:
 
     注意: robot_body 采用懒加载（首次访问时创建），
     避免在 dispatcher 初始化阶段创建机器人 ROS2 节点导致 DDS wait set 竞争。
+
+    robot_body 使用独立的 rclpy.Context，与 dispatcher 的默认 context 隔离，
+    彻底消除 "wait set index too big" 错误。
     """
 
     def __init__(self):
@@ -46,6 +49,7 @@ class VLAContext:
             self.config.traj.action_layout = robot_cfg.action_layout
 
         self._robot_body = None  # 懒加载
+        self._robot_context = None  # robot_body 专属 ROS2 context（隔离 wait set）
 
     # ================================================================
     # robot_body 懒加载属性
@@ -55,9 +59,15 @@ class VLAContext:
     def robot_body(self):
         """获取 RobotBody 实例（懒加载，首次访问时创建）"""
         if self._robot_body is None:
+            import rclpy
             from client.robots.unitree_g1.body_robot import RobotBody
 
-            self._robot_body = RobotBody(self.config)
+            # 创建独立 ROS2 context，与 dispatcher 隔离 wait set
+            self._robot_context = rclpy.Context()
+            if not self._robot_context.ok():
+                self._robot_context.init()
+
+            self._robot_body = RobotBody(self.config, ros_context=self._robot_context)
         return self._robot_body
 
     @robot_body.setter
@@ -138,3 +148,12 @@ class VLAContext:
             self._robot_body.close()
         except Exception:
             pass
+
+        # 关闭独立的 ROS2 context
+        if self._robot_context is not None:
+            try:
+                if self._robot_context.ok():
+                    self._robot_context.shutdown()
+            except Exception:
+                pass
+            self._robot_context = None

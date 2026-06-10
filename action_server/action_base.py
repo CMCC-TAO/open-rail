@@ -142,15 +142,17 @@ def run_vla_inference(
     stable_count_threshold: int = _DEFAULT_STABLE_COUNT,
     stability_ratio_thresh: float = _DEFAULT_STABILITY_RATIO,
     feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
+    fixed_duration: float = 0,
 ) -> TaskResult:
     """运行 VLA 推理全流程（复位 → 启动推理 → 监控进度 → 完成/超时）
 
     步骤:
         1. [可选] 复位机器人到安全姿态
         2. 设置语言指令 → inference_first() → run()
-        3. 监控 prob_progress：每 3Hz 发送 feedback
-        4. 稳定性检测（滑动窗口变异系数 + 连续计数）
-        5. 停止 VLA 客户端线程
+        3. 监控进度：
+           - fixed_duration > 0: 固定时长模式，运行指定秒数后完成
+           - fixed_duration = 0: prob_progress 稳定性检测模式
+        4. 停止 VLA 客户端线程
 
     Args:
         goal_handle:          ROS2 Action goal_handle
@@ -163,6 +165,7 @@ def run_vla_inference(
         stable_count_threshold: 连续稳定次数阈值
         stability_ratio_thresh:  变异系数阈值
         feedback_interval:     feedback 发送间隔
+        fixed_duration:        固定执行时长（秒），>0 时启用，不依赖 prob_progress
 
     Returns:
         TaskResult: success=True 完成 / False 失败+原因
@@ -197,15 +200,25 @@ def run_vla_inference(
                           error_message=f'Failed to start inference: {str(e)}')
 
     # ========== 步骤 3 + 4: 监控进度 + 稳定性检测 ==========
-    result = _monitor_vla_progress(
-        goal_handle=goal_handle,
-        vla_client=vla_client,
-        max_duration=max_duration,
-        thre_progress=thre_progress,
-        stable_count_threshold=stable_count_threshold,
-        stability_ratio_thresh=stability_ratio_thresh,
-        feedback_interval=feedback_interval,
-    )
+    if fixed_duration > 0:
+        # 固定时长模式：运行指定秒数后完成
+        result = _monitor_fixed_duration(
+            goal_handle=goal_handle,
+            vla_client=vla_client,
+            fixed_duration=fixed_duration,
+            feedback_interval=feedback_interval,
+        )
+    else:
+        # prob_progress 稳定性检测模式
+        result = _monitor_vla_progress(
+            goal_handle=goal_handle,
+            vla_client=vla_client,
+            max_duration=max_duration,
+            thre_progress=thre_progress,
+            stable_count_threshold=stable_count_threshold,
+            stability_ratio_thresh=stability_ratio_thresh,
+            feedback_interval=feedback_interval,
+        )
 
     # ========== 步骤 5: 停止 VLA 客户端线程 ==========
     _stop_vla_client(vla_client)
@@ -294,6 +307,51 @@ def _monitor_vla_progress(
             else:
                 stable_count = 0
                 stability_window.clear()
+
+            time.sleep(feedback_interval)
+
+    except Exception as e:
+        return TaskResult(False, error_code=99,
+                          error_message=f'Monitoring error: {str(e)}')
+
+
+def _monitor_fixed_duration(
+    goal_handle,
+    vla_client,
+    fixed_duration: float,
+    feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
+) -> TaskResult:
+    """固定时长监控模式 — 运行指定秒数后直接标记完成
+
+    用于不返回 prob_progress 的模型（如 GR00T）。
+    """
+    import time
+
+    start_time = time.time()
+    try:
+        while True:
+            elapsed = time.time() - start_time
+
+            # 检查外部停止信号
+            if not vla_client.is_running_action:
+                send_vla_feedback(goal_handle, 0, "VLA task stopped by external signal",
+                                  feedback_code=1)
+                return TaskResult(False, error_code=3,
+                                  error_message='VLA task cancelled')
+
+            # 发送进度反馈
+            progress_percent = min(100, int((elapsed / fixed_duration) * 100))
+            send_vla_feedback(
+                goal_handle,
+                progress_percent,
+                f'Running... {elapsed:.1f}s / {fixed_duration:.1f}s',
+            )
+
+            # 达到固定时长，任务完成
+            if elapsed >= fixed_duration:
+                send_vla_feedback(goal_handle, 100,
+                                  f'Task completed! Total time: {elapsed:.1f}s')
+                return TaskResult(True)
 
             time.sleep(feedback_interval)
 

@@ -218,14 +218,20 @@ def main(args=None):
     dispatcher = None
     try:
         dispatcher = VLAActionDispatcher()
-        # 使用 spin_once 循环替代 rclpy.spin()
-        # 原因: execute_callback 中懒加载 ROS2 节点会导致 wait set 竞争，
-        # spin() 会直接抛异常退出，而 spin_once 循环可以容忍单次错误继续运行。
-        while rclpy.ok():
-            try:
-                rclpy.spin_once(dispatcher, timeout_sec=0.1)
-            except Exception as e:
-                dispatcher.get_logger().warn(f'Spin error (recovered): {e}')
+
+        # 预初始化 robot_body：在 spin 循环启动前完成所有 ROS2 节点的创建，
+        # 避免 execute_callback 中懒加载新节点导致 wait set 重建时
+        # 产生 "wait set index too big" 错误。
+        dispatcher.get_logger().info('Pre-initializing robot_body (may take a few seconds)...')
+        _ = dispatcher._context.robot_body
+        dispatcher.get_logger().info('robot_body pre-initialized, wait set is stable')
+
+        # 使用 MultiThreadedExecutor 确保 action 回调在独立线程执行，
+        # 不会阻塞 spin 线程的 wait set 管理。
+        from rclpy.executors import MultiThreadedExecutor
+        executor = MultiThreadedExecutor()
+        executor.add_node(dispatcher)
+        executor.spin()
     except KeyboardInterrupt:
         print('\nShutting down VLA Action Dispatcher...')
     except Exception as e:
