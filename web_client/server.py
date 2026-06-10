@@ -582,9 +582,9 @@ def _collect_stats() -> dict:
         base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", False))
         base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", False))
         base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", False))
-        base["infer_count"]     = int(vla_client.rdm.infer_count)
-        base["avg_infer_time"]  = float(vla_client.rdm.avg_infer_time)
-        base["avg_traj_time"]   = float(vla_client.rdm.avg_traj_time)
+        base["infer_count"]     = int(vla_client.realtime_data_manager.infer_count)
+        base["avg_infer_time"]  = float(vla_client.realtime_data_manager.avg_infer_time)
+        base["avg_traj_time"]   = float(vla_client.realtime_data_manager.avg_traj_time)
         base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
         # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
         # acquired = vla_client.show_thread_lock.acquire(timeout=0.05)
@@ -1142,7 +1142,7 @@ def _ensure_vla_client_created():
     try:
         vla_zmq_client = ZMQClient(cfg.vla_zmq)
         robot, reused_robot = _get_robot(cfg)
-        rdm = RealtimeDataManager(cfg.rdm)
+        realtime_data_manager = RealtimeDataManager(cfg.rdm)
         inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
         intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
         task_language_manager = TaskLanguageManager(config=cfg.language)
@@ -1150,7 +1150,7 @@ def _ensure_vla_client_created():
         from client.core.vla_client import VLAClientAsync
         vla_client = VLAClientAsync(
             config=cfg,
-            rdm=rdm,
+            realtime_data_manager=realtime_data_manager,
             inter_chunk_fuser=inter_chunk_fuser,
             intra_chunk_smoother=intra_chunk_smoother,
             task_language_manager=task_language_manager,
