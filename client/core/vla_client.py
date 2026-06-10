@@ -15,6 +15,7 @@ from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.core.save_lerobot import LeRobotDatasetWriter
+from client.robots.base_robot import RobotBase
 from visual.websocket_server import VLAWebSocketServer
 
 
@@ -34,7 +35,7 @@ class VLAClientAsync():
                 intra_chunk_smoother: IntraChunkSmoother,
                 task_language_manager: TaskLanguageManager,
                 vla_zmq_client: ZMQClient,
-                robot: None):
+                robot: RobotBase):
         """Initialize the VLA Client.
         
         Args:
@@ -70,7 +71,6 @@ class VLAClientAsync():
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
-        self.config.observer.period = 1.0 / self.config.observer.fps
         self.control_thread_timer = MultiThreadTimer(float(self.config.controller.period), self._control_thread_fun)
         self.visualize_thread_timer = MultiThreadTimer(float(self.config.controller.period), self._visualize_thread_fun)
         
@@ -82,6 +82,7 @@ class VLAClientAsync():
         self._img_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_enc")
 
         # Inference variables
+        self.config.observer.period = 1.0 / self.config.observer.fps
         self._request_id = 0
 
         # Initialize the dataset writer with the provided recording configuration
@@ -653,10 +654,10 @@ class VLAClientAsync():
             current_state: Current robot joint state
         """
         # Convert non-None inputs to numpy arrays
-        action_np = np.asarray(action_fitted) if action_fitted is not None else None
-        action_vel = np.asarray(vel_fitted) if vel_fitted is not None else None
-        action_acc = np.asarray(acc_fitted) if acc_fitted is not None else None
-        state_np = np.asarray(current_state) if current_state is not None else None
+        # action_np = np.asarray(action_fitted) if action_fitted is not None else None
+        # action_vel = np.asarray(vel_fitted) if vel_fitted is not None else None
+        # action_acc = np.asarray(acc_fitted) if acc_fitted is not None else None
+        # state_np = np.asarray(current_state) if current_state is not None else None
 
         # Control period in seconds
         dt_ctrl = self.config.controller.period / 1000.0
@@ -664,40 +665,40 @@ class VLAClientAsync():
         list_data = []
 
         # Position data
-        if action_np is not None:
+        if action_fitted is not None:
             list_data.append({
                 'tab': 'position',
                 'type': 'action_fitted',
                 'x': self.vis_global_step,
-                'joints_y': action_np.tolist()
+                'joints_y': action_fitted.tolist()
             })
-        if state_np is not None:
+        if current_state is not None:
             list_data.append({
                 'tab': 'position',
                 'type': 'state',
                 'x': self.vis_global_step,
-                'joints_y': state_np.tolist()
+                'joints_y': current_state.tolist()
             })
 
         # TODO: use real velocity/acceleration
         # Velocity/acceleration for state (derived from state)
         state_vel = None
         state_acc = None
-        if state_np is not None:
+        if current_state is not None:
             if self.vis_prev_state is None:
-                state_vel = np.zeros_like(state_np)
-                state_acc = np.zeros_like(state_np)
+                state_vel = np.zeros_like(current_state)
+                state_acc = np.zeros_like(current_state)
             else:
                 try:
-                    state_vel = (state_np - self.vis_prev_state) / dt_ctrl
+                    state_vel = (current_state - self.vis_prev_state) / dt_ctrl
                     if self.vis_prev_state_vel is None:
-                        state_acc = np.zeros_like(state_np)
+                        state_acc = np.zeros_like(current_state)
                     else:
                         state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
                 except Exception as e:
                     self.logger.warning(f"Error computing state velocity/acceleration: {e}")
-                    state_vel = np.zeros_like(state_np)
-                    state_acc = np.zeros_like(state_np)
+                    state_vel = np.zeros_like(current_state)
+                    state_acc = np.zeros_like(current_state)
 
             list_data.append({
                 'tab': 'velocity',
@@ -713,19 +714,19 @@ class VLAClientAsync():
             })
 
         # Velocity/acceleration for action (direct input)
-        if action_vel is not None:
+        if vel_fitted is not None:
             list_data.append({
                 'tab': 'velocity',
                 'type': 'action_fitted',
                 'x': self.vis_global_step,
-                'joints_y': action_vel.tolist()
+                'joints_y': vel_fitted.tolist()
             })
-        if action_acc is not None:
+        if acc_fitted is not None:
             list_data.append({
                 'tab': 'acceleration',
                 'type': 'action_fitted',
                 'x': self.vis_global_step,
-                'joints_y': action_acc.tolist()
+                'joints_y': acc_fitted.tolist()
             })
 
         # Origin (raw action) series
@@ -769,12 +770,12 @@ class VLAClientAsync():
             self.vis_global_step += 1
 
         # Update previous values only for available inputs
-        if action_np is not None:
-            self.vis_prev_action = action_np
-        if action_vel is not None:
-            self.vis_prev_action_vel = action_vel
-        if state_np is not None:
-            self.vis_prev_state = state_np
+        if action_fitted is not None:
+            self.vis_prev_action = action_fitted
+        if vel_fitted is not None:
+            self.vis_prev_action_vel = vel_fitted
+        if current_state is not None:
+            self.vis_prev_state = current_state
         if state_vel is not None:
             self.vis_prev_state_vel = state_vel
 
