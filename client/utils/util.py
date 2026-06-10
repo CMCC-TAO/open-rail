@@ -314,8 +314,8 @@ def create_layout(info: dict, terminal_size=None):
     )
     obs_act_info = {
         "preprocess": config.vision.preprocess,
-        **vla_client.info_obs,
-        **vla_client.info_act,
+        # **vla_client.info_obs,
+        # **vla_client.info_act,
     }
     col_layout2_info2 = ''
     for key, value in obs_act_info.items():

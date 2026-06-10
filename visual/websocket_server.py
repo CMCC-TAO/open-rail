@@ -59,7 +59,7 @@ class VLAWebSocketServer:
         self._img_executor = None
         self._create_img_executor()
 
-        self._run_http_server_thread()
+        # self._run_http_server_thread()
 
     @classmethod
     def get_instance(cls, host='0.0.0.0', port=8765):
