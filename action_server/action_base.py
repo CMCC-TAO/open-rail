@@ -1,0 +1,323 @@
+"""
+任务处理器基类 - 所有 task handler 的抽象接口 + 通用工具
+"""
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Any
+
+
+# ==============================================
+# 任务执行结果
+# ==============================================
+@dataclass
+class TaskResult:
+    """统一的 handler 返回值
+
+    Attributes:
+        success:      是否成功
+        result_code:  SUCCESS=1 / FAILED=2 (与 ExecutionUnit.action 对齐)
+        error_code:   自定义错误码, 0 表示无错误
+        error_message: 错误描述
+    """
+    success: bool
+    error_code: int = 0
+    error_message: str = ''
+
+    @property
+    def result_code(self) -> int:
+        return 1 if self.success else 2
+
+
+# ==============================================
+# 抽象任务处理器
+# ==============================================
+class AbstractTaskHandler(ABC):
+    """所有 task handler 的基类
+
+    子类必须实现:
+        - task_name: 返回任务名称字符串（与 params 中的 task 字段匹配）
+        - execute(): 执行任务逻辑
+    """
+
+    @property
+    @abstractmethod
+    def task_name(self) -> str:
+        """任务名称，用于路由匹配 (对应 params['task'] 的值)"""
+        ...
+
+    @abstractmethod
+    def execute(self, goal_handle: Any, params: dict, context: Any) -> TaskResult:
+        """执行任务
+
+        Args:
+            goal_handle: ROS2 Action goal_handle，用于 publish_feedback
+            params:      解析后的参数字典（含 task / target / waypoint 等）
+            context:     VLAContext 共享组件容器（含 robot_body 等）
+
+        Returns:
+            TaskResult: 任务执行结果
+        """
+        ...
+
+    # ================================================================
+    # 工具方法
+    # ================================================================
+
+    @staticmethod
+    def send_feedback(goal_handle, progress: int, message: str,
+                      feedback_code: int = 0, need_process: bool = True) -> None:
+        """发送 feedback（线程安全）
+
+        Args:
+            goal_handle: ROS2 Action goal_handle
+            progress:    进度百分比 (0-100)
+            message:     文本描述
+            feedback_code: 状态码, 0=心跳
+            need_process:  是否需要外部处理
+        """
+        from message_center.action import ExecutionUnit
+
+        fb = ExecutionUnit.Feedback()
+        fb.need_process = need_process
+        fb.feedback_code = feedback_code
+        fb.message = f"[progress={progress}%] {message}"
+        goal_handle.publish_feedback(fb)
+
+    @staticmethod
+    def build_feedback(progress: int, message: str,
+                       feedback_code: int = 0, need_process: bool = True) -> Any:
+        """构建但不发送 feedback 对象（用于需要自定义发送时机的场景）"""
+        from message_center.action import ExecutionUnit
+
+        fb = ExecutionUnit.Feedback()
+        fb.need_process = need_process
+        fb.feedback_code = feedback_code
+        fb.message = f"[progress={progress}%] {message}"
+        return fb
+
+    @staticmethod
+    def build_failed_result(error_code: int, error_message: str) -> Any:
+        """构建失败 result 对象"""
+        from message_center.action import ExecutionUnit
+
+        result = ExecutionUnit.Result()
+        result.result = 2  # FAILED
+        result.error_code = error_code
+        result.error_message = error_message
+        return result
+
+    @staticmethod
+    def build_success_result() -> Any:
+        """构建成功 result 对象"""
+        from message_center.action import ExecutionUnit
+
+        result = ExecutionUnit.Result()
+        result.result = 1  # SUCCESS
+        result.error_code = 0
+        result.error_message = ''
+        return result
+
+
+# ==============================================
+# VLA 推理监控（模块级函数，所有 handler 共享）
+# ==============================================
+
+# 默认监控参数
+_DEFAULT_MAX_DURATION = 60.0          # 最大执行时间（秒）
+_DEFAULT_THRE_PROGRESS = 0.9          # 进度完成阈值
+_DEFAULT_STABLE_COUNT = 20            # 连续稳定计数阈值
+_DEFAULT_STABILITY_RATIO = 0.05       # 变异系数阈值
+_DEFAULT_FEEDBACK_INTERVAL = 1.0 / 3.0  # 3Hz
+
+
+def run_vla_inference(
+    goal_handle,
+    vla_client,
+    language_instruction: str,
+    robot_body=None,
+    reset_robot: bool = True,
+    max_duration: float = _DEFAULT_MAX_DURATION,
+    thre_progress: float = _DEFAULT_THRE_PROGRESS,
+    stable_count_threshold: int = _DEFAULT_STABLE_COUNT,
+    stability_ratio_thresh: float = _DEFAULT_STABILITY_RATIO,
+    feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
+) -> TaskResult:
+    """运行 VLA 推理全流程（复位 → 启动推理 → 监控进度 → 完成/超时）
+
+    步骤:
+        1. [可选] 复位机器人到安全姿态
+        2. 设置语言指令 → inference_first() → run()
+        3. 监控 prob_progress：每 3Hz 发送 feedback
+        4. 稳定性检测（滑动窗口变异系数 + 连续计数）
+        5. 停止 VLA 客户端线程
+
+    Args:
+        goal_handle:          ROS2 Action goal_handle
+        vla_client:           VLAClientAsync 实例
+        language_instruction: 语言指令文本
+        robot_body:           RobotBody 实例（reset_robot=True 时必填）
+        reset_robot:          是否在启动前复位机器人
+        max_duration:         最大执行时间（秒）
+        thre_progress:        进度阈值，超过后开始稳定性检测
+        stable_count_threshold: 连续稳定次数阈值
+        stability_ratio_thresh:  变异系数阈值
+        feedback_interval:     feedback 发送间隔
+
+    Returns:
+        TaskResult: success=True 完成 / False 失败+原因
+    """
+    import time
+
+    # ========== 步骤 1: 复位机器人（可选） ==========
+    if reset_robot:
+        if robot_body is None:
+            return TaskResult(False, error_code=4,
+                              error_message='reset_robot=True but robot_body is None')
+        send_vla_feedback(goal_handle, 5, "正在复位机器人到安全姿态...")
+        try:
+            robot_body.reset_robot(mode='default')
+            time.sleep(1.0)
+        except Exception as e:
+            return TaskResult(False, error_code=4,
+                              error_message=f'Robot reset failed: {str(e)}')
+
+    # ========== 步骤 2: 启动推理 ==========
+    try:
+        vla_client.language = language_instruction
+        vla_client.is_running_action = False
+
+        send_vla_feedback(goal_handle, 10, "正在启动 VLA 推理...")
+        vla_client.inference_first()
+        vla_client.is_running_action = True
+        vla_client.run()
+    except Exception as e:
+        return TaskResult(False, error_code=5,
+                          error_message=f'Failed to start inference: {str(e)}')
+
+    # ========== 步骤 3 + 4: 监控进度 + 稳定性检测 ==========
+    result = _monitor_vla_progress(
+        goal_handle=goal_handle,
+        vla_client=vla_client,
+        max_duration=max_duration,
+        thre_progress=thre_progress,
+        stable_count_threshold=stable_count_threshold,
+        stability_ratio_thresh=stability_ratio_thresh,
+        feedback_interval=feedback_interval,
+    )
+
+    # ========== 步骤 5: 停止 VLA 客户端线程 ==========
+    _stop_vla_client(vla_client)
+
+    return result
+
+
+def _monitor_vla_progress(
+    goal_handle,
+    vla_client,
+    max_duration: float = _DEFAULT_MAX_DURATION,
+    thre_progress: float = _DEFAULT_THRE_PROGRESS,
+    stable_count_threshold: int = _DEFAULT_STABLE_COUNT,
+    stability_ratio_thresh: float = _DEFAULT_STABILITY_RATIO,
+    feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
+) -> TaskResult:
+    """监控 VLA 推理进度循环
+
+    每 ~0.33s:
+        1. 读取 prob_progress
+        2. 发送 feedback（含进度百分比 + 已用时间）
+        3. prob_progress > thre_progress 时触发稳定性检测
+        4. 滑动窗口变异系数 < threshold 且连续稳定计数达到 → 任务完成
+        5. 超时 → 返回超时错误
+
+    Returns:
+        TaskResult
+    """
+    import time
+    import numpy as np
+
+    progress_start = time.time()
+    stable_count = 0
+    stability_window = []
+
+    try:
+        while True:
+            # 检查外部停止信号
+            if not vla_client.is_running_action:
+                send_vla_feedback(goal_handle, 0, "VLA task stopped by external signal",
+                                  feedback_code=1)
+                return TaskResult(False, error_code=3,
+                                  error_message='VLA task cancelled')
+
+            # 检查超时
+            elapsed_total = time.time() - progress_start
+            if elapsed_total > max_duration:
+                send_vla_feedback(goal_handle, 0,
+                                  f'Task timed out after {elapsed_total:.1f}s',
+                                  feedback_code=1)
+                return TaskResult(False, error_code=6,
+                                  error_message=f'Task timed out after {elapsed_total:.1f}s')
+
+            # 读取进度
+            current_prob_progress = vla_client.info_act.get('current_prob_progress', 0.0)
+            elapsed = time.time() - progress_start
+            progress_pct = min(int(current_prob_progress * 100), 99)
+
+            # 发送 feedback
+            send_vla_feedback(
+                goal_handle, progress_pct,
+                f"[elapsed={int(elapsed)}s] prob_progress={current_prob_progress:.3f}",
+                feedback_code=0,
+            )
+
+            # ===== 稳定性检测 =====
+            if current_prob_progress > thre_progress:
+                stability_window.append(current_prob_progress)
+                if len(stability_window) > 50:
+                    stability_window.pop(0)
+
+                if len(stability_window) >= 3:
+                    window_std = float(np.std(stability_window))
+                    window_mean = float(np.mean(stability_window))
+                    stability_ratio = window_std / (window_mean + 1e-6)
+
+                    if stability_ratio < stability_ratio_thresh:
+                        stable_count += 1
+                    else:
+                        stable_count = 0
+
+                    if stable_count >= stable_count_threshold:
+                        send_vla_feedback(goal_handle, 100,
+                                          f'Task completed! Total time: {elapsed:.1f}s')
+                        return TaskResult(True)
+            else:
+                stable_count = 0
+                stability_window.clear()
+
+            time.sleep(feedback_interval)
+
+    except Exception as e:
+        return TaskResult(False, error_code=99,
+                          error_message=f'Monitoring error: {str(e)}')
+
+
+def _stop_vla_client(vla_client) -> None:
+    """安全停止 VLA 客户端线程"""
+    import time
+    try:
+        vla_client.is_running_action = False
+        time.sleep(0.1)
+    except Exception:
+        pass
+
+
+def send_vla_feedback(goal_handle, progress: int, message: str,
+                      feedback_code: int = 0, need_process: bool = True) -> None:
+    """发送 VLA 推理 feedback（模块级函数，方便各 handler 直接调用）"""
+    from message_center.action import ExecutionUnit
+
+    fb = ExecutionUnit.Feedback()
+    fb.need_process = need_process
+    fb.feedback_code = feedback_code
+    fb.message = f"[progress={progress}%] {message}"
+    goal_handle.publish_feedback(fb)
