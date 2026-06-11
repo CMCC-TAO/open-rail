@@ -857,18 +857,33 @@ class VisualCameraConfigRequest(BaseModel):
 
 @app.post("/api/visualize/camera_cfg")
 async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
-    """Update runtime camera open config for visual websocket server (effective immediately)."""
+    """Update in-memory visualize.camera config (effective immediately)."""
     payload = req.dict(exclude_none=True)
     if not payload:
         return {"status": "ok", "applied": False}
 
-    vla_client = client_state.vla_client
-    ws_server = getattr(vla_client, "visualize_server", None) if vla_client is not None else None
-    if ws_server is None:
-        return {"status": "ok", "applied": False}
+    if client_state.config is None:
+        client_state.config = get_client_config()
 
-    await asyncio.to_thread(ws_server.update_camera_open_config, payload)
-    return {"status": "ok", "applied": True, "camera_cfg": payload}
+    with client_state.lock:
+        visual_root = getattr(client_state.config, "visualize", None)
+        if visual_root is None:
+            visual_root = getattr(client_state.config, "visual", None)
+        cam_cfg = getattr(visual_root, "camera", None) if visual_root is not None else None
+        if cam_cfg is None:
+            return {"status": "ok", "applied": False}
+
+        for k, v in payload.items():
+            if hasattr(cam_cfg, k):
+                setattr(cam_cfg, k, bool(v))
+
+        camera_cfg = {
+            "open_head": bool(getattr(cam_cfg, "open_head", True)),
+            "open_wrist_left": bool(getattr(cam_cfg, "open_wrist_left", True)),
+            "open_wrist_right": bool(getattr(cam_cfg, "open_wrist_right", True)),
+        }
+
+    return {"status": "ok", "applied": True, "camera_cfg": camera_cfg}
 
 
 @app.post("/api/config/patch")
@@ -895,22 +910,9 @@ async def patch_config(req: ConfigPatchRequest):
         raise HTTPException(503, "Config is busy. Please retry.")
     try:
         _apply_flat_patch_new(client_state.config, flat)
-        running = bool(client_state.running and client_state.vla_client is not None)
-        vla_client = client_state.vla_client
-        cam_cfg = getattr(getattr(client_state.config, "visualize", None), "camera", None)
         cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     finally:
         client_state.lock.release()
-
-    # Runtime side-effects for keys that need explicit push
-    if running:
-        try:
-            if any(k.startswith("visualize.camera.") for k in flat.keys()):
-                ws_server = getattr(vla_client, "visualize_server", None)
-                if ws_server is not None and cam_cfg is not None:
-                    await asyncio.to_thread(ws_server.update_camera_open_config, cam_cfg)
-        except Exception as e:
-            logger.warning(f"Runtime camera config sync failed: {e}")
 
     return {"status": "ok", "config": cfg_dict}
 
@@ -940,20 +942,6 @@ async def load_config_file(req: ConfigFileRequest):
 
     with client_state.lock:
         _apply_yaml_config(client_state.config, p)
-
-    # Runtime side-effects for configs requiring explicit push
-    if client_state.running and client_state.vla_client is not None:
-        try:
-            # Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
-            visual_root = getattr(client_state.config, "visualize", None)
-            if visual_root is None:
-                visual_root = getattr(client_state.config, "visual", None)
-            cam_cfg = getattr(visual_root, "camera", None)
-            ws_server = getattr(client_state.vla_client, "visualize_server", None)
-            if ws_server is not None and cam_cfg is not None:
-                await asyncio.to_thread(ws_server.update_camera_open_config, cam_cfg)
-        except Exception as e:
-            logger.warning(f"Runtime camera config sync after load failed: {e}")
 
     # user_cfg = load_user_config(str(p))
     # if user_cfg is None:
