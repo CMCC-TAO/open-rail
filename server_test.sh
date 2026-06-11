@@ -1,5 +1,5 @@
 python run_server.py \
 --model_type tao \
---model_path /home/ttt/Desktop/model_tao/model/tao_v0_20260603_182555_n8_b64_s10000 \
+--model_path /home/ttt/Desktop/model_tao/model_990/tao_v0_20260609_141547_n8_b64_s10000 \
 --embodiment_tag unitree_g1 \
 # --debug
