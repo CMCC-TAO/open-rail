@@ -134,6 +134,9 @@ def get_visualize_config() -> ConfigDict:
     config.server = ConfigDict()
     config.server.host = '0.0.0.0'
     config.server.port = 8765
+    config.server.max_size = 10 * 1024 * 1024  # 10MB
+    config.server.ping_interval = 20  # Ping interval in milliseconds
+    config.server.ping_timeout = 10  # Ping timeout in seconds
 
     config.camera = ConfigDict()
     config.camera.open_head = True
