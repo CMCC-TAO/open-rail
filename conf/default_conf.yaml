@@ -266,8 +266,14 @@ visualize:
   camera:
     open_head: true
     open_wrist_left: true
-    open_wrist_right: false
+    open_wrist_right: true
     update_interval_ms: 33
+  server:
+    host: 0.0.0.0
+    max_size: 10485760
+    ping_interval: 20
+    ping_timeout: 10
+    port: 8765
   trajectory:
     play: true
     selected_joints:

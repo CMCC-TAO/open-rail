@@ -512,6 +512,8 @@ class VLAClientAsync():
         """
         ext = '.png' if 'depth.' in key else '.jpg'
         img_processed = self._preprocess_func(value) if self._preprocess_func else value
+        # encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
+        # img_encoded = cv2.imencode(ext, img_processed, encode_params)[1]
         img_encoded = cv2.imencode(ext, img_processed)[1]
         return key, img_processed, img_encoded
 

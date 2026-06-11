@@ -8,6 +8,7 @@ import threading
 import os
 import cv2
 import numpy as np
+from collections import deque
 from typing import Dict, List, Set, Optional
 from concurrent.futures import ThreadPoolExecutor
 from ml_collections import ConfigDict
@@ -35,8 +36,8 @@ class VisualizeServer:
         self._last_camera_send_ts = 0.0
         self._last_chart_send_ts = 0.0
 
-        # Data send queue
-        self.data_send_queue = []
+        # Data send queue (deque gives O(1) append/popleft; bounded by maxlen)
+        self.data_send_queue = deque(maxlen=1000)
 
         # Server instance
         self.server = None
@@ -71,9 +72,7 @@ class VisualizeServer:
                 dt_with_ts = {**dt, 'timestamp': timestamp}
                 self.data_send_queue.append(dt_with_ts)
 
-            # Keep queue bounded to avoid memory overflow
-            if len(self.data_send_queue) > 1000:
-                self.data_send_queue = self.data_send_queue[-500:]
+            # Bounded automatically by deque(maxlen=1000).
 
     async def register_client(self, websocket):
         """Register a new WebSocket client."""
