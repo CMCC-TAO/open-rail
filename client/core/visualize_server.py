@@ -29,7 +29,6 @@ class VisualizeServer:
         self.latest_imgs: Optional[Dict] = None
         self.latest_imgs_seq = 0
         self.sent_imgs_seq = -1
-        self.camera_open = {0: True, 1: True, 2: True}  # 0=head, 1=left wrist, 2=right wrist
         self.data_lock = threading.Lock()
         self.camera_send_interval = 1.0 / 30.0
         self.chart_send_interval = 1.0 / 30.0
@@ -47,16 +46,12 @@ class VisualizeServer:
     def kill_port(self, port):
         os.system(f'kill -9 $(lsof -t -i:{port})')
 
-    def update_image_data(self, imgs: Dict, camera_cfg=None):
+    def update_image_data(self, imgs: Dict):
         """Update image data.
 
         Args:
             imgs (Dict): Image data dict, key is camera identifier, value is image array.
-            camera_cfg: Camera display config, supports open_head/open_wrist_left/open_wrist_right.
         """
-        if camera_cfg is not None:
-            self.update_camera_open_config(camera_cfg)
-
         with self.data_lock:
             self.latest_imgs = imgs.copy()
             self.latest_imgs_seq += 1
@@ -118,11 +113,13 @@ class VisualizeServer:
             return 0
         return None
 
-    def update_camera_open_config(self, camera_cfg):
-        with self.data_lock:
-            self.camera_open[0] = self._cfg_get(camera_cfg, 'open_head', True)
-            self.camera_open[1] = self._cfg_get(camera_cfg, 'open_wrist_left', True)
-            self.camera_open[2] = self._cfg_get(camera_cfg, 'open_wrist_right', True)
+    def _get_camera_open_map(self):
+        camera_cfg = getattr(self.config, 'camera', None)
+        return {
+            0: self._cfg_get(camera_cfg, 'open_head', True),
+            1: self._cfg_get(camera_cfg, 'open_wrist_left', True),
+            2: self._cfg_get(camera_cfg, 'open_wrist_right', True),
+        }
 
     async def send_camera_data(self):
         """Send camera frames to all clients using binary transport."""
@@ -141,7 +138,8 @@ class VisualizeServer:
                 return
             imgs = self.latest_imgs.copy()
             img_seq = self.latest_imgs_seq
-            camera_open = self.camera_open.copy()
+
+        camera_open = self._get_camera_open_map()
 
         sent_camera_ids = set()
 
