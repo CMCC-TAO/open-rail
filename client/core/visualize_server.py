@@ -3,28 +3,25 @@ import asyncio
 import websockets
 import json
 import logging
-import numpy as np
 import time
 import threading
-from typing import Dict, List, Set, Optional
 import os
 import cv2
+import numpy as np
+from typing import Dict, List, Set, Optional
 from concurrent.futures import ThreadPoolExecutor
+from ml_collections import ConfigDict
 
 # Limits threads used in OpenCV to avoid conflicts.
 cv2.setNumThreads(1)
-
-
-
 class VisualizeServer:
-    def __init__(self, host='0.0.0.0', port=8765):
+    def __init__(self, visualize_config: ConfigDict):
         # Use a stable logger name so logging_conf.py mapping always matches,
         # including script/uvicorn execution paths.
         self.logger = logging.getLogger(__name__)
-        self.logger.info("Initializing server on %s:%d", host, port)
-        self.kill_port(port)
-        self.host = host
-        self.port = port
+        self.config = visualize_config
+        self.logger.info("Initializing server on %s:%d", self.config.server.host, self.config.server.port)
+        self.kill_port(self.config.server.port)
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = False
 
@@ -296,14 +293,14 @@ class VisualizeServer:
 
         async with websockets.serve(
             self.client_handler,
-            self.host,
-            self.port,
+            self.config.server.host,
+            self.config.server.port,
             max_size=10 * 1024 * 1024,
             ping_interval=20,
             ping_timeout=10
         ) as server:
             self.server = server
-            self.logger.info("Server started: ws://%s:%d", self.host, self.port)
+            self.logger.info("Server started: ws://%s:%d", self.config.server.host, self.config.server.port)
             
             data_sender_task = asyncio.create_task(self.data_sender())
             try:
