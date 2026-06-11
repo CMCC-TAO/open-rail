@@ -96,10 +96,10 @@ class VLAActionDispatcher(Node):
             self.get_logger().warn(f'Failed to load init_grasp handler: {e}')
 
         try:
-            from action_server.task_on_hand_grasp import OneHandGraspHandler
-            self.register_handler(OneHandGraspHandler())
+            from action_server.task_grasp import GraspHandler
+            self.register_handler(GraspHandler())
         except ImportError as e:
-            self.get_logger().warn(f'Failed to load one_hand_grasp handler: {e}')
+            self.get_logger().warn(f'Failed to load grasp handler: {e}')
 
     # ================================================================
     # Action 回调

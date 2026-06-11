@@ -1,5 +1,7 @@
 """
-单手抓取任务 - 根据 target 选择语言指令，调用 VLA 模型推理执行抓取
+抓取任务 - 根据 target 选择语言指令，调用 VLA 模型推理执行抓取
+
+grasb 是一个大类，通过 target 字段区分具体的抓取动作（单手/双手、目标物体）。
 """
 
 import sys
@@ -16,10 +18,12 @@ from action_server.action_base import (
 # ==============================================
 # target → 语言指令映射表
 # ==============================================
-# 在此添加新的 target 条目即可扩展。key 为 params.target（不区分大小写）
+# key 为 params.target（不区分大小写），value 为对应的语言指令
 TARGET_LANGUAGE_MAP: dict[str, str] = {
-    "Wahaha": "Use one hand to grab one bottle from a pile of Wahaha drinks.",
-    "Coca-Cola": "Use both hands to grab the two nearest bottles from a pile of Coca-Cola drinks.",
+    "one Wahaha": "Use one hand to grab one bottle from a pile of Wahaha drinks.",
+    "one Coca-Cola": "Use one hand to grab one bottle from a pile of Coca-Cola drinks.",
+    "two Wahaha": "Use both hands to grab the two nearest bottles from a pile of Wahaha drinks.",
+    "two Coca-Cola": "Use both hands to grab the two nearest bottles from a pile of Coca-Cola drinks.",
 }
 
 
@@ -35,8 +39,8 @@ def _get_language_instruction(target: str) -> str | None:
     return TARGET_LANGUAGE_MAP.get(target.strip())
 
 
-class OneHandGraspHandler(AbstractTaskHandler):
-    """'one hand grasb' 任务处理器
+class GraspHandler(AbstractTaskHandler):
+    """'grasb' 任务处理器 — 抓取大类
 
     流程:
         1. 根据 params.target 查找对应的语言指令
@@ -47,7 +51,7 @@ class OneHandGraspHandler(AbstractTaskHandler):
 
     @property
     def task_name(self) -> str:
-        return "one hand grasb"
+        return "grasb"
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
         # ===== 步骤 1: 解析 target 并获取语言指令 =====
@@ -81,7 +85,7 @@ class OneHandGraspHandler(AbstractTaskHandler):
                 language_instruction=instruction,
                 robot_body=robot_body,
                 reset_robot=True,
-                fixed_duration=30.0,  # GR00T 模型不返回 prob_progress，固定运行 20 秒
+                fixed_duration=30.0,
             )
             return result
 

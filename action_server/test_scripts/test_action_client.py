@@ -43,11 +43,38 @@ AVAILABLE_TASKS = {
         },
     },
     "2": {
-        "name": "one hand grasb",
-        "desc": "单手抓取 — 使用 VLA 模型抓取指定目标（如 Wahaha）",
+        "name": "grasp one Wahaha",
+        "desc": "单手抓取 — 使用一只手从娃哈哈堆中抓取一瓶",
         "params": {
-            "task": "one hand grasb",
-            "target": "Wahaha",
+            "task": "grasb",
+            "target": "one Wahaha",
+            "waypoint": "none",
+        },
+    },
+    "3": {
+        "name": "grasp one Coca-Cola",
+        "desc": "单手抓取 — 使用一只手从可口可乐堆中抓取一瓶",
+        "params": {
+            "task": "grasb",
+            "target": "one Coca-Cola",
+            "waypoint": "none",
+        },
+    },
+    "4": {
+        "name": "grasp two Wahaha",
+        "desc": "双手抓取 — 使用两只手从娃哈哈堆中抓取最近的两瓶",
+        "params": {
+            "task": "grasb",
+            "target": "two Wahaha",
+            "waypoint": "none",
+        },
+    },
+    "5": {
+        "name": "grasp two Coca-Cola",
+        "desc": "双手抓取 — 使用两只手从可口可乐堆中抓取最近的两瓶",
+        "params": {
+            "task": "grasb",
+            "target": "two Coca-Cola",
             "waypoint": "none",
         },
     },
@@ -194,14 +221,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1-2 / q): ').strip().lower()
+        choice = input('请选择任务编号 (1-5 / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1-2 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-5 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]
