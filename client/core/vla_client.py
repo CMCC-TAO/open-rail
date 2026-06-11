@@ -90,7 +90,7 @@ class VLAClientAsync():
         )
 
         # Create visualization WebSocket server for live image and trajectory updates
-        self.visualize_server = VisualizeServer()
+        self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
         # Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
         visual_root = getattr(self.config, 'visualize', None)
         if visual_root is None:
