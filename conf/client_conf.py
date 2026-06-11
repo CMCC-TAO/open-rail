@@ -32,7 +32,7 @@ def get_client_config():
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
     config.vis_zmq = get_vis_zmq_config()
-    config.visual = get_visual_config()
+    config.visualize = get_visualize_config()
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
     config.language = get_language_config()
@@ -127,7 +127,7 @@ def get_observer_config() -> ConfigDict:
     config.fps = 30  # Frames per second for robot observation data collection
     return config
 
-def get_visual_config() -> ConfigDict:
+def get_visualize_config() -> ConfigDict:
     """Generate configuration for web visual panels."""
     config = ConfigDict()
 

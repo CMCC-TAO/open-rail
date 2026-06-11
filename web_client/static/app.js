@@ -665,7 +665,7 @@ function renderJointsGrouped(side, values) {
 async function syncRuntimeCameraConfig() {
   if (!App.isRunning) return;
   try {
-    await apiFetch('/api/visual/camera_cfg', {
+    await apiFetch('/api/visualize/camera_cfg', {
       method: 'POST',
       body: JSON.stringify({
         open_head: !!App.camOpen[0],
@@ -815,13 +815,13 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.auto_mode',
   'language.task_progress_threshold',
   'language.task_progress_win_size',
-  'visual.camera.connect_when_running',
-  'visual.camera.open_head',
-  'visual.camera.open_wrist_left',
-  'visual.camera.open_wrist_right',
-  'visual.trajectory.selected_joints',
-  'visual.trajectory.source',
-  'visual.trajectory.window_span_sec',
+  'visualize.camera.connect_when_running',
+  'visualize.camera.open_head',
+  'visualize.camera.open_wrist_left',
+  'visualize.camera.open_wrist_right',
+  'visualize.trajectory.selected_joints',
+  'visualize.trajectory.source',
+  'visualize.trajectory.window_span_sec',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
@@ -831,7 +831,7 @@ const CONFIG_READONLY_DOT_KEYS = new Set([
 ]);
 
 function getCfgMultiSelectOptions(dotKey) {
-  if (dotKey === 'visual.trajectory.source') {
+  if (dotKey === 'visualize.trajectory.source') {
     return [
       { value: 'State', label: 'State' },
       { value: 'ActionFitted', label: 'ActionFitted' },
@@ -839,7 +839,7 @@ function getCfgMultiSelectOptions(dotKey) {
     ];
   }
 
-  if (dotKey === 'visual.trajectory.selected_joints') {
+  if (dotKey === 'visualize.trajectory.selected_joints') {
     return TRAJ_JOINT_LABELS.map((name, idx) => ({ value: String(idx), label: `${name} (${idx})` }));
   }
 
@@ -1083,7 +1083,7 @@ function buildTree(obj, prefix, parentEl) {
   // Keys not listed here will appear at the end in their original order.
   const CUSTOM_GROUP_ORDER = [
     'robots',
-    'visual',
+    'visualize',
     // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
   ];
 
@@ -1363,7 +1363,7 @@ function createCfgRow(dotKey, label, value) {
 
     const selectedSet = new Set(
       selectedRaw.map(v => {
-        if (dotKey === 'visual.trajectory.source') return String(v).trim().toLowerCase();
+        if (dotKey === 'visualize.trajectory.source') return String(v).trim().toLowerCase();
         return String(parseInt(v, 10));
       })
     );
@@ -1372,7 +1372,7 @@ function createCfgRow(dotKey, label, value) {
       const o = document.createElement('option');
       o.value = opt.value;
       o.textContent = opt.label;
-      const key = dotKey === 'visual.trajectory.source'
+      const key = dotKey === 'visualize.trajectory.source'
         ? String(opt.value).toLowerCase()
         : String(parseInt(opt.value, 10));
       if (selectedSet.has(key)) o.selected = true;
@@ -1427,9 +1427,9 @@ function onCfgChange(dotKey, input, originalValue) {
     const selected = Array.from(input.selectedOptions).map(o => o.value);
     let parsed = selected;
 
-    if (dotKey === 'visual.trajectory.selected_joints') {
+    if (dotKey === 'visualize.trajectory.selected_joints') {
       parsed = selected.map(v => parseInt(v, 10)).filter(Number.isFinite);
-    } else if (dotKey === 'visual.trajectory.source') {
+    } else if (dotKey === 'visualize.trajectory.source') {
       parsed = selected
         .map(v => String(v).trim().toLowerCase())
         .map(v => {
@@ -1946,7 +1946,9 @@ function syncTrajWindowSpanUI() {
 }
 
 function applyVisualConfig(cfg = App.config) {
-  const visualCfg = (cfg && typeof cfg === 'object') ? (cfg.visual || {}) : {};
+  const root = (cfg && typeof cfg === 'object') ? cfg : {};
+  // Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
+  const visualCfg = (root.visualize && typeof root.visualize === 'object')? root.visualize : {};
 
   const camCfg = (visualCfg.camera && typeof visualCfg.camera === 'object') ? visualCfg.camera : {};
   const trajCfg = (visualCfg.trajectory && typeof visualCfg.trajectory === 'object') ? visualCfg.trajectory : {};
@@ -2051,34 +2053,34 @@ function applyVisualConfig(cfg = App.config) {
 
 function getVisualStatePatch() {
   return {
-    'visual.camera.open_head': !!App.camOpen[0],
-    'visual.camera.open_wrist_left': !!App.camOpen[1],
-    'visual.camera.open_wrist_right': !!App.camOpen[2],
-    'visual.trajectory.play': !App.traj.paused,
-    'visual.trajectory.source': [...App.traj.source].map(s => {
+    'visualize.camera.open_head': !!App.camOpen[0],
+    'visualize.camera.open_wrist_left': !!App.camOpen[1],
+    'visualize.camera.open_wrist_right': !!App.camOpen[2],
+    'visualize.trajectory.play': !App.traj.paused,
+    'visualize.trajectory.source': [...App.traj.source].map(s => {
       if (s === 'action_fitted') return 'ActionFitted';
       if (s === 'action_raw') return 'ActionRaw';
       return 'State';
     }),
-    'visual.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
-    'visual.trajectory.window_span_sec': normalizeTrajWindowSpanSec(App.traj.windowSpanSec, TRAJ_WINDOW_SPAN_SEC),
+    'visualize.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
+    'visualize.trajectory.window_span_sec': normalizeTrajWindowSpanSec(App.traj.windowSpanSec, TRAJ_WINDOW_SPAN_SEC),
   };
 }
 
 function syncVisualStateToLocalConfig(patch) {
   if (!App.config || typeof App.config !== 'object') App.config = {};
-  if (!App.config.visual || typeof App.config.visual !== 'object') App.config.visual = {};
-  if (!App.config.visual.camera || typeof App.config.visual.camera !== 'object') App.config.visual.camera = {};
-  if (!App.config.visual.trajectory || typeof App.config.visual.trajectory !== 'object') App.config.visual.trajectory = {};
+  if (!App.config.visualize || typeof App.config.visualize !== 'object') App.config.visualize = {};
+  if (!App.config.visualize.camera || typeof App.config.visualize.camera !== 'object') App.config.visualize.camera = {};
+  if (!App.config.visualize.trajectory || typeof App.config.visualize.trajectory !== 'object') App.config.visualize.trajectory = {};
 
-  App.config.visual.camera.open_head = patch['visual.camera.open_head'];
-  App.config.visual.camera.open_wrist_left = patch['visual.camera.open_wrist_left'];
-  App.config.visual.camera.open_wrist_right = patch['visual.camera.open_wrist_right'];
-  App.config.visual.trajectory.play = patch['visual.trajectory.play'];
-  delete App.config.visual.trajectory.default_paused;
-  App.config.visual.trajectory.source = patch['visual.trajectory.source'];
-  App.config.visual.trajectory.selected_joints = patch['visual.trajectory.selected_joints'];
-  App.config.visual.trajectory.window_span_sec = patch['visual.trajectory.window_span_sec'];
+  App.config.visualize.camera.open_head = patch['visualize.camera.open_head'];
+  App.config.visualize.camera.open_wrist_left = patch['visualize.camera.open_wrist_left'];
+  App.config.visualize.camera.open_wrist_right = patch['visualize.camera.open_wrist_right'];
+  App.config.visualize.trajectory.play = patch['visualize.trajectory.play'];
+  delete App.config.visualize.trajectory.default_paused;
+  App.config.visualize.trajectory.source = patch['visualize.trajectory.source'];
+  App.config.visualize.trajectory.selected_joints = patch['visualize.trajectory.selected_joints'];
+  App.config.visualize.trajectory.window_span_sec = patch['visualize.trajectory.window_span_sec'];
 }
 
 function syncVisualStateToConfigInputs(patch) {
@@ -2091,10 +2093,10 @@ function syncVisualStateToConfigInputs(patch) {
     if (input.tagName === 'SELECT' && input.multiple) {
       const selectedSet = new Set((Array.isArray(value) ? value : [value]).map(v => String(v)));
       Array.from(input.options).forEach(opt => {
-        const k = dotKey === 'visual.trajectory.source'
+        const k = dotKey === 'visualize.trajectory.source'
           ? String(opt.value).toLowerCase()
           : String(opt.value);
-        const vv = dotKey === 'visual.trajectory.source'
+        const vv = dotKey === 'visualize.trajectory.source'
           ? new Set([...selectedSet].map(x => x.toLowerCase()))
           : selectedSet;
         opt.selected = vv.has(k);
@@ -2121,18 +2123,18 @@ async function persistVisualStateNow() {
 
   // Visual panel changes are auto-applied; never show "unsaved changes" for them.
   Object.keys(App.pendingPatch)
-    .filter(k => k.startsWith('visual.camera.') || k.startsWith('visual.trajectory.'))
+    .filter(k => k.startsWith('visualize.camera.') || k.startsWith('visualize.trajectory.'))
     .forEach(k => delete App.pendingPatch[k]);
   if (!Object.keys(App.pendingPatch).length) clearPending();
 
   if (App.isRunning) {
     try {
-      await apiFetch('/api/visual/camera_cfg', {
+      await apiFetch('/api/visualize/camera_cfg', {
         method: 'POST',
         body: JSON.stringify({
-          open_head: patch['visual.camera.open_head'],
-          open_wrist_left: patch['visual.camera.open_wrist_left'],
-          open_wrist_right: patch['visual.camera.open_wrist_right'],
+          open_head: patch['visualize.camera.open_head'],
+          open_wrist_left: patch['visualize.camera.open_wrist_left'],
+          open_wrist_right: patch['visualize.camera.open_wrist_right'],
         }),
       });
     } catch (_) {
