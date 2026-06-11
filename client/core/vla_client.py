@@ -90,14 +90,14 @@ class VLAClientAsync():
         )
 
         # Create visualization WebSocket server for live image and trajectory updates
-        self.visualization_server = VisualizeServer()
+        self.visualize_server = VisualizeServer()
         # Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
         visual_root = getattr(self.config, 'visualize', None)
         if visual_root is None:
             visual_root = getattr(self.config, 'visual', None)
         camera_cfg = getattr(visual_root, 'camera', None)
         if camera_cfg is not None:
-            self.visualization_server.update_camera_open_config(camera_cfg)
+            self.visualize_server.update_camera_open_config(camera_cfg)
         self.vis_global_step = 0
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
@@ -137,11 +137,11 @@ class VLAClientAsync():
         self.is_control_thread_running = False
 
     def start_visualize(self):
-        self.visualization_server.start_server()
+        self.visualize_server.start_server()
         if not self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.start()
     def stop_visualize(self):
-        self.visualization_server.stop_server()
+        self.visualize_server.stop_server()
         if self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.stop(timeout=1.0)
 
@@ -220,7 +220,7 @@ class VLAClientAsync():
             self.dataset_write.close()
 
         self.vla_zmq.close()
-        self.visualization_server.stop_server()
+        self.visualize_server.stop_server()
 
         if hasattr(self, '_img_executor') and self._img_executor is not None:
             self._img_executor.shutdown(wait=False)
@@ -541,7 +541,7 @@ class VLAClientAsync():
             processed_imgs[key] = processed
 
         # Send images to visualization interface
-        self.visualization_server.update_image_data(processed_imgs)
+        self.visualize_server.update_image_data(processed_imgs)
 
         return encoded_imgs
 
@@ -761,7 +761,7 @@ class VLAClientAsync():
             self.vis_prev_origin_vel = origin_vel
 
         if list_data:
-            self.visualization_server.update_chart_data(list_data)
+            self.visualize_server.update_chart_data(list_data)
             self.vis_global_step += 1
 
         # Update previous values only for available inputs
