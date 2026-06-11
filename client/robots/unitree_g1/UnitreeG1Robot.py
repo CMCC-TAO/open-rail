@@ -395,7 +395,12 @@ class UnitreeG1Robot(Node):
     def _find_nearest(self, queue, target_ts):
         if not queue:
             return (None, 0.0)
-        return min(queue, key=lambda x: abs(x[1] - target_ts))
+        # 快照：避免 deque 在迭代时被采样线程 append 导致
+        # "deque mutated during iteration" 异常
+        snapshot = list(queue)
+        if not snapshot:
+            return (None, 0.0)
+        return min(snapshot, key=lambda x: abs(x[1] - target_ts))
 
     def get_arm_hand_states_nearest_func(self, ref_timestamp):
         """以 ref_timestamp 为基准，对齐左右臂/手的状态

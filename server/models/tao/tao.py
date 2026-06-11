@@ -40,46 +40,58 @@ class ModelVLA:
         # 关键: decode_action() 在 processing_tao_flow_matching_model.py 中
         # 会通过 EMBODIMENTS.get(embodiment_tag)() 创建新实例，因此必须
         # 同时修复 registry，否则新实例仍使用旧的 41D 索引。
+        #
+        # 重要: 只修正索引值，保留原有的 sub_component 名字不变
+        # (如 left_eef/right_eef)，因为 transformations 和归一化参数
+        # 都按原名索引，改名会导致 KeyError 或 IndexError。
         # ============================================================
         if embodiment_tag == 'unitree_g1':
             from tao.registry import EMBODIMENTS
 
-            # Fix 1: 修复已存在的 self.policy.embodiment 实例 (供 _to_vla_step_data 使用)
+            # 判断是否需要修正: 仅当检测到 41-DOF 索引 (left_arm.start == 15) 时
+            _needs_fix = False
+            state_subs = {}
             if hasattr(self.policy, 'embodiment') and hasattr(self.policy.embodiment, 'indices'):
                 indices = self.policy.embodiment.indices
                 state_subs = indices.get('state', {}).get('sub_components', {})
                 if state_subs.get('left_arm', {}).get('start') == 15:
-                    state_subs['left_arm'] = {"start": 0, "end": 7}
-                    state_subs['right_arm'] = {"start": 7, "end": 14}
-                    state_subs['left_hand'] = {"start": 14, "end": 20}
-                    state_subs['right_hand'] = {"start": 20, "end": 26}
-                action_subs = indices.get('action', {}).get('sub_components', {})
-                if action_subs.get('left_arm', {}).get('start') == 15:
-                    action_subs['left_arm'] = {"start": 0, "end": 7}
-                    action_subs['right_arm'] = {"start": 7, "end": 14}
-                    action_subs['left_hand'] = {"start": 14, "end": 20}
-                    action_subs['right_hand'] = {"start": 20, "end": 26}
+                    _needs_fix = True
 
-            # Fix 2: 修复 registry，使 decode_action 中创建的新实例也使用修正后的索引
-            if 'unitree_g1' in EMBODIMENTS._mapping:
-                original_cls = EMBODIMENTS._mapping['unitree_g1']
-                def _make_fixed_unitree_g1(original_cls_=original_cls):
-                    inst = original_cls_()
-                    # 新实例的 indices 是 fresh dict，直接替换子组件映射
-                    inst.indices['state']['sub_components'] = {
-                        'left_arm': {'start': 0, 'end': 7},
-                        'right_arm': {'start': 7, 'end': 14},
-                        'left_hand': {'start': 14, 'end': 20},
-                        'right_hand': {'start': 20, 'end': 26},
-                    }
-                    inst.indices['action']['sub_components'] = {
-                        'left_arm': {'start': 0, 'end': 7},
-                        'right_arm': {'start': 7, 'end': 14},
-                        'left_hand': {'start': 14, 'end': 20},
-                        'right_hand': {'start': 20, 'end': 26},
-                    }
-                    return inst
-                EMBODIMENTS._mapping['unitree_g1'] = _make_fixed_unitree_g1
+            if _needs_fix:
+                # 从现有 sub_components 读取名字和维度，只改索引值
+                # 默认 0-based 布局: arm(7) + arm(7) + eef/hand(6) + eef/hand(6) = 26
+                sub_keys = list(state_subs.keys())  # 保留原始名字
+                offsets = [0, 7, 14, 20, 26]  # 0-based 连续索引边界
+                new_state_subs = {}
+                new_action_subs = {}
+                for i, key in enumerate(sub_keys):
+                    new_state_subs[key] = {"start": offsets[i], "end": offsets[i+1]}
+                    new_action_subs[key] = {"start": offsets[i], "end": offsets[i+1]}
+
+                print(f'[TAO] Fixing unitree_g1 41-DOF indices to 0-based. '
+                      f'sub_components: {sub_keys}', flush=True)
+
+                # Fix 1: 修复已存在的 self.policy.embodiment 实例
+                if hasattr(self.policy, 'embodiment') and hasattr(self.policy.embodiment, 'indices'):
+                    self.policy.embodiment.indices['state']['sub_components'] = new_state_subs
+                    self.policy.embodiment.indices['action']['sub_components'] = new_action_subs
+
+                # Fix 2: 修复 registry，使 decode_action 中创建的新实例也使用修正后的索引
+                if 'unitree_g1' in EMBODIMENTS._mapping:
+                    original_cls = EMBODIMENTS._mapping['unitree_g1']
+                    _fixed_state = dict(new_state_subs)
+                    _fixed_action = dict(new_action_subs)
+                    def _make_fixed_unitree_g1(original_cls_=original_cls,
+                                               _fs=_fixed_state, _fa=_fixed_action):
+                        inst = original_cls_()
+                        inst.indices['state']['sub_components'] = dict(_fs)
+                        inst.indices['action']['sub_components'] = dict(_fa)
+                        return inst
+                    EMBODIMENTS._mapping['unitree_g1'] = _make_fixed_unitree_g1
+            else:
+                print(f'[TAO] unitree_g1 indices already 0-based, skipping fix. '
+                      f'sub_components: {list(state_subs.keys()) if state_subs else "N/A"}',
+                      flush=True)
         
     def infer(self, sequence, verbose:bool=False):
         """Perform inference on input sequence data

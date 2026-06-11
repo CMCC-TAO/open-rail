@@ -190,6 +190,9 @@ class VLAClientAsync():
             # Send data for inference and wait for results
             self.vla_zmq.sendMessage(data)
             result = self.vla_zmq.recvMessage()
+            if result is None:
+                self.logger.warning("recvMessage returned None, skipping this inference step")
+                return
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
@@ -242,6 +245,9 @@ class VLAClientAsync():
             # Send data for inference and wait for results
             self.vla_zmq.sendMessage(data)
             result = self.vla_zmq.recvMessage()
+            if result is None:
+                self.logger.warning("recvMessage returned None, skipping this inference step")
+                return
             action_data = result['data']
             
             # Get current data timestamp and update timestamps

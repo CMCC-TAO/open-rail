@@ -93,7 +93,12 @@ class UnitreeG1Camera(Node):
     def _find_closest(self, queue, target_ts):
         if not queue:
             return (None, None)
-        return min(queue, key=lambda x: abs(x[1] - target_ts))
+        # 快照：避免 deque 在迭代时被 ROS2 回调线程 append 导致
+        # "deque mutated during iteration" 异常
+        snapshot = list(queue)
+        if not snapshot:
+            return (None, None)
+        return min(snapshot, key=lambda x: abs(x[1] - target_ts))
 
 
 def main():
