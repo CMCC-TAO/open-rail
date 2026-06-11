@@ -262,22 +262,23 @@ vision:
   preprocess_size:
   - 640
   - 640
-visual:
+visualize:
   camera:
     open_head: true
     open_wrist_left: true
-    open_wrist_right: true
+    open_wrist_right: false
     update_interval_ms: 33
   trajectory:
     play: true
     selected_joints:
+    - 7
     - 8
     source:
-    - ActionRaw
-    - ActionFitted
     - State
+    - ActionFitted
+    - ActionRaw
     update_interval_ms: 50
-    window_span_sec: 8.0
+    window_span_sec: 10.0
 vla_zmq:
   client_addr: tcp://localhost:5566
   server_addr: tcp://*:5566

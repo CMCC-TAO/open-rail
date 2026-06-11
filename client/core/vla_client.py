@@ -91,7 +91,11 @@ class VLAClientAsync():
 
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualization_server = VisualizeServer()
-        camera_cfg = getattr(getattr(self.config, 'visual', None), 'camera', None)
+        # Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
+        visual_root = getattr(self.config, 'visualize', None)
+        if visual_root is None:
+            visual_root = getattr(self.config, 'visual', None)
+        camera_cfg = getattr(visual_root, 'camera', None)
         if camera_cfg is not None:
             self.visualization_server.update_camera_open_config(camera_cfg)
         self.vis_global_step = 0

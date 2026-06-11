@@ -38,7 +38,6 @@ try:
 except ImportError:
     _HAS_YAML = False
 
-from client.core import task_language_manager, vla_client
 import uvicorn
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -70,13 +69,13 @@ async def _lifespan(_: FastAPI):
     # ── startup ──
     setup_logging("client.log")
     client_state.config = get_client_config()
-    # print(f"Initial client config: {client_state.config}")
+    # print(f"Initial client config: {client_state.config.visualize}")
     if DEFAULT_YAML.exists():
         try:
             _apply_yaml_config(client_state.config, DEFAULT_YAML)
         except Exception as e:
             logger.warning(f"Failed to apply yaml conf: {e}")
-    # print(f"Final client config: {client_state.config}")
+    # print(f"Final client config: {client_state.config.visualize}")
 
     # Use a dedicated thread pool for the asyncio event loop so that
     # asyncio.to_thread() tasks are never queued behind business threads
@@ -856,7 +855,7 @@ class VisualCameraConfigRequest(BaseModel):
     open_wrist_right: Optional[bool] = None
 
 
-@app.post("/api/visual/camera_cfg")
+@app.post("/api/visualize/camera_cfg")
 async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
     """Update runtime camera open config for visual websocket server (effective immediately)."""
     payload = req.dict(exclude_none=True)
@@ -898,7 +897,7 @@ async def patch_config(req: ConfigPatchRequest):
         _apply_flat_patch_new(client_state.config, flat)
         running = bool(client_state.running and client_state.vla_client is not None)
         vla_client = client_state.vla_client
-        cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
+        cam_cfg = getattr(getattr(client_state.config, "visualize", None), "camera", None)
         cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     finally:
         client_state.lock.release()
@@ -906,7 +905,7 @@ async def patch_config(req: ConfigPatchRequest):
     # Runtime side-effects for keys that need explicit push
     if running:
         try:
-            if any(k.startswith("visual.camera.") for k in flat.keys()):
+            if any(k.startswith("visualize.camera.") for k in flat.keys()):
                 ws_server = getattr(vla_client, "visualization_server", None)
                 if ws_server is not None and cam_cfg is not None:
                     await asyncio.to_thread(ws_server.update_camera_open_config, cam_cfg)
@@ -945,7 +944,11 @@ async def load_config_file(req: ConfigFileRequest):
     # Runtime side-effects for configs requiring explicit push
     if client_state.running and client_state.vla_client is not None:
         try:
-            cam_cfg = getattr(getattr(client_state.config, "visual", None), "camera", None)
+            # Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
+            visual_root = getattr(client_state.config, "visualize", None)
+            if visual_root is None:
+                visual_root = getattr(client_state.config, "visual", None)
+            cam_cfg = getattr(visual_root, "camera", None)
             ws_server = getattr(client_state.vla_client, "visualization_server", None)
             if ws_server is not None and cam_cfg is not None:
                 await asyncio.to_thread(ws_server.update_camera_open_config, cam_cfg)
