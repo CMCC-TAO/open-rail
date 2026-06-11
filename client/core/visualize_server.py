@@ -295,9 +295,9 @@ class VisualizeServer:
             self.client_handler,
             self.config.server.host,
             self.config.server.port,
-            max_size=10 * 1024 * 1024,
-            ping_interval=20,
-            ping_timeout=10
+            max_size=self.config.server.max_size,
+            ping_interval=self.config.server.ping_interval,
+            ping_timeout=self.config.server.ping_timeout
         ) as server:
             self.server = server
             self.logger.info("Server started: ws://%s:%d", self.config.server.host, self.config.server.port)
