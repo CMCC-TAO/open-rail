@@ -21,7 +21,7 @@ class VisualizeServer:
         # Use a stable logger name so logging_conf.py mapping always matches,
         # including script/uvicorn execution paths.
         self.logger = logging.getLogger(__name__)
-        self.logger.info("Initializing VisualizeServer on %s:%d", host, port)
+        self.logger.info("Initializing server on %s:%d", host, port)
         self.kill_port(port)
         self.host = host
         self.port = port
@@ -303,7 +303,7 @@ class VisualizeServer:
             ping_timeout=10
         ) as server:
             self.server = server
-            self.logger.info("Visualize Server started: ws://%s:%d", self.host, self.port)
+            self.logger.info("Server started: ws://%s:%d", self.host, self.port)
             
             data_sender_task = asyncio.create_task(self.data_sender())
             try:
@@ -323,7 +323,7 @@ class VisualizeServer:
             # 触发事件通知异步循环退出
             if hasattr(self, '_shutdown_event') and self._shutdown_event.is_set() is False:
                 self._shutdown_event.set()
-            self.logger.info("Visualize Server stop signal sent.")
+            self.logger.info("Server stop signal sent.")
     # def stop_server(self):
     #     """Stop the WebSocket server."""
     #     self.running = False
@@ -360,7 +360,7 @@ class VisualizeServer:
         try:
             asyncio.run(self._server_running_fun())
         except Exception as e:
-            self.logger.error("Visualize server error: %s", e)
+            self.logger.error("Server error: %s", e)
 
     def start_server(self):
         """Start the server in a background daemon thread (idempotent)."""

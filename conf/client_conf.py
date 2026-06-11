@@ -131,6 +131,10 @@ def get_visualize_config() -> ConfigDict:
     """Generate configuration for web visual panels."""
     config = ConfigDict()
 
+    config.server = ConfigDict()
+    config.server.host = '0.0.0.0'
+    config.server.port = 8765
+
     config.camera = ConfigDict()
     config.camera.open_head = True
     config.camera.open_wrist_left = True
