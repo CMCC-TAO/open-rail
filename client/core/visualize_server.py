@@ -32,7 +32,6 @@ class VisualizeServer:
         self.latest_imgs: Optional[Dict] = None
         self.latest_imgs_seq = 0
         self.sent_imgs_seq = -1
-        self.latest_chart_data: List[Dict] = []
         self.camera_open = {0: True, 1: True, 2: True}  # 0=head, 1=left wrist, 2=right wrist
         self.data_lock = threading.Lock()
         self.camera_send_interval = 1.0 / 30.0
@@ -184,7 +183,8 @@ class VisualizeServer:
                 for client in self.clients.copy():
                     try:
                         await client.send(message)
-                    except websockets.exceptions.ConnectionClosed:
+                    except websockets.exceptions.ConnectionClosed as e:
+                        self.logger.warning("Failed to send camera frame to client: %s", e)
                         disconnected_clients.add(client)
                     except Exception as e:
                         self.logger.warning("Failed to send camera frame to client: %s", e)
@@ -289,7 +289,7 @@ class VisualizeServer:
             except Exception as e:
                 self.logger.error("Data sender loop error: %s", e)
                 await asyncio.sleep(1)
-    async def _server_running(self):
+    async def _server_running_fun(self):
         """Start the WebSocket server and the data-sending loop."""
         self.running = True
         self._shutdown_event = asyncio.Event()
@@ -358,7 +358,7 @@ class VisualizeServer:
     def _main_thread_fun(self):
         """Run the Visualize Server in a dedicated asyncio event loop (background thread)."""
         try:
-            asyncio.run(self._server_running())
+            asyncio.run(self._server_running_fun())
         except Exception as e:
             self.logger.error("Visualize server error: %s", e)
 
