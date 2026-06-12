@@ -961,7 +961,7 @@ class LeRobotDatasetWriter:
 
     def _prepare_video_frame(self, frame: Any, resize: bool=False, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
         """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
-        print(f"frame ndim={frame.ndim}, dtype={frame.dtype}, shape={frame.shape}, expected_shape={expected_shape}")
+        # print(f"frame ndim={frame.ndim}, dtype={frame.dtype}, shape={frame.shape}, expected_shape={expected_shape}")
         if not isinstance(frame, np.ndarray):
             self.logger.warning(f"Frame is not np.ndarray, skip process and return None.")
             return None
