@@ -907,42 +907,23 @@ class LeRobotDatasetWriter:
 
     def _prepare_video_frame(self, frame: Any, expected_shape: tuple[int, int, int]) -> Optional[np.ndarray]:
         """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
-        if isinstance(frame, Image.Image):
-            frame = np.array(frame)
+        print(f"frame ndim={frame.ndim}, dtype={frame.dtype}, shape={frame.shape}, expected_shape={expected_shape}")
         if not isinstance(frame, np.ndarray):
+            self.logger.warning(f"Frame is not np.ndarray, skip process and return None.")
             return None
-
-        if frame.ndim == 2:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-        elif frame.ndim == 3 and frame.shape[0] in (1, 3, 4) and frame.shape[-1] not in (1, 3, 4):
-            frame = np.transpose(frame, (1, 2, 0))
 
         if frame.ndim != 3:
+            self.logger.warning(f"Frame ndim is not equal 3, skip process and return None.")
             return None
 
-        if frame.shape[2] == 1:
-            frame = np.repeat(frame, 3, axis=2)
-        elif frame.shape[2] >= 4:
-            frame = frame[:, :, :3]
-
         # Convert RGB frames to BGR for OpenCV VideoWriter compatibility
-        if frame.shape[2] == 3:
-            frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        # if frame.shape[2] == 3:
+        #     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
         exp_h, exp_w = expected_shape[0], expected_shape[1]
         if frame.shape[0] != exp_h or frame.shape[1] != exp_w:
             frame = cv2.resize(frame, (exp_w, exp_h), interpolation=cv2.INTER_LINEAR)
-
-        if frame.dtype != np.uint8:
-            if np.issubdtype(frame.dtype, np.floating):
-                max_val = float(np.nanmax(frame)) if frame.size else 0.0
-                if max_val <= 1.0:
-                    frame = np.clip(frame * 255.0, 0, 255).astype(np.uint8)
-                else:
-                    frame = np.clip(frame, 0, 255).astype(np.uint8)
-            else:
-                frame = np.clip(frame, 0, 255).astype(np.uint8)
-
+        
         return np.ascontiguousarray(frame)
 
     def _create_video_writer(self, episode_chunk: int = 0, episode_index: int = 0) -> Dict[str, Any]:

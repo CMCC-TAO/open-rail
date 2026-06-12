@@ -85,7 +85,7 @@ class VLAServer:
                     with ThreadPoolExecutor() as executor:
                         decoded_images = list(executor.map(lambda d: cv2.imdecode(d[1], cv2.IMREAD_ANYDEPTH if 'depth.' in d[0] else cv2.IMREAD_COLOR), images_data))
                     for key, img in zip(cam_keys, decoded_images):
-                        data_item['obs'][key] = img
+                        data_item['obs'][key] = img[:, :, ::-1] # BGR to RGB
             else:
                 # Use thread pool for parallel image decoding
                 cam_keys = [key for key in data['obs'] if 'cam.' in key]

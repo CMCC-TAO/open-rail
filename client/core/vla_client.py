@@ -507,15 +507,20 @@ class VLAClientAsync():
         Returns:
             tuple: A tuple containing:
                 - key (str): Original image key
-                - img_processed (np.ndarray): Preprocessed image data
                 - img_encoded (np.ndarray): Encoded image data for transmission
         """
         ext = '.png' if 'depth.' in key else '.jpg'
+        # print(f"Debug: raw image shape: {value.shape}")
+        # print(f"Debug: preprocess_fun={self._preprocess_func}")
         img_processed = self._preprocess_func(value) if self._preprocess_func else value
+        # print(f"Debug: processed image shape: {value.shape}")
         # encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
         # img_encoded = cv2.imencode(ext, img_processed, encode_params)[1]
-        img_encoded = cv2.imencode(ext, img_processed)[1]
-        return key, img_processed, img_encoded
+        # image is encoded in BGR space, default for OpenCV
+        encode_result, img_encoded = cv2.imencode(ext, img_processed)
+        if not encode_result:
+            self.logger.warning(f"Image encoding failed for {key}.")
+        return key, img_encoded
 
     def _process_image(self, frame):
         """Process multiple images in threads.
@@ -530,13 +535,12 @@ class VLAClientAsync():
         # Use shared thread pool to parallel process all cameras (avoid per-frame pool creation)
         futures = [self._img_executor.submit(self._process_image_thread_fun, key, value) for key, value in cam_items]
         results = [future.result() for future in futures]  # Wait for all tasks to complete
-        encoded_imgs, processed_imgs = {}, {}
-        for key, processed, encoded in results:
-            encoded_imgs[key] = encoded
-            processed_imgs[key] = processed
+        encoded_imgs = {}
+        for key, encoded_img in results:
+            encoded_imgs[key] = encoded_img
 
         # Send images to visualization interface
-        self.visualize_server.update_image_data(processed_imgs)
+        self.visualize_server.update_image_data(encoded_imgs)
 
         return encoded_imgs
 

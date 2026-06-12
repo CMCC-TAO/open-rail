@@ -152,15 +152,7 @@ class VisualizeServer:
                 if not camera_open.get(camera_id, True):
                     continue
 
-                if isinstance(img, np.ndarray):
-                    loop = asyncio.get_running_loop()
-                    frame_bytes = await loop.run_in_executor(
-                        self._img_executor, self._encode_frame, img, camera_key
-                    )
-                    if frame_bytes is None:
-                        continue
-                else:
-                    frame_bytes = img
+                frame_bytes = img.tobytes()
 
                 sent_camera_ids.add(camera_id)
 
@@ -329,26 +321,6 @@ class VisualizeServer:
         if getattr(self, '_img_executor', None) is None or getattr(self._img_executor, '_shutdown', False):
             self._img_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vis_img_enc")
 
-    def _encode_frame(self, img, camera_key):
-        try:
-            if 'depth.' in camera_key:
-                img_depth_norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-                img_for_encode = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
-            else:
-                img_uint8 = img if img.dtype == np.uint8 else np.clip(img, 0, 255).astype(np.uint8)
-                img_for_encode = (
-                    img_uint8[:, :, ::-1]
-                    if img_uint8.ndim == 3 and img_uint8.shape[2] == 3
-                    else img_uint8
-                )
-            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
-            ok, enc = cv2.imencode('.jpg', img_for_encode, encode_params)
-            if not ok:
-                return None
-            return enc.tobytes()
-        except Exception as e:
-            self.logger.error("Image encoding failed for key '%s': %s", camera_key, e)
-            return None
     def _main_thread_fun(self):
         """Run the Visualize Server in a dedicated asyncio event loop (background thread)."""
         try:
