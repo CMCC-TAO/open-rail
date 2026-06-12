@@ -175,12 +175,12 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      test: 0:8
+      valid: 0:100
     total_chunks: 1
-    total_episodes: 9
-    total_frames: 2057
+    total_episodes: 0
+    total_frames: 0
     total_tasks: 0
-    total_videos: 27
+    total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false
@@ -278,7 +278,20 @@ visualize:
   trajectory:
     play: true
     selected_joints:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
     - 7
+    - 8
+    - 9
+    - 10
+    - 11
+    - 12
+    - 13
     source:
     - ActionRaw
     - ActionFitted

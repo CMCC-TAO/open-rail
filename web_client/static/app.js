@@ -53,6 +53,8 @@ const TRAJ_WINDOW_SPAN_SEC = 10.0;
 const TRAJ_WINDOW_SPAN_SEC_MAX = 15.0;
 // Hard cap for safety under very high-frequency streams.
 const TRAJ_BUFFER_HARD_MAX_POINTS = 20000;
+// Maximum points to render per joint series to avoid chart rendering stalls.
+const TRAJ_RENDER_POINT_MAX = 700;
 // Default trajectory chart update interval in ms (20 FPS)
 const DEFAULT_TRAJ_UPDATE_MS = 50;
 
@@ -3103,9 +3105,39 @@ function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampS
 function getJointSeriesData(bufferKey, jointIdx) {
   const buf = App.traj.buffer[bufferKey];
   if (!buf || buf.length === 0) return [];
-  // Do not filter by x-window here; Chart.js x.min/x.max handles clipping.
-  // This avoids per-refresh full-buffer filtering overhead and improves smoothness.
-  return buf.map(p => ({ x: p.x, y: p.joints_y[jointIdx] }));
+
+  const xLeft = App.traj.xLeft;
+  const xRight = App.traj.xRight;
+  let start = 0;
+  let end = buf.length;
+
+  if (Number.isFinite(xLeft) && Number.isFinite(xRight) && xRight > xLeft) {
+    while (start < buf.length && buf[start].x < xLeft) start++;
+    while (end > start && buf[end - 1].x > xRight) end--;
+  }
+
+  const len = end - start;
+  if (len <= TRAJ_RENDER_POINT_MAX) {
+    const out = new Array(len);
+    for (let i = 0; i < len; i += 1) {
+      const p = buf[start + i];
+      out[i] = { x: p.x, y: p.joints_y[jointIdx] };
+    }
+    return out;
+  }
+
+  const step = Math.ceil(len / TRAJ_RENDER_POINT_MAX);
+  const out = [];
+  for (let i = 0; i < len; i += step) {
+    const p = buf[start + i];
+    out.push({ x: p.x, y: p.joints_y[jointIdx] });
+  }
+  const last = buf[end - 1];
+  const lastX = out.length ? out[out.length - 1].x : null;
+  if (last && lastX !== last.x) {
+    out.push({ x: last.x, y: last.joints_y[jointIdx] });
+  }
+  return out;
 }
 
 /* ── Rebuild all datasets in the unified chart ── */
@@ -3115,9 +3147,15 @@ function refreshUnifiedChart() {
 
   const src = t.source;   // Set<'state'|'action_fitted'|'action_raw'>
   const datasets = [];
-  let allY = [];
+  let yMin = Number.POSITIVE_INFINITY;
+  let yMax = Number.NEGATIVE_INFINITY;
 
   const sorted = [...t.selectedJoints].sort((a, b) => a - b);
+  if (sorted.length === 0 || src.size === 0) {
+    t.chart.data.datasets = [];
+    t.chart.update('none');
+    return;
+  }
   const enabledSources = ['state', 'action_fitted', 'action_raw'].filter(k => src.has(k));
   const showSuffix = enabledSources.length > 1;
 
@@ -3139,7 +3177,13 @@ function refreshUnifiedChart() {
         pointRadius: 0, pointHoverRadius: 3,
         tension: 0.1, fill: false,
       });
-      allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
 
     if (src.has('action_fitted')) {
@@ -3154,7 +3198,13 @@ function refreshUnifiedChart() {
         pointRadius: 0, pointHoverRadius: 3,
         tension: 0.1, fill: false,
       });
-      allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
 
     if (src.has('action_raw')) {
@@ -3169,17 +3219,21 @@ function refreshUnifiedChart() {
         pointRadius: 0, pointHoverRadius: 3,
         tension: 0.1, fill: false,
       });
-      allY = allY.concat(data.map(p => p.y).filter(Number.isFinite));
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
   }
 
   t.chart.data.datasets = datasets;
 
   // Dynamic Y range with 10% padding
-  if (allY.length > 0) {
-    const yMin = Math.min(...allY);
-    const yMax = Math.max(...allY);
-    const pad  = (yMax - yMin) * 0.1 || 0.1;
+  if (yMin !== Number.POSITIVE_INFINITY && yMax !== Number.NEGATIVE_INFINITY) {
+    const pad = (yMax - yMin) * 0.1 || 0.1;
     t.chart.options.scales.y.min = yMin - pad;
     t.chart.options.scales.y.max = yMax + pad;
   } else {
