@@ -438,6 +438,60 @@ class LeRobotDatasetWriter:
 
         self.action_shape = features_config["action"]['shape'][0]
         self.state_shape = features_config["observation.state"]['shape'][0]
+        # {'action': (22,), 'cam.hand_left': (480, 848, 3), 'cam.hand_right': (480, 848, 3), 'cam.head': (720, 1280, 3), 'episode_index': (1,), 'frame_index': (1,), 'index': (1,), 'observation.state': (20,), 'task_index': (1,), 'timestamp': (1,)}
+        # print(f"Debug: camera_shape_dict={self.camera_shape_dict}")
+
+    def update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
+        """Update camera shape settings for current recording session and metadata.
+
+        Args:
+            shape_dict: Mapping from camera name (e.g. ``cam.head``) to HWC shape.
+        """
+        if not isinstance(shape_dict, dict) or not shape_dict:
+            self.logger.warning("update_camera_shape_dict called with empty shape_dict, skip update.")
+            return
+
+        updated = {}
+        for camera_name, shape_value in shape_dict.items():
+            if not str(camera_name).startswith("cam."):
+                continue
+
+            if shape_value is None or len(shape_value) < 2:
+                self.logger.warning(f"Invalid shape for {camera_name}: {shape_value}, skip update.")
+                continue
+
+            height = int(shape_value[0])
+            width = int(shape_value[1])
+            channel = int(shape_value[2]) if len(shape_value) >= 3 else 3
+            if height <= 0 or width <= 0 or channel <= 0:
+                self.logger.warning(f"Invalid shape value for {camera_name}: {shape_value}, skip update.")
+                continue
+
+            normalized_shape = (height, width, channel)
+            self.camera_shape_dict[camera_name] = normalized_shape
+            if camera_name not in self.camera_name_list:
+                self.camera_name_list.append(camera_name)
+
+            camera_feature = self.config["info"]["features"].get(camera_name, ConfigDict(allow_dotted_keys=True))
+            camera_feature["shape"] = [height, width, channel]
+
+            feature_info = camera_feature.get("info", ConfigDict(allow_dotted_keys=True))
+            feature_info["video.height"] = height
+            feature_info["video.width"] = width
+            feature_info["video.channels"] = channel
+            camera_feature["info"] = feature_info
+
+            video_info = camera_feature.get("video_info", ConfigDict(allow_dotted_keys=True))
+            video_info["video.fps"] = float(self.config["info"].get("fps", 30))
+            camera_feature["video_info"] = video_info
+
+            self.config["info"]["features"][camera_name] = camera_feature
+            updated[camera_name] = normalized_shape
+
+        if updated:
+            self.logger.info(f"Updated camera_shape_dict with runtime observation shapes: {updated}")
+        else:
+            self.logger.warning("No valid camera shape found in shape_dict, keep original config.")
     def _get_recording_session_id(self) -> int:
         with self._session_lock:
             return self._recording_session_id
@@ -654,7 +708,7 @@ class LeRobotDatasetWriter:
                     expected_shape = self.camera_shape_dict[camera_name]
                     raw_frame = step_state.get(camera_name)
                     # self.logger.info(f"step_state: {step_state.keys()}")
-                    frame = self._prepare_video_frame(raw_frame, expected_shape)
+                    frame = self._prepare_video_frame(raw_frame, self.config.resize, expected_shape)
                     # self.logger.info(f"expected_shape: {expected_shape}")
                     if frame is None:
                         self.logger.warning(f"{camera_name} frame invalid, skip this frame")
@@ -666,7 +720,7 @@ class LeRobotDatasetWriter:
                         continue
 
                     writer.write(frame)
-                    self.logger.info(f"{camera_name} writes a frame with expected_shape {expected_shape}.")
+                    self.logger.info(f"{camera_name} writes a frame with expected_shape {frame.shape}.")
                 # Construct record dictionary for Parquet file
                 parquet_frame = {
                     'observation.state': step_state['obs.state'].tolist(),
@@ -905,7 +959,7 @@ class LeRobotDatasetWriter:
 
         self.logger.info("All queues cleared.")
 
-    def _prepare_video_frame(self, frame: Any, expected_shape: tuple[int, int, int]) -> Optional[np.ndarray]:
+    def _prepare_video_frame(self, frame: Any, resize: bool=False, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
         """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
         print(f"frame ndim={frame.ndim}, dtype={frame.dtype}, shape={frame.shape}, expected_shape={expected_shape}")
         if not isinstance(frame, np.ndarray):
@@ -921,7 +975,7 @@ class LeRobotDatasetWriter:
         #     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
         exp_h, exp_w = expected_shape[0], expected_shape[1]
-        if frame.shape[0] != exp_h or frame.shape[1] != exp_w:
+        if resize and (frame.shape[0] != exp_h or frame.shape[1] != exp_w):
             frame = cv2.resize(frame, (exp_w, exp_h), interpolation=cv2.INTER_LINEAR)
         
         return np.ascontiguousarray(frame)

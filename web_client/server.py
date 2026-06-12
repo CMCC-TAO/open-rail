@@ -1743,6 +1743,14 @@ async def client_command(req: CommandRequest):
                     raise HTTPException(500, f"Failed to initialize recorder: {e}")
             else:
                 vla_client.dataset_write.set_task(task_id)
+
+            updated_camera_shapes = {}
+            if not bool(getattr(client_state.config.record, "resize", False)):
+                try:
+                    updated_camera_shapes = vla_client.update_camera_shape()
+                except Exception as e:
+                    logger.warning(f"Failed to update camera shapes before start_recording: {e}")
+
             vla_client.dataset_write.start_recording()
             current_recording_task = str(getattr(vla_client.dataset_write, "current_task", "") or "")
             current_recording_dir = ""
@@ -1757,6 +1765,7 @@ async def client_command(req: CommandRequest):
                 "command": cmd,
                 "recording_task": current_recording_task,
                 "recording_task_dir": current_recording_dir,
+                "updated_camera_shapes": updated_camera_shapes,
             }
 
         elif cmd == "stop_recording":
