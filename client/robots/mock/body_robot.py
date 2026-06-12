@@ -165,10 +165,11 @@ class RobotBody(RobotBase):
                         all_ok = False
                         break
 
-                    # 避免在 mock 侧使用 cv2.cvtColor，减少与其他模块的 OpenCV/FFmpeg 竞争
-                    frame_rgb = frame_bgr[:, :, ::-1].copy()
                     cam_key = f'cam.{key if key != "depth_head" else "depth.head"}'
-                    result[cam_key] = frame_rgb
+                    # 避免在 mock 侧使用 cv2.cvtColor，减少与其他模块的 OpenCV/FFmpeg 竞争
+                    # frame_rgb = frame_bgr[:, :, ::-1].copy()
+                    result[cam_key] = frame_bgr
+                    # print(f"Image shape: {frame_bgr.shape}")
 
                 if all_ok:
                     break

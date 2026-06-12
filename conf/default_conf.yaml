@@ -175,14 +175,15 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      test: 0:4
     total_chunks: 1
-    total_episodes: 0
-    total_frames: 0
+    total_episodes: 5
+    total_frames: 1471
     total_tasks: 0
-    total_videos: 0
+    total_videos: 15
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
+  resize: false
   save_dir: data/recording
   switch: false
 robots:
@@ -258,7 +259,7 @@ vis_zmq:
   server_addr: tcp://*:7788
 vision:
   history_frame: false
-  preprocess: pad_and_resize
+  preprocess: none
   preprocess_size:
   - 640
   - 640
@@ -278,13 +279,12 @@ visualize:
     play: true
     selected_joints:
     - 7
-    - 8
     source:
-    - State
-    - ActionFitted
     - ActionRaw
+    - ActionFitted
+    - State
     update_interval_ms: 50
-    window_span_sec: 10.0
+    window_span_sec: 8.0
 vla_zmq:
   client_addr: tcp://localhost:5566
   server_addr: tcp://*:5566
