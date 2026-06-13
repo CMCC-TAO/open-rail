@@ -81,7 +81,7 @@ record:
         width: 640
     cam.head:
       encode:
-        codec: mpeg4
+        codec: mp4v
         has_audio: false
         is_depth_map: false
       shape:
@@ -98,7 +98,7 @@ record:
     state_shape: 20
     total_chunks: 1
     total_episodes: 0
-    total_frames: 0
+    total_frames: 1
     total_tasks: 0
     total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
