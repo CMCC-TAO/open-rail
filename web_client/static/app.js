@@ -824,12 +824,19 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visualize.trajectory.selected_joints',
   'visualize.trajectory.source',
   'visualize.trajectory.window_span_sec',
+  'record.switch',
+  'record.save_dir',
+  'record.info.data_path',
+  'record.info.total_chunks',
+  'record.info.total_episodes',
+  'record.info.total_frames',
+  'record.info.total_tasks',
+  'record.info.total_videos',
+  'record.info.video_path',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
 const CONFIG_READONLY_DOT_KEYS = new Set([
-  'record.save_dir',
-  'record.switch',
 ]);
 
 function getCfgMultiSelectOptions(dotKey) {
