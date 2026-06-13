@@ -255,14 +255,14 @@ class LeRobotDatasetWriter:
         self._init_shared_data()
         self.task_language_dict = {}
 
-        save_dir = self.config.get("save_dir", "data/recording")
-        meta_required_file_exists = self._check_meta_path_and_dir(save_dir=save_dir, task=task)
-        if meta_required_file_exists:
-            self._update_config_from_meta_file()
-        else:
-            self.config['info']["total_episodes"] = 0
-            self.config['info']["total_frames"] = 0
-            self.config['info']["total_videos"] = 0
+        # save_dir = self.config.get("save_dir", "data/recording")
+        # meta_required_file_exists = self._check_meta_path_and_dir(save_dir=save_dir, task=task)
+        # if meta_required_file_exists:
+        #     self._update_config_from_meta_file()
+        # else:
+        #     self.config['info']["total_episodes"] = 0
+        #     self.config['info']["total_frames"] = 0
+        #     self.config['info']["total_videos"] = 0
         self._parse_config_info_features(self.config["info"]["features"])
 
         # Shared Queue
@@ -346,9 +346,9 @@ class LeRobotDatasetWriter:
         date_str = datetime.now().strftime("%Y%m%d")
         task_name = self._sanitize_task_name(task)
         candidate_dir = task_name + '_' + date_str
-        if self.current_task == task_name and os.path.exists(os.path.join(self.project_root_path, self.save_dir, candidate_dir)):
-            self.logger.info(f"set_task with the same task name {task_name} and existing directory, reuse it.")
-            return
+        # if self.current_task == task_name and os.path.exists(os.path.join(self.project_root_path, self.save_dir, candidate_dir)):
+        #     self.logger.info(f"set_task with the same task name {task_name} and existing directory, reuse it.")
+        #     return
         save_dir = self.config.get("save_dir", "data/recording")
         meta_required_file_exists = self._check_meta_path_and_dir(save_dir=save_dir, task=task)
         if meta_required_file_exists:
@@ -357,6 +357,7 @@ class LeRobotDatasetWriter:
             self.config['info']["total_episodes"] = 0
             self.config['info']["total_frames"] = 0
             self.config['info']["total_videos"] = 0
+        # self._parse_config_info_features(self.config["info"]["features"])
     
     def _check_required_meta_files(self, required_files: List[str] = ['info.json', 'episodes.jsonl', 'tasks.jsonl']) -> bool:
         # Check for required files
