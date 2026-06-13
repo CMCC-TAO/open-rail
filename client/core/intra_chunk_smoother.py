@@ -325,7 +325,7 @@ class IntraChunkSmoother():
         timestamps_fitted = np.arange(start_time, end_time, time_step)
         interp_1d = interp1d(timestamps, task_progress, kind='linear', bounds_error=False, fill_value='extrapolate')
         task_progress_fitted = interp_1d(timestamps_fitted)
-        self.logger.debug(f"Task progress interpolation: original task progress: {task_progress}, fitted task progress: {task_progress_fitted}")
+        # self.logger.debug(f"Task progress interpolation: original task progress: {task_progress}, fitted task progress: {task_progress_fitted}")
         return task_progress_fitted
 
 if __name__ == '__main__':

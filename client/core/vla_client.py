@@ -171,6 +171,7 @@ class VLAClientAsync():
             camera_shape_dict[camera_name] = (int(height), int(width), int(channel))
 
         if camera_shape_dict:
+            # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
             self.dataset_write.update_camera_shape_dict(camera_shape_dict)
             self.logger.info(f"Update camera shape from runtime observation: {camera_shape_dict}")
         else:

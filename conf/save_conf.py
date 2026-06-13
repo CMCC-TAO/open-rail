@@ -32,6 +32,8 @@ def get_record_data_config() -> ConfigDict:
     config.info.total_chunks = 1
     config.info.chunks_size = 1000
     config.info.fps = 30
+    config.info.state_shape = 20
+    config.info.action_shape = 22
 
     # Dataset splits
     config.info.splits = {'valid': '0:100'}
@@ -41,60 +43,60 @@ def get_record_data_config() -> ConfigDict:
     config.info.video_path = "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
 
     # Image feature definitions
-    config.info.features = ConfigDict(allow_dotted_keys=True)
+    # config.info.features = ConfigDict(allow_dotted_keys=True)
 
-    # Image features from cameras
-    config.info.features['cam.head'] = generate_image_feature_config()
-    config.info.features['cam.hand_left'] = generate_image_feature_config(width=848,height=480)
-    config.info.features['cam.hand_right'] = generate_image_feature_config(width=848,height=480)
+    # Image config dict from cameras
+    config.info['cam.head'] = generate_image_feature_config()
+    config.info['cam.hand_left'] = generate_image_feature_config(width=848,height=480)
+    config.info['cam.hand_right'] = generate_image_feature_config(width=848,height=480)
 
     # Other features
-    config.info.features['observation.state'] = ConfigDict({
-        "dtype": "float32",
-        "shape": [20]
-    })
-    config.info.features['action'] = ConfigDict({
-        "dtype": "float32",
-        "shape": [22]
-    })
-    config.info.features['episode_index'] = ConfigDict({
-        "dtype": "int64",
-        "shape": [1],
-        "names": None
-    })
-    config.info.features['frame_index'] = ConfigDict({
-        "dtype": "int64",
-        "shape": [1],
-        "names": None
-    })
-    config.info.features['index'] = ConfigDict({
-        "dtype": "int64",
-        "shape": [1],
-        "names": None
-    })
-    config.info.features['task_index'] = ConfigDict({
-        "dtype": "int64",
-        "shape": [1],
-        "names": None
-    })
-    config.info.features['timestamp'] = ConfigDict({
-        "dtype": "float32",
-        "shape": [1],
-        "names": None
-    })
+    # config.info.features['observation.state'] = ConfigDict({
+    #     "dtype": "float32",
+    #     "shape": [20]
+    # })
+    # config.info.features['action'] = ConfigDict({
+    #     "dtype": "float32",
+    #     "shape": [22]
+    # })
+    # config.info.features['episode_index'] = ConfigDict({
+    #     "dtype": "int64",
+    #     "shape": [1],
+    #     "names": None
+    # })
+    # config.info.features['frame_index'] = ConfigDict({
+    #     "dtype": "int64",
+    #     "shape": [1],
+    #     "names": None
+    # })
+    # config.info.features['index'] = ConfigDict({
+    #     "dtype": "int64",
+    #     "shape": [1],
+    #     "names": None
+    # })
+    # config.info.features['task_index'] = ConfigDict({
+    #     "dtype": "int64",
+    #     "shape": [1],
+    #     "names": None
+    # })
+    # config.info.features['timestamp'] = ConfigDict({
+    #     "dtype": "float32",
+    #     "shape": [1],
+    #     "names": None
+    # })
 
     # print(f"Generated record data config: {config}")
 
     return config
 
-def generate_image_feature_config(width: int = 1280, height: int = 720, fps: float = 30.0) -> ConfigDict:
+def generate_image_feature_config(width: int = 1280, height: int = 720, fps: int = 30) -> ConfigDict:
     """
     Generates a ConfigDict object representing image/video feature specifications.
 
     Args:
         width (int): Width of the video frame. Default is 1280.
         height (int): Height of the video frame. Default is 720.
-        fps (float): Frames per second of the video. Default is 30.0.
+        fps (int): Frames per second of the video. Default is 30.
 
     Returns:
         ConfigDict: A configuration dictionary containing:
@@ -105,30 +107,25 @@ def generate_image_feature_config(width: int = 1280, height: int = 720, fps: flo
             - info: ConfigDict with additional metadata such as resolution and codec
     """
     # Common video metadata definitions
-    video_info_common = {
-        "video.fps": fps,
-        "video.codec": "av1",
-        "video.pix_fmt": "yuv420p",
-        "video.is_depth_map": False,
+    encode = {
+        # "video.fps": fps,
+        "codec": "mp4v", # ('mp4v', 'avc1', 'XVID', 'MJPG')
+        "is_depth_map": False, # Depth image for True and False for RGB image
         "has_audio": False
     }
 
-    info_common = {
-        "video.fps": fps,
-        "video.height": height,
-        "video.width": width,
-        "video.channels": 3,
-        "video.codec": "mpeg4",
-        "video.pix_fmt": "yuv420p",
-        "video.is_depth_map": False,
-        "has_audio": False
+    shape = {
+        # "video.fps": fps,
+        "height": height,
+        "width": width,
+        "channel": 3,
     }
 
     # Construct and return ConfigDict object
     return ConfigDict({
-        "dtype": "video",
-        "shape": [height, width, 3],
-        "names": ["height", "width", "channel"],
-        "video_info": ConfigDict(video_info_common, allow_dotted_keys=True),
-        "info": ConfigDict(info_common, allow_dotted_keys=True)
+        # "dtype": "video",
+        "shape": ConfigDict(shape, allow_dotted_keys=False),
+        # "names": ["height", "width", "channel"],
+        "encode": ConfigDict(encode, allow_dotted_keys=False),
+        # "info": ConfigDict(info_common, allow_dotted_keys=True)
     })
