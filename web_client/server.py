@@ -69,12 +69,13 @@ async def _lifespan(_: FastAPI):
     # ── startup ──
     setup_logging("client.log")
     client_state.config = get_client_config()
-    # print(f"Initial client config: {client_state.config.visualize}")
+    # print(f"Initial client.record config: {client_state.config.record}")
     if DEFAULT_YAML.exists():
         try:
             _apply_yaml_config(client_state.config, DEFAULT_YAML)
         except Exception as e:
             logger.warning(f"Failed to apply yaml conf: {e}")
+    # print(f"Initial client.record config: {client_state.config.record}")
     # print(f"Final client config: {client_state.config.visualize}")
 
     # Use a dedicated thread pool for the asyncio event loop so that

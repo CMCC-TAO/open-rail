@@ -38,7 +38,7 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 2
+  sub_task_id: 1
   task_id: tea_master
   task_progress_threshold: 0.95
   task_progress_win_size: 10
@@ -60,127 +60,47 @@ rdm:
   record_data: false
 record:
   info:
+    action_shape: 22
+    cam.hand_left:
+      encode:
+        codec: mp4v
+        has_audio: false
+        is_depth_map: false
+      shape:
+        channel: 3
+        height: 640
+        width: 640
+    cam.hand_right:
+      encode:
+        codec: mp4v
+        has_audio: false
+        is_depth_map: false
+      shape:
+        channel: 3
+        height: 640
+        width: 640
+    cam.head:
+      encode:
+        codec: mpeg4
+        has_audio: false
+        is_depth_map: false
+      shape:
+        channel: 3
+        height: 640
+        width: 640
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
-    features:
-      action:
-        dtype: float32
-        shape:
-        - 22
-      cam.hand_left:
-        dtype: video
-        info:
-          has_audio: false
-          video.channels: 3
-          video.codec: mpeg4
-          video.fps: 30.0
-          video.height: 640
-          video.is_depth_map: false
-          video.pix_fmt: yuv420p
-          video.width: 640
-        names:
-        - height
-        - width
-        - channel
-        shape:
-        - 640
-        - 640
-        - 3
-        video_info:
-          has_audio: false
-          video.codec: av1
-          video.fps: 30.0
-          video.is_depth_map: false
-          video.pix_fmt: yuv420p
-      cam.hand_right:
-        dtype: video
-        info:
-          has_audio: false
-          video.channels: 3
-          video.codec: mpeg4
-          video.fps: 30.0
-          video.height: 640
-          video.is_depth_map: false
-          video.pix_fmt: yuv420p
-          video.width: 640
-        names:
-        - height
-        - width
-        - channel
-        shape:
-        - 640
-        - 640
-        - 3
-        video_info:
-          has_audio: false
-          video.codec: av1
-          video.fps: 30.0
-          video.is_depth_map: false
-          video.pix_fmt: yuv420p
-      cam.head:
-        dtype: video
-        info:
-          has_audio: false
-          video.channels: 3
-          video.codec: mpeg4
-          video.fps: 30.0
-          video.height: 640
-          video.is_depth_map: false
-          video.pix_fmt: yuv420p
-          video.width: 640
-        names:
-        - height
-        - width
-        - channel
-        shape:
-        - 640
-        - 640
-        - 3
-        video_info:
-          has_audio: false
-          video.codec: av1
-          video.fps: 30.0
-          video.is_depth_map: false
-          video.pix_fmt: yuv420p
-      episode_index:
-        dtype: int64
-        names: null
-        shape:
-        - 1
-      frame_index:
-        dtype: int64
-        names: null
-        shape:
-        - 1
-      index:
-        dtype: int64
-        names: null
-        shape:
-        - 1
-      observation.state:
-        dtype: float32
-        shape:
-        - 20
-      task_index:
-        dtype: int64
-        names: null
-        shape:
-        - 1
-      timestamp:
-        dtype: float32
-        names: null
-        shape:
-        - 1
     fps: 30
     robot_type: a2d
     splits:
-      test: 0:0
+      valid: 0:100
+    state_shape: 20
     total_chunks: 1
-    total_episodes: 1
-    total_frames: 3419
+    total_episodes: 0
+    total_frames: 0
     total_tasks: 0
-    total_videos: 3
+    total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false
@@ -278,20 +198,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
-    - 1
-    - 2
-    - 3
-    - 4
-    - 5
-    - 6
     - 7
-    - 8
-    - 9
-    - 10
-    - 11
-    - 12
-    - 13
     source:
     - ActionRaw
     - ActionFitted

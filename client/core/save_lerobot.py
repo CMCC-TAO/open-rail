@@ -30,7 +30,7 @@ class LeRobotDatasetParser:
         self.meta_dir = self.dataset_root / "meta"
         self.data_dir = self.dataset_root / "data"
         self.info = self._load_info()
-        self.fps = float(self.info.get("fps", 30) or 30)
+        self.fps = int(self.info.get("fps", 30) or 30)
         self.chunks_size = int(self.info.get("chunks_size", 1000) or 1000)
         self.video_keys = self._get_video_keys(self.info)
         self.episode_length_map = self._load_episode_length_map()
@@ -252,6 +252,7 @@ class LeRobotDatasetWriter:
         # Define logger
         self.logger = logging.getLogger(__name__)
         self.config = record_config
+        # print(f"Debug: record_config: {self.config}")
         self._init_shared_data()
         self.task_language_dict = {}
 
@@ -263,7 +264,7 @@ class LeRobotDatasetWriter:
         #     self.config['info']["total_episodes"] = 0
         #     self.config['info']["total_frames"] = 0
         #     self.config['info']["total_videos"] = 0
-        self._parse_config_info_features(self.config["info"]["features"])
+        self._parse_config_info(self.config["info"])
 
         # Shared Queue
         self.record_queue = Queue()
@@ -357,7 +358,7 @@ class LeRobotDatasetWriter:
             self.config['info']["total_episodes"] = 0
             self.config['info']["total_frames"] = 0
             self.config['info']["total_videos"] = 0
-        # self._parse_config_info_features(self.config["info"]["features"])
+        # self._parse_config_info(self.config["info"])
     
     def _check_required_meta_files(self, required_files: List[str] = ['info.json', 'episodes.jsonl', 'tasks.jsonl']) -> bool:
         # Check for required files
@@ -409,8 +410,45 @@ class LeRobotDatasetWriter:
             data = json.loads(file.read())
         
         # Update the dataset info in the config using the loaded JSON data
-        self.config["info"] = ConfigDict(data, allow_dotted_keys=True)
+        # print(f"Debug: before update config.info={self.config.info}")
+        # self.config["info"] = ConfigDict(data, allow_dotted_keys=True)
+        try:
+            self.config['info']['chunks_size'] = data['chunks_size']
+            self.config['info']['codebase_version'] = data['codebase_version']
+            self.config['info']['data_path'] = data['data_path']
+            self.config['info']['video_path'] = data['video_path']
+            self.config['info']['total_videos'] = data['total_videos']
+            self.config['info']['total_frames'] = data['total_frames']
+            self.config['info']['total_tasks'] = data['total_tasks']
+            self.config['info']['total_episodes'] = data['total_episodes']
+            self.config['info']['total_chunks'] = data['total_chunks']
+            self.config['info']['fps'] = int(data['fps'])
+            self.config['info']['robot_type'] = data['robot_type']
+            self.config['info']['splits'] = data['splits']
+            self.config['info']['state_shape'] = data['features']['observation.state']['shape'][0]
+            self.config['info']['action_shape'] = data['features']['action']['shape'][0]
+            self.config['info']['cam.head']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
+            self.config['info']['cam.head']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
+            self.config['info']['cam.head']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
+            self.config['info']['cam.head']['shape']['height'] = data['features']['cam.head']['info']['video.height']
+            self.config['info']['cam.head']['shape']['width'] = data['features']['cam.head']['info']['video.width']
+            self.config['info']['cam.head']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
+            self.config['info']['cam.hand_left']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
+            self.config['info']['cam.hand_left']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
+            self.config['info']['cam.hand_left']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
+            self.config['info']['cam.hand_left']['shape']['height'] = data['features']['cam.head']['info']['video.height']
+            self.config['info']['cam.hand_left']['shape']['width'] = data['features']['cam.head']['info']['video.width']
+            self.config['info']['cam.hand_left']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
+            self.config['info']['cam.hand_right']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
+            self.config['info']['cam.hand_right']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
+            self.config['info']['cam.hand_right']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
+            self.config['info']['cam.hand_right']['shape']['height'] = data['features']['cam.head']['info']['video.height']
+            self.config['info']['cam.hand_right']['shape']['width'] = data['features']['cam.head']['info']['video.width']
+            self.config['info']['cam.hand_right']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
+        except Exception as e:
+            print(f"Error: exception: {e}")
         # self._normalize_record_features_cam()
+        # print(f"Debug: after update config.info={self.config.info}")
 
         # Print a success message indicating that the meta files have updated the config
         self.logger.info("update dataset info from meta info file success.")
@@ -428,17 +466,18 @@ class LeRobotDatasetWriter:
                     self.task_language_dict[task_name] = task_index
         self.logger.info(f"Update task languages from meta task file success, task_language_dict={self.task_language_dict}.")
     
-    def _parse_config_info_features(self, features_config: ConfigDict) -> None:
+    def _parse_config_info(self, info_config: ConfigDict) -> None:
         self.camera_name_list = []
         self.camera_shape_dict = {}
-        for camera_name in features_config.keys():
+        for camera_name in info_config.keys():
             if str(camera_name).startswith("cam."):
                 self.camera_name_list.append(camera_name)
-            shape_list = features_config[camera_name]["shape"]
-            self.camera_shape_dict[camera_name] = tuple(shape_list)
+                shape_dict = info_config[camera_name]["shape"]
+                self.camera_shape_dict[camera_name] = (shape_dict["height"], shape_dict["width"], shape_dict["channel"])
+                # print(f"Debug: camera_name: {camera_name}, shape: {shape_list}")
 
-        self.action_shape = features_config["action"]['shape'][0]
-        self.state_shape = features_config["observation.state"]['shape'][0]
+        self.action_shape = info_config['action_shape']
+        self.state_shape = info_config['state_shape']
         # {'action': (22,), 'cam.hand_left': (480, 848, 3), 'cam.hand_right': (480, 848, 3), 'cam.head': (720, 1280, 3), 'episode_index': (1,), 'frame_index': (1,), 'index': (1,), 'observation.state': (20,), 'task_index': (1,), 'timestamp': (1,)}
         # print(f"Debug: camera_shape_dict={self.camera_shape_dict}")
 
@@ -473,20 +512,13 @@ class LeRobotDatasetWriter:
             if camera_name not in self.camera_name_list:
                 self.camera_name_list.append(camera_name)
 
-            camera_feature = self.config["info"]["features"].get(camera_name, ConfigDict(allow_dotted_keys=True))
-            camera_feature["shape"] = [height, width, channel]
+            camera_info = self.config["info"].get(camera_name, ConfigDict(allow_dotted_keys=False))
+            # print(f"Debug: camera={camera_name}, feature={camera_feature}")
+            camera_info["shape"]["height"] = height
+            camera_info["shape"]["width"] = width
+            camera_info["shape"]["channel"] = channel
 
-            feature_info = camera_feature.get("info", ConfigDict(allow_dotted_keys=True))
-            feature_info["video.height"] = height
-            feature_info["video.width"] = width
-            feature_info["video.channels"] = channel
-            camera_feature["info"] = feature_info
-
-            video_info = camera_feature.get("video_info", ConfigDict(allow_dotted_keys=True))
-            video_info["video.fps"] = float(self.config["info"].get("fps", 30))
-            camera_feature["video_info"] = video_info
-
-            self.config["info"]["features"][camera_name] = camera_feature
+            self.config["info"][camera_name] = camera_info
             updated[camera_name] = normalized_shape
 
         if updated:
@@ -1006,6 +1038,7 @@ class LeRobotDatasetWriter:
 
             writer = None
             for codec in ('mp4v', 'avc1', 'XVID', 'MJPG'):
+                print(f"Debug: Trying to save video with codec: {codec}")
                 fourcc = cv2.VideoWriter_fourcc(*codec)
                 candidate = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
                 if candidate is not None and candidate.isOpened():
@@ -1121,10 +1154,112 @@ class LeRobotDatasetWriter:
             self.config['info']["total_episodes"] = total_episodes
             self.config['info']["total_frames"] = total_frames
             self.config['info']["total_videos"] = total_videos
-            self.config['info']["splits"] = {"test": f"0:{total_episodes-1}"}
-
+            self.config['info']["splits"] = {"test": f"0:{total_episodes-1}"} 
+            # Define complete metadata dictionary structure
+            meta_info_dict = {
+                'chunks_size': self.config['info']['chunks_size'],
+                'codebase_version': self.config['info']['codebase_version'],
+                'data_path': self.config['info']['data_path'],
+                'features': {
+                    'action': {'dtype': 'float32', 'shape': [self.config['info']['action_shape']]},
+                    'cam.hand_left': {
+                        'dtype': 'video',
+                        'info': {
+                            'has_audio': self.config['info']['cam.hand_left']['encode']['has_audio'],
+                            'video.channels': self.config['info']['cam.hand_left']['shape']['channel'],
+                            'video.codec': self.config['info']['cam.hand_left']['encode']['codec'],
+                            'video.fps': float(self.config['info']['fps']),
+                            'video.height': self.config['info']['cam.hand_left']['shape']['height'],
+                            'video.is_depth_map': self.config['info']['cam.hand_left']['encode']['is_depth_map'],
+                            'video.pix_fmt': 'yuv420p',
+                            'video.width': self.config['info']['cam.hand_left']['shape']['width'],
+                        },
+                        'names': ['height', 'width', 'channel'],
+                        'shape': [
+                            self.config['info']['cam.hand_left']['shape']['height'],
+                            self.config['info']['cam.hand_left']['shape']['width'],
+                            self.config['info']['cam.hand_left']['shape']['channel']
+                            ],
+                        'video_info': {
+                            'has_audio': self.config['info']['cam.hand_left']['encode']['has_audio'],
+                            'video.codec': self.config['info']['cam.hand_left']['encode']['codec'],
+                            'video.fps': float(self.config['info']['fps']),
+                            'video.is_depth_map': self.config['info']['cam.hand_left']['encode']['is_depth_map'],
+                            'video.pix_fmt': 'yuv420p'
+                        }
+                    },
+                    'cam.hand_right': {
+                        'dtype': 'video',
+                        'info': {
+                            'has_audio': self.config['info']['cam.hand_right']['encode']['has_audio'],
+                            'video.channels': self.config['info']['cam.hand_right']['shape']['channel'],
+                            'video.codec': self.config['info']['cam.hand_right']['encode']['codec'],
+                            'video.fps': float(self.config['info']['fps']),
+                            'video.height': self.config['info']['cam.hand_right']['shape']['height'],
+                            'video.is_depth_map': self.config['info']['cam.hand_right']['encode']['is_depth_map'],
+                            'video.pix_fmt': 'yuv420p',
+                            'video.width': self.config['info']['cam.hand_right']['shape']['width'],
+                        },
+                        'names': ['height', 'width', 'channel'],
+                        'shape': [
+                            self.config['info']['cam.hand_right']['shape']['height'],
+                            self.config['info']['cam.hand_right']['shape']['width'],
+                            self.config['info']['cam.hand_right']['shape']['channel']
+                            ],
+                        'video_info': {
+                            'has_audio': self.config['info']['cam.hand_right']['encode']['has_audio'],
+                            'video.codec': self.config['info']['cam.hand_right']['encode']['codec'],
+                            'video.fps': float(self.config['info']['fps']),
+                            'video.is_depth_map': self.config['info']['cam.hand_right']['encode']['is_depth_map'],
+                            'video.pix_fmt': 'yuv420p'
+                        }
+                    },
+                    'cam.head': {
+                        'dtype': 'video',
+                        'info': {
+                            'has_audio': self.config['info']['cam.head']['encode']['has_audio'],
+                            'video.channels': self.config['info']['cam.head']['shape']['channel'],
+                            'video.codec': self.config['info']['cam.head']['encode']['codec'],
+                            'video.fps': float(self.config['info']['fps']),
+                            'video.height': self.config['info']['cam.head']['shape']['height'],
+                            'video.is_depth_map': self.config['info']['cam.head']['encode']['is_depth_map'],
+                            'video.pix_fmt': 'yuv420p',
+                            'video.width': self.config['info']['cam.head']['shape']['width'],
+                        },
+                        'names': ['height', 'width', 'channel'],
+                        'shape': [
+                            self.config['info']['cam.head']['shape']['height'],
+                            self.config['info']['cam.head']['shape']['width'],
+                            self.config['info']['cam.head']['shape']['channel']
+                            ],
+                        'video_info': {
+                            'has_audio': self.config['info']['cam.head']['encode']['has_audio'],
+                            'video.codec': self.config['info']['cam.head']['encode']['codec'],
+                            'video.fps': float(self.config['info']['fps']),
+                            'video.is_depth_map': self.config['info']['cam.head']['encode']['is_depth_map'],
+                            'video.pix_fmt': 'yuv420p'
+                        }
+                    },
+                    'episode_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
+                    'frame_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
+                    'index': {'dtype': 'int64', 'names': None, 'shape': [1]},
+                    'observation.state': {'dtype': 'float32', 'shape': [self.config['info']['state_shape']]},
+                    'task_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
+                    'timestamp': {'dtype': 'float32', 'names': None, 'shape': [1]}
+                },
+                'fps': float(self.config['info']['fps']),
+                'robot_type': self.config['info']['robot_type'],
+                'splits': {'train': f'0:{total_episodes-1}'},
+                'total_chunks': 1,
+                'total_episodes': total_episodes,
+                'total_frames': total_frames,
+                'total_tasks': 0, # TODO: assign total tasks
+                'total_videos': total_videos,
+                'video_path': self.config['info']['video_path']
+            }
+            print(f"Debug: info_file: {meta_info_dict}")
             with open(info_file_path, 'w', encoding='utf-8') as f:
-                json.dump(self.config['info'].to_dict(), f, indent=2, ensure_ascii=False, default=str)
+                json.dump(meta_info_dict, f, indent=2, ensure_ascii=False, default=str)
 
             self.logger.info(f"info.json has been written to: {info_file_path}")
 
