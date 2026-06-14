@@ -17,7 +17,7 @@
  *   POST /api/client/observe/start
  *   POST /api/client/infer/start
  *   POST /api/client/control/start
- *   POST /api/client/command     { command, params }
+ *   POST /api/client/control/reset|arm|gripper|head|waist|wheel
  */
 
 'use strict';

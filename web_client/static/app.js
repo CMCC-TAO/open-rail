@@ -174,7 +174,7 @@ function renderSubTask(subTaskId = null) {
   const lang = subtasks[subTaskId];
   if (typeof lang === 'string' && lang.trim()) {
     textEl.value = lang;
-    sendCommand('set_language', { language: lang });
+    sendLanguageSet(lang);
   }
 }
 
@@ -553,7 +553,7 @@ function wireEvents() {
   });
 
   $('btn-reset').addEventListener('click',  async () => {
-    await sendCommand('reset');
+    await sendControl('reset');
     toast('Robot reset initiated.', 'info');
   });
 
