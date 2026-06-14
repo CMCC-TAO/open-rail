@@ -2279,10 +2279,10 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   const rawIndex = (App.config && App.config.language && App.config.language.sub_task_id != null) ? App.config.language.sub_task_id : 0;
   let index = Number(rawIndex);
   if (!Number.isFinite(index)) index = 0;
-  if (forceFirstSubtask) index = 0;
 
   const autoModeRaw = App.config && App.config.language && App.config.language.auto_mode;
   const autoMode = (autoModeRaw === true || autoModeRaw === 'true' || autoModeRaw === 1 || autoModeRaw === '1');
+  if (forceFirstSubtask || autoMode) index = 0;
   const thresholdRaw = App.config && App.config.language && App.config.language.task_progress_threshold;
   const threshold = Number(thresholdRaw);
   const winSizeRaw = App.config && App.config.language && App.config.language.task_progress_win_size;
