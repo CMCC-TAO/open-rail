@@ -27,7 +27,7 @@ const sendGripperBySelection = async (target = null) => {
   const curR = Number.isFinite(Number(cur[15])) ? Number(cur[15]) : 0;
   const nextL = useLeft ? val : curL;
   const nextR = useRight ? val : curR;
-  await sendCommand('gripper', { pos: [nextL, nextR] });
+  await sendControl('gripper', { pos: [nextL, nextR] });
 };
 
 $('btn-gripper-send').addEventListener('click', async () => {
@@ -206,14 +206,14 @@ const sendArmBySelection = async () => {
   if (useRight) {
     for (let i = 7; i < 14; i++) target[i] = typed[i];
   }
-  await sendCommand('arm', { pos: target });
+  await sendControl('arm', { pos: target });
   armAppliedPose = typed.slice();
   refreshArmState();
   return true;
 };
 
 const sendHead = async () => {
-  await sendCommand('head', { pos: [getNum('head-yaw', 0), getNum('head-pitch', 0.436), getNum('head-roll', 0)] });
+  await sendControl('head', { pos: [getNum('head-yaw', 0), getNum('head-pitch', 0.436), getNum('head-roll', 0)] });
 };
 $('btn-head').addEventListener('click', async () => {
   await sendHead();
@@ -233,7 +233,7 @@ $('btn-head-save').addEventListener('click', () => {
 });
 
 const sendWaist = async () => {
-  await sendCommand('waist', { pos: [getNum('waist-yaw', 0), getNum('waist-pitch', 0.297), getNum('waist-roll', 0)] });
+  await sendControl('waist', { pos: [getNum('waist-yaw', 0), getNum('waist-pitch', 0.297), getNum('waist-roll', 0)] });
 };
 $('btn-waist').addEventListener('click', async () => {
   await sendWaist();
@@ -258,7 +258,7 @@ const sendBody = async () => {
   const roll = getNum('body-height', 0);
   const waistRollEl = $('waist-roll');
   if (waistRollEl) waistRollEl.value = String(roll);
-  await sendCommand('waist', { pos: [yaw, pitch, roll] });
+  await sendControl('waist', { pos: [yaw, pitch, roll] });
   waistCtrlState.refresh();
 };
 $('btn-body').addEventListener('click', async () => {
@@ -322,7 +322,7 @@ $('btn-arm-save').addEventListener('click', () => {
 
 
 const sendWheel = async (linear, angular, msg = 'Wheel command sent.') => {
-  await sendCommand('wheel', { pos: [linear, angular] });
+  await sendControl('wheel', { pos: [linear, angular] });
   toast(msg, 'ok');
 };
 

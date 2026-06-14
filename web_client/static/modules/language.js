@@ -493,7 +493,7 @@ $('btn-lang-send').addEventListener('click', async () => {
   $('btn-apply-config').click();
 
   // 3. Send language command to robot
-  await sendCommand('set_language', { language: lang });
+  await sendLanguageSet(lang);
   toast('Language command updated.', 'info');
 });
 $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });

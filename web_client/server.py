@@ -1689,117 +1689,149 @@ async def client_status():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  REST: runtime commands (replaces Enter-key menu in run_client.py)
+#  REST: runtime controls
 # ─────────────────────────────────────────────────────────────────────────────
-class CommandRequest(BaseModel):
-    command: str          # reset / resume / set_language / start_recording / stop_recording / arm / gripper / head / waist / wheel
-    params: Optional[dict] = None
+class PositionRequest(BaseModel):
+    pos: Optional[list[float]] = None
 
 
-@app.post("/api/client/command")
-async def client_command(req: CommandRequest):
+class LanguageSetRequest(BaseModel):
+    language: str = ""
+
+
+class RecordStartRequest(BaseModel):
+    save_items: Optional[list[str]] = None
+
+
+def _require_runtime(command_name: str):
     vla_client = client_state.vla_client
     robot = client_state.robot
     if vla_client is None:
-        raise HTTPException(400, f"Client is None. Bad request: {req.command}")
+        raise HTTPException(400, f"Client is None. Bad request: {command_name}")
+    if robot is None:
+        raise HTTPException(400, f"Robot is None. Bad request: {command_name}")
+    return vla_client, robot
 
-    cmd = req.command
-    params = req.params if isinstance(req.params, dict) else {}
 
+def _safe_pos(pos, default):
+    return pos if isinstance(pos, list) else default
+
+
+def _run_control_action(command: str, action: str, pos):
+    _, robot = _require_runtime(command)
+    robot.execute_action({action: pos})
+    return {"status": "ok", "command": command}
+
+
+@app.post('/api/client/control/reset')
+async def client_control_reset():
+    vla_client, robot = _require_runtime('reset')
     try:
-        if cmd == "reset":
-            # Pause first before resetting robot to initial position
-            paused_state = _pause_vla_client(vla_client)
-            robot.reset_robot(mode='default')
-            _resume_vla_client(vla_client, paused_state)  # Resume with the same thread state as before reset
-            await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
+        paused_state = _pause_vla_client(vla_client)
+        robot.reset_robot(mode='default')
+        _resume_vla_client(vla_client, paused_state)
+        await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
+        return {"status": "ok", "command": 'reset'}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
-        # elif cmd == "resume":
-        #     _resume_vla_client(vla_client)
-        #     await _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client resumed."}})
 
-        elif cmd == "set_language":
-            lang = params.get("language", "")
-            paused_state = _pause_vla_client(vla_client)
-            vla_client.task_language_manager.currt_language_instruction = lang
-            # print(f"SET LANGUAGE Debug sub_task_id={vla_client.task_language_manager.currt_language_instruction}")
-            # robot.reset_robot(mode='default')
-            _resume_vla_client(vla_client, paused_state)
+@app.post('/api/client/control/arm')
+async def client_control_arm(req: PositionRequest):
+    return _run_control_action('arm', 'arm', _safe_pos(req.pos, [0.0] * 14))
 
-        elif cmd == "start_recording":
-            save_items = params.get("save_items", [])
-            if not isinstance(save_items, list):
-                save_items = []
-            client_state.config.record.switch = True
-            client_state.config.record.record_exp_data = ('ExpData' in save_items)
-            task_id = getattr(getattr(client_state.config, "language", None), "task_id", None)
-            if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
-                try:
-                    from client.core.save_lerobot import LeRobotDatasetWriter
-                    vla_client.dataset_write = LeRobotDatasetWriter(
-                        record_config=client_state.config.record,
-                        task=task_id,
-                    )
-                except Exception as e:
-                    raise HTTPException(500, f"Failed to initialize recorder: {e}")
-            else:
-                vla_client.dataset_write.set_task(task_id)
 
-            updated_camera_shapes = {}
-            if not bool(getattr(client_state.config.record, "resize", False)):
-                try:
-                    updated_camera_shapes = vla_client.update_camera_shape()
-                except Exception as e:
-                    logger.warning(f"Failed to update camera shapes before start_recording: {e}")
+@app.post('/api/client/control/gripper')
+async def client_control_gripper(req: PositionRequest):
+    return _run_control_action('gripper', 'gripper', _safe_pos(req.pos, [0.0, 0.0]))
 
-            vla_client.dataset_write.start_recording()
-            current_recording_task = str(getattr(vla_client.dataset_write, "current_task", "") or "")
-            current_recording_dir = ""
+
+@app.post('/api/client/control/head')
+async def client_control_head(req: PositionRequest):
+    return _run_control_action('head', 'head', _safe_pos(req.pos, [0.0, 0.436, 0.0]))
+
+
+@app.post('/api/client/control/waist')
+async def client_control_waist(req: PositionRequest):
+    return _run_control_action('waist', 'waist', _safe_pos(req.pos, [0.0, 0.297, 0.0]))
+
+
+@app.post('/api/client/control/wheel')
+async def client_control_wheel(req: PositionRequest):
+    return _run_control_action('wheel', 'wheel', _safe_pos(req.pos, [0.0, 0.0]))
+
+
+@app.post('/api/client/language/set')
+async def client_language_set(req: LanguageSetRequest):
+    vla_client, _ = _require_runtime('set_language')
+    try:
+        paused_state = _pause_vla_client(vla_client)
+        vla_client.task_language_manager.currt_language_instruction = req.language if isinstance(req.language, str) else ''
+        _resume_vla_client(vla_client, paused_state)
+        return {"status": "ok", "command": 'set_language'}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post('/api/client/record/start')
+async def client_record_start(req: RecordStartRequest):
+    vla_client, _ = _require_runtime('start_recording')
+    try:
+        save_items = req.save_items if isinstance(req.save_items, list) else []
+        client_state.config.record.switch = True
+        client_state.config.record.record_exp_data = ('ExpData' in save_items)
+        task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
+        if not hasattr(vla_client, 'dataset_write') or vla_client.dataset_write is None:
             try:
-                save_path = str(getattr(vla_client.dataset_write, "save_path", "") or "")
-                if save_path:
-                    current_recording_dir = Path(save_path).name
-            except Exception:
-                current_recording_dir = ""
-            return {
-                "status": "ok",
-                "command": cmd,
-                "recording_task": current_recording_task,
-                "recording_task_dir": current_recording_dir,
-                "updated_camera_shapes": updated_camera_shapes,
-            }
-
-        elif cmd == "stop_recording":
-            if not hasattr(vla_client, "dataset_write") or vla_client.dataset_write is None:
-                raise HTTPException(400, "Recorder is not initialized.")
-            vla_client.dataset_write.stop_recording()
-            client_state.config.record.switch = False
-
-        elif cmd == "arm":
-            pos = params.get("pos", [0.0] * 14)
-            robot.execute_action({'arm': pos})
-
-        elif cmd == "gripper":
-            pos = params.get("pos", [0.0, 0.0])
-            robot.execute_action({'gripper': pos})
-
-        elif cmd == "head":
-            pos = params.get("pos", [0.0, 0.436, 0.0])
-            robot.execute_action({'head': pos})
-
-        elif cmd == "waist":
-            pos = params.get("pos", [0.0, 0.297, 0.0])
-            robot.execute_action({'waist': pos})
-
-        elif cmd == "wheel":
-            pos = params.get("pos", [0.0, 0.0])
-            robot.execute_action({'wheel': pos})
-
+                from client.core.save_lerobot import LeRobotDatasetWriter
+                vla_client.dataset_write = LeRobotDatasetWriter(record_config=client_state.config.record, task=task_id)
+            except Exception as e:
+                raise HTTPException(500, f'Failed to initialize recorder: {e}')
         else:
-            raise HTTPException(400, f"Unknown command: {cmd}")
+            vla_client.dataset_write.set_task(task_id)
 
-        return {"status": "ok", "command": cmd}
+        updated_camera_shapes = {}
+        if not bool(getattr(client_state.config.record, 'resize', False)):
+            try:
+                updated_camera_shapes = vla_client.update_camera_shape()
+            except Exception as e:
+                logger.warning(f'Failed to update camera shapes before start_recording: {e}')
 
+        vla_client.dataset_write.start_recording()
+        current_recording_task = str(getattr(vla_client.dataset_write, 'current_task', '') or '')
+        current_recording_dir = ''
+        try:
+            save_path = str(getattr(vla_client.dataset_write, 'save_path', '') or '')
+            if save_path:
+                current_recording_dir = Path(save_path).name
+        except Exception:
+            current_recording_dir = ''
+        return {
+            'status': 'ok',
+            'command': 'start_recording',
+            'recording_task': current_recording_task,
+            'recording_task_dir': current_recording_dir,
+            'updated_camera_shapes': updated_camera_shapes,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post('/api/client/record/stop')
+async def client_record_stop():
+    vla_client, _ = _require_runtime('stop_recording')
+    try:
+        if not hasattr(vla_client, 'dataset_write') or vla_client.dataset_write is None:
+            raise HTTPException(400, 'Recorder is not initialized.')
+        vla_client.dataset_write.stop_recording()
+        client_state.config.record.switch = False
+        return {'status': 'ok', 'command': 'stop_recording'}
     except HTTPException:
         raise
     except Exception as e:

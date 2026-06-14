@@ -345,9 +345,9 @@ function setupRecordingPanel() {
 
     const saveItems = getRecordingSaveItems();
     try {
-      const res = await apiFetch('/api/client/command', {
+      const res = await apiFetch('/api/client/record/start', {
         method: 'POST',
-        body: JSON.stringify({ command: 'start_recording', params: { save_items: saveItems } }),
+        body: JSON.stringify({ save_items: saveItems }),
       });
       const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
       const currentTask = typeof res?.recording_task === 'string' ? res.recording_task : '';
@@ -375,9 +375,9 @@ function setupRecordingPanel() {
 
   $('btn-recording-stop')?.addEventListener('click', async () => {
     try {
-      await apiFetch('/api/client/command', {
+      await apiFetch('/api/client/record/stop', {
         method: 'POST',
-        body: JSON.stringify({ command: 'stop_recording', params: {} }),
+        body: JSON.stringify({}),
       });
 
       App.isRecording = false;
