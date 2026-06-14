@@ -1837,7 +1837,33 @@ function setupLangPanel() {
       // App.langAuto.lastProgress = null;
       const enabled = !!autoChk.checked;
       setAutoModeEditable(enabled);
-      await persistLanguagePatch({ 'language.auto_mode': enabled });
+
+      if (enabled) {
+        const taskName = taskSel ? taskSel.value : null;
+        const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+
+        if (subtaskSel) {
+          if (subtaskSel.options.length > 0) {
+            subtaskSel.selectedIndex = 0;
+            subtaskSel.value = '0';
+            subtaskSel.dispatchEvent(new Event('change'));
+          } else {
+            subtaskSel.value = '';
+          }
+        }
+
+        if (subtasks[0] !== undefined) {
+          $('lang-cmd-text').value = subtasks[0];
+        }
+
+        await persistLanguagePatch({
+          'language.auto_mode': true,
+          'language.sub_task_id': 0,
+        });
+        return;
+      }
+
+      await persistLanguagePatch({ 'language.auto_mode': false });
     });
   }
 
@@ -3776,17 +3802,36 @@ function wireEvents() {
 
   // Language Command panel — send
   $('btn-lang-send').addEventListener('click', async () => {
-    const lang = $('lang-cmd-text').value.trim();
+    const taskSel = $('lang-task-select');
+    const subtaskSel = $('lang-subtask-select');
+    const autoChk = $('chk-lang-auto-mode');
+    const task = taskSel ? taskSel.value : null;
+    const subtasks = (task && LangCmd.tasks[task]) ? LangCmd.tasks[task] : [];
+
+    let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
+    if (!Number.isFinite(idx) || idx < 0) idx = 0;
+
+    // Auto mode should always start from first sub-task.
+    if (autoChk && autoChk.checked) {
+      idx = 0;
+      if (subtaskSel && subtaskSel.value !== '0') {
+        subtaskSel.value = '0';
+        subtaskSel.dispatchEvent(new Event('change'));
+      }
+    }
+
+    let lang = $('lang-cmd-text').value.trim();
+    if (autoChk && autoChk.checked && subtasks[0] !== undefined) {
+      lang = String(subtasks[0]).trim();
+      $('lang-cmd-text').value = lang;
+    }
+
     if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
 
     // 1. Write current Task / SubTask selection into pendingPatch
-    const taskSel    = $('lang-task-select');
-    const subtaskSel = $('lang-subtask-select');
-    const task  = taskSel    ? taskSel.value                    : null;
-    const idx   = subtaskSel ? parseInt(subtaskSel.value, 10)   : NaN;
     if (task != null) {
-      App.pendingPatch['language.task_id']  = task;
-      App.pendingPatch['language.sub_task_id'] = isNaN(idx) ? 0 : idx;
+      App.pendingPatch['language.task_id'] = task;
+      App.pendingPatch['language.sub_task_id'] = idx;
       markPending();
     }
 
