@@ -435,15 +435,15 @@ function updateWSIndicator(connected) {
 
 // ═══════════════════════════════════════════════════════
 //  Default demo values for State & Action (shown when client is not running)
-//  Layout: J0-6 = Arm-Left (7), J7-13 = Arm-Right (7), J14-15 = Gripper (2)
+//  Layout: J0-6 = Arm-Left (7), J7-13 = Arm-Right (7), J14-19 = Gripper (6)
 // ═══════════════════════════════════════════════════════
 const DEFAULT_JOINTS = Object.freeze([
   // Arm-Left  J0-J6  (values in 100-180 range for label width validation)
   0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
   // Arm-Right J7-J13
   0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
-  // Gripper   J14-J15
-  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000
+  // Gripper   J14-J19 (6 slots)
+  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000
 ]);
 
 /** Add small Gaussian-like noise to DEFAULT_JOINTS for a lifelike idle display. */
@@ -616,7 +616,8 @@ function renderSubTask(subTaskId = null) {
 // Joint layout: J0-6 = Arm Left (7), J7-13 = Arm Right (7), J14+ = Gripper/Hand
 const JOINT_ARM_L_COUNT   = 7;
 const JOINT_ARM_R_COUNT   = 7;
-// J0..6 → Arm-L, J7..13 → Arm-R, J14+ → Gripper/Hand
+const JOINT_GRIPPER_COUNT = 6;
+// J0..6 → Arm-L, J7..13 → Arm-R, J14..19 → Gripper/Hand (fixed 6 slots)
 
 function renderJointsGrouped(side, values) {
   // side: 'state' | 'action'
@@ -641,12 +642,23 @@ function renderJointsGrouped(side, values) {
       // chip.textContent = `R${i - JOINT_ARM_L_COUNT}: ${val}`;
       chip.textContent = `${i - JOINT_ARM_L_COUNT}｜${val}`;
       elArmR.appendChild(chip);
-    } else {
-      // chip.textContent = `G${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}: ${val}`;
-      chip.textContent = `${i - JOINT_ARM_L_COUNT - JOINT_ARM_R_COUNT}｜${val}`;
-      elGripper.appendChild(chip);
     }
+    // Skip gripper values here - we'll handle them separately below
   });
+
+  // Always render exactly 6 gripper/hand slots, filled from left to right
+  for (let i = 0; i < JOINT_GRIPPER_COUNT; i++) {
+    const chip = document.createElement('div');
+    chip.className = 'joint-chip';
+    
+    // Get the actual value if available (starting from index 14)
+    const sourceIndex = JOINT_ARM_L_COUNT + JOINT_ARM_R_COUNT + i;
+    const hasValue = sourceIndex < values.length && typeof values[sourceIndex] === 'number';
+    const val = hasValue ? values[sourceIndex].toFixed(2) : '0.00';
+    
+    chip.textContent = `${i}｜${val}`;
+    elGripper.appendChild(chip);
+  }
 }
 
 // ═══════════════════════════════════════════════════════
