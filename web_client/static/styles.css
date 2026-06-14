@@ -590,13 +590,13 @@ html, body {
 
 .recording-file-item-meta {
   flex: 0 0 auto;
-  margin-left: 10px;
+  margin-left: 5px;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .recording-file-item-actions {
-  flex: 0 0 22px;
+  flex: 0 0 20px;
   display: flex;
   justify-content: flex-end;
 }
@@ -618,8 +618,8 @@ html, body {
 }
 
 .recording-file-item-delete-icon {
-  width: 10px;
-  height: 10px;
+  width: 14px;
+  height: 14px;
   display: block;
   fill: currentColor;
 }

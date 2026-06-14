@@ -802,13 +802,14 @@ const CONFIG_SELECT_OPTIONS = {
   fitting_deg: [3, 4, 5, 6],
   preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   type: ['a2d', 'mock'],
-  mode: ['async', 'sync']
+  mode: ['async', 'sync'],
+  codec: ['mp4v', 'avc1']
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
   'fitting_num_samples', 'search_length', 'smooth_length', 'gripper_offset',
-  'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim'
+  'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
