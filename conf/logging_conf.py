@@ -102,7 +102,8 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "format": "%(asctime)s-[%(levelname)s]-%(name)s-%(message)s"
             },
             "verbose": {
-                "format": "%(asctime)s-[%(levelname)s]-%(name)s-%(filename)s:%(lineno)d-%(message)s"
+                # "format": "%(asctime)s-[%(levelname)s]-%(name)s-%(filename)s:%(lineno)d-%(message)s"
+                "format": "%(asctime)s-[%(levelname)s]-%(name)s.%(funcName)s:%(lineno)d-%(message)s"
             },
         },
         "handlers": {

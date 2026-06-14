@@ -97,10 +97,10 @@ record:
       valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 2
-    total_frames: 805
+    total_episodes: 3
+    total_frames: 4093
     total_tasks: 0
-    total_videos: 6
+    total_videos: 9
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false

@@ -1253,7 +1253,7 @@ class LeRobotDatasetWriter:
                 'total_chunks': 1,
                 'total_episodes': total_episodes,
                 'total_frames': total_frames,
-                'total_tasks': 0, # TODO: assign total tasks
+                'total_tasks': len(self.task_language_dict.keys()), # TODO: assign total tasks
                 'total_videos': total_videos,
                 'video_path': self.config['info']['video_path']
             }
