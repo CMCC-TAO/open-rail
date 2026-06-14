@@ -1,0 +1,78 @@
+/* ═══════════════════════════════════════════
+   MAIN LAYOUT: 3-column grid
+   Left: config+manual  |  Center: monitor+traj  |  Right: camera
+   ═══════════════════════════════════════════ */
+.layout {
+  position: fixed;
+  top: var(--topbar-h); left: 0; right: 0; bottom: var(--footer-h);
+  display: grid;
+  grid-template-columns: 280px 1fr 300px;
+  gap: var(--panel-gap);
+  padding: var(--panel-gap);
+  overflow: hidden;
+}
+
+.left-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--panel-gap);
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Center column: monitor on top, traj on bottom */
+.center-col {
+  display: flex; flex-direction: column; gap: var(--panel-gap);
+  overflow: hidden; min-height: 0;
+}
+/* Left column collapsed — zero width, content clipped, stays in grid flow */
+.left-col.collapsed { overflow: hidden; min-width: 0; }
+
+/* ═══════════════════════════════════════════
+   FLOATING PANEL REVEAL BUTTONS
+   Shown (fixed position) when a side panel is collapsed.
+   They take zero layout space — purely decorative overlays.
+   ═══════════════════════════════════════════ */
+.panel-reveal-btn {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 90;
+  /* pill-style to stand out */
+  padding: 10px 5px;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  border-left: none;
+  background: var(--bg3);
+  border-color: var(--border);
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1;
+  box-shadow: 2px 0 6px rgba(0,0,0,.08);
+  writing-mode: initial;
+}
+.panel-reveal-btn:hover {
+  background: var(--bg2);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 2px 0 8px rgba(9,105,218,.15);
+}
+.panel-reveal-left  { left: 0; top: 50%; transform: translateY(-50%); border-radius: 0 var(--radius) var(--radius) 0; border-left: none; }
+.panel-reveal-right { right: 0; border-radius: var(--radius) 0 0 var(--radius); border-right: none; box-shadow: -2px 0 6px rgba(0,0,0,.08); }
+.panel-reveal-config-hide {
+  left: calc(var(--panel-gap) + 280px - 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: var(--radius) 0 0 var(--radius);
+  border-right: none;
+  border-left: 1px solid var(--border);
+  box-shadow: -2px 0 6px rgba(0,0,0,.08);
+}
+.panel-reveal-visual-hide {
+  right: calc(var(--panel-gap) + 300px - 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 0 var(--radius) var(--radius) 0;
+  border-left: none;
+  border-right: 1px solid var(--border);
+  box-shadow: 2px 0 6px rgba(0,0,0,.08);
+}

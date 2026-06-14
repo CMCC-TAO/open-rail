@@ -1,0 +1,17 @@
+:root {
+  --bg:         #ffffff;
+  --bg2:        #f6f8fa;
+  --bg3:        #eaeef2;
+  --border:     #d0d7de;
+  --accent:     #0969da;
+  --success:    #1a7f37;
+  --danger:     #cf222e;
+  --warn:       #9a6700;
+  --text:       #1f2328;
+  --text-muted: #656d76;
+  --font:       'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --radius:     6px;
+  --topbar-h:   44px;
+  --footer-h:   28px;
+  --panel-gap:  8px;
+}
