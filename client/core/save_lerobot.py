@@ -753,7 +753,7 @@ class LeRobotDatasetWriter:
                         continue
 
                     writer.write(frame)
-                    self.logger.info(f"{camera_name} writes a frame with expected_shape {frame.shape}.")
+                    self.logger.debug(f"{camera_name} writes a frame with expected_shape {frame.shape}.")
                 # Construct record dictionary for Parquet file
                 parquet_frame = {
                     'observation.state': step_state['obs.state'].tolist(),
@@ -1038,7 +1038,7 @@ class LeRobotDatasetWriter:
 
             writer = None
             for codec in ('mp4v', 'avc1', 'XVID', 'MJPG'):
-                print(f"Debug: Trying to save video with codec: {codec}")
+                # print(f"Debug: Trying to save video with codec: {codec}")
                 fourcc = cv2.VideoWriter_fourcc(*codec)
                 candidate = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
                 if candidate is not None and candidate.isOpened():
@@ -1257,7 +1257,7 @@ class LeRobotDatasetWriter:
                 'total_videos': total_videos,
                 'video_path': self.config['info']['video_path']
             }
-            print(f"Debug: info_file: {meta_info_dict}")
+            # print(f"Debug: info_file: {meta_info_dict}")
             with open(info_file_path, 'w', encoding='utf-8') as f:
                 json.dump(meta_info_dict, f, indent=2, ensure_ascii=False, default=str)
 
