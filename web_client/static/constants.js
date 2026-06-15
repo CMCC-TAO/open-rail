@@ -5,10 +5,10 @@
  *   Receives: { type: 'stats'|'status'|'error', data: {...} }
  *
  * REST endpoints:
- *   GET  /api/config
- *   POST /api/config/patch       { patch: { "key.path": value, ... } }
- *   POST /api/config/load_file   { path: "..." }
- *   POST /api/config/save_file   { path: "..." }
+ *   GET  /api/client/config
+ *   POST /api/client/config/patch       { patch: { "key.path": value, ... } }
+ *   POST /api/client/config/load   { path: "..." }
+ *   POST /api/client/config/save   { path: "..." }
  *   GET  /api/client/status
  *   POST /api/client/start
  *   POST /api/client/stop
