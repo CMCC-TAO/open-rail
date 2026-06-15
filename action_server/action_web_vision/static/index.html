@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Action Web Vision</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════ TOP BAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="topbar-title">Action Web Vision</span>
+      <span class="topbar-subtitle">Real-time Monitor</span>
+    </div>
+    <div class="topbar-right">
+      <span class="resource-pill" id="val-cpu-usage"><span class="resource-label">CPU</span><span class="resource-value">--</span></span>
+      <span class="resource-pill" id="val-gpu-usage"><span class="resource-label">GPU</span><span class="resource-value">--</span></span>
+      <span class="resource-pill" id="val-mem-usage"><span class="resource-label">MEM</span><span class="resource-value">--</span></span>
+      <span class="resource-pill" id="val-bw-usage"><span class="resource-label">BW</span><span class="resource-value">--</span></span>
+      <span class="ws-dot disconnected" id="ws-indicator" title="Main WS (9000)"></span>
+      <span class="ws-label">WS</span>
+      <span class="ws-dot disconnected" id="cam-ws-indicator" title="Action WS (8765)"></span>
+      <span class="ws-label">ACT</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
+  <main class="layout">
+
+    <!-- ── LEFT: Camera Viewer ── -->
+    <div class="left-col">
+      <section class="panel panel-camera">
+        <div class="panel-header">
+          <span>&#x1F4F7; Camera Viewer</span>
+        </div>
+        <div class="panel-body">
+          <!-- Camera 0: Head -->
+          <div class="cam-item">
+            <div class="cam-row">
+              <span class="cam-label">Head</span>
+              <span class="cam-status active" id="cam-status-0">ON</span>
+              <span class="cam-spacer"></span>
+              <button class="btn btn-xs btn-cam" id="btn-cam-0">Close</button>
+            </div>
+            <div class="cam-preview" id="cam-preview-0">
+              <img id="cam-img-0" src="" alt="Head Camera" />
+              <div class="cam-placeholder" id="cam-placeholder-0">Waiting for stream...</div>
+            </div>
+          </div>
+
+          <!-- Camera 1: Wrist-Left -->
+          <div class="cam-item">
+            <div class="cam-row">
+              <span class="cam-label">Wrist-Left</span>
+              <span class="cam-status active" id="cam-status-1">ON</span>
+              <span class="cam-spacer"></span>
+              <button class="btn btn-xs btn-cam" id="btn-cam-1">Close</button>
+            </div>
+            <div class="cam-preview" id="cam-preview-1">
+              <img id="cam-img-1" src="" alt="Wrist-Left Camera" />
+              <div class="cam-placeholder" id="cam-placeholder-1">Waiting for stream...</div>
+            </div>
+          </div>
+
+          <!-- Camera 2: Wrist-Right -->
+          <div class="cam-item">
+            <div class="cam-row">
+              <span class="cam-label">Wrist-Right</span>
+              <span class="cam-status active" id="cam-status-2">ON</span>
+              <span class="cam-spacer"></span>
+              <button class="btn btn-xs btn-cam" id="btn-cam-2">Close</button>
+            </div>
+            <div class="cam-preview" id="cam-preview-2">
+              <img id="cam-img-2" src="" alt="Wrist-Right Camera" />
+              <div class="cam-placeholder" id="cam-placeholder-2">Waiting for stream...</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Joint State -->
+      <section class="panel">
+        <div class="panel-header">
+          <span>&#x1F916; Robot Joint State</span>
+        </div>
+        <div class="panel-body">
+          <div class="joint-grouped-wrap">
+            <div class="joint-grouped-col">
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm &#xB7; Left (L0-L6)</div>
+                <div id="joint-state-arm-l" class="joint-grid"></div>
+              </div>
+            </div>
+            <div class="joint-grouped-col">
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm &#xB7; Right (R0-R6)</div>
+                <div id="joint-state-arm-r" class="joint-grid"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── RIGHT: Trajectory + Progress ── -->
+    <div class="right-col">
+      <!-- Trajectory Chart -->
+      <section class="panel panel-traj">
+        <div class="panel-header">
+          <span>&#x1F4C8; Joint Trajectory</span>
+          <span class="spacer"></span>
+
+          <!-- Source checkboxes -->
+          <label title="Robot State"><input type="checkbox" id="chk-traj-state" checked /> State</label>
+          <label title="Action Fitted (smoothed)"><input type="checkbox" id="chk-traj-action-fitted" /> Action Fit</label>
+          <label title="Action Raw (model output)"><input type="checkbox" id="chk-traj-action-raw" /> Action Raw</label>
+          <span class="traj-sep"></span>
+
+          <!-- Window slider -->
+          <div class="traj-window-group">
+            <span style="color:#8b949e;font-size:10px;">Win</span>
+            <input id="traj-window-span-slider" class="traj-window-slider" type="range" min="1" max="15" step="1" value="10" />
+            <span id="traj-window-span-value" class="traj-window-value">10s</span>
+          </div>
+          <span class="traj-sep"></span>
+
+          <button class="btn btn-xs" id="btn-traj-clear" title="Clear chart">&#x1F5D1; Clear</button>
+        </div>
+        <div class="panel-body">
+          <!-- Joint selector -->
+          <div style="display:flex;gap:12px;flex-shrink:0;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span class="joint-sel-row-label">Arm L:</span>
+              <div id="joint-row-l" class="joint-sel-row"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span class="joint-sel-row-label">Arm R:</span>
+              <div id="joint-row-r" class="joint-sel-row"></div>
+            </div>
+            <button class="btn btn-xs" id="btn-joints-all">All</button>
+            <button class="btn btn-xs" id="btn-joints-none">None</button>
+          </div>
+
+          <!-- Chart -->
+          <div class="traj-chart-wrap" id="traj-chart-wrap">
+            <canvas id="traj-canvas"></canvas>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </main>
+
+  <!-- Libraries -->
+  <script src="/visual/vlib/chart.js"></script>
+  <script src="/visual/vlib/hammer.min.js"></script>
+  <script src="/visual/vlib/chartjs-plugin-zoom.min.js"></script>
+  <!-- App -->
+  <script src="/static/constants.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
