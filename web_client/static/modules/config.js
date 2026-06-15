@@ -16,7 +16,8 @@ const CONFIG_SELECT_OPTIONS = {
   inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline'],
   intra_chunk_mode: ['raw', 'interpolation', 'fitting'],
   fitting_deg: [3, 4, 5, 6],
-  preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
+  // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
+  method: ['resize', 'none'],
   type: ['a2d', 'mock'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1']

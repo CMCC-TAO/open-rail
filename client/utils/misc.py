@@ -8,7 +8,7 @@ import yaml
 import re
 from pathlib import Path
 
-def crop_and_resize(img, target_height=480, target_width=640):
+def crop_and_resize(img, target_height=480, target_width=640, keep_ratio=True):
     """Crop and resize image to target dimensions while maintaining aspect ratio.
     
     Args:
@@ -43,7 +43,7 @@ def crop_and_resize(img, target_height=480, target_width=640):
     resized = cv2.resize(cropped, (target_width, target_height), interpolation=cv2.INTER_AREA)
     return resized
 
-def pad_and_resize(img, target_height=480, target_width=640, pad_color=(0, 0, 0)):
+def pad_and_resize(img, target_height=480, target_width=640, pad_color=(0, 0, 0), keep_ratio=True):
     """Pad and resize image to target dimensions while maintaining aspect ratio.
     
     Args:
@@ -79,18 +79,50 @@ def pad_and_resize(img, target_height=480, target_width=640, pad_color=(0, 0, 0)
     resized = cv2.resize(padded, (target_width, target_height), interpolation=cv2.INTER_AREA)
     return resized
 
-def resize(img, target_height=480, target_width=640):
-    """Resize image to target dimensions.
+# def resize(img, target_height=480, target_width=640, keep_ratio=True):
+#     """Resize image to target dimensions.
+    
+#     Args:
+#         img: Input image array
+#         target_height (int): Target height in pixels
+#         target_width (int): Target width in pixels
+        
+#     Returns:
+#         numpy.ndarray: Resized image
+#     """
+#     return cv2.resize(img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+def resize(img, target_height=480, target_width=640, keep_ratio=True):
+    """Resize image to target dimensions with optional aspect ratio preservation.
     
     Args:
         img: Input image array
         target_height (int): Target height in pixels
         target_width (int): Target width in pixels
+        keep_ratio (bool): If True, resize keeping aspect ratio (longer side matches target, shorter side scaled);
+                           If False, directly resize to target dimensions.
         
     Returns:
         numpy.ndarray: Resized image
     """
-    return cv2.resize(img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+    if not keep_ratio:
+        return cv2.resize(img, (target_width, target_height), interpolation=cv2.INTER_AREA)
+    
+    height, width = img.shape[:2]
+    # target_ratio = target_width / target_height
+    current_ratio = width / height
+
+    if current_ratio < 1:
+        # Height is the longer side
+        new_height = target_height
+        new_width = int(target_height * current_ratio)
+    else:
+        # Width is the longer side
+        new_width = target_width
+        new_height = int(target_width / current_ratio)
+    # print(f"Resizing image from {width}x{height} to {new_width}x{new_height}")
+    return cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+    # return cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
+    # return cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
 
 def preprocess_yaml(file_path, base_dir=None):
     """Parse YAML files containing !include directives"""
