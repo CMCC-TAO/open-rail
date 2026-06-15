@@ -199,19 +199,40 @@ function setResourceText(el, label, value, unit) {
 //  Joint state display
 // ═══════════════════════════════════════════════════════
 function renderJointState(stateVals) {
-  if (!stateVals || stateVals.length < 14) return;
-  const elArmL = $('joint-state-arm-l');
-  const elArmR = $('joint-state-arm-r');
-  if (!elArmL || !elArmR) return;
-  elArmL.innerHTML = '';
-  elArmR.innerHTML = '';
-  for (let i = 0; i < 7; i++) {
-    const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
-    elArmL.innerHTML += `<div class="joint-chip">L${i}:<br>${v}</div>`;
+  if (!stateVals) return;
+  // Arm joints: indices 0-13
+  if (stateVals.length >= 14) {
+    const elArmL = $('joint-state-arm-l');
+    const elArmR = $('joint-state-arm-r');
+    if (elArmL || elArmR) {
+      if (elArmL) elArmL.innerHTML = '';
+      if (elArmR) elArmR.innerHTML = '';
+      for (let i = 0; i < 7; i++) {
+        const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
+        if (elArmL) elArmL.innerHTML += `<div class="joint-chip">L${i}:<br>${v}</div>`;
+      }
+      for (let i = 7; i < 14; i++) {
+        const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
+        if (elArmR) elArmR.innerHTML += `<div class="joint-chip">R${i - 7}:<br>${v}</div>`;
+      }
+    }
   }
-  for (let i = 7; i < 14; i++) {
-    const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
-    elArmR.innerHTML += `<div class="joint-chip">R${i - 7}:<br>${v}</div>`;
+  // Hand joints: indices 14-25
+  if (stateVals.length >= 26) {
+    const elHandL = $('joint-state-hand-l');
+    const elHandR = $('joint-state-hand-r');
+    if (elHandL || elHandR) {
+      if (elHandL) elHandL.innerHTML = '';
+      if (elHandR) elHandR.innerHTML = '';
+      for (let i = 14; i < 20; i++) {
+        const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
+        if (elHandL) elHandL.innerHTML += `<div class="joint-chip">LH${i - 14}:<br>${v}</div>`;
+      }
+      for (let i = 20; i < 26; i++) {
+        const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
+        if (elHandR) elHandR.innerHTML += `<div class="joint-chip">RH${i - 20}:<br>${v}</div>`;
+      }
+    }
   }
 }
 
@@ -294,6 +315,131 @@ function applyChipColor(chip, active, color) {
   }
 }
 
+// ═══════════════════════════════════════════════════════
+//  Hand trajectory chart — separate from arm chart
+// ═══════════════════════════════════════════════════════
+function createHandChart() {
+  const ht = App.handTraj;
+  if (ht.chart) return;
+  const canvas = $('hand-traj-canvas');
+  if (!canvas) return;
+  ht.chart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      parsing: false,
+      scales: {
+        x: {
+          type: 'linear',
+          title: { display: true, text: 'Time (s)', color: '#aaa', font: { size: 10 } },
+          ticks: { maxTicksLimit: 8, color: '#888', font: { size: 9 } },
+          grid: { color: 'rgba(255,255,255,.06)' },
+        },
+        y: {
+          title: { display: true, text: 'Hand Pos', color: '#aaa', font: { size: 10 } },
+          ticks: { maxTicksLimit: 6, color: '#888', font: { size: 9 } },
+          grid: { color: 'rgba(255,255,255,.06)' },
+        },
+      },
+      plugins: {
+        legend: {
+          display: true, position: 'top',
+          labels: {
+            usePointStyle: true, pointStyle: 'line', padding: 4,
+            font: { size: 9 }, color: '#ccc', boxWidth: 16,
+          },
+        },
+        tooltip: { mode: 'index', intersect: false },
+      },
+      interaction: { intersect: false, mode: 'index' },
+    },
+  });
+}
+
+function buildHandJointSelector() {
+  const ht = App.handTraj;
+  const rowL = $('hand-joint-row-l');
+  const rowR = $('hand-joint-row-r');
+  if (!rowL || !rowR) return;
+  rowL.innerHTML = '';
+  rowR.innerHTML = '';
+  // Hand joints: indices 14-25 (LH0-LH5=14-19, RH0-RH5=20-25)
+  for (let i = 14; i < 26; i++) {
+    const chip = document.createElement('span');
+    const localIdx = i - 14; // 0-11 for color lookup
+    const color = HAND_JOINT_COLORS[localIdx];
+    chip.className = 'joint-sel-chip' + (ht.selectedJoints.has(i) ? ' active' : '');
+    chip.textContent = i < 20 ? `LH${i - 14}` : `RH${i - 20}`;
+    chip.dataset.idx = i;
+    applyChipColor(chip, ht.selectedJoints.has(i), color);
+    chip.addEventListener('click', () => {
+      if (ht.selectedJoints.has(i)) { ht.selectedJoints.delete(i); chip.classList.remove('active'); applyChipColor(chip, false, color); }
+      else { ht.selectedJoints.add(i); chip.classList.add('active'); applyChipColor(chip, true, color); }
+      refreshHandChart();
+    });
+    (i < 20 ? rowL : rowR).appendChild(chip);
+  }
+  refreshHandChart();
+}
+
+function refreshHandChart() {
+  const t = App.traj;
+  const ht = App.handTraj;
+  if (!ht.chart) return;
+  const src = t.source;
+  const datasets = [];
+  const sorted = [...ht.selectedJoints].sort((a, b) => a - b);
+  if (sorted.length === 0 || src.size === 0) {
+    ht.chart.data.datasets = [];
+    ht.chart.update('none');
+    return;
+  }
+
+  for (const jointIdx of sorted) {
+    const localIdx = jointIdx - 14;
+    const color = HAND_JOINT_COLORS[localIdx] || 'rgb(100,100,100)';
+    const label = jointIdx < 20 ? `LH${jointIdx - 14}` : `RH${jointIdx - 20}`;
+
+    if (src.has('state')) {
+      const data = getJointSeriesData('state', jointIdx);
+      datasets.push({
+        label: label + ' (S)', data,
+        borderColor: color, borderWidth: 1.5, borderDash: [1, 3],
+        pointRadius: 0, tension: 0.1, fill: false,
+      });
+    }
+    if (src.has('action_fitted')) {
+      const data = getJointSeriesData('action_fitted', jointIdx);
+      datasets.push({
+        label: label + ' (AF)', data,
+        borderColor: color, borderWidth: 2, borderDash: [],
+        pointRadius: 0, tension: 0.1, fill: false,
+      });
+    }
+    if (src.has('action_raw')) {
+      const data = getJointSeriesData('action_raw', jointIdx);
+      datasets.push({
+        label: label + ' (AR)', data,
+        borderColor: color, borderWidth: 1, borderDash: [4, 3],
+        pointRadius: 0, tension: 0.1, fill: false,
+      });
+    }
+  }
+
+  ht.chart.data.datasets = datasets;
+
+  const { xLeft, xRight } = t;
+  if (Number.isFinite(xLeft) && Number.isFinite(xRight) && xRight > xLeft) {
+    ht.chart.options.scales.x.min = xLeft;
+    ht.chart.options.scales.x.max = xRight;
+  }
+
+  ht.chart.update('none');
+}
+
 function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampSec = null) {
   const t = App.traj;
   if (stateArr.length === 0 && actionFittedArr.length === 0 && actionRawArr.length === 0) return;
@@ -328,6 +474,7 @@ function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampS
   if (t.source.size === 0) return;
   recomputeXWindow();
   t.dirty = true;
+  App.handTraj.dirty = true;
 }
 
 function trimBuffer(key, currentX) {
@@ -428,12 +575,19 @@ function refreshUnifiedChart() {
 function startTrajUpdateTimer() {
   if (App.traj.updateTimer) clearInterval(App.traj.updateTimer);
   App.traj.updateTimer = setInterval(() => {
-    if (!App.traj.dirty) return;
+    if (!App.traj.dirty && !App.handTraj.dirty) return;
     const now = Date.now();
     if (now - App.traj.lastUpdateAt < App.traj.updateIntervalMs) return;
-    refreshUnifiedChart();
-    App.traj.dirty = false;
+    if (App.traj.dirty) {
+      refreshUnifiedChart();
+      App.traj.dirty = false;
+    }
+    if (App.handTraj.dirty) {
+      refreshHandChart();
+      App.handTraj.dirty = false;
+    }
     App.traj.lastUpdateAt = now;
+    App.handTraj.lastUpdateAt = now;
   }, App.traj.updateIntervalMs);
 }
 
@@ -477,9 +631,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Source checkboxes
-  $('chk-traj-state')?.addEventListener('change', e => { if (e.target.checked) App.traj.source.add('state'); else App.traj.source.delete('state'); App.traj.dirty = true; });
-  $('chk-traj-action-fitted')?.addEventListener('change', e => { if (e.target.checked) App.traj.source.add('action_fitted'); else App.traj.source.delete('action_fitted'); App.traj.dirty = true; });
-  $('chk-traj-action-raw')?.addEventListener('change', e => { if (e.target.checked) App.traj.source.add('action_raw'); else App.traj.source.delete('action_raw'); App.traj.dirty = true; });
+  $('chk-traj-state')?.addEventListener('change', e => { if (e.target.checked) App.traj.source.add('state'); else App.traj.source.delete('state'); App.traj.dirty = true; App.handTraj.dirty = true; });
+  $('chk-traj-action-fitted')?.addEventListener('change', e => { if (e.target.checked) App.traj.source.add('action_fitted'); else App.traj.source.delete('action_fitted'); App.traj.dirty = true; App.handTraj.dirty = true; });
+  $('chk-traj-action-raw')?.addEventListener('change', e => { if (e.target.checked) App.traj.source.add('action_raw'); else App.traj.source.delete('action_raw'); App.traj.dirty = true; App.handTraj.dirty = true; });
 
   // Clear button
   $('btn-traj-clear')?.addEventListener('click', () => {
@@ -487,19 +641,45 @@ document.addEventListener('DOMContentLoaded', () => {
     App.traj.startTimeSec = null;
     App.traj.lastX = 0;
     App.traj.dirty = true;
+    App.handTraj.dirty = true;
     refreshUnifiedChart();
+    refreshHandChart();
   });
 
-  // Joint selector all/none
+  // Joint selector all/none (arm)
   $('btn-joints-all')?.addEventListener('click', () => {
     for (let i = 0; i < 14; i++) App.traj.selectedJoints.add(i);
-    document.querySelectorAll('.joint-sel-chip').forEach(c => { c.classList.add('active'); applyChipColor(c, true, JOINT_COLORS[c.dataset.idx]); });
+    document.querySelectorAll('#joint-row-l .joint-sel-chip, #joint-row-r .joint-sel-chip').forEach(c => { c.classList.add('active'); applyChipColor(c, true, JOINT_COLORS[c.dataset.idx]); });
     refreshUnifiedChart();
   });
   $('btn-joints-none')?.addEventListener('click', () => {
-    App.traj.selectedJoints.clear();
-    document.querySelectorAll('.joint-sel-chip').forEach(c => { c.classList.remove('active'); applyChipColor(c, false, ''); });
+    for (let i = 0; i < 14; i++) App.traj.selectedJoints.delete(i);
+    document.querySelectorAll('#joint-row-l .joint-sel-chip, #joint-row-r .joint-sel-chip').forEach(c => { c.classList.remove('active'); applyChipColor(c, false, ''); });
     refreshUnifiedChart();
+  });
+
+  // Hand joint selector all/none
+  $('btn-hand-joints-all')?.addEventListener('click', () => {
+    for (let i = 14; i < 26; i++) App.handTraj.selectedJoints.add(i);
+    document.querySelectorAll('#hand-joint-row-l .joint-sel-chip, #hand-joint-row-r .joint-sel-chip').forEach(c => { c.classList.add('active'); applyChipColor(c, true, HAND_JOINT_COLORS[c.dataset.idx - 14]); });
+    refreshHandChart();
+  });
+  $('btn-hand-joints-none')?.addEventListener('click', () => {
+    for (let i = 14; i < 26; i++) App.handTraj.selectedJoints.delete(i);
+    document.querySelectorAll('#hand-joint-row-l .joint-sel-chip, #hand-joint-row-r .joint-sel-chip').forEach(c => { c.classList.remove('active'); applyChipColor(c, false, ''); });
+    refreshHandChart();
+  });
+
+  // Hand chart clear
+  $('btn-hand-traj-clear')?.addEventListener('click', () => {
+    // Share the same buffer — clear also affects arm chart
+    App.traj.buffer = { state: [], action_fitted: [], action_raw: [] };
+    App.traj.startTimeSec = null;
+    App.traj.lastX = 0;
+    App.traj.dirty = true;
+    App.handTraj.dirty = true;
+    refreshUnifiedChart();
+    refreshHandChart();
   });
 
   // Window slider
@@ -513,6 +693,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   createUnifiedChart();
   buildJointSelector();
+  createHandChart();
+  buildHandJointSelector();
   startTrajUpdateTimer();
   startCameraRenderLoop();
   connectWS();

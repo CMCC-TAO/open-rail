@@ -138,7 +138,7 @@ html, body {
 }
 
 /* ── Trajectory Panel ─────────────────────────────── */
-.panel-traj { flex: 1; }
+.panel-traj { flex: 1; min-height: 0; }
 .panel-traj .panel-body {
   display: flex; flex-direction: column; gap: 6px;
   padding: 6px;

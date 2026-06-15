@@ -41,7 +41,7 @@ const TRAJ_BUFFER_HARD_MAX_POINTS = 20000;
 const TRAJ_RENDER_POINT_MAX = 700;
 const DEFAULT_TRAJ_UPDATE_MS = 50;
 
-// 14-joint palette
+// Arm joint palette (14 joints: L0-L6, R0-R6)
 const JOINT_COLORS = [
   'rgb(220, 20, 60)',   // L0
   'rgb(255, 140, 0)',   // L1
@@ -57,6 +57,22 @@ const JOINT_COLORS = [
   'rgb(0, 128, 128)',   // R4
   'rgb(160, 32, 240)',  // R5
   'rgb(255, 105, 180)', // R6
+];
+
+// Hand joint palette (12 joints: LH0-LH5, RH0-RH5)
+const HAND_JOINT_COLORS = [
+  'rgb(255, 99, 132)',  // LH0
+  'rgb(255, 159, 64)',  // LH1
+  'rgb(255, 205, 86)',  // LH2
+  'rgb(75, 192, 192)',  // LH3
+  'rgb(54, 162, 235)',  // LH4
+  'rgb(153, 102, 255)', // LH5
+  'rgb(255, 159, 64)',  // RH0
+  'rgb(255, 99, 132)',  // RH1
+  'rgb(255, 205, 86)',  // RH2
+  'rgb(75, 192, 192)',  // RH3
+  'rgb(54, 162, 235)',  // RH4
+  'rgb(153, 102, 255)', // RH5
 ];
 
 function normalizeTrajWindowSpanSec(rawSpanSec, fallback = TRAJ_WINDOW_SPAN_SEC) {
@@ -87,10 +103,10 @@ const App = {
   lastCamUpdate: 0,
   camUpdateTimer: null,
 
-  // Trajectory state
+  // Trajectory state (arm: joints 0-13)
   traj: {
     source: new Set(['state']),
-    numJoints: 14,
+    numJoints: 26,
     selectedJoints: new Set([0, 1, 2, 3]),
     buffer: { state: [], action_fitted: [], action_raw: [] },
     startTimeSec: null,
@@ -101,6 +117,14 @@ const App = {
     dirty: false,
     updateIntervalMs: DEFAULT_TRAJ_UPDATE_MS,
     updateTimer: null,
+    lastUpdateAt: 0,
+  },
+
+  // Hand trajectory state (hand: joints 14-25, displayed as LH0-LH5/RH0-RH5)
+  handTraj: {
+    selectedJoints: new Set([14, 15, 16, 17]),
+    chart: null,
+    dirty: false,
     lastUpdateAt: 0,
   },
 };

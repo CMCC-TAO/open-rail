@@ -84,7 +84,7 @@
       <!-- Joint State -->
       <section class="panel">
         <div class="panel-header">
-          <span>&#x1F916; Robot Joint State</span>
+          <span>&#x1F916; Arm Joint State</span>
         </div>
         <div class="panel-body">
           <div class="joint-grouped-wrap">
@@ -103,14 +103,37 @@
           </div>
         </div>
       </section>
+
+      <!-- Hand Joint State -->
+      <section class="panel">
+        <div class="panel-header">
+          <span>&#x1F91E; Hand Joint State</span>
+        </div>
+        <div class="panel-body">
+          <div class="joint-grouped-wrap">
+            <div class="joint-grouped-col">
+              <div class="joint-group-section">
+                <div class="joint-group-label">Hand &#xB7; Left (LH0-LH5)</div>
+                <div id="joint-state-hand-l" class="joint-grid"></div>
+              </div>
+            </div>
+            <div class="joint-grouped-col">
+              <div class="joint-group-section">
+                <div class="joint-group-label">Hand &#xB7; Right (RH0-RH5)</div>
+                <div id="joint-state-hand-r" class="joint-grid"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
     <!-- ── RIGHT: Trajectory + Progress ── -->
     <div class="right-col">
-      <!-- Trajectory Chart -->
+      <!-- Trajectory Chart (Arm) -->
       <section class="panel panel-traj">
         <div class="panel-header">
-          <span>&#x1F4C8; Joint Trajectory</span>
+          <span>&#x1F4C8; Arm Trajectory</span>
           <span class="spacer"></span>
 
           <!-- Source checkboxes -->
@@ -147,6 +170,36 @@
           <!-- Chart -->
           <div class="traj-chart-wrap" id="traj-chart-wrap">
             <canvas id="traj-canvas"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Hand Trajectory Chart -->
+      <section class="panel panel-traj">
+        <div class="panel-header">
+          <span>&#x1F91E; Hand Trajectory</span>
+          <span class="spacer"></span>
+
+          <button class="btn btn-xs" id="btn-hand-traj-clear" title="Clear hand chart">&#x1F5D1; Clear</button>
+        </div>
+        <div class="panel-body">
+          <!-- Hand joint selector -->
+          <div style="display:flex;gap:12px;flex-shrink:0;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span class="joint-sel-row-label">Hand L:</span>
+              <div id="hand-joint-row-l" class="joint-sel-row"></div>
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <span class="joint-sel-row-label">Hand R:</span>
+              <div id="hand-joint-row-r" class="joint-sel-row"></div>
+            </div>
+            <button class="btn btn-xs" id="btn-hand-joints-all">All</button>
+            <button class="btn btn-xs" id="btn-hand-joints-none">None</button>
+          </div>
+
+          <!-- Hand Chart -->
+          <div class="traj-chart-wrap">
+            <canvas id="hand-traj-canvas"></canvas>
           </div>
         </div>
       </section>
