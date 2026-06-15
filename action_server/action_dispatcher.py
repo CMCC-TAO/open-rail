@@ -213,7 +213,8 @@ class VLAActionDispatcher(Node):
 # ==============================================
 
 def main(args=None):
-    rclpy.init(args=args)
+    # 显式传 args=[] 避免 sys.argv 干扰 ROS2 参数解析
+    rclpy.init(args=args if args is not None else [])
 
     dispatcher = None
     try:
