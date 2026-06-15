@@ -7,14 +7,14 @@ import sys
 import logging
 import argparse
 from ml_collections import ConfigDict
-from client.core import zmq_client
+from client.core import inter_chunk_fuser, zmq_client
 from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
-from conf.logging_conf import LOGGING_CONFIG
+from conf.logging_conf import setup_logging
 from client.core.vla_client import VLAClientAsync
-from client.core.vla_client_sync import VLAClientSync
 from client.core.zmq_client import ZMQClient
-from client.core.trajectory_generator import TrajectoryGenerator
+from client.core.inter_chunk_fuser import InterChunkFuser
+from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from rich.live import Live
 from rich.console import Console
@@ -46,7 +46,7 @@ def get_robot(config: ConfigDict):
         raise ValueError(f'Invalid Robot Type: {config.robots.type}')
 
 def parse_args():
-    """Parse command line arguments for VLA Client
+    """Parse command line arguments for VLA-RAIL Client
     
     Returns:
         argparse.Namespace: Parsed command line arguments
@@ -54,12 +54,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Client')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     parser.add_argument('--fps', type=int, help='FPS')
-    parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
+    parser.add_argument('--wait_time', type=int, help='Wait time for the next inference step in milliseconds')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
     parser.add_argument('--search_length', type=int, help='Forward search length')
-    parser.add_argument('--intra_chunk_mode', type=str, choices=['raw', 'raw_ipt', 'fit'], help='Intra-chunk processing mode: raw_ipt=direct execution with interpolation')
-    parser.add_argument('--inter_chunk_mode', type=str, choices=['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync'], help='The method to bridge action chunks')
-    parser.add_argument('--show_action_cams_qt', action='store_true', help='Show action and camera images visualization based on QT')
+    parser.add_argument('--intra_chunk_mode', type=str, choices=['raw', 'interpolation', 'fitting'], help='Intra-chunk processing mode: interpolation=process with interpolation')
+    parser.add_argument('--inter_chunk_mode', type=str, choices=['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline'], help='The method to bridge action chunks')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock', 'unitree_g1'], help='Robot type')
     parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
@@ -82,26 +81,26 @@ def override_config_with_args(config, args):
     """
     if args.fps is not None:
         config.observer.fps = args.fps
-    if args.sleep_time is not None:
-        config.sleep_time = args.sleep_time
+    if args.wait_time is not None:
+        config.controller.wait_time = args.wait_time
     if args.gripper_offset is not None:
-        config.gripper_offset = args.gripper_offset
+        config.controller.gripper_offset = args.gripper_offset
     if args.intra_chunk_mode is not None:
-        config.intra_chunk_mode = args.intra_chunk_mode
+        config.intra_chunk.intra_chunk_mode = args.intra_chunk_mode
+    if args.search_length is not None:
+        config.inter_chunk.search_length = args.search_length
     if args.inter_chunk_mode is not None:
-        config.inter_chunk_mode = args.inter_chunk_mode
-    if args.show_action_cams_qt:
-        config.show_action_cams_qt = True
+        config.inter_chunk.inter_chunk_mode = args.inter_chunk_mode
     if args.record:
         config.record.switch = True
     if args.robots_type is not None:
         config.robots.type = RobotType(args.robots_type)
-    if args.thre_prob_progress is not None:
-        config.thre_prob_progress = args.thre_prob_progress
+    if args.task_progress_threshold is not None:
+        config.language.task_progress_threshold = args.task_progress_threshold
     if args.preprocess is not None:
-        config.preprocess = args.preprocess
+        config.vision.preprocess = args.preprocess
     if args.preprocess_size is not None:
-        config.preprocess_size = args.preprocess_size
+        config.vision.preprocess_size = args.preprocess_size
     if args.language is not None:
         config.language = args.language
     return config
@@ -116,6 +115,35 @@ def wheel_control_loop(robot):
         robot.execute_action({'wheel': wheel_pos})
         time.sleep(0.05)
 
+
+def pause_vla_client_actions(vla_client):
+    if hasattr(vla_client, 'pause'):
+        vla_client.pause()
+        return
+    if hasattr(vla_client, 'is_observe_thread_running'):
+        vla_client.is_observe_thread_running = False
+    if hasattr(vla_client, 'is_inference_thread_running'):
+        vla_client.is_inference_thread_running = False
+    if hasattr(vla_client, 'is_control_thread_running'):
+        vla_client.is_control_thread_running = False
+    if hasattr(vla_client, 'is_running_action'):
+        vla_client.is_running_action = False
+
+
+def resume_vla_client_actions(vla_client):
+    if hasattr(vla_client, 'resume'):
+        vla_client.resume()
+        return
+    if hasattr(vla_client, 'is_observe_thread_running'):
+        vla_client.is_observe_thread_running = True
+    if hasattr(vla_client, 'is_inference_thread_running'):
+        vla_client.is_inference_thread_running = True
+    if hasattr(vla_client, 'is_control_thread_running'):
+        vla_client.is_control_thread_running = True
+    if hasattr(vla_client, 'is_running_action'):
+        vla_client.is_running_action = True
+
+
 def handle_user_input(vla_client, robot, live):
     """Handle user input
     
@@ -126,7 +154,7 @@ def handle_user_input(vla_client, robot, live):
         live.stop()
     
     try:
-        vla_client.is_running_action = False
+        pause_vla_client_actions(vla_client)
         cmd = input('\nProgram paused, please enter command, press Enter to continue:\nr: reset robot\nc: control robot\nl: modify language instruction\ns: save data (if recording enabled)\nd: delete data (if recording enabled)\nq: quit\n')
         
         if cmd == 'l':
@@ -215,16 +243,16 @@ def handle_user_input(vla_client, robot, live):
                 print('Control robot cmd completed!')
             vla_client.inference_first()
         elif cmd == 's' and vla_client.config.record.switch:
-            vla_client.dataset_write.save_writed_data()
+            # vla_client.dataset_write.save_writed_data()
             input('Data saved, press Enter to continue...')
         elif cmd == 'd' and vla_client.config.record.switch:
-            vla_client.dataset_write.abandon_record_data()
+            # vla_client.dataset_write.abandon_record_data()
             input('Data deleted, press Enter to continue...')
         elif cmd == 'q':
             return False  # Signal to quit
         
         vla_client.inference_first() # avoid pause/restart shaking
-        vla_client.is_running_action = True
+        resume_vla_client_actions(vla_client)
         return True  # Continue running
         
     finally:
@@ -233,9 +261,8 @@ def handle_user_input(vla_client, robot, live):
 
 if __name__ == "__main__":
     args = parse_args()
-    # Initialize logging configuration    
-    logging.config.dictConfig(LOGGING_CONFIG)
-    logger = logging.getLogger(__name__)
+    # Initialize logging configuration
+    logger = setup_logging("client.log", __name__)
     
     # Get configuration and apply command line arguments
     config = get_client_config()
@@ -254,14 +281,18 @@ if __name__ == "__main__":
     robot_cfg = getattr(config.robots, config.robots.type.value, None)
     if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
         config.rdm.action_layout = robot_cfg.action_layout
-        config.traj.action_layout = robot_cfg.action_layout
-    rdm = RealtimeDataManager(config.rdm)
-    traj_generator = TrajectoryGenerator(config=config.traj)
-    if config.inter_chunk_mode == 'sync':
-        vla_client = VLAClientSync(config=config, rdm=rdm, traj_generator=traj_generator, vla_zmq_client=vla_zmq_client, robot=robot)
-    else:
-        vla_client = VLAClientAsync(config=config, rdm=rdm, traj_generator=traj_generator, vla_zmq_client=vla_zmq_client, robot=robot)
-
+        config.intra_chunk.action_layout = robot_cfg.action_layout
+    realtime_data_manager = RealtimeDataManager(config.rdm)
+    inter_chunk_fuser = InterChunkFuser(config=config.inter_chunk)
+    intra_chunk_smoother = IntraChunkSmoother(config=config.intra_chunk)
+    vla_client = VLAClientAsync(
+        config=config,
+        realtime_data_manager=realtime_data_manager,
+        inter_chunk_fuser=inter_chunk_fuser,
+        intra_chunk_smoother=intra_chunk_smoother,
+        vla_zmq_client=vla_zmq_client,
+        robot=robot
+        )
 
     # extra
     if args.extra_dispatch_mode[0] != '0':
@@ -292,7 +323,7 @@ if __name__ == "__main__":
                 terminal_size = console.size
                 live.update(create_layout(info, terminal_size))
             elif args.debug:
-                print(f"\rinfer_count: {vla_client.rdm.infer_count}, avg_infer_time: {vla_client.rdm.avg_infer_time: .4f}s, "
+                print(f"\rinfer_count: {vla_client.realtime_data_manager.infer_count}, avg_infer_time: {vla_client.realtime_data_manager.avg_infer_time: .4f}s, "
                         f"task_info: {vla_client.language}", end='')
 
             # Check for user input using select

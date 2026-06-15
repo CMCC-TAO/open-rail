@@ -1,0 +1,76 @@
+/* ═══════════════════════════════════════════
+   RIGHT: CAMERA VISUAL
+   ═══════════════════════════════════════════ */
+.panel-visual {
+  overflow: hidden;
+}
+/* panel-visual collapsed — zero width, content clipped, stays in grid flow */
+.panel-visual.collapsed { overflow: hidden; min-width: 0; }
+
+.panel-visual .panel-body {
+  gap: 4px;
+  padding: 4px;
+  overflow-y: auto;
+  /* natural flow — items stack vertically, scroll if needed */
+  display: flex; flex-direction: column;
+}
+
+/* ── Camera item card: rounded border wrapping title+preview ── */
+.cam-item {
+  display: flex; flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  overflow: hidden;
+  flex-shrink: 0;   /* never compress; scroll the body instead */
+}
+
+/* Header row inside the card */
+.cam-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 8px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.cam-label { font-size: 11px; font-weight: 600; color: var(--text); flex: 0 0 auto; }
+.cam-status {
+  font-size: 10px; padding: 1px 6px; border-radius: 8px;
+  background: var(--bg2); border: 1px solid var(--border);
+  color: var(--text-muted); transition: all .2s;
+}
+.cam-status.active { background: rgba(26,127,55,.1); border-color: var(--success); color: var(--success); }
+.cam-status.error  { background: rgba(207,34,46,.08); border-color: var(--danger);  color: var(--danger);  }
+.cam-spacer { flex: 1; }
+
+/* Preview area: always visible, 640:480 = 4:3 */
+.cam-preview {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: var(--bg3);
+  overflow: hidden;
+  position: relative;
+  flex-shrink: 0;
+}
+/* Closed state: dim the image with an overlay, don't hide the box */
+.cam-preview.closed::after {
+  content: 'CLOSED';
+  position: absolute; inset: 0;
+  background: rgba(31,35,40,.55);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; letter-spacing: 2px;
+  color: rgba(255,255,255,.8);
+  pointer-events: none;
+}
+.cam-preview img {
+  width: 100%; height: 100%; object-fit: cover; background: var(--bg3);
+  display: block;
+}
+/* Hide broken-image icon before stream arrives */
+.cam-preview img:not(.loaded) { visibility: hidden; }
+.cam-preview-placeholder {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: var(--text-muted);
+  pointer-events: none;
+}

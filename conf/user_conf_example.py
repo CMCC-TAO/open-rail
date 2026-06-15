@@ -8,7 +8,7 @@ Usage:
     python run_client.py --user_conf conf/user_conf_example.py
 
 Configuration Priority (highest to lowest):
-    1. Command line arguments (--fps, --sleep_time, etc.)
+    1. Command line arguments (--fps, --wait_time, etc.)
     2. User configuration file (--user_conf)
     3. Default client configuration (client_conf.py)
 """
@@ -27,7 +27,9 @@ def get_user_config():
     """
     return {
         # Simple parameter overrides
-        'inter_chunk_mode': 'min_jerk',
+        'inter_chunk': {
+            'inter_chunk_mode': 'min_jerk',
+        },
         'language': [
             '[PLACE_CUP_ON_TABLE_RIGHT] [RIGHT_ARM] With the right arm, place the cup onto the table.',
             '[PLACE_CUP_ON_TABLE_LEFT] [LEFT_ARM] Using the left arm, place the cup onto the table.',

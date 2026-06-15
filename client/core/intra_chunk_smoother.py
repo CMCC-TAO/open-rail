@@ -1,13 +1,12 @@
-import time
-import queue
-import threading
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.interpolate import CubicSpline, interp1d
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from client.utils.util import run_time_decorator, get_action_layout_info
+from client.utils.util import run_time_decorator, parse_action_layout
 
-class TrajectoryGenerator():
+class IntraChunkSmoother():
     """Trajectory generator for robot motion planning and control.
     
     This class provides functionality for fitting and generating smooth trajectories
@@ -19,23 +18,93 @@ class TrajectoryGenerator():
         Args:
             config (ConfigDict): Configuration parameters for trajectory generation.
         """
+        self.logger = logging.getLogger(__name__)
         self.config = config
         self.action_layout = dict(config.action_layout) if hasattr(config, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = get_action_layout_info(self.action_layout)
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         # Create thread pools for parallel trajectory fitting
         self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers)
         self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers)
         self.hand_fitting_executor = ThreadPoolExecutor(max_workers=getattr(config, 'max_hand_fitting_workers', 12))
         
         # Initialize trajectory data storage
-        self.traj = None
-        self.traj_fitted = None
-        self.vel_fitted = None
-        self.acc_fitted = None
-        self.timestamps = None
-        self.timestamps_fitted = None
+        # self.traj = None
+        # self.traj_fitted = None
+        # self.vel_fitted = None
+        # self.acc_fitted = None
+        # self.timestamps = None
+        # self.timestamps_fitted = None
         
         self.frame = 0
+
+    def process(self, timestamps, action_chunk, task_progress=None):
+        """Perform trajectory fitting for robot actions.
+        
+        This method retrieves action chunks from the real-time data manager,
+        performs polynomial fitting using the trajectory generator to create
+        smooth trajectories for robot control.
+        
+        Args:
+            num_samples (int): Number of action samples to use for fitting
+            
+        Returns:
+            tuple: A tuple containing:
+                - action_chunk_fitted (np.ndarray): Fitted action trajectory
+                - vel_chunk_fitted (np.ndarray): Fitted velocity trajectory  
+                - timestamps_fitted (np.ndarray): Corresponding timestamps
+        """
+        
+        start_time = timestamps[0]
+        end_time = timestamps[-1]
+        
+        if self.config.intra_chunk_mode == 'raw':
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_raw(
+                timestamps=timestamps, 
+                action_chunk=action_chunk,
+                start_time=start_time,
+                end_time=end_time
+            ) 
+            task_progress_fitted = task_progress  # directly use the original task progress without interpolation
+        elif self.config.intra_chunk_mode == 'interpolation':
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_interpolation(
+                timestamps=timestamps,
+                action_chunk=action_chunk,
+                start_time=start_time,
+                end_time=end_time
+            )
+            task_progress_fitted = self._task_progress_interpolation(
+                timestamps=timestamps,
+                task_progress=task_progress,
+                start_time=start_time,
+                end_time=end_time
+            ) if task_progress is not None else None
+        elif self.config.intra_chunk_mode == 'fitting':
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
+                timestamps=timestamps, 
+                action_chunk=action_chunk, 
+                start_time=start_time, 
+                end_time=end_time 
+            )
+            task_progress_fitted = self._task_progress_interpolation(
+                timestamps=timestamps,
+                task_progress=task_progress,
+                start_time=start_time,
+                end_time=end_time
+            ) if task_progress is not None else None
+        else:  # fit mode (default)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
+                timestamps=timestamps, 
+                action_chunk=action_chunk, 
+                start_time=start_time, 
+                end_time=end_time 
+            )
+            task_progress_fitted = self._task_progress_interpolation(
+                timestamps=timestamps,
+                task_progress=task_progress,
+                start_time=start_time,
+                end_time=end_time
+            ) if task_progress is not None else None
+        return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted
 
     def _joint_traj_fitting(self, timestamps, joint_chunk, index, start_time, end_time, deg = 5, time_step = 0.001):
         """Fit a joint trajectory using polynomial fitting with deg parameter and return the fitted trajectory defined by start_time, end_time and time_step.
@@ -74,7 +143,7 @@ class TrajectoryGenerator():
         # Calculate joint acceleration using the second derivative
         second_derivative_polynomial = np.poly1d(second_derivative_coefficients)
         acceleration_chunk_fitted = second_derivative_polynomial(x)
-
+        # print(f"fitting degree: {deg}, time_step: {time_step}")
         return index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
     def _gripper_traj_fitting(self, timestamps, gripper_chunk, index, start_time, end_time, time_step = 0.001):
@@ -169,7 +238,7 @@ class TrajectoryGenerator():
         return index, hand_chunk_fitted, np.zeros_like(hand_chunk_fitted), np.zeros_like(hand_chunk_fitted)
 
     @run_time_decorator
-    def traj_fitting(self, timestamps, action_chunk, start_time, end_time, deg = 3, time_step = 0.001):
+    def _traj_fitting(self, timestamps, action_chunk, start_time, end_time):
         """Fit trajectories for both joints and grippers.
         
         Args:
@@ -183,22 +252,24 @@ class TrajectoryGenerator():
         Returns:
             tuple: (fitted_trajectory, fitted_velocity, fitted_timestamps)
         """
+        # use config parameters for fitting degree and time step to allow dynamic adjustment without modifying code
+        deg=self.config.fitting_deg 
+        time_step=self.config.fitting_time_step / 1000 # convert ms to seconds
+
         futures = []
         for name, seg in self.action_layout.items():
             for index in range(seg['start'], seg['end']):
                 joint_chunk = np.array(action_chunk[index, :])
-                if seg['policy'] == 'joint':
+                if seg['policy'] == 'gradual':
                     futures.append(self.joint_fitting_executor.submit(
                         self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
                     ))
-                elif seg['policy'] == 'hand':
-                    futures.append(self.hand_fitting_executor.submit(
-                        self._hand_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
-                    ))
-                else:
+                elif seg['policy'] == 'stepwise':
                     futures.append(self.gripper_fitting_executor.submit(
                         self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
                     ))
+                else:
+                    raise ValueError(f"Unknown policy: {seg['policy']}")
 
         results = [future.result() for future in futures]
         
@@ -213,12 +284,10 @@ class TrajectoryGenerator():
             final_velocity_results[index] = velocity_chunk_fitted
             final_acceleration_results[index] = acceleration_chunk_fitted
         # if self.traj_fitted is None:
-        self.traj_fitted = np.array(final_joint_results)
-        self.vel_fitted = np.array(final_velocity_results)
-        self.acc_fitted = np.array(final_acceleration_results)
-        self.traj = action_chunk
-        self.timestamps_fitted = np.arange(start_time, end_time, time_step)
-        self.timestamps = timestamps
+        traj_fitted = np.array(final_joint_results)
+        vel_fitted = np.array(final_velocity_results)
+        acc_fitted = np.array(final_acceleration_results)
+        timestamps_fitted = np.arange(start_time, end_time, time_step)
         # else:
         #     traj_fitted_new = np.array(final_joint_results)
         #     vel_fitted_new = np.array(final_velocity_results)
@@ -231,7 +300,77 @@ class TrajectoryGenerator():
         #     self.traj = action_chunk
         #     self.timestamps = timestamps
 
-        return self.traj_fitted, self.vel_fitted, self.acc_fitted, self.timestamps_fitted
+        return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
+    
+    @run_time_decorator
+    def _traj_raw(self, timestamps, action_chunk, start_time, end_time):
+        """Return raw trajectories without fitting for both joints and grippers.
+        
+        Args:
+            timestamps (np.array): Timestamps for the action chunk.
+            action_chunk (np.array): Action data to be returned.
+        """
+        
+        traj_fitted = action_chunk
+        vel_fitted = np.zeros_like(action_chunk)
+        acc_fitted = np.zeros_like(action_chunk)
+        timestamps_fitted = timestamps  # original sparse timestamps
+        return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
+    
+    @run_time_decorator
+    def _traj_interpolation(self, timestamps, action_chunk, start_time, end_time):
+        """Interpolate trajectories for both joints and grippers using CubicSpline.
+        
+        Args:
+            timestamps (np.array): Timestamps for the action chunk.
+            action_chunk (np.array): Action data to be interpolated.
+            start_time (float): Start time for the interpolated trajectory.
+            end_time (float): End time for the interpolated trajectory.
+        """
+        # Use CubicSpline interpolation for sparse raw chunks
+        # action_chunk = np.asarray(action_chunk)
+        # timestamps = np.asarray(timestamps)
+        
+        # Create dense timestamps for interpolation
+        time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
+        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        
+        # Interpolate each joint dimension using CubicSpline
+        n_joints = action_chunk.shape[0]
+        traj_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+        vel_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+        acc_fitted = np.zeros((n_joints, len(timestamps_fitted)))
+        
+        step_index_set = set(self.step_indices)
+        for j in range(n_joints):
+            # Gripper and head dimensions use zero-order hold interpolation (step-like)
+            if j in step_index_set:
+                interp_1d = interp1d(timestamps, action_chunk[j], kind='previous', bounds_error=False, fill_value='extrapolate')
+                traj_fitted[j] = interp_1d(timestamps_fitted)
+                vel_fitted[j] = np.zeros(len(timestamps_fitted))
+                acc_fitted[j] = np.zeros(len(timestamps_fitted))
+                continue
+            cubic_spline = CubicSpline(timestamps, action_chunk[j])
+            traj_fitted[j] = cubic_spline(timestamps_fitted)
+            vel_fitted[j] = cubic_spline(timestamps_fitted, 1)  # 1st derivative
+            acc_fitted[j] = cubic_spline(timestamps_fitted, 2)  # 2nd derivative
+        return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
+    
+    def _task_progress_interpolation(self, timestamps, task_progress, start_time, end_time):
+        """Interpolate task progress using linear interpolation.
+        
+        Args:
+            timestamps (np.array): Timestamps for the task progress data.
+            task_progress (np.array): Task progress data to be interpolated.
+            start_time (float): Start time for the interpolated task progress.
+            end_time (float): End time for the interpolated task progress.
+        """
+        time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
+        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        interp_1d = interp1d(timestamps, task_progress, kind='linear', bounds_error=False, fill_value='extrapolate')
+        task_progress_fitted = interp_1d(timestamps_fitted)
+        # self.logger.debug(f"Task progress interpolation: original task progress: {task_progress}, fitted task progress: {task_progress_fitted}")
+        return task_progress_fitted
 
 if __name__ == '__main__':
     import os
@@ -239,7 +378,7 @@ if __name__ == '__main__':
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     print(f'root_dir: {root_dir}')
     sys.path.append(root_dir)
-    from conf.traj_conf import get_traj_config
-    config = get_traj_config()
-    print(config)
-    traj_generator = TrajectoryGenerator(config=config)
+    from conf.client_conf import get_intra_chunk_config
+    intra_chunk_config = get_intra_chunk_config()
+    print(intra_chunk_config)
+    intra_chunk_smoother = IntraChunkSmoother(config=intra_chunk_config)

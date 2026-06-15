@@ -18,12 +18,22 @@ def run_time_decorator(func):
     """
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.perf_counter()  # Record the start time
-        result = func(*args, **kwargs)  # Call the function
-        end_time = time.perf_counter()  # Record the end time
-        elapsed_time = end_time - start_time  # Calculate the elapsed time
-        # Do not uncomment, too much data output affects debugging
-        logger.info(f"Function {func.__name__} called and took {elapsed_time*1000:.4f} milliseconds to execute.")
+        bound_logger = logger
+        if args:
+            instance_logger = getattr(args[0], "logger", None)
+            if isinstance(instance_logger, logging.Logger):
+                bound_logger = instance_logger
+
+        start_time = time.perf_counter()
+        try:
+            result = func(*args, **kwargs)
+        except Exception:
+            bound_logger.exception(f"{func.__name__} failed")
+            raise
+
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        bound_logger.info(f"{func.__name__} takes {elapsed_time*1000:.4f} milliseconds to execute.")
         return result
     return wrapper
 
@@ -163,15 +173,28 @@ def apply_user_config(config, user_config):
     
     return config
 
-def get_action_layout_info(action_layout):
+def parse_action_layout(action_layout):
+    """
+    Parses the action layout.
+
+    Args:
+        action_layout (dict): A dictionary describing the action layout.
+            Example: {'arm': {'start': 0, 'end': 7, 'policy': 'gradual'}, 'gripper': {'start': 7, 'end': 8, 'policy': 'stepwise'}}
+
+    Returns:
+        tuple[int, list[int], list[int]]: A tuple containing:
+            - action_dim (int): The total dimension of the action space.
+            - gradual_indices (list[int]): Action indices for the 'gradual' policy.
+            - stepwise_indices (list[int]): Action indices for the 'stepwise' policy.
+    """
     action_dim = max([v['end'] for v in action_layout.values()]) if action_layout else 0
-    joint_indices, step_indices = [], []
+    gradual_indices, stepwise_indices = [], []
     for v in action_layout.values():
-        if v['policy'] == 'joint':
-            joint_indices.extend(range(v['start'], v['end']))
-        elif v['policy'] == 'gripper':
-            step_indices.extend(range(v['start'], v['end']))
-    return action_dim, joint_indices, step_indices
+        if v['policy'] == 'gradual':
+            gradual_indices.extend(range(v['start'], v['end']))
+        elif v['policy'] == 'stepwise':
+            stepwise_indices.extend(range(v['start'], v['end']))
+    return action_dim, gradual_indices, stepwise_indices
 
 def command_prompt(info: dict):
     """Create a command prompt table for VLA inference framework.
@@ -276,19 +299,18 @@ def create_layout(info: dict, terminal_size=None):
         f"language: {vla_client.language}\n"
         f"record: {config.record.switch}\n"
         f"robots_type: {config.robots.type}\n"
-        f"thre_prob_progress: {config.thre_prob_progress}\n"
+        f"task_progress_threshold: {config.language.task_progress_threshold}\n"
     )
     col_layout1_info2 = (
         f"fps: {config.observer.fps}\n"
-        f"sleep_time: {config.sleep_time}\n"
-        f"gripper_offset: {config.gripper_offset}\n"
-        f"history_frame: {config.history_frame}\n"
+        f"wait_time: {config.controller.wait_time}\n"
+        f"gripper_offset: {config.controller.gripper_offset}\n"
+        f"history_frame: {config.vision.history_frame}\n"
     )
     col_layout1_info3 = (
-        f"wait_step: {config.controller.wait_step}\n"
         f"fps: {config.observer.fps}\n"
-        f"fit_num_samples: {config.fitting_num_samples}\n"
-        f"fit_time_step: {config.fitting_time_step}\n"
+        f"fit_num_samples: {config.intra_chunk.fitting_num_samples}\n"
+        f"fit_time_step: {config.intra_chunk.fitting_time_step}\n"
     )
     col_layout1.split_row(
         Layout(Panel(col_layout1_info1, subtitle='', subtitle_align='center', height=col_height)),
@@ -297,14 +319,14 @@ def create_layout(info: dict, terminal_size=None):
     )
     
     col_layout2_info1 = (
-        f"infer_count: {vla_client.rdm.infer_count}\n"
-        f"avg_infer_time: {vla_client.rdm.avg_infer_time: .4f}s\n"
-        f"avg_traj_time: {vla_client.rdm.avg_traj_time: .4f}s\n"
+        f"infer_count: {vla_client.realtime_data_manager.infer_count}\n"
+        f"avg_infer_time: {vla_client.realtime_data_manager.avg_infer_time: .4f}s\n"
+        f"avg_traj_time: {vla_client.realtime_data_manager.avg_traj_time: .4f}s\n"
     )
     obs_act_info = {
-        "preprocess": config.preprocess,
-        **vla_client.info_obs,
-        **vla_client.info_act,
+        "preprocess": config.vision.preprocess,
+        # **vla_client.info_obs,
+        # **vla_client.info_act,
     }
     col_layout2_info2 = ''
     for key, value in obs_act_info.items():

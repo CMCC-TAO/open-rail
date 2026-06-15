@@ -1,0 +1,19 @@
+/* ── Toast ── */
+.toast-container {
+  position: fixed; bottom: 36px; right: 20px;
+  display: flex; flex-direction: column; gap: 6px; z-index: 999;
+}
+.toast {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 14px; font-size: 12px;
+  max-width: 320px; opacity: 0; transform: translateX(40px);
+  animation: slideIn .25s forwards; pointer-events: none;
+  color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+.toast.ok    { border-color: var(--success); color: var(--success); }
+.toast.error { border-color: var(--danger);  color: var(--danger);  }
+.toast.warn  { border-color: var(--warn);    color: var(--warn);    }
+.toast.info  { border-color: var(--accent);  color: var(--accent);  }
+
+@keyframes slideIn { to { opacity: 1; transform: none; } }
+@keyframes fadeOut { to { opacity: 0; transform: translateX(40px); } }

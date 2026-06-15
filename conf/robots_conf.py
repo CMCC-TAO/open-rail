@@ -49,12 +49,13 @@ def get_mock_config():
                            'hand_left': 'observation.images.hand_left',
                            'hand_right': 'observation.images.hand_right'}
     config.action_layout = {
-        'arm': {'start': 0, 'end': 14, 'policy': 'joint'},
-        'gripper': {'start': 14, 'end': 16, 'policy': 'gripper'},
+        'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
+        'gripper': {'start': 14, 'end': 16, 'policy': 'stepwise'},
         # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
         # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
     }
-    config.root = '/home/robot/Music/task_39_only1'
+    config.dataset_path = '/home/robot/Music/task_39_only1'
+    # config.dataset_path = '/home/robot/Music'
     config.repo_id = 'task_39_only1'
     return config
 

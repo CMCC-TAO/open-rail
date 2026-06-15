@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VLA-RAIL Web Client</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <link rel="stylesheet" href="/static/styles/main.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════ TOP BAR ═══════════════════ -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div id="status-badge" class="status-badge stopped">STOPPED</div>
+    </div>
+    <div class="topbar-center">
+      <span class="logo">VLA-RAIL</span>
+      <span class="subtitle">Web Client Dashboard</span>
+    </div>
+    <div class="topbar-right">
+      <span id="ws-indicator" class="ws-dot disconnected" title="WebSocket"></span>
+      <span class="ws-label">WS</span>
+    </div>
+  </header>
+
+  <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
+  <main class="layout">
+
+    <!-- ╔══════════════ LEFT: CONFIG + MANUAL CONTROL ══════════════╗ -->
+    <div class="left-col" id="left-col">
+      <aside class="panel panel-config panel-expanded" id="panel-config">
+        <div class="panel-header" id="panel-config-header">
+          <span>⚙ Configuration</span>
+          <div class="panel-header-actions">
+            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse / Expand">▲</button>
+          </div>
+        </div>
+        <div class="panel-body" id="config-body">
+
+          <!-- Config file bar -->
+          <div class="config-file-bar">
+            <label class="btn btn-sm" id="btn-load-file" title="Load config file">
+              📂 Load
+              <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
+            </label>
+            <button class="btn btn-sm" id="btn-apply-config">✔ Apply</button>
+            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…">💾 Save As…</button>
+          </div>
+          <!-- Current file path display -->
+          <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
+
+          <!-- Search -->
+          <div class="config-search-bar">
+            <input id="conf-search" class="input-text" type="text" placeholder="Filter keys…" />
+          </div>
+
+          <!-- Config tree -->
+          <div id="config-tree" class="config-tree"></div>
+
+          <!-- Pending badge -->
+          <div class="config-footer">
+            <span id="pending-badge" class="pending-badge hidden">● unsaved changes</span>
+          </div>
+        </div>
+      </aside>
+
+      <section class="panel panel-recording" id="panel-recording">
+        <div class="panel-header" id="panel-recording-header">
+          <span>🧾 Data Recording</span>
+          <div class="panel-header-actions">
+            <button class="btn btn-xs" id="btn-recording-collapse" title="Collapse">▲</button>
+          </div>
+        </div>
+        <div class="panel-body collapsed" id="recording-body">
+          <div class="recording-controls">
+            <button class="btn btn-sm btn-success" id="btn-recording-start">Start</button>
+            <button class="btn btn-sm btn-danger" id="btn-recording-stop">Stop</button>
+          </div>
+          <div class="recording-options">
+            <span class="recording-options-title">Save Content</span>
+            <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" checked /> Episode</label>
+            <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label>
+          </div>
+          <div class="recording-config-wrap">
+            <div class="recording-config-title">Record Config</div>
+            <div id="recording-config-tree" class="recording-config-tree"></div>
+          </div>
+          <div class="recording-file-wrap">
+            <div class="recording-file-filter">
+              <span class="recording-file-filter-label">Tasks</span>
+              <select id="recording-task-select" class="recording-task-select"></select>
+            </div>
+            <div class="recording-file-title"><span>Episodes</span><label class="recording-chunk-filter"><span class="recording-chunk-filter-label">Chunk</span><select id="recording-chunk-select" class="recording-chunk-select"></select></label></div>
+            <div id="recording-file-list" class="recording-file-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel panel-manual" id="panel-manual">
+        <div class="panel-header" id="panel-manual-header">
+          <span>🕹 Manual Robot Control</span>
+          <div class="panel-header-actions">
+            <button class="btn btn-xs" id="btn-manual-collapse" title="Collapse">▲</button>
+          </div>
+        </div>
+        <div class="panel-body collapsed" id="manual-body">
+          <div class="robot-ctrl-grid">
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Arm</div>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-arm-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-arm">Set</button>
+                  <button class="btn btn-sm" id="btn-arm-save">Save</button>
+                </div>
+              </div>
+              <div class="robot-ctrl-row robot-arm-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> L</label>
+                <textarea id="arm-left-joints" class="input-text robot-arm-input" rows="2" placeholder="[0.123, 1.234, 4.567, 0.345, 0.322, 0.456, 0.786]">[0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000]</textarea>
+              </div>
+              <div class="robot-ctrl-row robot-arm-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> R</label>
+                <textarea id="arm-right-joints" class="input-text robot-arm-input" rows="2" placeholder="[0.123, 1.234, 4.567, 0.345, 0.322, 0.456, 0.786]">[0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000]</textarea>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Gripper / Hand</div>
+                <div class="robot-ctrl-checks-right">
+                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-left" checked /> Left</label>
+                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-right" checked /> Right</label>
+                </div>
+              </div>
+              <div class="robot-ctrl-row">
+                <input id="gripper-value" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="value" />
+              </div>
+              <div class="robot-ctrl-row robot-ctrl-row-actions">
+                <button class="btn btn-sm" id="btn-gripper-open">Open</button>
+                <button class="btn btn-sm" id="btn-gripper-close">Close</button>
+                <button class="btn btn-sm" id="btn-gripper-send">Send</button>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Head</div>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-head-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-head">Set</button>
+                  <button class="btn btn-sm" id="btn-head-save">Save</button>
+                </div>
+              </div>
+              <div class="robot-ctrl-row robot-head-input-row">
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">Y:</span>
+                  <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
+                </div>
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">P:</span>
+                  <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
+                </div>
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">R:</span>
+                  <input id="head-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
+                </div>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Waist</div>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-waist-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-waist">Set</button>
+                  <button class="btn btn-sm" id="btn-waist-save">Save</button>
+                </div>
+              </div>
+              <div class="robot-ctrl-row robot-waist-input-row">
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">Y:</span>
+                  <input id="waist-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
+                </div>
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">P:</span>
+                  <input id="waist-pitch" class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
+                </div>
+                <div class="robot-axis-field">
+                  <span class="robot-axis-tag">R:</span>
+                  <input id="waist-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
+                </div>
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Body</div>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-body-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-body">Set</button>
+                  <button class="btn btn-sm" id="btn-body-save">Save</button>
+                </div>
+              </div>
+              <div class="robot-ctrl-row">
+                <div class="robot-ctrl-label">Height (mm)</div>
+                <input id="body-height" class="input-num" type="number" step="1" value="20" placeholder="height" />
+              </div>
+            </section>
+
+            <section class="robot-ctrl-section">
+              <div class="robot-ctrl-section-head">
+                <div class="robot-ctrl-section-title">Wheel / Leg</div>
+                <div class="robot-ctrl-checks-right">
+                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel-keyboard" /> Keyboard Control</label>
+                </div>
+              </div>
+              <div class="robot-ctrl-row robot-ctrl-row-actions">
+                <button class="btn btn-sm" id="btn-wheel-forward">↑ Forward</button>
+                <button class="btn btn-sm" id="btn-wheel-backward">↓ Backward</button>
+                <button class="btn btn-sm" id="btn-wheel-left">↺ Turn Left</button>
+                <button class="btn btn-sm" id="btn-wheel-right">↻ Turn Right</button>
+              </div>
+            </section>
+
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ╔══════════════ CENTER: MONITOR + TRAJECTORY ══════════════╗ -->
+    <div class="center-col">
+
+      <!-- ── Runtime Monitor ── -->
+      <section class="panel panel-monitor">
+        <div class="panel-header monitor-header">
+          <span class="monitor-title">📊 Runtime Monitor</span>
+          <!-- Spacer: push all button groups to the right -->
+          <span class="monitor-spacer"></span>
+          <!-- Group ①: primary controls -->
+          <div class="monitor-ctrl-group">
+            <button class="btn btn-success btn-sm" id="btn-start">▶ Start</button>
+            <button class="btn btn-danger  btn-sm" id="btn-pause" disabled>⏸ Pause</button>
+            <button class="btn btn-xs"             id="btn-reset" disabled>↺ Reset</button>
+          </div>
+          <!-- Separator -->
+          <span class="monitor-sep"></span>
+          <!-- Group ②: thread controls -->
+          <div class="monitor-ctrl-group">
+            <button class="btn btn-xs" id="btn-observe" title="Start observe and visualize"><span class="thread-btn-main">Observe</span><span class="thread-btn-sub">Start</span></button>
+            <button class="btn btn-xs" id="btn-infer" title="Start inference" disabled><span class="thread-btn-main">Infer</span><span class="thread-btn-sub">Start</span></button>
+            <button class="btn btn-xs" id="btn-control" title="Start control" disabled><span class="thread-btn-main">Control</span><span class="thread-btn-sub">Start</span></button>
+          </div>
+          <!-- Separator -->
+          <span class="monitor-sep"></span>
+          <!-- Group ③: system resource usage -->
+          <div class="monitor-ctrl-group monitor-resource-group" title="System resource usage">
+            <span class="resource-pill" id="val-cpu-usage"><span class="resource-label">CPU</span><span class="resource-value">--</span></span>
+            <span class="resource-pill" id="val-gpu-usage"><span class="resource-label">GPU</span><span class="resource-value">--</span></span>
+            <span class="resource-pill" id="val-mem-usage"><span class="resource-label">MEM</span><span class="resource-value">--</span></span>
+            <span class="resource-pill" id="val-bw-usage"><span class="resource-label">BW</span><span class="resource-value">--</span></span>
+          </div>
+        </div>
+        <div class="panel-body">
+
+          <!-- Stats inline bar -->
+          <div class="section-title">Key Statistics</div>
+          <div class="stats-inline">
+            <span class="stat-inline-item">
+              <span class="stat-inline-label">Infer&nbsp;Count</span>
+              <span class="stat-inline-value" id="val-infer-count">–</span>
+            </span>
+            <span class="stat-inline-sep">|</span>
+            <span class="stat-inline-item">
+              <span class="stat-inline-label">Avg&nbsp;Infer</span>
+              <span class="stat-inline-value" id="val-infer-time">–</span>
+            </span>
+            <span class="stat-inline-sep">|</span>
+            <span class="stat-inline-item">
+              <span class="stat-inline-label">Avg&nbsp;Traj</span>
+              <span class="stat-inline-value" id="val-traj-time">–</span>
+            </span>
+          </div>
+
+          <!-- hidden KV containers kept for JS compatibility (not rendered) -->
+          <div id="config-snapshot" style="display:none"></div>
+          <div id="obs-act-info"    style="display:none"></div>
+
+          <!-- Robot state / action -->
+          <div class="section-title">Robot State &amp; Action</div>
+          <div class="joint-grouped-wrap">
+            <!-- State column -->
+            <div class="joint-grouped-col">
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm · Left <span class="joint-col-tag">State</span></div>
+                <div id="joint-state-arm-l" class="joint-grid"></div>
+              </div>
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm · Right <span class="joint-col-tag">State</span></div>
+                <div id="joint-state-arm-r" class="joint-grid"></div>
+              </div>
+              <div class="joint-group-section">
+                <div class="joint-group-label">Gripper / Hand <span class="joint-col-tag">State</span></div>
+                <div id="joint-state-gripper" class="joint-grid"></div>
+              </div>
+            </div>
+            <!-- Action column -->
+            <div class="joint-grouped-col">
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm · Left <span class="joint-col-tag tag-action">Action</span></div>
+                <div id="joint-action-arm-l" class="joint-grid"></div>
+              </div>
+              <div class="joint-group-section">
+                <div class="joint-group-label">Arm · Right <span class="joint-col-tag tag-action">Action</span></div>
+                <div id="joint-action-arm-r" class="joint-grid"></div>
+              </div>
+              <div class="joint-group-section">
+                <div class="joint-group-label">Gripper / Hand <span class="joint-col-tag tag-action">Action</span></div>
+                <div id="joint-action-gripper" class="joint-grid"></div>
+              </div>
+            </div>
+          </div>
+
+
+        </div>
+      </section>
+
+      <!-- ── Language Command ── -->
+      <section class="panel panel-lang" id="panel-lang">
+        <div class="panel-header">
+          <span>🗣 Language Command</span>
+          <div class="panel-header-actions">
+            <label class="lang-auto-mode" title="Auto switch to next sub-task language command by Task Progress">
+              <input id="chk-lang-auto-mode" type="checkbox" />
+              <span>Auto Mode</span>
+            </label>
+            <label class="lang-threshold-wrap" title="Task progress threshold for auto mode">
+              <span class="lang-threshold-label">Thresh</span>
+              <input id="inp-lang-threshold" class="input-text" type="number" step="0.01" disabled />
+            </label>
+            <label class="lang-threshold-wrap" title="Sliding window size for task progress average">
+              <span class="lang-threshold-label">win_size</span>
+              <input id="inp-lang-win-size" class="input-text" type="number" min="1" step="1" disabled />
+            </label>
+            <div class="task-progress-wrap" id="task-progress-wrap" title="Task progress (current_prob_progress)">
+              <span class="task-progress-label">Task Progress</span>
+              <div class="task-progress-track">
+                <div class="task-progress-fill" id="task-progress-fill"></div>
+              </div>
+              <span class="task-progress-value" id="task-progress-value">--</span>
+            </div>
+            <label class="btn btn-xs" title="Load task language json file">
+              📂 Load
+              <input id="lang-file-input" type="file" accept=".json" style="display:none" />
+            </label>
+            <button class="btn btn-xs" id="btn-lang-collapse" title="Collapse">▲</button>
+          </div>
+        </div>
+        <div class="panel-body" id="lang-body">
+          <div class="lang-cmd-layout">
+            <!-- Task selector (level-1) -->
+            <div class="lang-cmd-col">
+              <div class="lang-cmd-col-title">Task</div>
+              <select id="lang-task-select" class="lang-cmd-select" size="5"></select>
+            </div>
+            <!-- Sub-task selector (level-2) -->
+            <div class="lang-cmd-col lang-cmd-col-subtask">
+              <div class="lang-cmd-col-title">Sub-task</div>
+              <select id="lang-subtask-select" class="lang-cmd-select" size="5"></select>
+            </div>
+            <!-- Current instruction + send -->
+            <div class="lang-cmd-col lang-cmd-col-send">
+              <div class="lang-cmd-col-title">Instruction</div>
+              <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
+              <button class="btn btn-sm btn-primary" id="btn-lang-send">▶ Apply</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Joint Trajectory ── -->
+      <section class="panel panel-traj" id="panel-traj">
+        <div class="panel-header traj-panel-header" id="traj-panel-header">
+          <span>📈 Trajectory Viewer</span>
+          <div class="panel-header-actions traj-header-actions">
+            <!-- spacer: push all groups to the right -->
+            <span class="traj-header-spacer"></span>
+            <!-- ① Window group -->
+            <div class="traj-window-group" title="Trajectory window span in seconds">
+              <span class="traj-src-label">Window</span>
+              <div class="traj-window-row">
+                <input id="traj-window-span-slider" class="traj-window-slider" type="range" min="1" max="15" step="1" value="10" />
+                <span id="traj-window-span-value" class="traj-window-value">10s</span>
+              </div>
+            </div>
+            <!-- Divider -->
+            <span class="traj-header-sep"></span>
+            <!-- ② Source: independent group -->
+            <div class="traj-src-group">
+              <span class="traj-src-label">Source</span>
+              <div class="traj-src-rows">
+                <div class="traj-src-col traj-src-col-action">
+                  <label class="traj-src-check" title="Toggle Action Fit source">
+                    <input id="chk-traj-action-fitted" type="checkbox" />
+                    <span class="traj-src-btn-text">Action Fit</span>
+                    <span class="traj-line-indicator traj-line-indicator-action-fitted" aria-hidden="true"></span>
+                  </label>
+                  <label class="traj-src-check" title="Toggle Action Raw source">
+                    <input id="chk-traj-action-raw" type="checkbox" />
+                    <span class="traj-src-btn-text">Action Raw</span>
+                    <span class="traj-line-indicator traj-line-indicator-action-raw" aria-hidden="true"></span>
+                  </label>
+                </div>
+                <div class="traj-src-col traj-src-col-state">
+                  <label class="traj-src-check" title="Toggle State source">
+                    <input id="chk-traj-state" type="checkbox" checked />
+                    <span class="traj-src-btn-text">State</span>
+                    <span class="traj-line-indicator traj-line-indicator-state" aria-hidden="true"></span>
+                  </label>
+                  <button class="btn btn-xs" id="btn-traj-all"><span class="traj-src-btn-text">All</span></button>
+                </div>
+              </div>
+            </div>
+            <!-- Divider -->
+            <span class="traj-header-sep"></span>
+            <!-- ③ Joints: label + two rows (L0-L6+All / R0-R6+None) -->
+            <div class="traj-joints-group">
+              <span class="traj-src-label">Joints</span>
+              <div class="traj-joints-rows">
+                <div class="joint-sel-row" id="joint-row-l">
+                  <!-- L0-L6 chips injected by JS -->
+                  <button class="btn btn-xs traj-allnone-btn" id="btn-joints-all">All</button>
+                </div>
+                <div class="joint-sel-row" id="joint-row-r">
+                  <!-- R0-R6 chips injected by JS -->
+                  <button class="btn btn-xs traj-allnone-btn" id="btn-joints-none">None</button>
+                </div>
+              </div>
+            </div>
+            <!-- Divider -->
+            <span class="traj-header-sep"></span>
+            <!-- ③ Play + Clear: two rows matching Source height -->
+            <div class="traj-ctrl-group">
+              <span class="traj-src-label">Ctrl</span>
+              <div class="traj-ctrl-rows">
+                <button class="btn btn-xs btn-active" id="btn-traj-pause"><span class="btn-icon">▶</span> Play</button>
+                <button class="btn btn-xs" id="btn-traj-clear">🗑 Clear</button>
+              </div>
+            </div>
+            <!-- Divider -->
+            <span class="traj-header-sep"></span>
+            <!-- ④ Collapse: rightmost -->
+            <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse" title="Collapse">▼</button>
+          </div>
+        </div>
+        <div class="traj-body" id="traj-body">
+          <!-- Single unified chart canvas -->
+          <div class="traj-chart-wrap" id="traj-chart-wrap">
+            <canvas id="traj-canvas"></canvas>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /center-col -->
+
+    <!-- ╔══════════════ RIGHT: CAMERA VISUAL ══════════════╗ -->
+    <aside class="panel panel-visual" id="panel-visual">
+      <div class="panel-header">
+        <span>📷 Camera Viewer</span>
+        <div class="panel-header-actions">
+          <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle">⏸ Close All</button>
+        </div>
+      </div>
+      <div class="panel-body" id="camera-body">
+
+        <!-- Camera 0: Head -->
+        <div class="cam-item">
+          <div class="cam-row" id="cam-row-0">
+            <span class="cam-label">Head</span>
+            <span class="cam-status active" id="cam-status-0">ON</span>
+            <span class="cam-spacer"></span>
+            <button class="btn btn-xs" id="btn-cam-0">Close</button>
+          </div>
+          <div class="cam-preview" id="cam-preview-0">
+            <img id="cam-img-0" src="" alt="" />
+            <div class="cam-preview-placeholder" id="cam-placeholder-0">Waiting for stream…</div>
+          </div>
+        </div>
+
+        <!-- Camera 1: Wrist-Left -->
+        <div class="cam-item">
+          <div class="cam-row" id="cam-row-1">
+            <span class="cam-label">Wrist-Left</span>
+            <span class="cam-status active" id="cam-status-1">ON</span>
+            <span class="cam-spacer"></span>
+            <button class="btn btn-xs" id="btn-cam-1">Close</button>
+          </div>
+          <div class="cam-preview" id="cam-preview-1">
+            <img id="cam-img-1" src="" alt="" />
+            <div class="cam-preview-placeholder" id="cam-placeholder-1">Waiting for stream…</div>
+          </div>
+        </div>
+
+        <!-- Camera 2: Wrist-Right -->
+        <div class="cam-item">
+          <div class="cam-row" id="cam-row-2">
+            <span class="cam-label">Wrist-Right</span>
+            <span class="cam-status active" id="cam-status-2">ON</span>
+            <span class="cam-spacer"></span>
+            <button class="btn btn-xs" id="btn-cam-2">Close</button>
+          </div>
+          <div class="cam-preview" id="cam-preview-2">
+            <img id="cam-img-2" src="" alt="" />
+            <div class="cam-preview-placeholder" id="cam-placeholder-2">Waiting for stream…</div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+  </main>
+
+  <!-- ═══════════════════ PANEL REVEAL BUTTONS (floating, shown when panel is collapsed) ═══════════════════ -->
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-config-hide" id="btn-config-hide" title="Hide Configuration">◀</button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-left hidden" id="btn-config-reveal" title="Show Configuration">▶</button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-visual-hide" id="btn-visual-collapse" title="Hide Camera Viewer">▶</button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-right hidden" id="btn-visual-reveal" title="Show Camera Viewer">◀</button>
+
+  <!-- ═══════════════════ FOOTER ═══════════════════ -->
+  <footer class="footer-bar">
+    © 2025-2026 VLA-RAIL. All rights reserved.
+  </footer>
+
+  <!-- ═══════════════════ TOAST ═══════════════════ -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- ═══════════════════ MODAL: Save As ═══════════════════ -->
+  <div id="modal-saveas" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title">Save Config As…</div>
+      <input id="saveas-path" class="input-text" type="text" placeholder="conf/my_config.py" />
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btn-saveas-confirm">Save</button>
+        <button class="btn" id="btn-saveas-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chart.js + zoom plugin (same libs as visual/) -->
+  <script src="/visual/vlib/chart.js"></script>
+  <script src="/visual/vlib/hammer.min.js"></script>
+  <script src="/visual/vlib/chartjs-plugin-zoom.min.js"></script>
+  <script src="/static/constants.js"></script>
+  <script src="/static/modules/utils.js"></script>
+  <script src="/static/modules/websocket.js"></script>
+  <script src="/static/modules/camera.js"></script>
+  <script src="/static/modules/trajectory.js"></script>
+  <script src="/static/modules/config.js"></script>
+  <script src="/static/modules/language.js"></script>
+  <script src="/static/modules/recording.js"></script>
+  <script src="/static/modules/manual-control.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -97,6 +97,7 @@ class ModelVLA:
         time1 = time.time()
         ext_result = {}
         predicted_action = self.policy.get_action(inp_obs)
+        print(f"predicted_action keys: {predicted_action.keys()}, shapes: {{k: v.shape for k, v in predicted_action.items() if isinstance(v, np.ndarray)}}")
         # predicted_action['prob_progress'] = np.random.rand(64,)
         if isinstance(predicted_action, dict) and 'prob_progress' in predicted_action:
             ext_result['prob_progress'] = predicted_action['prob_progress']

@@ -1,0 +1,14 @@
+/* ── Modal ── */
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.3);
+  display: flex; align-items: center; justify-content: center; z-index: 200;
+}
+.modal.hidden { display: none; }
+.modal-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; min-width: 320px;
+  display: flex; flex-direction: column; gap: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.12);
+}
+.modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }

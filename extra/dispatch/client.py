@@ -31,6 +31,32 @@ class DispatchClient:
 
         self.manual_command = None
         self.replay_progress = -1
+
+    def _pause_vla_client_actions(self):
+        if hasattr(self.vla_client, 'pause'):
+            self.vla_client.pause()
+            return
+        if hasattr(self.vla_client, 'is_observe_thread_running'):
+            self.vla_client.is_observe_thread_running = False
+        if hasattr(self.vla_client, 'is_inference_thread_running'):
+            self.vla_client.is_inference_thread_running = False
+        if hasattr(self.vla_client, 'is_control_thread_running'):
+            self.vla_client.is_control_thread_running = False
+        if hasattr(self.vla_client, 'is_running_action'):
+            self.vla_client.is_running_action = False
+
+    def _resume_vla_client_actions(self):
+        if hasattr(self.vla_client, 'resume'):
+            self.vla_client.resume()
+            return
+        if hasattr(self.vla_client, 'is_observe_thread_running'):
+            self.vla_client.is_observe_thread_running = True
+        if hasattr(self.vla_client, 'is_inference_thread_running'):
+            self.vla_client.is_inference_thread_running = True
+        if hasattr(self.vla_client, 'is_control_thread_running'):
+            self.vla_client.is_control_thread_running = True
+        if hasattr(self.vla_client, 'is_running_action'):
+            self.vla_client.is_running_action = True
         
     def start(self):
         self.client.set_task_handler(self.handle_task)
@@ -39,7 +65,7 @@ class DispatchClient:
         
         # 程序启动：先恢复默认姿态，再暂停程序
         self.vla_client.language = self.config.language['default']
-        self.vla_client.is_running_action = False
+        self._pause_vla_client_actions()
         time.sleep(0.1)
         self.robot.reset_robot(target_pose=self.config.reset_pose_start['default'])
 
@@ -124,7 +150,7 @@ class DispatchClient:
 
         if self.config.reset_pose_start[key] is not None:
             print(f'\n复位机器人：{key}\n')
-            self.vla_client.is_running_action = False
+            self._pause_vla_client_actions()
             time.sleep(0.1)
             self.robot.reset_robot(target_pose=self.config.reset_pose_start[key])
             time.sleep(self.config.sleep_reset_pose[key][0])
@@ -133,14 +159,14 @@ class DispatchClient:
             print(f'\n语言指令：{self.config.language[key]}\n')
             self.vla_client.language = self.config.language[key]
             self.vla_client.inference_first()
-            self.vla_client.is_running_action = True
+            self._resume_vla_client_actions()
             # 需等待current_prob_progress更新，避免还是上次任务的值
             time.sleep(1.0)
             self.vla_client.info_act['current_prob_progress'] = 0.0
         else:
             self.client.send_status_update(task_data, 'executing', sub_skill=key, progress=0)
             print(f'\n播放轨迹：{self.config.language[key]}\n')
-            self.vla_client.is_running_action = False
+            self._pause_vla_client_actions()
             time.sleep(0.1)
             path_replay = self.config.language[key].split(':')[-1]
             self.robot.replay_trajectories(path_replay, progress_fn=self.progress_cb)
@@ -154,7 +180,7 @@ class DispatchClient:
         while True:
             if self.manual_command:
                 print('收到手动指令，终止任务执行')
-                self.vla_client.is_running_action = False
+                self._pause_vla_client_actions()
                 # 根据manual_command的类型返回不同的状态码
                 if self.manual_command.get('skill_type') == 'complete':
                     return 1  # complete命令返回1表示任务完成
@@ -211,7 +237,7 @@ class DispatchClient:
         if key in ['place_custardbun', 'place_shrimpdumpling', 'place_greentea', 'place_blacktea', 'place_bread']:
             self.client.send_status_update(task_data, 'completed')
 
-        self.vla_client.is_running_action = False
+        self._pause_vla_client_actions()
         time.sleep(0.1)
         if key in self.config.reset_pose_finish and self.config.reset_pose_finish[key] is not None:
             self.robot.reset_robot(target_pose=self.config.reset_pose_finish[key])
@@ -243,18 +269,18 @@ class DispatchClient:
         print(f'收到手动指令: {command}')
         self.manual_command = command
         if command['skill_type'] == 'pause':
-            self.vla_client.is_running_action = False
+            self._pause_vla_client_actions()
         elif command['skill_type'] == 'reset':
-            self.vla_client.is_running_action = False
+            self._pause_vla_client_actions()
             time.sleep(0.1)
             self.robot.reset_robot(target_pose=self.config.reset_pose_start['default'])
         elif command['skill_type'] == 'complete':
-            self.vla_client.is_running_action = False
+            self._pause_vla_client_actions()
 
     def mock_task(self):
         while True:
             input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-            self.vla_client.is_running_action = False
+            self._pause_vla_client_actions()
 
             if self.dispatch_target == 'robotB':
                 # 点心
@@ -270,7 +296,7 @@ class DispatchClient:
                 })
                 print('任务B1执行结果：', result)
                 input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-                self.vla_client.is_running_action = True
+                self._resume_vla_client_actions()
                 result = self.handle_task({
                     "version": "1.0",
                     "type": "mock_task",
@@ -297,7 +323,7 @@ class DispatchClient:
                 })
                 print('任务C1执行结果：', result)
                 input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-                self.vla_client.is_running_action = True
+                self._resume_vla_client_actions()
                 result = self.handle_task({
                     "version": "1.0",
                     "type": "mock_task",
@@ -310,7 +336,7 @@ class DispatchClient:
                 })
                 print('任务C2执行结果：', result)
                 input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-                self.vla_client.is_running_action = True
+                self._resume_vla_client_actions()
                 result = self.handle_task({
                     "version": "1.0",
                     "type": "mock_task",
@@ -347,7 +373,7 @@ class DispatchClient:
                 })
                 print('任务D2执行结果：', result)
                 input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-                self.vla_client.is_running_action = True
+                self._resume_vla_client_actions()
                 result = self.handle_task({
                     "version": "1.0",
                     "type": "mock_task",
@@ -384,7 +410,7 @@ class DispatchClient:
                 })
                 print('任务E1执行结果：', result)
                 input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-                self.vla_client.is_running_action = True
+                self._resume_vla_client_actions()
                 result = self.handle_task({
                     "version": "1.0",
                     "type": "mock_task",
@@ -397,7 +423,7 @@ class DispatchClient:
                 })
                 print('任务E2执行结果：', result)
                 input('\n模型暂停推理，模拟等待，按Enter结束等待...\n')
-                self.vla_client.is_running_action = True
+                self._resume_vla_client_actions()
                 result = self.handle_task({
                     "version": "1.0",
                     "type": "mock_task",

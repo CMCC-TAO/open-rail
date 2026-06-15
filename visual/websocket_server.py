@@ -2,13 +2,17 @@
 import asyncio
 import websockets
 import json
-import cv2
 import numpy as np
 import time
 import threading
 from typing import Dict, List, Set, Optional
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import os
+import cv2
+from concurrent.futures import ThreadPoolExecutor
+
+# 限制 OpenCV 线程，降低与解码端并发冲突概率
+cv2.setNumThreads(1)
 
 
 class VLAWebSocketServer:
@@ -23,11 +27,12 @@ class VLAWebSocketServer:
                     cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, host='localhost', port=8765):
+    def __init__(self, host='0.0.0.0', port=8765):
         if self.__class__._initialized:
             return
         self.__class__._initialized = True
-
+         # 设置 OpenCV 线程数为 1，避免多线程问题
+        # cv2.setNumThreads(1)
         self.kill_port(port)
         self.host = host
         self.port = port
@@ -36,19 +41,28 @@ class VLAWebSocketServer:
         
         # 数据存储
         self.latest_imgs: Optional[Dict] = None
+        self.latest_imgs_seq = 0
+        self.sent_imgs_seq = -1
         self.latest_chart_data: List[Dict] = []
+        self.camera_open = {0: True, 1: True, 2: True}  # 0=head, 1=left wrist, 2=right wrist
         self.data_lock = threading.Lock()
+        self.camera_send_interval = 1.0 / 30.0
+        self.chart_send_interval = 1.0 / 30.0
+        self._last_camera_send_ts = 0.0
+        self._last_chart_send_ts = 0.0
         
         # 数据发送队列
         self.data_send_queue = []
         
         # 服务器实例
         self.server = None
+        self._img_executor = None
+        self._create_img_executor()
 
         self._run_http_server_thread()
 
     @classmethod
-    def get_instance(cls, host='localhost', port=8765):
+    def get_instance(cls, host='0.0.0.0', port=8765):
         return cls(host=host, port=port)
 
     def kill_port(self, port):
@@ -72,14 +86,20 @@ class VLAWebSocketServer:
         )
         http_thread.start()
         
-    def update_image_data(self, imgs: Dict):
+    def update_image_data(self, imgs: Dict, camera_cfg=None):
         """更新图像数据
-        
+
         Args:
             imgs (Dict): 图像数据，key为摄像头标识，value为图像数据
+            camera_cfg: 相机显示配置，支持 open_head/open_wrist_left/open_wrist_right
         """
+        if camera_cfg is not None:
+            self.update_camera_open_config(camera_cfg)
+
         with self.data_lock:
             self.latest_imgs = imgs.copy()
+            self.latest_imgs_seq += 1
+        # print(f"图像数据已更新，包含摄像头: {list(imgs.keys())}")
 
     def update_chart_data(self, data: List[Dict]):
         """更新图表数据
@@ -97,6 +117,8 @@ class VLAWebSocketServer:
             # 保持队列大小，避免内存溢出
             if len(self.data_send_queue) > 1000:
                 self.data_send_queue = self.data_send_queue[-500:]
+        
+        # print(f"chart_data: {self.data_send_queue}")
     
     async def register_client(self, websocket):
         """注册新客户端"""
@@ -117,41 +139,80 @@ class VLAWebSocketServer:
         """注销客户端"""
         self.clients.discard(websocket)
         print(f"客户端已断开，当前连接数: {len(self.clients)}")
-    
+
+    @staticmethod
+    def _cfg_get(cfg, key, default=False):
+        if cfg is None:
+            return default
+        if isinstance(cfg, dict):
+            return bool(cfg.get(key, default))
+        return bool(getattr(cfg, key, default))
+
+    @staticmethod
+    def _camera_id_from_key(camera_key: str):
+        k = str(camera_key).lower()
+        if 'hand_left' in k or 'left_wrist' in k or 'wrist_left' in k:
+            return 1
+        if 'hand_right' in k or 'right_wrist' in k or 'wrist_right' in k:
+            return 2
+        if 'head' in k:
+            return 0
+        return None
+
+    def update_camera_open_config(self, camera_cfg):
+        with self.data_lock:
+            self.camera_open[0] = self._cfg_get(camera_cfg, 'open_head', True)
+            self.camera_open[1] = self._cfg_get(camera_cfg, 'open_wrist_left', True)
+            self.camera_open[2] = self._cfg_get(camera_cfg, 'open_wrist_right', True)
+
     async def send_camera_data(self):
         """发送摄像头数据 - 使用二进制传输优化性能"""
-        if not self.clients or not self.latest_imgs:
+        if not self.clients:
+            # print(f"No client is connected.")
+            return
+
+        now = time.time()
+        if now - self._last_camera_send_ts < self.camera_send_interval:
             return
         
         disconnected_clients = set()
         
-        # 获取最新的图像数据
+        # 获取最新的图像数据。只发送新帧，避免以 100Hz 反复编码同一帧占满 CPU/GIL。
         with self.data_lock:
-            imgs = self.latest_imgs.copy() if self.latest_imgs else {}
+            if not self.latest_imgs or self.latest_imgs_seq == self.sent_imgs_seq:
+                return
+            imgs = self.latest_imgs.copy()
+            img_seq = self.latest_imgs_seq
+            camera_open = self.camera_open.copy()
 
+        sent_camera_ids = set()
 
         # 为每个摄像头发送单独的二进制消息
-        for index, (camera_key, img) in enumerate(imgs.items()):
+        for camera_key, img in imgs.items():
             try:
+                camera_id = self._camera_id_from_key(camera_key)
+                if camera_id is None:
+                    continue
+                if camera_id in sent_camera_ids:
+                    continue
+                if not camera_open.get(camera_id, True):
+                    continue
+
                 # 将numpy数组转换为bytes
                 if isinstance(img, np.ndarray):
-                    h, w = img.shape[:2]
-                    # img = cv2.resize(img, (w // 2, h // 2))  # 降低分辨率以减少数据量
-                    if 'depth.' in camera_key:
-                        img_depth_norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-                        img = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
-                    else:
-                        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-                    encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
-                    img = cv2.imencode('.jpg', img, encode_params)[1]
-                    frame_bytes = img.tobytes()
+                    loop = asyncio.get_running_loop()
+                    frame_bytes = await loop.run_in_executor(self._img_executor, self._encode_frame, img, camera_key)
+                    if frame_bytes is None:
+                        continue
                 else:
                     frame_bytes = img
+
+                sent_camera_ids.add(camera_id)
 
                 # 创建消息头（JSON格式）
                 header = {
                     'type': 'camera_data_binary',
-                    'camera_id': index,
+                    'camera_id': camera_id,
                     'timestamp': time.time(),
                     'data_size': len(frame_bytes)
                 }
@@ -174,7 +235,10 @@ class VLAWebSocketServer:
                         
             except Exception as e:
                 print(f"处理图像数据失败 {camera_key}: {e}")
-        
+        self._last_camera_send_ts = now
+        with self.data_lock:
+            self.sent_imgs_seq = max(self.sent_imgs_seq, img_seq)
+        # print(f"已发送摄像头数据，包含摄像头: {list(imgs.keys())}")
         # 清理断开的客户端
         for client in disconnected_clients:
             await self.unregister_client(client)
@@ -183,6 +247,10 @@ class VLAWebSocketServer:
         """发送图表数据"""
         if not self.clients or not self.data_send_queue:
             return
+        now = time.time()
+        if now - self._last_chart_send_ts < self.chart_send_interval:
+            return
+        self._last_chart_send_ts = now
         
         disconnected_clients = set()
         
@@ -278,7 +346,7 @@ class VLAWebSocketServer:
                 
                 # 发送图表数据
                 await self.send_chart_data()
-                await asyncio.sleep(0.01)
+                await asyncio.sleep(0.02)
                 
             except Exception as e:
                 print(f"数据发送循环错误: {e}")
@@ -320,6 +388,27 @@ class VLAWebSocketServer:
             self.server.close()
             print("VLA WebSocket服务器已停止")
 
+    def _create_img_executor(self):
+        if getattr(self, '_img_executor', None) is None or getattr(self._img_executor, '_shutdown', False):
+            self._img_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vis_img_enc")
+
+    def _encode_frame(self, img, camera_key):
+        try:
+            if 'depth.' in camera_key:
+                img_depth_norm = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX, dtype=cv2.CV_8U)
+                img_for_encode = cv2.applyColorMap(img_depth_norm, cv2.COLORMAP_JET)
+            else:
+                img_uint8 = img if img.dtype == np.uint8 else np.clip(img, 0, 255).astype(np.uint8)
+                img_for_encode = img_uint8[:, :, ::-1] if img_uint8.ndim == 3 and img_uint8.shape[2] == 3 else img_uint8
+            encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
+            ok, enc = cv2.imencode('.jpg', img_for_encode, encode_params)
+            if not ok:
+                return None
+            return enc.tobytes()
+        except Exception as e:
+            print(f"图像编码失败: {e}")
+            return None
+
     def _run_loop_server(self):
         """Run WebSocket server in asyncio event loop"""
         try:
@@ -335,6 +424,7 @@ class VLAWebSocketServer:
     def run(self):
         if hasattr(self, 'websocket_thread') and self.websocket_thread and self.websocket_thread.is_alive():
             return
+        self._create_img_executor()
         self.websocket_thread = threading.Thread(
             target=self._run_loop_server,
             daemon=True

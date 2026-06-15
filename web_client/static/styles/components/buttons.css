@@ -1,0 +1,53 @@
+/* ── Buttons ── */
+.btn {
+  padding: 5px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--bg);
+  color: var(--text); cursor: pointer; font-family: var(--font);
+  font-size: 12px; transition: all .15s; white-space: nowrap;
+  line-height: 1.4;
+}
+/* Inline icon <span> inside buttons: normalise symbol/emoji height */
+.btn-icon {
+  display: inline-block; font-size: 10px; line-height: 1;
+  vertical-align: middle; position: relative; top: -0.5px;
+}
+.btn:hover  { border-color: var(--accent); color: var(--accent); background: rgba(9,105,218,.06); }
+.btn:active { opacity: .7; }
+.btn:disabled { opacity: .35; cursor: default; pointer-events: none; }
+.btn-xs  { padding: 2px 7px; font-size: 11px; }
+.btn-sm  { padding: 4px 10px; font-size: 12px; }
+.btn-lg  { padding: 7px 20px; font-size: 13px; font-weight: 600; }
+
+/* Keep Start/Stop button width stable while text toggles */
+#btn-start { min-width: 84px; text-align: center; }
+#btn-observe, #btn-infer, #btn-control {
+  min-width: 72px;
+  min-height: 30px;
+  padding: 2px 6px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  text-align: center;
+}
+.thread-btn-main {
+  font-size: 11px;
+  line-height: 1;
+  pointer-events: none;
+}
+.thread-btn-sub {
+  font-size: 8px;
+  line-height: 1;
+  opacity: .75;
+  pointer-events: none;
+}
+.btn-primary { background: rgba(9,105,218,.08); border-color: var(--accent); color: var(--accent); }
+.btn-primary:hover { background: rgba(9,105,218,.16); }
+.btn-success { background: rgba(26,127,55,.08); border-color: var(--success); color: var(--success); }
+.btn-success:hover { background: rgba(26,127,55,.16); }
+.btn-danger  { background: rgba(207,34,46,.07); border-color: var(--danger); color: var(--danger); }
+.btn-danger:hover  { background: rgba(207,34,46,.14); }
+.btn-warn    { background: rgba(154,103,0,.07); border-color: var(--warn); color: var(--warn); }
+.btn-warn:hover    { background: rgba(154,103,0,.14); }
+.btn-active  { background: rgba(9,105,218,.12) !important; border-color: var(--accent) !important; color: var(--accent) !important; }

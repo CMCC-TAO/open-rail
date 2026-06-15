@@ -1,0 +1,254 @@
+.recording-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.recording-controls .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+}
+
+.recording-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+
+.recording-options-title {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+.recording-option-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.recording-option-item input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.recording-config-wrap,
+.recording-file-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 6px;
+}
+
+.recording-config-title {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 6px;
+}
+
+.recording-config-tree {
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.recording-config-tree .cfg-key {
+  min-width: 112px;
+}
+
+.recording-file-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.recording-file-filter-label {
+  flex: 0 0 44px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+
+.recording-task-select {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  padding: 0 6px;
+  outline: none;
+}
+
+.recording-task-select:focus {
+  border-color: var(--accent);
+}
+
+.recording-file-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  margin-bottom: 6px;
+}
+
+.recording-chunk-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recording-chunk-filter-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: .3px;
+}
+
+.recording-chunk-select {
+  height: 22px;
+  min-width: 68px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11px;
+  padding: 0 6px;
+  outline: none;
+}
+
+.recording-chunk-select:focus {
+  border-color: var(--accent);
+}
+
+.recording-file-wrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.recording-file-list {
+  flex: 1 1 auto;
+  min-height: 220px;
+  max-height: none;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg2);
+  padding: 4px 6px;
+  font-size: 11px;
+}
+
+.recording-file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  line-height: 1.5;
+  padding: 1px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.recording-file-item:hover {
+  background: rgba(9,105,218,.06);
+}
+
+.recording-file-item.active {
+  background: rgba(9,105,218,.14);
+  color: var(--accent);
+}
+
+.recording-file-item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recording-file-item-meta {
+  flex: 0 0 auto;
+  margin-left: 5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.recording-file-item-actions {
+  flex: 0 0 20px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.recording-file-item-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: #ff4d4f;
+  line-height: 1;
+  cursor: pointer;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.recording-file-item-delete-icon {
+  width: 14px;
+  height: 14px;
+  display: block;
+  fill: currentColor;
+}
+
+.recording-file-item-delete:hover {
+  background: rgba(255,77,79,.10);
+  border-color: rgba(255,77,79,.45);
+}
+
+.recording-file-item.active .recording-file-item-meta {
+  color: var(--accent);
+}
+
+.recording-file-item.active .recording-file-item-delete {
+  visibility: visible;
+  pointer-events: auto;
+  background: transparent;
+  border-color: rgba(255,77,79,.35);
+}
+
+.recording-file-item.empty {
+  color: var(--text-muted);
+  cursor: default;
+}

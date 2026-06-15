@@ -1,0 +1,210 @@
+# VLA-RAIL Client Configuration
+# Auto-generated — edit values as needed
+
+controller:
+  gripper_offset: 5
+  period: 3.75
+  wait_time: 250
+inter_chunk:
+  inter_chunk_mode: search_action
+  search_length: 100
+  smooth_action: false
+  smooth_base: 0.0
+  smooth_length: 50
+  smooth_ratio: 0.75
+intra_chunk:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      start: 14
+  filter_window_size: 4
+  fitting_deg: 5
+  fitting_num_samples: 64
+  fitting_time_step: 3.75
+  gripper_dim: 2
+  head_dim: 2
+  intra_chunk_mode: fitting
+  joint_dim: 14
+  max_gripper_action_threshold: 0.95
+  max_gripper_fitting_workers: 2
+  max_head_fitting_workers: 2
+  max_joint_fitting_workers: 14
+  min_gripper_action_threshold: 0.05
+language:
+  auto_mode: true
+  file_path: language_cmd.json
+  sub_task_id: 0
+  task_id: tea_master
+  task_progress_threshold: 0.95
+  task_progress_win_size: 10
+observer:
+  fps: 30
+  period: 0.03333333333333333
+rdm:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      start: 14
+  max_len: 100
+  mode: async
+  record_data: false
+record:
+  info:
+    action_shape: 22
+    cam.hand_left:
+      encode:
+        codec: mp4v
+        has_audio: false
+        is_depth_map: false
+      shape:
+        channel: 3
+        height: 640
+        width: 640
+    cam.hand_right:
+      encode:
+        codec: mp4v
+        has_audio: false
+        is_depth_map: false
+      shape:
+        channel: 3
+        height: 640
+        width: 640
+    cam.head:
+      encode:
+        codec: mp4v
+        has_audio: false
+        is_depth_map: false
+      shape:
+        channel: 3
+        height: 640
+        width: 640
+    chunks_size: 1000
+    codebase_version: v2.0
+    data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
+    fps: 30
+    robot_type: a2d
+    splits:
+      valid: 0:100
+    state_shape: 20
+    total_chunks: 1
+    total_episodes: 3
+    total_frames: 4093
+    total_tasks: 0
+    total_videos: 9
+    video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
+  record_exp_data: false
+  resize: false
+  save_dir: data/recording
+  switch: false
+robots:
+  a2d:
+    action_layout:
+      arm:
+        end: 14
+        policy: gradual
+        start: 0
+      gripper:
+        end: 16
+        policy: stepwise
+        start: 14
+    camera:
+      names:
+        hand_left: hand_left
+        hand_right: hand_right
+        head: head
+      ref: head
+    gripper_freq: 40
+    hand_type: gripper
+    head_freq: 40
+    proprio_names:
+    - arm
+    - gripper
+    - head
+    - waist
+    reset_robot_pos:
+    - -1.0748
+    - 0.6107
+    - 0.2816
+    - -1.2823
+    - 0.7292
+    - 1.4957
+    - -0.1869
+    - 1.072
+    - -0.6103
+    - -0.278
+    - 1.2822
+    - -0.7299
+    - -1.4929
+    - 0.1873
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.4363
+    - 0.2967
+    - 20.0
+    - 0.0
+    - 0.0
+  mock:
+    action_layout:
+      arm:
+        end: 14
+        policy: gradual
+        start: 0
+      gripper:
+        end: 16
+        policy: stepwise
+        start: 14
+    camera:
+      names:
+        hand_left: observation.images.hand_left
+        hand_right: observation.images.hand_right
+        head: observation.images.top_head
+      ref: head
+    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
+    hand_type: gripper
+    repo_id: task_39_only1
+  type: mock
+vis_zmq:
+  client_addr: tcp://localhost:7788
+  server_addr: tcp://*:7788
+vision:
+  history_frame: false
+  preprocess: none
+  preprocess_size:
+  - 640
+  - 640
+visualize:
+  camera:
+    open_head: true
+    open_wrist_left: true
+    open_wrist_right: true
+    update_interval_ms: 33
+  server:
+    host: 0.0.0.0
+    max_size: 10485760
+    ping_interval: 20
+    ping_timeout: 10
+    port: 8765
+  trajectory:
+    play: true
+    selected_joints:
+    - 7
+    source:
+    - ActionRaw
+    - ActionFitted
+    - State
+    update_interval_ms: 50
+    window_span_sec: 8.0
+vla_zmq:
+  client_addr: tcp://localhost:5566
+  server_addr: tcp://*:5566

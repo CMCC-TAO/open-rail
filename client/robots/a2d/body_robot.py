@@ -16,6 +16,8 @@ class RobotBody(RobotBase):
         """
         super().__init__()
         self.cfg, self.ori_cfg = config['robots']['a2d'], config
+        if not hasattr(self.cfg, 'action_layout'):
+            self.logger.error("Parameter action_layout is required, please check the configuration.")
         self.action_layout = dict(self.cfg.get('action_layout', {}))
         self.camera= Camera(list(self.cfg['camera']['names'].values()))
         self.robot = Robot()

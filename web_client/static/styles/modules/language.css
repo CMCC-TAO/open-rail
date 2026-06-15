@@ -1,0 +1,170 @@
+/* Language Command panel */
+.panel-lang {
+  flex: 0 0 auto;
+  overflow: hidden;
+  min-height: 0;
+}
+/* When traj panel is collapsed, lang panel can grow to fill freed space */
+.panel-lang.expanded {
+  flex: 1;
+}
+.panel-lang .panel-body { padding: 8px; }
+.panel-lang .panel-body.collapsed { display: none; }
+
+.lang-auto-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.lang-auto-mode input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.lang-threshold-wrap {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.lang-threshold-label {
+  display: inline-block;
+  line-height: 1;
+}
+
+.lang-threshold-wrap input {
+  flex: 0 0 60px;
+  width: 60px !important;
+  height: 18px;
+  padding: 0 8px;
+  font-size: 11px;
+}
+
+.lang-threshold-wrap input:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.task-progress-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  height: 22px;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.task-progress-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  white-space: nowrap;
+}
+.task-progress-track {
+  width: 160px;
+  height: 80%;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg2);
+  overflow: hidden;
+}
+.task-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #2da44e 0%, #0969da 100%);
+  transition: width .2s ease;
+}
+.task-progress-value {
+  min-width: 44px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* When lang panel is expanded (traj collapsed), allow body to fill vertically */
+.panel-lang.expanded .panel-body {
+  overflow-y: auto;
+}
+.panel-lang.expanded .lang-cmd-layout {
+  flex: 1; min-height: 0;
+}
+.panel-lang.expanded .lang-cmd-select {
+  max-height: none;
+}
+
+.lang-cmd-layout {
+  display: flex; gap: 8px; min-height: 0;
+}
+/* Task: 3; Sub-task: 4; Instruction: 3 */
+.lang-cmd-col            { display: flex; flex-direction: column; gap: 4px; flex: 3; min-width: 0; }
+.lang-cmd-col-subtask    { flex: 4; }
+.lang-cmd-col-send       { flex: 3; }
+.lang-cmd-col-title {
+  font-size: 10px; font-weight: 700; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .5px;
+  padding-bottom: 3px; border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.lang-cmd-list {
+  display: flex; flex-direction: column; gap: 3px;
+  overflow-y: auto; max-height: 120px;
+}
+.lang-cmd-chip {
+  padding: 3px 8px; font-size: 11px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--bg); color: var(--text-muted);
+  cursor: pointer; transition: all .15s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+.lang-cmd-chip:hover  { border-color: var(--accent); color: var(--accent); }
+.lang-cmd-chip.active { background: rgba(9,105,218,.1); border-color: var(--accent); color: var(--accent); }
+
+/* Select-based task/subtask lists */
+.lang-cmd-select {
+  flex: 1; min-height: 80px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font); font-size: 11px; padding: 2px 0;
+  outline: none; transition: border .15s;
+  overflow-y: auto;
+}
+.lang-cmd-select:focus { border-color: var(--accent); }
+.lang-cmd-select option {
+  padding: 3px 8px; cursor: pointer;
+}
+.lang-cmd-select option:checked {
+  background: rgba(9,105,218,.12); color: var(--accent);
+}
+
+.lang-cmd-textarea {
+  flex: 1; resize: vertical; min-height: 54px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text);
+  font-family: var(--font); font-size: 11px; padding: 5px 8px;
+  outline: none; transition: border .15s;
+}
+.lang-cmd-textarea:focus { border-color: var(--accent); }

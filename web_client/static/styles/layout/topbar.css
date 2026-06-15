@@ -1,0 +1,34 @@
+/* ── Top bar ── */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--topbar-h);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 16px;
+  z-index: 100;
+}
+.topbar-left  { display: flex; align-items: center; gap: 10px; flex: 1; }
+.topbar-center {
+  flex: 1; display: flex; flex-direction: column;
+  justify-content: center; align-items: center;
+}
+.topbar-right  { flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+
+.logo { font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: 2px; }
+.subtitle { color: var(--text-muted); font-size: 11px; }
+
+/* ── Status badge ── */
+.status-badge {
+  padding: 3px 14px; border-radius: 12px; font-size: 11px;
+  font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
+  transition: all .3s;
+}
+.status-badge.running { background: rgba(26,127,55,.1); color: var(--success); border: 1px solid var(--success); }
+.status-badge.stopped { background: rgba(207,34,46,.08); color: var(--danger); border: 1px solid var(--danger); }
+.status-badge.paused  { background: rgba(210,153,34,.1); color: var(--warn); border: 1px solid var(--warn); }
+
+/* ── WS indicator ── */
+.ws-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; transition: background .3s; }
+.ws-dot.connected    { background: var(--success); box-shadow: 0 0 6px rgba(26,127,55,.5); }
+.ws-dot.disconnected { background: var(--text-muted); }
+.ws-label { font-size: 11px; color: var(--text-muted); }

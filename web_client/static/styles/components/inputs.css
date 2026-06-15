@@ -1,0 +1,9 @@
+/* ── Inputs ── */
+.input-text, .input-num {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius); color: var(--text); padding: 4px 8px;
+  font-family: var(--font); font-size: 12px; outline: none; transition: border .15s;
+}
+.input-text { width: 100%; }
+.input-num  { width: 70px; }
+.input-text:focus, .input-num:focus { border-color: var(--accent); }

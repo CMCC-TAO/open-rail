@@ -17,7 +17,7 @@ if project_root not in sys.path:
 # Import project modules
 from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
-from conf.logging_conf import LOGGING_CONFIG
+from conf.logging_conf import setup_logging
 from conf.client_conf import get_client_config
 
 from client.utils.util import load_user_config, apply_user_config
@@ -149,14 +149,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Client Application')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable live interface')
     parser.add_argument('--fps', type=int, help='Frame rate setting')
-    parser.add_argument('--sleep_time', type=float, help='Inference sleep time')
+    parser.add_argument('--wait_time', type=float, help='Wait time for the next inference step in milliseconds')
     parser.add_argument('--gripper_offset', type=int, help='Gripper forward offset')
     parser.add_argument('--search_length', type=int, help='Forward search length')
     parser.add_argument('--show_action_state', action='store_true', help='Show action and state visualization')
     parser.add_argument('--show_action_cams', action='store_true', help='Show action and camera images visualization')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
-    parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
+    parser.add_argument('--task_progress_threshold', type=float, help='Probability threshold for switching language instructions')
     parser.add_argument('--preprocess', type=str, choices=['crop_and_resize', 'pad_and_resize', 'resize', 'none'], help='Image preprocessing method')
     parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')
     parser.add_argument('--language', nargs='+', type=str, help='Language instruction options')
@@ -178,10 +178,10 @@ def override_config_with_args(config, args):
     """
     if args.fps is not None:
         config.observer.fps = args.fps
-    if args.sleep_time is not None:
-        config.sleep_time = args.sleep_time
+    if args.wait_time is not None:
+        config.controller.wait_time = args.wait_time
     if args.gripper_offset is not None:
-        config.gripper_offset = args.gripper_offset
+        config.controller.gripper_offset = args.gripper_offset
     if args.show_action_state:
         config.show_action_state = True
     if args.show_action_cams:
@@ -190,12 +190,12 @@ def override_config_with_args(config, args):
         config.record.switch = True
     if args.robots_type is not None:
         config.robots.type = RobotType(args.robots_type)
-    if args.thre_prob_progress is not None:
-        config.thre_prob_progress = args.thre_prob_progress
+    if args.task_progress_threshold is not None:
+        config.language.task_progress_threshold = args.task_progress_threshold
     if args.preprocess is not None:
-        config.preprocess = args.preprocess
+        config.vision.preprocess = args.preprocess
     if args.preprocess_size is not None:
-        config.preprocess_size = args.preprocess_size
+        config.vision.preprocess_size = args.preprocess_size
     if args.language is not None:
         config.language = args.language
     return config
@@ -204,9 +204,8 @@ def override_config_with_args(config, args):
 if __name__ == "__main__":
     # Parse command line arguments
     args = parse_args()
-    # Initialize logging configuration    
-    logging.config.dictConfig(LOGGING_CONFIG)
-    logger = logging.getLogger(__name__)
+    # Initialize logging configuration
+    logger = setup_logging("client.log", __name__)
     
     # Get configuration and apply command line arguments
     config = get_client_config()

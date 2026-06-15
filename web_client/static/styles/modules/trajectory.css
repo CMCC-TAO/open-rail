@@ -1,0 +1,228 @@
+.panel-traj {
+  flex: 1; min-height: 0;
+  overflow: hidden;
+}
+/* When the chart body is collapsed, shrink the panel to header height only,
+   releasing the remaining flex space to Language Command panel above */
+.panel-traj.body-collapsed {
+  flex: 0 0 auto;
+}
+/* ═══════════════════════════════════════════
+   JOINT TRAJECTORY PANEL
+   ═══════════════════════════════════════════ */
+/* traj header has 2-row content, align top */
+.traj-panel-header { align-items: flex-start; padding-top: 5px; padding-bottom: 5px; }
+
+.traj-panel-header .traj-src-label {
+  font-size: 10px; color: var(--text-muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .4px;
+  margin-bottom: 2px; display: block;
+}
+
+/* Header actions: fills remaining space, groups pushed to the right */
+.traj-header-actions {
+  display: flex; align-items: flex-start;
+  flex-wrap: nowrap; flex: 1; min-width: 0;
+}
+
+/* Spacer that pushes all groups to the right */
+.traj-header-spacer {
+  flex: 1;
+}
+
+/* Thin vertical separator between groups */
+.traj-header-sep {
+  width: 1px; height: 56px;
+  background: var(--border);
+  flex-shrink: 0; margin: 0 4px; align-self: center;
+}
+
+/* ── ① Source group ── */
+.traj-src-group {
+  display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0;
+}
+.traj-src-rows {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+}
+
+.traj-window-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.traj-window-row {
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.traj-window-slider {
+  width: 110px;
+  margin: 0;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.traj-window-slider:focus {
+  outline: none;
+}
+
+.traj-window-slider::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.traj-window-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+  margin-top: -2px;
+}
+
+.traj-window-slider::-moz-range-track {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.traj-window-slider::-moz-range-progress {
+  height: 3px;
+  border-radius: 999px;
+  background: var(--accent);
+}
+
+.traj-window-slider::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.traj-window-value {
+  min-width: 20px;
+  max-width: 20px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.traj-src-col {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.traj-src-col-action .traj-src-check { width: 128px; }
+.traj-src-col-state .traj-src-check { width: 96px; }
+
+.traj-src-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.traj-src-check input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.traj-src-btn-text {
+  flex: 0 0 auto;
+  text-align: left;
+}
+
+.traj-line-indicator {
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  border-top: 2px solid currentColor;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.traj-line-indicator-state { border-top-style: dotted; }
+.traj-line-indicator-action-fitted { border-top-style: solid; }
+.traj-line-indicator-action-raw { border-top-style: dashed; }
+
+/* ── ② Joints group ── */
+.traj-joints-group {
+  display: flex; flex-direction: column; align-items: flex-start;
+  flex-shrink: 1; min-width: 0;
+}
+.traj-joints-rows {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.joint-sel-row {
+  display: flex; gap: 3px; flex-wrap: nowrap; align-items: center;
+}
+
+/* All / None buttons inside joint rows */
+.traj-allnone-btn {
+  width: 42px; text-align: center; flex-shrink: 0;
+  margin-left: 4px;
+}
+
+/* Joint toggle chips */
+.joint-sel-chip {
+  padding: 1px 8px; font-size: 10px;
+  border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); color: var(--text-muted);
+  cursor: pointer; transition: all .15s; user-select: none;
+  font-family: var(--font); white-space: nowrap; flex-shrink: 0;
+}
+.joint-sel-chip:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── ③ Ctrl group: Play + Clear two rows ── */
+.traj-ctrl-group {
+  display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0;
+}
+.traj-ctrl-rows {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.traj-ctrl-rows .btn { width: 72px; text-align: center; }
+
+/* ── ④ Collapse button: rightmost, vertically centered ── */
+.traj-collapse-btn {
+  align-self: center; flex-shrink: 0; margin-left: 2px;
+}
+
+/* ── Body / chart ── */
+.traj-body {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  padding: 8px; overflow: hidden;
+}
+.traj-body.collapsed { display: none; }
+
+/* Single unified chart fills the whole traj-body */
+.traj-chart-wrap {
+  flex: 1; min-height: 0;
+  position: relative;
+}
+.traj-chart-wrap canvas {
+  width: 100% !important; height: 100% !important;
+}
