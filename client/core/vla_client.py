@@ -62,10 +62,13 @@ class VLAClientAsync():
         self.is_control_thread_running = False
         
         # Define image preprocess function
-        if self.config.vision.preprocess != 'none':
-            preprocess_func = getattr(misc, self.config.vision.preprocess)
-            height, width = self.config.vision.preprocess_size
-            self._preprocess_func = lambda img: preprocess_func(img, target_height=height, target_width=width)
+        if self.config.vision.preprocess.method != 'none':
+            preprocess_func = getattr(misc, self.config.vision.preprocess.method)
+            self._preprocess_func = lambda img: preprocess_func(
+                img,
+                target_height=self.config.vision.preprocess.height,
+                target_width=self.config.vision.preprocess.width,
+                keep_ratio=self.config.vision.preprocess.keep_ratio)
         else:
             self._preprocess_func = None
 
