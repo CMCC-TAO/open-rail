@@ -31,7 +31,7 @@ def get_client_config():
     config.observer = get_observer_config()
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
-    config.vis_zmq = get_vis_zmq_config()
+    # config.vis_zmq = get_vis_zmq_config()
     config.visualize = get_visualize_config()
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
