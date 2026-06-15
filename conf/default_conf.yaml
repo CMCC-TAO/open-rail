@@ -179,10 +179,11 @@ vis_zmq:
   server_addr: tcp://*:7788
 vision:
   history_frame: false
-  preprocess: none
-  preprocess_size:
-  - 640
-  - 640
+  preprocess:
+    height: 180
+    keep_ratio: true
+    method: resize
+    width: 640
 visualize:
   camera:
     open_head: true
