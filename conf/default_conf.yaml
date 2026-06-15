@@ -183,7 +183,7 @@ vision:
     height: 180
     keep_ratio: true
     method: resize
-    width: 240
+    width: 640
 visualize:
   camera:
     open_head: true

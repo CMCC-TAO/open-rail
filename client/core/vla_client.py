@@ -62,15 +62,16 @@ class VLAClientAsync():
         self.is_control_thread_running = False
         
         # Define image preprocess function
-        if self.config.vision.preprocess.method != 'none':
-            preprocess_func = getattr(misc, self.config.vision.preprocess.method)
-            self._preprocess_func = lambda img: preprocess_func(
-                img,
-                target_height=self.config.vision.preprocess.height,
-                target_width=self.config.vision.preprocess.width,
-                keep_ratio=self.config.vision.preprocess.keep_ratio)
-        else:
-            self._preprocess_func = None
+        self.update_preprocess_func()
+        # if self.config.vision.preprocess.method != 'none':
+        #     preprocess_func = getattr(misc, self.config.vision.preprocess.method)
+        #     self._preprocess_func = lambda img: preprocess_func(
+        #         img,
+        #         target_height=self.config.vision.preprocess.height,
+        #         target_width=self.config.vision.preprocess.width,
+        #         keep_ratio=self.config.vision.preprocess.keep_ratio)
+        # else:
+        #     self._preprocess_func = None
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
@@ -692,6 +693,18 @@ class VLAClientAsync():
                 return msg
             self.logger.warning(f"Drop stale response with unmatched request_id: {meta.get('request_id')}")
 
+    def update_preprocess_func(self):
+        """Update the preprocess function when vision.preprocess parameters change."""
+        # print(f"Debug: vision.preprocess = {self.config.vision.preprocess}")
+        if self.config.vision.preprocess.method != 'none':
+            preprocess_func = getattr(misc, self.config.vision.preprocess.method)
+            self._preprocess_func = lambda img: preprocess_func(
+                img,
+                target_height=self.config.vision.preprocess.height,
+                target_width=self.config.vision.preprocess.width,
+                keep_ratio=self.config.vision.preprocess.keep_ratio)
+        else:
+            self._preprocess_func = None
 
     def vis_action_state(self, action_fitted=None, vel_fitted=None, acc_fitted=None, action_raw=None, current_state=None):
         """

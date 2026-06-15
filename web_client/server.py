@@ -912,6 +912,16 @@ async def patch_config(req: ConfigPatchRequest):
     try:
         _apply_flat_patch_new(client_state.config, flat)
         cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
+        
+        # Check if vision.preprocess parameters were updated and update the preprocess function accordingly
+        vision_preprocess_keys = [k for k in flat.keys() if k.startswith('vision.preprocess')]
+        if vision_preprocess_keys and client_state.vla_client is not None:
+            try:
+                client_state.vla_client.update_preprocess_func()
+                logger.info(f"Updated preprocess function due to vision.preprocess config changes: {vision_preprocess_keys}")
+                # print(f"Updated preprocess function due to vision.preprocess config changes: {vision_preprocess_keys}")
+            except Exception as e:
+                logger.error(f"Failed to update preprocess function: {e}")
     finally:
         client_state.lock.release()
 
