@@ -244,7 +244,7 @@ function renderJointsGrouped(side, values) {
 async function syncRuntimeCameraConfig() {
   if (!App.isRunning) return;
   try {
-    await apiFetch('/api/visualize/camera_cfg', {
+    await apiFetch('/api/client/visualize/config', {
       method: 'POST',
       body: JSON.stringify({
         open_head: !!App.camOpen[0],
