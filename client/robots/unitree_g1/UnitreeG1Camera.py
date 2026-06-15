@@ -60,21 +60,18 @@ class UnitreeG1Camera(Node):
     def _cb_head(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_head.append((img, ts))
         _dprint(f"_cb_head: ts={ts:.6f}, img.shape={img.shape}")
 
     def _cb_left(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_left.append((img, ts))
         _dprint(f"_cb_left: ts={ts:.6f}, img.shape={img.shape}")
 
     def _cb_right(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         self.queue_right.append((img, ts))
         _dprint(f"_cb_right: ts={ts:.6f}, img.shape={img.shape}")
 
@@ -131,11 +128,11 @@ def main():
                 if head_ts != last_head_ts:
                     last_head_ts = head_ts
                     if head_img is not None:
-                        cv2.imshow("head", cv2.cvtColor(head_img, cv2.COLOR_RGB2BGR))
+                        cv2.imshow("head", head_img)
                     if left_img is not None:
-                        cv2.imshow("left", cv2.cvtColor(left_img, cv2.COLOR_RGB2BGR))
+                        cv2.imshow("left", left_img)
                     if right_img is not None:
-                        cv2.imshow("right", cv2.cvtColor(right_img, cv2.COLOR_RGB2BGR))
+                        cv2.imshow("right", right_img)
 
                 # 只打印一次，不影响每帧显示
                 print(f"head ts={head_ts:.6f}", end="\r")

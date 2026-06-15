@@ -488,6 +488,8 @@ def _get_robot(config):
             return robot_instance, True
         if robot_type == RobotType.MOCK and module_name.endswith("client.robots.mock.body_robot"):
             return robot_instance, True
+        if robot_type == RobotType.UNITREE_G1 and module_name.endswith("client.robots.unitree_g1.body_robot"):
+            return robot_instance, True
 
         try:
             robot_instance.close()
@@ -501,6 +503,17 @@ def _get_robot(config):
     elif robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
         robot_instance = RobotBody(config)
+    elif robot_type == RobotType.UNITREE_G1:
+        import rclpy as _rclpy
+        # 先确保全局 rclpy 初始化（幂等保护），再用独立 context 给 robot
+        # 传 args=[] 避免 sys.argv（如 --port）干扰 rcl 参数解析
+        if not _rclpy.ok():
+            _rclpy.init(args=[])
+        _ros_context = _rclpy.Context()
+        if not _ros_context.ok():
+            _ros_context.init(args=[])
+        from client.robots.unitree_g1.body_robot import RobotBody
+        robot_instance = RobotBody(config, ros_context=_ros_context)
     else:
         raise ValueError(f"Unsupported robot type: {robot_type}")
     return robot_instance, False

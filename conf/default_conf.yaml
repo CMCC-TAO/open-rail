@@ -16,11 +16,11 @@ intra_chunk:
   action_layout:
     arm:
       end: 14
-      policy: gradual
+      policy: joint
       start: 0
-    gripper:
-      end: 16
-      policy: stepwise
+    hand:
+      end: 26
+      policy: hand
       start: 14
   filter_window_size: 4
   fitting_deg: 5
@@ -49,11 +49,11 @@ rdm:
   action_layout:
     arm:
       end: 14
-      policy: gradual
+      policy: joint
       start: 0
-    gripper:
-      end: 16
-      policy: stepwise
+    hand:
+      end: 26
+      policy: hand
       start: 14
   max_len: 100
   mode: async
@@ -173,7 +173,54 @@ robots:
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
     hand_type: gripper
     repo_id: task_39_only1
-  type: mock
+  type: unitree_g1
+  unitree_g1:
+    action_layout:
+      arm:
+        end: 14
+        policy: joint
+        start: 0
+      hand:
+        end: 26
+        policy: hand
+        start: 14
+    camera:
+      names:
+        hand_left: hand_left
+        hand_right: hand_right
+        head: head
+      ref: head
+    hand_type: hand
+    proprio_names:
+    - arm
+    - hand
+    reset_robot_pos:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
 vis_zmq:
   client_addr: tcp://localhost:7788
   server_addr: tcp://*:7788

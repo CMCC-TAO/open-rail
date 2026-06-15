@@ -42,11 +42,15 @@ class RobotBody(RobotBase):
         time.sleep(2.0)
 
     def _start_spin_thread(self):
+        from rclpy.executors import SingleThreadedExecutor
+        self._executor = SingleThreadedExecutor(context=self._ros_context)
+        self._executor.add_node(self.camera)
+        self._executor.add_node(self.robot)
+
         def spin_worker():
             while self.running and self._ros_context.ok():
                 try:
-                    rclpy.spin_once(self.camera, timeout_sec=0.005)
-                    rclpy.spin_once(self.robot, timeout_sec=0.005)
+                    self._executor.spin_once(timeout_sec=0.005)
                 except Exception:
                     pass  # spin 异常不中断线程
         t = threading.Thread(target=spin_worker, daemon=True)
@@ -66,6 +70,50 @@ class RobotBody(RobotBase):
         """
         action = np.array(action).flatten()
         assert len(action) == 26, "must be 26-dim action"
+        self.robot.send_robot_action(action)
+
+    # ==================================================================
+    # 执行动作（dict 接口，用于手动控制模式）
+    # ==================================================================
+    def execute_action(self, data):
+        """执行手动控制动作
+
+        解析 dict 指令，构建 26 维动作后发送到机器人。
+
+        Args:
+            data: dict，如 {'gripper': [left, right]}、{'arm': [14x]}
+
+        Unitree G1 动作布局:
+            [0:7]   -> 左臂
+            [7:14]  -> 右臂
+            [14:20] -> 左手 (6 手指, 0~1000)
+            [20:26] -> 右手 (6 手指, 0~1000)
+
+        gripper 值映射:
+            [0, 0] -> 全开（所有手指 0）
+            [1, 1] -> 全闭（所有手指 1000）
+        """
+        current_state = getattr(self, 'current_state', None)
+        if current_state is None:
+            obs = self.retrieve_observation()
+            current_state = obs["obs.state"] if obs is not None else np.zeros(26)
+
+        action = np.array(current_state).copy().flatten()
+        assert len(action) == 26, f"current_state must be 26-dim, got {len(action)}"
+
+        for key, values in data.items():
+            values = np.asarray(values).flatten()
+            if key == 'gripper' and len(values) >= 2:
+                # [left, right] 映射到左右手各 6 手指
+                action[14:20] = np.full(6, float(values[0]) * 1000.0)
+                action[20:26] = np.full(6, float(values[1]) * 1000.0)
+            elif key == 'arm' and len(values) >= 14:
+                action[0:14] = values[:14]
+            elif key == 'hand' and len(values) >= 12:
+                action[14:26] = values[:12]
+            elif key == 'head' or key == 'waist' or key == 'wheel':
+                pass  # Unitree G1 26 维动作不包含 head/waist/wheel
+
         self.robot.send_robot_action(action)
 
     # ==================================================================
@@ -200,10 +248,29 @@ class RobotBody(RobotBase):
         self.robot.stop()
 
         # ######################
-        # 新增: 销毁 ROS2 节点（释放资源）
+        # 新增: 先移除 executor 中的节点，再销毁 executor
+        # ######################
+        if hasattr(self, '_executor'):
+            try:
+                self._executor.remove_node(self.camera)
+                self._executor.remove_node(self.robot)
+            except Exception:
+                pass
+
+        # ######################
+        # 销毁 ROS2 节点（释放资源）
         # ######################
         self.camera.destroy_node()
         self.robot.destroy_node()
+
+        # ######################
+        # 新增: shutdown 独立 context，避免 GC 阶段 Executor.__del__ 报错
+        # ######################
+        if self._ros_context is not None and self._ros_context.ok():
+            try:
+                self._ros_context.shutdown()
+            except Exception:
+                pass
 
         print("Unitree G1 RobotBody closed")
 

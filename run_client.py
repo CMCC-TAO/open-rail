@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument('--inter_chunk_mode', type=str, choices=['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline'], help='The method to bridge action chunks')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
     parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock', 'unitree_g1'], help='Robot type')
-    parser.add_argument('--thre_prob_progress', type=float, help='Probability threshold for switching language instructions')
+    parser.add_argument('--task_progress_threshold', type=float, help='Probability threshold for switching language instructions')
     parser.add_argument('--preprocess', type=str, choices=['crop_and_resize', 'pad_and_resize', 'resize', 'none'], help='Image preprocessing method')
     parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')
     parser.add_argument('--language', nargs='+', type=str, help='Language instruction options')

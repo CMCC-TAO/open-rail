@@ -260,13 +260,17 @@ class IntraChunkSmoother():
         for name, seg in self.action_layout.items():
             for index in range(seg['start'], seg['end']):
                 joint_chunk = np.array(action_chunk[index, :])
-                if seg['policy'] == 'gradual':
+                if seg['policy'] == 'gradual' or seg['policy'] == 'joint':
                     futures.append(self.joint_fitting_executor.submit(
                         self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
                     ))
-                elif seg['policy'] == 'stepwise':
+                elif seg['policy'] == 'stepwise' or seg['policy'] == 'gripper':
                     futures.append(self.gripper_fitting_executor.submit(
                         self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
+                    ))
+                elif seg['policy'] == 'hand':
+                    futures.append(self.hand_fitting_executor.submit(
+                        self._hand_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
                     ))
                 else:
                     raise ValueError(f"Unknown policy: {seg['policy']}")

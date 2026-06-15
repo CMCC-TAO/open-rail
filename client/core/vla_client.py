@@ -33,9 +33,9 @@ class VLAClientAsync():
                 realtime_data_manager: RealtimeDataManager,
                 inter_chunk_fuser: InterChunkFuser,
                 intra_chunk_smoother: IntraChunkSmoother,
-                task_language_manager: TaskLanguageManager,
                 vla_zmq_client: ZMQClient,
-                robot: RobotBase):
+                robot: RobotBase,
+                task_language_manager: TaskLanguageManager = None):
         """Initialize the VLA Client.
         
         Args:
@@ -51,7 +51,7 @@ class VLAClientAsync():
         self.realtime_data_manager = realtime_data_manager
         self.inter_chunk_fuser = inter_chunk_fuser
         self.intra_chunk_smoother = intra_chunk_smoother
-        self.task_language_manager = task_language_manager
+        self.task_language_manager = task_language_manager or TaskLanguageManager(config=self.config.language)
         self.vla_zmq = vla_zmq_client
         self.robot = robot
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
@@ -100,7 +100,15 @@ class VLAClientAsync():
         self.info_current_action = [0.0] * action_dim
         self.info_current_state = [0.0] * action_dim
         self.info_obs, self.info_act = {}, {}
-        # self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
+
+    @property
+    def language(self):
+        return self.task_language_manager.get_current_language()
+
+    @language.setter
+    def language(self, value):
+        self.task_language_manager.currt_language_instruction = value
+
     #################### VLA Client APIs ####################
     def start_observe(self):
         self.is_running = True
@@ -119,6 +127,10 @@ class VLAClientAsync():
 
     def stop_inference(self):
         self.is_inference_thread_running = False
+
+    def inference_first(self):
+        """Public API for first inference, delegates to internal _inference_first."""
+        self._inference_first()
 
     def start_control(self):
         self.is_running = True
