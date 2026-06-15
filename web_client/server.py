@@ -856,7 +856,7 @@ class VisualCameraConfigRequest(BaseModel):
     open_wrist_right: Optional[bool] = None
 
 
-@app.post("/api/visualize/camera_cfg")
+@app.post("/api/client/visualize/config")
 async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
     """Update in-memory visualize.camera config (effective immediately)."""
     payload = req.dict(exclude_none=True)
@@ -1233,7 +1233,16 @@ async def _bg_start_client():
                 loop
             )
         finally:
-            _cleanup()
+            with client_state.lock:
+                stopping_flag = bool(getattr(client_state, "stopping", False))
+            # If an external stop was requested (via /api/client/stop), the
+            # background stopper will perform cleanup. In that case avoid
+            # running `_cleanup` here to prevent duplicate attempts.
+            if not stopping_flag:
+                _cleanup()
+            else:
+                logger.debug("Worker thread exiting: external stop will run cleanup.")
+
             with client_state.lock:
                 if client_state.worker_thread is threading.current_thread():
                     client_state.worker_thread = None
@@ -1557,18 +1566,20 @@ def _join_worker_thread(timeout_s: float = 5.0):
         worker = client_state.worker_thread
 
     if worker is None:
-        return
+        return "no_worker"
 
     if worker is threading.current_thread():
-        return
+        return "no_worker"
 
     worker.join(timeout=max(0.1, float(timeout_s)))
     if worker.is_alive():
         logger.warning("VLA worker thread is still alive after join timeout.")
+        return "still_alive"
     else:
         with client_state.lock:
             if client_state.worker_thread is worker:
                 client_state.worker_thread = None
+        return "joined_dead"
 
 
 def _shutdown_stop_if_running():
@@ -1593,7 +1604,7 @@ def _has_alive_vla_threads(vla_client) -> bool:
     if vla_client is None:
         return False
 
-    for name in ("observe_thread", "inference_thread", "vis_action_cams_thread", "data_write_thread"):
+    for name in ("observe_thread", "inference_thread", "data_write_thread"):
         t = getattr(vla_client, name, None)
         if t is not None and hasattr(t, "is_alive") and t.is_alive():
             return True
@@ -1617,7 +1628,7 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
             vla_client = client_state.vla_client
             robot = client_state.robot
             # client_state.vla_client = None
-            client_state.robot = None
+            # client_state.robot = None
             client_state.running = False
             client_state.paused_thread_state = None
             client_state.stopping = False
@@ -1627,16 +1638,19 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
                 vla_client.stop()
             except Exception:
                 pass
-
+        # TODO: robot should be reset.
         threads_alive = _has_alive_vla_threads(vla_client)
+        # print(f"Debug: vla_client threads alive={threads_alive}")
 
         keep_robot_alive = False
         if robot is not None and not force_release_robot:
             module_name = getattr(robot.__class__, "__module__", "")
             keep_robot_alive = module_name.endswith("client.robots.a2d.body_robot")
+            # print(f"Debug: keep_robot_alive={keep_robot_alive}")
 
         if robot is not None and not keep_robot_alive:
             should_close_robot = not (skip_robot_close_if_threads_alive and threads_alive)
+            # print(f"Debug: should_close_robot={should_close_robot}")
             if should_close_robot:
                 try:
                     robot.close()
@@ -1650,6 +1664,7 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
             robot_instance = robot
         elif robot_instance is robot:
             robot_instance = None
+            # print(f"Debug: Robot instance was destroyed.")
 
         # On process shutdown, client_state.robot may already be None while a reused
         # robot instance is still cached globally. Ensure it is released as well.
