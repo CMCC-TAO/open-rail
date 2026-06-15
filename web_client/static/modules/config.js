@@ -1056,7 +1056,7 @@ async function persistVisualStateNow() {
 
   if (App.isRunning) {
     try {
-      await apiFetch('/api/visualize/camera_cfg', {
+      await apiFetch('/api/client/visualize/config', {
         method: 'POST',
         body: JSON.stringify({
           open_head: patch['visualize.camera.open_head'],
