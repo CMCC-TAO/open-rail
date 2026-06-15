@@ -113,7 +113,7 @@ function setupLangPanel() {
     markPending();
 
     try {
-      const res = await apiFetch('/api/config/patch', {
+      const res = await apiFetch('/api/client/config/patch', {
         method: 'POST',
         body: JSON.stringify({ patch }),
       });
@@ -124,7 +124,7 @@ function setupLangPanel() {
 
       const path = getConfigSavePath();
       if (path) {
-        await apiFetch('/api/config/save_file', {
+        await apiFetch('/api/client/config/save', {
           method: 'POST',
           body: JSON.stringify({ path }),
         });
@@ -311,9 +311,9 @@ async function loadDefaultLangFile() {
     const langPath = App.config && App.config.language && App.config.language.file_path;
     let res;
     if (langPath) {
-      res = await apiFetch('/api/lang_file/load', { method: 'POST', body: JSON.stringify({ path: langPath }) });
+      res = await apiFetch('/api/client/language/load', { method: 'POST', body: JSON.stringify({ path: langPath }) });
     } else {
-      res = await apiFetch('/api/default_lang_file');
+      res = await apiFetch('/api/client/language/load/default');
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
       if (res.path) App.config.language.file_path = res.path;
@@ -419,7 +419,7 @@ $('lang-file-input').addEventListener('change', async (e) => {
   if (!file) return;
   const path = file.path || file.name;
   try {
-    const res = await apiFetch('/api/lang_file/load', { method: 'POST', body: JSON.stringify({ path }) });
+    const res = await apiFetch('/api/client/language/load', { method: 'POST', body: JSON.stringify({ path }) });
     buildLangTasksFromData(res.data);
     renderLangTaskSelect();
 
@@ -431,7 +431,7 @@ $('lang-file-input').addEventListener('change', async (e) => {
     markPending();
 
     try {
-      const patchRes = await apiFetch('/api/config/patch', {
+      const patchRes = await apiFetch('/api/client/config/patch', {
         method: 'POST',
         body: JSON.stringify({ patch: { 'language.file_path': path } }),
       });
@@ -442,7 +442,7 @@ $('lang-file-input').addEventListener('change', async (e) => {
       const display = $('conf-path-display');
       const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
       if (cfgPath) {
-        await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
+        await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
       }
     } catch (_) {
       App.pendingPatch['language.file_path'] = path;

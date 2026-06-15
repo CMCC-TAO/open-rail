@@ -170,7 +170,7 @@ async function deleteRecordingEpisode(episodeId) {
   if (!ok) return;
 
   try {
-    await apiFetch('/api/recording/episode', {
+    await apiFetch('/api/client/record/delete', {
       method: 'DELETE',
       body: JSON.stringify({ task: App.recordingTask, episode_id: episodeId }),
     });
@@ -189,7 +189,7 @@ async function refreshRecordingFileList() {
     if (requestedChunk) params.set('chunk', requestedChunk);
 
     const q = params.toString();
-    const res = await apiFetch(`/api/recording/files${q ? `?${q}` : ''}`);
+    const res = await apiFetch(`/api/client/record/episodes${q ? `?${q}` : ''}`);
     renderRecordingFileList(res);
 
     const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
@@ -198,7 +198,7 @@ async function refreshRecordingFileList() {
       if (App.recordingTask) params2.set('task', App.recordingTask);
       if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
       const q2 = params2.toString();
-      const res2 = await apiFetch(`/api/recording/files${q2 ? `?${q2}` : ''}`);
+      const res2 = await apiFetch(`/api/client/record/episodes${q2 ? `?${q2}` : ''}`);
       renderRecordingFileList(res2);
     }
   } catch (_) { /* toasted */ }
@@ -325,7 +325,7 @@ async function setRecordSwitch(enable) {
     return;
   }
 
-  const res = await apiFetch('/api/config/patch', {
+  const res = await apiFetch('/api/client/config/patch', {
     method: 'POST',
     body: JSON.stringify({ patch: { 'record.switch': target } }),
   });

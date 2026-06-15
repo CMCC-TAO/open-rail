@@ -391,7 +391,7 @@ function wireEvents() {
     const path = file.path || (CONF_DIR + '/' + file.name);
     // const path = file.path || null;
     try {
-      const res = await apiFetch('/api/config/load_file', { method: 'POST', body: JSON.stringify({ path }) });
+      const res = await apiFetch('/api/client/config/load', { method: 'POST', body: JSON.stringify({ path }) });
       App.config = res.config || {}; App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
@@ -424,7 +424,7 @@ function wireEvents() {
     if (!path) return;
     $('modal-saveas').classList.add('hidden');
     try {
-      await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
+      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
       const display = $('conf-path-display');
       if (display) { display.textContent = _confRelPath(path); display.title = path; display.dataset.fullPath = path; }
       toast(`Saved as ${_confRelPath(path)}`, 'ok');
@@ -442,7 +442,7 @@ function wireEvents() {
     const restoreConfigTreeState = () => restoreConfigTreeUiState(uiState);
 
     try {
-      const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
+      const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
       App.config = res.config || {}; App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
@@ -458,7 +458,7 @@ function wireEvents() {
       const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
       if (path) {
         try {
-          await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
+          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
           toast(`Saved to ${_confRelPath(path)}`, 'ok');
         } catch (_) { /* toasted */ }
       }
@@ -514,7 +514,7 @@ function wireEvents() {
       const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };
       if (Object.keys(patchToApply).length) {
         try {
-          const res = await apiFetch('/api/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
+          const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
           App.config = res.config || App.config;
           App.pendingPatch = {};
           clearPending();
