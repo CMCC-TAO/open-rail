@@ -695,7 +695,7 @@ async def select_directory():
     return {"status": "ok", "path": str(p)}
 
 
-@app.get("/api/recording/files")
+@app.get("/api/client/record/episodes")
 async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] = None):
     """List recording task folders and parsed LeRobot episode records."""
     recoding_dir = ROOT / "data" / "recoding"
@@ -757,7 +757,7 @@ class RecordingEpisodeDeleteRequest(BaseModel):
     episode_id: str
 
 
-@app.delete("/api/recording/episode")
+@app.delete("/api/client/record/delete")
 async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
     recoding_dir = ROOT / "data" / "recoding"
     fallback_dir = ROOT / "data" / "recording"
@@ -793,7 +793,7 @@ async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
         raise HTTPException(500, f"Failed to delete recording episode: {e}")
 
 
-@app.get("/api/default_lang_file")
+@app.get("/api/client/language/load/default")
 async def get_default_lang_file():
     """Return the path and contents of the default language command JSON file."""
     if not DEFAULT_LANG_CMD.exists():
@@ -810,7 +810,7 @@ class LangFileRequest(BaseModel):
     path: str
 
 
-@app.post("/api/lang_file/load")
+@app.post("/api/client/language/load")
 async def load_lang_file(req: LangFileRequest):
     """Load a JSON language command file and return its contents."""
     # print(f"Loading language file: {req.path}")
@@ -836,7 +836,7 @@ async def load_lang_file(req: LangFileRequest):
         raise HTTPException(400, f"Failed to parse JSON: {e}")
 
 
-@app.get("/api/config")
+@app.get("/api/client/config")
 async def get_config():
     """Return current config as a nested dict."""
     if client_state.config is None:
@@ -887,7 +887,7 @@ async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
     return {"status": "ok", "applied": True, "camera_cfg": camera_cfg}
 
 
-@app.post("/api/config/patch")
+@app.post("/api/client/config/patch")
 async def patch_config(req: ConfigPatchRequest):
     """Apply a partial update to in-memory config. Effective immediately when possible."""
     if client_state.config is None:
@@ -922,7 +922,7 @@ class ConfigFileRequest(BaseModel):
     path: str
 
 
-@app.post("/api/config/load_file")
+@app.post("/api/client/config/load")
 async def load_config_file(req: ConfigFileRequest):
     """Load a yaml conf file and apply it. Effective immediately when possible."""
     if client_state.config is None:
@@ -953,7 +953,7 @@ async def load_config_file(req: ConfigFileRequest):
     return {"status": "ok", "config": cfg_dict}
 
 
-@app.post("/api/config/save_file")
+@app.post("/api/client/config/save")
 async def save_config_file(req: ConfigFileRequest):
     """Save current in-memory config to a file.
 
@@ -1057,7 +1057,7 @@ def _fmt_dict(d: dict, indent: int) -> str:
 def _dict_to_user_conf_yaml(d: dict) -> str:
     """Convert a nested dict to a YAML config string.
 
-    Uses PyYAML when available; falls back to a simple manual serialiser
+    Uses PyYAML when available; falls back to a simple manual serializer
     that handles the nested dicts produced by _config_to_dict.
     """
     if _HAS_YAML:
