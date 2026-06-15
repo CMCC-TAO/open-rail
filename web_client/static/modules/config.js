@@ -524,7 +524,7 @@ function createCfgRow(dotKey, label, value) {
       pathEl.title = selectedPath;
 
       try {
-        const patchRes = await apiFetch('/api/config/patch', {
+        const patchRes = await apiFetch('/api/client/config/patch', {
           method: 'POST',
           body: JSON.stringify({ patch: { [dotKey]: selectedPath } }),
         });
@@ -535,7 +535,7 @@ function createCfgRow(dotKey, label, value) {
         const display = $('conf-path-display');
         const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
         if (cfgPath) {
-          await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
+          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
         }
 
         renderConfigTree(App.config);
@@ -1073,7 +1073,7 @@ async function persistVisualStateNow() {
 
   _visualPersistInFlight = true;
   try {
-    const res = await apiFetch('/api/config/patch', {
+    const res = await apiFetch('/api/client/config/patch', {
       method: 'POST',
       body: JSON.stringify({ patch }),
     });
@@ -1082,7 +1082,7 @@ async function persistVisualStateNow() {
     const display = $('conf-path-display');
     const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
     if (path) {
-      await apiFetch('/api/config/save_file', { method: 'POST', body: JSON.stringify({ path }) });
+      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
     }
   } catch (_) {
     // no-op: visual state already effective in UI
@@ -1101,7 +1101,7 @@ function schedulePersistVisualState(delay = 120) {
 
 async function loadConfigFromServer() {
   try {
-    const res = await apiFetch('/api/config');
+    const res = await apiFetch('/api/client/config');
     App.config = res.config || {};
     App.pendingPatch = {};
     clearPending();
