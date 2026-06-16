@@ -94,7 +94,7 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      train: 0:4
+      valid: 0:100
     state_shape: 20
     total_chunks: 1
     total_episodes: 5

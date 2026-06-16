@@ -43,10 +43,10 @@
 .cam-status.error  { background: rgba(207,34,46,.08); border-color: var(--danger);  color: var(--danger);  }
 .cam-spacer { flex: 1; }
 
-/* Preview area: always visible, 640:480 = 4:3 */
+/* Preview area: always visible; aspect ratio follows incoming stream */
 .cam-preview {
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 4 / 3; /* fallback before first frame arrives */
   background: var(--bg3);
   overflow: hidden;
   position: relative;
@@ -63,7 +63,7 @@
   pointer-events: none;
 }
 .cam-preview img {
-  width: 100%; height: 100%; object-fit: cover; background: var(--bg3);
+  width: 100%; height: 100%; object-fit: contain; background: var(--bg3);
   display: block;
 }
 /* Hide broken-image icon before stream arrives */
