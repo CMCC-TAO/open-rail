@@ -104,6 +104,7 @@ class VLAClientAsync():
         self.info_current_action = [0.0] * action_dim
         self.info_current_state = [0.0] * action_dim
         self.info_obs, self.info_act = {}, {}
+        self.camera_shape_dict = None
         # self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
     #################### VLA Client APIs ####################
     def start_observe(self):
@@ -139,48 +140,10 @@ class VLAClientAsync():
             self.logger.warning("dataset_write is not initialized, skip update_camera_shape.")
             return {}
 
-        observe_data = self.realtime_data_manager.pop_observe_data(num_samples=1)
-        if not isinstance(observe_data, dict):
-            self.logger.warning("No valid observation popped from RDM, skip update_camera_shape.")
-            return {}
-
-        obs_dict = observe_data.get("obs", {}) if isinstance(observe_data.get("obs", {}), dict) else {}
-        camera_shape_dict = {}
-        for camera_name, camera_data in obs_dict.items():
-            if not str(camera_name).startswith("cam."):
-                continue
-
-            frame = None
-            if isinstance(camera_data, np.ndarray):
-                if camera_data.ndim == 3:
-                    frame = camera_data
-                elif camera_data.ndim == 1 and camera_data.size > 0:
-                    frame = cv2.imdecode(camera_data, cv2.IMREAD_UNCHANGED)
-            elif isinstance(camera_data, (bytes, bytearray)):
-                frame = cv2.imdecode(np.frombuffer(camera_data, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-
-            if frame is None:
-                self.logger.warning(f"Failed to decode camera frame from RDM for {camera_name}, skip.")
-                continue
-
-            if frame.ndim == 2:
-                height, width = frame.shape
-                channel = 1
-            elif frame.ndim >= 3:
-                height, width, channel = frame.shape[:3]
-            else:
-                self.logger.warning(f"Invalid frame ndim for {camera_name}: {frame.ndim}")
-                continue
-
-            camera_shape_dict[camera_name] = (int(height), int(width), int(channel))
-
-        if camera_shape_dict:
-            # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
-            self.dataset_write.update_camera_shape_dict(camera_shape_dict)
-            self.logger.info(f"Update camera shape from runtime observation: {camera_shape_dict}")
-        else:
-            self.logger.warning("No camera shape generated from RDM observation, keep original config.")
-        return camera_shape_dict
+        # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
+        self.dataset_write.update_camera_shape_dict(self.camera_shape_dict)
+        self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
+        return self.camera_shape_dict
 
     def start_visualize(self):
         self.visualize_server.start_server()
@@ -587,6 +550,9 @@ class VLAClientAsync():
             dict: The encoded images with key and values.
         """
         cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
+        if self.camera_shape_dict is None:
+            self.camera_shape_dict = {key: value.shape for key, value in cam_items}
+            # print(f"Debug: camera shape dict={self.camera_shape_dict}")
         # Use shared thread pool to parallel process all cameras (avoid per-frame pool creation)
         futures = [self._img_executor.submit(self._process_image_thread_fun, key, value) for key, value in cam_items]
         results = [future.result() for future in futures]  # Wait for all tasks to complete

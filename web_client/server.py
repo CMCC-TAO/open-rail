@@ -487,6 +487,20 @@ def _get_robot(config):
         if robot_type == RobotType.A2D and module_name.endswith("client.robots.a2d.body_robot"):
             return robot_instance, True
         if robot_type == RobotType.MOCK and module_name.endswith("client.robots.mock.body_robot"):
+            desired_path = str(getattr(getattr(config.robots, 'mock', None), 'dataset_path', '') or '')
+            current_path = str(getattr(robot_instance, 'dataset_path', '') or '')
+            if desired_path and desired_path != current_path and hasattr(robot_instance, 'reset'):
+                try:
+                    robot_instance.reset(dataset_path=desired_path, reload_dataset=True)
+                    logger.info(f"Reload mock dataset during robot reuse: {current_path} -> {desired_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to reload reused mock robot with new dataset path, will recreate robot: {e}")
+                    try:
+                        robot_instance.close()
+                    except Exception:
+                        pass
+                    robot_instance = None
+                    return _get_robot(config)
             return robot_instance, True
 
         try:
@@ -906,24 +920,62 @@ async def patch_config(req: ConfigPatchRequest):
 
     flat = _flatten(req.patch)
 
+    vision_preprocess_keys = [k for k in flat.keys() if k.startswith('vision.preprocess')]
+    dataset_path_key = 'robots.mock.dataset_path'
+    dataset_path_changed = dataset_path_key in flat
+
+    current_vla_client = None
+    current_robot = None
+    is_running = False
+
     acquired = client_state.lock.acquire(timeout=2.0)
     if not acquired:
         raise HTTPException(503, "Config is busy. Please retry.")
     try:
         _apply_flat_patch_new(client_state.config, flat)
         cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
-        
-        # Check if vision.preprocess parameters were updated and update the preprocess function accordingly
-        vision_preprocess_keys = [k for k in flat.keys() if k.startswith('vision.preprocess')]
-        if vision_preprocess_keys and client_state.vla_client is not None:
+        current_vla_client = client_state.vla_client
+        current_robot = client_state.robot
+        is_running = bool(client_state.running)
+
+        if vision_preprocess_keys and current_vla_client is not None:
             try:
-                client_state.vla_client.update_preprocess_func()
+                current_vla_client.update_preprocess_func()
                 logger.info(f"Updated preprocess function due to vision.preprocess config changes: {vision_preprocess_keys}")
-                # print(f"Updated preprocess function due to vision.preprocess config changes: {vision_preprocess_keys}")
             except Exception as e:
                 logger.error(f"Failed to update preprocess function: {e}")
     finally:
         client_state.lock.release()
+
+    if dataset_path_changed:
+        next_dataset_path = str(flat.get(dataset_path_key, '') or '').strip()
+        targets = []
+        if current_robot is not None:
+            targets.append(current_robot)
+        if robot_instance is not None and robot_instance is not current_robot:
+            targets.append(robot_instance)
+
+        for robot in targets:
+            module_name = getattr(robot.__class__, "__module__", "")
+            if not module_name.endswith("client.robots.mock.body_robot"):
+                continue
+            if not hasattr(robot, 'reset'):
+                continue
+            paused_state = None
+            try:
+                if is_running and current_vla_client is not None and robot is current_robot:
+                    paused_state = _pause_vla_client(current_vla_client)
+                robot.reset(dataset_path=next_dataset_path or None, reload_dataset=True)
+                logger.info(f"Applied mock dataset_path change: {next_dataset_path}")
+            except Exception as e:
+                logger.error(f"Failed to apply mock dataset_path change '{next_dataset_path}': {e}")
+                raise HTTPException(500, f"Failed to reload mock dataset: {e}")
+            finally:
+                if paused_state is not None:
+                    try:
+                        _resume_vla_client(current_vla_client, paused_state)
+                    except Exception as e:
+                        logger.error(f"Failed to resume client after dataset reload: {e}")
 
     return {"status": "ok", "config": cfg_dict}
 
