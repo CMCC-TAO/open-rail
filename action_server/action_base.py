@@ -284,7 +284,13 @@ def _monitor_vla_progress(
                 feedback_code=0,
             )
 
-            # ===== 稳定性检测 =====
+            # ===== 条件 1: prob_progress > 95% → 立即完成（无需等待稳定性）+ =====
+            if current_prob_progress > 0.95:
+                send_vla_feedback(goal_handle, 100,
+                                  f'Task completed (prob_progress={current_prob_progress:.3f})! Elapsed: {elapsed:.1f}s')
+                return TaskResult(True)
+
+            # ===== 条件 2: prob_progress 稳定性检测（原有逻辑，低于95%时兜底）=====
             if current_prob_progress > thre_progress:
                 stability_window.append(current_prob_progress)
                 if len(stability_window) > 50:
@@ -302,7 +308,7 @@ def _monitor_vla_progress(
 
                     if stable_count >= stable_count_threshold:
                         send_vla_feedback(goal_handle, 100,
-                                          f'Task completed! Total time: {elapsed:.1f}s')
+                                          f'Task completed (prob stable)! Total time: {elapsed:.1f}s')
                         return TaskResult(True)
             else:
                 stable_count = 0

@@ -86,7 +86,9 @@ class GraspHandler(AbstractTaskHandler):
                 language_instruction=instruction,
                 robot_body=robot_body,
                 reset_robot=not context._initialized,
-                fixed_duration=30.0,
+                max_duration=10.0,
+                thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >95% 直接完成或 10s 超时
+                stable_count_threshold=999,
             )
             return result
 
