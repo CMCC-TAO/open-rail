@@ -78,6 +78,42 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
+    "6": {
+        "name": "left arm deliver",
+        "desc": "左手递物 — 3s 线性插值到左递物位姿 → 左手全开 → 保持 1s",
+        "params": {
+            "task": "left arm deliver",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "7": {
+        "name": "right arm deliver",
+        "desc": "右手递物 — 3s 线性插值到右递物位姿 → 右手全开 → 保持 1s",
+        "params": {
+            "task": "right arm deliver",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "8": {
+        "name": "one arm deliver",
+        "desc": "单手递物 — 自动判断哪只手有物体，路由到左手/右手递物",
+        "params": {
+            "task": "one arm deliver",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "9": {
+        "name": "both arm deliver",
+        "desc": "双手递物 — 双臂同时递物，需双手都有物体",
+        "params": {
+            "task": "both arm deliver",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
 }
 
 
@@ -188,17 +224,21 @@ def print_banner():
 
 
 def print_menu():
-    """打印任务菜单"""
+    """打印任务菜单（紧凑列布局）"""
+    items = [(key, task["name"]) for key, task in AVAILABLE_TASKS.items()]
+    col_width = 30
     print()
     print('可用任务:')
-    print('─' * 50)
-    for key, task in AVAILABLE_TASKS.items():
-        print(f'  [{key}] {task["name"]}')
-        print(f'       {task["desc"]}')
-        print(f'       params: {json.dumps(task["params"], ensure_ascii=False)}')
-        print()
-    print('  [q] 退出')
-    print('─' * 50)
+    print('─' * 63)
+    for i in range(0, len(items), 2):
+        left = f'  [{items[i][0]}] {items[i][1]}'
+        if i + 1 < len(items):
+            right = f'[{items[i+1][0]}] {items[i+1][1]}'
+            print(f'{left:<{col_width}}{right}')
+        else:
+            print(left)
+    print(f'{"  [q] 退出":<{col_width}}')
+    print('─' * 63)
 
 
 def main():
@@ -221,14 +261,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1-5 / q): ').strip().lower()
+        choice = input('请选择任务编号 (1-9 / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1-5 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-9 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]

@@ -34,6 +34,14 @@ ERR_TWO_HAND_BOTH_FAILED = 15
 ERR_MISSING_TARGET = 16
 ERR_UNKNOWN_TARGET = 17
 
+# task_deliver 专用 (21-26)
+ERR_DELIVER_TIMEOUT = 21
+ERR_DELIVER_LEFT_EMPTY = 22
+ERR_DELIVER_RIGHT_EMPTY = 23
+ERR_DELIVER_ONE_HAND_BOTH_EMPTY = 24
+ERR_DELIVER_BOTH_HAND_NOT_BOTH = 25
+ERR_DELIVER_ONE_HAND_STILL_HOLDING = 26
+
 ERR_MSG = {
     ERR_SUCCESS: "none",
     # 通用
@@ -54,6 +62,14 @@ ERR_MSG = {
     ERR_TWO_HAND_BOTH_FAILED: "Both hands grasp failed",
     ERR_MISSING_TARGET: 'Missing "target" field in params',
     ERR_UNKNOWN_TARGET: "Unknown target",
+
+    # task_deliver 专用
+    ERR_DELIVER_TIMEOUT: "Deliver task timed out",
+    ERR_DELIVER_LEFT_EMPTY: "Left hand is empty but left arm deliver requested",
+    ERR_DELIVER_RIGHT_EMPTY: "Right hand is empty but right arm deliver requested",
+    ERR_DELIVER_ONE_HAND_BOTH_EMPTY: "Both hands are empty but one arm deliver requested",
+    ERR_DELIVER_BOTH_HAND_NOT_BOTH: "Not both hands have objects but both arm deliver requested",
+    ERR_DELIVER_ONE_HAND_STILL_HOLDING: "One hand still holding object after both arm deliver",
 }
 
 

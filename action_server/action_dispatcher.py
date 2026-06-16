@@ -497,6 +497,16 @@ class VLAActionDispatcher(Node):
         except ImportError as e:
             self.get_logger().warn(f'Failed to load grasp handler: {e}')
 
+        try:
+            from action_server.task_deliver import DeliverHandler
+            handler = DeliverHandler()
+            for task_name in ["left arm deliver", "right arm deliver",
+                              "one arm deliver", "both arm deliver"]:
+                self._handlers[task_name] = handler
+            self.get_logger().info(f'Registered deliver handler for 4 task variants')
+        except ImportError as e:
+            self.get_logger().warn(f'Failed to load deliver handler: {e}')
+
     # ================================================================
     # Action 回调
     # ================================================================
