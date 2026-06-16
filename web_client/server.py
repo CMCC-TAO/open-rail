@@ -732,7 +732,10 @@ async def select_directory():
             )
             if proc.returncode == 0:
                 selected = proc.stdout.strip()
-            elif proc.returncode not in (0, 1):
+            elif proc.returncode == 1:
+                # User explicitly cancelled zenity dialog.
+                return {"status": "cancelled", "path": ""}
+            else:
                 logger.warning(f"zenity directory picker failed: {proc.stderr.strip()}")
         except Exception as e:
             logger.warning(f"zenity directory picker exception: {e}")
