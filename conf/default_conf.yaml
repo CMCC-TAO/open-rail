@@ -174,16 +174,13 @@ robots:
     hand_type: gripper
     repo_id: task_39_only1
   type: mock
-vis_zmq:
-  client_addr: tcp://localhost:7788
-  server_addr: tcp://*:7788
 vision:
   history_frame: false
   preprocess:
     height: 180
     keep_ratio: true
     method: resize
-    width: 224
+    width: 640
 visualize:
   camera:
     open_head: true
@@ -199,7 +196,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 7
+    - 9
     source:
     - ActionRaw
     - ActionFitted
