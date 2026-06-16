@@ -14,7 +14,8 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from action_server.action_base import AbstractTaskHandler, TaskResult
+from action_server.action_base import AbstractTaskHandler, TaskResult, ERR_SUCCESS, ERR_INIT_GRASP_FAILED, ERR_MSG
+
 
 # ==============================================
 # 准备抓取姿态从 robots_conf.py 的 reset_robot_pos 读取
@@ -61,11 +62,12 @@ class InitGraspHandler(AbstractTaskHandler):
             # ===== 步骤 3: 完成 =====
             context._initialized = True
             self.send_feedback(goal_handle, 100, "机器人已就绪，准备抓取姿态完成")
-            return TaskResult(True)
+            return TaskResult(True, error_code=ERR_SUCCESS, error_message=ERR_MSG[ERR_SUCCESS])
 
         except Exception as e:
-            err_msg = f"init grasp 执行失败: {str(e)}"
-            self.send_feedback(goal_handle, 0, err_msg, feedback_code=99)
-            return TaskResult(False, error_code=99, error_message=err_msg)
+            err_code = ERR_INIT_GRASP_FAILED
+            err_msg = f"{ERR_MSG[err_code]}: {str(e)}"
+            self.send_feedback(goal_handle, 0, err_msg)
+            return TaskResult(False, error_code=err_code, error_message=err_msg)
 
         # 无需 finally 清理 — robot_body 由 dispatcher 统一管理

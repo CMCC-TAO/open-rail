@@ -55,6 +55,7 @@ class VLAContext:
         self._robot_context = None  # robot_body 专属 ROS2 context（隔离 wait set）
         self._active_vla_client = None  # 当前活跃的 VLA 客户端（供 ObsDataBridge 读取进度）
         self._initialized = False  # 是否已执行过 init_grasp（跳过复位）
+        self.grasp_detector = None  # 抓取状态检测器（由 dispatcher 注入）
 
         # ── 定时打印初始化标志（约 2s 间隔，便于调试）──
         self._print_init_running = True

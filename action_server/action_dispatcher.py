@@ -449,6 +449,7 @@ class VLAActionDispatcher(Node):
 
         # 创建抓取检测器（订阅 set_angle/get_angle 话题，判断抓取状态）
         self._grasp_detector = GraspDetector(self)
+        self._context.grasp_detector = self._grasp_detector
 
         # 创建 Action Server
         self._action_server = ActionServer(

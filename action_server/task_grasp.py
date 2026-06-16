@@ -13,7 +13,23 @@ if _project_root not in sys.path:
 
 from action_server.action_base import (
     AbstractTaskHandler, TaskResult, run_vla_inference,
+    ERR_MISSING_TARGET, ERR_UNKNOWN_TARGET,
+    ERR_GRASP_TIMEOUT, ERR_ONE_HAND_FAILED,
+    ERR_TWO_HAND_LEFT_FAILED, ERR_TWO_HAND_RIGHT_FAILED,
+    ERR_TWO_HAND_BOTH_FAILED,
 )
+
+
+# ==============================================
+# Target → 手数映射
+# ==============================================
+# 显式映射，不依赖字符串前缀判断
+TARGET_HAND_MAP: dict[str, str] = {
+    "one Wahaha": "one hand",
+    "one Coca-Cola": "one hand",
+    "two Wahaha": "two hand",
+    "two Coca-Cola": "two hand",
+}
 
 # ==============================================
 # target → 语言指令映射表
@@ -57,15 +73,15 @@ class GraspHandler(AbstractTaskHandler):
         # ===== 步骤 1: 解析 target 并获取语言指令 =====
         target = params.get("target", "")
         if not target:
-            self.send_feedback(goal_handle, 0, "缺少 target 字段", feedback_code=1)
-            return TaskResult(False, error_code=2,
+            self.send_feedback(goal_handle, 0, "缺少 target 字段")
+            return TaskResult(False, error_code=ERR_MISSING_TARGET,
                               error_message='Missing "target" field in params')
 
         instruction = _get_language_instruction(target)
         if instruction is None:
             self.send_feedback(goal_handle, 0,
-                               f"未知 target: {target}", feedback_code=1)
-            return TaskResult(False, error_code=3,
+                               f"未知 target: {target}")
+            return TaskResult(False, error_code=ERR_UNKNOWN_TARGET,
                               error_message=f'Unknown target="{target}". '
                                             f'Supported: {list(TARGET_LANGUAGE_MAP.keys())}')
 
@@ -86,13 +102,43 @@ class GraspHandler(AbstractTaskHandler):
                 language_instruction=instruction,
                 robot_body=robot_body,
                 reset_robot=not context._initialized,
-                max_duration=10.0,
-                thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >95% 直接完成或 10s 超时
+                max_duration=20.0,
+                thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >95% 直接完成或 20s 超时
                 stable_count_threshold=999,
             )
-            return result
+            # ===== 步骤 4: 分析结果，结合手势判断具体错误 =====
+            if not result.success:
+                # 超时 → 映射为抓取超时错误码
+                if result.error_code == 6:
+                    return TaskResult(False, error_code=ERR_GRASP_TIMEOUT,
+                                      error_message="Grasp task timed out")
+                # 其他错误（复位失败、推理未启动、取消等）→ 原样透传
+                return result
+
+            # VLA 推理成功 (prob_progress > 95%)，验证实际抓握状态
+            hand_type = TARGET_HAND_MAP.get(target.strip(), "one hand")
+            grasp_state = context.grasp_detector.grasp_state  # [left, right]
+
+            if hand_type == "one hand":
+                if not (grasp_state[0] or grasp_state[1]):  # 任一手抓到即成功
+                    return TaskResult(False, error_code=ERR_ONE_HAND_FAILED,
+                                      error_message="One-hand grasp failed")
+                return result  # 抓握成功
+
+            # two hand
+            if grasp_state[0] and grasp_state[1]:
+                return result  # 双手抓握成功
+            if not grasp_state[0] and not grasp_state[1]:
+                return TaskResult(False, error_code=ERR_TWO_HAND_BOTH_FAILED,
+                                  error_message="Both hands grasp failed")
+            if not grasp_state[0]:
+                return TaskResult(False, error_code=ERR_TWO_HAND_LEFT_FAILED,
+                                  error_message="Left hand grasp failed")
+            # not grasp_state[1]
+            return TaskResult(False, error_code=ERR_TWO_HAND_RIGHT_FAILED,
+                              error_message="Right hand grasp failed")
 
         finally:
-            # ===== 步骤 4: 清理 per-task 组件 =====
+            # ===== 步骤 5: 清理 per-task 组件 =====
             context._active_vla_client = None
             context.destroy_vla_components(components)

@@ -8,6 +8,56 @@ from typing import Any
 
 
 # ==============================================
+# 全局错误码定义
+# 各 handler 共享，新增错误码请追加（避免冲突）
+# ==============================================
+
+# 成功
+ERR_SUCCESS = 0
+
+# 通用 (91-99)
+ERR_TASK_CANCELLED = 91
+ERR_ROBOT_RESET_FAILED = 92
+ERR_INFERENCE_START_FAILED = 93
+ERR_TASK_TIMEOUT = 94
+ERR_MONITOR_ERROR = 95
+
+# task_init_grasp 专用 (1)
+ERR_INIT_GRASP_FAILED = 1
+
+# task_grasp 专用 (11-19)
+ERR_GRASP_TIMEOUT = 11
+ERR_ONE_HAND_FAILED = 12
+ERR_TWO_HAND_LEFT_FAILED = 13
+ERR_TWO_HAND_RIGHT_FAILED = 14
+ERR_TWO_HAND_BOTH_FAILED = 15
+ERR_MISSING_TARGET = 16
+ERR_UNKNOWN_TARGET = 17
+
+ERR_MSG = {
+    ERR_SUCCESS: "none",
+    # 通用
+    ERR_TASK_CANCELLED: "Task cancelled by external signal",
+    ERR_ROBOT_RESET_FAILED: "Robot reset failed",
+    ERR_INFERENCE_START_FAILED: "Failed to start inference",
+    ERR_TASK_TIMEOUT: "Task timed out",
+    ERR_MONITOR_ERROR: "Internal monitoring error",
+
+    # task_init_grasp 专用
+    ERR_INIT_GRASP_FAILED: "Init grasp failed",
+    
+    # task_grasp 专用
+    ERR_GRASP_TIMEOUT: "Grasp task timed out",
+    ERR_ONE_HAND_FAILED: "One-hand grasp failed",
+    ERR_TWO_HAND_LEFT_FAILED: "Left hand grasp failed",
+    ERR_TWO_HAND_RIGHT_FAILED: "Right hand grasp failed",
+    ERR_TWO_HAND_BOTH_FAILED: "Both hands grasp failed",
+    ERR_MISSING_TARGET: 'Missing "target" field in params',
+    ERR_UNKNOWN_TARGET: "Unknown target",
+}
+
+
+# ==============================================
 # 任务执行结果
 # ==============================================
 @dataclass
@@ -96,29 +146,6 @@ class AbstractTaskHandler(ABC):
         fb.message = f"[progress={progress}%] {message}"
         return fb
 
-    @staticmethod
-    def build_failed_result(error_code: int, error_message: str) -> Any:
-        """构建失败 result 对象"""
-        from message_center.action import ExecutionUnit
-
-        result = ExecutionUnit.Result()
-        result.result = 2  # FAILED
-        result.error_code = error_code
-        result.error_message = error_message
-        return result
-
-    @staticmethod
-    def build_success_result() -> Any:
-        """构建成功 result 对象"""
-        from message_center.action import ExecutionUnit
-
-        result = ExecutionUnit.Result()
-        result.result = 1  # SUCCESS
-        result.error_code = 0
-        result.error_message = ''
-        return result
-
-
 # ==============================================
 # VLA 推理监控（模块级函数，所有 handler 共享）
 # ==============================================
@@ -175,14 +202,14 @@ def run_vla_inference(
     # ========== 步骤 1: 复位机器人（可选） ==========
     if reset_robot:
         if robot_body is None:
-            return TaskResult(False, error_code=4,
+            return TaskResult(False, error_code=ERR_ROBOT_RESET_FAILED,
                               error_message='reset_robot=True but robot_body is None')
         send_vla_feedback(goal_handle, 5, "正在复位机器人到安全姿态...")
         try:
             robot_body.reset_robot(mode='default')
             time.sleep(1.0)
         except Exception as e:
-            return TaskResult(False, error_code=4,
+            return TaskResult(False, error_code=ERR_ROBOT_RESET_FAILED,
                               error_message=f'Robot reset failed: {str(e)}')
 
     # ========== 步骤 2: 启动推理 ==========
@@ -196,7 +223,7 @@ def run_vla_inference(
         vla_client.inference_first()        # 首帧推理
         vla_client.is_running_action = True # 允许推理线程持续推理
     except Exception as e:
-        return TaskResult(False, error_code=5,
+        return TaskResult(False, error_code=ERR_INFERENCE_START_FAILED,
                           error_message=f'Failed to start inference: {str(e)}')
 
     # ========== 步骤 3 + 4: 监控进度 + 稳定性检测 ==========
@@ -258,18 +285,16 @@ def _monitor_vla_progress(
         while True:
             # 检查外部停止信号
             if not vla_client.is_running_action:
-                send_vla_feedback(goal_handle, 0, "VLA task stopped by external signal",
-                                  feedback_code=1)
-                return TaskResult(False, error_code=3,
+                send_vla_feedback(goal_handle, 0, "VLA task stopped by external signal")
+                return TaskResult(False, error_code=ERR_TASK_CANCELLED,
                                   error_message='VLA task cancelled')
 
             # 检查超时
             elapsed_total = time.time() - progress_start
             if elapsed_total > max_duration:
                 send_vla_feedback(goal_handle, 0,
-                                  f'Task timed out after {elapsed_total:.1f}s',
-                                  feedback_code=1)
-                return TaskResult(False, error_code=6,
+                                  f'Task timed out after {elapsed_total:.1f}s')
+                return TaskResult(False, error_code=ERR_TASK_TIMEOUT,
                                   error_message=f'Task timed out after {elapsed_total:.1f}s')
 
             # 读取进度
@@ -281,7 +306,6 @@ def _monitor_vla_progress(
             send_vla_feedback(
                 goal_handle, progress_pct,
                 f"[elapsed={int(elapsed)}s] prob_progress={current_prob_progress:.3f}",
-                feedback_code=0,
             )
 
             # ===== 条件 1: prob_progress > 95% → 立即完成（无需等待稳定性）+ =====
@@ -317,7 +341,7 @@ def _monitor_vla_progress(
             time.sleep(feedback_interval)
 
     except Exception as e:
-        return TaskResult(False, error_code=99,
+        return TaskResult(False, error_code=ERR_MONITOR_ERROR,
                           error_message=f'Monitoring error: {str(e)}')
 
 
@@ -340,9 +364,8 @@ def _monitor_fixed_duration(
 
             # 检查外部停止信号
             if not vla_client.is_running_action:
-                send_vla_feedback(goal_handle, 0, "VLA task stopped by external signal",
-                                  feedback_code=1)
-                return TaskResult(False, error_code=3,
+                send_vla_feedback(goal_handle, 0, "VLA task stopped by external signal")
+                return TaskResult(False, error_code=ERR_TASK_CANCELLED,
                                   error_message='VLA task cancelled')
 
             # 发送进度反馈
@@ -362,7 +385,7 @@ def _monitor_fixed_duration(
             time.sleep(feedback_interval)
 
     except Exception as e:
-        return TaskResult(False, error_code=99,
+        return TaskResult(False, error_code=ERR_MONITOR_ERROR,
                           error_message=f'Monitoring error: {str(e)}')
 
 
