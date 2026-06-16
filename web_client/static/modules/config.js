@@ -138,8 +138,10 @@ function restoreConfigTreeUiState(state) {
 
 function renderConfigTree(cfg) {
   const root = $('config-tree');
+  const uiState = captureConfigTreeUiState();
   root.innerHTML = '';
   buildTree(cfg, '', root);
+  restoreConfigTreeUiState(uiState);
 }
 
 
@@ -513,9 +515,9 @@ function createCfgRow(dotKey, label, value) {
     pathEl.textContent = value === null ? '' : String(value);
     pathEl.title = value === null ? '' : String(value);
     pathEl.style.width = '100%';
-    pathEl.style.whiteSpace = 'nowrap';
-    pathEl.style.overflow = 'hidden';
-    pathEl.style.textOverflow = 'ellipsis';
+    pathEl.style.whiteSpace = 'normal';
+    pathEl.style.overflowWrap = 'anywhere';
+    pathEl.style.wordBreak = 'break-word';
     pathEl.style.fontSize = '10px';
     pathEl.style.lineHeight = '1.2';
     pathEl.style.background = 'transparent';
@@ -528,7 +530,12 @@ function createCfgRow(dotKey, label, value) {
     btn.addEventListener('click', async () => {
       let selectedPath = '';
       try {
-        const pickRes = await apiFetch('/api/fs/select_directory');
+        const pickRes = await apiFetch('/api/fs/select_directory', {
+          // Native directory chooser blocks server response until user confirms/cancels.
+          // Use a long timeout to avoid aborting before path is selected.
+          timeoutMs: 600000,
+          suppressAbortToast: true,
+        });
         selectedPath = String(pickRes?.path || '').trim();
       } catch (_) {
         return;
