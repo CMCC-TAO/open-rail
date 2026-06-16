@@ -117,12 +117,7 @@ robots:
         end: 16
         policy: stepwise
         start: 14
-    camera:
-      names:
-        hand_left: hand_left
-        hand_right: hand_right
-        head: head
-      ref: head
+    camera: {}
     gripper_freq: 40
     hand_type: gripper
     head_freq: 40
@@ -171,8 +166,6 @@ robots:
         head: observation.images.top_head
       ref: head
     dataset_path: /home/robot/Downloads/task_39_only1
-    hand_type: gripper
-    repo_id: task_39_only1
   type: mock
 vision:
   history_frame: false

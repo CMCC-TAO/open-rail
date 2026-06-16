@@ -530,7 +530,7 @@ function createCfgRow(dotKey, label, value) {
     btn.addEventListener('click', async () => {
       let selectedPath = '';
       try {
-        const pickRes = await apiFetch('/api/fs/select_directory', {
+        const pickRes = await apiFetch('/api/client/robot/select_directory', {
           // Native directory chooser blocks server response until user confirms/cancels.
           // Use a long timeout to avoid aborting before path is selected.
           timeoutMs: 600000,
