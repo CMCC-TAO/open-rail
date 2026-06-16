@@ -57,6 +57,7 @@ from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.utils.util import load_user_config, apply_user_config
+from client.robots.base_robot import RobotBase
 
 logger = logging.getLogger(__name__)
 
@@ -500,8 +501,10 @@ def _get_robot(config):
                     except Exception:
                         pass
                     robot_instance = None
-                    return _get_robot(config)
-            return robot_instance, True
+                else:
+                    return robot_instance, True
+            else:
+                return robot_instance, True
 
         try:
             robot_instance.close()
@@ -518,6 +521,52 @@ def _get_robot(config):
     else:
         raise ValueError(f"Unsupported robot type: {robot_type}")
     return robot_instance, False
+
+
+def _bind_robot_to_vla_client(vla_client, robot):
+    if vla_client is not None:
+        vla_client.robot = robot
+    with client_state.lock:
+        if client_state.vla_client is vla_client:
+            client_state.robot = robot
+
+
+def _ensure_config_robot_bound(force_recreate: bool = False):
+    """Create robot by current config and inject into existing vla_client."""
+    global robot_instance
+
+    with client_state.lock:
+        vla_client = client_state.vla_client
+        cfg = client_state.config
+        current_robot = client_state.robot
+
+    if vla_client is None:
+        return None
+    if cfg is None:
+        cfg = get_client_config()
+        client_state.config = cfg
+
+    if force_recreate and robot_instance is not None:
+        try:
+            robot_instance.close()
+        except Exception:
+            pass
+        robot_instance = None
+
+    robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
+    if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
+        cfg.rdm.action_layout = robot_cfg.action_layout
+        cfg.intra_chunk.action_layout = robot_cfg.action_layout
+
+    robot, _ = _get_robot(cfg)
+    if current_robot is robot:
+        _bind_robot_to_vla_client(vla_client, robot)
+        return robot
+
+    # Default RobotBase instance used at init can be replaced directly.
+    # Non-cached previous robot release is handled by _get_robot() path.
+    _bind_robot_to_vla_client(vla_client, robot)
+    return robot
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -923,16 +972,22 @@ async def patch_config(req: ConfigPatchRequest):
     vision_preprocess_keys = [k for k in flat.keys() if k.startswith('vision.preprocess')]
     dataset_path_key = 'robots.mock.dataset_path'
     dataset_path_changed = dataset_path_key in flat
+    robot_type_key = 'robots.type'
+    robot_type_changed = robot_type_key in flat
 
     current_vla_client = None
     current_robot = None
     is_running = False
+    prev_robot_type = None
+    next_robot_type = None
 
     acquired = client_state.lock.acquire(timeout=2.0)
     if not acquired:
         raise HTTPException(503, "Config is busy. Please retry.")
     try:
+        prev_robot_type = str(getattr(getattr(client_state.config, 'robots', None), 'type', ''))
         _apply_flat_patch_new(client_state.config, flat)
+        next_robot_type = str(getattr(getattr(client_state.config, 'robots', None), 'type', ''))
         cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
         current_vla_client = client_state.vla_client
         current_robot = client_state.robot
@@ -947,7 +1002,24 @@ async def patch_config(req: ConfigPatchRequest):
     finally:
         client_state.lock.release()
 
-    if dataset_path_changed:
+    if robot_type_changed and prev_robot_type != next_robot_type and current_vla_client is not None:
+        paused_state = None
+        try:
+            if is_running:
+                paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
+            await asyncio.to_thread(_ensure_config_robot_bound, True)
+            logger.info(f"Robot type changed: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
+        except Exception as e:
+            logger.error(f"Failed to recreate robot for type change {prev_robot_type} -> {next_robot_type}: {e}")
+            raise HTTPException(500, f"Failed to recreate robot for type change: {e}")
+        finally:
+            if paused_state is not None:
+                try:
+                    await asyncio.to_thread(_resume_vla_client, current_vla_client, paused_state)
+                except Exception as e:
+                    logger.error(f"Failed to resume client after robot recreate: {e}")
+
+    if dataset_path_changed and not (robot_type_changed and prev_robot_type != next_robot_type):
         next_dataset_path = str(flat.get(dataset_path_key, '') or '').strip()
         targets = []
         if current_robot is not None:
@@ -1003,8 +1075,31 @@ async def load_config_file(req: ConfigFileRequest):
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
 
+    current_vla_client = None
+    is_running = False
+    prev_robot_type = None
+    next_robot_type = None
+
     with client_state.lock:
+        prev_robot_type = str(getattr(getattr(client_state.config, 'robots', None), 'type', ''))
         _apply_yaml_config(client_state.config, p)
+        next_robot_type = str(getattr(getattr(client_state.config, 'robots', None), 'type', ''))
+        current_vla_client = client_state.vla_client
+        is_running = bool(client_state.running)
+
+    if prev_robot_type != next_robot_type and current_vla_client is not None:
+        paused_state = None
+        try:
+            if is_running:
+                paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
+            await asyncio.to_thread(_ensure_config_robot_bound, True)
+            logger.info(f"Robot type changed by config load: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
+        finally:
+            if paused_state is not None:
+                try:
+                    await asyncio.to_thread(_resume_vla_client, current_vla_client, paused_state)
+                except Exception as e:
+                    logger.error(f"Failed to resume client after config-load robot recreate: {e}")
 
     # user_cfg = load_user_config(str(p))
     # if user_cfg is None:
@@ -1176,8 +1271,6 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
 #  REST: client control
 # ─────────────────────────────────────────────────────────────────────────────
 def _ensure_vla_client_created():
-    global robot_instance
-
     with client_state.lock:
         if client_state.vla_client is not None:
             return client_state.vla_client
@@ -1191,11 +1284,9 @@ def _ensure_vla_client_created():
         cfg.intra_chunk.action_layout = robot_cfg.action_layout
 
     vla_zmq_client = None
-    robot = None
-    reused_robot = False
+    robot = RobotBase()
     try:
         vla_zmq_client = ZMQClient(cfg.vla_zmq)
-        robot, reused_robot = _get_robot(cfg)
         realtime_data_manager = RealtimeDataManager(cfg.rdm)
         inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
         intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
@@ -1217,13 +1308,6 @@ def _ensure_vla_client_created():
                 vla_zmq_client.close()
             except Exception:
                 pass
-        if robot is not None and not reused_robot:
-            try:
-                robot.close()
-            except Exception:
-                pass
-            if robot_instance is robot:
-                robot_instance = None
         raise
 
     with client_state.lock:
@@ -1237,6 +1321,8 @@ async def _bg_start_client():
     client_state._loop = loop
 
     try:
+        await asyncio.to_thread(_ensure_vla_client_created)
+        await asyncio.to_thread(_ensure_config_robot_bound)
         vla_client = client_state.vla_client
     except Exception as e:
         err = traceback.format_exc()
@@ -1460,7 +1546,7 @@ async def _bg_resume_and_broadcast(vla_client):
 
 async def _bg_toggle_observe_and_broadcast():
     try:
-        # vla_client = await asyncio.to_thread(_ensure_vla_client_created)
+        await asyncio.to_thread(_ensure_vla_client_created)
         vla_client = client_state.vla_client
         if vla_client == None:
             with client_state.lock:
@@ -1486,6 +1572,8 @@ async def _bg_toggle_observe_and_broadcast():
             message = "Observe stopped."
         # Start
         else:
+            await asyncio.to_thread(_ensure_config_robot_bound)
+            vla_client = client_state.vla_client
             await asyncio.to_thread(_start_observe, vla_client)
             message = "Observe started."
 
