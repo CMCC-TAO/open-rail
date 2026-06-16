@@ -13,14 +13,14 @@ def get_a2d_config():
                    proprioception names, and gripper frequency for A2D robot.
     """
     config = ConfigDict()
-    config.camera = ConfigDict()
     config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
-    config.camera.ref = 'head'
-    # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
+    config.camera = ConfigDict()
+    # config.camera.ref = 'head'
+    # # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
     
-    config.camera.names = {'head': 'head',
-                           'hand_left': 'hand_left_fisheye' if 'hand' in config.hand_type else 'hand_left',
-                           'hand_right': 'hand_right_fisheye' if 'hand' in config.hand_type else 'hand_right'}
+    # config.camera.names = {'head': 'head',
+    #                        'hand_left': 'hand_left_fisheye' if 'hand' in config.hand_type else 'hand_left',
+    #                        'hand_right': 'hand_right_fisheye' if 'hand' in config.hand_type else 'hand_right'}
     config.proprio_names = ['arm', 'hand' if 'hand' in config.hand_type else 'gripper', 'head', 'waist']
     config.gripper_freq = 40
     config.head_freq = 40
@@ -42,7 +42,7 @@ def get_mock_config():
     """
     config = ConfigDict()
     config.camera = ConfigDict()
-    config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
+    # config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
     config.camera.ref = 'head'
     config.camera.names = {'head': 'observation.images.top_head',
                            'hand_left': 'observation.images.hand_left',
@@ -55,7 +55,6 @@ def get_mock_config():
     }
     config.dataset_path = '/home/robot/Music/task_39_only1'
     # config.dataset_path = '/home/robot/Music'
-    config.repo_id = 'task_39_only1'
     return config
 
 def get_robots_config():

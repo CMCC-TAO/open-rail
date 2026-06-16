@@ -715,7 +715,7 @@ async def get_conf_dir():
     return {"status": "ok", "path": str(conf_dir)}
 
 
-@app.get("/api/fs/select_directory")
+@app.get("/api/client/robot/select_directory")
 async def select_directory():
     """Open a native directory chooser and return an absolute path."""
     selected = ""
