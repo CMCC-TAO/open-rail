@@ -17,7 +17,7 @@ Action Web Vision Server — 纯转发 Web 可视化服务
         ↓ action_raw / action_fitted
     浏览器 WebSocket 客户端（直连）
 
-访问：http://localhost:9000 或 http://0.0.0.0:9000
+访问：http://localhost:9000
 """
 
 import asyncio
@@ -34,9 +34,10 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 import uvicorn
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -167,8 +168,26 @@ def _collect_resource_stats() -> dict:
     return data
 
 
+# ── Lifecycle (lifespan context manager) ───────────────────────────────────
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    print("[WebVision] Starting Action Web Vision Server v2...")
+    asyncio.create_task(_bridge_reader())
+    asyncio.create_task(_stats_loop())
+    print("[WebVision] Server ready → open http://localhost:9000 in browser")
+    yield
+    global _bridge_ws, _bridge_connected
+    _bridge_connected = False
+    if _bridge_ws:
+        try:
+            await _bridge_ws.close()
+        except Exception:
+            pass
+        _bridge_ws = None
+
+
 # ── FastAPI app ─────────────────────────────────────────────────────────────
-app = FastAPI(title="Action Web Vision", version="2.0.0")
+app = FastAPI(title="Action Web Vision", version="2.0.0", lifespan=_lifespan)
 
 # Static files
 if STATIC_DIR.exists():
@@ -246,25 +265,7 @@ async def _bridge_reader():
                 ws_clients.difference_update(dead)
 
 
-# ── Lifecycle ───────────────────────────────────────────────────────────────
-@app.on_event("startup")
-async def startup():
-    print("[WebVision] Starting Action Web Vision Server v2...")
-    asyncio.create_task(_bridge_reader())
-    asyncio.create_task(_stats_loop())
-    print("[WebVision] Server ready on http://0.0.0.0:9000")
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    global _bridge_ws, _bridge_connected
-    _bridge_connected = False
-    if _bridge_ws:
-        try:
-            await _bridge_ws.close()
-        except Exception:
-            pass
-        _bridge_ws = None
+# ── Lifecycle handled by _lifespan() above ─────────────────────────────────
 
 
 async def _stats_loop():
@@ -297,7 +298,7 @@ async def favicon():
     icon_path = STATIC_DIR / "favicon.ico"
     if icon_path.exists():
         return FileResponse(str(icon_path))
-    return FileResponse(str(STATIC_DIR / "index.html"), status_code=404)
+    return Response(status_code=204)
 
 
 # ── WebSocket endpoint (browser clients) ────────────────────────────────────
@@ -331,7 +332,7 @@ async def websocket_endpoint(ws: WebSocket):
 if __name__ == "__main__":
     uvicorn.run(
         "action_server.action_web_vision.server:app",
-        host="0.0.0.0",
+        host="127.0.0.1",
         port=9000,
         reload=False,
         log_level="info",

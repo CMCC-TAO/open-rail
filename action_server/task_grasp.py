@@ -79,6 +79,7 @@ class GraspHandler(AbstractTaskHandler):
 
         try:
             # ===== 步骤 3: 执行 VLA 推理 =====
+            context._active_vla_client = vla_client  # 供 ObsDataBridge 读取进度
             result = run_vla_inference(
                 goal_handle=goal_handle,
                 vla_client=vla_client,
@@ -91,4 +92,5 @@ class GraspHandler(AbstractTaskHandler):
 
         finally:
             # ===== 步骤 4: 清理 per-task 组件 =====
+            context._active_vla_client = None
             context.destroy_vla_components(components)

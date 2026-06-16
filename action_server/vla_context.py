@@ -52,6 +52,7 @@ class VLAContext:
 
         self._robot_body = None  # 懒加载
         self._robot_context = None  # robot_body 专属 ROS2 context（隔离 wait set）
+        self._active_vla_client = None  # 当前活跃的 VLA 客户端（供 ObsDataBridge 读取进度）
 
     # ================================================================
     # robot_body 懒加载属性
@@ -80,6 +81,21 @@ class VLAContext:
     @robot_body.setter
     def robot_body(self, value):
         self._robot_body = value
+
+    # ================================================================
+    # 任务进度（供 ObsDataBridge 读取）
+    # ================================================================
+
+    @property
+    def current_task_progress(self) -> float:
+        """当前推理任务进度 (0.0~1.0)，无活跃任务时返回 0.0"""
+        vc = self._active_vla_client
+        if vc is None:
+            return 0.0
+        try:
+            return float(getattr(vc, 'info_act', {}).get('current_prob_progress', 0.0))
+        except Exception:
+            return 0.0
 
     # ================================================================
     # Per-task VLA 组件工厂

@@ -4,8 +4,8 @@
  * WebSocket: ws://localhost:9000/ws
  *   Receives:
  *     - Binary: camera_data_binary (camera_id: 0=head, 1=wrist-left, 2=wrist-right)
- *     - JSON: { type: 'joint_data', data: { tab:'position', type:'state', joints_y:[...], timestamp } }
- *     - JSON: { type: 'stats', data: { cpu_usage, gpu_usage, mem_usage, bandwidth_m, task_progress } }
+ *     - JSON: { type: 'joint_data', data: { tab:'position', type:'state', joints_y:[...], timestamp, task_progress } }
+ *     - JSON: { type: 'stats', data: { cpu_usage, gpu_usage, mem_usage, bandwidth_m } }
  *
  * VisualizeServer: ws://localhost:8765
  *   Receives (when task active):

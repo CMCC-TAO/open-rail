@@ -51,6 +51,8 @@ function handleWSMessage(msg) {
     case 'joint_data':
       if (msg.data && msg.data.type === 'state' && Array.isArray(msg.data.joints_y)) {
         ingestTrajData(msg.data.joints_y, [], [], msg.data.timestamp);
+        // Update task progress if present
+        updateTaskProgress(msg.data.task_progress);
       }
       break;
     case 'stats':
@@ -173,6 +175,30 @@ function handleCamWSMessage(msg) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  Task progress bar
+// ═══════════════════════════════════════════════════════
+const _tpFill = () => $('task-progress-fill');
+const _tpVal  = () => $('task-progress-value');
+
+function updateTaskProgress(rawProgress) {
+  const fillEl = _tpFill();
+  const valueEl = _tpVal();
+  if (!fillEl || !valueEl) return;
+
+  const parsed = Number(rawProgress);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    fillEl.style.width = '0%';
+    valueEl.textContent = '0.0%';
+    return;
+  }
+
+  const clamped = Math.max(0, Math.min(1, parsed));
+  const pct = (clamped * 100).toFixed(1);
+  fillEl.style.width = `${pct}%`;
+  valueEl.textContent = `${pct}%`;
+}
+
+// ═══════════════════════════════════════════════════════
 //  Stats rendering
 // ═══════════════════════════════════════════════════════
 function renderStats(data) {
@@ -196,42 +222,63 @@ function setResourceText(el, label, value, unit) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  Joint state display
+//  Joint state display — init once, update text only
 // ═══════════════════════════════════════════════════════
+const _jcValRefs = { armL: [], armR: [], handL: [], handR: [] };
+let _jcInited = false;
+
+function _initJointChips() {
+  if (_jcInited) return;
+  _jcInited = true;
+  const groups = [
+    { el: $('joint-state-arm-l'),  refs: _jcValRefs.armL,  prefix: 'L',  count: 7, offset: 0 },
+    { el: $('joint-state-arm-r'),  refs: _jcValRefs.armR,  prefix: 'R',  count: 7, offset: 0 },
+    { el: $('joint-state-hand-l'), refs: _jcValRefs.handL, prefix: 'LH', count: 6, offset: 0 },
+    { el: $('joint-state-hand-r'), refs: _jcValRefs.handR, prefix: 'RH', count: 6, offset: 0 },
+  ];
+  for (const g of groups) {
+    if (!g.el) continue;
+    g.el.innerHTML = '';
+    for (let i = 0; i < g.count; i++) {
+      const chip = document.createElement('div');
+      chip.className = 'joint-chip';
+      const lbl = document.createElement('span');
+      lbl.className = 'jc-label';
+      lbl.textContent = `${g.prefix}${i}:`;
+      const val = document.createElement('span');
+      val.className = 'jc-val';
+      val.textContent = '--';
+      chip.appendChild(lbl);
+      chip.appendChild(val);
+      g.el.appendChild(chip);
+      g.refs.push(val);
+    }
+  }
+}
+
 function renderJointState(stateVals) {
   if (!stateVals) return;
+  _initJointChips();
   // Arm joints: indices 0-13
   if (stateVals.length >= 14) {
-    const elArmL = $('joint-state-arm-l');
-    const elArmR = $('joint-state-arm-r');
-    if (elArmL || elArmR) {
-      if (elArmL) elArmL.innerHTML = '';
-      if (elArmR) elArmR.innerHTML = '';
-      for (let i = 0; i < 7; i++) {
-        const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
-        if (elArmL) elArmL.innerHTML += `<div class="joint-chip">L${i}:<br>${v}</div>`;
-      }
-      for (let i = 7; i < 14; i++) {
-        const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
-        if (elArmR) elArmR.innerHTML += `<div class="joint-chip">R${i - 7}:<br>${v}</div>`;
-      }
+    for (let i = 0; i < 7; i++) {
+      const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
+      if (_jcValRefs.armL[i]) _jcValRefs.armL[i].textContent = v;
+    }
+    for (let i = 7; i < 14; i++) {
+      const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
+      if (_jcValRefs.armR[i - 7]) _jcValRefs.armR[i - 7].textContent = v;
     }
   }
   // Hand joints: indices 14-25
   if (stateVals.length >= 26) {
-    const elHandL = $('joint-state-hand-l');
-    const elHandR = $('joint-state-hand-r');
-    if (elHandL || elHandR) {
-      if (elHandL) elHandL.innerHTML = '';
-      if (elHandR) elHandR.innerHTML = '';
-      for (let i = 14; i < 20; i++) {
-        const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
-        if (elHandL) elHandL.innerHTML += `<div class="joint-chip">LH${i - 14}:<br>${v}</div>`;
-      }
-      for (let i = 20; i < 26; i++) {
-        const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
-        if (elHandR) elHandR.innerHTML += `<div class="joint-chip">RH${i - 20}:<br>${v}</div>`;
-      }
+    for (let i = 14; i < 20; i++) {
+      const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
+      if (_jcValRefs.handL[i - 14]) _jcValRefs.handL[i - 14].textContent = v;
+    }
+    for (let i = 20; i < 26; i++) {
+      const v = typeof stateVals[i] === 'number' ? stateVals[i].toFixed(4) : '--';
+      if (_jcValRefs.handR[i - 20]) _jcValRefs.handR[i - 20].textContent = v;
     }
   }
 }

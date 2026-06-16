@@ -216,6 +216,7 @@ class ObsDataBridge:
                                 "type": "state",
                                 "joints_y": state_list,
                                 "timestamp": now,
+                                "task_progress": self._ctx.current_task_progress,
                             },
                         })
                         self._enqueue(msg)

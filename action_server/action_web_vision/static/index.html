@@ -16,6 +16,14 @@
       <span class="topbar-subtitle">Real-time Monitor</span>
     </div>
     <div class="topbar-right">
+      <!-- Task Progress -->
+      <div class="task-progress-wrap" id="task-progress-wrap" title="Task Progress (current_prob_progress)">
+        <span class="task-progress-label">PROGRESS</span>
+        <div class="task-progress-track">
+          <div class="task-progress-fill" id="task-progress-fill"></div>
+        </div>
+        <span class="task-progress-value" id="task-progress-value">0.0%</span>
+      </div>
       <span class="resource-pill" id="val-cpu-usage"><span class="resource-label">CPU</span><span class="resource-value">--</span></span>
       <span class="resource-pill" id="val-gpu-usage"><span class="resource-label">GPU</span><span class="resource-value">--</span></span>
       <span class="resource-pill" id="val-mem-usage"><span class="resource-label">MEM</span><span class="resource-value">--</span></span>
