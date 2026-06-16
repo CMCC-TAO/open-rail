@@ -42,35 +42,9 @@ class RobotBody(RobotBase):
         self.video_caps = {}
         self._io_lock = threading.Lock()
 
+        self.dataset_path = ''
         try:
-            dataset_path = self.cfg.get('dataset_path', self.cfg.get('root', ''))
-            if not dataset_path:
-                raise ValueError('mock.dataset_path is empty')
-            parquet_glob = os.path.join(dataset_path, 'data', 'chunk-*', 'episode_*.parquet')
-            parquet_files = sorted(glob.glob(parquet_glob))
-            if not parquet_files:
-                raise FileNotFoundError(f'未找到离线数据: {parquet_glob}')
-
-            for parquet_path in parquet_files:
-                chunk_dir = os.path.basename(os.path.dirname(parquet_path))
-                chunk_id = int(chunk_dir.split('-')[-1])
-                ep_name = os.path.splitext(os.path.basename(parquet_path))[0]
-                episode_id = int(ep_name.split('_')[-1])
-                self.episode_files.append((chunk_id, episode_id, parquet_path))
-
-            self._load_episode(0)
-
-            meta_info_path = os.path.join(dataset_path, 'meta', 'info.json')
-            if os.path.exists(meta_info_path):
-                try:
-                    import json
-                    with open(meta_info_path, 'r', encoding='utf-8') as f:
-                        info = json.load(f)
-                    fps = info.get('fps', 30)
-                    self.period = 1.0 / max(float(fps), 1e-6)
-                except Exception:
-                    pass
-
+            self.reset(reload_dataset=True)
             self.logger.info(f"Loaded local episodes: {len(self.episode_files)}")
             self.logger.info(f"Current episode frames: {len(self.dataset)}")
             self.logger.info(f"Playback fps: {1.0 / self.period:.2f}")
@@ -87,6 +61,66 @@ class RobotBody(RobotBase):
                 pass
         self.video_caps = {}
 
+    def _resolve_dataset_path(self, dataset_path=None):
+        if dataset_path is None:
+            dataset_path = self.cfg.get('dataset_path', self.cfg.get('root', ''))
+        dataset_path = str(dataset_path or '').strip()
+        if not dataset_path:
+            raise ValueError('mock.dataset_path is empty')
+        return dataset_path
+
+    def _load_meta_period(self, dataset_path: str):
+        self.period = 1.0 / 30.0
+        meta_info_path = os.path.join(dataset_path, 'meta', 'info.json')
+        if os.path.exists(meta_info_path):
+            try:
+                import json
+                with open(meta_info_path, 'r', encoding='utf-8') as f:
+                    info = json.load(f)
+                fps = info.get('fps', 30)
+                self.period = 1.0 / max(float(fps), 1e-6)
+            except Exception:
+                pass
+
+    def _reload_dataset(self, dataset_path=None):
+        dataset_path = self._resolve_dataset_path(dataset_path)
+        parquet_glob = os.path.join(dataset_path, 'data', 'chunk-*', 'episode_*.parquet')
+        parquet_files = sorted(glob.glob(parquet_glob))
+        if not parquet_files:
+            raise FileNotFoundError(f'未找到离线数据: {parquet_glob}')
+
+        self._release_video_caps()
+        self.episode_files = []
+        self.current_episode_idx = 0
+        self.currt_index = 0
+
+        for parquet_path in parquet_files:
+            chunk_dir = os.path.basename(os.path.dirname(parquet_path))
+            chunk_id = int(chunk_dir.split('-')[-1])
+            ep_name = os.path.splitext(os.path.basename(parquet_path))[0]
+            episode_id = int(ep_name.split('_')[-1])
+            self.episode_files.append((chunk_id, episode_id, parquet_path))
+
+        self.dataset_path = dataset_path
+        self.cfg.dataset_path = dataset_path
+        self._load_meta_period(dataset_path)
+        self._load_episode(0)
+
+    def reset(self, dataset_path=None, reload_dataset=False):
+        """Reset mock playback to episode-0/frame-0, optionally reloading dataset."""
+        with self._io_lock:
+            target_path = self._resolve_dataset_path(dataset_path)
+            path_changed = target_path != self.dataset_path
+
+            if reload_dataset or path_changed or not self.episode_files:
+                self._reload_dataset(target_path)
+            else:
+                self._load_episode(0)
+
+            self.current_state = np.zeros(self.action_dim)
+
+        self.logger.info(f"Mock robot reset complete. dataset={self.dataset_path}, episode=0, frame=0")
+
     def _load_episode(self, episode_list_idx: int):
         self._release_video_caps()
         self.current_episode_idx = episode_list_idx
@@ -96,7 +130,7 @@ class RobotBody(RobotBase):
 
         for _, video_key in self.cfg['camera']['names'].items():
             video_path = os.path.join(
-                self.cfg.get('dataset_path', self.cfg.get('root', '')),
+                self.dataset_path,
                 'videos',
                 f'chunk-{chunk_id:03d}',
                 video_key,
@@ -124,12 +158,13 @@ class RobotBody(RobotBase):
         return
 
     def reset_robot(self, target_pose=None, mode='zero'):
-        """Reset the robot to its default position.
-        """
+        """Reset the robot to its default position and rewind mock dataset playback."""
         if target_pose is None:
             if mode == 'zero':
                 target_pose = np.zeros(self.action_dim)
         self.current_state = target_pose if target_pose is not None else self.current_state
+        # Mock robot reset should also rewind to episode-0 / frame-0.
+        self.reset(reload_dataset=False)
 
     def retrieve_observation(self):
         """Retrieve observation data from local lerobot-format files."""

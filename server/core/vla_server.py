@@ -168,6 +168,9 @@ class VLAServer:
             # Submit inference task to thread pool with timing
             inference_start_time = time.time()
             model_data = data if isinstance(data, list) else [data]
+            for idx, item in enumerate(model_data):
+                for k, v in item.get('obs', {}).items():
+                    print(f"Debug: model_data[{idx}]['obs']['{k}'] dtype: {getattr(v, 'dtype', type(v))}")
             future = self.executor.submit(self.model.infer, model_data)
             future.add_done_callback(lambda f: self.inference_callback(f, inference_start_time, meta=meta))
             for key, value in model_data[0]['obs'].items():

@@ -39,7 +39,7 @@ language:
   auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
+  task_id: point_bottle
   task_progress_threshold: 0.95
   task_progress_win_size: 10
 observer:
@@ -68,8 +68,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 480
+        width: 848
     cam.hand_right:
       encode:
         codec: mp4v
@@ -77,8 +77,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 480
+        width: 848
     cam.head:
       encode:
         codec: mp4v
@@ -86,21 +86,21 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 800
+        width: 1280
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      train: 0:4
     state_shape: 20
     total_chunks: 1
-    total_episodes: 3
-    total_frames: 4093
-    total_tasks: 0
-    total_videos: 9
+    total_episodes: 5
+    total_frames: 986
+    total_tasks: 1
+    total_videos: 15
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false
@@ -173,7 +173,7 @@ robots:
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
     hand_type: gripper
     repo_id: task_39_only1
-  type: mock
+  type: a2d
 vision:
   history_frame: false
   preprocess:
@@ -196,7 +196,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 9
+    - 0
     source:
     - ActionRaw
     - ActionFitted
