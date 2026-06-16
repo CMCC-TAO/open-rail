@@ -39,7 +39,7 @@ language:
   auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: point_bottle
+  task_id: tea_master
   task_progress_threshold: 0.95
   task_progress_win_size: 10
 observer:
@@ -94,7 +94,7 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      train: 0:11
+      valid: 0:100
     state_shape: 20
     total_chunks: 1
     total_episodes: 12
@@ -117,12 +117,7 @@ robots:
         end: 16
         policy: stepwise
         start: 14
-    camera:
-      names:
-        hand_left: hand_left
-        hand_right: hand_right
-        head: head
-      ref: head
+    camera: {}
     gripper_freq: 40
     hand_type: gripper
     head_freq: 40

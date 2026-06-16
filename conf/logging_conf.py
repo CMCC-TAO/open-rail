@@ -11,6 +11,7 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
 import re
+import sys
 
 # Create logs directory relative to project root
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
@@ -65,7 +66,8 @@ def _build_log_path(log_filename: str) -> str:
     path = Path(log_filename)
     stem = path.stem or "app"
     suffix = path.suffix or ".log"
-    timestamp = datetime.now().strftime("%Y-%m-%d--%H:%M:%S")
+    # timestamp = datetime.now().strftime("%Y-%m-%d--%H:%M:%S")
+    timestamp = datetime.now().strftime("%Y-%m-%d--%H:%M:%S" if sys.platform != "win32" else "%Y-%m-%d--%H-%M-%S")
     return str(LOG_DIR / f"{stem}{suffix}.{timestamp}")
 
 
