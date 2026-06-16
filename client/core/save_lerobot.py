@@ -577,25 +577,25 @@ class LeRobotDatasetWriter:
 
     def stop_recording(self):
         """
-        Stops the recording process by signaling the writer process to terminate.
+        Stops recording and waits for all queued data to be written before exiting.
 
-        This method sets the 'running' flag to False, which should cause the writer process
-        to finish processing any remaining data and exit gracefully.
+        Behavior:
+        - Set ``running=False`` to stop accepting new records.
+        - Let writer process continue draining ``record_queue``.
+        - Wait for writer process to exit naturally after flushing video/parquet.
         """
         if self.shared_data.running.value:
             self.shared_data.running.value = False
-            self.logger.info("Signaled writer process to stop.")
+            self.logger.info("Signaled writer process to stop after draining queue.")
 
-        # Invalidate already-submitted async tasks from previous recording cycle.
+        # Invalidate future async tasks from next cycle; current queue will still be drained.
         self._bump_recording_session_id()
 
         wp = getattr(self, "writer_process", None)
         if wp is not None and wp.is_alive():
-            wp.join(timeout=2)
-            if wp.is_alive():
-                self.logger.warning("Writer thread still alive after timeout, terminating...")
-                wp.terminate()
-                wp.join(timeout=1)
+            self.logger.info("Waiting writer process to flush queued data...")
+            wp.join()
+            self.logger.info("Writer process exited after queue drain.")
         elif wp is None:
             self.logger.debug("stop_recording called but writer process is not initialized.")
 
@@ -709,19 +709,20 @@ class LeRobotDatasetWriter:
             episode_task_list = []
             step_task_index = 0
             # Use a thread to write parquet file
-            write_parquet_thread = threading.Thread(target=self._write_parquet_fun, daemon=True)
+            write_loop_done = threading.Event()
+            write_parquet_thread = threading.Thread(target=self._write_parquet_fun, args=(write_loop_done,), daemon=True)
             try:
                 write_parquet_thread.start()
             except Exception as e:
                 self.logger.error("Write parquet thread can't start.")
                 return
-            while self.shared_data.running.value:
+            while self.shared_data.running.value or (not self.record_queue.empty()):
                 # Get state and action data from queue
                 try:
-                    step_state, step_action = self.record_queue.get_nowait()
+                    step_state, step_action = self.record_queue.get(timeout=0.1)
                 except Empty:
-                    self.logger.info("Record queue empty, waiting for data...")
-                    time.sleep(0.1)
+                    if self.shared_data.running.value:
+                        self.logger.info("Record queue empty, waiting for data...")
                     continue
                 step_language = step_state['language_instruction']
                 
@@ -785,8 +786,9 @@ class LeRobotDatasetWriter:
                                 episode_length=frame_index,
                                 total_videos=self.shared_data.total_videos.value,
                                 episode_task_list=episode_task_list)
-            # stop recording for current episode: flush video files immediately
-            write_parquet_thread.join(timeout=2.0)
+            # stop recording for current episode: flush video/parquet after all queue data drained
+            write_loop_done.set()
+            write_parquet_thread.join()
             self._release_video_writers()
             self._release_parquet_writer()
             # self._clear_queues()
@@ -1111,22 +1113,22 @@ class LeRobotDatasetWriter:
     #         self.parquet_writer.close()
     #         self.logger.info(f"Successfully wrote Parquet file to: {self.parquet_file_path}")
 
-    def _write_parquet_fun(self):
-        """Writes the Parquet file containing the collected data."""
-        while self.shared_data.running.value:
-            # Write a batch of records to Parquet file every 1 seconds
+    def _write_parquet_fun(self, write_loop_done: threading.Event):
+        """Writes parquet batches until writer loop is done and in-memory buffer is empty."""
+        while True:
+            # Write a batch of records to Parquet file every 1 second
             time.sleep(1.0)
             with self.parquet_lock:
-                if not self.parquet_frame_list:
-                    self.logger.warning("No episode records to write, parquet will be empty.")
-                    continue
-                df = pd.DataFrame(self.parquet_frame_list)
-                table = pa.Table.from_pandas(df, schema=self.parquet_schema)
-                self.parquet_writer.write_table(table)
-                self.logger.info(f"Wrote {len(self.parquet_frame_list)} records to Parquet file.")
-                self.parquet_frame_list.clear()
-        # Write any remaining records when stopping
-        time.sleep(0.1) # make sure all data is recorded.
+                if self.parquet_frame_list:
+                    df = pd.DataFrame(self.parquet_frame_list)
+                    table = pa.Table.from_pandas(df, schema=self.parquet_schema)
+                    self.parquet_writer.write_table(table)
+                    self.logger.info(f"Wrote {len(self.parquet_frame_list)} records to Parquet file.")
+                    self.parquet_frame_list.clear()
+                if write_loop_done.is_set() and (not self.parquet_frame_list):
+                    break
+
+        # Final flush before closing
         with self.parquet_lock:
             if self.parquet_frame_list:
                 df = pd.DataFrame(self.parquet_frame_list)
@@ -1137,7 +1139,7 @@ class LeRobotDatasetWriter:
                 self.parquet_frame_list = None  # Help GC
         self.parquet_writer.close()
         self.parquet_writer = None
-        self.logger.info(f"Successfully wrote Parquet file.")
+        self.logger.info("Successfully wrote Parquet file.")
             
 
     def _write_meta_files(self, total_episodes: int, total_frames: int, episode_length: int, total_videos: int, episode_task_list: list[str]):

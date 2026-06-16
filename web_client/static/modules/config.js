@@ -468,6 +468,20 @@ function buildGroupFromEl(label, bodyEl) {
   return group;
 }
 
+function setConfigValueByDotKey(cfg, dotKey, value) {
+  if (!cfg || typeof cfg !== 'object') return;
+  const parts = String(dotKey || '').split('.').filter(Boolean);
+  if (!parts.length) return;
+
+  let node = cfg;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const k = parts[i];
+    if (node[k] == null || typeof node[k] !== 'object') node[k] = {};
+    node = node[k];
+  }
+  node[parts[parts.length - 1]] = value;
+}
+
 function createCfgRow(dotKey, label, value) {
   const row = document.createElement('div');
   row.className = 'cfg-row';
@@ -529,19 +543,28 @@ function createCfgRow(dotKey, label, value) {
           method: 'POST',
           body: JSON.stringify({ patch: { [dotKey]: selectedPath } }),
         });
-        App.config = patchRes.config || App.config;
+
+        App.config = patchRes.config || App.config || {};
+        setConfigValueByDotKey(App.config, dotKey, selectedPath);
         delete App.pendingPatch[dotKey];
         if (!Object.keys(App.pendingPatch).length) clearPending();
 
-        const display = $('conf-path-display');
-        const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-        if (cfgPath) {
-          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
-        }
-
         renderConfigTree(App.config);
         renderRecordingConfigTree(App.config);
-        toast('dataset_path updated.', 'ok', 2000);
+
+        const defaultCfgPath = `${CONF_DIR}/default_conf.yaml`;
+        const display = $('conf-path-display');
+        try {
+          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: defaultCfgPath }) });
+          if (display) {
+            display.textContent = 'conf/default_conf.yaml';
+            display.title = defaultCfgPath;
+            display.dataset.fullPath = defaultCfgPath;
+          }
+          toast('dataset_path updated and saved to default_conf.yaml.', 'ok', 2200);
+        } catch (_) {
+          toast('dataset_path updated, but save to default_conf.yaml failed.', 'warn', 2600);
+        }
       } catch (_) {
         App.pendingPatch[dotKey] = selectedPath;
         markPending();

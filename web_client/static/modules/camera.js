@@ -70,11 +70,26 @@ const CAM_NAMES = ['Head', 'Wrist-Left', 'Wrist-Right'];
 const camState = {
   // latest pending binary frame per camera index
   pendingData: {},      // { 0: Uint8Array, 1: Uint8Array, 2: Uint8Array }
+  aspectRatioByCam: {}, // { 0: ratio, 1: ratio, 2: ratio }
   pendingUpdate: false,
   lastUpdateTime: 0,
   updateInterval: 33,
   updateTimer: null,
 };
+
+function updateCameraAspectRatio(idx, width, height) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+  const preview = $(`cam-preview-${idx}`);
+  if (!preview) return;
+
+  const ratio = width / height;
+  const prevRatio = camState.aspectRatioByCam[idx];
+  // Only update style when ratio actually changes to avoid unnecessary layout work.
+  if (Number.isFinite(prevRatio) && Math.abs(prevRatio - ratio) < 0.01) return;
+
+  camState.aspectRatioByCam[idx] = ratio;
+  preview.style.aspectRatio = `${width} / ${height}`;
+}
 
 function restartCameraUpdateTimer() {
   if (camState.updateTimer) clearInterval(camState.updateTimer);
@@ -183,6 +198,7 @@ function updateCameraDisplay(idx, imageBytes) {
 
   const tmp = new Image();
   tmp.onload = () => {
+    updateCameraAspectRatio(idx, tmp.naturalWidth, tmp.naturalHeight);
     // Release previous blob URL
     if (imgEl.src && imgEl.src.startsWith('blob:')) URL.revokeObjectURL(imgEl.src);
     imgEl.src = blobUrl;

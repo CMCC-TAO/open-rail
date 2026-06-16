@@ -375,6 +375,7 @@ function setupRecordingPanel() {
 
   $('btn-recording-stop')?.addEventListener('click', async () => {
     try {
+      toast('Recording stopping.', 'info');
       await apiFetch('/api/client/record/stop', {
         method: 'POST',
         body: JSON.stringify({}),

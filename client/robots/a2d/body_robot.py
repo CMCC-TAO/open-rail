@@ -156,14 +156,14 @@ class RobotBody(RobotBase):
                 self.current_timestamp = ref_timestamp
 
             result['ref_timestamp'] = ref_timestamp
-            result[f'cam.{cam_ref}'] = image
+            result[f'cam.{cam_ref}'] = image[:, :, ::-1] # RGB -> BGR
             for key, value in cam_names.items():
                 if key == cam_ref:
                     continue
                 image, timestamp = self.camera.get_image_nearest(value, ref_timestamp)
                 if key == 'depth_head':
                     key = 'depth.head'
-                result[f'cam.{key}'] = image
+                result[f'cam.{key}'] = image[:, :, ::-1] # BGR -> RGB
 
             joint_states, gripper_start = [], 0
             for proprio in self.cfg['proprio_names']:
