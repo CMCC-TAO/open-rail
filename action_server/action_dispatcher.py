@@ -4,6 +4,12 @@ VLA Action Dispatcher - 任务分发型 ROS2 Action Server
 以 params 中的 task 字段为路由键，将 goal 分发给对应的 handler 执行。
 """
 
+# ════════════════════════════════════════════════════════════════
+# 抓取检测配置参数 —— 修改此处即可调节抓取判定灵敏度
+# ════════════════════════════════════════════════════════════════
+GRASP_ANGLE_DIFF_THRESHOLD = 200.0   # 拇指弯曲角度差阈值 (set_angle - get_angle)
+GRASP_HOLD_DURATION_SEC = 1.0        # 差值需持续超过阈值的最短时间（秒）
+
 import sys
 import os
 import time
@@ -27,6 +33,179 @@ from action_server.vla_context import VLAContext
 
 
 # ════════════════════════════════════════════════════════════════
+# Grasp Detector — 实时监控手部 set_angle/get_angle 差值判断抓取状态
+# ════════════════════════════════════════════════════════════════
+class GraspDetector:
+    """通过比较手部 set_angle 与 get_angle 的 thumb_bend 差值来检测抓取状态。
+
+    判定逻辑:
+        对于每只手，如果 set_angle[thumb_bend] - get_angle[thumb_bend] > 阈值
+        并且持续超过 GRASP_HOLD_DURATION_SEC 秒，则判定该手处于抓取状态。
+
+    内部维护 [左手抓取, 右手抓取] 的 bool 列表，实时更新。
+
+    监控的 ROS2 话题:
+        - /left_hand/set_angle   (期望角度, JointState)
+        - /left_hand/get_angle   (实际角度, JointState)
+        - /right_hand/set_angle  (期望角度, JointState)
+        - /right_hand/get_angle  (实际角度, JointState)
+    """
+
+    # 手部关节顺序: little, ring, middle, index, thumb_bend, thumb_rotate
+    THUMB_BEND_INDEX = 4
+
+    def __init__(self, node: Node):
+        from sensor_msgs.msg import JointState
+        from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
+
+        self._node = node
+        self._lock = threading.Lock()
+
+        # ── 抓取状态：[左手是否抓取, 右手是否抓取] ──
+        self._grasp_state = [False, False]
+
+        # ── 缓存最新的 set/get 角度 ──
+        # key: 'left_set', 'left_get', 'right_set', 'right_get'
+        self._angle_cache = {
+            'left_set': None,
+            'left_get': None,
+            'right_set': None,
+            'right_get': None,
+        }
+
+        # ── 差值首次超过阈值的时间戳 ──
+        self._left_exceed_since: float = 0.0   # 0.0 表示当前未超限
+        self._right_exceed_since: float = 0.0
+
+        # ── 定时打印线程（约 1s 间隔）──
+        self._print_running = True
+        self._print_thread = threading.Thread(target=self._print_loop, daemon=True)
+        self._print_thread.start()
+
+        # QoS: 与机器人驱动匹配 BEST_EFFORT
+        qos_sensor = QoSProfile(
+            reliability=QoSReliabilityPolicy.BEST_EFFORT,
+            durability=QoSDurabilityPolicy.VOLATILE,
+            depth=10,
+        )
+
+        # ── 订阅 4 个话题 ──
+        node.create_subscription(
+            JointState, '/left_hand/set_angle',
+            self._cb_left_set, qos_sensor)
+        node.create_subscription(
+            JointState, '/left_hand/get_angle',
+            self._cb_left_get, qos_sensor)
+        node.create_subscription(
+            JointState, '/right_hand/set_angle',
+            self._cb_right_set, qos_sensor)
+        node.create_subscription(
+            JointState, '/right_hand/get_angle',
+            self._cb_right_get, qos_sensor)
+
+        node.get_logger().info(
+            f'[GraspDetector] Started | threshold={GRASP_ANGLE_DIFF_THRESHOLD}, '
+            f'hold={GRASP_HOLD_DURATION_SEC}s'
+        )
+
+    # ── 定时打印 ──
+
+    def _print_loop(self):
+        """每隔约 1 秒打印一次当前抓取状态及角度差，便于调试观察"""
+        while self._print_running:
+            time.sleep(1.0)
+            with self._lock:
+                state = list(self._grasp_state)
+                diffs = {
+                    'left': self._compute_diff('left_set', 'left_get'),
+                    'right': self._compute_diff('right_set', 'right_get'),
+                }
+            left_str = f"{diffs['left']:+8.1f}" if diffs['left'] is not None else "    N/A"
+            right_str = f"{diffs['right']:+8.1f}" if diffs['right'] is not None else "    N/A"
+            print(
+                f"[GraspDetector] state={state}  "
+                f"left_diff={left_str}  right_diff={right_str}  "
+                f"(threshold={GRASP_ANGLE_DIFF_THRESHOLD})"
+            )
+
+    def stop(self):
+        """停止打印线程"""
+        self._print_running = False
+
+    # ── 回调函数 ──
+
+    def _cb_left_set(self, msg):
+        self._on_angle('left_set', msg)
+
+    def _cb_left_get(self, msg):
+        self._on_angle('left_get', msg)
+
+    def _cb_right_set(self, msg):
+        self._on_angle('right_set', msg)
+
+    def _cb_right_get(self, msg):
+        self._on_angle('right_get', msg)
+
+    def _on_angle(self, key: str, msg):
+        """提取 thumb_bend position 并缓存，然后更新抓取判定"""
+        idx = self.THUMB_BEND_INDEX
+        if msg.position and len(msg.position) > idx:
+            with self._lock:
+                self._angle_cache[key] = float(msg.position[idx])
+                self._evaluate_grasp()
+
+    def _evaluate_grasp(self):
+        """重新评估左右手抓取状态（必须在 _lock 内调用）"""
+        now = time.time()
+
+        # ── 左手 ──
+        left_diff = self._compute_diff('left_set', 'left_get')
+        if left_diff is not None and left_diff > GRASP_ANGLE_DIFF_THRESHOLD:
+            if self._left_exceed_since == 0.0:
+                self._left_exceed_since = now
+            if now - self._left_exceed_since >= GRASP_HOLD_DURATION_SEC:
+                self._grasp_state[0] = True
+        else:
+            self._left_exceed_since = 0.0
+            self._grasp_state[0] = False
+
+        # ── 右手 ──
+        right_diff = self._compute_diff('right_set', 'right_get')
+        if right_diff is not None and right_diff > GRASP_ANGLE_DIFF_THRESHOLD:
+            if self._right_exceed_since == 0.0:
+                self._right_exceed_since = now
+            if now - self._right_exceed_since >= GRASP_HOLD_DURATION_SEC:
+                self._grasp_state[1] = True
+        else:
+            self._right_exceed_since = 0.0
+            self._grasp_state[1] = False
+
+    def _compute_diff(self, set_key: str, get_key: str):
+        """计算 set_angle - get_angle 的差值，数据缺失时返回 None"""
+        set_val = self._angle_cache[set_key]
+        get_val = self._angle_cache[get_key]
+        if set_val is None or get_val is None:
+            return None
+        return set_val - get_val
+
+    # ── 公开接口 ──
+
+    @property
+    def grasp_state(self) -> list:
+        """返回当前抓取状态 [左手, 右手]，线程安全"""
+        with self._lock:
+            return list(self._grasp_state)
+
+    def get_angle_diffs(self) -> dict:
+        """返回当前左右手的 set/get 角度差（调试用）"""
+        with self._lock:
+            return {
+                'left': self._compute_diff('left_set', 'left_get'),
+                'right': self._compute_diff('right_set', 'right_get'),
+            }
+
+
+# ════════════════════════════════════════════════════════════════
 # Observation Data Bridge — 把观测数据推送到内部 WebSocket 端口
 # 供 action_web_vision 消费，避免 web 服务器重复创建 RobotBody
 # ════════════════════════════════════════════════════════════════
@@ -38,8 +217,9 @@ class ObsDataBridge:
         推送线程 → 写入共享队列 → asyncio data_sender 循环 → WS 客户端
     """
 
-    def __init__(self, vla_context: VLAContext):
+    def __init__(self, vla_context: VLAContext, grasp_detector: 'GraspDetector' = None):
         self._ctx = vla_context
+        self._grasp_detector = grasp_detector
         self._running = False
         # 共享数据队列：推送线程写，asyncio 服务器线程读
         self._send_queue = deque(maxlen=500)
@@ -148,6 +328,7 @@ class ObsDataBridge:
         }
         last_cam_ts = 0.0
         last_state_ts = 0.0
+        last_grasp_ts = 0.0
 
         while self._running:
             try:
@@ -192,6 +373,15 @@ class ObsDataBridge:
                                     self._enqueue(message)
                                 except Exception:
                                     pass
+
+                # ── 抓取状态推送（独立于关节限流，与话题频率对齐）──
+                if self._grasp_detector is not None and now - last_grasp_ts >= 0.033:
+                    grasp_msg = json.dumps({
+                        "type": "grasp_state",
+                        "data": self._grasp_detector.grasp_state,
+                    })
+                    self._enqueue(grasp_msg)
+                    last_grasp_ts = now
 
                 # ── 关节状态 ──
                 if robot is not None and now - last_state_ts >= 0.033:
@@ -258,6 +448,9 @@ class VLAActionDispatcher(Node):
 
         # 注册内置 handler
         self._register_builtin_handlers()
+
+        # 创建抓取检测器（订阅 set_angle/get_angle 话题，判断抓取状态）
+        self._grasp_detector = GraspDetector(self)
 
         # 创建 Action Server
         self._action_server = ActionServer(
@@ -432,7 +625,7 @@ def main(args=None):
         dispatcher.get_logger().info('robot_body pre-initialized, wait set is stable')
 
         # 启动观测数据桥接（供 action_web_vision 服务器消费）
-        dispatcher._obs_bridge = ObsDataBridge(dispatcher._context)
+        dispatcher._obs_bridge = ObsDataBridge(dispatcher._context, dispatcher._grasp_detector)
         dispatcher._obs_bridge.start()
         dispatcher.get_logger().info('ObsDataBridge started (ws://127.0.0.1:9001)')
 
@@ -448,6 +641,12 @@ def main(args=None):
         print(f'Fatal error: {e}')
     finally:
         if dispatcher is not None:
+            # 停止抓取检测器打印线程
+            if hasattr(dispatcher, '_grasp_detector'):
+                try:
+                    dispatcher._grasp_detector.stop()
+                except Exception:
+                    pass
             # 停止观测数据桥接
             if hasattr(dispatcher, '_obs_bridge'):
                 try:

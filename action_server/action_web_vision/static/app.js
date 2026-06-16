@@ -58,6 +58,11 @@ function handleWSMessage(msg) {
     case 'stats':
       if (msg.data) renderStats(msg.data);
       break;
+    case 'grasp_state':
+      if (Array.isArray(msg.data) && msg.data.length >= 2) {
+        updateGraspState(msg.data[0], msg.data[1]);
+      }
+      break;
     case 'pong':
       break;
   }
@@ -218,6 +223,30 @@ function setResourceText(el, label, value, unit) {
     el.innerHTML = `<span class="resource-label">${label}</span><span class="resource-value">${value.toFixed(1)}${unit}</span>`;
   } else {
     el.innerHTML = `<span class="resource-label">${label}</span><span class="resource-value">--</span>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  Grasp state display — panel cards below joint state
+// ═══════════════════════════════════════════════════════
+function updateGraspState(leftGrasping, rightGrasping) {
+  _setGraspCard('grasp-left-card',  'grasp-left-indicator',  'grasp-left-text',  leftGrasping);
+  _setGraspCard('grasp-right-card', 'grasp-right-indicator', 'grasp-right-text', rightGrasping);
+}
+
+function _setGraspCard(cardId, indicatorId, textId, grasping) {
+  const card  = $(cardId);
+  const dot   = $(indicatorId);
+  const txt   = $(textId);
+  if (!card || !dot || !txt) return;
+  if (grasping) {
+    card.classList.add('grasping');
+    dot.classList.add('grasping');
+    txt.textContent = 'GRASPING';
+  } else {
+    card.classList.remove('grasping');
+    dot.classList.remove('grasping');
+    txt.textContent = 'IDLE';
   }
 }
 
