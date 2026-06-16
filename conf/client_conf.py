@@ -31,7 +31,7 @@ def get_client_config():
     config.observer = get_observer_config()
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
-    config.vis_zmq = get_vis_zmq_config()
+    # config.vis_zmq = get_vis_zmq_config()
     config.visualize = get_visualize_config()
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
@@ -167,6 +167,9 @@ def get_language_config() -> ConfigDict:
 def get_vision_config() -> ConfigDict:
     config = ConfigDict()
     config.history_frame = False  # Enable/disable historical frame usage
-    config.preprocess = 'pad_and_resize'
-    config.preprocess_size = [640, 640]  # [height, width]
+    config.preprocess = ConfigDict()
+    config.preprocess.method = 'resize' # only support resize and none
+    config.preprocess.keep_ratio = True 
+    config.preprocess.height = 480
+    config.preprocess.width = 640
     return config
