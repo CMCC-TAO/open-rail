@@ -18,7 +18,8 @@ def get_vla_server_config():
     """
     config = ConfigDict()
     config.zmq = get_vla_zmq_config()
-    config.max_workers = 1  # Maximum inference worker threads, 1 means no concurrent inference support
+    config.max_infer_workers = 1  # Maximum inference worker threads, 1 means no concurrent inference support
+    config.max_decode_workers = 1  # Maximum inference worker threads, 1 means no concurrent inference support
     config.models = get_models_config()
     return config
 
