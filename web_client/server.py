@@ -1906,8 +1906,8 @@ async def client_record_stop():
     try:
         if not hasattr(vla_client, 'dataset_write') or vla_client.dataset_write is None:
             raise HTTPException(400, 'Recorder is not initialized.')
-        vla_client.dataset_write.stop_recording()
         client_state.config.record.switch = False
+        vla_client.dataset_write.stop_recording()
         return {'status': 'ok', 'command': 'stop_recording'}
     except HTTPException:
         raise
