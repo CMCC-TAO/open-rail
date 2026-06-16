@@ -20,6 +20,7 @@ VLA Context - 共享组件容器
 import sys
 import os
 import time
+import threading
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
@@ -53,6 +54,12 @@ class VLAContext:
         self._robot_body = None  # 懒加载
         self._robot_context = None  # robot_body 专属 ROS2 context（隔离 wait set）
         self._active_vla_client = None  # 当前活跃的 VLA 客户端（供 ObsDataBridge 读取进度）
+        self._initialized = False  # 是否已执行过 init_grasp（跳过复位）
+
+        # ── 定时打印初始化标志（约 2s 间隔，便于调试）──
+        self._print_init_running = True
+        self._print_init_thread = threading.Thread(target=self._print_init_loop, daemon=True)
+        self._print_init_thread.start()
 
     # ================================================================
     # robot_body 懒加载属性
@@ -175,8 +182,15 @@ class VLAContext:
     # 生命周期
     # ================================================================
 
+    def _print_init_loop(self):
+        """每隔约 2 秒打印一次初始化状态，便于调试"""
+        while self._print_init_running:
+            time.sleep(2.0)
+            print(f"[VLAContext] initialized={self._initialized}")
+
     def close(self) -> None:
         """清理所有共享资源（dispatcher 关闭时调用）"""
+        self._print_init_running = False
         if self._robot_body is None:
             return
 

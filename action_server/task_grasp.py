@@ -85,7 +85,7 @@ class GraspHandler(AbstractTaskHandler):
                 vla_client=vla_client,
                 language_instruction=instruction,
                 robot_body=robot_body,
-                reset_robot=True,
+                reset_robot=not context._initialized,
                 fixed_duration=30.0,
             )
             return result

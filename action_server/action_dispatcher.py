@@ -8,7 +8,7 @@ VLA Action Dispatcher - 任务分发型 ROS2 Action Server
 # 抓取检测配置参数 —— 修改此处即可调节抓取判定灵敏度
 # ════════════════════════════════════════════════════════════════
 GRASP_ANGLE_DIFF_THRESHOLD = 200.0   # 拇指弯曲角度差阈值 (set_angle - get_angle)
-GRASP_HOLD_DURATION_SEC = 1.0        # 差值需持续超过阈值的最短时间（秒）
+GRASP_HOLD_DURATION_SEC = 0.5        # 差值需持续超过阈值的最短时间（秒）
 
 import sys
 import os
@@ -124,8 +124,6 @@ class GraspDetector:
             right_str = f"{diffs['right']:+8.1f}" if diffs['right'] is not None else "    N/A"
             print(
                 f"[GraspDetector] state={state}  "
-                f"left_diff={left_str}  right_diff={right_str}  "
-                f"(threshold={GRASP_ANGLE_DIFF_THRESHOLD})"
             )
 
     def stop(self):

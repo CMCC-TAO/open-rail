@@ -98,6 +98,7 @@ class InitGraspHandler(AbstractTaskHandler):
                 robot_body.robot.enable_relative_clamp = True
 
             # ===== 步骤 3: 完成 =====
+            context._initialized = True
             self.send_feedback(goal_handle, 100, "机器人已就绪，准备抓取姿态完成")
             return TaskResult(True)
 
