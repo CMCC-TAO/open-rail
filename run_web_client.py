@@ -30,7 +30,6 @@ def parse_args():
 def kill_port(port):
     import os
     os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
-    os.system(f'kill -9 $(lsof -t -i:{8765})')  # 杀掉占用端口的进程
 
 if __name__ == '__main__':
     args = parse_args()
