@@ -517,6 +517,16 @@ class VLAActionDispatcher(Node):
         except ImportError as e:
             self.get_logger().warn(f'Failed to load place handler: {e}')
 
+        try:
+            from action_server.task_release import ReleaseHandler
+            handler = ReleaseHandler()
+            for task_name in ["left hand release", "right hand release",
+                              "both hand release"]:
+                self._handlers[task_name] = handler
+            self.get_logger().info(f'Registered release handler for 3 task variants')
+        except ImportError as e:
+            self.get_logger().warn(f'Failed to load release handler: {e}')
+
     # ================================================================
     # Action 回调
     # ================================================================

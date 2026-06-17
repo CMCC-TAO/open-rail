@@ -150,7 +150,82 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
+    "14": {
+        "name": "left hand release",
+        "desc": "左手松手 — 左手 hand 的 6 个电机控制量设为 0，维持 1s",
+        "params": {
+            "task": "left hand release",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "15": {
+        "name": "right hand release",
+        "desc": "右手松手 — 右手 hand 的 6 个电机控制量设为 0，维持 1s",
+        "params": {
+            "task": "right hand release",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "16": {
+        "name": "both hand release",
+        "desc": "双手松手 — 双手 hand 的 6 个电机控制量设为 0，维持 1s",
+        "params": {
+            "task": "both hand release",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
 }
+
+
+# ============================================================
+# 按源文件分组的任务结构（用于菜单展示）
+# ============================================================
+TASK_GROUPS = [
+    {
+        "title": "init grasp",
+        "items": [
+            ("1", "init grasp"),
+        ],
+    },
+    {
+        "title": "grasp",
+        "items": [
+            ("2", "grasp one Wahaha"),
+            ("3", "grasp one Coca-Cola"),
+            ("4", "grasp two Wahaha"),
+            ("5", "grasp two Coca-Cola"),
+        ],
+    },
+    {
+        "title": "deliver",
+        "items": [
+            ("6", "left arm deliver"),
+            ("7", "right arm deliver"),
+            ("8", "one arm deliver"),
+            ("9", "both arm deliver"),
+        ],
+    },
+    {
+        "title": "place",
+        "items": [
+            ("10", "left arm place"),
+            ("11", "right arm place"),
+            ("12", "one arm place"),
+            ("13", "both arm place"),
+        ],
+    },
+    {
+        "title": "release",
+        "items": [
+            ("14", "left hand release"),
+            ("15", "right hand release"),
+            ("16", "both hand release"),
+        ],
+    },
+]
 
 
 class VLAActionTestClient(Node):
@@ -260,21 +335,29 @@ def print_banner():
 
 
 def print_menu():
-    """打印任务菜单（紧凑列布局）"""
-    items = [(key, task["name"]) for key, task in AVAILABLE_TASKS.items()]
-    col_width = 30
+    """打印任务菜单（按功能模块分组，每组 3 列横向排列）"""
+    col_width = 22
     print()
-    print('可用任务:')
-    print('─' * 63)
-    for i in range(0, len(items), 2):
-        left = f'  [{items[i][0]}] {items[i][1]}'
-        if i + 1 < len(items):
-            right = f'[{items[i+1][0]}] {items[i+1][1]}'
-            print(f'{left:<{col_width}}{right}')
-        else:
-            print(left)
-    print(f'{"  [q] 退出":<{col_width}}')
-    print('─' * 63)
+    for group in TASK_GROUPS:
+        title = group["title"]
+        items = group["items"]
+        # 单行标题：——————task xxx——————
+        content = f'task {title}'
+        pad_total = 50 - len(content)
+        left = pad_total // 2
+        right = pad_total - left
+        print(f'{"—" * left}{content}{"—" * right}')
+        # 3 列布局
+        for i in range(0, len(items), 3):
+            row_items = items[i:i + 3]
+            line_parts = []
+            for key, name in row_items:
+                line_parts.append(f'[{key}] {name}')
+            while len(line_parts) < 3:
+                line_parts.append('')
+            print(f'{line_parts[0]:<{col_width}}{line_parts[1]:<{col_width}}{line_parts[2]}')
+    print(f'[q] 退出')
+    print(f'{"—" * 50}')
 
 
 def main():
@@ -297,14 +380,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1-13 / q): ').strip().lower()
+        choice = input('请选择任务编号 (1-16 / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1-13 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-16 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]
