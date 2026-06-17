@@ -11,13 +11,68 @@ from copy import deepcopy
 from datetime import datetime, timedelta
 from pathlib import Path
 import re
-import sys
+import os
+import psutil
+import subprocess
+
+
+def _is_ntfs_mount_accurate2(path):
+    """
+    检查指定路径是否挂载在 NTFS 文件系统上
+    """
+    # 一次性获取所有分区信息
+    partitions = psutil.disk_partitions(all=False)
+    if not partitions:
+        return False
+    # 获取绝对路径
+    abs_path = os.path.abspath(path)
+    is_windows = os.name == 'nt'
+    # 查找匹配的挂载点（无需排序，直接遍历并记录最长匹配）
+    best_mount = None
+    best_mount_len = -1
+    for partition in partitions:
+        mountpoint = partition.mountpoint
+        # 检查路径是否以挂载点开头
+        if is_windows:
+            is_match = abs_path.upper().startswith(mountpoint.upper())
+        else:
+            is_match = abs_path.startswith(mountpoint)
+        
+        if is_match and len(mountpoint) > best_mount_len:
+            best_mount_len = len(mountpoint)
+            best_mount = partition
+    if best_mount is None:
+        return False
+    # 检查文件系统类型
+    fstype = best_mount.fstype.lower()
+    # 直接确认 NTFS
+    if fstype in ('ntfs', 'ntfs3'):
+        return True
+    # 处理 fuseblk (通常是 NTFS-3G)
+    if fstype == 'fuseblk':
+        device = best_mount.device
+        try:
+            # 使用 lsblk 获取文件系统类型（仅输出必要字段）
+            result = subprocess.run(
+                ['lsblk', '-n', '-o', 'FSTYPE', device],  # -n 不显示标题，-o 只输出 FSTYPE
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                fs_type = result.stdout.strip()
+                return fs_type.lower() == 'ntfs'
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+            pass
+    
+    return False
+
 
 # Create logs directory relative to project root
 LOG_DIR = Path(__file__).resolve().parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
 LOG_RETENTION_DAYS = 7
-_LOG_DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})--\d{2}:\d{2}:\d{2}$")
+IS_LOG_DISK_TYPE_NTFS = _is_ntfs_mount_accurate2(LOG_DIR)
+_LOG_DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})--\d{2}:\d{2}:\d{2}$") if not IS_LOG_DISK_TYPE_NTFS else re.compile(r"(\d{4}-\d{2}-\d{2})--\d{2}-\d{2}-\d{2}$")
+_LOG_TIMESTAMP_FORMAT = "%Y-%m-%d--%H:%M:%S" if not IS_LOG_DISK_TYPE_NTFS else "%Y-%m-%d--%H-%M-%S"
 
 
 def _extract_log_day(log_file: Path) -> str:
@@ -67,7 +122,7 @@ def _build_log_path(log_filename: str) -> str:
     stem = path.stem or "app"
     suffix = path.suffix or ".log"
     # timestamp = datetime.now().strftime("%Y-%m-%d--%H:%M:%S")
-    timestamp = datetime.now().strftime("%Y-%m-%d--%H:%M:%S" if sys.platform != "win32" else "%Y-%m-%d--%H-%M-%S")
+    timestamp = datetime.now().strftime(_LOG_TIMESTAMP_FORMAT)
     return str(LOG_DIR / f"{stem}{suffix}.{timestamp}")
 
 
