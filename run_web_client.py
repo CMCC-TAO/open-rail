@@ -16,7 +16,7 @@ Port layout:
 import argparse
 import os
 import sys
-
+import traceback
 import uvicorn
 
 
@@ -48,6 +48,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         exit_code = 0
     except Exception:
+        traceback.print_exc()
         exit_code = 1
         raise
     finally:
