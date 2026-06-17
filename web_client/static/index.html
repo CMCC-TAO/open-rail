@@ -388,9 +388,15 @@
             <!-- ① Window group -->
             <div class="traj-window-group" title="Trajectory window span in seconds">
               <span class="traj-src-label">Window</span>
-              <div class="traj-window-row">
-                <input id="traj-window-span-slider" class="traj-window-slider" type="range" min="1" max="15" step="1" value="10" />
-                <span id="traj-window-span-value" class="traj-window-value">10s</span>
+              <div class="traj-window-rows">
+                <div class="traj-window-row">
+                  <input id="traj-window-span-slider" class="traj-window-slider" type="range" min="1" max="15" step="1" value="10" />
+                  <span id="traj-window-span-value" class="traj-window-value">10s</span>
+                </div>
+                <div class="traj-window-controls">
+                  <button class="btn btn-xs btn-active" id="btn-traj-pause"><span class="btn-icon">▶</span> Play</button>
+                  <button class="btn btn-xs" id="btn-traj-clear">🗑 Clear</button>
+                </div>
               </div>
             </div>
             <!-- Divider -->
@@ -437,18 +443,6 @@
                 </div>
               </div>
             </div>
-            <!-- Divider -->
-            <span class="traj-header-sep"></span>
-            <!-- ③ Play + Clear: two rows matching Source height -->
-            <div class="traj-ctrl-group">
-              <span class="traj-src-label">Ctrl</span>
-              <div class="traj-ctrl-rows">
-                <button class="btn btn-xs btn-active" id="btn-traj-pause"><span class="btn-icon">▶</span> Play</button>
-                <button class="btn btn-xs" id="btn-traj-clear">🗑 Clear</button>
-              </div>
-            </div>
-            <!-- Divider -->
-            <span class="traj-header-sep"></span>
             <!-- ④ Collapse: rightmost -->
             <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse" title="Collapse">▼</button>
           </div>
