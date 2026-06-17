@@ -177,6 +177,33 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
+    "17": {
+        "name": "left arm reset",
+        "desc": "左手复位 — 3s 线性插值到左复位姿态 [0,0.3,0,1.3,0,0,0]，手掌不变",
+        "params": {
+            "task": "left arm reset",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "18": {
+        "name": "right arm reset",
+        "desc": "右手复位 — 3s 线性插值到右复位姿态 [0,-0.3,0,1.3,0,0,0]，手掌不变",
+        "params": {
+            "task": "right arm reset",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "19": {
+        "name": "both arm reset",
+        "desc": "双手复位 — 3s 线性插值双臂同时到复位姿态，手掌不变",
+        "params": {
+            "task": "both arm reset",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
 }
 
 
@@ -223,6 +250,14 @@ TASK_GROUPS = [
             ("14", "left hand release"),
             ("15", "right hand release"),
             ("16", "both hand release"),
+        ],
+    },
+    {
+        "title": "reset",
+        "items": [
+            ("17", "left arm reset"),
+            ("18", "right arm reset"),
+            ("19", "both arm reset"),
         ],
     },
 ]
@@ -380,14 +415,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1-16 / q): ').strip().lower()
+        choice = input('请选择任务编号 (1-19 / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1-16 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-19 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]

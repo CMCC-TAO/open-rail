@@ -527,6 +527,16 @@ class VLAActionDispatcher(Node):
         except ImportError as e:
             self.get_logger().warn(f'Failed to load release handler: {e}')
 
+        try:
+            from action_server.task_reset import ResetHandler
+            handler = ResetHandler()
+            for task_name in ["left arm reset", "right arm reset",
+                              "both arm reset"]:
+                self._handlers[task_name] = handler
+            self.get_logger().info(f'Registered reset handler for 3 task variants')
+        except ImportError as e:
+            self.get_logger().warn(f'Failed to load reset handler: {e}')
+
     # ================================================================
     # Action 回调
     # ================================================================
