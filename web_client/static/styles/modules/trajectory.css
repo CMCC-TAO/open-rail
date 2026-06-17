@@ -32,7 +32,7 @@
 
 /* Thin vertical separator between groups */
 .traj-header-sep {
-  width: 1px; height: 56px;
+  width: 1px; height: 64px;
   background: var(--border);
   flex-shrink: 0; margin: 0 4px; align-self: center;
 }
@@ -56,15 +56,21 @@
   min-width: 0;
 }
 
+.traj-window-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .traj-window-row {
-  height: 42px;
-  display: inline-flex;
+  height: 22px;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
 }
 
 .traj-window-slider {
-  width: 110px;
+  width: 78px;
   margin: 0;
   -webkit-appearance: none;
   appearance: none;
@@ -140,7 +146,7 @@
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -153,6 +159,7 @@
 .traj-src-btn-text {
   flex: 0 0 auto;
   text-align: left;
+  font-size: 10px
 }
 
 .traj-line-indicator {
@@ -196,14 +203,24 @@
 }
 .joint-sel-chip:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── ③ Ctrl group: Play + Clear two rows ── */
-.traj-ctrl-group {
-  display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0;
+/* Window group controls: Pause/Clear on second row */
+.traj-window-controls {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  width: 100%;
+  height: 22px;
 }
-.traj-ctrl-rows {
-  display: flex; flex-direction: column; gap: 3px;
+
+.traj-window-controls .btn {
+  width: 48px;
+  height: 22px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
-.traj-ctrl-rows .btn { width: 72px; text-align: center; }
 
 /* ── ④ Collapse button: rightmost, vertically centered ── */
 .traj-collapse-btn {
