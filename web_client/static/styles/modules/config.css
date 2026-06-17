@@ -12,6 +12,36 @@
   border-color: var(--border); background: var(--bg);
   color: var(--accent);
 }
+.main-params-section {
+  flex: 0 0 auto;
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 6px;
+}
+.main-params-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  text-align: center;
+  letter-spacing: .4px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+.main-params-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.main-params-tree .cfg-row {
+  padding: 2px 4px;
+}
+.main-params-tree .cfg-key {
+  min-width: 128px;
+}
+
 .config-tree { flex: 1; overflow-y: auto; }
 
 .cfg-group { margin-bottom: 4px; }
