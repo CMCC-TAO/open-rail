@@ -16,8 +16,8 @@ Port layout:
 import argparse
 import os
 import sys
-import traceback
 import uvicorn
+from conf.logging_conf import setup_logging
 
 
 def parse_args():
@@ -28,7 +28,6 @@ def parse_args():
     return p.parse_args()
 
 def kill_port(port):
-    import os
     os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
 
 if __name__ == '__main__':
@@ -37,6 +36,7 @@ if __name__ == '__main__':
 
     exit_code = 0
     try:
+        logger = setup_logging("client.log", "run_web_client")
         uvicorn.run(
             "web_client.server:app",
             host=args.host,
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         exit_code = 0
     except Exception:
-        traceback.print_exc()
+        logger.exception("未知错误")
         exit_code = 1
         raise
     finally:
