@@ -42,6 +42,13 @@ ERR_DELIVER_ONE_HAND_BOTH_EMPTY = 24
 ERR_DELIVER_BOTH_HAND_NOT_BOTH = 25
 ERR_DELIVER_ONE_HAND_STILL_HOLDING = 26
 
+# task_place 专用 (31-35)
+ERR_PLACE_LEFT_EMPTY = 31
+ERR_PLACE_RIGHT_EMPTY = 32
+ERR_PLACE_ONE_HAND_BOTH_EMPTY = 33
+ERR_PLACE_BOTH_HAND_NOT_BOTH = 34
+ERR_PLACE_ONE_HAND_STILL_HOLDING = 35
+
 ERR_MSG = {
     ERR_SUCCESS: "none",
     # 通用
@@ -70,6 +77,13 @@ ERR_MSG = {
     ERR_DELIVER_ONE_HAND_BOTH_EMPTY: "Both hands are empty but one arm deliver requested",
     ERR_DELIVER_BOTH_HAND_NOT_BOTH: "Not both hands have objects but both arm deliver requested",
     ERR_DELIVER_ONE_HAND_STILL_HOLDING: "One hand still holding object after both arm deliver",
+
+    # task_place 专用
+    ERR_PLACE_LEFT_EMPTY: "Left hand is empty but left arm place requested",
+    ERR_PLACE_RIGHT_EMPTY: "Right hand is empty but right arm place requested",
+    ERR_PLACE_ONE_HAND_BOTH_EMPTY: "Both hands are empty but one arm place requested",
+    ERR_PLACE_BOTH_HAND_NOT_BOTH: "Not both hands have objects but both arm place requested",
+    ERR_PLACE_ONE_HAND_STILL_HOLDING: "One hand still holding object after both arm place",
 }
 
 

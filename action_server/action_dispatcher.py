@@ -507,6 +507,16 @@ class VLAActionDispatcher(Node):
         except ImportError as e:
             self.get_logger().warn(f'Failed to load deliver handler: {e}')
 
+        try:
+            from action_server.task_place import PlaceHandler
+            handler = PlaceHandler()
+            for task_name in ["left arm place", "right arm place",
+                              "one arm place", "both arm place"]:
+                self._handlers[task_name] = handler
+            self.get_logger().info(f'Registered place handler for 4 task variants')
+        except ImportError as e:
+            self.get_logger().warn(f'Failed to load place handler: {e}')
+
     # ================================================================
     # Action 回调
     # ================================================================

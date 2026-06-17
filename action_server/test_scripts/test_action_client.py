@@ -114,6 +114,42 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
+    "10": {
+        "name": "left arm place",
+        "desc": "左手放置 — 录制轨迹回放（左手），过渡+插补+平滑",
+        "params": {
+            "task": "left arm place",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "11": {
+        "name": "right arm place",
+        "desc": "右手放置 — 录制轨迹回放（右手），过渡+插补+平滑",
+        "params": {
+            "task": "right arm place",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "12": {
+        "name": "one arm place",
+        "desc": "单手放置 — 自动判断哪只手有物体，路由到左手/右手放置",
+        "params": {
+            "task": "one arm place",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "13": {
+        "name": "both arm place",
+        "desc": "双手放置 — 录制轨迹回放（双手），需双手都有物体",
+        "params": {
+            "task": "both arm place",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
 }
 
 
@@ -261,14 +297,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1-9 / q): ').strip().lower()
+        choice = input('请选择任务编号 (1-13 / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1-9 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-13 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]
