@@ -166,22 +166,26 @@ class DeliverHandler(AbstractTaskHandler):
         finally:
             robot.enable_relative_clamp = orig_relative
 
-        return current_state  # 返回初始状态（含有手掌值，供调用方参考）
+        return action  # 返回最后一帧动作（含目标手臂位姿 + 原始手掌值）
 
     def _open_hand_and_hold(
         self, robot_body, hand_side: str,
         goal_handle, hold_duration: float,
+        base_state: np.ndarray | None = None,
     ) -> None:
         """打开手部（全部手指设为 0.0）并保持指定时间
 
         Args:
             hand_side: 'left' / 'right' / 'both'
+            base_state: 基础状态（含期望的手臂位置），None 则从 robot 读取
         """
-        current_state = self._get_current_full_state(robot_body)
-        if current_state is None:
-            return
-
-        action = current_state.copy()
+        if base_state is not None:
+            action = base_state.copy()
+        else:
+            current_state = self._get_current_full_state(robot_body)
+            if current_state is None:
+                return
+            action = current_state.copy()
         zero_hand = np.zeros(6)
 
         if hand_side in ('left', 'both'):
@@ -189,8 +193,15 @@ class DeliverHandler(AbstractTaskHandler):
         if hand_side in ('right', 'both'):
             action[20:26] = zero_hand
 
+        # 临时关闭相对限幅，避免 clamp 对比 bag 数据导致手臂抖动
+        robot = robot_body.robot
+        orig_clamp = getattr(robot, 'enable_relative_clamp', True)
+        robot.enable_relative_clamp = False
+
         side_label = {'left': '左手', 'right': '右手', 'both': '双手'}.get(hand_side, hand_side)
         robot_body.control_robot(action)
+
+        robot.enable_relative_clamp = orig_clamp
         send_vla_feedback(goal_handle, 95, f"{side_label}已打开，保持 {hold_duration:.0f}s...")
         time.sleep(hold_duration)
 
@@ -218,7 +229,7 @@ class DeliverHandler(AbstractTaskHandler):
             return TaskResult(False, error_code=ERR_DELIVER_TIMEOUT,
                               error_message="Failed to get current robot state for left arm deliver")
 
-        self._open_hand_and_hold(robot_body, 'left', goal_handle, HAND_OPEN_HOLD_TIME)
+        self._open_hand_and_hold(robot_body, 'left', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
         send_vla_feedback(goal_handle, 100, "左手递物完成")
         return TaskResult(True)
@@ -243,7 +254,7 @@ class DeliverHandler(AbstractTaskHandler):
             return TaskResult(False, error_code=ERR_DELIVER_TIMEOUT,
                               error_message="Failed to get current robot state for right arm deliver")
 
-        self._open_hand_and_hold(robot_body, 'right', goal_handle, HAND_OPEN_HOLD_TIME)
+        self._open_hand_and_hold(robot_body, 'right', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
         send_vla_feedback(goal_handle, 100, "右手递物完成")
         return TaskResult(True)
@@ -288,7 +299,7 @@ class DeliverHandler(AbstractTaskHandler):
                               error_message="Failed to get current robot state for both arm deliver")
 
         # 2. 同时打开双手，保持 1s
-        self._open_hand_and_hold(robot_body, 'both', goal_handle, HAND_OPEN_HOLD_TIME)
+        self._open_hand_and_hold(robot_body, 'both', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
         # 3. 等待 0.5s 让 grasp_detector 更新
         time.sleep(0.5)
