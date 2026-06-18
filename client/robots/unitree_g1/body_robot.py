@@ -188,15 +188,15 @@ class RobotBody(RobotBase):
         """获取当前 26 维状态，不依赖相机
 
         优先级:
-          1. self.current_state（VLA 观察线程缓存）
-          2. 直接从 self.robot 的 ROS2 订阅缓存读取
+          1. 直接从 self.robot 的 ROS2 订阅缓存读取（实时，不依赖相机）
+          2. self.current_state（VLA 观察线程缓存，可能过期）
           3. retrieve_observation() 回退（需要相机）
-        """
-        # 优先级 1: 使用 VLA 缓存的状态
-        if self.current_state is not None:
-            return self.current_state.copy()
 
-        # 优先级 2: 直接从 ROS2 缓存读取（不依赖相机）
+        注：ROS2 缓存由独立 spin 线程实时更新，始终代表机器人实际位置；
+            current_state 只在 VLA observe 线程运行时才更新，
+            一旦 VLA 停止就会过期，不能作为复位轨迹的起点。
+        """
+        # 优先级 1: 直接从 ROS2 缓存读取（不依赖相机，实时最新）
         try:
             robot = self.robot
             la = robot.latest_left_arm
@@ -218,10 +218,15 @@ class RobotBody(RobotBase):
                         + list(rh_msg.position),
                         dtype=float,
                     )
+                    # 同步到 current_state 供其他模块快速访问
                     self.current_state = state.copy()
                     return state
         except Exception:
             pass
+
+        # 优先级 2: 使用 VLA 缓存的状态（仅当 ROS2 缓存未初始化时）
+        if self.current_state is not None:
+            return self.current_state.copy()
 
         # 优先级 3: 回退 retrieve_observation（需要相机数据）
         for _ in range(10):

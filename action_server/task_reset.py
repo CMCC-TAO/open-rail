@@ -83,19 +83,14 @@ class ResetHandler(AbstractTaskHandler):
         """获取当前 26 维完整状态 [左臂7, 右臂7, 左手6, 右手6]
 
         优先级:
-          1. robot_body.current_state（由 VLA 观察线程缓存，非 None 时最快）
-          2. 直接从 robot_body.robot 的 ROS2 订阅缓存读取（不依赖相机）
+          1. 直接从 robot_body.robot 的 ROS2 订阅缓存读取（实时，不依赖相机）
+          2. robot_body.current_state（VLA 观察线程缓存，可能过期）
           3. retrieve_observation() 回退（需要相机数据）
-        """
-        # 优先级 1: 使用 VLA 缓存的状态
-        try:
-            cs = getattr(robot_body, 'current_state', None)
-            if cs is not None:
-                return cs.copy()
-        except Exception:
-            pass
 
-        # 优先级 2: 直接从 ROS2 缓存读取关节状态（不依赖相机）
+        注：ROS2 缓存由 spin 线程实时更新；current_state 可能来自之前的
+            VLA 任务，在 VLA 停止后即过期，不应优先使用。
+        """
+        # 优先级 1: 直接从 ROS2 缓存读取（实时最新，不依赖相机）
         try:
             robot = robot_body.robot
             la = robot.latest_left_arm
@@ -117,9 +112,16 @@ class ResetHandler(AbstractTaskHandler):
                         + list(rh_msg.position),
                         dtype=float,
                     )
-                    # 同步回 current_state 供后续调用复用
                     robot_body.current_state = state.copy()
                     return state
+        except Exception:
+            pass
+
+        # 优先级 2: 使用 VLA 缓存的状态
+        try:
+            cs = getattr(robot_body, 'current_state', None)
+            if cs is not None:
+                return cs.copy()
         except Exception:
             pass
 
