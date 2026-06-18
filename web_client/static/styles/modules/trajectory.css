@@ -70,7 +70,7 @@
 }
 
 .traj-window-slider {
-  width: 78px;
+  width: 108px;
   margin: 0;
   -webkit-appearance: none;
   appearance: none;
@@ -132,8 +132,8 @@
   gap: 3px;
 }
 
-.traj-src-col-action .traj-src-check { width: 128px; }
-.traj-src-col-state .traj-src-check { width: 96px; }
+.traj-src-col-action .traj-src-check { width: 120px; }
+.traj-src-col-state .traj-src-check { width: 88px; }
 
 .traj-src-check {
   display: inline-flex;
@@ -213,7 +213,7 @@
 }
 
 .traj-window-controls .btn {
-  width: 48px;
+  width: 64px;
   height: 22px;
   padding: 0;
   display: flex;
@@ -224,7 +224,7 @@
 
 /* ── ④ Collapse button: rightmost, vertically centered ── */
 .traj-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 2px;
+  align-self: center; flex-shrink: 0; margin-left: 0px;
 }
 
 /* ── Body / chart ── */

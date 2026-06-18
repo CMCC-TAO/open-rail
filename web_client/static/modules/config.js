@@ -57,6 +57,147 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
 const CONFIG_READONLY_DOT_KEYS = new Set([
 ]);
 
+// Default key list for the fixed "Main Parameters" area.
+// Format: { "dot.key": "Display Label" }
+// You can override it in config by setting one of:
+//   - main_parameters: { "dot.key": "Label", ... }
+//   - visualize.main_parameters: { "dot.key": "Label", ... }
+const DEFAULT_MAIN_PARAMETER_KEYS = {
+  'robots.type': 'Robot Type',
+  'rdm.mode': 'Mode',
+  'controller.wait_time': 'Wait Time[ms]',
+  'controller.period': 'Control Period[ms]',
+  'inter_chunk.inter_chunk_mode': 'Inter-Chunk Mode',
+  'intra_chunk.intra_chunk_mode': 'Intra-Chunk Mode',
+  'vision.preprocess.mode': 'Preprocess Mode',
+  'vision.preprocess.width': 'Preprocess Width',
+};
+
+let _cfgInputSyncing = false;
+
+function getConfigValueByDotKey(cfg, dotKey) {
+  if (!cfg || typeof cfg !== 'object') return undefined;
+  const parts = String(dotKey || '').split('.').filter(Boolean);
+  if (!parts.length) return undefined;
+
+  let node = cfg;
+  for (const p of parts) {
+    if (node == null || typeof node !== 'object' || !(p in node)) return undefined;
+    node = node[p];
+  }
+  return node;
+}
+
+function resolveMainParameterKeys(cfg) {
+  // First check if there are custom main parameters defined in the config
+  const fromRoot = getConfigValueByDotKey(cfg, 'main_parameters');
+  const fromVisual = getConfigValueByDotKey(cfg, 'visualize.main_parameters');
+  
+  // Determine the source - either from config or default
+  let sourceObj = DEFAULT_MAIN_PARAMETER_KEYS;
+  
+  // Check if the config defines main parameters as an array (old format) or object (new format)
+  if (fromRoot && typeof fromRoot === 'object' && !Array.isArray(fromRoot)) {
+    // New format: object with key-value pairs
+    sourceObj = fromRoot;
+  } else if (fromVisual && typeof fromVisual === 'object' && !Array.isArray(fromVisual)) {
+    // New format: object with key-value pairs
+    sourceObj = fromVisual;
+  } else if (Array.isArray(fromRoot)) {
+    // Old format: array of keys - convert to object with same keys and labels
+    sourceObj = {};
+    fromRoot.forEach(key => {
+      sourceObj[key] = key; // Use the key itself as the label
+    });
+  } else if (Array.isArray(fromVisual)) {
+    // Old format: array of keys - convert to object with same keys and labels
+    sourceObj = {};
+    fromVisual.forEach(key => {
+      sourceObj[key] = key; // Use the key itself as the label
+    });
+  }
+
+  const seen = new Set();
+  const result = [];
+  
+  // Process the object entries to return array of {key, label} pairs
+  Object.entries(sourceObj).forEach(([key, label]) => {
+    const k = String(key || '').trim();
+    const l = String(label || '').trim();
+    
+    if (!k || seen.has(k)) return;
+    
+    seen.add(k);
+    result.push({ key: k, label: l });
+  });
+
+  return result;
+}
+
+function setCfgInputValue(input, dotKey, value) {
+  if (!input) return;
+
+  if (input.tagName === 'SELECT' && input.multiple) {
+    const selectedSet = new Set((Array.isArray(value) ? value : [value]).map(v => String(v)));
+    const selectedLower = new Set([...selectedSet].map(v => v.toLowerCase()));
+    Array.from(input.options).forEach(opt => {
+      const key = dotKey === 'visualize.trajectory.source'
+        ? String(opt.value).toLowerCase()
+        : String(opt.value);
+      opt.selected = dotKey === 'visualize.trajectory.source'
+        ? selectedLower.has(key)
+        : selectedSet.has(key);
+    });
+    return;
+  }
+
+  if (input.tagName === 'SELECT') {
+    input.value = String(value);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    input.value = JSON.stringify(value);
+  } else {
+    input.value = value == null ? '' : String(value);
+  }
+}
+
+function syncCfgInputsByDotKey(dotKey, value, sourceInput = null) {
+  const rows = document.querySelectorAll(`.cfg-row[data-key="${dotKey}"]`);
+  if (!rows.length) return;
+
+  _cfgInputSyncing = true;
+  try {
+    rows.forEach((row) => {
+      const input = row.querySelector('input, select');
+      if (!input || input === sourceInput) return;
+      setCfgInputValue(input, dotKey, value);
+      input.style.borderColor = '';
+
+      if (dotKey === 'robots.type' && input.tagName === 'SELECT') {
+        input.dispatchEvent(new Event('change'));
+      }
+    });
+  } finally {
+    _cfgInputSyncing = false;
+  }
+}
+
+function renderMainParameters(cfg) {
+  const root = $('main-params-tree');
+  if (!root) return;
+  root.innerHTML = '';
+
+  const params = resolveMainParameterKeys(cfg);
+  params.forEach(({ key: dotKey, label }) => {
+    const value = getConfigValueByDotKey(cfg, dotKey);
+    if (value === undefined) return;
+    // Use the custom label instead of the dotKey for display
+    root.appendChild(createCfgRow(dotKey, label, value));
+  });
+}
+
 function getCfgMultiSelectOptions(dotKey) {
   if (dotKey === 'visualize.trajectory.source') {
     return [
@@ -140,6 +281,7 @@ function renderConfigTree(cfg) {
   const root = $('config-tree');
   const uiState = captureConfigTreeUiState();
   root.innerHTML = '';
+  renderMainParameters(cfg);
   buildTree(cfg, '', root);
   restoreConfigTreeUiState(uiState);
 }
@@ -658,6 +800,7 @@ function createCfgRow(dotKey, label, value) {
 }
 
 function onCfgChange(dotKey, input, originalValue) {
+  if (_cfgInputSyncing) return;
   const bareKey = dotKey.includes('.') ? dotKey.split('.').pop() : dotKey;
 
   if (input.tagName === 'SELECT' && input.multiple) {
@@ -680,6 +823,7 @@ function onCfgChange(dotKey, input, originalValue) {
 
     input.style.borderColor = '';
     App.pendingPatch[dotKey] = parsed;
+    syncCfgInputsByDotKey(dotKey, parsed, input);
     markPending();
     return;
   }
@@ -704,6 +848,7 @@ function onCfgChange(dotKey, input, originalValue) {
   }
   input.style.borderColor = '';
   App.pendingPatch[dotKey] = parsed;
+  syncCfgInputsByDotKey(dotKey, parsed, input);
   if (dotKey === 'record.switch') {
     if (!App.config || typeof App.config !== 'object') App.config = {};
     if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
@@ -1041,36 +1186,9 @@ function syncVisualStateToLocalConfig(patch) {
 }
 
 function syncVisualStateToConfigInputs(patch) {
-  const setVal = (dotKey, value) => {
-    const row = document.querySelector(`.cfg-row[data-key="${dotKey}"]`);
-    if (!row) return;
-    const input = row.querySelector('input, select');
-    if (!input) return;
-
-    if (input.tagName === 'SELECT' && input.multiple) {
-      const selectedSet = new Set((Array.isArray(value) ? value : [value]).map(v => String(v)));
-      Array.from(input.options).forEach(opt => {
-        const k = dotKey === 'visualize.trajectory.source'
-          ? String(opt.value).toLowerCase()
-          : String(opt.value);
-        const vv = dotKey === 'visualize.trajectory.source'
-          ? new Set([...selectedSet].map(x => x.toLowerCase()))
-          : selectedSet;
-        opt.selected = vv.has(k);
-      });
-      return;
-    }
-
-    if (input.tagName === 'SELECT') {
-      input.value = String(value);
-      return;
-    }
-
-    if (Array.isArray(value)) input.value = JSON.stringify(value);
-    else input.value = value == null ? '' : String(value);
-  };
-
-  Object.entries(patch).forEach(([k, v]) => setVal(k, v));
+  Object.entries(patch).forEach(([dotKey, value]) => {
+    syncCfgInputsByDotKey(dotKey, value, null);
+  });
 }
 
 async function persistVisualStateNow() {
