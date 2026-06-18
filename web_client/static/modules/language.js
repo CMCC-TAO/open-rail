@@ -24,6 +24,30 @@ function buildLangTasksFromData(data) {
   }
 }
 
+function getAppliedLangSelection() {
+  const taskId = App.config && App.config.language ? App.config.language.task_id : undefined;
+  const rawSubTaskId = App.config && App.config.language ? App.config.language.sub_task_id : undefined;
+  const parsedSubTaskId = Number(rawSubTaskId);
+  return {
+    taskId,
+    subTaskId: Number.isFinite(parsedSubTaskId) ? parsedSubTaskId : null,
+  };
+}
+
+function setAppliedOptionMarker(optionEl, isApplied) {
+  if (!optionEl) return;
+  if (isApplied) optionEl.dataset.applied = '1';
+  else delete optionEl.dataset.applied;
+}
+
+function formatLangTaskOptionLabel(taskName) {
+  return taskName;
+}
+
+function formatLangSubtaskOptionLabel(taskName, text, index) {
+  return `${index + 1}. ${text.substring(0, 50)}${text.length > 50 ? '…' : ''}`;
+}
+
 function renderLangTaskSelect() {
   const taskSel    = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
@@ -32,10 +56,12 @@ function renderLangTaskSelect() {
   const prevTask = taskSel.value;
   taskSel.innerHTML = '';
 
+  const { taskId: appliedTaskId } = getAppliedLangSelection();
   Object.keys(LangCmd.tasks).forEach(taskName => {
     const opt = document.createElement('option');
     opt.value = taskName;
-    opt.textContent = taskName;
+    opt.textContent = formatLangTaskOptionLabel(taskName);
+    setAppliedOptionMarker(opt, taskName === appliedTaskId);
     taskSel.appendChild(opt);
   });
 
@@ -59,10 +85,12 @@ function renderLangSubtaskSelect() {
   const taskName = taskSel ? taskSel.value : null;
   const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
 
+  const { taskId: appliedTaskId, subTaskId: appliedSubTaskId } = getAppliedLangSelection();
   subtasks.forEach((text, i) => {
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = `${i + 1}. ${text.substring(0, 50)}${text.length > 50 ? '…' : ''}`;
+    opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i);
+    setAppliedOptionMarker(opt, taskName === appliedTaskId && i === appliedSubTaskId);
     opt.title = text;
     subtaskSel.appendChild(opt);
   });
