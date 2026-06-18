@@ -341,27 +341,44 @@
 <span style="color:var(--text);font-weight:600;">vla_infer/</span>
 ├── <span style="color:var(--blue);font-weight:600;">run_server.py</span>            <span style="color:var(--text-dim);">B1 Server入口</span>
 ├── <span style="color:var(--green);font-weight:600;">run_client.py</span>            <span style="color:var(--text-dim);">B1 Client入口</span>
+├── <span style="color:var(--orange);font-weight:600;">action_server/</span>           <span style="color:var(--text-dim);">B9新增 任务调度</span>
+│   ├── action_dispatcher.py  <span style="color:var(--text-dim);">ROS2 ActionServer</span>
+│   ├── task_deliver.py       <span style="color:var(--text-dim);">递送任务</span>
+│   ├── task_grasp.py         <span style="color:var(--text-dim);">抓取任务</span>
+│   └── task_place.py         <span style="color:var(--text-dim);">放置任务</span>
 ├── <span style="color:var(--yellow);font-weight:600;">conf/</span>                    <span style="color:var(--text-dim);">B2 配置中心</span>
-│   ├── client_conf.py        <span style="color:var(--text-dim);">预处理尺寸/控制参数</span>
-│   ├── models_conf.py        <span style="color:var(--text-dim);">模型选择与路径</span>
-│   ├── robots_conf.py        <span style="color:var(--text-dim);">G1 action_layout</span>
-│   └── traj_conf.py          <span style="color:var(--text-dim);">滤波阈值与拟合配置</span>
+│   ├── client_conf.py        <span style="color:var(--text-dim);">RDM/Controller/Observer</span>
+│   ├── models_conf.py        <span style="color:var(--text-dim);">10种模型类型</span>
+│   ├── robots_conf.py        <span style="color:var(--text-dim);">机器人action_layout</span>
+│   ├── server_conf.py        <span style="color:var(--text-dim);">Server线程配置</span>
+│   ├── default_conf.yaml     <span style="color:var(--text-dim);">持久化默认参数</span>
+│   └── zmq_conf.py           <span style="color:var(--text-dim);">ZMQ地址端口</span>
 ├── <span style="color:var(--green);font-weight:600;">server/</span>                  <span style="color:var(--text-dim);">B3/B4</span>
 │   ├── core/
-│   │   ├── zmq_server.py     <span style="color:var(--text-dim);">B3 ZMQ通信</span>
-│   │   └── vla_server.py     <span style="color:var(--text-dim);">B4 推理服务循环</span>
-│   └── models/gr00t/
-│       └── gr00t_n1_5.py     <span style="color:var(--text-dim);">B4 模型推理封装</span>
+│   │   ├── zmq_server.py     <span style="color:var(--text-dim);">B3 ZMQ ROUTER</span>
+│   │   └── vla_server.py     <span style="color:var(--text-dim);">B4 并行解码+推理</span>
+│   └── models/
+│       ├── gr00t/            <span style="color:var(--text-dim);">n1/n1_5/n1_6 三种变体</span>
+│       ├── openpi/           <span style="color:var(--text-dim);">pi0/pi05</span>
+│       ├── act/  rdt/  tao/  <span style="color:var(--text-dim);">多模型支持</span>
+│       ├── smolvla/  go1/    <span style="color:var(--text-dim);">轻量/四足</span>
+│       └── mock/             <span style="color:var(--text-dim);">测试模拟</span>
 ├── <span style="color:var(--blue);font-weight:600;">client/</span>                  <span style="color:var(--text-dim);">B5/B6/B7</span>
 │   ├── core/
-│   │   ├── vla_client.py     <span style="color:var(--text-dim);">B5 主循环(observe/infer/control)</span>
-│   │   ├── realtime_data_manager.py   <span style="color:var(--text-dim);">B7 chunk过渡</span>
-│   │   └── trajectory_generator.py    <span style="color:var(--text-dim);">B7 拟合/滤波</span>
+│   │   ├── vla_client.py     <span style="color:var(--text-dim);">B5 5线程主循环</span>
+│   │   ├── inter_chunk_fuser.py     <span style="color:var(--text-dim);">B7 chunk间过渡</span>
+│   │   ├── intra_chunk_smoother.py  <span style="color:var(--text-dim);">B7 chunk内拟合</span>
+│   │   ├── realtime_data_manager.py <span style="color:var(--text-dim);">B7 数据管理</span>
+│   │   ├── task_language_manager.py <span style="color:var(--text-dim);">B5 语言自动切换</span>
+│   │   ├── visualize_server.py      <span style="color:var(--text-dim);">B8 WebSocket可视化</span>
+│   │   └── save_lerobot.py          <span style="color:var(--text-dim);">B5 LeRobot数据录制</span>
 │   └── robots/unitree_g1/
-│       ├── body_robot.py     <span style="color:var(--text-dim);">B6 观测拼装(3路RGB+26 state)</span>
-│       ├── UnitreeG1Camera.py    <span style="color:var(--text-dim);">B6 相机对齐</span>
-│       └── UnitreeG1Robot.py     <span style="color:var(--text-dim);">B6 26维->4话题</span>
-└── <span style="color:var(--pink);font-weight:600;">visual/</span>                  <span style="color:var(--text-dim);">B8 Web可视化</span></pre>
+│       ├── body_robot.py     <span style="color:var(--text-dim);">B6 观测拼装+独立ROS</span>
+│       ├── UnitreeG1Camera.py    <span style="color:var(--text-dim);">B6 3路相机(800+848+848)</span>
+│       └── UnitreeG1Robot.py     <span style="color:var(--text-dim);">B6 26维→限幅→4话题</span>
+├── <span style="color:var(--pink);font-weight:600;">visual/</span>                  <span style="color:var(--text-dim);">B8 可视化(旧)</span>
+├── <span style="color:var(--pink);font-weight:600;">web_client/</span>              <span style="color:var(--text-dim);">B8 可视化(新)</span>
+└── <span style="color:var(--pink);font-weight:600;">extra/dispatch/</span>         <span style="color:var(--text-dim);">B5 多机协同调度</span></pre>
     </div>
 
     <div style="flex:1.5;min-width:260px;background:var(--bg);border-radius:8px;padding:0.7rem 0.9rem;">
@@ -373,13 +390,14 @@
           <th style="padding:0.1rem 0.3rem;text-align:left;">关键文件</th>
         </tr>
         <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">B1</span></td><td style="padding:0.08rem 0.3rem">入口编排</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">run_server/run_client.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--yellow);">B2</span></td><td style="padding:0.08rem 0.3rem">参数中心</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">conf/*.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">B3</span></td><td style="padding:0.08rem 0.3rem">ZMQ通信</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">zmq_server.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">B4</span></td><td style="padding:0.08rem 0.3rem">模型推理</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">gr00t_n1_5.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">B5</span></td><td style="padding:0.08rem 0.3rem">实时控制</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">vla_client.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">B6</span></td><td style="padding:0.08rem 0.3rem">G1适配</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">body_robot.py + UnitreeG1*.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--purple);">B7</span></td><td style="padding:0.08rem 0.3rem">轨迹/滤波</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">trajectory_generator.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--pink);">B8</span></td><td style="padding:0.08rem 0.3rem">可视化运维</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">visual/</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--yellow);">B2</span></td><td style="padding:0.08rem 0.3rem">参数中心</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">conf/*.py + default_conf.yaml</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">B3</span></td><td style="padding:0.08rem 0.3rem">ZMQ异步通信</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">zmq_server.py + zmq_client.py</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">B4</span></td><td style="padding:0.08rem 0.3rem">模型推理(10种)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">vla_server.py + models/*/</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">B5</span></td><td style="padding:0.08rem 0.3rem">实时控制(5线程)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">vla_client.py + zmq_client.py</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">B6</span></td><td style="padding:0.08rem 0.3rem">G1驱动(限幅+防抖)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">body_robot.py + UnitreeG1*.py</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--purple);">B7</span></td><td style="padding:0.08rem 0.3rem">Intra+Inter轨迹</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">intra_chunk_smoother.py + inter_chunk_fuser.py</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--pink);">B8</span></td><td style="padding:0.08rem 0.3rem">可视化运维</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">visual/ + web_client/ + visualize_server.py</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">B9</span></td><td style="padding:0.08rem 0.3rem">任务调度</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_server/ (ROS2 ActionServer)</td></tr>
       </table>
       <div style="margin-top:0.4rem;font-size:0.7rem;color:var(--text-dim);padding:0.3rem 0.4rem;background:var(--surface2);border-radius:4px;">
         <strong>与 TAO 的关系：</strong>TAO 训练出的模型权重 + 配置 -> vla_infer 加载使用。<br>
@@ -438,7 +456,7 @@
   </div>
 </div>
 
-div class="section-label"><span>B1 入口层：启动脚本如何串起全链路</span></div>
+<div class="section-label"><span>B1 入口层：启动脚本如何串起全链路</span></div>
 
 <div class="card-grid">
   <div class="module blue-bg" style="margin-bottom:0;">
@@ -462,14 +480,15 @@ div class="section-label"><span>B1 入口层：启动脚本如何串起全链路
     <div class="code-block" style="font-size:0.72rem;">
 <span style="color:var(--text-dim);"># 启动链路：</span>
 parse_args() -> get_vla_server_config() -> override_config_with_args()
-  -> get_model() <span style="color:var(--text-dim);"># 加载TAO训练好的模型</span>
-  -> VLAServer.run() <span style="color:var(--text-dim);"># 进入推理循环</span></div>
+  -> get_model() <span style="color:var(--text-dim);"># 加载模型(mock/act/gr00t_n1/n1_5/n1_6/rdt/smolvla/go1/pi0/pi05/tao)</span>
+  -> ZMQServer() + VLAServer.run() <span style="color:var(--text-dim);"># ZMQ ROUTER + 推理循环</span></div>
 
     <div class="tensor-row">
       <span class="tensor"><span class="label">关键参数</span></span>
-      <span class="tensor"><span style="color:var(--blue);">--model_type</span> gr00t_n1_5</span>
-      <span class="tensor"><span style="color:var(--blue);">--model_path</span> /path/to/tao/model</span>
-      <span class="tensor"><span style="color:var(--blue);">--debug</span> 打印推理耗时</span>
+      <span class="tensor"><span style="color:var(--blue);">--model_type</span> gr00t_n1_5 | gr00t_n1_6 | tao | pi0 ...</span>
+      <span class="tensor"><span style="color:var(--blue);">--model_path</span> /path/to/model</span>
+      <span class="tensor"><span style="color:var(--blue);">--embodiment_tag</span> unitree_g1 | a2d_gripper</span>
+      <span class="tensor"><span style="color:var(--blue);">--debug</span> 禁用 Rich 面板</span>
     </div>
   </div>
 
@@ -487,20 +506,22 @@ parse_args() -> get_vla_server_config() -> override_config_with_args()
     </div>
 
     <div class="module-desc">
-      构建 Robot 对象 -> 连接 ZMQ -> 启动 VLAClientAsync 四线程循环。
+      构建 Robot 对象 -> 连接 ZMQ -> 启动 VLAClientAsync 五线程循环。
     </div>
 
     <div class="code-block" style="font-size:0.72rem;">
 <span style="color:var(--text-dim);"># 启动链路：</span>
-parse_args() -> get_client_config() -> get_robot()
-  -> VLAClientAsync.run() <span style="color:var(--text-dim);"># 启动观测/推理/拟合/控制 4 线程</span></div>
+parse_args() -> get_client_config() -> load_user_config() -> override_config_with_args()
+  -> get_robot() + ZMQClient() + RDM + InterChunkFuser + IntraChunkSmoother
+  -> VLAClientAsync.run() <span style="color:var(--text-dim);"># 启动 5 线程（observe/infer/control/visualize + 图片编码线程池）</span></div>
 
     <div class="tensor-row">
       <span class="tensor"><span class="label">关键参数</span></span>
-      <span class="tensor"><span style="color:var(--green);">--robots_type</span> unitree_g1</span>
-      <span class="tensor"><span style="color:var(--green);">--preprocess_size</span> 640 640</span>
-      <span class="tensor"><span style="color:var(--green);">--inter_chunk_mode</span> min_jerk</span>
-      <span class="tensor"><span style="color:var(--green);">--fps</span> 20</span>
+      <span class="tensor"><span style="color:var(--green);">--robots_type</span> unitree_g1 | a2d | mock</span>
+      <span class="tensor"><span style="color:var(--green);">--intra_chunk_mode</span> raw | interpolation | fitting</span>
+      <span class="tensor"><span style="color:var(--green);">--inter_chunk_mode</span> search_action | poly | smooth_velocity | min_jerk | bspline</span>
+      <span class="tensor"><span style="color:var(--green);">--extra_dispatch_mode</span> 0(关闭) | 1(启用) | 2(mock)</span>
+      <span class="tensor"><span style="color:var(--green);">--user_conf</span> user_conf.py</span>
     </div>
   </div>
 </div>
@@ -519,39 +540,63 @@ parse_args() -> get_client_config() -> get_robot()
     <tr><th>配置文件</th><th>关键配置项</th><th>部署影响</th><th>与 TAO 的关系</th></tr>
     <tr>
       <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">preprocess_size=[640,640]</span></span></td>
-      <td>客户端图像统一尺寸，部署主口径</td>
-      <td>TAO 训练时图像原始 640 被 resize 到 224，部署时同样口径</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">vision.preprocess.method=resize</span></span></td>
+      <td>图像统一调整到 <span class="shape">[480,640]</span>（keep_ratio保持宽高比）</td>
+      <td>部署口径，模型内后续缩到 224</td>
     </tr>
     <tr>
       <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">fitting_time_step=<span class="shape">3.75</span></span></td>
-      <td>轨迹插值密度：3.75ms 即 266Hz</td>
+      <td><span class="tensor" style="font-size:0.65rem;">controller.period=<span class="shape">3.75ms</span></span></td>
+      <td>控制周期：3.75ms = 266Hz</td>
       <td>-</td>
     </tr>
     <tr>
       <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">inter_chunk_mode=<span class="shape">min_jerk</span></span></td>
-      <td>chunk 间过渡策略，影响动作平滑度</td>
+      <td><span class="tensor" style="font-size:0.65rem;">controller.wait_time=<span class="shape">200ms</span></span></td>
+      <td>两次推理间的等待，越长动作越迟滞</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><code>conf/client_conf.py</code></td>
+      <td><span class="tensor" style="font-size:0.65rem;">intra_chunk.intra_chunk_mode=<span class="shape">fitting</span></span></td>
+      <td>chunk 内处理：raw/interpolation/fitting</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><code>conf/client_conf.py</code></td>
+      <td><span class="tensor" style="font-size:0.65rem;">inter_chunk.inter_chunk_mode=<span class="shape">min_jerk</span></span></td>
+      <td>chunk 间过渡策略</td>
       <td>-</td>
     </tr>
     <tr>
       <td><code>conf/models_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">model_type / model_path</span></td>
-      <td>选择哪个 TAO 训练好的模型</td>
+      <td><span class="tensor" style="font-size:0.65rem;">type / model_path / embodiment_tag</span></td>
+      <td>选择哪个模型 + 哪个机器人体态</td>
       <td>直接指向 TAO 输出的 checkpoint</td>
     </tr>
     <tr>
       <td><code>conf/robots_conf.py</code></td>
       <td><span class="tensor" style="font-size:0.65rem;">unitree_g1.action_layout</span></td>
-      <td>26维动作切片规则：左臂[0:7] 右臂[7:14] 左手[14:20] 右手[20:26]</td>
-      <td>与 TAO 的 embodiment 配置完全一致</td>
+      <td>26维动作切片：arm[0:14] hand[14:26]</td>
+      <td>与 TAO 的 embodiment 完全一致</td>
     </tr>
     <tr>
-      <td><code>conf/traj_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">filter_window_size / thresholds</span></td>
-      <td>手部动作防抖和离散化 (0/1)</td>
+      <td><code>conf/client_conf.py</code></td>
+      <td><span class="tensor" style="font-size:0.65rem;">intra_chunk.fitting_deg=<span class="shape">4</span></span></td>
+      <td>多项式拟合阶数</td>
       <td>-</td>
+    </tr>
+    <tr>
+      <td><code>conf/client_conf.py</code></td>
+      <td><span class="tensor" style="font-size:0.65rem;">language.auto_mode=<span class="shape">True</span></span></td>
+      <td>根据 task_progress 自动切换语言指令</td>
+      <td>需要在 TAO 中训练 prob_progress 输出</td>
+    </tr>
+    <tr>
+      <td><code>conf/default_conf.yaml</code></td>
+      <td><span class="tensor" style="font-size:0.65rem;">所有参数持久化</span></td>
+      <td>运行时实际加载的值</td>
+      <td>可替代 conf/*.py 的默认值</td>
     </tr>
   </table>
 
@@ -574,50 +619,51 @@ parse_args() -> get_client_config() -> get_robot()
 
   <div class="story-bubble">
     <div class="s-label">倒水任务中的通信流</div>
-    Client（G1 身体）和 Server（倒水专家大脑）之间通过 ZMQ 来回传递消息：<br>
-    Client 收集好 <em>3 张 640×640 图像 + 26 维关节状态</em> → 打包序列化 → ZMQ 发送 →
-    Server 反序列化 → 推理 → ZMQ 回复 → Client 收到 <em>64 步倒水动作</em>。<br>
-    整个过程就像电话通话：Client 先说话，Server 听完回答，挂断后再接下一通。
+    Client（G1 身体）和 Server（倒水专家大脑）之间通过 <strong>ZMQ DEALER/ROUTER</strong> 模式异步通信：<br>
+    Client 收集好 <em>3 张图像 + 26 维关节状态</em> → pickle序列化 + json元数据 → ZMQ 异步发送 →
+    Server ROUTER 收到 → 并行解码 + 推理 → ZMQ 回复 → Client DEALER 收到 <em>64 步倒水动作</em>。<br>
+    与 REQ/REP 不同，DEALER/ROUTER 支持并行请求、非阻塞发送和双向元数据传输。
   </div>
 
   <div class="tensor-row">
-    <span class="tensor"><span class="label">请求包</span> <span class="shape">obs + state[26] + language</span></span>
-    <span class="tensor"><span class="label">响应包</span> <span class="shape">pred_action[64, 26]</span></span>
-    <span class="tensor"><span class="label">通信协议</span> ZMQ.REQ/REP</span>
+    <span class="tensor"><span class="label">请求包</span> <span class="shape">pickle(obs+state+language) + json(meta)</span></span>
+    <span class="tensor"><span class="label">响应包</span> <span class="shape">pickle(pred_action+ext) + json(meta)</span></span>
+    <span class="tensor"><span class="label">通信协议</span> ZMQ.DEALER(Client) / ROUTER(Server)</span>
   </div>
 
   <table>
     <tr><th>步骤</th><th>谁</th><th>做什么</th><th>数据形状</th></tr>
     <tr>
-      <td>1</td><td>Client</td>
-      <td>采集观测 → 编码图像 → 组装消息</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">3×[640,640,3]</span> + <span class="shape">state[26]</span></span></td>
+      <td>1</td><td>Client Robot</td>
+      <td>采集观测 → 预处理（统一尺寸[480,640]）→ 编码JPEG</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">3张[JPEG编码]</span> + <span class="shape">state[26]</span></span></td>
     </tr>
     <tr>
-      <td>2</td><td>Client</td>
-      <td>ZMQ <span class="src-badge src-code">sendMessage</span></td>
-      <td>序列化后的字节流</td>
+      <td>2</td><td>Client ZMQ</td>
+      <td>DEALER 非阻塞发送 <span class="src-badge src-code">sendMessage(data, meta)</span></td>
+      <td>序列化 pickle + JSON multipart</td>
     </tr>
     <tr>
       <td>3</td><td>Server</td>
-      <td>ZMQ 收包 → <span class="src-badge src-code">model.infer()</span></td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">[1,3,224,224]</span>×3 + <span class="shape">state[26]</span></span></td>
+      <td>ROUTER 收包 → 并行解码 → <span class="src-badge src-code">pad_and_resize(640)</span> → <span class="src-badge src-code">model.infer()</span></td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">3×[640,640,3]→[224,224]</span> + <span class="shape">state[26]</span></span></td>
     </tr>
     <tr>
       <td>4</td><td>Server</td>
-      <td>返回推理结果</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">pred_action[64,26]</span></span></td>
+      <td>返回推理结果（包含动作 + 扩展字段）</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">pred_action[64,26]</span> + <span class="shape">ext(prob_progress等)</span></span></td>
     </tr>
     <tr>
       <td>5</td><td>Client</td>
-      <td>轨迹拟合 + 插值过渡 → 控制机器人</td>
+      <td>IntraChunk拟合 + InterChunk过渡 → 控制机器人</td>
       <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">拟合后[266Hz,26]</span></span></td>
     </tr>
   </table>
 
   <div class="tip">
-    <strong>🔑 关键约束：</strong>ZMQ 是同步 REQ/REP，Client 发送后必须等 Server 回复才能发下一条。
-    因此推理延迟直接影响控制节奏 —— 如果推理耗时 50ms，那控制频率最高只能到 20Hz。
+    <strong>🔑 关键约束：</strong>ZMQ 通信量为图像编码+pickle耗时；HWM=1 保证不会堆积旧消息，
+    新推理结果到来时旧消息自动丢弃。Server 通过 ThreadPoolExecutor 并行解码多路图像（<code>max_decode_workers</code>），
+    通过异步回调 <code>inference_callback</code> 回复结果。
   </div>
 </div>
 
@@ -629,13 +675,14 @@ parse_args() -> get_client_config() -> get_robot()
     <span class="tag blue">B4</span>
     <div class="module-title">
       GR00T N1.5 输入封装
-      <span class="badge code-ref">gr00t_n1_5.py::infer()</span>
+      <span class="badge code-ref">models/gr00t_n1_5.py::infer()</span>
     </div>
 
     <div class="story-bubble">
       <div class="s-label">倒水任务中的角色</div>
-      当 Server 收到 G1 发来的观测数据后，<span class="glossary-term">GR00T N1.5<span class="tooltip">NVIDIA 发布的 VLA 基础模型，基于 SigLIP+Qwen3 架构，专门用于机器人任务推理</span></span>
-      模型的 <span class="src-badge src-code">infer()</span> 方法将原始 obs 打包成模型需要的输入格式。
+      当 Server 收到 G1 发来的观测数据后，<span class="glossary-term">GR00T N1.5<span class="tooltip">NVIDIA 发布的 VLA 基础模型，基于 SigLIP+Qwen3 架构</span></span>
+      等模型通过 <span class="src-badge src-code">infer()</span> 方法将原始 obs 打包成模型需要的输入格式。
+      <strong>Server 当前支持 10 种模型类型：</strong>mock, act, gr00t_n1, gr00t_n1_5, gr00t_n1_6, rdt, smolvla, go1, pi0, pi05, tao。
     </div>
 
     <div class="module-desc">
@@ -646,58 +693,62 @@ parse_args() -> get_client_config() -> get_robot()
       <span class="tensor"><span class="label">video</span> <span class="shape">[1,T,3,224,224]</span> <span class="dim-detail">{T=历史帧数, 3=RGB, 224=模型内尺寸}</span></span>
       <span class="tensor"><span class="label">state</span> <span class="shape">[1,26]</span> <span class="dim-detail">{14臂+12手}</span></span>
       <span class="tensor"><span class="label">language</span> <span class="shape">token_ids</span> <span class="dim-detail">{文本编码}</span></span>
-      <span class="tensor"><span class="label">输出</span> <span class="shape">[1,64,26]</span> <span class="dim-detail">{64=action_horizon, 26=动作维度}</span></span>
+      <span class="tensor"><span class="label">输出</span> <span class="shape">[1,64,26] + ext</span> <span class="dim-detail">{64=action_horizon, ext=prob_progress等}</span></span>
     </div>
   </div>
 
   <div class="module" style="margin-bottom:0;">
     <span class="tag blue">B4</span>
     <div class="module-title">
-      640 → 224 两级尺寸映射
-      <span class="badge code-ref">data_config.py::transform()</span>
+      Client 480 → Server 640 → 模型 224 三级映射
+      <span class="badge code-ref">client/misc.py + server/vla_server.py + model transform</span>
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">最容易混淆的概念</div>
-      Client 配置的 <span class="tensor" style="font-size:0.65rem;"><span class="shape">preprocess_size=[640,640]</span></span> 是<strong>部署口径</strong>，
+      <div class="s-label">最容易混淆的概念——现在是三级映射</div>
+      Client 配置的 <span class="tensor" style="font-size:0.65rem;"><span class="shape">vision.preprocess=[480,640]</span></span> 是<strong>客户端预处理口径</strong>，
+      Server 收到后做 <span class="tensor" style="font-size:0.65rem;"><span class="shape">pad_and_resize(640,640)</span></span> 是<strong>统一传输口径</strong>，
       模型内部的 <span class="tensor" style="font-size:0.65rem;"><span class="shape">VideoResize(224,224)</span></span> 是<strong>模型感知尺寸</strong>。
-      两者都是必经环节，但意义完全不同！
+      三级尺寸各自独立，理解这一点能避免大量排障困扰！
     </div>
 
     <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 两级映射链路：</span>
-Client conf: preprocess_size=[640,640]  <span style="color:var(--text-dim);">← 你控制的部署参数</span>
-  -> ZMQ 传输编码后的 640 图像
-  -> Server 收到后解码
+<span style="color:var(--text-dim);"># 三级映射链路：</span>
+Client conf: vision.preprocess.height=480, width=640  <span style="color:var(--text-dim);">← 客户端预处理（resize保持宽高比）</span>
+  -> JPEG编码 -> ZMQ发送
+  -> Server 解码 -> VLAServer._pad_and_resize(target=640,640)  <span style="color:var(--text-dim);">← 统一到640传输口径</span>
   -> GR00T transform: VideoResize(224,224)  <span style="color:var(--text-dim);">← 模型内部固定逻辑</span>
   -> 最终输入 <span class="shape">[1,3,224,224]</span>
     </div>
 
     <div class="tip">
-      <strong>⚠️ 常见误解：</strong>有人以为 Client 配 640 模型就能看到 640 的细节，
+      <strong>⚠️ 常见误解：</strong>有人以为改 Client 的 preprocess_size 就能改变模型输入尺寸，
       实际上模型内部一定会缩到 224。如果要改模型输入分辨率，需要修改 TAO 训练时的 data_config，
-      然后重新训练模型 —— 这不属于部署范畴。
+      然后重新训练模型 —— 这不属于部署范畴。Server 的 pad_and_resize(640) 是固定逻辑。
     </div>
   </div>
 </div>
 
 <!-- ==================== B5 Client 实时控制 ==================== -->
-<div class="section-label"><span>B5 Client 实时控制层：四线程协同</span></div>
+<div class="section-label"><span>B5 Client 实时控制层：五线程协同</span></div>
 
 <div class="module" style="border-left:4px solid var(--green);">
   <span class="tag green">B5</span>
   <div class="module-title">
-    VLAClientAsync 四线程架构
+    VLAClientAsync 五线程架构
     <span class="badge code-ref">vla_infer/client/core/vla_client.py</span>
   </div>
 
   <div class="story-bubble">
-    <div class="s-label">倒水任务中的四线程协作</div>
-    G1 机器人要流畅地完成倒水，需要 4 个工人同时工作：<br>
+    <div class="s-label">倒水任务中的五线程协作 + 新组件</div>
+    G1 机器人要流畅地完成倒水，需要 5 个工人同时工作：<br>
     <strong>观测工</strong>不断看（3 路摄像头采集）→ <strong>推理工</strong>发请求等回复 →
-    <strong>轨迹工</strong>把粗糙的动作描精细 → <strong>控制工</strong>逐帧驱动电机。<br>
-    它们共享一块黑板（<span class="glossary-term">RDM<span class="tooltip">Realtime Data Manager，实时数据管理器，四线程间共享数据的中心存储</span></span>），
-    观测工写数据，推理工读数据和写动作，轨迹工读动作写拟合结果，控制工读拟合结果写执行。
+    <strong>轨迹工</strong>（IntraChunk平滑 + InterChunk过渡）→ <strong>控制工</strong>按 266Hz 逐帧驱动电机 →
+    <strong>可视化工</strong>推送数据到 Web 面板。<br>
+    它们共享一块黑板（<span class="glossary-term">RDM<span class="tooltip">Realtime Data Manager，五线程间共享数据的中心存储</span></span>），
+    观测工写数据，推理工读数据和写动作，拟合工读动作写拟合结果，控制工读拟合结果写执行，可视化工推送监控数据。<br>
+    此外还有 <strong>TaskLanguageManager</strong>（根据 prob_progress 自动切换语言指令）和
+    <strong>LeRobotDatasetWriter</strong>（录制训练数据）两个辅助组件。
   </div>
 
   <table>
@@ -706,49 +757,57 @@ Client conf: preprocess_size=[640,640]  <span style="color:var(--text-dim);">←
       <td><span style="color:var(--blue);font-weight:600;">observe</span></td>
       <td><span class="src-badge src-code">_observe_thread_fun</span></td>
       <td>~30Hz</td>
-      <td>采集 3 路摄像头画面 + 26 维关节状态写入 RDM</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">3×640×640×3 RGB</span> + <span class="shape">state[26]</span></span></td>
+      <td>采集 3 路摄像头画面（800+848+848）→ resize到[480,640] → JPEG编码 → 写入 RDM</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">3×JPEG编码</span> + <span class="shape">state[26]</span></span></td>
     </tr>
     <tr>
       <td><span style="color:var(--green);font-weight:600;">inference</span></td>
-      <td><span class="src-badge src-code">inference_first/step</span></td>
-      <td>按触发</td>
-      <td>从 RDM 取最新观测 → ZMQ 发给 Server → 取回 action chunk</td>
+      <td><span class="src-badge src-code">_inference_first/step</span></td>
+      <td>按触发（wait_time=200ms）</td>
+      <td>从 RDM 取最新观测 → ZMQ DEALER 发送 → 取回 action chunk</td>
       <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">pred_action[64,26]</span></span></td>
     </tr>
     <tr>
       <td><span style="color:var(--purple);font-weight:600;">trajectory</span></td>
-      <td><span class="src-badge src-code">_traj_fitting</span></td>
-      <td>推理后触发</td>
-      <td>对 64 步动作做多项式拟合 + 手部防抖，生成高频轨迹</td>
+      <td><span class="src-badge src-code">IntraChunkSmoother.process + InterChunkFuser.process</span></td>
+      <td>推理后触发（inline）</td>
+      <td>IntraChunk: 多项式拟合[64步→266Hz]；InterChunk: 与上一chunk平滑衔接</td>
       <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">拟合后[266Hz,26]</span></span></td>
     </tr>
     <tr>
       <td><span style="color:var(--red);font-weight:600;">control</span></td>
       <td><span class="src-badge src-code">_control_thread_fun</span></td>
-      <td>固定周期</td>
-      <td>按 266Hz 从 RDM 取当前动作 → 26 维切片 → ROS2 话题下发</td>
+      <td>固定 266Hz（3.75ms Timer）</td>
+      <td>按 266Hz 从 RDM 取当前动作 → 解析 action_layout → 限幅 → ROS2 话题下发</td>
       <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">ROS2话题[14臂+12手]</span></span></td>
+    </tr>
+    <tr>
+      <td><span style="color:var(--pink);font-weight:600;">visualize</span></td>
+      <td><span class="src-badge src-code">_visualize_thread_fun</span></td>
+      <td>266Hz Timer</td>
+      <td>推送动作/状态数据到 VisualizeServer WebSocket</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">动作曲线+状态数据</span></span></td>
     </tr>
   </table>
 
   <table>
-    <tr><th colspan="3" style="color:var(--orange);">倒水任务中的时序示例（假设 Server 推理耗时 50ms）</th></tr>
+    <tr><th colspan="3" style="color:var(--orange);">推理-控制流水线时序（wait_time=200ms）</th></tr>
     <tr><th>T+0ms</th><td>observe 采集第 1 帧</td><td>inference 等待</td></tr>
-    <tr><th>T+33ms</th><td>observe 采集第 2 帧</td><td>inference 开始推理（第 1 帧 → ZMQ → Server）</td></tr>
-    <tr><th>T+83ms</th><td>observe 采集第 3 帧</td><td>inference 收到 action chunk [64,26]，trajectory 开始拟合</td></tr>
-    <tr><th>T+100ms</th><td colspan="2">control 按 266Hz 开始执行第 1 步动作 ...</td></tr>
+    <tr><th>T+33ms</th><td>observe 采集第 2 帧</td><td>inference 触发 _inference_first（ZMQ → Server）</td></tr>
+    <tr><th>T+83ms</th><td>observe 持续采集</td><td>收到 action chunk → IntraChunk拟合 → InterChunk过渡 → 写入 RDM</td></tr>
+    <tr><th>T+100ms~</th><td colspan="2">control 按 266Hz 逐帧执行，wait_time 过后触发下一轮 inference</td></tr>
   </table>
 
   <div class="tip">
-    <strong>🔑 关键区分：</strong>任何抖动问题，先定位是哪个线程的瓶颈：
-    <em>infer 延迟高</em> → 看 B4 Server；<em>轨迹跳变</em> → 看 B7 拟合参数；
-    <em>执行跟不上</em> → 看 B6 ROS2 话题频率。
+    <strong>🔑 关键区分：</strong>任何抖动问题，先定位是哪个环节的瓶颈：
+    <em>infer 延迟高</em> → 看 B4 Server；<em>轨迹跳变</em> → 看 B7 IntraChunk 拟合参数；
+    <em>chunk切换顿挫</em> → 看 B7 InterChunk 策略；<em>执行跟不上</em> → 看 B6 限幅和话题频率。
   </div>
+
 </div>
 
 <!-- ==================== B6 G1 驱动映射 ==================== -->
-<div class="section-label"><span>B6 Unitree G1 驱动层：14臂 + 12手 的动作切片与话题映射</span></div>
+<div class="section-label"><span>B6 Unitree G1 驱动层：26维→限幅→ROS2话题，arm+hand双段layout</span></div>
 
 <div class="card-grid">
   <div class="module" style="margin-bottom:0;">
@@ -759,42 +818,44 @@ Client conf: preprocess_size=[640,640]  <span style="color:var(--text-dim);">←
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">倒水任务的 26 维分解</div>
-      G1 倒水时全身的动作被编码成一个 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[26]</span></span> 维度的向量，
-      就像乐谱上的 26 条音轨，每条控制一个自由度：
-      <strong>14 条臂轨</strong>控制大臂小臂的精确位置，<strong>12 条手轨</strong>控制手指的张开闭合。
-      模型预测出 64 步动作，每一步都是一个 <span class="shape">[26]</span> 维的"切片"。
+      <div class="s-label">倒水任务的 26 维分解（配置层 vs 驱动层）</div>
+      G1 倒水时全身的动作被编码成一个 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[26]</span></span> 维度的向量。
+      <strong>配置层（robots_conf.py）</strong>分为 2 段：<span class="shape">arm[0:14]</span> + <span class="shape">hand[14:26]</span>；
+      实际 <strong>驱动层（UnitreeG1Robot.py）</strong>在内部切成 4 段发送给 ROS2 话题。
+      手部带防抖机制，差值小于 <span class="shape">50</span> 时不重复发送以防电机过热。
     </div>
 
     <table>
-      <tr><th>切片范围</th><th>自由度</th><th>控制对象</th><th>倒水任务中的用途</th><th>数据类型</th></tr>
+      <tr><th>配置层切片</th><th>驱动层切片</th><th>自由度</th><th>控制对象</th><th>ROS2 话题</th><th>限幅保护</th></tr>
       <tr>
+        <td rowspan="2"><span class="tensor" style="font-size:0.65rem;"><span class="shape">arm[0:14]</span></span></td>
         <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[0:7]</span></span></td>
         <td>7</td>
         <td>左臂（肩3+肘2+腕2）</td>
-        <td>左手持水杯，定位到杯口位置</td>
-        <td><span class="src-badge src-calc">float32</span></td>
+        <td><code>/left_arm/joint_pos</code> (Jointpos)</td>
+        <td><span class="src-badge src-calc">相对delta+绝对限幅</span></td>
       </tr>
       <tr>
         <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[7:14]</span></span></td>
         <td>7</td>
         <td>右臂（肩3+肘2+腕2）</td>
-        <td>右手持水壶，执行倾倒动作</td>
-        <td><span class="src-badge src-calc">float32</span></td>
+        <td><code>/right_arm/joint_pos</code> (Jointpos)</td>
+        <td><span class="src-badge src-calc">相对delta+绝对限幅</span></td>
       </tr>
       <tr>
+        <td rowspan="2"><span class="tensor" style="font-size:0.65rem;"><span class="shape">hand[14:26]</span></span></td>
         <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[14:20]</span></span></td>
         <td>6</td>
-        <td>左手手指</td>
-        <td>控制左手指握住杯子的力度</td>
-        <td><span class="src-badge src-calc">float32 → 0/1</span></td>
+        <td>左手手指（little~thumb)）</td>
+        <td><code>/left_hand_cmd</code> (JointState,带防抖≥50)</td>
+        <td>差分防抖</td>
       </tr>
       <tr>
         <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[20:26]</span></span></td>
         <td>6</td>
-        <td>右手手指</td>
-        <td>控制右手抓握水壶柄的松紧</td>
-        <td><span class="src-badge src-calc">float32 → 0/1</span></td>
+        <td>右手手指（little~thumb)）</td>
+        <td><code>/right_hand_cmd</code> (JointState,带防抖≥50)</td>
+        <td>差分防抖</td>
       </tr>
     </table>
   </div>
@@ -814,84 +875,98 @@ Client conf: preprocess_size=[640,640]  <span style="color:var(--text-dim);">←
     </div>
 
     <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 26维 → 4个ROS2话题</span>
-<span style="color:var(--text-dim);"># 出处：client/robots/unitree_g1/UnitreeG1Robot.py</span>
+<span style="color:var(--text-dim);"># 26维 → 4个ROS2话题  + 安全限幅</span>
+<span style="color:var(--text-dim);"># 出处：client/robots/unitree_g1/UnitreeG1Robot.py::send_robot_action()</span>
 
-left_arm_msg.position    = action[0:7]     <span style="color:var(--text-dim);">→ /left_arm/joint_pos</span>
-right_arm_msg.position   = action[7:14]    <span style="color:var(--text-dim);">→ /right_arm/joint_pos</span>
-left_hand_msg.angle      = action[14:20]   <span style="color:var(--text-dim);">→ /left_hand/set_angle (带防抖)</span>
-right_hand_msg.angle     = action[20:26]   <span style="color:var(--text-dim);">→ /right_hand/set_angle (带防抖)</span>
+<span style="color:var(--text-dim);"># Step 1: 限幅——相对delta限位 + 绝对安全限位兜底</span>
+<span style="color:var(--text-dim);"># 左臂delta: [0.15,0.15,0.15,0.15,0.50,0.25,0.20]</span>
+<span style="color:var(--text-dim);"># 右臂delta: [0.20,0.15,0.15,0.15,0.50,0.25,0.20]</span>
+action = _clamp_arm_actions(action, current_arm_state)
+
+<span style="color:var(--text-dim);"># Step 2: 切片 + ROS2 发布</span>
+left_arm_msg.joint    = action[0:7]     <span style="color:var(--text-dim);">→ /left_arm/joint_pos (Jointpos)</span>
+right_arm_msg.joint   = action[7:14]    <span style="color:var(--text-dim);">→ /right_arm/joint_pos (Jointpos)</span>
+left_hand_msg.position = action[14:20]  <span style="color:var(--text-dim);">→ /left_hand_cmd (JointState, diff≥50才发)</span>
+right_hand_msg.position= action[20:26]  <span style="color:var(--text-dim);">→ /right_hand_cmd (JointState, diff≥50才发)</span>
     </div>
 
     <div class="tensor-row">
-      <span class="tensor"><span class="label">左臂话题</span> <span class="shape">/left_arm/joint_pos</span> <span class="dim-detail">{7维float}</span></span>
-      <span class="tensor"><span class="label">右臂话题</span> <span class="shape">/right_arm/joint_pos</span> <span class="dim-detail">{7维float}</span></span>
-      <span class="tensor"><span class="label">左手话题</span> <span class="shape">/left_hand/set_angle</span> <span class="dim-detail">{6维,防抖}</span></span>
-      <span class="tensor"><span class="label">右手话题</span> <span class="shape">/right_hand/set_angle</span> <span class="dim-detail">{6维,防抖}</span></span>
+      <span class="tensor"><span class="label">左臂话题</span> <span class="shape">/left_arm/joint_pos</span> <span class="dim-detail">{Jointpos 7维}</span></span>
+      <span class="tensor"><span class="label">右臂话题</span> <span class="shape">/right_arm/joint_pos</span> <span class="dim-detail">{Jointpos 7维}</span></span>
+      <span class="tensor"><span class="label">左手话题</span> <span class="shape">/left_hand_cmd</span> <span class="dim-detail">{JointState 6维}</span></span>
+      <span class="tensor"><span class="label">右手话题</span> <span class="shape">/right_hand_cmd</span> <span class="dim-detail">{JointState 6维}</span></span>
     </div>
 
     <div class="tip">
-      <strong>⚠️ 手部防抖机制：</strong>手部命令带防抖阈值，差值小于阈值时不发送。
-      防止手指在小范围内频繁开合导致电机过热。阈值由 <span class="src-badge src-config">traj_conf.py</span> 中的 <code>filter_window_size</code> 控制。
+      <strong>⚠️ 安全限幅双层保护：</strong><br>
+      <strong>相对限幅：</strong>单步 action 与当前 state 的偏差不能超过 delta 值。
+      例如左肩 pitch delta=0.15，超出则被 clamp。<br>
+      <strong>绝对限幅：</strong>关节位置的绝对硬限位，即使相对限幅失效也能兜底。<br>
+      <strong>手部防抖：</strong>手部新指令与已发送指令的绝对差之和 &gt; 50 时才发送，
+      防止手指频繁微调导致电机过热。<br>
+      <strong>控制/推理比：</strong>RATIO=9（30Hz/267Hz），delta 按比例缩放。
     </div>
   </div>
 </div>
 
 <!-- ==================== B7 轨迹/滤波 ==================== -->
-<div class="section-label"><span>B7 轨迹/滤波层：过渡策略、拟合与平滑</span></div>
+<div class="section-label"><span>B7 轨迹/滤波层：IntraChunk 拟合 + InterChunk 过渡双阶段</span></div>
 
 <div class="card-grid">
   <div class="module" style="margin-bottom:0;">
     <span class="tag purple">B7</span>
     <div class="module-title">
-      Intra-chunk 拟合
-      <span class="badge code-ref">client/core/trajectory_generator.py</span>
+      IntraChunk（块内）平滑拟合
+      <span class="badge code-ref">client/core/intra_chunk_smoother.py</span>
     </div>
 
     <div class="story-bubble">
       <div class="s-label">倒水动作的"描线"过程</div>
-      Server 返回的 64 步动作像一副"画了关键点"的简笔画（<span class="shape">64帧</span>），
-      需要<strong>轨迹拟合</strong>把它变成连续平滑的线条（<span class="shape">266Hz</span>），
-      机器人才能流畅地执行。关节和手部的处理方式不同。
+      Server 返回的 64 步动作像一副"画了关键点"的简笔画（<span class="shape">64帧, ≈3秒</span>），
+      需要<strong>IntraChunkSmoother</strong>把它变成连续平滑的线条（<span class="shape">266Hz</span>），
+      机器人才能流畅地执行。关节和手部分别用不同的拟合策略。
+      支持 3 种模式：<span class="src-badge src-calc">raw</span>（原样输出）、<span class="src-badge src-calc">interpolation</span>（线性插值）、<span class="src-badge src-calc">fitting</span>（多项式拟合）。
     </div>
 
     <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 关节拟合：多项式插值（trajectory_generator.py::_joint_traj_fitting）</span>
-coeff = polyfit(timestamps, joint_chunk, deg=4)
+<span style="color:var(--text-dim);"># 关节拟合：多项式插值（intra_chunk_smoother.py::process）</span>
+coeff = polyfit(timestamps, joint_chunk, deg=config.fitting_deg)  <span style="color:var(--text-dim);"># deg=4</span>
 q = poly1d(coeff)(x)      <span style="color:var(--text-dim);"># 位置</span>
 v = polyder(coeff)(x)      <span style="color:var(--text-dim);"># 速度（一阶导）</span>
 a = polyder(polyder(coeff))(x)  <span style="color:var(--text-dim);"># 加速度（二阶导）</span>
 
-<span style="color:var(--text-dim);"># 手部拟合：均值窗口 + 阈值离散化（_gripper_traj_fitting）</span>
+<span style="color:var(--text-dim);"># 手部拟合：均值窗口 + 阈值离散化（intra_chunk_smoother.py::_gripper_traj_fitting）</span>
 mean = np.mean(gripper_chunk[window_min:window_max])
-if mean > max_threshold: gripper = 1.0  <span style="color:var(--text-dim);"># 张开/闭合</span>
-elif mean < min_threshold: gripper = 0.0
+if mean &gt; max_threshold: gripper = 1.0  <span style="color:var(--text-dim);"># 张开/闭合</span>
+elif mean &lt; min_threshold: gripper = 0.0
     </div>
 
     <div class="tensor-row">
       <span class="tensor"><span class="label">输入</span> <span class="shape">[64,26]</span> <span class="dim-detail">{64=chunk步数}</span></span>
       <span class="tensor"><span class="label arrow">→</span> <span class="shape">fitting_time_step=3.75ms</span> <span class="dim-detail">{266Hz}</span></span>
-      <span class="tensor"><span class="label">输出</span> <span class="shape">[~266×horizon_sec, 26]</span></span>
+      <span class="tensor"><span class="label">输出</span> <span class="shape">[~800, 26]</span> <span class="dim-detail">{~3秒×266Hz}</span></span>
     </div>
 
     <div class="tip">
-      <strong>🔑 调参：</strong><code>fitting_time_step</code> 越小输出的轨迹越密（比如 2.5ms → 400Hz），
-      但拟合计算量也更大。<code>fitting_deg</code> 越大曲线越贴合原始数据，但高了可能边界震荡。
+      <strong>🔑 调参：</strong><code>fitting_time_step</code> 越小轨迹越密（2.5ms → 400Hz），
+      <code>fitting_deg</code> 越大曲线越贴合原始数据，但高了可能边界震荡。<br>
+      使用 ThreadPoolExecutor 并行拟合关节（<code>max_joint_fitting_workers=14</code>）和手部（<code>max_gripper_fitting_workers=2</code>）。
     </div>
   </div>
 
   <div class="module" style="margin-bottom:0;">
     <span class="tag purple">B7</span>
     <div class="module-title">
-      Inter-chunk 过渡策略
-      <span class="badge code-ref">realtime_data_manager.py</span>
+      InterChunk（块间）过渡融合
+      <span class="badge code-ref">client/core/inter_chunk_fuser.py</span>
     </div>
 
     <div class="story-bubble">
       <div class="s-label">两段动作之间的"无缝换挡"</div>
       模型每推理一次产生一段 <span class="shape">64 步</span> 的动作（chunk）。
-      当新 chunk 到来时，必须<strong>平滑地</strong>从旧 chunk 的末尾过渡到新 chunk 的开头，
-      否则就会出现"机器人一下卡顿然后跳变"——就像开车换挡顿挫。
+      当新 chunk 到来时，<strong>InterChunkFuser</strong>负责<strong>平滑地</strong>从旧 chunk 的末尾过渡到新 chunk 的开头，
+      否则就会出现"机器人一下卡顿然后跳变"——就像开车换挡顿挫。<br>
+      支持 6 种策略：<span class="src-badge src-calc">search_action</span> <span class="src-badge src-calc">poly</span> <span class="src-badge src-calc">smooth_velocity</span> <span class="src-badge src-calc">min_jerk</span> <span class="src-badge src-calc">bspline</span> <span class="src-badge src-calc">sync</span>。
     </div>
 
     <table>
@@ -910,15 +985,27 @@ elif mean < min_threshold: gripper = 0.0
       </tr>
       <tr>
         <td><span class="src-badge src-calc">smooth_velocity</span></td>
-        <td>PD 控制器平滑速度</td>
+        <td>PD 控制器平滑速度（kp·e - kd·v）</td>
         <td>非常稳定，但会略微滞后</td>
         <td>高精度操作（如倒水到指定水量）</td>
+      </tr>
+      <tr>
+        <td><span class="src-badge src-calc">poly</span></td>
+        <td>多项式块间过渡</td>
+        <td>平滑度高</td>
+        <td>通用场景</td>
       </tr>
       <tr>
         <td><span class="src-badge src-calc">bspline</span></td>
         <td>B样条曲线拟合</td>
         <td>平滑度高，但计算开销大</td>
         <td>轨迹录制回放</td>
+      </tr>
+      <tr>
+        <td><span class="src-badge src-calc">sync</span></td>
+        <td>同步模式，阻塞等待推理完成</td>
+        <td>严格对齐无跳变</td>
+        <td>调试/测试</td>
       </tr>
     </table>
 
@@ -930,52 +1017,127 @@ elif mean < min_threshold: gripper = 0.0
 </div>
 
 <!-- ==================== B8 可视化运维 ==================== -->
-<div class="section-label"><span>B8 可视化与运维层：观测页面、日志观察与部署闭环</span></div>
+<div class="section-label"><span>B8 可视化与运维层：三套可视化系统 + 日志监控</span></div>
 
 <div class="module" style="border-left:4px solid var(--pink);">
   <span class="tag pink">B8</span>
   <div class="module-title">
-    可视化运维
-    <span class="badge code-ref">visual/ + websocket_server.py</span>
+    可视化运维（三套系统）
+    <span class="badge code-ref">visual/ + web_client/ + visualize_server.py</span>
   </div>
 
   <div class="story-bubble">
     <div class="s-label">倒水任务的"监控室"</div>
-    就像手术室里有各种监视器一样，vla_infer 提供 Web 可视化页面让你实时监控
-    G1 倒水过程中的每个环节：<em>3 路摄像头画面</em>、<em>动作曲线</em>、<em>推理延迟</em>等。
+    vla_infer 提供 <strong>三套可视化方案</strong> 让你实时监控 G1 倒水过程：<br>
+    <strong>visual/</strong>（旧）：传统 WebSocket 服务 + 独立 HTML 面板，可查看摄像头图像和图表<br>
+    <strong>web_client/</strong>（新）：模块化分离的 Web 客户端，通过 WebSocket 推送数据<br>
+    <strong>Client 内置 VisualizeServer</strong>：VLAClientAsync 启动时自动创建 WebSocket 服务，`_visualize_thread_fun` 按 266Hz 推送动作/状态数据<br>
+    三者共享同一数据源（RDM），但提供服务的方式不同。
   </div>
 
   <table>
     <tr><th>监控环节</th><th>入口</th><th>倒水任务中观察什么</th><th>异常信号</th></tr>
     <tr>
-      <td><span style="color:var(--green);font-weight:600;">Web 可视化</span></td>
+      <td><span style="color:var(--pink);font-weight:600;">VisualizeServer(内置)</span></td>
+      <td><span class="src-badge src-code">client/core/visualize_server.py</span></td>
+      <td>通过 WebSocket 推送 3 路图像 + 动作曲线 + 状态数据到 Web 前端</td>
+      <td>WebSocket 断连 / 数据推送延迟</td>
+    </tr>
+    <tr>
+      <td><span style="color:var(--green);font-weight:600;">Web 可视化(旧)</span></td>
       <td><span class="src-badge src-code">visual/index.html</span></td>
       <td>3 路图像是否持续更新、26 维动作曲线是否连续</td>
       <td>图像卡住 / 曲线有断崖状跳变</td>
     </tr>
     <tr>
+      <td><span style="color:var(--green);font-weight:600;">Web 可视化(新)</span></td>
+      <td><span class="src-badge src-code">web_client/server.py</span></td>
+      <td>模块化面板：图像/轨迹/控制/记录</td>
+      <td>模块无响应</td>
+    </tr>
+    <tr>
       <td><span style="color:var(--blue);font-weight:600;">Server 日志</span></td>
       <td><span class="src-badge src-code">run_server.py</span></td>
-      <td>Avg infer time、infer_count、是否有异常报错</td>
+      <td>Avg infer time、infer_count、并行解码时间</td>
       <td>推理耗时突增 / 多次 timeout</td>
     </tr>
     <tr>
       <td><span style="color:var(--orange);font-weight:600;">Client 日志</span></td>
       <td><span class="src-badge src-code">run_client.py</span></td>
-      <td>观测可用率、控制周期稳定性、丢帧数</td>
-      <td>观测 obs 为空 / 控制周期不稳</td>
+      <td>观测可用率、控制周期稳定性、task_progress</td>
+      <td>观测 obs 为空 / task_progress 不变化</td>
     </tr>
     <tr>
       <td><span style="color:var(--purple);font-weight:600;">ROS2 话题</span></td>
       <td><span class="src-badge src-code">ros2 topic echo</span></td>
-      <td>/joint_state 是否有连续输出、手部话题频率</td>
-      <td>话题中断 / 手部指令频繁跳变</td>
+      <td>/joint_state 连续输出、手部话题频率、限幅是否激活</td>
+      <td>话题中断 / 手部指令被防抖频繁抑制</td>
     </tr>
   </table>
 
   <div class="tip">
     <strong>🔑 部署闭环验证：</strong>在 Web 可视化看到 "图像流 → 推理 → 动作曲线 → 实际 G1 动作"
     一一对应的闭环，才算部署成功。任何一个环节断开，需要回看对应 B 块的细节。
+  </div>
+</div>
+
+<!-- ==================== B9 任务调度层 ==================== -->
+<div class="section-label"><span>B9 action_server 任务调度层：ROS2 ActionServer 分派框架</span></div>
+
+<div class="module" style="border-left:4px solid var(--orange);">
+  <span class="tag orange">B9</span>
+  <div class="module-title">
+    任务调度框架（ROS2 ActionServer）
+    <span class="badge code-ref">action_server/</span>
+  </div>
+
+  <div class="story-bubble">
+    <div class="s-label">倒水任务的"指挥官"</div>
+    当需要执行复杂的多步骤任务（如抓取→递送→放置→复位）时，
+    action_server 就像一个指挥官，把复合任务拆解成一系列原子操作
+    （init_grasp → grasp → deliver → place → reset），
+    每个原子操作由对应 handler 通过 VLA 推理完成。
+  </div>
+
+  <div class="card-grid" style="margin-top:0.5rem;">
+    <div style="background:var(--surface2);border-radius:8px;padding:0.6rem;">
+      <div style="font-weight:600;font-size:0.78rem;color:var(--orange);margin-bottom:0.3rem;">核心组件</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);line-height:1.7;">
+        <strong>action_dispatcher.py</strong>: ROS2 ActionServer，接收 ExecutionUnit action<br>
+        <strong>vla_context.py</strong>: VLA 上下文管理（ZMQ 客户端 + 机器人句柄）<br>
+        <strong>action_base.py</strong>: 抽象 handler 基类 + 错误码定义
+      </div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:0.6rem;">
+      <div style="font-weight:600;font-size:0.78rem;color:var(--orange);margin-bottom:0.3rem;">任务 Handler</div>
+      <div style="font-size:0.7rem;color:var(--text-dim);line-height:1.7;">
+        <strong>task_init_grasp.py</strong>: 初始抓取姿态<br>
+        <strong>task_grasp.py</strong>: 单手/双手抓取（含抓取检测）<br>
+        <strong>task_deliver.py</strong>: 递送物体<br>
+        <strong>task_place.py</strong>: 放置物体<br>
+        <strong>task_release.py</strong>: 释放物体<br>
+        <strong>task_reset.py</strong>: 机器人复位
+      </div>
+    </div>
+  </div>
+
+  <table style="margin-top:0.5rem;">
+    <tr><th>组件</th><th>功能</th><th>关键文件</th></tr>
+    <tr>
+      <td>GraspDetector</td>
+      <td>实时监控手部 set_angle/get_angle 差值判断抓取状态，thumb_bend 差 &gt; 200° 持续 0.5s 判定为抓取</td>
+      <td><span class="src-badge src-code">action_dispatcher.py</span></td>
+    </tr>
+    <tr>
+      <td>VLAContext</td>
+      <td>管理 VLA 推理的上下文（ZMQ 客户端 + 机器人实例），支持任务执行期间的暂停/恢复</td>
+      <td><span class="src-badge src-code">vla_context.py</span></td>
+    </tr>
+  </table>
+
+  <div class="tip">
+    <strong>⚠️ 依赖说明：</strong>action_server 依赖 ROS2 action 协议（message_center/ExecutionUnit.action），
+    需要先编译对应的 ROS2 消息包。task handler 通过 VLAContext 间接调用 VLAClientAsync 进行推理。
   </div>
 </div>
 
@@ -990,67 +1152,80 @@ elif mean < min_threshold: gripper = 0.0
       <td>① 传感器采集</td>
       <td>UnitreeG1Camera.py</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">原始传感器流</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[h,w,3]</span> + <span class="shape">state[26]</span></span></td>
-      <td>三路相机原始分辨率不同，state 从 /joint_state 拼装</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[800/848,640/848,3]</span> + <span class="shape">state[26]</span></span></td>
+      <td>head=800×640, hand=480×848；state 从 /joint_state 拼装 14臂+12手</td>
     </tr>
     <tr>
       <td>② 客户端预处理</td>
-      <td>vla_client.py</td>
+      <td>misc.py (resize/crop_and_resize)</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[h,w,3]</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[640,640,3]</span></span></td>
-      <td>pad_and_resize / crop_and_resize 统一到配置尺寸</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[480,640,3]</span></span></td>
+      <td>resize 保持宽高比到 vision.preprocess</td>
     </tr>
     <tr>
-      <td>③ 图像编码</td>
-      <td>_process_image()</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[640,640,3]</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">编码后字节流</span></span></td>
-      <td>JPEG 编码减小传输体积</td>
+      <td>③ 图像编码 + ZMQ</td>
+      <td>_observe_thread_fun + ZMQClient</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[480,640,3] RGB</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">pickle(data) + json(meta)</span></span></td>
+      <td>ThreadPoolExecutor 并行 JPEG 编码；DEALER 非阻塞发送</td>
     </tr>
     <tr>
       <td>④ ZMQ 传输</td>
-      <td>zmq_server.py</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">打包 obs+state+language</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">序列化字节</span></span></td>
-      <td>序列化方式：pickle</td>
+      <td>ZMQClient (DEALER) ↔ ZMQServer (ROUTER)</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">pickle+json 序列化</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">反序列化 obs+state+language</span></span></td>
+      <td>异步 DEALER/ROUTER，HWM=1</td>
     </tr>
     <tr>
-      <td>⑤ Server 解码</td>
-      <td>vla_server.py</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">序列化字节</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[640,640,3]</span></span></td>
-      <td>解码后恢复图像</td>
+      <td>⑤ Server 并行解码</td>
+      <td>vla_server.py (image_decode_executor)</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">编码后字节流</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[640,640,3] RGB</span></span></td>
+      <td>ThreadPoolExecutor 并行解码 + pad_and_resize(640)</td>
     </tr>
     <tr>
       <td>⑥ 模型 transform</td>
-      <td>gr00t_n1_5.py</td>
+      <td>model.data_config.transform()</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[640,640,3]</span></span></td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[224,224,3]</span></span></td>
       <td>VideoResize 缩放到模型训练尺寸</td>
     </tr>
     <tr>
       <td>⑦ 模型推理</td>
-      <td>ModelVLA.infer()</td>
+      <td>ModelVLA.infer()（10种类型）</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[1,3,224,224]×3</span> + <span class="shape">state[1,26]</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[1,64,26]</span></span></td>
-      <td>一次推理产生 64 步动作</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[1,64,26] + ext</span></span></td>
+      <td>异步回调 inference_callback；ext 包含 prob_progress 等</td>
     </tr>
     <tr>
-      <td>⑧ 轨迹拟合</td>
-      <td>trajectory_generator.py</td>
+      <td>⑧ IntraChunk 拟合</td>
+      <td>intra_chunk_smoother.py</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[64,26]</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[~266*3, 26]</span></span></td>
-      <td>3 秒的动作用 3.75ms 步长细化 ~800 帧</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[~800,26] + vel + acc</span></span></td>
+      <td>多项式拟合（关节）+ 均值窗口离散化（手部），3.75ms步长</td>
     </tr>
     <tr>
-      <td>⑨ Chunk 过渡</td>
-      <td>realtime_data_manager.py</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">新旧chunk各[64,26]</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">过渡段[过渡帧数,26]</span></span></td>
-      <td>min_jerk 从上一 chunk 末尾自然过渡到新的</td>
+      <td>⑨ InterChunk 过渡</td>
+      <td>inter_chunk_fuser.py</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">新旧chunk各[~800,26]</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">过渡后[~800,26]</span></span></td>
+      <td>min_jerk/search_action/poly/smooth_velocity/bspline/sync</td>
     </tr>
     <tr>
-      <td>⑩ ROS2 下发</td>
+      <td>⑩ 限幅保护</td>
+      <td>UnitreeG1Robot.py::_clamp_arm_actions</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[26] 动作向量</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">限幅后的[26]</span></span></td>
+      <td>相对delta限位 + 绝对安全限位兜底</td>
+    </tr>
+    <tr>
+      <td>⑪ ROS2 下发</td>
+      <td>UnitreeG1Robot.py</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[26]</span> × 控制周期</span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">4 个 ROS2 话题</span></span></td>
+      <td>26维拆为 7+7+6+6 分别发布（Jointpos+JointState）</td>
+    </tr>
+  </table>
       <td>UnitreeG1Robot.py</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[26]</span> × 控制周期</span></td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">4 个 ROS2 话题</span></span></td>
@@ -1145,7 +1320,7 @@ elif mean < min_threshold: gripper = 0.0
     <tr><th>参数</th><th>默认值</th><th>建议区间</th><th>调大效果</th><th>调小效果</th><th>关联 B 块</th></tr>
     <tr>
       <td><span class="src-badge src-config">observer.fps</span></td>
-      <td>配置项</td><td>10~30</td>
+      <td>30</td><td>10~30</td>
       <td>观测更密，负载更高</td><td>负载低，动作可能迟钝</td>
       <td>B5</td>
     </tr>
@@ -1187,7 +1362,7 @@ elif mean < min_threshold: gripper = 0.0
     </tr>
     <tr>
       <td><span class="src-badge src-config">preprocess_size</span></td>
-      <td>[640,640]</td><td>固定 640</td>
+      <td>[480,640]</td><td>固定 480×640</td>
       <td colspan="2">部署主链路固定，模型内自动到 224</td>
       <td>B2/B4</td>
     </tr>
@@ -1206,7 +1381,7 @@ elif mean < min_threshold: gripper = 0.0
     <span class="tag purple">公式</span>
     <div class="module-title">
       ① 关节多项式拟合
-      <span class="badge code-ref">trajectory_generator.py::_joint_traj_fitting</span>
+      <span class="badge code-ref">intra_chunk_smoother.py::process</span>
     </div>
     <div class="formula-box">
       q(t) = <span class="highlight">Σ</span> aₖ·tᵏ,  v(t) = dq/dt,  a(t) = d²q/dt²
@@ -1224,7 +1399,7 @@ a = polyder(polyder(coeff))(x)  <span style="color:var(--text-dim);"># → 加�
     <span class="tag purple">公式</span>
     <div class="module-title">
       ② 手部均值窗 + 阈值离散化
-      <span class="badge code-ref">trajectory_generator.py::_gripper_traj_fitting</span>
+      <span class="badge code-ref">intra_chunk_smoother.py::_gripper_traj_fitting</span>
     </div>
     <div class="formula-box">
       ḡ(i) = mean(g[i-k : i+k]),  if ḡ &gt; max_th → 1,  if ḡ &lt; min_th → 0
@@ -1240,7 +1415,7 @@ elif mean &lt; min_threshold: gripper = <span class="hl-red">0.0</span>  <span s
     <span class="tag purple">公式</span>
     <div class="module-title">
       ③ Smooth Velocity (PD 平滑)
-      <span class="badge code-ref">realtime_data_manager.py::_smooth_velocity_transition</span>
+      <span class="badge code-ref">inter_chunk_fuser.py</span>
     </div>
     <div class="formula-box">
       acc = kp·(target-pos) - kd·vel,  vel = clip(vel+acc·dt),  pos += vel·dt
@@ -1259,7 +1434,7 @@ for each step:
     <span class="tag purple">公式</span>
     <div class="module-title">
       ④ Min-Jerk / B-Spline / Search
-      <span class="badge code-ref">realtime_data_manager.py</span>
+      <span class="badge code-ref">inter_chunk_fuser.py</span>
     </div>
     <div class="formula-box">
       min J = <span class="highlight">∫</span> (d³x/dt³)² dt  <span style="color:var(--text-dim);">（Min-Jerk）</span><br>
@@ -1285,7 +1460,7 @@ for each step:
     <tr>
       <td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">动作抖动/突变</span></td>
       <td>inter_chunk_mode 不适配或平滑参数过激</td>
-      <td><span class="src-badge src-code">realtime_data_manager.py</span></td>
+      <td><span class="src-badge src-code">inter_chunk_fuser.py</span></td>
       <td>先对比 min_jerk 与 smooth_velocity，再调 search_length/fitting_time_step</td>
     </tr>
     <tr>
@@ -1327,11 +1502,11 @@ for each step:
   <div class="glossary-grid">
     <div class="glossary-item">
       <div class="term"><span class="glossary-term">ZMQ<span class="tooltip">ZeroMQ，轻量级高性能消息队列库，用于 Client-Server 通信</span></span></div>
-      <div class="def">Client-Server 间的通信框架，使用 REQ/REP 模式同步请求-应答</div>
+      <div class="def">Client-Server 间的通信框架，使用 DEALER/ROUTER 模式异步请求-应答（支持 multipart 消息 + 并行请求）</div>
     </div>
     <div class="glossary-item">
-      <div class="term"><span class="glossary-term">RDM<span class="tooltip">Realtime Data Manager，四线程间共享的环形缓冲区数据管理</span></span></div>
-      <div class="def">实时数据管理器，四线程通过它共享观测、动作、轨迹等数据</div>
+      <div class="term"><span class="glossary-term">RDM<span class="tooltip">Realtime Data Manager，五线程间共享数据的中心存储</span></span></div>
+      <div class="def">实时数据管理器，五线程通过它共享观测、动作、轨迹等数据</div>
     </div>
     <div class="glossary-item">
       <div class="term"><span class="glossary-term">Action Chunk<span class="tooltip">模型一次推理输出的一整段连续动作序列</span></span></div>
@@ -1348,6 +1523,26 @@ for each step:
     <div class="glossary-item">
       <div class="term"><span class="glossary-term">GR00T N1.5<span class="tooltip">NVIDIA 发布的通用机器人 VLA 基础模型</span></span></div>
       <div class="def">NVIDIA 通用机器人基础模型，vla_infer 默认加载的推理模型</div>
+    </div>
+    <div class="glossary-item">
+      <div class="term"><span class="glossary-term">DEALER/ROUTER<span class="tooltip">ZMQ 异步通信模式，Client 用 DEALER，Server 用 ROUTER</span></span></div>
+      <div class="def">相对于 REQ/REP 同步模式，DEALER/ROUTER 支持并行请求、非阻塞发送和 multipart 消息（pickle data + JSON meta）</div>
+    </div>
+    <div class="glossary-item">
+      <div class="term"><span class="glossary-term">IntraChunk<span class="tooltip">chunk 内部的轨迹拟合/平滑</span></span></div>
+      <div class="def">对单个 action chunk [64,26] 做多项式拟合（关节）或均值窗口离散化（手部），输出 [~800,26] @ 266Hz</div>
+    </div>
+    <div class="glossary-item">
+      <div class="term"><span class="glossary-term">VisualizeServer<span class="tooltip">Client 内置的 WebSocket 可视化服务</span></span></div>
+      <div class="def">VLAClientAsync 启动时自动创建，`_visualize_thread_fun` 按 266Hz 推送动作/状态到 Web 前端</div>
+    </div>
+    <div class="glossary-item">
+      <div class="term"><span class="glossary-term">TaskLanguageManager<span class="tooltip">根据 prob_progress 自动切换语言指令</span></span></div>
+      <div class="def">读取 `language_cmd.json` 中的多语言指令集，根据推理输出的 prob_progress 值自动选择当前阶段指令</div>
+    </div>
+    <div class="glossary-item">
+      <div class="term"><span class="glossary-term">LeRobotDatasetWriter<span class="tooltip">HuggingFace LeRobot 格式数据录制</span></span></div>
+      <div class="def">将部署运行的观测/动作数据录制为标准 LeRobot 格式，可用于后续训练或回放分析</div>
     </div>
   </div>
 </div>
@@ -1436,10 +1631,9 @@ python run_client.py --robots_type unitree_g1 --inter_chunk_mode min_jerk
     <div class="code-block" style="font-size:0.72rem;">
 python run_client.py \
   --robots_type unitree_g1 \
-  --preprocess pad_and_resize \
-  --preprocess_size 640 640 \
+  --intra_chunk_mode fitting \
   --inter_chunk_mode min_jerk \
-  --fps 20
+  --fps 30
     </div>
   </div>
 
@@ -1452,8 +1646,8 @@ python run_client.py \
 ros2 topic list | grep -E "head|left|right|joint|hand"
 
 ros2 topic echo /joint_state --once
-ros2 topic echo /left_hand/get_angle --once
-ros2 topic echo /right_hand/get_angle --once
+ros2 topic echo /left_hand_cmd --once
+ros2 topic echo /right_hand_cmd --once
     </div>
   </div>
 
