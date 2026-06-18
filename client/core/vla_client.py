@@ -259,7 +259,7 @@ class VLAClientAsync():
                 # Decide whether to change language instruction based on the task progress predicted by the VLA model
                 data = self._process_data(observations)
                 self.realtime_data_manager.add_observe_data(data)
-            time.sleep(0.001)
+            # time.sleep(0.001)
     
     def _inference_thread_fun(self):
         while self.is_running:
