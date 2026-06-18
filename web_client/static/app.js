@@ -123,6 +123,65 @@ function updateTaskProgress(rawProgress, subTaskId = null) {
   fillEl.style.width = `${(clamped * 100).toFixed(1)}%`;
   valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
   renderSubTask(subTaskId);
+  handleAutoModeCompletion(clamped, subTaskId);
+}
+
+async function handleAutoModeCompletion(progress, subTaskId = null) {
+  const autoChk = $('chk-lang-auto-mode');
+  if (!autoChk || !autoChk.checked) return;
+  if (!App.isRunning || App.isPaused) return;
+
+  if (!App.langAuto || typeof App.langAuto !== 'object') App.langAuto = {};
+  if (App.langAuto.completionInFlight) return;
+
+  const taskSel = $('lang-task-select');
+  const taskName = taskSel ? taskSel.value : null;
+  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  if (!Array.isArray(subtasks) || subtasks.length === 0) return;
+
+  const latestSubTaskId = Number(subTaskId);
+  if (!Number.isFinite(latestSubTaskId)) return;
+
+  const lastSubTaskId = subtasks.length - 1;
+  const thresholdRaw = App.config && App.config.language ? App.config.language.task_progress_threshold : 0.9;
+  const threshold = Number.isFinite(Number(thresholdRaw)) ? Number(thresholdRaw) : 0.9;
+
+  if (latestSubTaskId !== lastSubTaskId || progress < threshold) return;
+
+  App.langAuto.completionInFlight = true;
+  try {
+    const patch = { 'language.sub_task_id': 0 };
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const display = $('conf-path-display');
+    const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+    if (cfgPath) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: cfgPath }),
+      });
+    }
+
+    if (typeof applyLangConfigSelection === 'function') {
+      applyLangConfigSelection(true);
+    }
+
+    await apiFetch('/api/client/pause', {
+      method: 'POST',
+      timeoutMs: 3000,
+      suppressAbortToast: true,
+    });
+
+    toast('Auto Mode reached last sub-task, reset to 0 and paused.', 'info', 2600);
+  } catch (_) {
+    // no-op: apiFetch already handles toasts
+  } finally {
+    App.langAuto.completionInFlight = false;
+  }
 }
 
 function renderSubTask(subTaskId = null) {
