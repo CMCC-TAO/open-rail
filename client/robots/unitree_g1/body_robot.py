@@ -130,17 +130,11 @@ class RobotBody(RobotBase):
                 return
         target_pose = np.array(target_pose)
 
-        # 使用 ruckig 平滑规划前 14 维（左右臂）
-        # 重试读取观测：最多等待 1s，确保取到有效当前状态再规划轨迹
-        current_obs = None
-        for _ in range(10):
-            current_obs = self.retrieve_observation()
-            if current_obs is not None:
-                break
-            time.sleep(0.1)
+        # 获取当前状态（优先级：缓存 → ROS2订阅 → retrieve_observation）
+        current_state = self._get_reset_current_state()
 
-        if current_obs is not None:
-            current_positions = current_obs["obs.state"][:14]
+        if current_state is not None:
+            current_positions = current_state[:14]
             target_positions = target_pose[:14]
             dis = np.abs(current_positions - target_positions)
             if np.any(dis > np.deg2rad(0.01)):
@@ -151,8 +145,8 @@ class RobotBody(RobotBase):
                 )
                 n_points = len(trajs)
                 # 获取手部当前状态用于线性插值
-                left_hand_current = current_obs["obs.state"][14:20]
-                right_hand_current = current_obs["obs.state"][20:26]
+                left_hand_current = current_state[14:20]
+                right_hand_current = current_state[20:26]
                 left_hand_target = target_pose[14:20]
                 right_hand_target = target_pose[20:26]
 
@@ -168,7 +162,20 @@ class RobotBody(RobotBase):
             else:
                 self.robot.send_robot_action(target_pose)
         else:
-            self.robot.send_robot_action(target_pose)
+            # 连当前状态都获取不到时，使用默认零位做线性插值兜底
+            # （避免一步跳变到目标位姿导致机器人"飞"起来）
+            print("[WARN] reset_robot: cannot get current state, using linear interpolation from zero")
+            current_positions = np.zeros(14)
+            target_positions = target_pose[:14]
+            n_steps = 50
+            for i in range(1, n_steps + 1):
+                t = i / n_steps
+                tmp = np.zeros(26)
+                tmp[:14] = current_positions + t * (target_positions - current_positions)
+                tmp[14:20] = target_pose[14:20] * t
+                tmp[20:26] = target_pose[20:26] * t
+                self.robot.send_robot_action(tmp)
+                time.sleep(0.02)
 
         # 设置手部初始状态
         self.robot.current_left_hand_state = target_pose[14:20]
@@ -176,6 +183,55 @@ class RobotBody(RobotBase):
 
         time.sleep(1.0)
         print("Unitree G1 reset done")
+
+    def _get_reset_current_state(self) -> np.ndarray | None:
+        """获取当前 26 维状态，不依赖相机
+
+        优先级:
+          1. self.current_state（VLA 观察线程缓存）
+          2. 直接从 self.robot 的 ROS2 订阅缓存读取
+          3. retrieve_observation() 回退（需要相机）
+        """
+        # 优先级 1: 使用 VLA 缓存的状态
+        if self.current_state is not None:
+            return self.current_state.copy()
+
+        # 优先级 2: 直接从 ROS2 缓存读取（不依赖相机）
+        try:
+            robot = self.robot
+            la = robot.latest_left_arm
+            ra = robot.latest_right_arm
+            lh = robot.latest_left_hand
+            rh = robot.latest_right_hand
+            if all(x is not None for x in (la, ra, lh, rh)):
+                la_msg, _ = la
+                ra_msg, _ = ra
+                lh_msg, _ = lh
+                rh_msg, _ = rh
+                if (la_msg and ra_msg and lh_msg and rh_msg
+                        and la_msg.position and ra_msg.position
+                        and lh_msg.position and rh_msg.position):
+                    state = np.array(
+                        list(la_msg.position)
+                        + list(ra_msg.position)
+                        + list(lh_msg.position)
+                        + list(rh_msg.position),
+                        dtype=float,
+                    )
+                    self.current_state = state.copy()
+                    return state
+        except Exception:
+            pass
+
+        # 优先级 3: 回退 retrieve_observation（需要相机数据）
+        for _ in range(10):
+            obs = self.retrieve_observation()
+            if obs is not None and "obs.state" in obs:
+                state = obs["obs.state"]
+                self.current_state = state
+                return state
+            time.sleep(0.1)
+        return None
 
     # ==================================================================
     # 获取观测（图像 + 对齐后的关节角）

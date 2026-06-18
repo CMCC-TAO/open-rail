@@ -91,15 +91,49 @@ class DeliverHandler(AbstractTaskHandler):
     # ================================================================
 
     def _get_current_full_state(self, robot_body) -> np.ndarray | None:
-        """获取当前 26 维完整状态 [左臂7, 右臂7, 左手6, 右手6]"""
-        # 优先使用缓存的状态
+        """获取当前 26 维完整状态 [左臂7, 右臂7, 左手6, 右手6]
+
+        优先级:
+          1. robot_body.current_state（由 VLA 观察线程缓存）
+          2. 直接从 robot_body.robot 的 ROS2 订阅缓存读取（不依赖相机）
+          3. retrieve_observation() 回退（需要相机数据）
+        """
+        # 优先级 1: 使用 VLA 缓存的状态
         try:
             cs = getattr(robot_body, 'current_state', None)
             if cs is not None:
                 return cs.copy()
         except Exception:
             pass
-        # 回退到 retrieve_observation（需要相机数据）
+
+        # 优先级 2: 直接从 ROS2 缓存读取关节状态（不依赖相机）
+        try:
+            robot = robot_body.robot
+            la = robot.latest_left_arm
+            ra = robot.latest_right_arm
+            lh = robot.latest_left_hand
+            rh = robot.latest_right_hand
+            if all(x is not None for x in (la, ra, lh, rh)):
+                la_msg, _ = la
+                ra_msg, _ = ra
+                lh_msg, _ = lh
+                rh_msg, _ = rh
+                if (la_msg and ra_msg and lh_msg and rh_msg
+                        and la_msg.position and ra_msg.position
+                        and lh_msg.position and rh_msg.position):
+                    state = np.array(
+                        list(la_msg.position)
+                        + list(ra_msg.position)
+                        + list(lh_msg.position)
+                        + list(rh_msg.position),
+                        dtype=float,
+                    )
+                    robot_body.current_state = state.copy()
+                    return state
+        except Exception:
+            pass
+
+        # 优先级 3: 回退 retrieve_observation（需要相机数据）
         for _ in range(20):
             obs = robot_body.retrieve_observation()
             if obs is not None and "obs.state" in obs:

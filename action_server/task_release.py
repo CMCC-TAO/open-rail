@@ -38,6 +38,8 @@ from action_server.action_base import (
 # 时间常量
 # ==============================================
 HAND_RELEASE_HOLD_TIME = 1.0  # 手部松开后保持时长（秒）
+HAND_RELEASE_STEPS = 10       # 渐变释放步数（均匀插值，每步40ms，共~0.4s渐变）
+HAND_RELEASE_STEP_INTERVAL = 0.04  # 每步间隔（秒）
 
 
 class ReleaseHandler(AbstractTaskHandler):
@@ -72,15 +74,49 @@ class ReleaseHandler(AbstractTaskHandler):
     # ================================================================
 
     def _get_current_full_state(self, robot_body) -> np.ndarray | None:
-        """获取当前 26 维完整状态 [左臂7, 右臂7, 左手6, 右手6]"""
-        # 优先使用缓存的状态
+        """获取当前 26 维完整状态 [左臂7, 右臂7, 左手6, 右手6]
+
+        优先级:
+          1. robot_body.current_state（由 VLA 观察线程缓存）
+          2. 直接从 robot_body.robot 的 ROS2 订阅缓存读取（不依赖相机）
+          3. retrieve_observation() 回退（需要相机数据）
+        """
+        # 优先级 1: 使用 VLA 缓存的状态
         try:
             cs = getattr(robot_body, 'current_state', None)
             if cs is not None:
                 return cs.copy()
         except Exception:
             pass
-        # 回退到 retrieve_observation（需要相机数据）
+
+        # 优先级 2: 直接从 ROS2 缓存读取关节状态（不依赖相机）
+        try:
+            robot = robot_body.robot
+            la = robot.latest_left_arm
+            ra = robot.latest_right_arm
+            lh = robot.latest_left_hand
+            rh = robot.latest_right_hand
+            if all(x is not None for x in (la, ra, lh, rh)):
+                la_msg, _ = la
+                ra_msg, _ = ra
+                lh_msg, _ = lh
+                rh_msg, _ = rh
+                if (la_msg and ra_msg and lh_msg and rh_msg
+                        and la_msg.position and ra_msg.position
+                        and lh_msg.position and rh_msg.position):
+                    state = np.array(
+                        list(la_msg.position)
+                        + list(ra_msg.position)
+                        + list(lh_msg.position)
+                        + list(rh_msg.position),
+                        dtype=float,
+                    )
+                    robot_body.current_state = state.copy()
+                    return state
+        except Exception:
+            pass
+
+        # 优先级 3: 回退 retrieve_observation（需要相机数据）
         for _ in range(20):
             obs = robot_body.retrieve_observation()
             if obs is not None and "obs.state" in obs:
@@ -93,7 +129,9 @@ class ReleaseHandler(AbstractTaskHandler):
         self, robot_body, hand_side: str,
         goal_handle, hold_duration: float,
     ) -> None:
-        """松手：将手部 6 个关节控制量设为 0，手臂保持不变，保持指定时间
+        """松手：将手部 6 个关节控制量渐变归零，手臂保持不变，保持指定时间
+
+        使用均匀插值分步释放，避免一步归零导致手部快速坠落。
 
         Args:
             hand_side: 'left' / 'right' / 'both'
@@ -102,16 +140,24 @@ class ReleaseHandler(AbstractTaskHandler):
         if current_state is None:
             return
 
-        action = current_state.copy()
+        action_start = current_state.copy()
+        action_end = current_state.copy()
         zero_hand = np.zeros(6)
 
         if hand_side in ('left', 'both'):
-            action[14:20] = zero_hand
+            action_end[14:20] = zero_hand
         if hand_side in ('right', 'both'):
-            action[20:26] = zero_hand
+            action_end[20:26] = zero_hand
 
         side_label = {'left': '左手', 'right': '右手', 'both': '双手'}.get(hand_side, hand_side)
-        robot_body.control_robot(action)
+
+        # 渐变释放：均匀插值 HAND_RELEASE_STEPS 步
+        for step in range(1, HAND_RELEASE_STEPS + 1):
+            alpha = step / HAND_RELEASE_STEPS
+            action = action_start * (1 - alpha) + action_end * alpha
+            robot_body.control_robot(action)
+            time.sleep(HAND_RELEASE_STEP_INTERVAL)
+
         send_vla_feedback(goal_handle, 50, f"{side_label}已松开，保持 {hold_duration:.0f}s...")
         time.sleep(hold_duration)
 
