@@ -39,6 +39,7 @@ class RobotBody(RobotBase):
         self.current_episode_idx = 0
         self.currt_index = 0
         self.period = 1.0 / 30.0
+        self.last_timestamp = time.time()
         self.video_caps = {}
         self._io_lock = threading.Lock()
 
@@ -171,7 +172,6 @@ class RobotBody(RobotBase):
         if self.dataset is None or len(self.dataset) == 0:
             return None
 
-        start_time = time.time()
 
         with self._io_lock:
             if self.currt_index >= len(self.dataset):
@@ -231,9 +231,10 @@ class RobotBody(RobotBase):
 
             self.currt_index += 1
 
-        end_time = time.time()
-        if end_time - start_time < self.period:
-            time.sleep(self.period - (end_time - start_time))
+        current_timestamp = time.time()
+        if current_timestamp - self.last_timestamp < self.period:
+            time.sleep(self.period - (current_timestamp - self.last_timestamp))
+        self.last_timestamp = time.time()
         return result
 
     def close(self):
