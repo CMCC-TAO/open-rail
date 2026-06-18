@@ -153,10 +153,9 @@ class DeliverHandler(AbstractTaskHandler):
     ) -> np.ndarray | None:
         """线性插值手臂到目标位姿，手掌保持当前值不变
 
-        流程:
-          1. 禁用相对限幅（允许大幅规划）
-          2. 逐帧线性插值，每帧发送完整 26 维动作
-          3. 恢复相对限幅
+        注：delta 相对限幅保持开启，插值每步变化很小
+            （~0.01 rad，远小于 0.15~0.50 的限幅阈值），
+            不会触发裁剪，但能防止意外跳变。
 
         Args:
             left_target:  左臂 7 维目标位姿，None 表示不动
@@ -173,32 +172,26 @@ class DeliverHandler(AbstractTaskHandler):
         num_steps = max(1, int(duration / CONTROL_INTERVAL))
         actual_interval = duration / num_steps
 
-        # 保存相对限幅开关并关闭（允许大幅轨迹规划）
         robot = robot_body.robot
-        orig_relative = getattr(robot, 'enable_relative_clamp', True)
-        robot.enable_relative_clamp = False
 
-        try:
-            for step in range(num_steps):
-                t = (step + 1) / num_steps  # 0 → 1
+        for step in range(num_steps):
+            t = (step + 1) / num_steps  # 0 → 1
 
-                action = current_state.copy()
-                if left_target is not None:
-                    action[0:7] = current_state[0:7] + t * (left_target - current_state[0:7])
-                if right_target is not None:
-                    action[7:14] = current_state[7:14] + t * (right_target - current_state[7:14])
-                # 手掌保持 current_state 中的值不变
+            action = current_state.copy()
+            if left_target is not None:
+                action[0:7] = current_state[0:7] + t * (left_target - current_state[0:7])
+            if right_target is not None:
+                action[7:14] = current_state[7:14] + t * (right_target - current_state[7:14])
+            # 手掌保持 current_state 中的值不变
 
-                robot.send_robot_action(action)
+            robot.send_robot_action(action)
 
-                # 进度反馈
-                pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
-                send_vla_feedback(goal_handle, pct,
-                                  f"手臂过渡中... {t * 100:.0f}%")
+            # 进度反馈
+            pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
+            send_vla_feedback(goal_handle, pct,
+                              f"手臂过渡中... {t * 100:.0f}%")
 
-                time.sleep(actual_interval)
-        finally:
-            robot.enable_relative_clamp = orig_relative
+            time.sleep(actual_interval)
 
         return action  # 返回最后一帧动作（含目标手臂位姿 + 原始手掌值）
 
@@ -227,15 +220,9 @@ class DeliverHandler(AbstractTaskHandler):
         if hand_side in ('right', 'both'):
             action[20:26] = zero_hand
 
-        # 临时关闭相对限幅，避免 clamp 对比 bag 数据导致手臂抖动
-        robot = robot_body.robot
-        orig_clamp = getattr(robot, 'enable_relative_clamp', True)
-        robot.enable_relative_clamp = False
-
+        # 注：只修改手掌[14:26]，手臂不变，delta 限幅不会触发
         side_label = {'left': '左手', 'right': '右手', 'both': '双手'}.get(hand_side, hand_side)
         robot_body.control_robot(action)
-
-        robot.enable_relative_clamp = orig_clamp
         send_vla_feedback(goal_handle, 95, f"{side_label}已打开，保持 {hold_duration:.0f}s...")
         time.sleep(hold_duration)
 

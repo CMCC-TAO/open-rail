@@ -163,28 +163,23 @@ class ResetHandler(AbstractTaskHandler):
         actual_interval = duration / num_steps
 
         robot = robot_body.robot
-        orig_relative = getattr(robot, 'enable_relative_clamp', True)
-        robot.enable_relative_clamp = False
 
-        try:
-            for step in range(num_steps):
-                t = (step + 1) / num_steps
+        for step in range(num_steps):
+            t = (step + 1) / num_steps
 
-                action = current_state.copy()
-                if left_target is not None:
-                    action[0:7] = current_state[0:7] + t * (left_target - current_state[0:7])
-                if right_target is not None:
-                    action[7:14] = current_state[7:14] + t * (right_target - current_state[7:14])
+            action = current_state.copy()
+            if left_target is not None:
+                action[0:7] = current_state[0:7] + t * (left_target - current_state[0:7])
+            if right_target is not None:
+                action[7:14] = current_state[7:14] + t * (right_target - current_state[7:14])
 
-                robot.send_robot_action(action)
+            robot.send_robot_action(action)
 
-                pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
-                send_vla_feedback(goal_handle, pct,
-                                  f"手臂复位中... {t * 100:.0f}%")
+            pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
+            send_vla_feedback(goal_handle, pct,
+                              f"手臂复位中... {t * 100:.0f}%")
 
-                time.sleep(actual_interval)
-        finally:
-            robot.enable_relative_clamp = orig_relative
+            time.sleep(actual_interval)
 
         return current_state
 

@@ -51,13 +51,11 @@ class InitGraspHandler(AbstractTaskHandler):
             self.send_feedback(goal_handle, 10, "正在确认机器人连接...")
 
             # ===== 步骤 2: 过渡到准备抓取姿态 =====
-            # 关闭相对限幅，让大范围期望轨迹可以完整下发
-            robot_body.robot.enable_relative_clamp = False
-            try:
-                self.send_feedback(goal_handle, 30, "正在过渡到准备抓取姿态...")
-                robot_body.reset_robot(target_pose=init_grasp_pose)
-            finally:
-                robot_body.robot.enable_relative_clamp = True
+            # 注：delta 相对限幅保持开启（0.15~0.50 rad），
+            #     ruckig 轨迹每步变化 ~0.01 rad（50Hz × 0.5 rad/s），
+            #     远小于限幅阈值，不会触发裁剪，但能防止意外跳变。
+            self.send_feedback(goal_handle, 30, "正在过渡到准备抓取姿态...")
+            robot_body.reset_robot(target_pose=init_grasp_pose)
 
             # ===== 步骤 3: 完成 =====
             context._initialized = True

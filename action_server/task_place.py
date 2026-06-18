@@ -236,32 +236,28 @@ class PlaceHandler(AbstractTaskHandler):
         actual_interval = TRANSITION_DURATION / num_steps
 
         robot = robot_body.robot
-        orig_relative = getattr(robot, 'enable_relative_clamp', True)
-        robot.enable_relative_clamp = False
-        try:
-            for step in range(num_steps):
-                t = (step + 1) / num_steps
-                action = current_state.copy()
 
-                if which_arm in ("left", "both"):
-                    action[0:ARM_DIM] = (
-                        current_state[0:ARM_DIM]
-                        + t * (first_action[0:ARM_DIM] - current_state[0:ARM_DIM])
-                    )
-                if which_arm in ("right", "both"):
-                    action[ARM_DIM:2 * ARM_DIM] = (
-                        current_state[ARM_DIM:2 * ARM_DIM]
-                        + t * (first_action[ARM_DIM:2 * ARM_DIM] - current_state[ARM_DIM:2 * ARM_DIM])
-                    )
-                # 手掌保持当前值，避免中途松开
-                robot.send_robot_action(action)
+        for step in range(num_steps):
+            t = (step + 1) / num_steps
+            action = current_state.copy()
 
-                pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
-                send_vla_feedback(goal_handle, pct,
-                                  f"过渡到轨迹起始... {t * 100:.0f}%")
-                time.sleep(actual_interval)
-        finally:
-            robot.enable_relative_clamp = orig_relative
+            if which_arm in ("left", "both"):
+                action[0:ARM_DIM] = (
+                    current_state[0:ARM_DIM]
+                    + t * (first_action[0:ARM_DIM] - current_state[0:ARM_DIM])
+                )
+            if which_arm in ("right", "both"):
+                action[ARM_DIM:2 * ARM_DIM] = (
+                    current_state[ARM_DIM:2 * ARM_DIM]
+                    + t * (first_action[ARM_DIM:2 * ARM_DIM] - current_state[ARM_DIM:2 * ARM_DIM])
+                )
+            # 手掌保持当前值，避免中途松开
+            robot.send_robot_action(action)
+
+            pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
+            send_vla_feedback(goal_handle, pct,
+                              f"过渡到轨迹起始... {t * 100:.0f}%")
+            time.sleep(actual_interval)
 
         return True
 
@@ -274,28 +270,27 @@ class PlaceHandler(AbstractTaskHandler):
         """回放完整轨迹
 
         只控制指定手臂跟随轨迹，非活跃手臂保持当前位置，手掌保持当前值。
+
+        注：delta 相对限幅保持开启，parquet 轨迹为 50Hz 录制，
+            每帧变化很小，不会触发裁剪，但能防止意外跳变。
         """
         robot = robot_body.robot
-        orig_relative = getattr(robot, 'enable_relative_clamp', True)
-        robot.enable_relative_clamp = False
-        try:
-            n_frames = len(trajectory)
-            for i, frame in enumerate(trajectory):
-                action = current_state.copy()
-                # 手臂跟随轨迹
-                if which_arm in ("left", "both"):
-                    action[0:ARM_DIM] = frame[0:ARM_DIM]
-                if which_arm in ("right", "both"):
-                    action[ARM_DIM:2 * ARM_DIM] = frame[ARM_DIM:2 * ARM_DIM]
-                # 手掌保持当前值（末尾统一打开）
-                robot.send_robot_action(action)
 
-                pct = start_progress + int((end_progress - start_progress) * (i + 1) / n_frames)
-                send_vla_feedback(goal_handle, pct,
-                                  f"轨迹回放中... {i + 1}/{n_frames}")
-                time.sleep(CONTROL_INTERVAL)
-        finally:
-            robot.enable_relative_clamp = orig_relative
+        n_frames = len(trajectory)
+        for i, frame in enumerate(trajectory):
+            action = current_state.copy()
+            # 手臂跟随轨迹
+            if which_arm in ("left", "both"):
+                action[0:ARM_DIM] = frame[0:ARM_DIM]
+            if which_arm in ("right", "both"):
+                action[ARM_DIM:2 * ARM_DIM] = frame[ARM_DIM:2 * ARM_DIM]
+            # 手掌保持当前值（末尾统一打开）
+            robot.send_robot_action(action)
+
+            pct = start_progress + int((end_progress - start_progress) * (i + 1) / n_frames)
+            send_vla_feedback(goal_handle, pct,
+                              f"轨迹回放中... {i + 1}/{n_frames}")
+            time.sleep(CONTROL_INTERVAL)
 
     def _open_hand_and_verify(
         self, robot_body, hand_side: str,
