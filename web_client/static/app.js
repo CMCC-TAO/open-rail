@@ -213,24 +213,36 @@ function renderSubTask(subTaskId = null) {
     return;
   }
 
+  const targetIdx = Number(subTaskId);
+  if (!Number.isFinite(targetIdx)) return;
+
   let curIdx = parseInt(subtaskSel.value, 10);
   if (!Number.isFinite(curIdx) || curIdx < 0) curIdx = 0;
 
-  if (subTaskId === curIdx) {
-    // console.log('renderSubTask no-op: target subTaskId equals current', { subTaskId, curIdx });
+  if (targetIdx < 0 || targetIdx >= subtasks.length) {
+    console.warn('renderSubTask aborted: subTaskId out of range', { subTaskId: targetIdx, length: subtasks.length });
     return;
   }
 
-  if (subTaskId < 0 || subTaskId >= subtasks.length) {
-    console.warn('renderSubTask aborted: subTaskId out of range', { subTaskId, length: subtasks.length });
+  if (!App.config || typeof App.config !== 'object') App.config = {};
+  if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+  App.config.language.task_id = taskName;
+  App.config.language.sub_task_id = targetIdx;
+
+  if (typeof refreshLangAppliedMarkers === 'function') {
+    refreshLangAppliedMarkers(taskName, targetIdx);
+  }
+
+  if (targetIdx === curIdx) {
+    // console.log('renderSubTask no-op: target subTaskId equals current', { targetIdx, curIdx });
     return;
   }
 
-  // console.log('renderSubTask switching subtask', { from: curIdx, to: subTaskId, taskName, subtaskText: subtasks[subTaskId] });
-  subtaskSel.value = String(subTaskId);
+  // console.log('renderSubTask switching subtask', { from: curIdx, to: targetIdx, taskName, subtaskText: subtasks[targetIdx] });
+  subtaskSel.value = String(targetIdx);
   subtaskSel.dispatchEvent(new Event('change'));
 
-  const lang = subtasks[subTaskId];
+  const lang = subtasks[targetIdx];
   if (typeof lang === 'string' && lang.trim()) {
     textEl.value = lang;
     sendLanguageSet(lang);
