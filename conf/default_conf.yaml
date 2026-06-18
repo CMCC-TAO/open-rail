@@ -6,7 +6,7 @@ controller:
   period: 3.75
   wait_time: 250
 inter_chunk:
-  inter_chunk_mode: search_action
+  inter_chunk_mode: min_jerk
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
@@ -40,7 +40,7 @@ language:
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: tea_master
-  task_progress_threshold: 0.95
+  task_progress_threshold: 0.99
   task_progress_win_size: 10
 observer:
   fps: 30
@@ -94,13 +94,13 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      train: 0:3
     state_shape: 20
     total_chunks: 1
-    total_episodes: 12
-    total_frames: 2732
-    total_tasks: 1
-    total_videos: 36
+    total_episodes: 4
+    total_frames: 3424
+    total_tasks: 4
+    total_videos: 12
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false
@@ -117,7 +117,12 @@ robots:
         end: 16
         policy: stepwise
         start: 14
-    camera: {}
+    camera:
+      names:
+        hand_left: hand_left
+        hand_right: hand_right
+        head: head
+      ref: head
     gripper_freq: 40
     hand_type: gripper
     head_freq: 40
@@ -141,12 +146,12 @@ robots:
     - -0.7299
     - -1.4929
     - 0.1873
-    - 0.0
-    - 0.0
+    - 0
+    - 0
     - 0.0
     - 0.4363
-    - 0.2967
-    - 20.0
+    - 0.4012
+    - 27.0
     - 0.0
     - 0.0
   mock:
@@ -165,8 +170,8 @@ robots:
         hand_right: observation.images.hand_right
         head: observation.images.top_head
       ref: head
-    dataset_path: /home/robot/Downloads/task_39_only1
-  type: mock
+    dataset_path: /home/robot/Music/task_39_only1
+  type: a2d
 vision:
   history_frame: false
   preprocess:
@@ -189,7 +194,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
+    - 7
     source:
     - ActionRaw
     - ActionFitted

@@ -19,6 +19,7 @@ class RobotBody(RobotBase):
         if not hasattr(self.cfg, 'action_layout'):
             self.logger.error("Parameter action_layout is required, please check the configuration.")
         self.action_layout = dict(self.cfg.get('action_layout', {}))
+        print(f"Debug: {self.cfg}")
         self.camera= Camera(list(self.cfg['camera']['names'].values()))
         self.robot = Robot()
         self.current_state = np.zeros(max([v['end'] for v in self.action_layout.values()]) if self.action_layout else 0)
