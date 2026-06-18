@@ -621,6 +621,7 @@ def _collect_stats() -> dict:
         "infer_count": 0,
         "avg_infer_time": 0.0,
         "avg_traj_time": 0.0,
+        "obv_fps": 0.0,
         "language": "",
         "current_state": [],
         "current_action": [],
@@ -648,6 +649,7 @@ def _collect_stats() -> dict:
         base["infer_count"]     = int(vla_client.realtime_data_manager.infer_count)
         base["avg_infer_time"]  = float(vla_client.realtime_data_manager.avg_infer_time)
         base["avg_traj_time"]   = float(vla_client.realtime_data_manager.avg_traj_time)
+        base["obv_fps"]         = float(vla_client.realtime_data_manager.get_observe_fps())
         base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
         # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
         # acquired = vla_client.show_thread_lock.acquire(timeout=0.05)

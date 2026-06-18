@@ -40,6 +40,8 @@ function renderStats(data) {
     ? (data.avg_infer_time * 1000).toFixed(1) + ' ms' : '–';
   $('val-traj-time').textContent   = data.avg_traj_time != null
     ? (data.avg_traj_time * 1000).toFixed(1) + ' ms' : '–';
+  $('val-obv-fps').textContent = data.obv_fps != null
+    ? Number(data.obv_fps).toFixed(1) + ' fps' : '–';
 
   updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
 

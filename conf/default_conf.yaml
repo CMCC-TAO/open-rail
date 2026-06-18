@@ -57,6 +57,7 @@ rdm:
       start: 14
   max_len: 100
   mode: async
+  observe_fps_window_size: 10
   record_data: false
 record:
   info:
@@ -194,7 +195,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
+    - 7
     source:
     - ActionRaw
     - ActionFitted

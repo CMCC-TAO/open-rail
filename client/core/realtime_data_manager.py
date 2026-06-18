@@ -31,6 +31,9 @@ class RealtimeDataManager():
         self.action_layout = dict(rdm_config.action_layout) if hasattr(rdm_config, 'action_layout') else {}
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.observe_buffer = deque(maxlen=rdm_config.max_len)
+        self.observe_fps_window_size = max(2, int(getattr(rdm_config, 'observe_fps_window_size', 30)))
+        self.observe_add_timestamps = deque(maxlen=self.observe_fps_window_size)
+        self.observe_fps = 0.0
         self.action_chunks = []
         self.timestamp_chunks = []
         self.action_thread_lock = threading.Lock()
@@ -148,8 +151,19 @@ class RealtimeDataManager():
         self.frame_count += 1
         # Skip the first few frames as they may be unstable
         if self.frame_count > 5:
+            now = time.perf_counter()
             with self.observe_thread_lock:
                 self.observe_buffer.append(frame)
+                self.observe_add_timestamps.append(now)
+                if len(self.observe_add_timestamps) >= 2:
+                    duration = self.observe_add_timestamps[-1] - self.observe_add_timestamps[0]
+                    if duration > 1e-6:
+                        self.observe_fps = (len(self.observe_add_timestamps) - 1) / duration
+
+    def get_observe_fps(self):
+        """Get observation FPS estimated from recent add_observe_data calls."""
+        with self.observe_thread_lock:
+            return float(self.observe_fps)
 
     def update_action_chunk_raw(self, action_chunk, timestamp_chunk):
         """Update the raw action chunk and timestamp chunk predicted by the VLA model.
@@ -459,9 +473,13 @@ class RealtimeDataManager():
             self.action_chunks = []
             self.timestamp_chunks = []
             self.infer_count = 0
+
+        with self.observe_thread_lock:
+            self.observe_buffer.clear()
+            self.observe_add_timestamps.clear()
+            self.observe_fps = 0.0
         
         with self.polynomial_thread_lock:
-            self.observe_buffer.clear()
             self.action_chunk_fitted = None
             self.vel_chunk_fitted = None
             self.acc_chunk_fitted = None
