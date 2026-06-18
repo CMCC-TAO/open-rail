@@ -63,7 +63,7 @@ class RealtimeDataManager():
         self.avg_traj_time = 0.0
         self.infer_count = 0
 
-        # Syncchronous Runing Flag
+        # Synchronous Running Flag
         self.sync_running = False
         self.mode = 'control'
 
@@ -508,4 +508,3 @@ class RealtimeDataManager():
         actual_wait_time = (time.perf_counter() - start_time) * 1000.0
         self.logger.info(f"mode={mode}, real_wait_time={actual_wait_time:.3f}ms.")
         return result
-

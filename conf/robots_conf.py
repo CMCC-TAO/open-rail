@@ -15,19 +15,19 @@ def get_a2d_config():
     config = ConfigDict()
     config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
     config.camera = ConfigDict()
-    # config.camera.ref = 'head'
-    # # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
+    config.camera.ref = 'head'
+    # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
     
-    # config.camera.names = {'head': 'head',
-    #                        'hand_left': 'hand_left_fisheye' if 'hand' in config.hand_type else 'hand_left',
-    #                        'hand_right': 'hand_right_fisheye' if 'hand' in config.hand_type else 'hand_right'}
+    config.camera.names = {'head': 'head',
+                           'hand_left': 'hand_left_fisheye' if 'hand' in config.hand_type else 'hand_left',
+                           'hand_right': 'hand_right_fisheye' if 'hand' in config.hand_type else 'hand_right'}
     config.proprio_names = ['arm', 'hand' if 'hand' in config.hand_type else 'gripper', 'head', 'waist']
     config.gripper_freq = 40
     config.head_freq = 40
-    config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0] # default pose (teleoperation default pose)
+    config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.4012, 27.0] + [0.0, 0.0] # default pose (teleoperation default pose)
     config.action_layout = {
-        'arm': {'start': 0, 'end': 14, 'policy': 'joint'},
-        'gripper': {'start': 14, 'end': 16, 'policy': 'gripper'},
+        'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
+        'gripper': {'start': 14, 'end': 16, 'policy': 'stepwise'},
         # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
         # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
     }
