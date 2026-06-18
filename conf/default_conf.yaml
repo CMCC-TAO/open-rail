@@ -194,7 +194,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 7
+    - 0
     source:
     - ActionRaw
     - ActionFitted

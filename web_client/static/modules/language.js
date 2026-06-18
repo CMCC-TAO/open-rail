@@ -48,6 +48,32 @@ function formatLangSubtaskOptionLabel(taskName, text, index) {
   return `${index + 1}. ${text.substring(0, 50)}${text.length > 50 ? '…' : ''}`;
 }
 
+function refreshLangAppliedMarkers(taskId, subTaskId) {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+
+  const resolvedTaskId = taskId != null
+    ? String(taskId)
+    : (taskSel ? taskSel.value : '');
+
+  const parsedSubTaskId = Number(subTaskId);
+  const resolvedSubTaskId = Number.isFinite(parsedSubTaskId) ? parsedSubTaskId : null;
+
+  if (taskSel) {
+    Array.from(taskSel.options).forEach((opt) => {
+      setAppliedOptionMarker(opt, opt.value === resolvedTaskId);
+    });
+  }
+
+  if (subtaskSel) {
+    const visibleTaskId = taskSel ? taskSel.value : resolvedTaskId;
+    const enableSubtaskMarker = visibleTaskId === resolvedTaskId && resolvedSubTaskId != null;
+    Array.from(subtaskSel.options).forEach((opt) => {
+      setAppliedOptionMarker(opt, enableSubtaskMarker && Number(opt.value) === resolvedSubTaskId);
+    });
+  }
+}
+
 function renderLangTaskSelect() {
   const taskSel    = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
@@ -438,6 +464,7 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
 
   // Sync Config panel selects
   syncLangTaskOptions(taskName || task, safeIndex >= 0 ? safeIndex : 0);
+  refreshLangAppliedMarkers(taskName || task, safeIndex >= 0 ? safeIndex : null);
 }
 
 function setupLanguageEvents() {
