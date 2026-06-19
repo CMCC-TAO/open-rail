@@ -1,7 +1,7 @@
 /* ── Generic Panel ── */
 .panel {
   background: var(--bg2);
-  border: none;
+  border: 1px solid var(--panel-border);
   border-radius: var(--panel-radius);
   box-shadow: var(--panel-shadow);
   display: flex; flex-direction: column;

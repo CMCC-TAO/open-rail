@@ -8,7 +8,7 @@
   display: flex; align-items: center; gap: 6px;
   padding: 5px 0px; flex-wrap: nowrap;
 }
-.monitor-title { font-weight: 600; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0; }
+.monitor-title { font-weight: 700; font-size: 13px; color: var(--panel-header-text); text-transform: none; letter-spacing: .15px; flex-shrink: 0; }
 /* Spacer pushes all button groups to the right */
 .monitor-spacer { flex: 1; }
 /* Each button group */
@@ -76,8 +76,8 @@
   flex-wrap: nowrap; flex-shrink: 0;
 }
 .stat-inline-item  { display: flex; align-items: baseline; gap: 5px; }
-.stat-inline-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
-.stat-inline-value { font-size: 13px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.stat-inline-label { font-size: 11px; color: var(--text-muted); text-transform: none; letter-spacing: .2px; white-space: nowrap; }
+.stat-inline-value { font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1.05; white-space: nowrap; }
 .stat-inline-sep   { color: var(--border); font-size: 14px; user-select: none; }
 
 /* ── Stats grid (kept for compatibility) ── */
