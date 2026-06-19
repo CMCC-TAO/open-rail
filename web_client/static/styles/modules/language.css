@@ -15,7 +15,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 22px;
+  height: 28px;
   padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -36,7 +36,7 @@
   flex-direction: row;
   align-items: center;
   gap: 6px;
-  height: 22px;
+  height: 28px;
   padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -69,7 +69,7 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  height: 22px;
+  height: 28px;
   padding: 2px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -83,8 +83,8 @@
   white-space: nowrap;
 }
 .task-progress-track {
-  width: 160px;
-  height: 80%;
+  width: 120px;
+  height: 75%;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg2);

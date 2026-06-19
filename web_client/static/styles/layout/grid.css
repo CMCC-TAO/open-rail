@@ -2,14 +2,34 @@
    MAIN LAYOUT: 3-column grid
    Left: config+manual  |  Center: monitor+traj  |  Right: camera
    ═══════════════════════════════════════════ */
+:root {
+  --layout-left-col-width: 16%;
+  --layout-right-col-width: 20%;
+}
+
 .layout {
   position: fixed;
   top: var(--topbar-h); left: 0; right: 0; bottom: var(--footer-h);
   display: grid;
-  grid-template-columns: 280px 1fr 300px;
+  grid-template-columns: var(--layout-left-col-width) 1fr var(--layout-right-col-width);
   gap: var(--panel-gap);
   padding: var(--panel-gap);
   overflow: hidden;
+}
+
+/* Collapse states are managed by JS via layout classes */
+.layout.left-collapsed {
+  grid-template-columns: 0 1fr var(--layout-right-col-width);
+  padding-left: 0;
+}
+
+.layout.right-collapsed {
+  grid-template-columns: var(--layout-left-col-width) 1fr 0;
+  padding-right: 0;
+}
+
+.layout.left-collapsed.right-collapsed {
+  grid-template-columns: 0 1fr 0;
 }
 
 .left-col {
@@ -59,7 +79,7 @@
 .panel-reveal-left  { left: 0; top: 50%; transform: translateY(-50%); border-radius: 0 var(--radius) var(--radius) 0; border-left: none; }
 .panel-reveal-right { right: 0; border-radius: var(--radius) 0 0 var(--radius); border-right: none; box-shadow: -2px 0 6px rgba(0,0,0,.08); }
 .panel-reveal-config-hide {
-  left: calc(var(--panel-gap) + 280px - 10px);
+  left: calc(var(--panel-gap) + var(--layout-left-col-width) - 10px);
   top: 50%;
   transform: translateY(-50%);
   border-radius: var(--radius) 0 0 var(--radius);
@@ -68,7 +88,7 @@
   box-shadow: -2px 0 6px rgba(0,0,0,.08);
 }
 .panel-reveal-visual-hide {
-  right: calc(var(--panel-gap) + 300px - 10px);
+  right: calc(var(--panel-gap) + var(--layout-right-col-width) - 10px);
   top: 50%;
   transform: translateY(-50%);
   border-radius: 0 var(--radius) var(--radius) 0;

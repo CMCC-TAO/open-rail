@@ -109,19 +109,20 @@ function restartCameraUpdateTimer() {
   }, camState.updateInterval);
 }
 
-/** Recalculate and apply grid-template-columns based on current collapsed state. */
+/** Update layout collapse classes; width and positions are fully managed in grid.css. */
 function updateLayoutColumns() {
   const leftCollapsed = $('left-col').classList.contains('collapsed');
   const visualCollapsed = $('panel-visual').classList.contains('collapsed');
-  const left  = leftCollapsed ? '0px'   : '280px';
-  const right = visualCollapsed ? '0px' : '300px';
-  // When a column is 0, also suppress the gap on that side by adjusting padding
   const layout = document.querySelector('.layout');
-  layout.style.gridTemplateColumns = `${left} 1fr ${right}`;
-  // Suppress padding on collapsed sides so no whitespace strip remains
-  const gap = getComputedStyle(document.documentElement).getPropertyValue('--panel-gap').trim();
-  layout.style.paddingLeft   = leftCollapsed ? '0' : gap;
-  layout.style.paddingRight  = visualCollapsed ? '0' : gap;
+  if (!layout) return;
+
+  layout.classList.toggle('left-collapsed', leftCollapsed);
+  layout.classList.toggle('right-collapsed', visualCollapsed);
+
+  // Clear any legacy inline styles from previous implementations.
+  layout.style.gridTemplateColumns = '';
+  layout.style.paddingLeft = '';
+  layout.style.paddingRight = '';
 }
 
 function setupCameraPanel() {
