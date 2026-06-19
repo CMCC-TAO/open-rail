@@ -32,40 +32,38 @@
 /* Monitor resource usage group */
 .monitor-resource-group {
   display: grid;
-  grid-template-columns: repeat(2, 72px);
-  grid-template-rows: repeat(2, 18px);
-  gap: 0 2px; /* tighter vertical gap */
+  grid-template-columns: repeat(4, 80px); /* Increased width slightly */
+  grid-template-rows: 24px; /* Increased height from 18px to 24px */
+  gap: 0 4px; /* Slightly increased gap */
   align-content: center;
-  margin-top: -4px;   /* squeeze top spacing toward header */
-  margin-bottom: -4px;/* squeeze bottom spacing toward header */
+  margin-top: 0;
+  margin-bottom: 0;
 }
+
 .resource-pill {
-  font-size: 9px;
+  font-size: 10px; /* Slightly increased font size */
   color: var(--text-muted);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
-  padding: 0 6px;
-  line-height: 10px; /* slightly taller line for readability */
-  width: 72px;
-  min-width: 72px;
-  max-width: 72px;
-  height: 18px;      /* slightly shorter height to counter negative margins */
-  min-height: 18px;
-  display: grid;
-  grid-template-columns: 18px 1fr;
+  padding: 0 8px; /* Increased padding */
+  line-height: 14px; /* Adjusted line height for better text alignment */
+  width: 80px;
+  min-width: 80px;
+  height: 24px; /* Increased height from 18px to 24px */
+  display: flex;
   align-items: center;
-  gap: 1px;
-  white-space: nowrap;
+  justify-content: space-between;
 }
+
 .resource-label {
-  text-align: left;
-  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600; /* Made label bold */
 }
+
 .resource-value {
-  text-align: right;
-  color: var(--text);
-  font-variant-numeric: tabular-nums;
+  font-weight: 700; /* Increased font weight for value */
 }
 
 /* ── Control bar (kept for any remaining uses) ── */
