@@ -52,12 +52,14 @@ function refreshLangAppliedMarkers(taskId, subTaskId) {
   const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
 
-  const resolvedTaskId = taskId != null
-    ? String(taskId)
-    : (taskSel ? taskSel.value : '');
+  const applied = getAppliedLangSelection();
+  const fallbackTaskId = applied.taskId != null ? String(applied.taskId) : '';
+  const resolvedTaskId = taskId != null ? String(taskId) : fallbackTaskId;
 
   const parsedSubTaskId = Number(subTaskId);
-  const resolvedSubTaskId = Number.isFinite(parsedSubTaskId) ? parsedSubTaskId : null;
+  const resolvedSubTaskId = Number.isFinite(parsedSubTaskId)
+    ? parsedSubTaskId
+    : (Number.isFinite(applied.subTaskId) ? applied.subTaskId : null);
 
   if (taskSel) {
     Array.from(taskSel.options).forEach((opt) => {
@@ -242,6 +244,7 @@ function setupLangPanel() {
       syncLangIndexOptions(taskSel.value, 0);
       const cfgIdxSel = $('cfg-language-index');
       if (cfgIdxSel) cfgIdxSel.value = '0';
+      refreshLangAppliedMarkers();
     });
   }
 
