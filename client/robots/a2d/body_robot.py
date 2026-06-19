@@ -5,6 +5,7 @@ import pandas as pd
 from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
 from ..base_robot import RobotBase
+# from copy import copy
 
 
 class RobotBody(RobotBase):
@@ -157,14 +158,16 @@ class RobotBody(RobotBase):
                 self.current_timestamp = ref_timestamp
 
             result['ref_timestamp'] = ref_timestamp
-            result[f'cam.{cam_ref}'] = image[:, :, ::-1] # RGB -> BGR
+            result[f'cam.{cam_ref}'] = image[:, :, ::-1].copy() # RGB -> BGR, cam_ref = head
+            # print(f"Debug:cam.cam_ref={cam_ref}")
             for key, value in cam_names.items():
                 if key == cam_ref:
                     continue
                 image, timestamp = self.camera.get_image_nearest(value, ref_timestamp)
-                if key == 'depth_head':
-                    key = 'depth.head'
-                result[f'cam.{key}'] = image[:, :, ::-1] # BGR -> RGB
+                # if key == 'depth_head':
+                #     key = 'depth.head'
+                result[f'cam.{key}'] = image[:, :, ::-1].copy() # BGR -> RGB, key=hand_left/hand_right
+                # print(f"Debug:cam.{key}={key}")
 
             joint_states, gripper_start = [], 0
             for proprio in self.cfg['proprio_names']:
