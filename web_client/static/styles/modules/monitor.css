@@ -1,5 +1,4 @@
 .panel-monitor {
-  flex: 0 0 auto;
   overflow: hidden;
 }
 .panel-monitor .panel-body { padding: 6px 8px; gap: 6px; }
@@ -107,13 +106,6 @@
 }
 .kv-key { color: var(--text-muted); font-size: 11px; }
 .kv-val { color: var(--text); font-size: 11px; word-break: break-all; }
-
-/* Reserved blank area after removing Robot State & Action section */
-.monitor-reserved-space {
-  min-height: 132px;
-  margin-top: 4px;
-  border-radius: var(--radius);
-}
 
 /* ── Debug box ── */
 .debug-box {

@@ -1,12 +1,7 @@
 /* Language Command panel */
 .panel-lang {
-  flex: 0 0 auto;
   overflow: hidden;
   min-height: 0;
-}
-/* When traj panel is collapsed, lang panel can grow to fill freed space */
-.panel-lang.expanded {
-  flex: 1;
 }
 .panel-lang .panel-body { padding: 8px; }
 .panel-lang .panel-body.collapsed { display: none; }
@@ -104,14 +99,14 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* When lang panel is expanded (traj collapsed), allow body to fill vertically */
-.panel-lang.expanded .panel-body {
+/* When trajectory is collapsed, language panel can use extra vertical space */
+.center-col.traj-collapsed .panel-lang .panel-body {
   overflow-y: auto;
 }
-.panel-lang.expanded .lang-cmd-layout {
+.center-col.traj-collapsed .panel-lang .lang-cmd-layout {
   flex: 1; min-height: 0;
 }
-.panel-lang.expanded .lang-cmd-select {
+.center-col.traj-collapsed .panel-lang .lang-cmd-select {
   max-height: none;
 }
 

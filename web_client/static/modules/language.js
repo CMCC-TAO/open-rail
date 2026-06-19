@@ -560,20 +560,22 @@ $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e
 $('btn-lang-collapse').addEventListener('click', () => {
   const langBody = $('lang-body');
   const trajBody = $('traj-body');
-  const panelT = $('panel-traj');
-  const panelL = $('panel-lang');
 
   // If trajectory is collapsed, this click should restore both panels to normal layout.
   if (trajBody.classList.contains('collapsed')) {
     trajBody.classList.remove('collapsed');
     langBody.classList.remove('collapsed');
-    panelT.classList.remove('body-collapsed');
-    panelL.classList.remove('expanded');
+    if (typeof updateCenterPanelLayoutState === 'function') {
+      updateCenterPanelLayoutState();
+    }
     syncCenterPanelCollapseUi();
     return;
   }
 
   langBody.classList.toggle('collapsed');
+  if (typeof updateCenterPanelLayoutState === 'function') {
+    updateCenterPanelLayoutState();
+  }
   syncCenterPanelCollapseUi();
 });
 
