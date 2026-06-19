@@ -33,7 +33,7 @@
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.cam-label { font-size: 11px; font-weight: 600; color: var(--text); flex: 0 0 auto; }
+.cam-label { font-size: 12px; font-weight: 700; color: var(--text); flex: 0 0 auto; }
 .cam-status {
   font-size: 10px; padding: 1px 6px; border-radius: 8px;
   background: var(--bg2); border: 1px solid var(--border);

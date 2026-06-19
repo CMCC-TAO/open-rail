@@ -5,9 +5,9 @@
 :root {
   --layout-left-col-width: 17%;
   --layout-right-col-width: 20%;
-  --center-monitor-height: 14%;
+  --center-monitor-height: 15.5%;
   --center-lang-height: 26%;
-  --center-traj-height: 57%;
+  --center-traj-height: 55%;
   --center-collapsed-language-header-height: 38px;
   --center-collapsed-trajectory-header-height: 75px;
 }

@@ -24,9 +24,9 @@
 .main-params-title {
   font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: none;
   text-align: center;
-  letter-spacing: .4px;
+  letter-spacing: .2px;
   color: var(--accent);
   margin-bottom: 4px;
 }
@@ -49,7 +49,7 @@
   display: flex; align-items: center; gap: 4px;
   padding: 3px 6px; background: var(--bg3); border-radius: var(--radius);
   cursor: pointer; user-select: none; font-size: 11px;
-  color: var(--text-muted); font-weight: 700; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 700; text-transform: none;
   border: 1px solid var(--border);
 }
 .cfg-group-header:hover { color: var(--accent); border-color: var(--accent); }

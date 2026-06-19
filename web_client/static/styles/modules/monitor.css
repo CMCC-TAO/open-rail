@@ -8,7 +8,7 @@
   display: flex; align-items: center; gap: 6px;
   padding: 5px 0px; flex-wrap: nowrap;
 }
-.monitor-title { font-weight: 700; font-size: 13px; color: var(--panel-header-text); text-transform: none; letter-spacing: .15px; flex-shrink: 0; }
+.monitor-title { font-weight: 800; font-size: 14px; color: var(--panel-header-text); text-transform: none; letter-spacing: .18px; flex-shrink: 0; }
 /* Spacer pushes all button groups to the right */
 .monitor-spacer { flex: 1; }
 /* Each button group */
@@ -56,8 +56,8 @@
 }
 
 .resource-label {
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  text-transform: none;
+  letter-spacing: 0.2px;
   font-weight: 600; /* Made label bold */
 }
 
@@ -86,14 +86,14 @@
   background: var(--bg); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 8px 10px;
 }
-.stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px; }
+.stat-label { font-size: 11px; color: var(--text-muted); text-transform: none; letter-spacing: .2px; margin-bottom: 4px; }
 .stat-value { font-size: 18px; font-weight: 700; color: var(--accent); }
 .stat-lang  { font-size: 11px; word-break: break-all; }
 
 /* ── Section title ── */
 .section-title {
-  font-size: 11px; font-weight: 600; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: .5px;
+  font-size: 12px; font-weight: 700; color: var(--panel-header-text);
+  text-transform: none; letter-spacing: .2px;
   border-left: 2px solid var(--accent); padding-left: 6px;
   margin-top: 4px; cursor: pointer; user-select: none;
 }

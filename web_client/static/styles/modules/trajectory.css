@@ -10,7 +10,7 @@
 
 .traj-panel-header .traj-src-label {
   font-size: 10px; color: var(--text-muted); font-weight: 600;
-  text-transform: uppercase; letter-spacing: .4px;
+  text-transform: none; letter-spacing: .2px;
   margin-bottom: 2px; display: block;
 }
 
@@ -78,39 +78,39 @@
 }
 
 .traj-window-slider::-webkit-slider-runnable-track {
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--border);
+  background: var(--accent);
 }
 
 .traj-window-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--accent);
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--accent-strong);
   border-radius: 50%;
-  background: var(--accent);
-  margin-top: -2px;
+  background: #ffffff;
+  margin-top: -3px;
 }
 
 .traj-window-slider::-moz-range-track {
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--border);
+  background: var(--accent-soft-hover);
 }
 
 .traj-window-slider::-moz-range-progress {
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
   background: var(--accent);
 }
 
 .traj-window-slider::-moz-range-thumb {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--accent);
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--accent-strong);
   border-radius: 50%;
-  background: var(--accent);
+  background: #ffffff;
 }
 
 .traj-window-value {
