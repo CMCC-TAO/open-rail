@@ -226,13 +226,16 @@ function renderSubTask(subTaskId = null) {
     return;
   }
 
+  const appliedTaskIdRaw = App.config && App.config.language ? App.config.language.task_id : null;
+  const appliedTaskId = appliedTaskIdRaw == null ? null : String(appliedTaskIdRaw);
+
   if (!App.config || typeof App.config !== 'object') App.config = {};
   if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
-  App.config.language.task_id = taskName;
   App.config.language.sub_task_id = targetIdx;
 
   if (typeof refreshLangAppliedMarkers === 'function') {
-    refreshLangAppliedMarkers(taskName, targetIdx);
+    const markerTaskId = appliedTaskId != null ? appliedTaskId : taskName;
+    refreshLangAppliedMarkers(markerTaskId, targetIdx);
   }
 
   if (targetIdx === curIdx) {

@@ -16,8 +16,8 @@ import pandas as pd
 import torch
 
 # 限制 OpenCV/FFmpeg 线程，避免多线程解码冲突（pthread_frame async_lock）
-os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "threads;1")
-cv2.setNumThreads(1)
+# os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "threads;1")
+# cv2.setNumThreads(1)
 
 class RobotBody(RobotBase):
     def __init__(self, config):

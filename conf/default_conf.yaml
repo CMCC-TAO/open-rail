@@ -39,7 +39,7 @@ language:
   auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: point_bottle
+  task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 observer:
@@ -57,7 +57,7 @@ rdm:
       start: 14
   max_len: 100
   mode: async
-  observe_fps_window_size: 10
+  observe_fps_window_size: 20
   record_data: false
 record:
   info:
@@ -69,8 +69,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 480
-        width: 848
+        height: 640
+        width: 640
     cam.hand_right:
       encode:
         codec: mp4v
@@ -78,8 +78,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 480
-        width: 848
+        height: 640
+        width: 640
     cam.head:
       encode:
         codec: mp4v
@@ -87,26 +87,26 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 800
-        width: 1280
+        height: 640
+        width: 640
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
     fps: 30
     robot_type: a2d
     splits:
-      train: 0:10
+      train: 0:0
     state_shape: 20
     total_chunks: 1
-    total_episodes: 11
-    total_frames: 3119
-    total_tasks: 1
-    total_videos: 33
+    total_episodes: 1
+    total_frames: 0
+    total_tasks: 0
+    total_videos: 3
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false
   save_dir: data/recording
-  switch: false
+  switch: true
 robots:
   a2d:
     action_layout:
@@ -172,7 +172,7 @@ robots:
         head: observation.images.top_head
       ref: head
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
-  type: a2d
+  type: mock
 vision:
   history_frame: false
   preprocess:
