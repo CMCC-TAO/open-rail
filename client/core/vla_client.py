@@ -253,12 +253,20 @@ class VLAClientAsync():
             observations = self.robot.retrieve_observation()
             # observations keys=dict_keys(['ref_timestamp', 'cam.hand_left', 'cam.hand_right', 'cam.head', 'obs.state', 'action'])
             # print(f"Debug: observations keys={observations.keys()}")
+            timestamp_1 = time.time()
+            timestamp_2 = None
             if observations is not None:
                 if self.config.record.switch :
                     self.dataset_write.add_observation_async(observations, self.task_language_manager.get_current_language(), time.perf_counter())
+                    timestamp_2 = time.time()
+                    print(f"Debug: record time={(timestamp_2-timestamp_1) * 1000} ms")
                 # Decide whether to change language instruction based on the task progress predicted by the VLA model
                 data = self._process_data(observations)
+                timestamp_3 = time.time()
+                print(f"Debug: process time={((timestamp_3-timestamp_1) if timestamp_2 is None else (timestamp_3-timestamp_2)) * 1000} ms")
                 self.realtime_data_manager.add_observe_data(data)
+                timestamp_4 = time.time()
+                print(f"Debug: add time={(timestamp_4-timestamp_3)*1000} ms")
             # time.sleep(0.001)
     
     def _inference_thread_fun(self):

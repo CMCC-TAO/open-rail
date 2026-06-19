@@ -1,11 +1,10 @@
 import os
 import re
-from pathlib import Path
 import numpy as np
-from PIL import Image
 import json
 import cv2
 import time
+from pathlib import Path
 from ml_collections import ConfigDict
 from collections import deque
 import pyarrow as pa
@@ -15,9 +14,7 @@ import threading
 from multiprocessing import Process, Manager,Queue
 from queue import Empty
 from typing import Any, Dict, List, Optional, Union
-import copy
 import logging
-from io import StringIO
 from concurrent.futures import ThreadPoolExecutor
 import traceback
 from datetime import datetime
