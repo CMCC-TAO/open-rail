@@ -108,52 +108,11 @@
 .kv-key { color: var(--text-muted); font-size: 11px; }
 .kv-val { color: var(--text); font-size: 11px; word-break: break-all; }
 
-/* ── Joint chips (current values) — grouped layout ── */
-.joint-grouped-wrap {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-}
-.joint-grouped-col {
-  display: flex; flex-direction: column; gap: 4px;
-}
-.joint-grouped-col-title {
-  font-size: 11px; color: var(--text-muted); font-weight: 700;
-  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px;
-}
-.joint-group-section {
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 4px 6px;
-}
-.joint-group-label {
-  font-size: 10px; color: var(--text-muted); font-weight: 600;
-  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 3px;
-  border-bottom: 1px solid var(--border); padding-bottom: 2px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-/* State / Action inline tag shown at the right of each group label */
-.joint-col-tag {
-  font-size: 9px; font-weight: 700; letter-spacing: .4px;
-  padding: 1px 5px; border-radius: 8px;
-  background: rgba(9,105,218,.08); border: 1px solid rgba(9,105,218,.25);
-  color: var(--accent); text-transform: uppercase; flex-shrink: 0;
-}
-.joint-col-tag.tag-action {
-  background: rgba(26,127,55,.08); border-color: rgba(26,127,55,.3);
-  color: var(--success);
-}
-.joint-grid { 
-  display: flex; 
-  flex-wrap: wrap; 
-  gap: 3px; 
-  justify-content: flex-start;
-}
-.joint-chip {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 3px; padding: 2px 2px; font-size: 10px;
-  flex: 1;                    /* Allow chips to grow and fill available space */
-  min-width: 50px;            /* Minimum width to prevent extreme shrinking */
-  max-width: 80px;            /* Maximum width to prevent extreme growing */
-  text-align: center; white-space: nowrap;
-  margin: 0 1px;              /* Small horizontal margins to assist with spacing */
+/* Reserved blank area after removing Robot State & Action section */
+.monitor-reserved-space {
+  min-height: 132px;
+  margin-top: 4px;
+  border-radius: var(--radius);
 }
 
 /* ── Debug box ── */
