@@ -27,15 +27,16 @@
   --warn-soft:          #fef3e0;
   --warn-soft-hover:    #fbe2b9;
 
-  --text:       #1f2328;
-  --text-muted: #656d76;
+  --text:       #2d3034;
+  --text-muted: #313538;
   --font:       'SF Mono', 'Fira Code', 'Consolas', monospace;
   --radius:     8px;
   --panel-radius: 14px;
+  --panel-border: rgba(199, 201, 205, 0.531);
   --panel-shadow: 0 6px 14px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
   --panel-shadow-hover: 0 8px 18px rgba(15, 23, 42, 0.1), 0 2px 5px rgba(15, 23, 42, 0.06);
   --panel-header-bg: linear-gradient(0deg, #f2f4f7 0%, #d5d7de 100%);
-  --panel-header-text: #5a6c85;
+  --panel-header-text: #36383c;
   --panel-header-divider: rgba(214, 216, 219, 0.26);
   --panel-header-inner-highlight: transparent;
   --panel-header-bottom-shadow: transparent;
