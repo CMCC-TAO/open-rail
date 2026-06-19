@@ -3,12 +3,13 @@
    Left: config+manual  |  Center: monitor+traj  |  Right: camera
    ═══════════════════════════════════════════ */
 :root {
-  --layout-left-col-width: 16%;
+  --layout-left-col-width: 17%;
   --layout-right-col-width: 20%;
-  --center-monitor-height: 22%;
+  --center-monitor-height: 14%;
   --center-lang-height: 26%;
-  --center-traj-height: 52%;
-  --center-collapsed-header-height: 38px;
+  --center-traj-height: 57%;
+  --center-collapsed-language-header-height: 38px;
+  --center-collapsed-trajectory-header-height: 75px;
 }
 
 .layout {
@@ -56,7 +57,7 @@
 
 /* Language collapsed -> keep only header, Trajectory consumes remaining height */
 .center-col.lang-collapsed .panel-lang {
-  flex: 0 0 var(--center-collapsed-header-height);
+  flex: 0 0 var(--center-collapsed-language-header-height);
 }
 .center-col.lang-collapsed .panel-traj {
   flex: 1 1 auto;
@@ -64,7 +65,7 @@
 
 /* Trajectory collapsed -> keep only header, Language consumes remaining height */
 .center-col.traj-collapsed .panel-traj {
-  flex: 0 0 var(--center-collapsed-header-height);
+  flex: 0 0 var(--center-collapsed-trajectory-header-height);
 }
 .center-col.traj-collapsed .panel-lang {
   flex: 1 1 auto;
