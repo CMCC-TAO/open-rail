@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 from ml_collections import ConfigDict
 
 # Limits threads used in OpenCV to avoid conflicts.
-cv2.setNumThreads(1)
+# cv2.setNumThreads(1)
 class VisualizeServer:
     def __init__(self, visualize_config: ConfigDict):
         # Use a stable logger name so logging_conf.py mapping always matches,

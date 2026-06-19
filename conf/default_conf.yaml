@@ -39,7 +39,7 @@ language:
   auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
+  task_id: point_bottle
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 observer:
@@ -95,13 +95,13 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      train: 0:10
     state_shape: 20
     total_chunks: 1
-    total_episodes: 4
-    total_frames: 3424
-    total_tasks: 4
-    total_videos: 12
+    total_episodes: 11
+    total_frames: 3119
+    total_tasks: 1
+    total_videos: 33
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false
@@ -172,7 +172,7 @@ robots:
         head: observation.images.top_head
       ref: head
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
-  type: mock
+  type: a2d
 vision:
   history_frame: false
   preprocess:
