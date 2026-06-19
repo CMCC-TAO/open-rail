@@ -26,7 +26,7 @@
 .recording-options-title {
   font-size: 11px;
   color: var(--text-muted);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .4px;
 }
 
@@ -59,7 +59,7 @@
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .4px;
   margin-bottom: 6px;
 }
@@ -86,7 +86,7 @@
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .4px;
 }
 
@@ -115,7 +115,7 @@
   font-size: 10px;
   font-weight: 700;
   color: var(--text-muted);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .4px;
   margin-bottom: 6px;
 }
