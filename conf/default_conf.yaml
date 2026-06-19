@@ -95,7 +95,7 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      train: 0:12
+      valid: 0:100
     state_shape: 20
     total_chunks: 1
     total_episodes: 13
@@ -172,7 +172,7 @@ robots:
         head: observation.images.top_head
       ref: head
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
-  type: a2d
+  type: mock
 vision:
   history_frame: false
   preprocess:

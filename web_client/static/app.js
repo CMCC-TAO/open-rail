@@ -1,32 +1,4 @@
 // ═══════════════════════════════════════════════════════
-//  Default demo values for State & Action (shown when client is not running)
-//  Layout: J0-6 = Arm-Left (7), J7-13 = Arm-Right (7), J14-19 = Gripper (6)
-// ═══════════════════════════════════════════════════════
-const DEFAULT_JOINTS = Object.freeze([
-  // Arm-Left  J0-J6  (values in 100-180 range for label width validation)
-  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
-  // Arm-Right J7-J13
-  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
-  // Gripper   J14-J19 (6 slots)
-  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000
-]);
-
-/** Add small Gaussian-like noise to DEFAULT_JOINTS for a lifelike idle display. */
-function _makeDefaultJointValues(noiseScale = 0.03) {
-  return DEFAULT_JOINTS.map(v => {
-    const noise = (Math.random() + Math.random() + Math.random() - 1.5) * noiseScale;
-    return Math.round((v + noise) * 100) / 100;
-  });
-}
-
-// Cache default values so they don't flicker on every render cycle
-let _defaultStateCache  = null;
-let _defaultActionCache = null;
-
-function getDefaultState()  { if (!_defaultStateCache)  _defaultStateCache  = _makeDefaultJointValues(0.00); return _defaultStateCache; }
-function getDefaultAction() { if (!_defaultActionCache) _defaultActionCache = _makeDefaultJointValues(0.00); return _defaultActionCache; }
-
-// ═══════════════════════════════════════════════════════
 //  Stats rendering
 // ═══════════════════════════════════════════════════════
 function renderStats(data) {
@@ -69,20 +41,7 @@ function renderStats(data) {
   setResourceValue(memEl, Number.isFinite(memVal) ? memVal.toFixed(1) + '%' : '--', 'MEM');
   setResourceValue(bwEl, Number.isFinite(bwVal) ? bwVal.toFixed(2) + 'M' : '--', 'NET');
 
-  // Use default joint values when client is not running and no real data available
-  const stateVals  = (data.current_state  && data.current_state.length)  ? data.current_state  : getDefaultState();
-  const actionVals = (data.current_action && data.current_action.length) ? data.current_action : getDefaultAction();
   App.latestState = Array.isArray(data.current_state) ? data.current_state.slice() : [];
-  renderJointsGrouped('state',  stateVals);
-  renderJointsGrouped('action', actionVals);
-
-  $('debug-info').textContent = data.debug_info || '';
-
-  // Feed trajectory chart from stats only when visual WS stream is unavailable.
-  // Avoid mixing two data sources (different timestamps/rates), which causes jitter.
-  if (!App.camWsAlive) {
-    ingestTrajData(data.current_state || [], data.current_action || [], []);
-  }
 }
 
 function renderKV(containerId, obj) {
@@ -96,17 +55,6 @@ function renderKV(containerId, obj) {
   }
 }
 
-function renderJoints(containerId, values) {
-  const el = $(containerId);
-  if (!el) return;
-  el.innerHTML = '';
-  values.forEach((v, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'joint-chip';
-    chip.textContent = `J${i}: ${typeof v === 'number' ? v.toFixed(3) : v}`;
-    el.appendChild(chip);
-  });
-}
 
 function updateTaskProgress(rawProgress, subTaskId = null) {
   const fillEl = $('task-progress-fill');
@@ -251,54 +199,6 @@ function renderSubTask(subTaskId = null) {
   if (typeof lang === 'string' && lang.trim()) {
     textEl.value = lang;
     sendLanguageSet(lang);
-  }
-}
-
-// Joint layout: J0-6 = Arm Left (7), J7-13 = Arm Right (7), J14+ = Gripper/Hand
-const JOINT_ARM_L_COUNT   = 7;
-const JOINT_ARM_R_COUNT   = 7;
-const JOINT_GRIPPER_COUNT = 6;
-// J0..6 → Arm-L, J7..13 → Arm-R, J14..19 → Gripper/Hand (fixed 6 slots)
-
-function renderJointsGrouped(side, values) {
-  // side: 'state' | 'action'
-  const elArmL    = $(`joint-${side}-arm-l`);
-  const elArmR    = $(`joint-${side}-arm-r`);
-  const elGripper = $(`joint-${side}-gripper`);
-  if (!elArmL) return;
-
-  elArmL.innerHTML = '';
-  elArmR.innerHTML = '';
-  elGripper.innerHTML = '';
-
-  values.forEach((v, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'joint-chip';
-    const val = typeof v === 'number' ? v.toFixed(4) : v;
-    if (i < JOINT_ARM_L_COUNT) {
-      // chip.textContent = `L${i}: ${val}`;
-      chip.textContent = `${i}｜${val}`;
-      elArmL.appendChild(chip);
-    } else if (i < JOINT_ARM_L_COUNT + JOINT_ARM_R_COUNT) {
-      // chip.textContent = `R${i - JOINT_ARM_L_COUNT}: ${val}`;
-      chip.textContent = `${i - JOINT_ARM_L_COUNT}｜${val}`;
-      elArmR.appendChild(chip);
-    }
-    // Skip gripper values here - we'll handle them separately below
-  });
-
-  // Always render exactly 6 gripper/hand slots, filled from left to right
-  for (let i = 0; i < JOINT_GRIPPER_COUNT; i++) {
-    const chip = document.createElement('div');
-    chip.className = 'joint-chip';
-    
-    // Get the actual value if available (starting from index 14)
-    const sourceIndex = JOINT_ARM_L_COUNT + JOINT_ARM_R_COUNT + i;
-    const hasValue = sourceIndex < values.length && typeof values[sourceIndex] === 'number';
-    const val = hasValue ? values[sourceIndex].toFixed(2) : '0.00';
-    
-    chip.textContent = `${i}｜${val}`;
-    elGripper.appendChild(chip);
   }
 }
 
