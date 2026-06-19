@@ -2,8 +2,16 @@
 .panel-lang {
   overflow: hidden;
   min-height: 0;
+  --lang-task-subtask-content-height: 100%;
+  --lang-task-subtask-bottom: 16px;
+  --lang-apply-btn-height: 28px;
+  --lang-cmd-col-gap: 4px;
 }
-.panel-lang .panel-body { padding: 8px; }
+.panel-lang .panel-body {
+  padding: 8px;
+  min-height: 0;
+  overflow: hidden;
+}
 .panel-lang .panel-body.collapsed { display: none; }
 
 .lang-auto-mode {
@@ -112,9 +120,11 @@
 
 .lang-cmd-layout {
   display: flex; gap: 8px; min-height: 0;
+  flex: 1;
+  height: 100%;
 }
 /* Task: 3; Sub-task: 4; Instruction: 3 */
-.lang-cmd-col            { display: flex; flex-direction: column; gap: 4px; flex: 3; min-width: 0; }
+.lang-cmd-col            { display: flex; flex-direction: column; gap: var(--lang-cmd-col-gap); flex: 3; min-width: 0; }
 .lang-cmd-col-subtask    { flex: 4; }
 .lang-cmd-col-send       { flex: 3; }
 .lang-cmd-col-title {
@@ -140,7 +150,9 @@
 
 /* Select-based task/subtask lists */
 .lang-cmd-select {
-  flex: 1; min-height: 80px;
+  flex: 0 0 calc(var(--lang-task-subtask-content-height) - var(--lang-task-subtask-bottom));
+  height: calc(var(--lang-task-subtask-content-height) - var(--lang-task-subtask-bottom));
+  min-height: 72px;
   background: var(--bg); border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text);
   font-family: var(--font); font-size: 11px; padding: 2px 0;
@@ -164,7 +176,10 @@
 }
 
 .lang-cmd-textarea {
-  flex: 1; resize: vertical; min-height: 54px;
+  flex: 0 0 calc(var(--lang-task-subtask-content-height) - var(--lang-apply-btn-height) - var(--lang-cmd-col-gap) - var(--lang-task-subtask-bottom));
+  height: calc(var(--lang-task-subtask-content-height) - var(--lang-apply-btn-height) - var(--lang-cmd-col-gap) - var(--lang-task-subtask-bottom));
+  resize: vertical;
+  min-height: 54px;
   background: var(--bg); border: 1px solid var(--border);
   border-radius: var(--radius); color: var(--text);
   font-family: var(--font); font-size: 11px; padding: 5px 8px;
