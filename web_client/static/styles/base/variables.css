@@ -1,17 +1,51 @@
 :root {
-  --bg:         #ffffff;
-  --bg2:        #f6f8fa;
-  --bg3:        #eaeef2;
-  --border:     #d0d7de;
-  --accent:     #0969da;
-  --success:    #1a7f37;
-  --danger:     #cf222e;
-  --warn:       #9a6700;
+  --bg:         #f5f7fa;
+  --bg2:        #ffffff;
+  --bg3:        #f8fafd;
+  --border:     #d6deea;
+
+  /* Brand Color（Apple/Google 风格：简约高可视） */
+  --accent:            #1a73e8;
+  --accent-strong:     #1558b0;
+  --accent-soft:       #e8f0fe;
+  --accent-soft-hover: #d2e3fc;
+  --accent-soft-active:#aecbfa;
+
+  /* Semantic Colors（与冷灰背景协调） */
+  --success:            #188038;
+  --success-strong:     #136a2d;
+  --success-soft:       #e6f4ea;
+  --success-soft-hover: #ceead6;
+
+  --danger:             #d93025;
+  --danger-strong:      #b3261e;
+  --danger-soft:        #fce8e6;
+  --danger-soft-hover:  #f7d7d4;
+
+  --warn:               #b06a00;
+  --warn-strong:        #8f5300;
+  --warn-soft:          #fef3e0;
+  --warn-soft-hover:    #fbe2b9;
+
   --text:       #1f2328;
   --text-muted: #656d76;
   --font:       'SF Mono', 'Fira Code', 'Consolas', monospace;
-  --radius:     6px;
+  --radius:     8px;
+  --panel-radius: 14px;
+  --panel-shadow: 0 6px 14px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
+  --panel-shadow-hover: 0 8px 18px rgba(15, 23, 42, 0.1), 0 2px 5px rgba(15, 23, 42, 0.06);
+  --panel-header-bg: linear-gradient(0deg, #f2f4f7 0%, #d5d7de 100%);
+  --panel-header-text: #5a6c85;
+  --panel-header-divider: rgba(214, 216, 219, 0.26);
+  --panel-header-inner-highlight: transparent;
+  --panel-header-bottom-shadow: transparent;
+
+  --status-glow-success: 0 0 10px rgba(24, 128, 56, 0.42);
+  --overlay-dark: rgba(23, 31, 44, 0.52);
+  --overlay-light: rgba(255, 255, 255, 0.85);
+  --progress-gradient: linear-gradient(90deg, var(--success) 0%, var(--accent) 100%);
+
   --topbar-h:   44px;
   --footer-h:   28px;
-  --panel-gap:  8px;
+  --panel-gap:  12px;
 }
