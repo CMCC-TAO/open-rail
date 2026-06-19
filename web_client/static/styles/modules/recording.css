@@ -180,11 +180,11 @@
 }
 
 .recording-file-item:hover {
-  background: rgba(9,105,218,.06);
+  background: var(--accent-soft);
 }
 
 .recording-file-item.active {
-  background: rgba(9,105,218,.14);
+  background: var(--accent-soft-hover);
   color: var(--accent);
 }
 
@@ -218,7 +218,7 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #ff4d4f;
+  color: var(--danger);
   line-height: 1;
   cursor: pointer;
   visibility: hidden;
@@ -233,8 +233,8 @@
 }
 
 .recording-file-item-delete:hover {
-  background: rgba(255,77,79,.10);
-  border-color: rgba(255,77,79,.45);
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
 .recording-file-item.active .recording-file-item-meta {
@@ -245,7 +245,7 @@
   visibility: visible;
   pointer-events: auto;
   background: transparent;
-  border-color: rgba(255,77,79,.35);
+  border-color: var(--danger);
 }
 
 .recording-file-item.empty {

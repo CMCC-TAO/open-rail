@@ -39,8 +39,8 @@
   background: var(--bg2); border: 1px solid var(--border);
   color: var(--text-muted); transition: all .2s;
 }
-.cam-status.active { background: rgba(26,127,55,.1); border-color: var(--success); color: var(--success); }
-.cam-status.error  { background: rgba(207,34,46,.08); border-color: var(--danger);  color: var(--danger);  }
+.cam-status.active { background: var(--success-soft); border-color: var(--success); color: var(--success); }
+.cam-status.error  { background: var(--danger-soft); border-color: var(--danger);  color: var(--danger);  }
 .cam-spacer { flex: 1; }
 
 /* Preview area: always visible; aspect ratio follows incoming stream */
@@ -56,10 +56,10 @@
 .cam-preview.closed::after {
   content: 'CLOSED';
   position: absolute; inset: 0;
-  background: rgba(31,35,40,.55);
+  background: var(--overlay-dark);
   display: flex; align-items: center; justify-content: center;
   font-size: 12px; font-weight: 700; letter-spacing: 2px;
-  color: rgba(255,255,255,.8);
+  color: var(--overlay-light);
   pointer-events: none;
 }
 .cam-preview img {
