@@ -378,6 +378,16 @@ function startTrajUpdateTimer() {
   }, intervalMs);
 }
 
+function updateCenterPanelLayoutState() {
+  const centerCol = document.querySelector('.center-col');
+  const langBody = $('lang-body');
+  const trajBody = $('traj-body');
+  if (!centerCol || !langBody || !trajBody) return;
+
+  centerCol.classList.toggle('lang-collapsed', langBody.classList.contains('collapsed'));
+  centerCol.classList.toggle('traj-collapsed', trajBody.classList.contains('collapsed'));
+}
+
 function syncCenterPanelCollapseUi() {
   const langBody = $('lang-body');
   const langBtn = $('btn-lang-collapse');
@@ -500,26 +510,23 @@ function setupTrajPanel() {
   $('btn-traj-collapse').addEventListener('click', () => {
     const body = $('traj-body');
     const langBody = $('lang-body');
-    const panelT = $('panel-traj');
-    const panelL = $('panel-lang');
 
     // If Language panel is collapsed while Trajectory is normal,
     // this click should restore both panels to normal size.
     if (!body.classList.contains('collapsed') && langBody.classList.contains('collapsed')) {
       langBody.classList.remove('collapsed');
       body.classList.remove('collapsed');
-      panelT.classList.remove('body-collapsed');
-      panelL.classList.remove('expanded');
+      updateCenterPanelLayoutState();
       syncCenterPanelCollapseUi();
       return;
     }
 
-    const collapsed = body.classList.toggle('collapsed');
-    panelT.classList.toggle('body-collapsed', collapsed);
-    panelL.classList.toggle('expanded', collapsed);
+    body.classList.toggle('collapsed');
+    updateCenterPanelLayoutState();
     syncCenterPanelCollapseUi();
   });
 
+  updateCenterPanelLayoutState();
   syncCenterPanelCollapseUi();
 
   // Select all / none

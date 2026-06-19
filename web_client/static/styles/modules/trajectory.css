@@ -1,11 +1,6 @@
 .panel-traj {
-  flex: 1; min-height: 0;
+  min-height: 0;
   overflow: hidden;
-}
-/* When the chart body is collapsed, shrink the panel to header height only,
-   releasing the remaining flex space to Language Command panel above */
-.panel-traj.body-collapsed {
-  flex: 0 0 auto;
 }
 /* ═══════════════════════════════════════════
    JOINT TRAJECTORY PANEL

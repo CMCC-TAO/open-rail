@@ -5,6 +5,10 @@
 :root {
   --layout-left-col-width: 16%;
   --layout-right-col-width: 20%;
+  --center-monitor-height: 22%;
+  --center-lang-height: 26%;
+  --center-traj-height: 52%;
+  --center-collapsed-header-height: 38px;
 }
 
 .layout {
@@ -40,11 +44,32 @@
   min-height: 0;
 }
 
-/* Center column: monitor on top, traj on bottom */
+/* Center column: monitor + language + trajectory */
 .center-col {
   display: flex; flex-direction: column; gap: var(--panel-gap);
-  overflow: hidden; min-height: 0;
+  overflow: hidden; min-height: 0; height: 100%;
 }
+
+.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 0; }
+.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 0; }
+.center-col .panel-traj { flex: 0 0 var(--center-traj-height); min-height: 0; }
+
+/* Language collapsed -> keep only header, Trajectory consumes remaining height */
+.center-col.lang-collapsed .panel-lang {
+  flex: 0 0 var(--center-collapsed-header-height);
+}
+.center-col.lang-collapsed .panel-traj {
+  flex: 1 1 auto;
+}
+
+/* Trajectory collapsed -> keep only header, Language consumes remaining height */
+.center-col.traj-collapsed .panel-traj {
+  flex: 0 0 var(--center-collapsed-header-height);
+}
+.center-col.traj-collapsed .panel-lang {
+  flex: 1 1 auto;
+}
+
 /* Left column collapsed — zero width, content clipped, stays in grid flow */
 .left-col.collapsed { overflow: hidden; min-width: 0; }
 
