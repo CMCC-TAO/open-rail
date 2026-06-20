@@ -27,18 +27,28 @@
 }
 .btn:hover  { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .btn:active { opacity: .9; }
-.btn:disabled { opacity: .45; cursor: default; pointer-events: none; }
+.btn:disabled { opacity: .55; cursor: default; pointer-events: none; }
 .btn-xs  { padding: 2px 7px; font-size: 11px; }
 .btn-sm  { padding: 4px 10px; font-size: 12px; }
 .btn-lg  { padding: 7px 20px; font-size: 13px; font-weight: 600; }
 
 /* Keep Start/Stop button width stable while text toggles */
 #btn-start, #btn-pause, #btn-reset {
-  min-width: 88px;
+  min-width: 80px;
   min-height: 34px;
   text-align: center;
   font-size: 14px;
-  font-weight: 900;
+  font-weight: 1000;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+#btn-start i.fas, #btn-pause i.fas, #btn-reset i.fas {
+  margin-right: 0;
+  line-height: 1;
+  vertical-align: middle;
 }
 #btn-observe, #btn-infer, #btn-control {
   min-width: 80px;
@@ -54,14 +64,14 @@
 .thread-btn-main {
   font-size: 13px;
   line-height: 1;
-  font-weight: 900;
+  font-weight: 1000;
   pointer-events: none;
 }
 .thread-btn-sub {
   font-size: 10px;
   line-height: 1;
   font-weight: 600;
-  opacity: .85;
+  opacity: .75;
   pointer-events: none;
 }
 .btn-primary,
