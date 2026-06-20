@@ -348,7 +348,7 @@ function buildTree_old(obj, prefix, parentEl) {
     for (const [sgName, entries] of Object.entries(sgMap)) {
       if (entries.length === 0) continue;
       const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
-      basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
+      basicBody.appendChild(buildGroup(sgName.replace('_', '-'), rows));
     }
 
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
@@ -360,7 +360,7 @@ function buildTree_old(obj, prefix, parentEl) {
     const body    = document.createElement('div');
     body.className = 'cfg-group-body';
     buildTree(val, dotKey, body);
-    parentEl.appendChild(buildGroupFromEl(key.toUpperCase(), body));
+    parentEl.appendChild(buildGroupFromEl(key, body));
   }
 }
 function buildTree(obj, prefix, parentEl) {
@@ -423,7 +423,7 @@ function buildTree(obj, prefix, parentEl) {
     for (const [sgName, entries] of Object.entries(sgMap)) {
       if (entries.length === 0) continue;
       const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
-      basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
+      basicBody.appendChild(buildGroup(sgName.replace('_', '-'), rows));
     }
 
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
@@ -469,7 +469,7 @@ function buildTree(obj, prefix, parentEl) {
     } else {
       buildTree(val, dotKey, body);
     }
-    parentEl.appendChild(buildGroupFromEl(key.toUpperCase(), body));
+    parentEl.appendChild(buildGroupFromEl(key, body));
   }
 }
 // ═══════════════════════════════════════════════════════
@@ -558,7 +558,7 @@ function _buildRobotsGroup(obj, parentEl) {
     const body = document.createElement('div');
     body.className = 'cfg-group-body';
     buildTree(v, dotKey, body);
-    const groupEl = buildGroupFromEl(k.toUpperCase(), body);
+    const groupEl = buildGroupFromEl(k, body);
     groupEl.dataset.robotType = k;
     // Show only the group matching current type
     groupEl.style.display = (k === currentType) ? '' : 'none';
