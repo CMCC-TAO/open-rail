@@ -82,12 +82,25 @@
   border: 1px solid color-mix(in srgb, var(--border) 80%, #d93025 20%);
   background: transparent;
   color: color-mix(in srgb, var(--danger) 88%, #ffffff 12%);
-  font-weight: 700;
+  font-weight: 900;
   letter-spacing: 0.2px;
   min-height: 26px;
-  padding: 4px 10px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1;
   box-shadow: none;
   transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+}
+
+#btn-cam-all-toggle i.fas {
+  margin-right: 0;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 #btn-cam-all-toggle::before {
   content: "";

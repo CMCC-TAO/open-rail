@@ -6,7 +6,7 @@
 /* ── Monitor panel header: title left, button groups right ── */
 .monitor-header {
   display: flex; align-items: center; gap: 6px;
-  padding: 5px 0px; flex-wrap: nowrap;
+  padding: 5px 14px; flex-wrap: nowrap;
 }
 .monitor-title { font-weight: 800; font-size: 14px; color: var(--panel-header-text); text-transform: none; letter-spacing: .18px; flex-shrink: 0; }
 /* Spacer pushes all button groups to the right */
