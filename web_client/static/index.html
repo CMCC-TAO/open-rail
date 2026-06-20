@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VLA-RAIL Web Client</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="/static/styles/main.css" />
 </head>
 <body>
@@ -38,9 +40,9 @@
     <div class="left-col" id="left-col">
       <aside class="panel panel-config panel-expanded" id="panel-config">
         <div class="panel-header" id="panel-config-header">
-          <span>⚙ Configuration</span>
+          <span><i class="fas fa-cog"></i> Configuration</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse / Expand">▲</button>
+            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse / Expand"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body" id="config-body">
@@ -48,11 +50,11 @@
           <!-- Config file bar -->
           <div class="config-file-bar">
             <label class="btn btn-sm" id="btn-load-file" title="Load config file">
-              📂 Load
+              <i class="fas fa-folder-open"></i> Load
               <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
             </label>
-            <button class="btn btn-sm" id="btn-apply-config">✔ Apply</button>
-            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…">💾 Save As…</button>
+            <button class="btn btn-sm" id="btn-apply-config"><i class="fas fa-check"></i> Apply</button>
+            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…"><i class="fas fa-save"></i> Save As…</button>
           </div>
           <!-- Current file path display -->
           <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
@@ -80,9 +82,9 @@
 
       <section class="panel panel-recording" id="panel-recording">
         <div class="panel-header" id="panel-recording-header">
-          <span>🧾 Data Recording</span>
+          <span><i class="fas fa-database"></i> Data Recording</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs" id="btn-recording-collapse" title="Collapse">▲</button>
+            <button class="btn btn-xs" id="btn-recording-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="recording-body">
@@ -112,9 +114,9 @@
 
       <section class="panel panel-manual" id="panel-manual">
         <div class="panel-header" id="panel-manual-header">
-          <span>🕹 Manual Robot Control</span>
+          <span><i class="fas fa-gamepad"></i> Manual Robot Control</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs" id="btn-manual-collapse" title="Collapse">▲</button>
+            <button class="btn btn-xs" id="btn-manual-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="manual-body">
@@ -229,10 +231,10 @@
                 </div>
               </div>
               <div class="robot-ctrl-row robot-ctrl-row-actions">
-                <button class="btn btn-sm" id="btn-wheel-forward">↑ Forward</button>
-                <button class="btn btn-sm" id="btn-wheel-backward">↓ Backward</button>
-                <button class="btn btn-sm" id="btn-wheel-left">↺ Turn Left</button>
-                <button class="btn btn-sm" id="btn-wheel-right">↻ Turn Right</button>
+                <button class="btn btn-sm" id="btn-wheel-forward"><i class="fas fa-arrow-up"></i> Forward</button>
+                <button class="btn btn-sm" id="btn-wheel-backward"><i class="fas fa-arrow-down"></i> Backward</button>
+                <button class="btn btn-sm" id="btn-wheel-left"><i class="fas fa-rotate-left"></i> Turn Left</button>
+                <button class="btn btn-sm" id="btn-wheel-right"><i class="fas fa-rotate-right"></i> Turn Right</button>
               </div>
             </section>
 
@@ -247,14 +249,14 @@
       <!-- ── Runtime Monitor ── -->
       <section class="panel panel-monitor">
         <div class="panel-header monitor-header">
-          <span class="monitor-title">📊 Runtime Monitor</span>
+          <span class="monitor-title"><i class="fas fa-chart-line"></i> Runtime Monitor</span>
           <!-- Spacer: push all button groups to the right -->
           <span class="monitor-spacer"></span>
           <!-- Group ①: primary controls -->
           <div class="monitor-ctrl-group">
-            <button class="btn btn-success btn-sm" id="btn-start">▶ Start</button>
-            <button class="btn btn-danger  btn-sm" id="btn-pause" disabled>⏸ Pause</button>
-            <button class="btn btn-sm"             id="btn-reset" disabled>↺ Reset</button>
+            <button class="btn btn-success btn-sm" id="btn-start"><i class="fas fa-play"></i> Start</button>
+            <button class="btn btn-danger  btn-sm" id="btn-pause" disabled><i class="fas fa-pause"></i> Pause</button>
+            <button class="btn btn-sm"             id="btn-reset" disabled><i class="fas fa-rotate-left"></i> Reset</button>
           </div>
           <!-- Separator -->
           <span class="monitor-sep"></span>
@@ -311,7 +313,7 @@
       <!-- ── Language Command ── -->
       <section class="panel panel-lang" id="panel-lang">
         <div class="panel-header">
-          <span>🗣 Language Command</span>
+          <span><i class="fas fa-comments"></i> Language Command</span>
           <div class="panel-header-actions">
             <label class="lang-auto-mode" title="Auto switch to next sub-task language command by Task Progress">
               <input id="chk-lang-auto-mode" type="checkbox" />
@@ -333,10 +335,10 @@
               <span class="task-progress-value" id="task-progress-value">--</span>
             </div>
             <label class="btn btn-xs" title="Load task language json file">
-              📂 Load
+              <i class="fas fa-folder-open"></i> Load
               <input id="lang-file-input" type="file" accept=".json" style="display:none" />
             </label>
-            <button class="btn btn-xs" id="btn-lang-collapse" title="Collapse">▲</button>
+            <button class="btn btn-xs" id="btn-lang-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body" id="lang-body">
@@ -355,7 +357,7 @@
             <div class="lang-cmd-col lang-cmd-col-send">
               <div class="lang-cmd-col-title">Instruction</div>
               <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
-              <button class="btn btn-sm" id="btn-lang-send">✔ Apply</button>
+              <button class="btn btn-sm" id="btn-lang-send"><i class="fas fa-check"></i> Apply</button>
             </div>
           </div>
         </div>
@@ -364,7 +366,7 @@
       <!-- ── Joint Trajectory ── -->
       <section class="panel panel-traj" id="panel-traj">
         <div class="panel-header traj-panel-header" id="traj-panel-header">
-          <span>📈 Trajectory Viewer</span>
+          <span><i class="fas fa-chart-area"></i> Trajectory Viewer</span>
           <div class="panel-header-actions traj-header-actions">
             <!-- spacer: push all groups to the right -->
             <span class="traj-header-spacer"></span>
@@ -377,8 +379,8 @@
                   <span id="traj-window-span-value" class="traj-window-value">10s</span>
                 </div>
                 <div class="traj-window-controls">
-                  <button class="btn btn-xs btn-active" id="btn-traj-pause"><span class="btn-icon">▶</span> Play</button>
-                  <button class="btn btn-xs" id="btn-traj-clear">🗑 Clear</button>
+                  <button class="btn btn-xs btn-active" id="btn-traj-pause"><span class="btn-icon"><i class="fas fa-play"></i></span> Play</button>
+                  <button class="btn btn-xs" id="btn-traj-clear"><i class="fas fa-trash-can"></i> Clear</button>
                 </div>
               </div>
             </div>
@@ -406,7 +408,7 @@
                     <span class="traj-src-btn-text">State</span>
                     <span class="traj-line-indicator traj-line-indicator-state" aria-hidden="true"></span>
                   </label>
-                  <button class="btn btn-xs" id="btn-traj-all"><span class="traj-src-btn-text">All</span></button>
+                  <button class="btn btn-xs traj-allnone-btn traj-src-all-btn" id="btn-traj-all"><span class="traj-src-btn-text">All</span></button>
                 </div>
               </div>
             </div>
@@ -429,7 +431,7 @@
             <!-- Divider -->
             <span class="traj-header-sep"></span>
             <!-- ④ Collapse: rightmost -->
-            <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse" title="Collapse">▼</button>
+            <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse" title="Collapse"><i class="fas fa-chevron-down"></i></button>
           </div>
         </div>
         <div class="traj-body" id="traj-body">
@@ -445,9 +447,9 @@
     <!-- ╔══════════════ RIGHT: CAMERA VISUAL ══════════════╗ -->
     <aside class="panel panel-visual" id="panel-visual">
       <div class="panel-header">
-        <span>📷 Camera Viewer</span>
+        <span><i class="fas fa-camera"></i> Camera Viewer</span>
         <div class="panel-header-actions">
-          <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle">⏸ Close All</button>
+          <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle"><i class="fas fa-pause"></i> Close All</button>
         </div>
       </div>
       <div class="panel-body" id="camera-body">
@@ -500,10 +502,10 @@
   </main>
 
   <!-- ═══════════════════ PANEL REVEAL BUTTONS (floating, shown when panel is collapsed) ═══════════════════ -->
-  <button class="btn btn-xs panel-reveal-btn panel-reveal-config-hide" id="btn-config-hide" title="Hide Configuration">◀</button>
-  <button class="btn btn-xs panel-reveal-btn panel-reveal-left hidden" id="btn-config-reveal" title="Show Configuration">▶</button>
-  <button class="btn btn-xs panel-reveal-btn panel-reveal-visual-hide" id="btn-visual-collapse" title="Hide Camera Viewer">▶</button>
-  <button class="btn btn-xs panel-reveal-btn panel-reveal-right hidden" id="btn-visual-reveal" title="Show Camera Viewer">◀</button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-config-hide" id="btn-config-hide" title="Hide Configuration"><i class="fas fa-chevron-left"></i></button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-left hidden" id="btn-config-reveal" title="Show Configuration"><i class="fas fa-chevron-right"></i></button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-visual-hide" id="btn-visual-collapse" title="Hide Camera Viewer"><i class="fas fa-chevron-right"></i></button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-right hidden" id="btn-visual-reveal" title="Show Camera Viewer"><i class="fas fa-chevron-left"></i></button>
 
   <!-- ═══════════════════ FOOTER ═══════════════════ -->
   <footer class="footer-bar">

@@ -197,9 +197,9 @@ visualize:
     selected_joints:
     - 0
     source:
-    - ActionRaw
-    - ActionFitted
     - State
+    - ActionFitted
+    - ActionRaw
     update_interval_ms: 50
     window_span_sec: 8.0
 vla_zmq:

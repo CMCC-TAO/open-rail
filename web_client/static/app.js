@@ -266,21 +266,21 @@ function syncStartPauseButtons(running, paused = false) {
   const btnPause = $('btn-pause');
 
   if (running) {
-    btnStart.textContent = '■ Stop';
+    btnStart.innerHTML = '<i class="fas fa-stop"></i> Stop';
     btnStart.className = 'btn btn-danger btn-sm';
   } else {
-    btnStart.textContent = '▶ Start';
+    btnStart.innerHTML = '<i class="fas fa-play"></i> Start';
     btnStart.className = 'btn btn-success btn-sm';
   }
 
   if (!running) {
-    btnPause.textContent = '⏸ Pause';
+    btnPause.innerHTML = '<i class="fas fa-pause"></i> Pause';
     btnPause.className = 'btn btn-danger  btn-sm';
   } else if (paused) {
-    btnPause.textContent = '▶ Resume';
+    btnPause.innerHTML = '<i class="fas fa-play"></i> Resume';
     btnPause.className = 'btn btn-success btn-sm';
   } else {
-    btnPause.textContent = '⏸ Pause';
+    btnPause.innerHTML = '<i class="fas fa-pause"></i> Pause';
     btnPause.className = 'btn btn-danger  btn-sm';
   }
 
