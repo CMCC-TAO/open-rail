@@ -11,6 +11,20 @@
   display: inline-block; font-size: 10px; line-height: 1;
   vertical-align: middle; position: relative; top: -0.5px;
 }
+/* Font Awesome icons in buttons */
+.btn i.fas, .btn i.far, .btn i.fab {
+  margin-right: 4px;
+  font-size: 12px;
+  vertical-align: middle;
+}
+.btn-xs i.fas, .btn-xs i.far, .btn-xs i.fab {
+  font-size: 11px;
+  margin-right: 3px;
+}
+.btn-sm i.fas, .btn-sm i.far, .btn-sm i.fab {
+  font-size: 12px;
+  margin-right: 4px;
+}
 .btn:hover  { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .btn:active { opacity: .9; }
 .btn:disabled { opacity: .45; cursor: default; pointer-events: none; }

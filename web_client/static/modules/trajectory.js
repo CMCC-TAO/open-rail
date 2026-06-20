@@ -397,13 +397,13 @@ function syncCenterPanelCollapseUi() {
   if (langBtn && langBody) {
     const langCollapsed = langBody.classList.contains('collapsed');
     // Language panel: swap icons for Collapse/Expand as requested.
-    langBtn.textContent = langCollapsed ? '▼' : '▲';
+    langBtn.innerHTML = langCollapsed ? '<i class="fas fa-chevron-down"></i>' : '<i class="fas fa-chevron-up"></i>';
     langBtn.title = langCollapsed ? 'Expand' : 'Collapse';
   }
 
   if (trajBtn && trajBody) {
     const trajCollapsed = trajBody.classList.contains('collapsed');
-    trajBtn.textContent = trajCollapsed ? '▲' : '▼';
+    trajBtn.innerHTML = trajCollapsed ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>';
     trajBtn.title = trajCollapsed ? 'Expand' : 'Collapse';
   }
 }
@@ -426,7 +426,6 @@ function setupTrajPanel() {
     if (btnAllSource) {
       const s = App.traj.source;
       const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
-      btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
       btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
   }
@@ -480,8 +479,8 @@ function setupTrajPanel() {
     const btn = $('btn-traj-pause');
     if (!btn) return;
     btn.innerHTML = App.traj.paused
-      ? '<span class="btn-icon">▶</span> Play'
-      : '<span class="btn-icon">⏸</span> Pause';
+      ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
+      : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
     btn.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
   }
 

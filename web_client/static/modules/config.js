@@ -582,7 +582,7 @@ function buildGroup(label, rowEls) {
   group.className = 'cfg-group';
   const header = document.createElement('div');
   header.className = 'cfg-group-header';
-  header.innerHTML = `<span class="cfg-group-toggle">▶</span><span>${label}</span>`;
+  header.innerHTML = `<span class="cfg-group-toggle"><i class="fas fa-chevron-right"></i></span><span>${label}</span>`;
   const body = document.createElement('div');
   body.className = 'cfg-group-body';
   body.style.display = 'none';
@@ -601,7 +601,7 @@ function buildGroupFromEl(label, bodyEl) {
   group.className = 'cfg-group';
   const header = document.createElement('div');
   header.className = 'cfg-group-header';
-  header.innerHTML = `<span class="cfg-group-toggle">▶</span><span>${label}</span>`;
+  header.innerHTML = `<span class="cfg-group-toggle"><i class="fas fa-chevron-right"></i></span><span>${label}</span>`;
   bodyEl.style.display = 'none';
   header.addEventListener('click', () => {
     const open = header.classList.toggle('open');
@@ -1069,7 +1069,7 @@ function applyVisualConfig(cfg = App.config) {
   const camAllBtn = $('btn-cam-all-toggle');
   if (camAllBtn) {
     const allOn = App.camOpen.every(v => v);
-    camAllBtn.textContent = allOn ? '⏸ Close All' : '▶ Open All';
+    camAllBtn.innerHTML = allOn ? '<i class="fas fa-pause"></i> Close All' : '<i class="fas fa-play"></i> Open All';
     camAllBtn.className = allOn ? 'btn btn-xs btn-danger' : 'btn btn-xs btn-success';
   }
 
@@ -1133,13 +1133,12 @@ function applyVisualConfig(cfg = App.config) {
   if (chkActionRaw) chkActionRaw.checked = App.traj.source.has('action_raw');
   if (btnAllSource) {
     const allSelected = App.traj.source.has('state') && App.traj.source.has('action_fitted') && App.traj.source.has('action_raw');
-    btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
     btnAllSource.textContent = allSelected ? 'None' : 'All';
   }
   if (btnPlay) {
     btnPlay.innerHTML = App.traj.paused
-      ? '<span class="btn-icon">▶</span> Play'
-      : '<span class="btn-icon">⏸</span> Pause';
+      ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
+      : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
     btnPlay.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
   }
 

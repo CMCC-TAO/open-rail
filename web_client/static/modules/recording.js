@@ -262,9 +262,9 @@ function setupLeftPanelAccordion() {
       panel?.classList.toggle('panel-expanded', expanded);
       if (btn) {
         const isConfigBtn = btnId === 'btn-config-collapse';
-        btn.textContent = isConfigBtn
-          ? (expanded ? '▲' : '▼')
-          : (expanded ? '▼' : '▲');
+        btn.innerHTML = isConfigBtn
+          ? (expanded ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>')
+          : (expanded ? '<i class="fas fa-chevron-down"></i>' : '<i class="fas fa-chevron-up"></i>');
       }
     });
 

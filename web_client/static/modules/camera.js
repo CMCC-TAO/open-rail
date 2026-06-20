@@ -155,10 +155,10 @@ function setupCameraPanel() {
     const allOn = App.camOpen.every(v => v);
     const btn = $('btn-cam-all-toggle');
     if (allOn) {
-      btn.textContent = '⏸ Close All';
+      btn.innerHTML = '<i class="fas fa-pause"></i> Close All';
       btn.className = 'btn btn-xs btn-danger';
     } else {
-      btn.textContent = '▶ Open All';
+      btn.innerHTML = '<i class="fas fa-play"></i> Open All';
       btn.className = 'btn btn-xs btn-success';
     }
   }

@@ -206,29 +206,10 @@
   box-shadow: none;
   transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
 }
-.traj-allnone-btn::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(180deg, color-mix(in srgb, #ffffff 14%, transparent) 0%, transparent 45%);
-  opacity: .75;
-}
-.traj-allnone-btn:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border) 42%);
-  color: color-mix(in srgb, var(--text) 80%, #ffffff 20%);
-  background: color-mix(in srgb, var(--accent-soft) 30%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
-    0 6px 14px color-mix(in srgb, var(--accent) 14%, transparent);
-}
-.traj-allnone-btn:active {
-  transform: translateY(0);
-  box-shadow:
-    inset 0 2px 4px color-mix(in srgb, #000000 14%, transparent),
-    0 2px 7px color-mix(in srgb, #0a1626 20%, transparent);
+
+/* Source group All button - wider to match State checkbox */
+.traj-src-all-btn {
+  width: 88px;
 }
 
 /* Window group controls: Pause/Clear on second row */
