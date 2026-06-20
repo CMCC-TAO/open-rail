@@ -10,6 +10,27 @@
   min-width: 0;
   justify-content: center;
   text-align: center;
+  padding: 4px 8px;
+}
+
+/* Make Start/Stop follow Configuration Load/Apply neutral button style */
+.recording-controls .btn.btn-success,
+.recording-controls .btn.btn-danger {
+  background: var(--bg);
+  border-color: var(--border);
+  color: var(--text);
+  box-shadow: none;
+  font-weight: 400;
+}
+.recording-controls .btn.btn-success:hover,
+.recording-controls .btn.btn-danger:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.recording-controls .btn.btn-success:active,
+.recording-controls .btn.btn-danger:active {
+  opacity: .9;
 }
 
 .recording-options {

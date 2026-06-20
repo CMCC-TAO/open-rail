@@ -1,6 +1,16 @@
 /* ── Config panel ── */
 .config-file-bar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .config-file-bar label.btn { position: relative; overflow: hidden; cursor: pointer; }
+
+/* Configuration buttons: tighten icon/text and horizontal padding */
+.config-file-bar .btn {
+  padding: 4px 8px;
+}
+.config-file-bar .btn i.fas,
+.config-file-bar .btn i.far,
+.config-file-bar .btn i.fab {
+  margin-right: -2px;
+}
 .config-path-display {
   font-size: 10px; color: var(--text-muted); padding: 2px 6px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
