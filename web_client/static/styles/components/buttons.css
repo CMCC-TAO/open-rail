@@ -19,11 +19,12 @@
 .btn-lg  { padding: 7px 20px; font-size: 13px; font-weight: 600; }
 
 /* Keep Start/Stop button width stable while text toggles */
-#btn-start, #btn-pause, #btn-observe, #btn-infer, #btn-control {
+#btn-start, #btn-pause, #btn-reset {
   min-width: 88px;
+  min-height: 34px;
   text-align: center;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 900;
 }
 #btn-observe, #btn-infer, #btn-control {
   min-width: 80px;
@@ -39,13 +40,14 @@
 .thread-btn-main {
   font-size: 13px;
   line-height: 1;
-  font-weight: 800;
+  font-weight: 900;
   pointer-events: none;
 }
 .thread-btn-sub {
   font-size: 10px;
   line-height: 1;
-  opacity: .9;
+  font-weight: 600;
+  opacity: .85;
   pointer-events: none;
 }
 .btn-primary,
