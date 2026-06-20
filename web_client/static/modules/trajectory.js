@@ -481,7 +481,7 @@ function setupTrajPanel() {
     btn.innerHTML = App.traj.paused
       ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
       : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
-    btn.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
+    btn.className = 'btn btn-xs';
   }
 
   $('btn-traj-pause').addEventListener('click', () => {
