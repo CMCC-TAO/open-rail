@@ -20,6 +20,95 @@
   flex-shrink: 0; margin: 0 4px; align-self: center;
 }
 
+/* ── Runtime monitor control buttons: minimal-tech premium style ── */
+.panel-monitor .monitor-ctrl-group .btn {
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #1a73e8 20%);
+  background:
+    linear-gradient(165deg,
+      color-mix(in srgb, var(--bg2) 95%, #0f2033 5%) 0%,
+      color-mix(in srgb, var(--bg3) 92%, #081a2b 8%) 100%);
+  color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%);
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 18%, transparent),
+    0 4px 10px color-mix(in srgb, #0a1626 20%, transparent);
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+}
+.panel-monitor .monitor-ctrl-group .btn::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, #ffffff 14%, transparent) 0%, transparent 45%);
+  opacity: .75;
+}
+.panel-monitor .monitor-ctrl-group .btn:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border) 42%);
+  color: color-mix(in srgb, var(--text) 80%, #ffffff 20%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
+    0 6px 14px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.panel-monitor .monitor-ctrl-group .btn:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, #000000 14%, transparent),
+    0 2px 7px color-mix(in srgb, #0a1626 20%, transparent);
+}
+.panel-monitor .monitor-ctrl-group .btn:disabled {
+  border-color: color-mix(in srgb, var(--border) 90%, transparent);
+  background: color-mix(in srgb, var(--bg) 96%, #0e1d2f 4%);
+  color: color-mix(in srgb, var(--text-muted) 78%, #8aa0b8 22%);
+  opacity: .65;
+  box-shadow: none;
+}
+
+/* Accent semantic buttons in monitor */
+.panel-monitor .monitor-ctrl-group .btn-success {
+  border-color: color-mix(in srgb, var(--success) 65%, var(--border) 35%);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--success) 92%, #ffffff 8%) 0%,
+    color-mix(in srgb, var(--success-strong) 86%, #081a2b 14%) 100%);
+  color: #ffffff;
+}
+.panel-monitor .monitor-ctrl-group .btn-success:hover {
+  border-color: color-mix(in srgb, var(--success) 78%, #e6f4ea 22%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 24%, transparent),
+    0 7px 16px color-mix(in srgb, var(--success) 24%, transparent);
+}
+.panel-monitor .monitor-ctrl-group .btn-danger {
+  border-color: color-mix(in srgb, var(--danger) 62%, var(--border) 38%);
+  background: linear-gradient(160deg,
+    color-mix(in srgb, var(--danger) 90%, #ffffff 10%) 0%,
+    color-mix(in srgb, var(--danger-strong) 86%, #1f0f16 14%) 100%);
+  color: #ffffff;
+}
+.panel-monitor .monitor-ctrl-group .btn-danger:hover {
+  border-color: color-mix(in srgb, var(--danger) 78%, #fce8e6 22%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
+    0 7px 16px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+/* Stronger hierarchy for thread button labels */
+.panel-monitor .thread-btn-main {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .15px;
+}
+.panel-monitor .thread-btn-sub {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .25px;
+  opacity: .92;
+}
+
 /* Replay path pill */
 .replay-path-display {
   font-size: 10px; color: var(--text-muted);
@@ -68,17 +157,93 @@
 /* ── Control bar (kept for any remaining uses) ── */
 .control-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-/* ── Stats inline bar (single row) ── */
+/* ── Stats inline board cards ── */
 .stats-inline {
-  display: flex; align-items: center; gap: 6px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 4px 10px;
-  flex-wrap: nowrap; flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  padding: 2px 0;
 }
-.stat-inline-item  { display: flex; align-items: baseline; gap: 5px; }
-.stat-inline-label { font-size: 11px; color: var(--text-muted); text-transform: none; letter-spacing: .2px; white-space: nowrap; }
-.stat-inline-value { font-size: 20px; font-weight: 800; color: var(--accent); line-height: 1.05; white-space: nowrap; }
-.stat-inline-sep   { color: var(--border); font-size: 14px; user-select: none; }
+.stat-inline-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 60px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--bg2) 90%, #0f2136 10%) 0%,
+      color-mix(in srgb, var(--bg2) 95%, #0a1627 5%) 60%,
+      color-mix(in srgb, var(--bg3) 88%, #0b1f33 12%) 100%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 10%, transparent),
+    0 6px 18px color-mix(in srgb, #04121e 34%, transparent);
+  overflow: hidden;
+}
+.stat-inline-item::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 0;
+  height: 2px;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 78%, #6ce7ff 22%) 0%,
+    color-mix(in srgb, var(--accent) 40%, transparent) 100%);
+  opacity: 0.85;
+}
+.stat-inline-item::after {
+  content: "";
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  top: -45px;
+  right: -32px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle,
+    color-mix(in srgb, var(--accent) 16%, transparent) 0%,
+    transparent 70%);
+}
+.stat-inline-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--text-muted) 90%, #b7ccdf 10%);
+  letter-spacing: 0.45px;
+  text-transform: none;
+  white-space: nowrap;
+}
+.stat-inline-value {
+  font-size: clamp(22px, 1.5vw, 26px);
+  font-weight: 850;
+  color: color-mix(in srgb, var(--panel-header-text) 88%, #ffffff 12%);
+  line-height: 1;
+  letter-spacing: 0.18px;
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 1px 0 color-mix(in srgb, #ffffff 12%, transparent);
+  white-space: nowrap;
+}
+.stat-inline-sep { display: none; }
+
+@media (max-width: 1120px) {
+  .stats-inline {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .stats-inline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .stat-inline-item {
+    min-height: 56px;
+  }
+}
 
 /* ── Stats grid (kept for compatibility) ── */
 .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
