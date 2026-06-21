@@ -2,33 +2,97 @@
 .topbar {
   position: fixed; top: 0; left: 0; right: 0;
   height: var(--topbar-h);
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; padding: 0 16px;
+  background: var(--topbar-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(199, 201, 205, 0.4);
+  display: flex; align-items: center; padding: 0 20px;
   z-index: 100;
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: all 0.3s ease;
 }
-.topbar-left  { display: flex; align-items: center; gap: 10px; flex: 1; }
+
+.topbar:hover {
+  box-shadow: 
+    0 8px 30px rgba(0, 0, 0, 0.18),
+    0 4px 16px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.topbar-left  { display: flex; align-items: center; gap: 16px; flex: 1; }
 .topbar-center {
   flex: 1; display: flex; flex-direction: column;
   justify-content: center; align-items: center;
 }
-.topbar-right  { flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.topbar-right  { flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 
-.logo { font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: 2px; }
-.subtitle { color: var(--text-muted); font-size: 11px; }
+.logo { 
+  font-size: 20px; 
+  font-weight: 1000; 
+  background: linear-gradient(135deg, #1a73e8, #4285f4, #5a9df9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 1.5px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.subtitle { 
+  color: var(--text-muted); 
+  font-size: 11px; 
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
 
 /* ── Status badge ── */
 .status-badge {
-  padding: 3px 14px; border-radius: 12px; font-size: 11px;
-  font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  transition: all .3s;
+  padding: 4px 16px; 
+  border-radius: 20px; 
+  font-size: 12px;
+  font-weight: 800; 
+  letter-spacing: 0.5px; 
+  text-transform: capitalize;
+  transition: all .3s ease;
+  border: 1px solid transparent;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
 }
-.status-badge.running { background: var(--success-soft); color: var(--success); border: 1px solid var(--success); }
-.status-badge.stopped { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger); }
-.status-badge.paused  { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); }
+.status-badge.running { 
+  background: linear-gradient(135deg, rgba(24, 128, 56, 0.15), rgba(24, 128, 56, 0.05)); 
+  color: var(--success); 
+}
+.status-badge.stopped { 
+  background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); 
+  color: var(--danger); 
+}
+.status-badge.paused  { 
+  background: linear-gradient(135deg, rgba(176, 106, 0, 0.15), rgba(176, 106, 0, 0.05));
+  color: var(--warn); 
+}
 
 /* ── WS indicator ── */
-.ws-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; transition: background .3s; }
-.ws-dot.connected    { background: var(--success); box-shadow: var(--status-glow-success); }
-.ws-dot.disconnected { background: var(--text-muted); }
-.ws-label { font-size: 11px; color: var(--text-muted); }
+.ws-dot { 
+  width: 8px; 
+  height: 8px; 
+  border-radius: 50%; 
+  display: inline-block; 
+  transition: all .3s ease;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+}
+.ws-dot.connected    { 
+  background: var(--success); 
+  box-shadow: 0 0 8px rgba(24, 128, 56, 0.4);
+}
+.ws-dot.disconnected { 
+  background: var(--text-muted); 
+  opacity: 0.6;
+}
+.ws-label { 
+  font-size: 11px; 
+  color: var(--text-muted); 
+  font-weight: 400;
+}

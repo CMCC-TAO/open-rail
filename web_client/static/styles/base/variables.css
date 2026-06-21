@@ -47,6 +47,8 @@
   --progress-gradient: linear-gradient(90deg, var(--success) 0%, var(--accent) 100%);
 
   --topbar-h:   44px;
+  /* --topbar-bg: linear-gradient(135deg, #f3f5f7 0%, #c0c2c9 50%,  #f3f5f7 100%); */
+  --topbar-bg: linear-gradient(135deg, #f1f3f5 0%, #d9dbde 50%,  #f1f3f5 100%);
   --footer-h:   28px;
   --panel-gap:  12px;
 }
