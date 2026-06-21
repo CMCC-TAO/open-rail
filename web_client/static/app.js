@@ -39,7 +39,7 @@ function renderStats(data) {
   setResourceValue(cpuEl, Number.isFinite(cpuVal) ? cpuVal.toFixed(1) + '%' : '--', 'CPU');
   setResourceValue(gpuEl, Number.isFinite(gpuVal) ? gpuVal.toFixed(1) + '%' : '--', 'GPU');
   setResourceValue(memEl, Number.isFinite(memVal) ? memVal.toFixed(1) + '%' : '--', 'MEM');
-  setResourceValue(bwEl, Number.isFinite(bwVal) ? bwVal.toFixed(2) + 'M' : '--', 'NET');
+  setResourceValue(bwEl, Number.isFinite(bwVal) ? bwVal.toFixed(1) + 'M' : '--', 'NET');
 
   App.latestState = Array.isArray(data.current_state) ? data.current_state.slice() : [];
 }
