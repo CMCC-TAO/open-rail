@@ -95,6 +95,18 @@
   transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
 }
 
+/* Camera Open All button - accent color style */
+#btn-cam-all-toggle.btn-success {
+  color: color-mix(in srgb, var(--accent) 88%, #ffffff 12%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, var(--accent) 20%);
+}
+
+#btn-cam-all-toggle.btn-success:hover {
+  color: color-mix(in srgb, var(--accent) 80%, #ffffff 20%);
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--accent-soft) 22%);
+  background: color-mix(in srgb, var(--accent-soft) 30%, transparent);
+}
+
 #btn-cam-all-toggle i.fas {
   margin-right: 0;
   line-height: 1;
