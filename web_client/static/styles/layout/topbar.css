@@ -30,7 +30,7 @@
 
 .logo { 
   font-size: 20px; 
-  font-weight: 1000; 
+  font-weight: 800; 
   background: linear-gradient(135deg, #1a73e8, #4285f4, #5a9df9);
   -webkit-background-clip: text;
   background-clip: text;
@@ -52,25 +52,42 @@
   padding: 4px 16px; 
   border-radius: 20px; 
   font-size: 12px;
-  font-weight: 800; 
-  letter-spacing: 0.5px; 
+  font-weight: 900; 
+  letter-spacing: 1.0px; 
   text-transform: capitalize;
   transition: all .3s ease;
   border: 1px solid transparent;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.1),
+    0 2px 4px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  position: relative;
+  overflow: hidden;
+}
+.status-badge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 20px;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.3) 0%, 
+    rgba(255, 255, 255, 0) 50%);
+  pointer-events: none;
 }
 .status-badge.running { 
-  background: linear-gradient(135deg, rgba(24, 128, 56, 0.15), rgba(24, 128, 56, 0.05)); 
+  background: linear-gradient(135deg, rgba(24, 128, 56, 0.2), rgba(24, 128, 56, 0.1)); 
   color: var(--success); 
 }
 .status-badge.stopped { 
-  background: linear-gradient(135deg, rgba(217, 48, 37, 0.15), rgba(217, 48, 37, 0.05)); 
+  background: linear-gradient(135deg, rgba(217, 48, 37, 0.2), rgba(217, 48, 37, 0.1)); 
   color: var(--danger); 
 }
 .status-badge.paused  { 
-  background: linear-gradient(135deg, rgba(176, 106, 0, 0.15), rgba(176, 106, 0, 0.05));
+  background: linear-gradient(135deg, rgba(176, 106, 0, 0.2), rgba(176, 106, 0, 0.1));
   color: var(--warn); 
 }
 
