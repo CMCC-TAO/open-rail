@@ -57,11 +57,11 @@
   text-transform: capitalize;
   transition: all .3s ease;
   border: 1px solid transparent;
-  box-shadow: 
+  /* box-shadow: 
     0 4px 12px rgba(0, 0, 0, 0.1),
-    0 2px 4px rgba(0, 0, 0, 0.08);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+    0 2px 4px rgba(0, 0, 0, 0.08); */
+  /* backdrop-filter: blur(6px); */
+  /* -webkit-backdrop-filter: blur(6px); */
   position: relative;
   overflow: hidden;
 }
@@ -105,17 +105,49 @@
 .resource-pill {
   font-size: 10px; /* Slightly increased font size */
   color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  padding: 0 8px; /* Increased padding */
+  border-radius: 9px; /* Changed to match status badge rounded style */
+  padding: 0 8px; /* Increased padding for better appearance */
   line-height: 14px; /* Adjusted line height for better text alignment */
-  width: 80px;
-  min-width: 80px;
+  width: 72px;
+  min-width: 72px;
   height: 24px; /* Increased height from 18px to 24px */
   display: flex;
   align-items: center;
   justify-content: space-between;
+  background: linear-gradient(135deg, 
+    rgba(155, 155, 155, 0.2) 0%, 
+    rgba(105, 105, 105, 0.125) 100%); /* Subtle gradient background similar to status badges */
+  border: 1px solid rgba(255, 255, 255, 0.15); /* Light border for glass effect */
+  /* box-shadow: 
+    0 1px 2px rgba(0, 0, 0, 0.02),
+    0 1px 2px rgba(0, 0, 0, 0.04); */
+  /* backdrop-filter: blur(6px); Glassmorphism effect */
+  /* -webkit-backdrop-filter: blur(6px); */
+  position: relative;
+  overflow: hidden;
+  transition: all .3s ease;
+}
+
+.resource-pill::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 20px; /* Match the pill shape */
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.2) 0%, 
+    rgba(255, 255, 255, 0) 50%);
+  pointer-events: none;
+  transition: all .3s ease;
+}
+
+.resource-pill:hover {
+  box-shadow: 
+    0 6px 16px rgba(0, 0, 0, 0.08),
+    0 3px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
 }
 
 .resource-label {
