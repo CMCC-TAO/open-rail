@@ -39,7 +39,7 @@ language:
   auto_mode: false
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: point_bottle
+  task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 observer:
@@ -182,9 +182,9 @@ vision:
     width: 640
 visualize:
   camera:
-    open_head: true
-    open_wrist_left: true
-    open_wrist_right: true
+    open_head: false
+    open_wrist_left: false
+    open_wrist_right: false
     update_interval_ms: 33
   server:
     host: 0.0.0.0

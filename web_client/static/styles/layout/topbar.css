@@ -56,12 +56,12 @@
   letter-spacing: 1.0px; 
   text-transform: capitalize;
   transition: all .3s ease;
-  border: 1px solid transparent;
-  /* box-shadow: 
-    0 4px 12px rgba(0, 0, 0, 0.1),
-    0 2px 4px rgba(0, 0, 0, 0.08); */
-  /* backdrop-filter: blur(6px); */
-  /* -webkit-backdrop-filter: blur(6px); */
+  border: 1px solid transparent;  /* 初始边框为透明 */
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.08),           /* 添加较弱的外阴影 */
+    0 1px 2px rgba(0, 0, 0, 0.05);           /* 添加较弱的内阴影 */
+  backdrop-filter: blur(6px);                 /* 恢复glass效果 */
+  -webkit-backdrop-filter: blur(6px);         /* 恢复glass效果 */
   position: relative;
   overflow: hidden;
 }
@@ -74,21 +74,24 @@
   bottom: 0;
   border-radius: 20px;
   background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.3) 0%, 
+    rgba(255, 255, 255, 0.2) 0%,              /* 减弱浮光效果 */
     rgba(255, 255, 255, 0) 50%);
   pointer-events: none;
 }
 .status-badge.running { 
   background: linear-gradient(135deg, rgba(24, 128, 56, 0.2), rgba(24, 128, 56, 0.1)); 
   color: var(--success); 
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);  /* 边框颜色与文字颜色保持一致 */
 }
 .status-badge.stopped { 
   background: linear-gradient(135deg, rgba(217, 48, 37, 0.2), rgba(217, 48, 37, 0.1)); 
   color: var(--danger); 
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);  /* 边框颜色与文字颜色保持一致 */
 }
 .status-badge.paused  { 
   background: linear-gradient(135deg, rgba(176, 106, 0, 0.2), rgba(176, 106, 0, 0.1));
   color: var(--warn); 
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);  /* 边框颜色与文字颜色保持一致 */
 }
 
 /* Monitor resource usage group */
@@ -117,12 +120,12 @@
   background: linear-gradient(135deg, 
     rgba(155, 155, 155, 0.2) 0%, 
     rgba(105, 105, 105, 0.125) 100%); /* Subtle gradient background similar to status badges */
-  border: 1px solid rgba(255, 255, 255, 0.15); /* Light border for glass effect */
-  /* box-shadow: 
-    0 1px 2px rgba(0, 0, 0, 0.02),
-    0 1px 2px rgba(0, 0, 0, 0.04); */
-  /* backdrop-filter: blur(6px); Glassmorphism effect */
-  /* -webkit-backdrop-filter: blur(6px); */
+  border: 1px solid color-mix(in srgb, var(--bg2) 50%, var(--text-muted) 50%); /* 边框颜色介于背景色和文字颜色之间 */
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.06),          /* 添加较弱的外阴影 */
+    0 1px 1px rgba(0, 0, 0, 0.03);          /* 添加较弱的内阴影 */
+  backdrop-filter: blur(6px);                /* 恢复glass效果 */
+  -webkit-backdrop-filter: blur(6px);        /* 恢复glass效果 */
   position: relative;
   overflow: hidden;
   transition: all .3s ease;
@@ -137,7 +140,7 @@
   bottom: 0;
   border-radius: 20px; /* Match the pill shape */
   background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.2) 0%, 
+    rgba(255, 255, 255, 0.15) 0%,             /* 减弱浮光效果 */
     rgba(255, 255, 255, 0) 50%);
   pointer-events: none;
   transition: all .3s ease;
@@ -145,8 +148,8 @@
 
 .resource-pill:hover {
   box-shadow: 
-    0 6px 16px rgba(0, 0, 0, 0.08),
-    0 3px 8px rgba(0, 0, 0, 0.1);
+    0 4px 10px rgba(0, 0, 0, 0.12),          /* 调整悬停时的阴影效果 */
+    0 2px 6px rgba(0, 0, 0, 0.08);
   transform: translateY(-1px);
 }
 

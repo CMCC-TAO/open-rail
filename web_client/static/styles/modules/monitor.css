@@ -163,12 +163,12 @@
 /* Stronger hierarchy for thread button labels */
 .panel-monitor .thread-btn-main {
   font-size: 12px;
-  font-weight: 1000;
+  font-weight: 850;
   letter-spacing: .15px;
 }
 .panel-monitor .thread-btn-sub {
   font-size: 9px;
-  font-weight: 700;
+  font-weight: 650;
   letter-spacing: .15px;
   opacity: .75;
 }
