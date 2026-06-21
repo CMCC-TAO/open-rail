@@ -201,7 +201,7 @@ visualize:
     - ActionFitted
     - ActionRaw
     update_interval_ms: 50
-    window_span_sec: 8.0
+    window_span_sec: 9.0
 vla_zmq:
   client_addr: tcp://localhost:5566
   server_addr: tcp://*:5566

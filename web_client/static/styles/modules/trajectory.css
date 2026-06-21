@@ -85,8 +85,8 @@
 
 .traj-window-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   border: 1px solid var(--accent-strong);
   border-radius: 50%;
   background: #ffffff;
@@ -106,8 +106,8 @@
 }
 
 .traj-window-slider::-moz-range-thumb {
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   border: 1px solid var(--accent-strong);
   border-radius: 50%;
   background: #ffffff;
@@ -117,7 +117,7 @@
   min-width: 20px;
   max-width: 20px;
   text-align: right;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 
@@ -216,7 +216,7 @@
 .traj-window-controls {
   display: flex;
   flex-direction: row;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
   height: 22px;
 }
@@ -224,11 +224,36 @@
 .traj-window-controls .btn {
   width: 64px;
   height: 22px;
-  padding: 0;
-  display: flex;
+  padding: 0 2px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #1a73e8 20%);
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  box-shadow: none;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+}
+
+/* Align Pause/Play + Clear with Joints All/None style */
+.traj-window-controls .btn:active {
+  opacity: .9;
+}
+.traj-window-controls .btn.btn-active {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--border) 80%, #1a73e8 20%) !important;
+  color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%) !important;
+  box-shadow: none !important;
+}
+.traj-window-controls .btn i.fas,
+.traj-window-controls .btn i.far,
+.traj-window-controls .btn i.fab {
+  margin-right: -1px;
 }
 
 /* ── ④ Collapse button: rightmost, vertically centered ── */
