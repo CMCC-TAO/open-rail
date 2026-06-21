@@ -471,6 +471,12 @@ function wireEvents() {
       if (App.isRunning) {
         // Stop request
         const prevPaused = App.isPaused;
+
+        // If data recording is active, stop recording first.
+        if (App.isRecording && typeof stopDataRecordingIfNeeded === 'function') {
+          await stopDataRecordingIfNeeded({ silent: false, refreshList: false });
+        }
+
         setRunningUI(false, false);
         try {
           await apiFetch('/api/client/stop', { method: 'POST', timeoutMs: 8000 });
