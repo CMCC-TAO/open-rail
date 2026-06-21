@@ -90,7 +90,7 @@
   border: 1px solid var(--accent-strong);
   border-radius: 50%;
   background: #ffffff;
-  margin-top: -3px;
+  margin-top: -4px;
 }
 
 .traj-window-slider::-moz-range-track {
@@ -224,7 +224,7 @@
 .traj-window-controls .btn {
   width: 64px;
   height: 22px;
-  padding: 0 2px;
+  padding: 0 0px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -250,10 +250,20 @@
   color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%) !important;
   box-shadow: none !important;
 }
+.traj-window-controls .btn .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  margin-right: 3px;
+}
 .traj-window-controls .btn i.fas,
 .traj-window-controls .btn i.far,
 .traj-window-controls .btn i.fab {
-  margin-right: -1px;
+  margin-right: 2px;
+  margin-top: -1px;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 /* ── ④ Collapse button: rightmost, vertically centered ── */
