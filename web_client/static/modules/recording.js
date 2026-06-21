@@ -1,14 +1,19 @@
 function syncRecordingSwitchUI() {
   const running = !!App.isRunning;
   const recording = !!App.isRecording;
-  const btnStart = $('btn-recording-start');
-  const btnStop = $('btn-recording-stop');
-  if (!btnStart || !btnStop) return;
+  const btnStartStop = $('btn-recording-startstop');
+  if (!btnStartStop) return;
 
-  btnStart.disabled = !running || recording;
-  btnStop.disabled = !running || !recording;
-  btnStart.className = (!running || recording) ? 'btn btn-sm' : 'btn btn-sm btn-success';
-  btnStop.className = (running && recording) ? 'btn btn-sm btn-danger' : 'btn btn-sm';
+  btnStartStop.disabled = !running;
+  
+  // Update button text and style based on recording status
+  if (recording) {
+    btnStartStop.textContent = 'Stop';
+    btnStartStop.className = 'btn btn-sm btn-danger';
+  } else {
+    btnStartStop.textContent = 'Start';
+    btnStartStop.className = 'btn btn-sm btn-success';
+  }
 }
 
 function renderRecordingConfigTree(cfg = App.config) {
@@ -336,61 +341,66 @@ async function setRecordSwitch(enable) {
 }
 
 function setupRecordingPanel() {
-  $('btn-recording-start')?.addEventListener('click', async () => {
-    if (!App.isRunning) {
-      toast('Client is not running.', 'warn');
-      syncRecordingSwitchUI();
-      return;
-    }
-
-    const saveItems = getRecordingSaveItems();
-    try {
-      const res = await apiFetch('/api/client/record/start', {
-        method: 'POST',
-        body: JSON.stringify({ save_items: saveItems }),
-      });
-      const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
-      const currentTask = typeof res?.recording_task === 'string' ? res.recording_task : '';
-      if (currentTaskDir) {
-        App.recordingTask = currentTaskDir;
-        App.recordingChunk = null;
-        App.recordingChunksSnapshot = [];
-      } else if (currentTask) {
-        // Fallback for older backend: select newest dir with task prefix.
-        App.recordingTask = currentTask;
-        App.recordingChunk = null;
-        App.recordingChunksSnapshot = [];
+  // Handle the unified start/stop button
+  const startStopBtn = $('btn-recording-startstop');
+  if (startStopBtn) {
+    startStopBtn.addEventListener('click', async function() {
+      if (!App.isRunning) {
+        toast('Client is not running.', 'warn');
+        syncRecordingSwitchUI();
+        return;
       }
 
-      App.isRecording = true;
-      if (!App.config || typeof App.config !== 'object') App.config = {};
-      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
-      App.config.record.switch = true;
-      renderRecordingConfigTree(App.config);
-      await refreshRecordingFileList();
-      toast('Recording started.', 'ok');
-    } catch (_) { /* toasted */ }
-    syncRecordingSwitchUI();
-  });
+      if (App.isRecording) {
+        // Stop recording
+        try {
+          toast('Recording stopping.', 'info');
+          await apiFetch('/api/client/record/stop', {
+            method: 'POST',
+            body: JSON.stringify({}),
+          });
 
-  $('btn-recording-stop')?.addEventListener('click', async () => {
-    try {
-      toast('Recording stopping.', 'info');
-      await apiFetch('/api/client/record/stop', {
-        method: 'POST',
-        body: JSON.stringify({}),
-      });
+          App.isRecording = false;
+          if (!App.config || typeof App.config !== 'object') App.config = {};
+          if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+          App.config.record.switch = false;
+          renderRecordingConfigTree(App.config);
+          toast('Recording stopped.', 'warn');
+          await refreshRecordingFileList();
+        } catch (_) { /* toasted */ }
+      } else {
+        // Start recording
+        const saveItems = getRecordingSaveItems();
+        try {
+          const res = await apiFetch('/api/client/record/start', {
+            method: 'POST',
+            body: JSON.stringify({ save_items: saveItems }),
+          });
+          const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
+          const currentTask = typeof res?.recording_task === 'string' ? res.recording_task : '';
+          if (currentTaskDir) {
+            App.recordingTask = currentTaskDir;
+            App.recordingChunk = null;
+            App.recordingChunksSnapshot = [];
+          } else if (currentTask) {
+            // Fallback for older backend: select newest dir with task prefix.
+            App.recordingTask = currentTask;
+            App.recordingChunk = null;
+            App.recordingChunksSnapshot = [];
+          }
 
-      App.isRecording = false;
-      if (!App.config || typeof App.config !== 'object') App.config = {};
-      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
-      App.config.record.switch = false;
-      renderRecordingConfigTree(App.config);
-      toast('Recording stopped.', 'warn');
-      await refreshRecordingFileList();
-    } catch (_) { /* toasted */ }
-    syncRecordingSwitchUI();
-  });
+          App.isRecording = true;
+          if (!App.config || typeof App.config !== 'object') App.config = {};
+          if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+          App.config.record.switch = true;
+          renderRecordingConfigTree(App.config);
+          await refreshRecordingFileList();
+          toast('Recording started.', 'ok');
+        } catch (_) { /* toasted */ }
+      }
+      syncRecordingSwitchUI();
+    });
+  }
 
   const taskSel = $('recording-task-select');
   taskSel?.addEventListener('change', async () => {
@@ -409,3 +419,39 @@ function setupRecordingPanel() {
   syncRecordingSwitchUI();
   syncRecordingFileListPolling();
 }
+
+// 更新开始录制函数
+function startRecording() {
+  if (!App.isRunning || App.isRecording) return;
+  
+  const episodeEnabled = $('#chk-record-episode').checked;
+  const expdataEnabled = $('#chk-record-expdata').checked;
+  
+  // 发送开始录制请求到后端
+  sendWsMessage({ type: 'start_recording', payload: { 
+    record_episode: episodeEnabled, 
+    record_expdata: expdataEnabled 
+  }});
+}
+
+// 更新停止录制函数
+function stopRecording() {
+  if (!App.isRunning || !App.isRecording) return;
+  
+  // 发送停止录制请求到后端
+  sendWsMessage({ type: 'stop_recording', payload: {} });
+}
+
+// 为单一按钮添加事件监听器
+document.addEventListener('DOMContentLoaded', function() {
+  const startStopBtn = $('btn-recording-startstop');
+  if (startStopBtn) {
+    startStopBtn.addEventListener('click', function() {
+      if (App.isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+  }
+});

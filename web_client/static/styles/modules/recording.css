@@ -13,6 +13,70 @@
   padding: 4px 8px;
 }
 
+/* Style for toggle recording button to match camera panel's Open All/Close All style */
+.recording-controls .btn-toggle-recording {
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #4CAF50 20%);
+  background: transparent;
+  color: color-mix(in srgb, var(--success) 88%, #ffffff 12%);
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  min-height: 26px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1;
+  box-shadow: none;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+}
+
+.recording-controls .btn-toggle-recording i.fas {
+  margin-right: 0;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recording-controls .btn-toggle-recording::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, #ffffff 14%, transparent) 0%, transparent 45%);
+  opacity: .75;
+}
+
+.recording-controls .btn-toggle-recording:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--success) 78%, #E8F5E9 22%);
+  background: color-mix(in srgb, var(--success) 10%, transparent);
+  color: var(--success);
+  box-shadow: 0 4px 8px color-mix(in srgb, var(--success) 20%, transparent);
+}
+
+.recording-controls .btn-toggle-recording.recording {
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #d93025 20%);
+  color: color-mix(in srgb, var(--danger) 88%, #ffffff 12%);
+}
+
+.recording-controls .btn-toggle-recording.recording:hover {
+  border-color: color-mix(in srgb, var(--danger) 78%, #fce8e6 22%);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  color: var(--danger);
+}
+
+.recording-controls .btn-toggle-recording:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 /* Make Start/Stop follow Configuration Load/Apply neutral button style */
 .recording-controls .btn.btn-success,
 .recording-controls .btn.btn-danger {
@@ -31,6 +95,15 @@
 .recording-controls .btn.btn-success:active,
 .recording-controls .btn.btn-danger:active {
   opacity: .9;
+}
+
+/* Inline options layout for recording checkboxes */
+.recording-options-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 0 8px;
 }
 
 .recording-options {
