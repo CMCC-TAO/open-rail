@@ -17,8 +17,8 @@
 
 .topbar:hover {
   box-shadow: 
-    0 8px 30px rgba(0, 0, 0, 0.18),
-    0 4px 16px rgba(0, 0, 0, 0.2),
+    0 6px 20px rgba(0, 0, 0, 0.12),
+    0 3px 12px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 .topbar-left  { display: flex; align-items: center; gap: 16px; flex: 1; }
@@ -30,8 +30,8 @@
 
 .logo { 
   font-size: 20px; 
-  font-weight: 800; 
-  background: linear-gradient(135deg, #1a73e8, #4285f4, #5a9df9);
+  font-weight: 1000; 
+  background: linear-gradient(90deg, #196ddc, #2f6ccf, #5a9df9);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -89,6 +89,43 @@
 .status-badge.paused  { 
   background: linear-gradient(135deg, rgba(176, 106, 0, 0.2), rgba(176, 106, 0, 0.1));
   color: var(--warn); 
+}
+
+/* Monitor resource usage group */
+.system-resource-group {
+  display: grid;
+  grid-template-columns: repeat(4, 80px); /* Increased width slightly */
+  grid-template-rows: 24px; /* Increased height from 18px to 24px */
+  gap: 0 4px; /* Slightly increased gap */
+  align-content: center;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.resource-pill {
+  font-size: 10px; /* Slightly increased font size */
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 0 8px; /* Increased padding */
+  line-height: 14px; /* Adjusted line height for better text alignment */
+  width: 80px;
+  min-width: 80px;
+  height: 24px; /* Increased height from 18px to 24px */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.resource-label {
+  text-transform: none;
+  letter-spacing: 0.2px;
+  font-weight: 600; /* Made label bold */
+}
+
+.resource-value {
+  font-weight: 700; /* Increased font weight for value */
 }
 
 /* ── WS indicator ── */

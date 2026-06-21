@@ -181,43 +181,6 @@
 }
 .replay-path-display:not(:empty) { border-color: var(--border); background: var(--bg); }
 
-/* Monitor resource usage group */
-.monitor-resource-group {
-  display: grid;
-  grid-template-columns: repeat(4, 80px); /* Increased width slightly */
-  grid-template-rows: 24px; /* Increased height from 18px to 24px */
-  gap: 0 4px; /* Slightly increased gap */
-  align-content: center;
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-.resource-pill {
-  font-size: 10px; /* Slightly increased font size */
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  padding: 0 8px; /* Increased padding */
-  line-height: 14px; /* Adjusted line height for better text alignment */
-  width: 80px;
-  min-width: 80px;
-  height: 24px; /* Increased height from 18px to 24px */
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.resource-label {
-  text-transform: none;
-  letter-spacing: 0.2px;
-  font-weight: 600; /* Made label bold */
-}
-
-.resource-value {
-  font-weight: 700; /* Increased font weight for value */
-}
-
 /* ── Control bar (kept for any remaining uses) ── */
 .control-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
