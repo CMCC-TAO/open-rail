@@ -6,13 +6,13 @@ function syncRecordingSwitchUI() {
 
   btnStartStop.disabled = !running;
   
-  // Update button text and style based on recording status
+  // Update button text/icon/style based on recording status
   if (recording) {
-    btnStartStop.textContent = 'Stop';
-    btnStartStop.className = 'btn btn-sm btn-danger';
+    btnStartStop.innerHTML = '<i class="fas fa-stop"></i> Stop';
+    btnStartStop.className = 'btn btn-xs btn-danger';
   } else {
-    btnStartStop.textContent = 'Start';
-    btnStartStop.className = 'btn btn-sm btn-success';
+    btnStartStop.innerHTML = '<i class="fas fa-play"></i> Start';
+    btnStartStop.className = 'btn btn-xs btn-success';
   }
 }
 

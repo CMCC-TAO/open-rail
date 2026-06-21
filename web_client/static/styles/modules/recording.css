@@ -13,13 +13,13 @@
   padding: 4px 8px;
 }
 
-/* Style for toggle recording button to match camera panel's Open All/Close All style */
-.recording-controls .btn-toggle-recording {
+/* Recording Start/Stop button: align visual style with Camera Viewer Open/Close All */
+#btn-recording-startstop {
   position: relative;
   border-radius: 9px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, #4CAF50 20%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #d93025 20%);
   background: transparent;
-  color: color-mix(in srgb, var(--success) 88%, #ffffff 12%);
+  color: color-mix(in srgb, var(--danger) 88%, #ffffff 12%);
   font-weight: 900;
   letter-spacing: 0.2px;
   min-height: 26px;
@@ -33,7 +33,21 @@
   transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
 }
 
-.recording-controls .btn-toggle-recording i.fas {
+#btn-recording-startstop.btn-success {
+  color: color-mix(in srgb, var(--accent) 88%, #ffffff 12%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, var(--accent) 20%);
+}
+
+#btn-recording-startstop.btn-success:hover {
+  color: color-mix(in srgb, var(--accent) 80%, #ffffff 20%);
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--accent-soft) 22%);
+  background: color-mix(in srgb, var(--accent-soft) 30%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
+    0 6px 14px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+#btn-recording-startstop i.fas {
   margin-right: 0;
   line-height: 1;
   display: inline-flex;
@@ -41,7 +55,7 @@
   justify-content: center;
 }
 
-.recording-controls .btn-toggle-recording::before {
+#btn-recording-startstop::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -51,50 +65,28 @@
   opacity: .75;
 }
 
-.recording-controls .btn-toggle-recording:hover {
+#btn-recording-startstop:hover {
   transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--success) 78%, #E8F5E9 22%);
-  background: color-mix(in srgb, var(--success) 10%, transparent);
-  color: var(--success);
-  box-shadow: 0 4px 8px color-mix(in srgb, var(--success) 20%, transparent);
-}
-
-.recording-controls .btn-toggle-recording.recording {
-  border: 1px solid color-mix(in srgb, var(--border) 80%, #d93025 20%);
-  color: color-mix(in srgb, var(--danger) 88%, #ffffff 12%);
-}
-
-.recording-controls .btn-toggle-recording.recording:hover {
   border-color: color-mix(in srgb, var(--danger) 78%, #fce8e6 22%);
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-  color: var(--danger);
+  color: color-mix(in srgb, var(--danger) 80%, #ffffff 20%);
+  background: color-mix(in srgb, var(--danger-soft) 30%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
+    0 6px 14px color-mix(in srgb, var(--danger) 22%, transparent);
 }
 
-.recording-controls .btn-toggle-recording:disabled {
+#btn-recording-startstop:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, #000000 14%, transparent),
+    0 2px 7px color-mix(in srgb, #0a1626 20%, transparent);
+}
+
+#btn-recording-startstop:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
-}
-
-/* Make Start/Stop follow Configuration Load/Apply neutral button style */
-.recording-controls .btn.btn-success,
-.recording-controls .btn.btn-danger {
-  background: var(--bg);
-  border-color: var(--border);
-  color: var(--text);
-  box-shadow: none;
-  font-weight: 400;
-}
-.recording-controls .btn.btn-success:hover,
-.recording-controls .btn.btn-danger:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.recording-controls .btn.btn-success:active,
-.recording-controls .btn.btn-danger:active {
-  opacity: .9;
 }
 
 /* Inline options layout for recording checkboxes */

@@ -69,8 +69,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 480
-        width: 848
+        height: 640
+        width: 640
     cam.hand_right:
       encode:
         codec: mp4v
@@ -78,8 +78,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 480
-        width: 848
+        height: 640
+        width: 640
     cam.head:
       encode:
         codec: mp4v
@@ -87,21 +87,21 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 800
-        width: 1280
+        height: 640
+        width: 640
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      train: 0:2
     state_shape: 20
     total_chunks: 1
-    total_episodes: 13
-    total_frames: 3244
-    total_tasks: 1
-    total_videos: 39
+    total_episodes: 3
+    total_frames: 0
+    total_tasks: 0
+    total_videos: 9
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false
@@ -182,9 +182,9 @@ vision:
     width: 640
 visualize:
   camera:
-    open_head: false
-    open_wrist_left: false
-    open_wrist_right: false
+    open_head: true
+    open_wrist_left: true
+    open_wrist_right: true
     update_interval_ms: 33
   server:
     host: 0.0.0.0
