@@ -1,5 +1,22 @@
 /* ── Config panel ── */
-.config-file-bar { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.config-file-bar {
+  --config-body-padding-x: 12px;
+  --config-btn-min-width: 82px;
+
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
+  justify-content: space-between;
+  align-items: center;
+
+  /* 使用面板“可视宽度 - 左右 padding”计算按钮间距，确保与同面板元素对齐 */
+  width: 100%;
+  column-gap: clamp(
+    8px,
+    calc((100% - (2 * var(--config-body-padding-x)) - (3 * var(--config-btn-min-width))) / 2),
+    22px
+  );
+}
 .config-file-bar label.btn { position: relative; overflow: hidden; cursor: pointer; }
 
 /* Configuration buttons: tighten icon/text and horizontal padding */
