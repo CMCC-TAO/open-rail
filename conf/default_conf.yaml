@@ -95,13 +95,13 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      train: 0:2
+      train: 0:3
     state_shape: 20
     total_chunks: 1
-    total_episodes: 3
+    total_episodes: 4
     total_frames: 0
     total_tasks: 0
-    total_videos: 9
+    total_videos: 12
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   resize: false

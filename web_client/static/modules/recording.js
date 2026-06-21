@@ -32,6 +32,35 @@ function getRecordingSaveItems() {
   return items;
 }
 
+async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } = {}) {
+  if (!App.isRunning || !App.isRecording) {
+    syncRecordingSwitchUI();
+    return false;
+  }
+
+  try {
+    if (!silent) toast('Recording stopping.', 'info');
+    await apiFetch('/api/client/record/stop', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+
+    App.isRecording = false;
+    if (!App.config || typeof App.config !== 'object') App.config = {};
+    if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+    App.config.record.switch = false;
+
+    renderRecordingConfigTree(App.config);
+    if (!silent) toast('Recording stopped.', 'warn');
+    if (refreshList) await refreshRecordingFileList();
+    syncRecordingSwitchUI();
+    return true;
+  } catch (_) {
+    syncRecordingSwitchUI();
+    return false;
+  }
+}
+
 function renderRecordingFileList(data) {
   const listEl = $('recording-file-list');
   const taskSel = $('recording-task-select');
@@ -353,21 +382,7 @@ function setupRecordingPanel() {
 
       if (App.isRecording) {
         // Stop recording
-        try {
-          toast('Recording stopping.', 'info');
-          await apiFetch('/api/client/record/stop', {
-            method: 'POST',
-            body: JSON.stringify({}),
-          });
-
-          App.isRecording = false;
-          if (!App.config || typeof App.config !== 'object') App.config = {};
-          if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
-          App.config.record.switch = false;
-          renderRecordingConfigTree(App.config);
-          toast('Recording stopped.', 'warn');
-          await refreshRecordingFileList();
-        } catch (_) { /* toasted */ }
+        await stopDataRecordingIfNeeded({ silent: false, refreshList: true });
       } else {
         // Start recording
         const saveItems = getRecordingSaveItems();
