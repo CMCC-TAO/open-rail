@@ -44,8 +44,19 @@ function formatLangTaskOptionLabel(taskName) {
   return taskName;
 }
 
-function formatLangSubtaskOptionLabel(taskName, text, index) {
-  return `${index + 1}. ${text.substring(0, 50)}${text.length > 50 ? '…' : ''}`;
+function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
+  const width = subtaskSelectEl && subtaskSelectEl.clientWidth ? subtaskSelectEl.clientWidth : 0;
+  if (!Number.isFinite(width) || width <= 0) return 36;
+  // Reserve width for index/prefix + right check icon area + select paddings.
+  const reservedPx = 78;
+  const avgCharPx = 7.2;
+  const estimated = Math.floor((width - reservedPx) / avgCharPx);
+  return Math.max(14, estimated);
+}
+
+function formatLangSubtaskOptionLabel(taskName, text, index, maxChars = 36) {
+  const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
+  return `${index + 1}.${clipped}`;
 }
 
 function refreshLangAppliedMarkers(taskId, subTaskId) {
@@ -112,12 +123,13 @@ function renderLangSubtaskSelect() {
   subtaskSel.innerHTML = '';
   const taskName = taskSel ? taskSel.value : null;
   const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  const maxChars = getLangSubtaskMaxCharsByWidth(subtaskSel);
 
   const { taskId: appliedTaskId, subTaskId: appliedSubTaskId } = getAppliedLangSelection();
   subtasks.forEach((text, i) => {
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i);
+    opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i, maxChars);
     setAppliedOptionMarker(opt, taskName === appliedTaskId && i === appliedSubTaskId);
     opt.title = text;
     subtaskSel.appendChild(opt);
