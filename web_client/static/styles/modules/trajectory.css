@@ -268,7 +268,7 @@
 
 /* ── ④ Collapse button: rightmost, vertically centered ── */
 .traj-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px;
+  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
 }
 
 /* ── Body / chart ── */
