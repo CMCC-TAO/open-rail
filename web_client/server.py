@@ -622,12 +622,14 @@ def _collect_stats() -> dict:
         "avg_infer_time": 0.0,
         "avg_traj_time": 0.0,
         "obv_fps": 0.0,
+        "img_proc_time": 0.0,
+        "current_prob_progress": 0.0,
         "language": "",
-        "current_state": [],
-        "current_action": [],
-        "info_obs": {},
-        "info_act": {},
-        "debug_info": "",
+        # "current_state": [],
+        # "current_action": [],
+        # "info_obs": {},
+        # "info_act": {},
+        # "debug_info": "",
         "config_snapshot": {},
         "cpu_usage": None,
         "gpu_usage": None,
@@ -646,6 +648,8 @@ def _collect_stats() -> dict:
         base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", False))
         base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", False))
         base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", False))
+        base["img_proc_time"] = float(getattr(vla_client, "image_process_time", 0.0))
+        base["current_prob_progress"] = float(getattr(vla_client, "current_prob_progress", 0.0))
         base["infer_count"]     = int(vla_client.realtime_data_manager.infer_count)
         base["avg_infer_time"]  = float(vla_client.realtime_data_manager.avg_infer_time)
         base["avg_traj_time"]   = float(vla_client.realtime_data_manager.avg_traj_time)
@@ -653,26 +657,26 @@ def _collect_stats() -> dict:
         base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
         # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
         # acquired = vla_client.show_thread_lock.acquire(timeout=0.05)
-        try:
-            current_state  = list(vla_client.info_current_state)
-            current_action = list(vla_client.info_current_action)
-            info_obs = dict(vla_client.info_obs)
-            info_act = dict(vla_client.info_act)
-        finally:
-            pass
+        # try:
+        #     # current_state  = list(vla_client.info_current_state)
+        #     # current_action = list(vla_client.info_current_action)
+        #     # info_obs = dict(vla_client.info_obs)
+        #     # info_act = dict(vla_client.info_act)
+        # finally:
+        #     pass
             # if acquired:
             #     vla_client.show_thread_lock.release()
-        base["current_state"]   = [round(float(x), 4) for x in current_state]
-        base["current_action"]  = [round(float(x), 4) for x in current_action]
-        base["info_obs"]        = {k: str(v) for k, v in info_obs.items()}
-        base["info_act"]        = {k: str(v) for k, v in info_act.items()}
+        # base["current_state"]   = [round(float(x), 4) for x in current_state]
+        # base["current_action"]  = [round(float(x), 4) for x in current_action]
+        # base["info_obs"]        = {k: str(v) for k, v in info_obs.items()}
+        # base["info_act"]        = {k: str(v) for k, v in info_act.items()}
         try:
-            base["current_prob_progress"] = float(info_act.get("current_prob_progress", 0.0))
+            # base["current_prob_progress"] = float(info_act.get("current_prob_progress", 0.0))
             base["sub_task_id"] = int(vla_client.config.language.sub_task_id) if hasattr(vla_client.config.language, 'sub_task_id') else None
             # print(f"Debug: sub_task_id: {vla_client.config.language.sub_task_id}")
         except Exception as e:
-            base["current_prob_progress"] = 0.0
-            logger.error("Failed to parse current_prob_progress from info_act: {e}")
+            # base["current_prob_progress"] = 0.0
+            logger.error("Failed to get sub task id from language config: {e}")
         # base["debug_info"]      = str(vla_client.debug_info)
         # base["config_snapshot"] = {
         #     "fps":              cfg.observer.fps,
