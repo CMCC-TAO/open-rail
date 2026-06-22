@@ -47,13 +47,12 @@ def get_rdm_config() -> ConfigDict:
     Returns:
         ConfigDict: Configuration dictionary for RealtimeDataManager containing:
             - max_len: Maximum length of observation data sequence buffer
-            - record_data: Flag to enable/disable data recording
+            - observe_fps_window_size: Window size for FPS estimation
     """
     config = ConfigDict()
     config.mode = 'async'  # inference mode, choices = ('async', 'sync')
     config.max_len = 100  # Maximum length of observation data sequence buffer
     config.observe_fps_window_size = 10  # FPS estimation window size based on latest N added observation frames
-    config.record_data = False  # Enable/disable data recording
     return config
 
 def get_intra_chunk_config() -> ConfigDict:

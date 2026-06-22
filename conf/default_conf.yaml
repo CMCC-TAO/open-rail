@@ -58,7 +58,6 @@ rdm:
   max_len: 100
   mode: async
   observe_fps_window_size: 20
-  record_data: false
 record:
   info:
     action_shape: 22
