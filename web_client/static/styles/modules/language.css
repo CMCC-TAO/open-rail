@@ -118,6 +118,9 @@
   max-height: none;
 }
 
+.lang-collapse-btn {
+  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
+}
 .lang-cmd-layout {
   display: flex; 
   gap: 8px; 
