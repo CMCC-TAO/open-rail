@@ -26,6 +26,16 @@
   box-shadow: none;
   gap: 6px;
 }
+/* 添加统一的图标样式到面板头部 */
+.panel-header i.fas {
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  min-width: 14px;
+}
 .panel-header-actions { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; flex-shrink: 0; }
 .panel-body { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 

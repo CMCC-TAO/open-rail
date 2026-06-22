@@ -8,6 +8,8 @@ function renderStats(data) {
   setRunningUI(data.running, data.paused ?? false);
 
   $('val-infer-count').textContent = data.infer_count ?? '–';
+  $('img-proc-time').textContent   = data.img_proc_time != null
+    ? Number(data.img_proc_time).toFixed(1) + ' ms' : '–';
   $('val-infer-time').textContent  = data.avg_infer_time != null
     ? (data.avg_infer_time * 1000).toFixed(1) + ' ms' : '–';
   $('val-traj-time').textContent   = data.avg_traj_time != null

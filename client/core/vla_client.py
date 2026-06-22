@@ -101,9 +101,11 @@ class VLAClientAsync():
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         action_dim = self.action_dim if self.action_dim > 0 else 16
-        self.info_current_action = [0.0] * action_dim
-        self.info_current_state = [0.0] * action_dim
-        self.info_obs, self.info_act = {}, {}
+        # self.info_current_action = [0.0] * action_dim
+        # self.info_current_state = [0.0] * action_dim
+        self.image_process_time = 0.0
+        self.current_prob_progress = 0.0
+        # self.info_obs, self.info_act = {}, {}
         self.camera_shape_dict = None
         # self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
     #################### VLA Client APIs ####################
@@ -196,7 +198,7 @@ class VLAClientAsync():
         self.task_language_manager.reset()
         self.realtime_data_manager.clear()
         with self.show_thread_lock:
-            self.info_act['current_prob_progress'] = 0.0
+            self.current_prob_progress = 0.0
         # TODO: Robot reset
 
     def close(self):
@@ -303,20 +305,20 @@ class VLAClientAsync():
 
         if action_fitted is not None:
             self.robot.control_robot(action_fitted)
-            with self.show_thread_lock:
-                self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
+            # with self.show_thread_lock:
+                # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
             if self.config.record.switch and self.is_control_thread_running and self.is_running:
                 self.dataset_write.add_action_async(action_fitted, time.perf_counter())
             
-            with self.show_thread_lock:
-                self.info_act['action'] = action_fitted.shape
+            # with self.show_thread_lock:
+            #     self.info_act['action'] = action_fitted.shape
 
         # Only use alignment processing if prob_progress array length > 1
         prob_progress = self.realtime_data_manager.get_prob_progress()
         if prob_progress is not None:
             with self.show_thread_lock:
-                self.info_act['current_prob_progress'] = prob_progress
+                self.current_prob_progress = prob_progress
             # print(f"current prob_progress: {prob_progress}")
             if self.config.language.auto_mode == True:
                 # Automatically switch language instruction based on prob_progress changes
@@ -557,6 +559,8 @@ class VLAClientAsync():
         Returns:
             dict: The encoded images with key and values.
         """
+        start_time = time.perf_counter()
+        
         cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
         if self.camera_shape_dict is None:
             self.camera_shape_dict = {key: value.shape for key, value in cam_items}
@@ -568,6 +572,8 @@ class VLAClientAsync():
         for key, encoded_img in results:
             encoded_imgs[key] = encoded_img
 
+        # Calculate processing time in milliseconds
+        self.image_process_time = self.image_process_time * 0.8 +  (time.perf_counter() - start_time) * 1000 * 0.2
         # Send images to visualization interface
         self.visualize_server.update_image_data(encoded_imgs)
 
@@ -588,10 +594,10 @@ class VLAClientAsync():
         loc_timestamp = time.perf_counter()
         encoded_imgs = self._process_image(frame)
         
-        with self.show_thread_lock:
-            if 'obs.state' in frame and frame['obs.state'] is not None:
-                self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
-            self.info_obs['state'] = frame['obs.state'].shape
+        # with self.show_thread_lock:
+            # if 'obs.state' in frame and frame['obs.state'] is not None:
+            #     self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
+            # self.info_obs['state'] = frame['obs.state'].shape
         data = {
             'type': 'vla_obs',
             'ref_timestamp': frame['ref_timestamp'],
