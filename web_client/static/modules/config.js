@@ -671,11 +671,19 @@ function createCfgRow(dotKey, label, value) {
     btn.type = 'button';
     btn.className = 'btn btn-xs';
     btn.textContent = 'Browse';
+    let isBrowsing = false;
 
     btn.addEventListener('click', async () => {
+      if (isBrowsing) return;
+      isBrowsing = true;
+      btn.disabled = true;
+      btn.textContent = 'Browsing...';
+
       let selectedPath = '';
       try {
-        const pickRes = await apiFetch('/api/client/robot/select_directory', {
+        const initialPath = String(value || '').trim();
+        const url = `/api/client/robot/select_directory${initialPath ? `?path=${encodeURIComponent(initialPath)}` : ''}`;
+        const pickRes = await apiFetch(url, {
           // Native directory chooser blocks server response until user confirms/cancels.
           // Use a long timeout to avoid aborting before path is selected.
           timeoutMs: 600000,
@@ -683,7 +691,11 @@ function createCfgRow(dotKey, label, value) {
         });
         selectedPath = String(pickRes?.path || '').trim();
       } catch (_) {
-        return;
+        selectedPath = '';
+      } finally {
+        isBrowsing = false;
+        btn.disabled = false;
+        btn.textContent = 'Browse';
       }
       if (!selectedPath) return;
 
