@@ -36,10 +36,10 @@ intra_chunk:
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
 language:
-  auto_mode: true
+  auto_mode: false
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: table_bussing
+  task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 observer:
@@ -94,7 +94,7 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      train: 0:1
+      valid: 0:100
     state_shape: 20
     total_chunks: 1
     total_episodes: 2
@@ -103,8 +103,8 @@ record:
     total_videos: 6
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
-  save_raw: true
   save_dir: data/recording
+  save_raw: true
   switch: false
 robots:
   a2d:
@@ -170,7 +170,7 @@ robots:
         hand_right: observation.images.hand_right
         head: observation.images.top_head
       ref: head
-    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
+    dataset_path: /home/gaohan/DATA/task_1196
   type: mock
 vision:
   history_frame: false
@@ -194,7 +194,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
+    - 9
     source:
     - State
     - ActionFitted

@@ -31,6 +31,10 @@ function connectWS() {
     App.wsAlive = false;
     updateWSIndicator(false);
     clearInterval(App._pingTimer);
+    // If backend killed while running, interrupt the current log record
+    if (App.isRunning && typeof interruptRunningExecRecord === 'function') {
+      interruptRunningExecRecord();
+    }
     App.reconnectTimer = setTimeout(connectWS, RECONNECT);
   };
 
