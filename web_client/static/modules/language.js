@@ -49,7 +49,7 @@ function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
   if (!Number.isFinite(width) || width <= 0) return 36;
   // Reserve width for index/prefix + right check icon area + select paddings.
   const reservedPx = 81;
-  const avgCharPx = 6.6;
+  const avgCharPx = 7.2;
   const estimated = Math.floor((width - reservedPx) / avgCharPx);
   return Math.max(14, estimated);
 }

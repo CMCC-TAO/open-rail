@@ -3,7 +3,7 @@
   overflow: hidden;
   min-height: 0;
   --lang-task-subtask-content-height: 100%;
-  --lang-task-subtask-bottom: 20px;
+  --lang-task-subtask-bottom: 24px;
   --lang-apply-btn-height: 28px;
   --lang-cmd-col-gap: 4px;
 }
