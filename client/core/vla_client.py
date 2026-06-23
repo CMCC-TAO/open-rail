@@ -349,17 +349,17 @@ class VLAClientAsync():
         - Sets up the fitted action chunk for control
         """
         # Wait for observation changes after reset, then retrieve fresh obs for inference
-        observations, cnt = None, 0
-        while observations is None or cnt < 3:
-            # time.sleep(0.2)
-            self.realtime_data_manager.clear()
-            observations = self.robot.retrieve_observation()
-            cnt += 1
+        # observations, cnt = None, 0
+        # while observations is None or cnt < 3:
+        #     # time.sleep(0.2)
+        #     self.realtime_data_manager.clear()
+        #     observations = self.robot.retrieve_observation()
+        #     cnt += 1
 
-        if observations is not None:
-            self.realtime_data_manager.clear()
-            data = self._process_data(observations)
-            self.realtime_data_manager.add_observe_data(data)
+        # if observations is not None:
+        #     self.realtime_data_manager.clear()
+        #     data = self._process_data(observations)
+        #     self.realtime_data_manager.add_observe_data(data)
             # Clear action data to ensure fresh action retrieval
         
         # Get observation data (thread-safe function, no lock needed)
@@ -371,6 +371,7 @@ class VLAClientAsync():
             # Send data for inference and wait for results
             result = self._request_inference(data, timeout_ms=500)
             if result is None or 'data' not in result:
+                # print("Debug: infer first timeout.")
                 return
             self.realtime_data_manager.add_infer_count()
 

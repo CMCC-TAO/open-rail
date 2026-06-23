@@ -154,11 +154,11 @@ class RealtimeDataManager():
             now = time.perf_counter()
             with self.observe_thread_lock:
                 self.observe_buffer.append(frame)
-                self.observe_add_timestamps.append(now)
-                if len(self.observe_add_timestamps) >= 2:
-                    duration = self.observe_add_timestamps[-1] - self.observe_add_timestamps[0]
-                    if duration > 1e-6:
-                        self.observe_fps = (len(self.observe_add_timestamps) - 1) / duration
+            self.observe_add_timestamps.append(now)
+            if len(self.observe_add_timestamps) >= 2:
+                duration = self.observe_add_timestamps[-1] - self.observe_add_timestamps[0]
+                if duration > 1e-6:
+                    self.observe_fps = (len(self.observe_add_timestamps) - 1) / duration
 
     def get_observe_fps(self):
         """Get observation FPS estimated from recent add_observe_data calls."""
@@ -435,12 +435,11 @@ class RealtimeDataManager():
         Returns:
             dict | list: The observe data frame. None if the buffer is empty.
         """
+        data = None
         with self.observe_thread_lock:
             if len(self.observe_buffer) >= num_samples:
                 data = self.observe_buffer.pop() if num_samples == 1 else [self.observe_buffer.pop() for _ in range(num_samples)]
-                return data
-            else:
-                return None
+        return data
     
     def read_observe_data(self):
         """Read the latest observe data from the buffer.
