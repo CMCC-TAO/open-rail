@@ -54,6 +54,9 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'record.info.total_videos',
   'record.info.video_path',
   'controller.raw_fps',
+  'controller.wait_time',
+  'controller.period',
+  'controller.speed',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
