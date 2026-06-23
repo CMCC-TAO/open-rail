@@ -77,7 +77,6 @@ def get_intra_chunk_config() -> ConfigDict:
     config.max_gripper_fitting_workers = 2
     config.max_head_fitting_workers = 2
     config.fitting_num_samples = 64
-    config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
     config.fitting_deg = 4  # Polynomial fitting degree
     config.intra_chunk_mode = 'fitting'  # intra-chunk processing mode, choices = ('raw', 'interpolation', 'fitting')
     config.joint_dim = 14  # Degrees of freedom for dual arms

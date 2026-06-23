@@ -75,8 +75,8 @@ class VLAClientAsync():
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
-        self.control_thread_timer = MultiThreadTimer(float(self.config.controller.period), self._control_thread_fun)
-        self.visualize_thread_timer = MultiThreadTimer(float(self.config.controller.period), self._visualize_thread_fun)
+        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
+        self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
         
         self.show_thread_lock = threading.Lock()
 
@@ -100,7 +100,7 @@ class VLAClientAsync():
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
-        action_dim = self.action_dim if self.action_dim > 0 else 16
+        # action_dim = self.action_dim if self.action_dim > 0 else 16
         # self.info_current_action = [0.0] * action_dim
         # self.info_current_state = [0.0] * action_dim
         self.image_process_time = 0.0
@@ -135,7 +135,11 @@ class VLAClientAsync():
 
     def stop_control(self):
         self.is_control_thread_running = False
-
+    
+    def set_interval(self, interval) -> None:
+        self.control_thread_timer.set_interval(interval)
+        self.visualize_thread_timer.set_interval(interval)
+    
     def update_camera_shape(self) -> dict:
         """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
         if not hasattr(self, "dataset_write") or self.dataset_write is None:
@@ -394,6 +398,7 @@ class VLAClientAsync():
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
                 timestamps,
                 action_chunk,
+                time_step=self.config.controller.period,
                 task_progress=prob_progress)
 
             # Record control timestamp
@@ -482,7 +487,11 @@ class VLAClientAsync():
             prob_progress = None
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
                 prob_progress = action_data['ext']['prob_progress']
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk, task_progress=prob_progress)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
+                timestamps,
+                action_chunk,
+                time_step=self.config.controller.period,
+                task_progress=prob_progress)
 
             # Record control timestamp
             self.realtime_data_manager.set_control_time_marker()
