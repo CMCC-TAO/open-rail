@@ -378,36 +378,6 @@ def _normalize_record_features_cam(cfg_dict: dict) -> dict:
                 features[f"cam.{cam_key}"] = cam_val
     return cfg_dict
 
-
-def _apply_flat_patch_old(config, patch: dict):
-    """Apply a flat {dot.separated.key: value} patch to config."""
-    from ml_collections import ConfigDict
-
-    def _set_nested(obj, keys, value):
-        for k in keys[:-1]:
-            # Use getattr with a sentinel to avoid falsy-value short-circuit
-            _sentinel = object()
-            attr = getattr(obj, k, _sentinel)
-            obj = obj[k] if attr is _sentinel else attr
-        leaf_key = keys[-1]
-        current = getattr(obj, leaf_key, None)
-        # Enum coercion
-        if current is not None and hasattr(current, '__class__') and hasattr(current.__class__, '__bases__'):
-            if any('Enum' in str(b) for b in current.__class__.__bases__):
-                ec = current.__class__
-                try:
-                    value = ec(value)
-                except Exception:
-                    pass
-        setattr(obj, leaf_key, value)
-
-    for dotkey, value in patch.items():
-        keys = dotkey.split('.')
-        try:
-            _set_nested(config, keys, value)
-        except Exception as e:
-            logger.warning(f"Failed to patch config key '{dotkey}': {e}")
-
 def _apply_flat_patch_new(config, patch: dict):
     """Apply flat patch only to existing config leaf keys (no new key creation)."""
     import enum
@@ -977,6 +947,9 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
+
+    # for k in flat.keys():
+    #     print(f"Debug: key={k}, value={flat[k]}")
 
     vision_preprocess_keys = [k for k in flat.keys() if k.startswith('vision.preprocess')]
     dataset_path_key = 'robots.mock.dataset_path'

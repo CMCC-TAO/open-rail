@@ -7,7 +7,7 @@ const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record']);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
-  intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples', 'fitting_time_step'],
+  intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples'],
   inter_chunk: ['inter_chunk_mode', 'search_length', 'smooth_action', 'smooth_base', 'smooth_length', 'smooth_ratio'],
 };
 
