@@ -971,16 +971,9 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
-
-    # for k in flat.keys():
-    #     print(f"Debug: key={k}, value={flat[k]}")
-
-    vision_preprocess_keys = [k for k in flat.keys() if k.startswith('vision.preprocess')]
-    dataset_path_key = 'robots.mock.dataset_path'
-    dataset_path_changed = dataset_path_key in flat
-    robot_type_key = 'robots.type'
-    robot_type_changed = robot_type_key in flat
-
+    vision_preprocess_keys = []
+    dataset_path_changed = False
+    robot_type_changed = False
     current_vla_client = None
     current_robot = None
     is_running = False
@@ -999,6 +992,22 @@ async def patch_config(req: ConfigPatchRequest):
         current_robot = client_state.robot
         is_running = bool(client_state.running)
 
+        for k in flat.keys():
+            if k.startswith('vision.preprocess'):
+                vision_preprocess_keys.append(k)
+            elif k.startswith('robots.mock.dataset_path'):
+                dataset_path_changed = True
+                next_dataset_path = str(flat[k]).strip()
+            elif k.startswith('robots.type'):
+                robot_type_changed = True
+            elif k.startswith('controller.period'):
+                if current_vla_client is not None:
+                    current_vla_client.set_interval(float(flat[k]))
+                else:
+                    pass
+            else:
+                # print(f"Debug: key={k}, value={flat[k]}")
+                pass
         if vision_preprocess_keys and current_vla_client is not None:
             try:
                 current_vla_client.update_preprocess_func()
@@ -1026,7 +1035,6 @@ async def patch_config(req: ConfigPatchRequest):
                     logger.error(f"Failed to resume client after robot recreate: {e}")
 
     if dataset_path_changed and not (robot_type_changed and prev_robot_type != next_robot_type):
-        next_dataset_path = str(flat.get(dataset_path_key, '') or '').strip()
         targets = []
         if current_robot is not None:
             targets.append(current_robot)
