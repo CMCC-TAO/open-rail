@@ -78,7 +78,8 @@ class IntraChunkSmoother():
                 timestamps=timestamps,
                 task_progress=task_progress,
                 start_time=start_time,
-                end_time=end_time
+                end_time=end_time,
+                time_step=time_step
             ) if task_progress is not None else None
         elif self.config.intra_chunk_mode == 'fitting':
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
@@ -91,7 +92,8 @@ class IntraChunkSmoother():
                 timestamps=timestamps,
                 task_progress=task_progress,
                 start_time=start_time,
-                end_time=end_time
+                end_time=end_time,
+                time_step=time_step
             ) if task_progress is not None else None
         else:  # fit mode (default)
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
@@ -104,7 +106,8 @@ class IntraChunkSmoother():
                 timestamps=timestamps,
                 task_progress=task_progress,
                 start_time=start_time,
-                end_time=end_time
+                end_time=end_time,
+                time_step=time_step
             ) if task_progress is not None else None
         return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted
 

@@ -394,6 +394,7 @@ class VLAClientAsync():
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
                 timestamps,
                 action_chunk,
+                time_step=self.config.intra_chunk.fitting_time_step,
                 task_progress=prob_progress)
 
             # Record control timestamp
@@ -482,7 +483,11 @@ class VLAClientAsync():
             prob_progress = None
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
                 prob_progress = action_data['ext']['prob_progress']
-            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(timestamps, action_chunk, task_progress=prob_progress)
+            action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
+                timestamps, 
+                action_chunk,  
+                time_step=self.config.intra_chunk.fitting_time_step,
+                task_progress=prob_progress)
 
             # Record control timestamp
             self.realtime_data_manager.set_control_time_marker()
