@@ -39,11 +39,13 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visualize.camera.open_head',
   'visualize.camera.open_wrist_left',
   'visualize.camera.open_wrist_right',
-  'visualize.trajectory.selected_joints',
+  'visualize.trajectory.play',
   'visualize.trajectory.source',
+  'visualize.trajectory.selected_joints',
   'visualize.trajectory.window_span_sec',
   'record.switch',
   'record.save_dir',
+  'record.record_exp_data',
   'record.info.data_path',
   'record.info.total_chunks',
   'record.info.total_episodes',
@@ -51,6 +53,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'record.info.total_tasks',
   'record.info.total_videos',
   'record.info.video_path',
+  'observer.period',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
