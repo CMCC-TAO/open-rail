@@ -132,6 +132,7 @@ class ClientState:
         self.worker_thread: Optional[threading.Thread] = None
 
 client_state = ClientState()
+select_directory_lock = asyncio.Lock()
 
 _RESOURCE_CACHE = {
     "ts": 0.0,
@@ -692,42 +693,53 @@ async def get_conf_dir():
 
 
 @app.get("/api/client/robot/select_directory")
-async def select_directory():
+async def select_directory(path: Optional[str] = None):
     """Open a native directory chooser and return an absolute path."""
     selected = ""
-
-    has_gui = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
-    if has_gui and shutil.which("zenity"):
+    initial_dir = str(ROOT)
+    if path:
         try:
-            proc = subprocess.run(
-                ["zenity", "--file-selection", "--directory", "--title=Select Dataset Directory"],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                check=False,
-            )
-            if proc.returncode == 0:
-                selected = proc.stdout.strip()
-            elif proc.returncode == 1:
-                # User explicitly cancelled zenity dialog.
-                return {"status": "cancelled", "path": ""}
-            else:
-                logger.warning(f"zenity directory picker failed: {proc.stderr.strip()}")
-        except Exception as e:
-            logger.warning(f"zenity directory picker exception: {e}")
+            p = Path(path).expanduser()
+            if p.exists():
+                initial_dir = str(p if p.is_dir() else p.parent)
+        except Exception:
+            initial_dir = str(ROOT)
 
-    if not selected:
-        try:
-            import tkinter as tk
-            from tkinter import filedialog
+    async with select_directory_lock:
+        has_gui = bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+        used_zenity = False
+        zenity_failed = False
+        if has_gui and shutil.which("zenity"):
+            used_zenity = True
+            try:
+                zenity_cmd = ["zenity", "--file-selection", "--directory", "--title=Select Dataset Directory"]
+                if initial_dir:
+                    zenity_cmd.extend(["--filename", str(Path(initial_dir).resolve())])
+                proc = await asyncio.to_thread(
+                    subprocess.run,
+                    zenity_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    check=False,
+                )
+                if proc.returncode == 0:
+                    selected = proc.stdout.strip()
+                elif proc.returncode == 1:
+                    # User explicitly cancelled zenity dialog.
+                    return {"status": "cancelled", "path": ""}
+                else:
+                    zenity_failed = True
+                    logger.warning(f"zenity directory picker failed: {proc.stderr.strip()}")
+            except Exception as e:
+                zenity_failed = True
+                logger.warning(f"zenity directory picker exception: {e}")
 
-            root = tk.Tk()
-            root.withdraw()
-            root.attributes("-topmost", True)
-            selected = filedialog.askdirectory(title="Select Dataset Directory") or ""
-            root.destroy()
-        except Exception as e:
-            logger.warning(f"tk directory picker failed: {e}")
+        if not selected and (zenity_failed or not used_zenity):
+            try:
+                selected = await asyncio.to_thread(_ask_directory_with_tk, initial_dir)
+            except Exception as e:
+                logger.warning(f"tk directory picker failed: {e}")
 
     selected = str(selected).strip()
     if not selected:
@@ -735,6 +747,18 @@ async def select_directory():
 
     p = Path(selected).expanduser().resolve()
     return {"status": "ok", "path": str(p)}
+
+
+def _ask_directory_with_tk(initial_dir: str) -> str:
+    import tkinter as tk
+    from tkinter import filedialog
+
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)
+    selected = filedialog.askdirectory(title="Select Dataset Directory", initialdir=initial_dir) or ""
+    root.destroy()
+    return selected
 
 
 @app.get("/api/client/record/episodes")
@@ -1995,8 +2019,15 @@ async def websocket_endpoint(ws: WebSocket):
         client_state.ws_clients.add(ws)
 
     # Push current client_state immediately on connect
-    stats = await asyncio.to_thread(_collect_stats)
-    await ws.send_text(json.dumps({"type": "stats", "data": stats}))
+    try:
+        stats = await asyncio.to_thread(_collect_stats)
+        await ws.send_text(json.dumps({"type": "stats", "data": stats}))
+    except (WebSocketDisconnect, asyncio.CancelledError, RuntimeError) as e:
+        logger.debug(f"WS initial send failed: {e}")
+        return
+    except Exception as e:
+        logger.debug(f"WS initial send failed: {e}")
+        return
 
     try:
         while True:
