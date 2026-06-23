@@ -62,6 +62,11 @@
   font-size: var(--font-size-2);
 }
 
+.lang-threshold-wrap input::-webkit-inner-spin-button,
+.lang-threshold-wrap input::-webkit-outer-spin-button {
+  margin-right: -4px; /* 通过负边距将箭头区域向右拉近，缩小右侧空白 */
+}
+
 .lang-threshold-wrap input:disabled {
   opacity: .55;
   cursor: not-allowed;
