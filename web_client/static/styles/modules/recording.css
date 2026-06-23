@@ -24,7 +24,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 80%, #d93025 20%);
   background: transparent;
   color: color-mix(in srgb, var(--danger) 88%, #ffffff 12%);
-  font-weight: 900;
+  font-weight: var(--font-weight-5);
   letter-spacing: 0.2px;
   min-height: 26px;
   padding: 4px 8px;
@@ -114,7 +114,7 @@
 }
 
 .recording-options-title {
-  font-size: 11px;
+  font-size: var(--font-size-2);
   color: var(--text-muted);
   text-transform: none;
   letter-spacing: .4px;
@@ -124,7 +124,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-2);
   color: var(--text);
   cursor: pointer;
 }
@@ -146,8 +146,8 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-4);
   color: var(--text-muted);
   text-transform: none;
   letter-spacing: .4px;
@@ -173,8 +173,8 @@
 
 .recording-file-filter-label {
   flex: 0 0 44px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-4);
   color: var(--text-muted);
   text-transform: none;
   letter-spacing: .4px;
@@ -188,7 +188,7 @@
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   padding: 0 6px;
   outline: none;
 }
@@ -202,8 +202,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-4);
   color: var(--text-muted);
   text-transform: none;
   letter-spacing: .4px;
@@ -217,8 +217,8 @@
 }
 
 .recording-chunk-filter-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-4);
   color: var(--text-muted);
   letter-spacing: .3px;
 }
@@ -230,7 +230,7 @@
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   padding: 0 6px;
   outline: none;
 }
@@ -255,7 +255,7 @@
   border-radius: var(--radius);
   background: var(--bg2);
   padding: 4px 6px;
-  font-size: 11px;
+  font-size: var(--font-size-2);
 }
 
 .recording-file-item {
