@@ -84,7 +84,7 @@ class VLAClientAsync():
         self._img_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_enc")
 
         # Inference variables
-        self.config.observer.period = 1.0 / self.config.observer.fps
+        self.set_observe_period(speed=self.config.controller.speed)
         self._request_id = 0
 
         # Initialize the dataset writer with the provided recording configuration
@@ -136,9 +136,13 @@ class VLAClientAsync():
     def stop_control(self):
         self.is_control_thread_running = False
     
-    def set_interval(self, interval) -> None:
-        self.control_thread_timer.set_interval(interval)
-        self.visualize_thread_timer.set_interval(interval)
+    def set_control_period(self, period) -> None:
+        self.control_thread_timer.set_interval(period)
+        self.visualize_thread_timer.set_interval(period)
+    
+    def set_observe_period(self, speed) -> None:
+        self.observe_period = 1.0 / speed / self.config.controller.raw_fps
+        # print(f"Debug: control speed = {speed}")
     
     def update_camera_shape(self) -> dict:
         """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
@@ -652,7 +656,7 @@ class VLAClientAsync():
             # Generate action and timestamp chunks
             for index, action in enumerate(pred_action):
                 action_chunk.append(action)
-                timestamp_chunk.append(self.config.observer.period * index)
+                timestamp_chunk.append(self.observe_period * index)
             
             # Set first frame timestamp to observation reference timestamp
             timestamp_chunk[0] = ref_timestamp
@@ -793,7 +797,7 @@ class VLAClientAsync():
                 'joints_y': origin_np.tolist()
             })
 
-            dt_origin = self.config.observer.period
+            dt_origin = self.observe_period
             if self.vis_prev_origin is None:
                 origin_vel = np.zeros_like(origin_np)
                 origin_acc = np.zeros_like(origin_np)

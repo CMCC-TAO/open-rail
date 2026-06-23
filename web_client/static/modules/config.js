@@ -53,7 +53,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'record.info.total_tasks',
   'record.info.total_videos',
   'record.info.video_path',
-  'observer.period',
+  'controller.raw_fps',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
@@ -70,6 +70,7 @@ const DEFAULT_MAIN_PARAMETER_KEYS = {
   'rdm.mode': 'Mode',
   'controller.wait_time': 'Wait Time[ms]',
   'controller.period': 'Control Period[ms]',
+  'controller.speed': 'Control Speed',
   'inter_chunk.inter_chunk_mode': 'Inter-Chunk Mode',
   'intra_chunk.intra_chunk_mode': 'Intra-Chunk Mode',
   'vision.preprocess.mode': 'Preprocess Mode',

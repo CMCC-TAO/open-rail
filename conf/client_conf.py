@@ -17,7 +17,6 @@ def get_client_config():
             - rdm: Real-time data manager configuration
             - intra_chunk: Intra-chunk smoothing/fitting configuration
             - controller: Robot controller configuration
-            - observer: Observation system configuration
             - robots: Robot-specific configuration
             - zmq: ZMQ communication configuration
             - record: Data recording configuration
@@ -28,7 +27,6 @@ def get_client_config():
     config.intra_chunk = get_intra_chunk_config()
     config.inter_chunk = get_inter_chunk_config()
     config.controller = get_controller_config()
-    config.observer = get_observer_config()
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
     # config.vis_zmq = get_vis_zmq_config()
@@ -109,6 +107,8 @@ def get_controller_config() -> ConfigDict:
     config = ConfigDict()
     config.wait_time = 200  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
     config.period = 3.75   # Control period for sending command to robot in milliseconds
+    config.speed = 1.0     # The execution speed with respect to tele-operation speed
+    config.raw_fps = 30    # The FPS of the dataset used to train vla/wam model
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
     return config
 
