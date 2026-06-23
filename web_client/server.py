@@ -1002,7 +1002,12 @@ async def patch_config(req: ConfigPatchRequest):
                 robot_type_changed = True
             elif k.startswith('controller.period'):
                 if current_vla_client is not None:
-                    current_vla_client.set_interval(float(flat[k]))
+                    current_vla_client.set_control_period(float(flat[k]))
+                else:
+                    pass
+            elif k.startswith('controller.speed'):
+                if current_vla_client is not None:
+                    current_vla_client.set_observe_period(float(flat[k]))
                 else:
                     pass
             else:

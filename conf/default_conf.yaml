@@ -4,6 +4,8 @@
 controller:
   gripper_offset: 5
   period: 3.75
+  raw_fps: 30
+  speed: 1.25
   wait_time: 400
 inter_chunk:
   inter_chunk_mode: search_action
@@ -37,13 +39,10 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 1
+  sub_task_id: 0
   task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
-observer:
-  fps: 30
-  period: 0.03333333333333333
 rdm:
   action_layout:
     arm:
