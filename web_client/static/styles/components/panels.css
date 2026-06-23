@@ -18,8 +18,12 @@
   position: relative;
   padding: 8px 14px;
   border-bottom: 1px solid var(--panel-header-divider);
-  display: flex; align-items: center; justify-content: space-between;
-  font-weight: 800; font-size: 14px; color: var(--panel-header-text);
+  display: flex; 
+  align-items: center;
+  justify-content: space-between;
+  font-weight: var(--font-weight-5); 
+  font-size: var(--font-size-5); 
+  color: var(--panel-header-text);
   text-transform: none; letter-spacing: .2px;
   flex-shrink: 0;
   background: var(--panel-header-bg);
@@ -33,7 +37,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: var(--font-size-4);
   min-width: 14px;
 }
 .panel-header-actions { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; flex-shrink: 0; }
@@ -46,3 +50,11 @@
 .panel-recording .panel-body.collapsed { display: none; }
 .panel-manual .panel-body { padding: 8px; overflow-x: hidden; }
 .panel-manual .panel-body.collapsed { display: none; }
+
+/* ── Section title ── */
+.section-title {
+  font-size: var(--font-size-4); font-weight: var(--font-weight-4); color: var(--panel-header-text);
+  text-transform: none; letter-spacing: .2px;
+  border-left: 2px solid var(--accent); padding-left: 6px;
+  margin-top: 4px; cursor: pointer; user-select: none;
+}

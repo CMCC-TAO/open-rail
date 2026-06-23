@@ -3,12 +3,6 @@
 }
 .panel-monitor .panel-body { padding: 6px 8px; gap: 6px; }
 
-/* ── Monitor panel header: title left, button groups right ── */
-.monitor-header {
-  display: flex; align-items: center; gap: 6px;
-  padding: 5px 14px; flex-wrap: nowrap;
-}
-.monitor-title { font-weight: 800; font-size: 14px; color: var(--panel-header-text); text-transform: none; letter-spacing: .18px; flex-shrink: 0; }
 /* Spacer pushes all button groups to the right */
 .monitor-spacer { flex: 1; }
 /* Each button group */
@@ -32,7 +26,7 @@
       color-mix(in srgb, var(--bg2) 96%, #0a1627 4%) 60%,
       color-mix(in srgb, var(--bg3) 90%, #0b1f33 10%) 100%);
   color: color-mix(in srgb, var(--text) 90%, #f3f8ff 10%);
-  font-weight: 800;
+  font-weight: var(--font-weight-5);
   letter-spacing: 0.2px;
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #ffffff 8%, transparent),  /* 减弱内阴影 */
@@ -162,20 +156,20 @@
 
 /* Stronger hierarchy for thread button labels */
 .panel-monitor .thread-btn-main {
-  font-size: 12px;
-  font-weight: 850;
+  font-size: var(--font-size-4);
+  font-weight: var(--font-weight-5);
   letter-spacing: .15px;
 }
 .panel-monitor .thread-btn-sub {
-  font-size: 9px;
-  font-weight: 650;
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-3);
   letter-spacing: .15px;
   opacity: .75;
 }
 
 /* Replay path pill */
 .replay-path-display {
-  font-size: 10px; color: var(--text-muted);
+  font-size: var(--font-size-1); color: var(--text-muted);
   max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   border: 1px solid transparent; border-radius: var(--radius); padding: 1px 4px;
 }
@@ -238,16 +232,16 @@
     transparent 70%);
 }
 .stat-inline-label {
-  font-size: 12px; /* 减小标签字体大小 */
-  font-weight: 600; /* 减小标签字体粗细 */
+  font-size: var(--font-size-3); /* 减小标签字体大小 */
+  font-weight: var(--font-weight-3); /* 减小标签字体粗细 */
   color: color-mix(in srgb, var(--text-muted) 70%, #b7ccdf 10%);
   letter-spacing: 0.35px; /* 调整字母间距 */
   text-transform: none;
   white-space: nowrap;
 }
 .stat-inline-value {
-  font-size: clamp(16px, 1.2vw, 20px); /* 减小数值字体大小 */
-  font-weight: 900; /* 减小数值字体粗细 */
+  font-size: clamp(var(--font-size-4), 1.2vw, var(--font-size-6)); /* 减小数值字体大小 */
+  font-weight: var(--font-weight-5); /* 减小数值字体粗细 */
   color: color-mix(in srgb, var(--panel-header-text) 88%, #ffffff 12%);
   line-height: 1;
   letter-spacing: 0.12px; /* 调整字母间距 */
@@ -273,37 +267,19 @@
   }
 }
 
-/* ── Stats grid (kept for compatibility) ── */
-.stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.stat-card {
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 8px 10px;
-}
-.stat-label { font-size: 11px; color: var(--text-muted); text-transform: none; letter-spacing: .2px; margin-bottom: 4px; }
-.stat-value { font-size: 18px; font-weight: 700; color: var(--accent); }
-.stat-lang  { font-size: 11px; word-break: break-all; }
-
-/* ── Section title ── */
-.section-title {
-  font-size: 12px; font-weight: 700; color: var(--panel-header-text);
-  text-transform: none; letter-spacing: .2px;
-  border-left: 2px solid var(--accent); padding-left: 6px;
-  margin-top: 4px; cursor: pointer; user-select: none;
-}
-
 /* ── KV grid ── */
 .kv-grid {
   display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px;
   background: var(--bg); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 6px 8px;
 }
-.kv-key { color: var(--text-muted); font-size: 11px; }
-.kv-val { color: var(--text); font-size: 11px; word-break: break-all; }
+.kv-key { color: var(--text-muted); font-size: var(--font-size-2); }
+.kv-val { color: var(--text); font-size: var(--font-size-2); word-break: break-all; }
 
 /* ── Debug box ── */
 .debug-box {
   background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 8px; font-size: 11px;
+  border-radius: var(--radius); padding: 8px; font-size: var(--font-size-2);
   color: var(--text-muted); white-space: pre-wrap; word-break: break-word;
   max-height: 80px; overflow-y: auto;
 }

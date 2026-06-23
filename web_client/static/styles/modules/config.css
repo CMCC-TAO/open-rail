@@ -29,7 +29,7 @@
   margin-right: -2px;
 }
 .config-path-display {
-  font-size: 10px; color: var(--text-muted); padding: 2px 6px;
+  font-size: var(--font-size-1); color: var(--text-muted); padding: 2px 6px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   border: 1px solid transparent; border-radius: var(--radius);
   display: none;   /* hidden when empty; JS sets display via :not(:empty) trick below */
@@ -47,17 +47,6 @@
   border-radius: var(--radius);
   background: var(--bg);
   padding: 6px;
-}
-.main-params-title {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: none;
-  text-align: left;
-  letter-spacing: .2px;
-  color: var(--panel-header-text);
-  margin-bottom: 4px;
-  border-left: 2px solid var(--accent);
-  padding-left: 6px;
 }
 .main-params-tree {
   display: flex;
@@ -77,12 +66,12 @@
 .cfg-group-header {
   display: flex; align-items: center; gap: 4px;
   padding: 3px 6px; background: var(--bg3); border-radius: var(--radius);
-  cursor: pointer; user-select: none; font-size: 11px;
-  color: var(--text-muted); font-weight: 700; text-transform: none;
+  cursor: pointer; user-select: none; font-size: var(--font-size-2);
+  color: var(--text-muted); font-weight: var(--font-weight-4); text-transform: none;
   border: 1px solid var(--border);
 }
 .cfg-group-header:hover { color: var(--accent); border-color: var(--accent); }
-.cfg-group-toggle { font-size: 10px; transition: transform .15s; }
+.cfg-group-toggle { font-size: var(--font-size-1); transition: transform .15s; }
 .cfg-group-header.open .cfg-group-toggle { transform: rotate(90deg); }
 .cfg-group-body { padding-left: 8px; }
 
@@ -91,7 +80,7 @@
   padding: 3px 4px; border-radius: 4px; transition: background .1s;
 }
 .cfg-row:hover { background: var(--bg3); }
-.cfg-key   { color: var(--text-muted); flex: 0 0 auto; min-width: 120px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cfg-key   { color: var(--text-muted); flex: 0 0 auto; min-width: 120px; font-size: var(--font-size-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cfg-value { flex: 1; }
 .cfg-value input, .cfg-value select { width: 100%; }
 .cfg-value select[multiple] { min-height: 70px; padding: 4px; }
@@ -101,7 +90,7 @@
   display: flex; align-items: center; gap: 8px;
   padding-top: 6px; border-top: 1px solid var(--border); flex-shrink: 0;
 }
-.pending-badge { color: var(--warn); font-size: 11px; flex: 1; }
+.pending-badge { color: var(--warn); font-size: var(--font-size-2); flex: 1; }
 .pending-badge.hidden { display: none; }
 
 /* ── ④ Collapse button: rightmost, vertically centered ── */

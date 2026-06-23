@@ -10,7 +10,7 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font);
-  font-size: 13px;
+  font-size: var(--font-size-4);
   overflow: hidden;
 }
 

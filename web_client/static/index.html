@@ -61,7 +61,7 @@
 
           <!-- Main parameters (fixed area) -->
           <div id="main-params-section" class="main-params-section">
-            <div class="main-params-title">Main Parameters</div>
+            <div class="section-title">Main Parameters</div>
             <div id="main-params-tree" class="main-params-tree"></div>
           </div>
 
@@ -246,8 +246,10 @@
 
       <!-- ── Runtime Monitor ── -->
       <section class="panel panel-monitor">
-        <div class="panel-header monitor-header">
-          <span class="monitor-title"><i class="fas fa-chart-line"></i> Runtime Monitor</span>
+        <!-- <div class="panel-header monitor-header"> -->
+          <!-- <span class="monitor-title"><i class="fas fa-chart-line"></i> Runtime Monitor</span> -->
+        <div class="panel-header">
+          <span><i class="fas fa-chart-line"></i> Runtime Monitor</span>
           <!-- Spacer: push all button groups to the right -->
           <span class="monitor-spacer"></span>
           <!-- Group ①: primary controls -->
@@ -336,17 +338,17 @@
           <div class="lang-cmd-layout">
             <!-- Task selector (level-1) -->
             <div class="lang-cmd-col">
-              <div class="lang-cmd-col-title">Task</div>
+              <div class="section-title">Task</div>
               <select id="lang-task-select" class="lang-cmd-select" size="5"></select>
             </div>
             <!-- Sub-task selector (level-2) -->
             <div class="lang-cmd-col lang-cmd-col-subtask">
-              <div class="lang-cmd-col-title">Sub-Task</div>
+              <div class="section-title">Sub-Task</div>
               <select id="lang-subtask-select" class="lang-cmd-select" size="5"></select>
             </div>
             <!-- Current instruction + send -->
             <div class="lang-cmd-col lang-cmd-col-send">
-              <div class="lang-cmd-col-title">Instruction</div>
+              <div class="section-title">Instruction</div>
               <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
               <button class="btn btn-sm" id="btn-lang-send"><i class="fas fa-check"></i> Apply</button>
             </div>
