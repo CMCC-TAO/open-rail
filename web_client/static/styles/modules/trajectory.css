@@ -6,7 +6,7 @@
    JOINT TRAJECTORY PANEL
    ═══════════════════════════════════════════ */
 /* traj header has 2-row content, align top */
-.traj-panel-header { align-items: flex-start; padding-top: 5px; padding-bottom: 5px; }
+.traj-panel-header { align-items: flex-start; padding-top: 12px; padding-bottom: 5px; }
 
 .traj-panel-header .traj-src-label {
   font-size: var(--font-size-1); color: var(--text-muted); font-weight: var(--font-weight-3);

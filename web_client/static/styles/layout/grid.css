@@ -5,9 +5,9 @@
 :root {
   --layout-left-col-width: 17%;
   --layout-right-col-width: 20%;
-  --center-monitor-height: 20%;
+  --center-monitor-height: 17%;
   --center-lang-height: 26%;
-  --center-traj-height: 50%;
+  --center-traj-height: 52%;
   --center-collapsed-language-header-height: 38px;
   --center-collapsed-trajectory-header-height: 75px;
 }
@@ -53,8 +53,8 @@
   background: var(--bg);
 }
 
-.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 0; }
-.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 0; }
+.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 156px; }
+.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 240px; }
 .center-col .panel-traj { flex: 0 0 var(--center-traj-height); min-height: 0; }
 
 /* Language collapsed -> keep only header, Trajectory consumes remaining height */
