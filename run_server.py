@@ -70,6 +70,7 @@ def parse_args():
     parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
+    parser.add_argument('--embodiment_tag', type=str, help='Embodiment tag for TAO model (e.g. unitree_g1, a2d_gripper)')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
     return parser.parse_args()
@@ -106,6 +107,13 @@ def override_config_with_args(config, args):
             config.models.pi05.model_path = args.model_path
         elif config.models.type == ModelType.TAO:
             config.models.tao.model_path = args.model_path
+    
+    # Override embodiment_tag (works for TAO and gr00t_n1_5)
+    if args.embodiment_tag:
+        if config.models.type == ModelType.TAO:
+            config.models.tao.embodiment_tag = args.embodiment_tag
+        elif config.models.type == ModelType.GR00T_N1 or config.models.type == ModelType.GR00T_N1_5 or config.models.type == ModelType.GR00T_N1_6:
+            config.models.gr00t.embodiment_tag = args.embodiment_tag
     
     return config
 

@@ -18,11 +18,11 @@ intra_chunk:
   action_layout:
     arm:
       end: 14
-      policy: gradual
+      policy: joint
       start: 0
-    gripper:
-      end: 16
-      policy: stepwise
+    hand:
+      end: 26
+      policy: hand
       start: 14
   filter_window_size: 4
   fitting_deg: 5
@@ -40,18 +40,18 @@ language:
   auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
+  task_id: pour_tea
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 rdm:
   action_layout:
     arm:
       end: 14
-      policy: gradual
+      policy: joint
       start: 0
-    gripper:
-      end: 16
-      policy: stepwise
+    hand:
+      end: 26
+      policy: hand
       start: 14
   max_len: 100
   mode: async
@@ -169,7 +169,54 @@ robots:
         head: observation.images.top_head
       ref: head
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
-  type: mock
+  type: unitree_g1
+  unitree_g1:
+    action_layout:
+      arm:
+        end: 14
+        policy: joint
+        start: 0
+      hand:
+        end: 26
+        policy: hand
+        start: 14
+    camera:
+      names:
+        hand_left: hand_left
+        hand_right: hand_right
+        head: head
+      ref: head
+    hand_type: hand
+    proprio_names:
+    - arm
+    - hand
+    reset_robot_pos:
+    - 0.3
+    - 0.15
+    - -0.15
+    - -0.3
+    - 0.0
+    - -0.3
+    - 0.0
+    - 0.3
+    - -0.15
+    - 0.15
+    - -0.3
+    - 0.0
+    - -0.3
+    - 0.0
+    - 100.0
+    - 100.0
+    - 100.0
+    - 100.0
+    - 150.0
+    - 50.0
+    - 100.0
+    - 100.0
+    - 100.0
+    - 100.0
+    - 150.0
+    - 50.0
 vision:
   history_frame: false
   preprocess:
@@ -192,7 +239,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 7
+    - 0
     source:
     - State
     - ActionFitted
