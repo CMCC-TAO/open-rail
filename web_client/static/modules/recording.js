@@ -560,6 +560,13 @@ function _updateScoreRow() {
   row.style.display = (ExecLog.enabled && hasRunning) ? 'flex' : 'none';
 }
 
+/** Sync disabled state of ExecLog Rec button with App.isRunning */
+function syncExecLogRecButton() {
+  const recBtn = $('btn-exec-log-rec');
+  if (!recBtn) return;
+  recBtn.disabled = !App.isRunning;
+}
+
 /** Render the execution log table */
 function renderExecLog() {
   const tbody = $('exec-log-tbody');
@@ -570,7 +577,10 @@ function renderExecLog() {
 
   const recBtn = $('btn-exec-log-rec');
   const isRecording = ExecLog.records.some(r => r.status === 'running');
-  if (recBtn) recBtn.classList.toggle('recording', isRecording);
+  if (recBtn) {
+    recBtn.classList.toggle('recording', isRecording);
+    syncExecLogRecButton();
+  }
 
   // Stop old timer
   if (ExecLog._timerInterval) {
@@ -836,6 +846,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   if (typeof renderExecLog === 'function') renderExecLog();
+  if (typeof syncExecLogRecButton === 'function') syncExecLogRecButton();
 
   // Initialization complete - allow new records to be created after a short delay
   setTimeout(() => {

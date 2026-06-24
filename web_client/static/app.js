@@ -350,6 +350,7 @@ function setRunningUI(running, paused = false) {
       App.isRecording = false;
     }
     syncRecordingSwitchUI();
+    syncExecLogRecButton();
   }
 
   syncStartPauseButtons(running, paused);
