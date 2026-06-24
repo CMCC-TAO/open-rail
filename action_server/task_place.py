@@ -51,9 +51,16 @@ LEFT_PLACE_POSE  = np.array([-0.1726,  0.1, 0.0, 1.045, 0.0, -1.393, 0.0])
 RIGHT_PLACE_POSE = np.array([-0.1726, -0.1, 0.0, 1.045, 0.0, -1.393, 0.0])
 
 # ==============================================
+# 放置完成后回缩位姿（手掌打开后手臂后退一段距离）
+# ==============================================
+LEFT_RETRACT_POSE  = np.array([0.5,  0.1, 0.0, 0.0, 0.0, -0.8, 0.0])
+RIGHT_RETRACT_POSE = np.array([0.5, -0.1, 0.0, 0.0, 0.0, -0.8, 0.0])
+
+# ==============================================
 # 时间常量
 # ==============================================
-ARM_INTERPOLATION_TIME = 5.0   # 手臂线性插值时长（秒）
+ARM_INTERPOLATION_TIME = 3.0   # 手臂线性插值时长（秒）
+ARM_RETRACT_TIME = 3.0          # 放置后手臂回缩时长（秒）
 HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
 CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
 
@@ -216,7 +223,7 @@ class PlaceHandler(AbstractTaskHandler):
             if current_state is None:
                 return
             action = current_state.copy()
-        zero_hand = np.zeros(6)
+        zero_hand = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 700.0])
 
         if hand_side in ('left', 'both'):
             action[14:20] = zero_hand
@@ -255,6 +262,16 @@ class PlaceHandler(AbstractTaskHandler):
 
         self._open_hand_and_hold(robot_body, 'left', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
+        # 3. 1s 手臂回缩到安全位置
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=LEFT_RETRACT_POSE,
+            right_target=None,
+            duration=ARM_RETRACT_TIME,
+            goal_handle=goal_handle,
+            start_progress=95, end_progress=99,
+        )
+
         send_vla_feedback(goal_handle, 100, "左手放置完成")
         return TaskResult(True)
 
@@ -279,6 +296,16 @@ class PlaceHandler(AbstractTaskHandler):
                               error_message="Failed to get current robot state for right arm place")
 
         self._open_hand_and_hold(robot_body, 'right', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
+
+        # 3. 1s 手臂回缩到安全位置
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=None,
+            right_target=RIGHT_RETRACT_POSE,
+            duration=ARM_RETRACT_TIME,
+            goal_handle=goal_handle,
+            start_progress=95, end_progress=99,
+        )
 
         send_vla_feedback(goal_handle, 100, "右手放置完成")
         return TaskResult(True)
