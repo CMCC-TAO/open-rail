@@ -15,6 +15,17 @@ class InterChunkFuser:
         self.logger = logging.getLogger(__name__)
         self.config = config
 
+    def _mode_config(self, mode):
+        cfg = getattr(self.config, mode, None)
+        return cfg if cfg is not None else ConfigDict()
+
+    def _common_config(self):
+        cfg = getattr(self.config, 'common', None)
+        return cfg if cfg is not None else self.config
+
+    def _cfg_value(self, cfg, key, default):
+        return getattr(cfg, key, getattr(self.config, key, default))
+
     @run_time_decorator
     def process(self, 
             next_action_chunk,
@@ -39,15 +50,19 @@ class InterChunkFuser:
             
             return next_action_chunk, next_vel_chunk, next_acc_chunk, target_chunk_index
 
-        if self.config.inter_chunk_mode == 'search_action':
+        mode = self.config.inter_chunk_mode
+        mode_cfg = self._mode_config(mode)
+        common_cfg = self._common_config()
+
+        if mode == 'search_action':
             action_chunk_smoothed, target_chunk_index = self._search_smooth_action_1(
                 next_action_chunk,
                 target_chunk_index,
                 currt_action,
                 currt_vel,
-                self.config.search_length,
+                self._cfg_value(mode_cfg, 'search_length', 100),
                 search_step = 5)
-        elif self.config.inter_chunk_mode == 'poly':
+        elif mode == 'poly':
             # can NOT use with search_action at the same time
             action_chunk_smoothed, target_chunk_index = self._poly_chunk_transition_1(
                 next_action_chunk,
@@ -57,10 +72,10 @@ class InterChunkFuser:
                 currt_action,
                 currt_vel,
                 currt_acc,
-                poly_length=30,
+                poly_length=self._cfg_value(mode_cfg, 'poly_length', 30),
                 joint_indices=joint_indices,
             )
-        elif self.config.inter_chunk_mode == 'smooth_velocity':
+        elif mode == 'smooth_velocity':
             # sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
             action_chunk_smoothed, target_chunk_index = self._smooth_velocity_transition_numba_1(
                 next_action_chunk,
@@ -70,14 +85,14 @@ class InterChunkFuser:
                 currt_vel,
                 currt_acc,
                 joint_indices=joint_indices,
-                max_vel=2.0,
-                max_acc=5.0,
-                kp=5.0,
-                kd=2.0)
+                max_vel=self._cfg_value(mode_cfg, 'max_vel', 2.0),
+                max_acc=self._cfg_value(mode_cfg, 'max_acc', 5.0),
+                kp=self._cfg_value(mode_cfg, 'kp', 5.0),
+                kd=self._cfg_value(mode_cfg, 'kd', 2.0))
             # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
             # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
-        elif self.config.inter_chunk_mode == 'min_jerk':
-            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition_1(
+        elif mode == 'min_jerk':
+            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition(
                 next_action_chunk,
                 next_vel_chunk,
                 next_acc_chunk,
@@ -87,10 +102,10 @@ class InterChunkFuser:
                 currt_vel,
                 currt_acc,
                 joint_indices=joint_indices,
-                blend_threshold=0.7,
-                transition_length=32
+                blend_threshold=self._cfg_value(mode_cfg, 'blend_threshold', 0.7),
+                adaptive_factor=self._cfg_value(mode_cfg, 'adaptive_factor', -1)
             )
-        elif self.config.inter_chunk_mode == 'bspline':
+        elif mode == 'bspline':
             action_chunk_smoothed, target_chunk_index = self._bspline_chunk_transition_1(
                 next_action_chunk,
                 next_vel_chunk,
@@ -98,11 +113,14 @@ class InterChunkFuser:
                 target_chunk_index,
                 currt_action,
                 currt_vel,
-                num_control_points=6,
-                transition_length=32
+                num_control_points=self._cfg_value(mode_cfg, 'num_control_points', 6),
+                transition_length=self._cfg_value(mode_cfg, 'transition_length', 32)
             )
+        elif mode == 'sync':
+            action_chunk_smoothed = next_action_chunk.copy()
         else:
-            pass
+            self.logger.warning(f"Unknown inter_chunk_mode={mode}, use next action chunk directly.")
+            action_chunk_smoothed = next_action_chunk.copy()
             
         # # calculate velocity and acceleration in a unified format
         # TODO: Calculate velocity and acceleration in methods;
@@ -119,17 +137,21 @@ class InterChunkFuser:
         acc_chunk_smoothed = next_acc_chunk.copy()
         acc_chunk_smoothed[joint_indices, target_chunk_index:] = acc_future 
 
-        self.logger.debug(f"smooth_action={self.config.smooth_action}, smooth_length={self.config.smooth_length}, smooth_base={self.config.smooth_base}, smooth ratio={self.config.smooth_ratio}")
+        smooth_action = self._cfg_value(common_cfg, 'smooth_action', False)
+        smooth_length = self._cfg_value(common_cfg, 'smooth_length', 150)
+        smooth_base = self._cfg_value(common_cfg, 'smooth_base', 0.0)
+        smooth_ratio = self._cfg_value(common_cfg, 'smooth_ratio', 0.75)
+        self.logger.debug(f"smooth_action={smooth_action}, smooth_length={smooth_length}, smooth_base={smooth_base}, smooth ratio={smooth_ratio}")
         # weighted smoothing
-        if self.config.smooth_action:
+        if smooth_action:
             action_chunk_smoothed = self._weighted_smoothing(
                 next_action_chunk=next_action_chunk,
                 target_chunk_index=target_chunk_index,
                 currt_action=currt_action,
                 joint_indices=joint_indices,
-                smooth_length=self.config.smooth_length,
-                smooth_base=self.config.smooth_base,
-                smooth_ratio=self.config.smooth_ratio
+                smooth_length=smooth_length,
+                smooth_base=smooth_base,
+                smooth_ratio=smooth_ratio
             )
         return action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index
     
@@ -527,8 +549,7 @@ class InterChunkFuser:
             new_acc = np.zeros_like(new_vel)
 
         # Determine the length of the transition period.
-        transition_length = min(next_action_chunk.shape[1] // 2, next_action_chunk.shape[1] - target_chunk_index)
-        # transition_length = min(poly_length, next_action_chunk.shape[1] - target_chunk_index)
+        transition_length = min(int(poly_length), next_action_chunk.shape[1] - target_chunk_index)
         action_chunk_smoothed = next_action_chunk.copy()
         end_index = target_chunk_index + transition_length - 1
         resolved_joint_indices = self._get_joint_indices(next_action_chunk, joint_indices)
@@ -595,131 +616,6 @@ class InterChunkFuser:
         return action_chunk_smoothed, target_chunk_index
 
     def _min_jerk_chunk_transition(self,
-        new_action_chunk,
-        new_vel_chunk,
-        new_acc_chunk,
-        new_timestamps,
-        target_index,
-        current_pos,
-        current_vel,
-        current_acc,
-        joint_indices=None,
-    ):
-        """
-        Smooths the transition to a new action chunk using a minimum-jerk trajectory.
-
-        This method generates a smooth path from the current robot state (position, velocity,
-        and acceleration) to a target state within the new action chunk. The trajectory
-        is a quintic polynomial that minimizes jerk (the third derivative of position),
-        resulting in a very smooth and natural-looking motion. The transition length is
-        adaptively determined based on the difference between the current and target states.
-
-        Args:
-            new_action_chunk (np.ndarray): The upcoming chunk of actions (positions).
-            new_vel_chunk (np.ndarray): The upcoming chunk of velocities.
-            new_acc_chunk (np.ndarray): The upcoming chunk of accelerations.
-            new_timestamps (np.ndarray): Timestamps corresponding to the action chunk.
-            target_index (int): The index in the new_action_chunk where the transition should start.
-            current_pos (np.ndarray): The current position of the robot joints.
-            current_vel (np.ndarray): The current velocity of the robot joints.
-            current_acc (np.ndarray): The current acceleration of the robot joints.
-            joint_indices (list, optional): Indices of the joints to apply the transition to.
-                                            If None, applies to all joints. Defaults to None.
-
-        Returns:
-            np.ndarray: The action chunk with the smoothed transition applied.
-        """
-        if current_pos is None or current_vel is None:
-            return new_action_chunk
-
-        # Define the target state for the transition.
-        target_pos = new_action_chunk[:, target_index].copy()
-        target_vel = new_vel_chunk[:, target_index].copy()
-        target_acc = new_acc_chunk[:, target_index].copy() if new_acc_chunk is not None else np.zeros_like(target_vel)
-
-        # Determine which joints to apply the smoothing to.
-        resolved_joint_indices = self._get_joint_indices(new_action_chunk, joint_indices)
-
-        # Calculate the difference (magnitude) between current and target states.
-        pos_diff = np.linalg.norm(current_pos[resolved_joint_indices] - target_pos[resolved_joint_indices])
-        vel_diff = np.linalg.norm(current_vel[resolved_joint_indices] - target_vel[resolved_joint_indices])
-        acc_diff = np.linalg.norm(current_acc[resolved_joint_indices] - target_acc[resolved_joint_indices])
-
-        # Adaptively determine the transition length based on the state differences.
-        # A larger difference results in a longer transition.
-        base_transition = new_action_chunk.shape[1] // 2
-        adaptive_factor = min(2.0, 0.5 + pos_diff * 2.0 + vel_diff * 1.5 + acc_diff * 0.3)
-        transition_length = min(int(base_transition * adaptive_factor), new_action_chunk.shape[1] - target_index)
-
-        # If the transition is too short, skip smoothing.
-        if transition_length <= 1:
-            return new_action_chunk
-
-        smoothed_chunk = new_action_chunk.copy()
-
-        # Calculate time step (dt) and total transition duration (T).
-        dt = new_timestamps[1] - new_timestamps[0] if len(new_timestamps) > 1 else 0.005
-        T = transition_length * dt
-
-        # Determine the end index for the transition within the chunk.
-        end_index = min(target_index + transition_length - 1, new_action_chunk.shape[1] - 1)
-
-        # Generate the trajectory for each joint.
-        for joint_idx in resolved_joint_indices:
-            # Define initial conditions (at tau=0).
-            x0 = current_pos[joint_idx]
-            v0 = current_vel[joint_idx] * T  # Scale velocity by T for normalized time.
-            a0 = current_acc[joint_idx] * T * T  # Scale acceleration by T^2 for normalized time.
-
-            # Define final conditions (at tau=1).
-            xf = new_action_chunk[joint_idx, end_index]
-            vf = new_vel_chunk[joint_idx, end_index] * T if end_index < new_vel_chunk.shape[1] else 0.0
-            af = (
-                (new_acc_chunk[joint_idx, end_index] * T * T)
-                if (new_acc_chunk is not None and end_index < new_acc_chunk.shape[1])
-                else 0.0
-            )
-
-            # Apply the quintic polynomial for each step in the transition.
-            for i in range(transition_length):
-                # tau is the normalized time, from 0 to 1.
-                tau = i / (transition_length - 1) if transition_length > 1 else 1.0
-                tau2 = tau * tau
-                tau3 = tau2 * tau
-                tau4 = tau3 * tau
-                tau5 = tau4 * tau
-
-                # These are the basis functions (quintic polynomials) for a minimum-jerk trajectory.
-                # They blend the initial and final position, velocity, and acceleration.
-                h0 = 1 - 10 * tau3 + 15 * tau4 - 6 * tau5
-                h1 = tau - 6 * tau3 + 8 * tau4 - 3 * tau5
-                h2 = 0.5 * tau2 - 1.5 * tau3 + 1.5 * tau4 - 0.5 * tau5
-                h3 = 10 * tau3 - 15 * tau4 + 6 * tau5
-                h4 = -4 * tau3 + 7 * tau4 - 3 * tau5
-                h5 = 0.5 * tau3 - tau4 + 0.5 * tau5
-
-                # Calculate the smoothed position by combining the basis functions with the boundary conditions.
-                smoothed_pos = h0 * x0 + h1 * v0 + h2 * a0 + h3 * xf + h4 * vf + h5 * af
-
-                # Blend the end of the smoothed trajectory with the original target trajectory
-                # to ensure a seamless continuation.
-                blend_start = 0.7
-                if tau > blend_start:
-                    blend_ratio = (tau - blend_start) / (1.0 - blend_start)
-                    target_pos_at_i = (
-                        new_action_chunk[joint_idx, target_index + i]
-                        if (target_index + i) < new_action_chunk.shape[1]
-                        else xf
-                    )
-                    smoothed_pos = (1 - blend_ratio) * smoothed_pos + blend_ratio * target_pos_at_i
-
-                # Update the action chunk with the new smoothed position.
-                if target_index + i < smoothed_chunk.shape[1]:
-                    smoothed_chunk[joint_idx, target_index + i] = smoothed_pos
-
-        return smoothed_chunk
-
-    def _min_jerk_chunk_transition_1(self,
         next_action_chunk,
         next_vel_chunk,
         next_acc_chunk,
@@ -730,7 +626,7 @@ class InterChunkFuser:
         current_acc,
         joint_indices=None,
         blend_threshold = 0.7,
-        transition_length = 32,
+        adaptive_factor = -1,
     ):
         """
         Smooths the transition to a new action chunk using a minimum-jerk trajectory.
@@ -773,9 +669,13 @@ class InterChunkFuser:
         acc_diff = np.linalg.norm(current_acc[resolved_joint_indices] - target_acc[resolved_joint_indices])
 
         # Adaptively determine the transition length based on the state differences.
-        # A larger difference results in a longer transition.
-        base_transition = next_action_chunk.shape[1] // 2
-        adaptive_factor = min(2.0, 0.5 + pos_diff * 2.0 + vel_diff * 1.5 + acc_diff * 0.3)
+        # A larger difference results in a longer transition. A non-negative configured
+        # adaptive_factor manually fixes the ratio and is clamped to [0, 1].
+        base_transition = next_action_chunk.shape[1]
+        if adaptive_factor < 0:
+            adaptive_factor = min(1.0, 0.25 + pos_diff * 1.0 + vel_diff * 0.75 + acc_diff * 0.15)
+        else:
+            adaptive_factor = min(1.0, max(0.0, float(adaptive_factor)))
         transition_length = min(int(base_transition * adaptive_factor), next_action_chunk.shape[1] - target_chunk_index)
 
         # If the transition is too short, skip smoothing.
@@ -984,7 +884,7 @@ class InterChunkFuser:
 
         # Determine the length of the transition. It's a fraction of the chunk size,
         # but not longer than the remaining part of the chunk.
-        transition_length = min(next_action_chunk.shape[1] // 3, next_action_chunk.shape[1] - target_chunk_index)
+        transition_length = min(int(transition_length), next_action_chunk.shape[1] - target_chunk_index)
 
         # If the transition is too short, it's not worth smoothing.
         if transition_length <= 3:
