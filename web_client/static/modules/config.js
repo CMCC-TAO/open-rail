@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════
 
 // Keys to exclude from the config tree (handled separately or rendered via createLangLinkRow)
-const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record']);
+const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record', 'controller']);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
@@ -57,6 +57,10 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'controller.wait_time',
   'controller.period',
   'controller.speed',
+  'controller.gripper_offset',
+  'vision.preprocess.method',
+  'vision.preprocess.width',
+  'rdm.mode',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
@@ -74,10 +78,11 @@ const DEFAULT_MAIN_PARAMETER_KEYS = {
   'controller.wait_time': 'Wait Time[ms]',
   'controller.period': 'Control Period[ms]',
   'controller.speed': 'Control Speed',
+  'controller.gripper_offset': 'Gripper Offset',
   'inter_chunk.inter_chunk_mode': 'Inter-Chunk Mode',
   'intra_chunk.intra_chunk_mode': 'Intra-Chunk Mode',
-  'vision.preprocess.mode': 'Preprocess Mode',
-  'vision.preprocess.width': 'Preprocess Width',
+  'vision.preprocess.method': 'Img Proc Method',
+  'vision.preprocess.width': 'Img Proc Width',
 };
 
 let _cfgInputSyncing = false;
