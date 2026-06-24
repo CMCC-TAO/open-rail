@@ -37,7 +37,7 @@ intra_chunk:
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
 language:
-  auto_mode: false
+  auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: tea_master
@@ -92,13 +92,13 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      train: 0:2
     state_shape: 20
     total_chunks: 1
-    total_episodes: 2
-    total_frames: 96
+    total_episodes: 3
+    total_frames: 135
     total_tasks: 3
-    total_videos: 6
+    total_videos: 9
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   save_dir: data/recording

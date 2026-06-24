@@ -791,8 +791,43 @@ function setupRecordingPanel() {
   syncRecordingFileListPolling();
 }
 
+// TODO Check if needed
+// 更新开始录制函数
+function startRecording() {
+  if (!App.isRunning || App.isRecording) return;
+
+  const episodeEnabled = $('chk-record-episode').checked;
+  const expdataEnabled = $('chk-record-expdata').checked;
+
+  // 发送开始录制请求到后端
+  sendWsMessage({ type: 'start_recording', payload: {
+    record_episode: episodeEnabled,
+    record_expdata: expdataEnabled
+  }});
+}
+
+// 更新停止录制函数
+function stopRecording() {
+  if (!App.isRunning || !App.isRecording) return;
+
+  // 发送停止录制请求到后端
+  sendWsMessage({ type: 'stop_recording', payload: {} });
+}
+
 // ── Execution Log initialization ──────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
+  // 为单一按钮添加事件监听器
+  const startStopBtn = $('btn-recording-startstop');
+  if (startStopBtn) {
+    startStopBtn.addEventListener('click', function() {
+      if (App.isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+  }
+
   // ExecLog checkbox: toggle panel visibility
   const execlogChk = $('chk-record-exec-log');
   if (execlogChk) {
