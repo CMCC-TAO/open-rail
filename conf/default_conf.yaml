@@ -39,7 +39,7 @@ intra_chunk:
 language:
   auto_mode: false
   file_path: language_cmd.json
-  sub_task_id: 0
+  sub_task_id: 2
   task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
@@ -92,12 +92,12 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      train: 0:1
     state_shape: 20
     total_chunks: 1
     total_episodes: 2
-    total_frames: 900
-    total_tasks: 2
+    total_frames: 96
+    total_tasks: 3
     total_videos: 6
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false

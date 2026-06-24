@@ -93,8 +93,45 @@
             <div class="recording-options-inline">
               <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" checked /> Episode</label>
               <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label>
+              <label class="recording-option-item"><input type="checkbox" id="chk-record-exec-log" /> ExecLog</label>
             </div>
           </div>
+
+          <!-- Execution Log Panel (moved to top, shown when checked) -->
+          <div id="exec-log-panel" class="exec-log-panel" style="display:none">
+            <div class="section-title"> ExecLog <span id="exec-log-count"></span></div>
+            <div class="exec-log-toolbar">
+              <div class="exec-log-toolbar-row">
+                <button class="btn btn-xs" id="btn-exec-log-rec" title="Start / Stop recording"><i class="fas fa-circle"></i> Rec</button>
+                <button class="btn btn-xs" id="btn-log-export" title="Export CSV"><i class="fas fa-download"></i> CSV</button>
+                <button class="btn btn-xs" id="btn-log-save" title="Save to server"><i class="fas fa-save"></i> Save</button>
+                <button class="btn btn-xs btn-danger" id="btn-log-clear" title="Clear all records">Clear All</button>
+              </div>
+              <div id="exec-score-row" class="exec-score-row" style="display:none">
+                <span class="exec-score-label">Score:</span>
+                <button class="btn exec-score-btn exec-score-0" data-score="0" title="Fail (0)">0</button>
+                <button class="btn exec-score-btn exec-score-05" data-score="0.5" title="Partial (0.5)">0.5</button>
+                <button class="btn exec-score-btn exec-score-1" data-score="1" title="Success (1)">1</button>
+              </div>
+            </div>
+            <div class="exec-log-table-wrap">
+              <table class="exec-log-table">
+                <thead>
+                  <tr>
+                    <th class="col-id">Task#</th>
+                    <th class="col-inst">Inst</th>
+                    <th class="col-start">Start</th>
+                    <th class="col-dur">Dur</th>
+                    <th class="col-score">Sco</th>
+                    <th class="col-note">Note</th>
+                    <th class="col-del"></th>
+                  </tr>
+                </thead>
+                <tbody id="exec-log-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          
           <div class="recording-config-wrap">
             <div class="section-title">Record Config</div>
             <div id="recording-config-tree" class="recording-config-tree"></div>
@@ -337,7 +374,6 @@
               <i class="fas fa-folder-open"></i> Load
               <input id="lang-file-input" type="file" accept=".json" style="display:none" />
             </label>
-            <button class="btn btn-xs" id="btn-lang-log" title="Toggle execution log"><i class="fas fa-clipboard-list"></i> Log</button>
             <button class="btn btn-xs lang-collapse-btn" id="btn-lang-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
@@ -348,46 +384,16 @@
               <div class="section-title">Task</div>
               <select id="lang-task-select" class="lang-cmd-select" size="5"></select>
             </div>
-            <div class="lang-resize-handle" title="Drag to resize"></div>
             <!-- Sub-task selector (level-2) -->
             <div class="lang-cmd-col lang-cmd-col-subtask">
               <div class="section-title">Sub-Task</div>
               <select id="lang-subtask-select" class="lang-cmd-select" size="5"></select>
             </div>
-            <div class="lang-resize-handle" title="Drag to resize"></div>
             <!-- Current instruction + send -->
             <div class="lang-cmd-col lang-cmd-col-send">
               <div class="section-title">Instruction</div>
               <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
               <button class="btn btn-sm" id="btn-lang-send"><i class="fas fa-check"></i> Apply</button>
-            </div>
-            <div class="lang-resize-handle" title="Drag to resize"></div>
-            <!-- Execution Log Panel (4th column) -->
-            <div id="lang-log-panel" class="lang-log-panel">
-              <div class="lang-log-toolbar">
-                <span class="lang-log-title"><i class="fas fa-history"></i> Log <span id="lang-log-count"></span></span>
-                <button class="btn btn-xs" id="btn-execlog-rec" title="Manually start a new record"><i class="fas fa-circle"></i> Rec</button>
-                <div id="lang-score-row" class="lang-score-row">
-                  <span class="lang-score-label">Score:</span>
-                  <button class="btn lang-score-btn lang-score-0" data-score="0" title="Fail (0)">0</button>
-                  <button class="btn lang-score-btn lang-score-05" data-score="0.5" title="Partial (0.5)">0.5</button>
-                  <button class="btn lang-score-btn lang-score-1" data-score="1" title="Success (1)">1</button>
-                </div>
-                <div class="lang-log-toolbar-sep"></div>
-                <button class="btn btn-xs" id="btn-log-export" title="Export CSV"><i class="fas fa-download"></i> CSV</button>
-                <button class="btn btn-xs" id="btn-log-save" title="Save to server"><i class="fas fa-save"></i> Save</button>
-                <button class="btn btn-xs btn-danger" id="btn-log-clear" title="Clear all records">Clear All</button>
-              </div>
-              <div class="lang-log-table-wrap">
-                <table class="lang-log-table">
-                  <thead>
-                    <tr>
-                      <th>Task#</th><th>Instruction</th><th>Start</th><th>Dur</th><th>✓</th><th>Notes</th><th></th>
-                    </tr>
-                  </thead>
-                  <tbody id="lang-log-tbody"></tbody>
-                </table>
-              </div>
             </div>
           </div>
         </div>
