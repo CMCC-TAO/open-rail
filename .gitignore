@@ -134,3 +134,5 @@ camera.txt
 hal.txt
 user_conf_*.py
 !user_conf_example.py
+
+.qoder/

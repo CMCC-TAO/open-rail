@@ -18,21 +18,21 @@ import subprocess
 
 def _is_ntfs_mount_accurate2(path):
     """
-    检查指定路径是否挂载在 NTFS 文件系统上
+    Check if specified path is mounted on NTFS filesystem
     """
-    # 一次性获取所有分区信息
+    # Get all partition information at once
     partitions = psutil.disk_partitions(all=False)
     if not partitions:
         return False
-    # 获取绝对路径
+    # Get absolute path
     abs_path = os.path.abspath(path)
     is_windows = os.name == 'nt'
-    # 查找匹配的挂载点（无需排序，直接遍历并记录最长匹配）
+    # Find matching mount point (no sorting needed, traverse directly and record longest match)
     best_mount = None
     best_mount_len = -1
     for partition in partitions:
         mountpoint = partition.mountpoint
-        # 检查路径是否以挂载点开头
+        # Check if path starts with mount point
         if is_windows:
             is_match = abs_path.upper().startswith(mountpoint.upper())
         else:
@@ -43,18 +43,18 @@ def _is_ntfs_mount_accurate2(path):
             best_mount = partition
     if best_mount is None:
         return False
-    # 检查文件系统类型
+    # Check filesystem type
     fstype = best_mount.fstype.lower()
-    # 直接确认 NTFS
+    # Confirm NTFS directly
     if fstype in ('ntfs', 'ntfs3'):
         return True
-    # 处理 fuseblk (通常是 NTFS-3G)
+    # Handle fuseblk (usually NTFS-3G)
     if fstype == 'fuseblk':
         device = best_mount.device
         try:
-            # 使用 lsblk 获取文件系统类型（仅输出必要字段）
+            # Use lsblk to get filesystem type (output only necessary fields)
             result = subprocess.run(
-                ['lsblk', '-n', '-o', 'FSTYPE', device],  # -n 不显示标题，-o 只输出 FSTYPE
+                ['lsblk', '-n', '-o', 'FSTYPE', device],  # -n no header, -o output only FSTYPE
                 capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
@@ -179,7 +179,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
         },
         "loggers": {
             "client.core.vla_client": {
-                "handlers": ["file"],
+                "handlers": ["console", "file"],
                 "level": "DEBUG",
                 "propagate": False,
             },
@@ -259,7 +259,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "propagate": False,
             },
             "__main__": {
-                "handlers": ["file"],
+                "handlers": ["console", "file"],
                 "level": "DEBUG",
                 "propagate": False,
             },

@@ -25,6 +25,7 @@ class IntraChunkSmoother():
         # Create thread pools for parallel trajectory fitting
         self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers)
         self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers)
+        self.hand_fitting_executor = ThreadPoolExecutor(max_workers=getattr(config, 'max_hand_fitting_workers', 12))
         
         # Initialize trajectory data storage
         # self.traj = None
@@ -201,6 +202,49 @@ class IntraChunkSmoother():
 
         return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted), np.zeros_like(gripper_chunk_fitted)  # Gripper velocity and acceleration are not considered
 
+    def _hand_traj_fitting(self, timestamps, hand_chunk, index, start_time, end_time, time_step=0.001):
+        """Fit a dexterous hand trajectory using mean filtering only (no threshold clamping).
+
+        Hand values (0-1000 range) are smoothed via sliding window mean without
+        the 0-1 threshold clamping used for grippers, preserving the full range.
+
+        Args:
+            timestamps (np.array): The timestamps of the hand trajectory in seconds.
+            hand_chunk (np.array): The hand finger trajectory to be fitted.
+            index (int): The index of the finger.
+            start_time (float): The start time of the fitted trajectory in seconds.
+            end_time (float): The end time of the fitted trajectory in seconds.
+            time_step (float, optional): The time step to compute the fitted trajectory.
+
+        Returns:
+            tuple(int, np.array, np.array, np.array): index, fitted, velocity, acceleration.
+        """
+        # Smooth using sliding window mean (no threshold clamping)
+        length = len(hand_chunk)
+        window_size_half = self.config.filter_window_size
+        for currt_index in range(length):
+            if currt_index < window_size_half:
+                window_min = 0
+                window_max = min(length, window_size_half * 2 + 1)
+            elif currt_index >= length - window_size_half:
+                window_min = max(0, length - window_size_half * 2 - 1)
+                window_max = length
+            else:
+                window_min = currt_index - window_size_half
+                window_max = currt_index + window_size_half + 1
+            hand_chunk[currt_index] = np.mean(hand_chunk[window_min:window_max])
+
+        # Linear interpolation to target timestamps
+        timestamp_fitted = np.arange(start_time, end_time, time_step)
+        hand_chunk_fitted = []
+        currt_index = 0
+        for timestamp in timestamp_fitted:
+            if timestamp > timestamps[currt_index]:
+                currt_index = min(length, currt_index + 1)
+            hand_chunk_fitted.append((hand_chunk[max(currt_index - 1, 0)] + hand_chunk[min(currt_index, length - 1)]) / 2.0)
+
+        return index, hand_chunk_fitted, np.zeros_like(hand_chunk_fitted), np.zeros_like(hand_chunk_fitted)
+
     @run_time_decorator
     def _traj_fitting(self, timestamps, action_chunk, start_time, end_time, time_step):
         """Fit trajectories for both joints and grippers.
@@ -223,13 +267,17 @@ class IntraChunkSmoother():
         for name, seg in self.action_layout.items():
             for index in range(seg['start'], seg['end']):
                 joint_chunk = np.array(action_chunk[index, :])
-                if seg['policy'] == 'gradual':
+                if seg['policy'] == 'gradual' or seg['policy'] == 'joint':
                     futures.append(self.joint_fitting_executor.submit(
                         self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
                     ))
-                elif seg['policy'] == 'stepwise':
+                elif seg['policy'] == 'stepwise' or seg['policy'] == 'gripper':
                     futures.append(self.gripper_fitting_executor.submit(
                         self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
+                    ))
+                elif seg['policy'] == 'hand':
+                    futures.append(self.hand_fitting_executor.submit(
+                        self._hand_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
                     ))
                 else:
                     raise ValueError(f"Unknown policy: {seg['policy']}")
