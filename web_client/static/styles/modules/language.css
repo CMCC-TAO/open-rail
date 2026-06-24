@@ -128,25 +128,27 @@
 }
 .lang-cmd-layout {
   display: flex; 
-  gap: 0; 
+  gap: 8px; 
   min-height: 0;
   flex: 1;
   height: 100%;
 }
-/* Task: 12%; Sub-task: 28%; Instruction: 20%; Log: flex:1 */
+/* Task: 30%; Sub-task: 40%; Instruction: 30% - 总计100% */
 .lang-cmd-col            { 
   display: flex; 
   flex-direction: column; 
   gap: var(--lang-cmd-col-gap); 
   /* flex: 3;  */
   min-width: 0; 
-  width: 12%; 
+  width: 15%; 
 }
 .lang-cmd-col-subtask    { 
-  width: 28%; 
+  /* flex: 4;  */
+  width: 35%; 
 }
 .lang-cmd-col-send       { 
-  width: 20%; 
+  /* flex: 3;  */
+  width: 30%; 
 }
 
 .lang-cmd-list {
