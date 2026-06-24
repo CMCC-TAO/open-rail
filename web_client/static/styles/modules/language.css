@@ -123,9 +123,6 @@
   max-height: none;
 }
 
-.lang-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
-}
 .lang-cmd-layout {
   display: flex; 
   gap: 8px; 
@@ -139,16 +136,18 @@
   flex-direction: column; 
   gap: var(--lang-cmd-col-gap); 
   /* flex: 3;  */
-  min-width: 0; 
-  width: 15%; 
+  min-width: 81px; 
+  width: 20%; 
 }
 .lang-cmd-col-subtask    { 
   /* flex: 4;  */
-  width: 35%; 
+  min-width: 192px;
+  width: 40%; 
 }
 .lang-cmd-col-send       { 
   /* flex: 3;  */
-  width: 30%; 
+  min-width: 192px;
+  width: 40%; 
 }
 
 .lang-cmd-list {

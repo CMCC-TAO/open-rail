@@ -92,8 +92,3 @@
 }
 .pending-badge { color: var(--warn); font-size: var(--font-size-2); flex: 1; }
 .pending-badge.hidden { display: none; }
-
-/* ── ④ Collapse button: rightmost, vertically centered ── */
-.conf-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
-}
