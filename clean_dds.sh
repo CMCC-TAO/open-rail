@@ -28,10 +28,35 @@ echo -e "${YELLOW}[1/3] 查找残留的 DDS/ROS2 相关进程...${NC}"
 # 匹配: python run_web_client / run_client / run_server,
 #        ros2, rviz, robot_state_publisher, unitree_g1_drivers
 ORPHAN_PIDS=$(ps -eo pid,ppid,cmd \
-    | grep -E '(run_web_client|run_client|run_server|ros2|rviz|robot_state_publisher|unitree_g1_drivers)' \
+    | grep -E '(vla_action|action_dispatcher|run_web_client|run_client|run_server|ros2|rviz|robot_state_publisher|unitree_g1_drivers)' \
     | grep -v grep \
     | grep -v "clean_dds" \
     || true)
+
+# 也通过端口查找残留（更精准，不依赖进程名）
+# 已知端口：9000(web_client), 9001(ObsBridge), 8765(visual WS), 8080(visual static)
+PORT_PIDS=""
+for port in 9000 9001 8765 8080; do
+    SS_OUT=$(ss -tlnp "sport = :$port" 2>/dev/null || true)
+    if [[ -n "$SS_OUT" ]]; then
+        PORT_PID=$(echo "$SS_OUT" | grep -oP 'pid=\K\d+' || true)
+        if [[ -n "$PORT_PID" ]]; then
+            PORT_PIDS="$PORT_PIDS $PORT_PID"
+        fi
+    fi
+done
+
+# 合并端口发现的 PID 到 ORPHAN_PIDS
+if [[ -n "$PORT_PIDS" ]]; then
+    for pid in $PORT_PIDS; do
+        if ! echo "$ORPHAN_PIDS" | awk '{print $1}' | grep -qw "$pid"; then
+            CMD_LINE=$(ps -p "$pid" -o pid=,ppid=,cmd= 2>/dev/null || true)
+            if [[ -n "$CMD_LINE" ]]; then
+                ORPHAN_PIDS=$(printf "%s\n%s" "$ORPHAN_PIDS" "$CMD_LINE")
+            fi
+        fi
+    done
+fi
 
 if [[ -z "$ORPHAN_PIDS" ]]; then
     echo -e "${GREEN}  没有发现残留进程 ✓${NC}"

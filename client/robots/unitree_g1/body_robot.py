@@ -130,8 +130,8 @@ class RobotBody(RobotBase):
                 return
         target_pose = np.array(target_pose)
 
-        # Get current state (priority: cache → ROS2 subscription → retrieve_observation)
-        current_state = self._get_reset_current_state()
+        # Get current action (trajectory start from latest cmd, smoother than measured state)
+        current_state = self._get_reset_current_action()
 
         if current_state is not None:
             current_positions = current_state[:14]
@@ -185,20 +185,22 @@ class RobotBody(RobotBase):
         print("Unitree G1 reset done")
 
     def _get_reset_current_state(self) -> np.ndarray | None:
-        """Get current 26-dim state without camera dependency
+        """Get current 26-dim state from measured joint_state — for model input
+
+        The model expects observed joint positions, not commanded actions.
+        Use this when the result feeds into VLA inference (retrieve_observation captures
+        the same source, but this method works without camera).
 
         Priority:
-          1. Read directly from self.robot's ROS2 subscription cache (real-time, no camera dependency)
+          1. State cache — /joint_state + /left_hand/get_angle + /right_hand/get_angle
+             (measured joint position, real-time from ROS2 spin thread)
           2. self.current_state (VLA observation thread cache, may be stale)
           3. retrieve_observation() fallback (requires camera)
-
-        Note: ROS2 cache is updated in real-time by independent spin thread, always representing actual robot position;
-              current_state only updates when VLA observe thread is running,
-              becomes stale once VLA stops, cannot serve as reset trajectory starting point.
         """
-        # Priority 1: Read directly from ROS2 cache (no camera dependency, real-time latest)
+        robot = self.robot
+
+        # Priority 1: State cache (measured, from /joint_state + /left_hand/get_angle + /right_hand/get_angle)
         try:
-            robot = self.robot
             la = robot.latest_left_arm
             ra = robot.latest_right_arm
             lh = robot.latest_left_hand
@@ -218,13 +220,71 @@ class RobotBody(RobotBase):
                         + list(rh_msg.position),
                         dtype=float,
                     )
-                    # Sync to current_state for quick access by other modules
                     self.current_state = state.copy()
                     return state
         except Exception:
             pass
 
-        # Priority 2: Use VLA cached state (only when ROS2 cache not initialized)
+        # Priority 2: Use VLA cached state
+        if self.current_state is not None:
+            return self.current_state.copy()
+
+        # Priority 3: Fallback to retrieve_observation (requires camera data)
+        for _ in range(10):
+            obs = self.retrieve_observation()
+            if obs is not None and "obs.state" in obs:
+                state = obs["obs.state"]
+                self.current_state = state
+                return state
+            time.sleep(0.1)
+        return None
+
+    def _get_reset_current_action(self) -> np.ndarray | None:
+        """Get current 26-dim action from commanded joint_action — for trajectory planning
+
+        Uses the latest commanded action (/joint_action + /left_hand/set_angle +
+        /right_hand/set_angle) as the trajectory starting point. This eliminates
+        the tracking lag between measured joint_state and actual control position,
+        producing a smoother transition.
+
+        Only use this for trajectory planning start points (reset_robot, linear
+        interpolation to target). For model input use _get_reset_current_state().
+
+        Priority:
+          1. Action cache — /joint_action + /left_hand/set_angle + /right_hand/set_angle
+             (latest cmd sent to robot)
+          2. self.current_state (VLA observation thread cache)
+          3. retrieve_observation() fallback (requires camera)
+        """
+        robot = self.robot
+
+        # Priority 1: Action cache (latest cmd, from /joint_action + /left_hand/set_angle + /right_hand/set_angle)
+        try:
+            la = robot.latest_left_arm_action
+            ra = robot.latest_right_arm_action
+            lh = robot.latest_left_hand_action
+            rh = robot.latest_right_hand_action
+            if all(x is not None for x in (la, ra, lh, rh)):
+                la_msg, _ = la
+                ra_msg, _ = ra
+                lh_msg, _ = lh
+                rh_msg, _ = rh
+                if (la_msg and ra_msg and lh_msg and rh_msg
+                        and la_msg.position and ra_msg.position
+                        and lh_msg.position and rh_msg.position):
+                    state = np.array(
+                        list(la_msg.position)
+                        + list(ra_msg.position)
+                        + list(lh_msg.position)
+                        + list(rh_msg.position),
+                        dtype=float,
+                    )
+                    self.current_state = state.copy()
+                    return state
+        except Exception:
+            pass
+
+        # Priority 2: Use VLA cached state
         if self.current_state is not None:
             return self.current_state.copy()
 

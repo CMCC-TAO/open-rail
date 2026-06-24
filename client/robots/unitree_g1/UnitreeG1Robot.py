@@ -122,6 +122,13 @@ class UnitreeG1Robot(Node):
         self.topic_right_hand = "/right_hand/get_angle"
 
         # ======================
+        # Subscription topics (action reading)
+        # ======================
+        self.topic_joint_action = "/joint_action"
+        self.topic_left_hand_action = "/left_hand/set_angle"
+        self.topic_right_hand_action = "/right_hand/set_angle"
+
+        # ======================
         # Publish topics (control output)
         # ======================
         self.topic_left_arm_cmd = "/left_arm/joint_pos"
@@ -130,10 +137,14 @@ class UnitreeG1Robot(Node):
         self.topic_right_hand_cmd = "/right_hand_cmd"
 
         print(f"[DBG UnitreeG1Robot] Subscribed topics:")
-        print(f"[DBG UnitreeG1Robot]   - {self.topic_joint_states}")
-        print(f"[DBG UnitreeG1Robot]   - {self.topic_left_hand}")
-        print(f"[DBG UnitreeG1Robot]   - {self.topic_right_hand}")
-        print(f"[DBG UnitreeG1Robot]   (pubs: {self.topic_left_arm_cmd}, {self.topic_right_arm_cmd}, {self.topic_left_hand_cmd}, {self.topic_right_hand_cmd})")
+        print(f"[DBG UnitreeG1Robot]   states - {self.topic_joint_states}")
+        print(f"[DBG UnitreeG1Robot]           - {self.topic_left_hand}")
+        print(f"[DBG UnitreeG1Robot]           - {self.topic_right_hand}")
+        print(f"[DBG UnitreeG1Robot]   actions- {self.topic_joint_action}")
+        print(f"[DBG UnitreeG1Robot]           - {self.topic_left_hand_action}")
+        print(f"[DBG UnitreeG1Robot]           - {self.topic_right_hand_action}")
+        print(f"[DBG UnitreeG1Robot]   (pubs: {self.topic_left_arm_cmd}, {self.topic_right_arm_cmd}, "
+              f"{self.topic_left_hand_cmd}, {self.topic_right_hand_cmd})")
 
         # Latest state cache
         self.latest_left_arm = None
@@ -141,11 +152,23 @@ class UnitreeG1Robot(Node):
         self.latest_left_hand = None
         self.latest_right_hand = None
 
+        # ===== Action cache (from /joint_action, /left_hand/set_angle, /right_hand/set_angle) =====
+        self.latest_left_arm_action = None
+        self.latest_right_arm_action = None
+        self.latest_left_hand_action = None
+        self.latest_right_hand_action = None
+
         # Queue cache (for timestamp alignment)
         self.queue_left_arm = deque(maxlen=30)
         self.queue_right_arm = deque(maxlen=30)
         self.queue_left_hand = deque(maxlen=30)
         self.queue_right_hand = deque(maxlen=30)
+
+        # Queue cache (action)
+        self.queue_left_arm_action = deque(maxlen=30)
+        self.queue_right_arm_action = deque(maxlen=30)
+        self.queue_left_hand_action = deque(maxlen=30)
+        self.queue_right_hand_action = deque(maxlen=30)
 
         # QoS matching robot driver
         qos_correct = QoSProfile(
@@ -161,6 +184,11 @@ class UnitreeG1Robot(Node):
         self.create_subscription(JointState, self.topic_joint_states, self._cb_joint_states, qos_correct)
         self.create_subscription(JointState, self.topic_left_hand, self._cb_left_hand, qos_correct)
         self.create_subscription(JointState, self.topic_right_hand, self._cb_right_hand, qos_correct)
+
+        # Action subscriptions (latest cmd sent to robot)
+        self.create_subscription(JointState, self.topic_joint_action, self._cb_joint_action, qos_correct)
+        self.create_subscription(JointState, self.topic_left_hand_action, self._cb_left_hand_action, qos_correct)
+        self.create_subscription(JointState, self.topic_right_hand_action, self._cb_right_hand_action, qos_correct)
 
         # ======================
         # Publishers (control robot)
@@ -199,6 +227,12 @@ class UnitreeG1Robot(Node):
         self._last_queue_ts_right_arm = 0.0
         self._last_queue_ts_left_hand = 0.0
         self._last_queue_ts_right_hand = 0.0
+
+        # ----- Action dedup timestamps -----
+        self._last_queue_ts_left_arm_action = 0.0
+        self._last_queue_ts_right_arm_action = 0.0
+        self._last_queue_ts_left_hand_action = 0.0
+        self._last_queue_ts_right_hand_action = 0.0
 
         # Sampling thread
         self.sample_thread = threading.Thread(target=self._sample_loop, daemon=True)
@@ -351,6 +385,66 @@ class UnitreeG1Robot(Node):
         _dprint(f"_cb_right_hand received: ts={ts:.6f}, positions={msg.position[:3]}...")
 
     # ======================
+    # Action subscription callbacks
+    #   /joint_action has same joint names as /joint_state
+    #   /left_hand/set_angle and /right_hand/set_angle mirror /left_hand/get_angle /right_hand/get_angle
+    # ======================
+
+    def _cb_joint_action(self, msg):
+        ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+
+        # Build name->index mapping
+        name_to_idx = {name: i for i, name in enumerate(msg.name)}
+
+        # Extract left arm positions by name
+        left_positions = []
+        for name in self.left_arm_joint_names:
+            if name in name_to_idx:
+                left_positions.append(msg.position[name_to_idx[name]])
+
+        # Extract right arm positions by name
+        right_positions = []
+        for name in self.right_arm_joint_names:
+            if name in name_to_idx:
+                right_positions.append(msg.position[name_to_idx[name]])
+
+        la_ok = len(left_positions) == len(self.left_arm_joint_names)
+        ra_ok = len(right_positions) == len(self.right_arm_joint_names)
+        if la_ok:
+            left_msg = JointState()
+            left_msg.header = msg.header
+            left_msg.name = list(self.left_arm_joint_names)
+            left_msg.position = [float(p) for p in left_positions]
+            self.latest_left_arm_action = (left_msg, ts)
+
+        if ra_ok:
+            right_msg = JointState()
+            right_msg.header = msg.header
+            right_msg.name = list(self.right_arm_joint_names)
+            right_msg.position = [float(p) for p in right_positions]
+            self.latest_right_arm_action = (right_msg, ts)
+
+        if la_ok and ra_ok:
+            _dprint(f"_cb_joint_action OK: ts={ts:.6f}")
+        elif not la_ok and not ra_ok:
+            _dprint(f"_cb_joint_action BOTH FAIL: la_found={len(left_positions)}/{len(self.left_arm_joint_names)} "
+                    f"ra_found={len(right_positions)}/{len(self.right_arm_joint_names)}")
+        elif not la_ok:
+            _dprint(f"_cb_joint_action LEFT FAIL: la_found={len(left_positions)}/{len(self.left_arm_joint_names)}")
+        else:
+            _dprint(f"_cb_joint_action RIGHT FAIL: ra_found={len(right_positions)}/{len(self.right_arm_joint_names)}")
+
+    def _cb_left_hand_action(self, msg):
+        ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        self.latest_left_hand_action = (msg, ts)
+        _dprint(f"_cb_left_hand_action received: ts={ts:.6f}, positions={msg.position[:3]}...")
+
+    def _cb_right_hand_action(self, msg):
+        ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        self.latest_right_hand_action = (msg, ts)
+        _dprint(f"_cb_right_hand_action received: ts={ts:.6f}, positions={msg.position[:3]}...")
+
+    # ======================
     # Sampling thread
     # ======================
     def _sample_loop(self):
@@ -382,9 +476,34 @@ class UnitreeG1Robot(Node):
                 if abs(ts - self._last_queue_ts_right_hand) > eps:
                     self.queue_right_hand.append(self.latest_right_hand)
                     self._last_queue_ts_right_hand = ts
+
+            # ----- Action queues -----
+            if self.latest_left_arm_action:
+                ts = self.latest_left_arm_action[1]
+                if abs(ts - self._last_queue_ts_left_arm_action) > eps:
+                    self.queue_left_arm_action.append(self.latest_left_arm_action)
+                    self._last_queue_ts_left_arm_action = ts
+            if self.latest_right_arm_action:
+                ts = self.latest_right_arm_action[1]
+                if abs(ts - self._last_queue_ts_right_arm_action) > eps:
+                    self.queue_right_arm_action.append(self.latest_right_arm_action)
+                    self._last_queue_ts_right_arm_action = ts
+            if self.latest_left_hand_action:
+                ts = self.latest_left_hand_action[1]
+                if abs(ts - self._last_queue_ts_left_hand_action) > eps:
+                    self.queue_left_hand_action.append(self.latest_left_hand_action)
+                    self._last_queue_ts_left_hand_action = ts
+            if self.latest_right_hand_action:
+                ts = self.latest_right_hand_action[1]
+                if abs(ts - self._last_queue_ts_right_hand_action) > eps:
+                    self.queue_right_hand_action.append(self.latest_right_hand_action)
+                    self._last_queue_ts_right_hand_action = ts
+
             if loop_count % 500 == 0:
-                _dprint(f"queues: left_arm={len(self.queue_left_arm)} right_arm={len(self.queue_right_arm)} "
-                        f"left_hand={len(self.queue_left_hand)} right_hand={len(self.queue_right_hand)} "
+                _dprint(f"queues: la={len(self.queue_left_arm)} ra={len(self.queue_right_arm)} "
+                        f"lh={len(self.queue_left_hand)} rh={len(self.queue_right_hand)} || "
+                        f"act_la={len(self.queue_left_arm_action)} act_ra={len(self.queue_right_arm_action)} "
+                        f"act_lh={len(self.queue_left_hand_action)} act_rh={len(self.queue_right_hand_action)} || "
                         f"latest: la={'Y' if self.latest_left_arm else 'N'} ra={'Y' if self.latest_right_arm else 'N'} "
                         f"lh={'Y' if self.latest_left_hand else 'N'} rh={'Y' if self.latest_right_hand else 'N'}")
             time.sleep(0.002)
@@ -415,6 +534,32 @@ class UnitreeG1Robot(Node):
         right_arm, right_arm_ts = self._find_nearest(self.queue_right_arm, ref_timestamp)
         left_hand, left_hand_ts = self._find_nearest(self.queue_left_hand, ref_timestamp)
         right_hand, right_hand_ts = self._find_nearest(self.queue_right_hand, ref_timestamp)
+
+        return {
+            "left_arm": left_arm,
+            "right_arm": right_arm,
+            "left_hand": left_hand,
+            "right_hand": right_hand,
+            "ref_timestamp": ref_timestamp,
+            "left_arm_timestamp": left_arm_ts,
+            "right_arm_timestamp": right_arm_ts,
+            "left_hand_timestamp": left_hand_ts,
+            "right_hand_timestamp": right_hand_ts,
+        }
+
+    def get_arm_hand_actions_nearest_func(self, ref_timestamp):
+        """Align left/right arm/hand actions (latest cmd) based on ref_timestamp
+
+        Args:
+            ref_timestamp (float): Reference timestamp
+
+        Returns:
+            dict: Contains action states and timestamps for each part
+        """
+        left_arm, left_arm_ts = self._find_nearest(self.queue_left_arm_action, ref_timestamp)
+        right_arm, right_arm_ts = self._find_nearest(self.queue_right_arm_action, ref_timestamp)
+        left_hand, left_hand_ts = self._find_nearest(self.queue_left_hand_action, ref_timestamp)
+        right_hand, right_hand_ts = self._find_nearest(self.queue_right_hand_action, ref_timestamp)
 
         return {
             "left_arm": left_arm,

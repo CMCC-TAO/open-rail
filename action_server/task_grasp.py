@@ -55,6 +55,73 @@ def _get_language_instruction(target: str) -> str | None:
     return TARGET_LANGUAGE_MAP.get(target.strip())
 
 
+def _reset_arms_to_default(robot_body, context, duration=2.0):
+    """将双臂在指定时间内线性过渡到默认位置，手掌保持当前控制量不变
+
+    Args:
+        robot_body: RobotBody 实例
+        context: VLAContext 实例
+        duration: 过渡时间（秒）
+    """
+    import numpy as np
+    import time
+
+    # 获取默认位置配置
+    robot_type = context.config.robots.type.value
+    robot_cfg = getattr(context.config.robots, robot_type)
+    default_pose = np.array(robot_cfg.reset_robot_pos, dtype=np.float64)
+
+    # 获取当前机器人完整状态（26维）
+    current_state = robot_body._get_reset_current_state()
+    if current_state is None:
+        print('[GraspHandler] WARN: 无法获取当前机器人状态，跳过手臂复位')
+        return
+
+    current_arm = current_state[:14]  # 当前手臂位置
+
+    # 获取当前手掌控制量（保持手掌不变）
+    # 优先从 robot 的缓存状态中读取（由 VLA 推理过程中更新）
+    left_hand = getattr(robot_body.robot, 'current_left_hand_state', None)
+    right_hand = getattr(robot_body.robot, 'current_right_hand_state', None)
+
+    # 如果缓存中无手掌状态，从当前状态中取
+    if left_hand is None and len(current_state) >= 20:
+        left_hand = current_state[14:20]
+    if right_hand is None and len(current_state) >= 26:
+        right_hand = current_state[20:26]
+
+    # 兜底使用默认姿态的手掌值
+    if left_hand is None:
+        left_hand = default_pose[14:20]
+    if right_hand is None:
+        right_hand = default_pose[20:26]
+
+    left_hand = np.asarray(left_hand, dtype=float)
+    right_hand = np.asarray(right_hand, dtype=float)
+
+    target_arm = default_pose[:14]
+
+    # 计算手臂距离，如果已经接近则跳过
+    arm_dist = np.max(np.abs(current_arm - target_arm))
+    if arm_dist < np.deg2rad(0.5):
+        print(f'[GraspHandler] 手臂已在默认位置附近 (max_diff={arm_dist:.4f} rad)，跳过复位')
+        return
+
+    n_steps = max(1, int(duration / 0.02))  # 50Hz
+    print(f'[GraspHandler] 双臂回归默认位置 ({duration}s, {n_steps} steps)...')
+
+    for i in range(1, n_steps + 1):
+        t = i / n_steps
+        action = np.zeros(26)
+        action[:14] = current_arm + t * (target_arm - current_arm)
+        action[14:20] = left_hand
+        action[20:26] = right_hand
+        robot_body.robot.send_robot_action(action)
+        time.sleep(0.02)
+
+    print('[GraspHandler] 双臂回归默认位置完成')
+
+
 class GraspHandler(AbstractTaskHandler):
     """'grasb' 任务处理器 — 抓取大类
 
@@ -102,10 +169,14 @@ class GraspHandler(AbstractTaskHandler):
                 language_instruction=instruction,
                 robot_body=robot_body,
                 reset_robot=not context._initialized,
-                max_duration=20.0,
-                thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >95% 直接完成或 20s 超时
+                max_duration=30.0,
+                thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >95% 直接完成或 30s 超时
                 stable_count_threshold=999,
             )
+
+            # ===== 无论推理成功还是失败，先将双臂回归默认位置（手掌不变）=====
+            _reset_arms_to_default(robot_body, context, duration=2.0)
+
             # ===== 步骤 4: 分析结果，结合手势判断具体错误 =====
             if not result.success:
                 # 超时 → 映射为抓取超时错误码

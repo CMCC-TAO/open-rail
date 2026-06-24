@@ -91,20 +91,21 @@ class DeliverHandler(AbstractTaskHandler):
     # ================================================================
 
     def _get_current_full_state(self, robot_body) -> np.ndarray | None:
-        """获取当前 26 维完整状态 [左臂7, 右臂7, 左手6, 右手6]
+        """获取当前 26 维完整状态（优先从 action 缓存读取，用于轨迹规划起点）
 
         优先级:
-          1. 直接从 robot_body.robot 的 ROS2 订阅缓存读取（实时，不依赖相机）
+          1. Action 缓存 — /joint_action + /left_hand/set_angle + /right_hand/set_angle
+             （最新下发量，轨迹规划起点更平滑）
           2. robot_body.current_state（VLA 观察线程缓存，可能过期）
           3. retrieve_observation() 回退（需要相机数据）
         """
-        # 优先级 1: 直接从 ROS2 缓存读取（实时最新，不依赖相机）
+        # 优先级 1: 从 action 订阅缓存读取（最新下发量，消除执行滞后）
         try:
             robot = robot_body.robot
-            la = robot.latest_left_arm
-            ra = robot.latest_right_arm
-            lh = robot.latest_left_hand
-            rh = robot.latest_right_hand
+            la = robot.latest_left_arm_action
+            ra = robot.latest_right_arm_action
+            lh = robot.latest_left_hand_action
+            rh = robot.latest_right_hand_action
             if all(x is not None for x in (la, ra, lh, rh)):
                 la_msg, _ = la
                 ra_msg, _ = ra

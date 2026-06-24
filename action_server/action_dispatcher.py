@@ -250,7 +250,7 @@ class ObsDataBridge:
         asyncio.run(self._async_server())
 
     async def _async_server(self):
-        import websockets
+        import websockets, socket, signal, subprocess, re
 
         async def handler(ws, path=None):
             with self._ws_lock:
@@ -265,7 +265,42 @@ class ObsDataBridge:
                 with self._ws_lock:
                     self._ws_clients.discard(ws)
 
-        async with websockets.serve(handler, "127.0.0.1", 9001, max_size=2**23) as server:
+        # 手动创建 socket，避免旧进程残留导致 "address already in use"
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1", 9001))
+        except OSError:
+            # 旧进程还活着，找到它并杀掉
+            try:
+                ss_out = subprocess.run(
+                    ["ss", "-tlnp", "sport = :9001"],
+                    capture_output=True, text=True, timeout=3
+                ).stdout
+                m = re.search(r'pid=(\d+)', ss_out)
+                if m:
+                    old_pid = int(m.group(1))
+                    print(f"[ObsBridge] Old process PID={old_pid} holds port 9001, killing...")
+                    os.kill(old_pid, signal.SIGTERM)
+                    for _ in range(20):
+                        time.sleep(0.1)
+                        try:
+                            os.kill(old_pid, 0)
+                        except OSError:
+                            break
+                    else:
+                        os.kill(old_pid, signal.SIGKILL)
+                        time.sleep(0.5)
+                    print(f"[ObsBridge] Port 9001 released, rebinding...")
+                    sock.close()
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    sock.bind(("127.0.0.1", 9001))
+            except Exception:
+                pass
+        sock.listen()
+
+        async with websockets.serve(handler, sock=sock, max_size=2**23) as server:
             print("[ObsBridge] WS server listening on 9001")
             # data_sender 循环：从共享队列取数据并广播
             while self._running:
