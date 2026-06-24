@@ -15,15 +15,6 @@ inter_chunk:
   smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
-  action_layout:
-    arm:
-      end: 14
-      policy: gradual
-      start: 0
-    gripper:
-      end: 16
-      policy: stepwise
-      start: 14
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
@@ -39,20 +30,11 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 1
+  sub_task_id: 0
   task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 rdm:
-  action_layout:
-    arm:
-      end: 14
-      policy: gradual
-      start: 0
-    gripper:
-      end: 16
-      policy: stepwise
-      start: 14
   max_len: 100
   mode: async
   observe_fps_window_size: 20

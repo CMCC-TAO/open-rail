@@ -447,10 +447,8 @@ def _apply_flat_patch_new(config, patch: dict):
 robot_instance = None
 _cleanup_guard = threading.Lock()
 
-def _get_robot(config):
+def _get_robot(robot_type, robot_config):
     global robot_instance
-
-    robot_type = config.robots.type
 
     # Reuse existing robot instance when the type matches.
     # This avoids re-initializing A2D DDS node after stop/start cycles.
@@ -459,7 +457,7 @@ def _get_robot(config):
         if robot_type == RobotType.A2D and module_name.endswith("client.robots.a2d.body_robot"):
             return robot_instance, True
         if robot_type == RobotType.MOCK and module_name.endswith("client.robots.mock.body_robot"):
-            desired_path = str(getattr(getattr(config.robots, 'mock', None), 'dataset_path', '') or '')
+            desired_path = str(getattr(robot_config, 'dataset_path', '') or '')
             current_path = str(getattr(robot_instance, 'dataset_path', '') or '')
             if desired_path and desired_path != current_path and hasattr(robot_instance, 'reset'):
                 try:
@@ -485,10 +483,10 @@ def _get_robot(config):
 
     if robot_type == RobotType.A2D:
         from client.robots.a2d.body_robot import RobotBody
-        robot_instance = RobotBody(config)
+        robot_instance = RobotBody(robot_config)
     elif robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
-        robot_instance = RobotBody(config)
+        robot_instance = RobotBody(robot_config)
     else:
         raise ValueError(f"Unsupported robot type: {robot_type}")
     return robot_instance, False
@@ -508,14 +506,14 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
 
     with client_state.lock:
         vla_client = client_state.vla_client
-        cfg = client_state.config
+        client_config = client_state.config
         current_robot = client_state.robot
 
     if vla_client is None:
         return None
-    if cfg is None:
-        cfg = get_client_config()
-        client_state.config = cfg
+    if client_config is None:
+        client_config = get_client_config()
+        client_state.config = client_config
 
     if force_recreate and robot_instance is not None:
         try:
@@ -524,12 +522,9 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
             pass
         robot_instance = None
 
-    robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
-    if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
-        cfg.rdm.action_layout = robot_cfg.action_layout
-        cfg.intra_chunk.action_layout = robot_cfg.action_layout
+    robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
 
-    robot, _ = _get_robot(cfg)
+    robot, _ = _get_robot(client_config.robots.type, robot_config)
     if current_robot is robot:
         _bind_robot_to_vla_client(vla_client, robot)
         return robot
@@ -1294,26 +1289,25 @@ def _ensure_vla_client_created():
         if client_state.vla_client is not None:
             return client_state.vla_client
 
-    cfg = client_state.config if client_state.config is not None else get_client_config()
-    client_state.config = cfg
+    # TODO: Load config from yaml file
+    if client_state.config is None:
+        client_state.config = get_client_config()
+    client_config = client_state.config
 
-    robot_cfg = getattr(cfg.robots, cfg.robots.type.value, None)
-    if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
-        cfg.rdm.action_layout = robot_cfg.action_layout
-        cfg.intra_chunk.action_layout = robot_cfg.action_layout
+    robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
 
     vla_zmq_client = None
-    robot = RobotBase()
+    robot = RobotBase(robot_config)
     try:
-        vla_zmq_client = ZMQClient(cfg.vla_zmq)
-        realtime_data_manager = RealtimeDataManager(cfg.rdm)
-        inter_chunk_fuser = InterChunkFuser(config=cfg.inter_chunk)
-        intra_chunk_smoother = IntraChunkSmoother(config=cfg.intra_chunk)
-        task_language_manager = TaskLanguageManager(config=cfg.language)
+        vla_zmq_client = ZMQClient(client_config.vla_zmq)
+        realtime_data_manager = RealtimeDataManager(client_config.rdm)
+        inter_chunk_fuser = InterChunkFuser(config=client_config.inter_chunk)
+        intra_chunk_smoother = IntraChunkSmoother(config=client_config.intra_chunk)
+        task_language_manager = TaskLanguageManager(config=client_config.language)
 
         from client.core.vla_client import VLAClientAsync
         vla_client = VLAClientAsync(
-            config=cfg,
+            config=client_config,
             realtime_data_manager=realtime_data_manager,
             inter_chunk_fuser=inter_chunk_fuser,
             intra_chunk_smoother=intra_chunk_smoother,

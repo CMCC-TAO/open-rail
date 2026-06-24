@@ -1,6 +1,5 @@
 import logging
 import math
-from shlex import join
 import numpy as np
 from numba import njit
 from ml_collections import ConfigDict
@@ -28,6 +27,8 @@ class InterChunkFuser:
             joint_indices= None,
             step_indices = None):
         # process first inference
+        if joint_indices is None:
+            joint_indices = list(range(next_action_chunk.shape[0]))
         if currt_action is None and currt_vel is None and currt_acc is None:
             next_vel_chunk = np.zeros_like(next_action_chunk)
             next_vel_chunk[:, 1:] = (next_action_chunk[:, 1:] - next_action_chunk[:, :-1]) / (next_timestamps[1] - next_timestamps[0])
@@ -57,8 +58,8 @@ class InterChunkFuser:
                 currt_action,
                 currt_vel,
                 currt_acc,
-                poly_length=30,
                 joint_indices=joint_indices,
+                poly_length=30,
             )
         elif self.config.inter_chunk_mode == 'smooth_velocity':
             # sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
@@ -249,7 +250,7 @@ class InterChunkFuser:
                                     init_pos,
                                     init_vel,
                                     init_acc,
-                                    joint_indices=None,
+                                    joint_indices,
                                     max_vel=2.0,
                                     max_acc=5.0,
                                     kp=5.0,
@@ -353,128 +354,6 @@ class InterChunkFuser:
         action_chunk_smoothed[joint_indices, target_chunk_index:] = pos_seq
         return action_chunk_smoothed, target_chunk_index 
 
-    @staticmethod
-    def _get_joint_indices(action_chunk, joint_indices=None):
-        if joint_indices:
-            return joint_indices
-        return list(range(action_chunk.shape[0]))
-
-    def _poly_chunk_transition(
-        self,
-        new_action_chunk,
-        new_vel_chunk,
-        new_timestamps,
-        target_index,
-        current_pos,
-        current_vel,
-        current_acc,
-        joint_indices=None,
-    ):
-        """
-        Smooths the transition to a new action chunk using a quintic polynomial.
-
-        This method creates a trajectory that matches the position, velocity, and acceleration
-        at both the start (current state) and end (a point in the new chunk) of the transition.
-        It solves a system of linear equations to find the coefficients of a 5th-degree
-        polynomial that satisfies these boundary conditions. This ensures a C2-continuous
-        transition. If solving fails (e.g., due to a singular matrix), it falls back to a
-        cubic Hermite spline which only matches position and velocity.
-
-        Args:
-            new_action_chunk (np.ndarray): The upcoming chunk of actions (positions).
-            new_vel_chunk (np.ndarray): The upcoming chunk of velocities.
-            new_timestamps (np.ndarray): Timestamps corresponding to the action chunk.
-            target_index (int): The index in the new_action_chunk where the transition should start.
-            current_pos (np.ndarray): The current position of the robot joints.
-            current_vel (np.ndarray): The current velocity of the robot joints.
-            current_acc (np.ndarray): The current acceleration of the robot joints.
-            joint_indices (list, optional): Indices of the joints to apply the transition to. If None, applies to all joints. Defaults to None.
-
-        Returns:
-            np.ndarray: The action chunk with the smoothed transition applied.
-        """
-        if current_pos is None or current_vel is None:
-            return new_action_chunk
-
-        # Estimate the acceleration at the target index using finite differences.
-        new_vel = new_vel_chunk[:, target_index]
-        if target_index < new_vel_chunk.shape[1] - 1:
-            next_vel = new_vel_chunk[:, target_index + 1]
-            dt = new_timestamps[target_index + 1] - new_timestamps[target_index]
-            new_acc = (next_vel - new_vel) / dt if dt > 0 else np.zeros_like(new_vel)
-        else:
-            new_acc = np.zeros_like(new_vel)
-
-        # Determine the length of the transition period.
-        transition_length = min(new_action_chunk.shape[1] // 2, new_action_chunk.shape[1] - target_index)
-        if transition_length <= 1:
-            return new_action_chunk
-
-        smoothed_chunk = new_action_chunk.copy()
-        end_index = target_index + transition_length - 1
-        resolved_joint_indices = self._get_joint_indices(new_action_chunk, joint_indices)
-
-        # Generate the trajectory for each joint.
-        for joint_idx in resolved_joint_indices:
-            # Define initial and final boundary conditions.
-            p0, v0, a0 = current_pos[joint_idx], current_vel[joint_idx], current_acc[joint_idx]
-            pf = new_action_chunk[joint_idx, end_index]
-            vf = new_vel_chunk[joint_idx, end_index]
-            af = new_acc[joint_idx] if end_index < len(new_acc) else 0.0
-
-            # Normalize time for the transition to be from t=0 to t=1.
-            t_transition = np.linspace(0, 1, transition_length)
-
-            # The matrix 'A' is derived from the quintic polynomial p(t) = c0 + c1*t + ... + c5*t^5
-            # and its derivatives p'(t) and p''(t), evaluated at t=0 and t=1.
-            # This sets up a system of linear equations to solve for the coefficients [c0, ..., c5].
-            A = np.array(
-                [
-                    [1, 0, 0, 0, 0, 0],  # p(0) = p0
-                    [0, 1, 0, 0, 0, 0],  # p'(0) = v0
-                    [0, 0, 2, 0, 0, 0],  # p''(0) = a0
-                    [1, 1, 1, 1, 1, 1],  # p(1) = pf
-                    [0, 1, 2, 3, 4, 5],  # p'(1) = vf
-                    [0, 0, 2, 6, 12, 20],  # p''(1) = af
-                ]
-            )
-
-            # The vector 'b' contains the desired boundary conditions.
-            b = np.array([p0, v0, a0, pf, vf, af])
-
-            try:
-                # Solve the system A * coeffs = b to find the polynomial coefficients.
-                coeffs = np.linalg.solve(A, b)
-                for i, t in enumerate(t_transition):
-                    # Evaluate the polynomial at time t to get the smoothed position.
-                    smoothed_pos = (
-                        coeffs[0]
-                        + coeffs[1] * t
-                        + coeffs[2] * t**2
-                        + coeffs[3] * t**3
-                        + coeffs[4] * t**4
-                        + coeffs[5] * t**5
-                    )
-                    smoothed_chunk[joint_idx, target_index + i] = smoothed_pos
-
-            except np.linalg.LinAlgError:
-                # If the matrix A is singular, quintic solution is not possible.
-                # Fall back to a cubic Hermite spline, which matches only position and velocity.
-                if self.logger is not None:
-                    self.logger.warning(f"Singular matrix for joint {joint_idx}, using cubic interpolation")
-                for i, t in enumerate(t_transition):
-                    # Hermite basis functions for cubic interpolation.
-                    h00 = 2 * t**3 - 3 * t**2 + 1
-                    h10 = t**3 - 2 * t**2 + t
-                    h01 = -2 * t**3 + 3 * t**2
-                    h11 = t**3 - t**2
-
-                    # Interpolate using the initial/final position and velocity.
-                    smoothed_pos = h00 * p0 + h10 * v0 + h01 * pf + h11 * vf
-                    smoothed_chunk[joint_idx, target_index + i] = smoothed_pos
-
-        return smoothed_chunk
-
     def _poly_chunk_transition_1(
         self,
         next_action_chunk,
@@ -484,8 +363,8 @@ class InterChunkFuser:
         current_pos,
         current_vel,
         current_acc,
-        poly_length=10,
-        joint_indices=None,
+        joint_indices,
+        poly_length=10
     ):
         """
         Smooths the transition to a new action chunk using a quintic polynomial.
@@ -531,10 +410,9 @@ class InterChunkFuser:
         # transition_length = min(poly_length, next_action_chunk.shape[1] - target_chunk_index)
         action_chunk_smoothed = next_action_chunk.copy()
         end_index = target_chunk_index + transition_length - 1
-        resolved_joint_indices = self._get_joint_indices(next_action_chunk, joint_indices)
 
         # Generate the trajectory for each joint.
-        for joint_idx in resolved_joint_indices:
+        for joint_idx in joint_indices:
             # Define initial and final boundary conditions.
             p0, v0, a0 = current_pos[joint_idx], current_vel[joint_idx], current_acc[joint_idx]
             pf = next_action_chunk[joint_idx, end_index]
@@ -594,131 +472,6 @@ class InterChunkFuser:
 
         return action_chunk_smoothed, target_chunk_index
 
-    def _min_jerk_chunk_transition(self,
-        new_action_chunk,
-        new_vel_chunk,
-        new_acc_chunk,
-        new_timestamps,
-        target_index,
-        current_pos,
-        current_vel,
-        current_acc,
-        joint_indices=None,
-    ):
-        """
-        Smooths the transition to a new action chunk using a minimum-jerk trajectory.
-
-        This method generates a smooth path from the current robot state (position, velocity,
-        and acceleration) to a target state within the new action chunk. The trajectory
-        is a quintic polynomial that minimizes jerk (the third derivative of position),
-        resulting in a very smooth and natural-looking motion. The transition length is
-        adaptively determined based on the difference between the current and target states.
-
-        Args:
-            new_action_chunk (np.ndarray): The upcoming chunk of actions (positions).
-            new_vel_chunk (np.ndarray): The upcoming chunk of velocities.
-            new_acc_chunk (np.ndarray): The upcoming chunk of accelerations.
-            new_timestamps (np.ndarray): Timestamps corresponding to the action chunk.
-            target_index (int): The index in the new_action_chunk where the transition should start.
-            current_pos (np.ndarray): The current position of the robot joints.
-            current_vel (np.ndarray): The current velocity of the robot joints.
-            current_acc (np.ndarray): The current acceleration of the robot joints.
-            joint_indices (list, optional): Indices of the joints to apply the transition to.
-                                            If None, applies to all joints. Defaults to None.
-
-        Returns:
-            np.ndarray: The action chunk with the smoothed transition applied.
-        """
-        if current_pos is None or current_vel is None:
-            return new_action_chunk
-
-        # Define the target state for the transition.
-        target_pos = new_action_chunk[:, target_index].copy()
-        target_vel = new_vel_chunk[:, target_index].copy()
-        target_acc = new_acc_chunk[:, target_index].copy() if new_acc_chunk is not None else np.zeros_like(target_vel)
-
-        # Determine which joints to apply the smoothing to.
-        resolved_joint_indices = self._get_joint_indices(new_action_chunk, joint_indices)
-
-        # Calculate the difference (magnitude) between current and target states.
-        pos_diff = np.linalg.norm(current_pos[resolved_joint_indices] - target_pos[resolved_joint_indices])
-        vel_diff = np.linalg.norm(current_vel[resolved_joint_indices] - target_vel[resolved_joint_indices])
-        acc_diff = np.linalg.norm(current_acc[resolved_joint_indices] - target_acc[resolved_joint_indices])
-
-        # Adaptively determine the transition length based on the state differences.
-        # A larger difference results in a longer transition.
-        base_transition = new_action_chunk.shape[1] // 2
-        adaptive_factor = min(2.0, 0.5 + pos_diff * 2.0 + vel_diff * 1.5 + acc_diff * 0.3)
-        transition_length = min(int(base_transition * adaptive_factor), new_action_chunk.shape[1] - target_index)
-
-        # If the transition is too short, skip smoothing.
-        if transition_length <= 1:
-            return new_action_chunk
-
-        smoothed_chunk = new_action_chunk.copy()
-
-        # Calculate time step (dt) and total transition duration (T).
-        dt = new_timestamps[1] - new_timestamps[0] if len(new_timestamps) > 1 else 0.005
-        T = transition_length * dt
-
-        # Determine the end index for the transition within the chunk.
-        end_index = min(target_index + transition_length - 1, new_action_chunk.shape[1] - 1)
-
-        # Generate the trajectory for each joint.
-        for joint_idx in resolved_joint_indices:
-            # Define initial conditions (at tau=0).
-            x0 = current_pos[joint_idx]
-            v0 = current_vel[joint_idx] * T  # Scale velocity by T for normalized time.
-            a0 = current_acc[joint_idx] * T * T  # Scale acceleration by T^2 for normalized time.
-
-            # Define final conditions (at tau=1).
-            xf = new_action_chunk[joint_idx, end_index]
-            vf = new_vel_chunk[joint_idx, end_index] * T if end_index < new_vel_chunk.shape[1] else 0.0
-            af = (
-                (new_acc_chunk[joint_idx, end_index] * T * T)
-                if (new_acc_chunk is not None and end_index < new_acc_chunk.shape[1])
-                else 0.0
-            )
-
-            # Apply the quintic polynomial for each step in the transition.
-            for i in range(transition_length):
-                # tau is the normalized time, from 0 to 1.
-                tau = i / (transition_length - 1) if transition_length > 1 else 1.0
-                tau2 = tau * tau
-                tau3 = tau2 * tau
-                tau4 = tau3 * tau
-                tau5 = tau4 * tau
-
-                # These are the basis functions (quintic polynomials) for a minimum-jerk trajectory.
-                # They blend the initial and final position, velocity, and acceleration.
-                h0 = 1 - 10 * tau3 + 15 * tau4 - 6 * tau5
-                h1 = tau - 6 * tau3 + 8 * tau4 - 3 * tau5
-                h2 = 0.5 * tau2 - 1.5 * tau3 + 1.5 * tau4 - 0.5 * tau5
-                h3 = 10 * tau3 - 15 * tau4 + 6 * tau5
-                h4 = -4 * tau3 + 7 * tau4 - 3 * tau5
-                h5 = 0.5 * tau3 - tau4 + 0.5 * tau5
-
-                # Calculate the smoothed position by combining the basis functions with the boundary conditions.
-                smoothed_pos = h0 * x0 + h1 * v0 + h2 * a0 + h3 * xf + h4 * vf + h5 * af
-
-                # Blend the end of the smoothed trajectory with the original target trajectory
-                # to ensure a seamless continuation.
-                blend_start = 0.7
-                if tau > blend_start:
-                    blend_ratio = (tau - blend_start) / (1.0 - blend_start)
-                    target_pos_at_i = (
-                        new_action_chunk[joint_idx, target_index + i]
-                        if (target_index + i) < new_action_chunk.shape[1]
-                        else xf
-                    )
-                    smoothed_pos = (1 - blend_ratio) * smoothed_pos + blend_ratio * target_pos_at_i
-
-                # Update the action chunk with the new smoothed position.
-                if target_index + i < smoothed_chunk.shape[1]:
-                    smoothed_chunk[joint_idx, target_index + i] = smoothed_pos
-
-        return smoothed_chunk
-
     def _min_jerk_chunk_transition_1(self,
         next_action_chunk,
         next_vel_chunk,
@@ -728,7 +481,7 @@ class InterChunkFuser:
         current_pos,
         current_vel,
         current_acc,
-        joint_indices=None,
+        joint_indices,
         blend_threshold = 0.7,
         transition_length = 32,
     ):
@@ -764,13 +517,10 @@ class InterChunkFuser:
         target_vel = next_vel_chunk[:, target_chunk_index].copy()
         target_acc = next_acc_chunk[:, target_chunk_index].copy() if next_acc_chunk is not None else np.zeros_like(target_vel)
 
-        # Determine which joints to apply the smoothing to.
-        resolved_joint_indices = self._get_joint_indices(next_action_chunk, joint_indices)
-
         # Calculate the difference (magnitude) between current and target states.
-        pos_diff = np.linalg.norm(current_pos[resolved_joint_indices] - target_pos[resolved_joint_indices])
-        vel_diff = np.linalg.norm(current_vel[resolved_joint_indices] - target_vel[resolved_joint_indices])
-        acc_diff = np.linalg.norm(current_acc[resolved_joint_indices] - target_acc[resolved_joint_indices])
+        pos_diff = np.linalg.norm(current_pos[joint_indices] - target_pos[joint_indices])
+        vel_diff = np.linalg.norm(current_vel[joint_indices] - target_vel[joint_indices])
+        acc_diff = np.linalg.norm(current_acc[joint_indices] - target_acc[joint_indices])
 
         # Adaptively determine the transition length based on the state differences.
         # A larger difference results in a longer transition.
@@ -792,7 +542,7 @@ class InterChunkFuser:
         end_index = min(target_chunk_index + transition_length - 1, next_action_chunk.shape[1] - 1)
 
         # Generate the trajectory for each joint.
-        for joint_idx in resolved_joint_indices:
+        for joint_idx in joint_indices:
             # Define initial conditions (at tau=0).
             x0 = current_pos[joint_idx]
             v0 = current_vel[joint_idx] * T  # Scale velocity by T for normalized time.

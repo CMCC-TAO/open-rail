@@ -1,15 +1,25 @@
-import time
-import cv2
-import numpy as np
+import logging
+from client.utils.util import parse_action_layout
 
-try:
-    import ruckig
-except ImportError:
-    pass
+# try:
+#     import ruckig
+# except ImportError:
+#     pass
 
 class RobotBase():
-    def __init__(self):
-        self.robot = None
+    def __init__(self, config):
+        self.logger = logging.getLogger(__name__)
+        # self.config = getattr(config.robots, config.robots.type.value, {})
+        self.config = config
+        # print(f"Debug: cfg={self.config}")
+        # TODO: Make action_layout value changing tasks effects in realtime
+        if not hasattr(self.config, 'action_layout'):
+            self.logger.error("Parameter action_layout is required, please check the configuration.")
+        self.action_layout = dict(self.config.get('action_layout', {}))
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
+        # print(f"Debug: action_dim={self.action_dim}")
+        # print(f"Debug: joint_indices={self.joint_indices}")
+        # print(f"Debug: step_indices={self.step_indices}")
 
     def control_robot(self, data):
         """
@@ -42,43 +52,59 @@ class RobotBase():
         """
         raise NotImplementedError('reset_robot is not implemented')
 
-    def ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):
+    def get_joint_indices(self):
         """
-        Trajectory planning using Ruckig
-        Args:
-            current_pose: current joint pose
-            target_pose: target joint pose
-            dof: degrees of freedom
-            interval: time interval
+        Get joint indices of robot
         Returns:
-            list of trajectory points
+            joint_indices: joint indices of robot
         """
-        rk = ruckig.Ruckig(dof, interval)
-        rk_input = ruckig.InputParameter(dof)
-        rk_output = ruckig.OutputParameter(dof)
+        return self.joint_indices
+
+    def get_step_indices(self):
+        """
+        Get step indices of robot
+        Returns:
+            step_indices: step indices of robot
+        """
+        return self.step_indices
+
+    # def ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):
+    #     """
+    #     Trajectory planning using Ruckig
+    #     Args:
+    #         current_pose: current joint pose
+    #         target_pose: target joint pose
+    #         dof: degrees of freedom
+    #         interval: time interval
+    #     Returns:
+    #         list of trajectory points
+    #     """
+    #     rk = ruckig.Ruckig(dof, interval)
+    #     rk_input = ruckig.InputParameter(dof)
+    #     rk_output = ruckig.OutputParameter(dof)
         
-        # Set current state
-        rk_input.current_position = current_pose
-        rk_input.current_velocity = [0.0] * dof
-        rk_input.current_acceleration = [0.0] * dof
+    #     # Set current state
+    #     rk_input.current_position = current_pose
+    #     rk_input.current_velocity = [0.0] * dof
+    #     rk_input.current_acceleration = [0.0] * dof
         
-        # Set target state
-        rk_input.target_position = target_pose
-        rk_input.target_velocity = [0.0] * dof
-        rk_input.target_acceleration = [0.0] * dof
+    #     # Set target state
+    #     rk_input.target_position = target_pose
+    #     rk_input.target_velocity = [0.0] * dof
+    #     rk_input.target_acceleration = [0.0] * dof
         
-        # Set motion constraints
-        rk_input.max_velocity = [2.0] * dof
-        rk_input.max_acceleration = [1.0] * dof
-        rk_input.max_jerk = [5.0] * dof
+    #     # Set motion constraints
+    #     rk_input.max_velocity = [2.0] * dof
+    #     rk_input.max_acceleration = [1.0] * dof
+    #     rk_input.max_jerk = [5.0] * dof
         
-        # Generate trajectory
-        trajs = []
-        while rk.update(rk_input, rk_output) == ruckig.Result.Working:
-            trajs.append(rk_output.new_position)
-            rk_output.pass_to_input(rk_input)
+    #     # Generate trajectory
+    #     trajs = []
+    #     while rk.update(rk_input, rk_output) == ruckig.Result.Working:
+    #         trajs.append(rk_output.new_position)
+    #         rk_output.pass_to_input(rk_input)
         
-        return trajs
+    #     return trajs
 
     def close(self):
         pass

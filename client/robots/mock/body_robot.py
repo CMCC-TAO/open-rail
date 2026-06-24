@@ -1,19 +1,16 @@
+import os
+import glob
 import time
 import cv2
-import random
 import logging
 import numpy as np
-from pprint import pprint
+import pandas as pd
 import threading
 
 # from launch import Action
 from ..base_robot import RobotBase
-from client.utils.util import run_time_decorator, parse_action_layout
+from client.utils.util import run_time_decorator
 
-import os
-import glob
-import pandas as pd
-import torch
 
 # 限制 OpenCV/FFmpeg 线程，避免多线程解码冲突（pthread_frame async_lock）
 # os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "threads;1")
@@ -26,13 +23,8 @@ class RobotBody(RobotBase):
         Args:
             config (dict): Configuration dictionary containing mock robot settings
         """
-        super().__init__()
-        self.logger = logging.getLogger(__name__)
-        self.cfg, self.ori_cfg = config['robots']['mock'], config
-        if not hasattr(self.cfg, 'action_layout'):
-            self.logger.error("Parameter action_layout is required, please check the configuration.")
-        self.action_layout = dict(self.cfg.get('action_layout', {}))
-        self.action_dim, _, _ = parse_action_layout(self.action_layout)
+        super().__init__(config)
+        self.logger = logging.getLogger(__name__) # required for correct logging output
         self.current_state = np.zeros(self.action_dim)
         self.dataset = None
         self.episode_files = []
@@ -51,7 +43,7 @@ class RobotBody(RobotBase):
             self.logger.info(f"Playback fps: {1.0 / self.period:.2f}")
         except Exception as e:
             self.logger.error(f"Failed to load local dataset: {e}")
-            print(f"Failed to load local dataset: {e}")
+            # print(f"Failed to load local dataset: {e}")
             self.dataset = None
 
     def _release_video_caps(self):
@@ -64,7 +56,7 @@ class RobotBody(RobotBase):
 
     def _resolve_dataset_path(self, dataset_path=None):
         if dataset_path is None:
-            dataset_path = self.cfg.get('dataset_path', self.cfg.get('root', ''))
+            dataset_path = self.config.get('dataset_path', self.config.get('root', ''))
         dataset_path = str(dataset_path or '').strip()
         if not dataset_path:
             raise ValueError('mock.dataset_path is empty')
@@ -103,7 +95,7 @@ class RobotBody(RobotBase):
             self.episode_files.append((chunk_id, episode_id, parquet_path))
 
         self.dataset_path = dataset_path
-        self.cfg.dataset_path = dataset_path
+        self.config.dataset_path = dataset_path
         self._load_meta_period(dataset_path)
         self._load_episode(0)
 
@@ -129,7 +121,7 @@ class RobotBody(RobotBase):
         self.dataset = pd.read_parquet(parquet_path)
         self.currt_index = 0
 
-        for _, video_key in self.cfg['camera']['names'].items():
+        for _, video_key in self.config['camera']['names'].items():
             video_path = os.path.join(
                 self.dataset_path,
                 'videos',
@@ -181,7 +173,7 @@ class RobotBody(RobotBase):
                     return None
 
             row = self.dataset.iloc[self.currt_index]
-            cam_names = self.cfg['camera']['names']
+            cam_names = self.config['camera']['names']
 
             result = {
                 'ref_timestamp': time.clock_gettime_ns(time.CLOCK_MONOTONIC)

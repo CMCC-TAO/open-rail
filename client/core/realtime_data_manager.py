@@ -1,14 +1,11 @@
 import copy
 import time
-import math
 import threading
 import numpy as np
 import logging
-import matplotlib.pyplot as plt
 from collections import deque
 from ml_collections import ConfigDict
-from concurrent.futures import ThreadPoolExecutor
-from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index, parse_action_layout
+from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index
 from client.core.inter_chunk_fuser import InterChunkFuser
 
 
@@ -28,8 +25,6 @@ class RealtimeDataManager():
         """
         self.logger = logging.getLogger(__name__)
         self.rdm_config = rdm_config
-        self.action_layout = dict(rdm_config.action_layout) if hasattr(rdm_config, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.observe_buffer = deque(maxlen=rdm_config.max_len)
         self.observe_fps_window_size = max(2, int(getattr(rdm_config, 'observe_fps_window_size', 30)))
         self.observe_add_timestamps = deque(maxlen=self.observe_fps_window_size)
@@ -130,18 +125,7 @@ class RealtimeDataManager():
         self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count if self.infer_count > 0 else currt_traj_time
         self.logger.debug(f'avg traj time: {self.avg_traj_time:.4f}s')
         # self.logger.debug(f'avg traj time: {self.avg_traj_time}')
-
-    def _get_joint_indices(self, action_chunk):
-        if self.joint_indices:
-            return self.joint_indices
-        return list(range(action_chunk.shape[0]))
-
-    def _get_step_indices(self, action_chunk):
-        if self.step_indices:
-            return self.step_indices
-        joint_indices = set(self._get_joint_indices(action_chunk))
-        return [index for index in range(action_chunk.shape[0]) if index not in joint_indices]
-    
+ 
     def add_observe_data(self, frame):
         """Add observe data to buffer. The observe data is a dictionary containing the robot state, camera images and timestamps.
 
