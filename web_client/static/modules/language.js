@@ -309,7 +309,6 @@ function setupLangPanel() {
       }
 
       await persistLanguagePatch({ 'language.auto_mode': false });
-      autoStartExecRecord();
     });
   }
 
