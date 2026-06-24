@@ -7,7 +7,7 @@ from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc
-from client.utils.util import run_time_decorator, parse_action_layout
+from client.utils.util import run_time_decorator
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
@@ -54,8 +54,6 @@ class VLAClientAsync():
         self.task_language_manager = task_language_manager
         self.vla_zmq = vla_zmq_client
         self.robot = robot
-        self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.is_running = False
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
@@ -100,9 +98,6 @@ class VLAClientAsync():
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
-        # action_dim = self.action_dim if self.action_dim > 0 else 16
-        # self.info_current_action = [0.0] * action_dim
-        # self.info_current_state = [0.0] * action_dim
         self.image_process_time = 0.0
         self.current_prob_progress = 0.0
         # self.info_obs, self.info_act = {}, {}
@@ -403,13 +398,13 @@ class VLAClientAsync():
                 timestamps,
                 action_chunk,
                 time_step=self.config.controller.period,
-                task_progress=prob_progress)
+                task_progress=prob_progress,
+                joint_indices=self.robot.get_joint_indices(),
+                step_indices=self.robot.get_step_indices())
 
             # Record control timestamp
             self.realtime_data_manager.set_control_time_marker()
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
-            # joint_indices = self.realtime_data_manager._get_joint_indices(action_chunk_fitted)
-            # step_indices = self.realtime_data_manager._get_step_indices(action_chunk_fitted)
             # currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
                 next_action_chunk=action_chunk_fitted,
@@ -495,7 +490,9 @@ class VLAClientAsync():
                 timestamps,
                 action_chunk,
                 time_step=self.config.controller.period,
-                task_progress=prob_progress)
+                task_progress=prob_progress,
+                joint_indices=self.robot.get_joint_indices(),
+                step_indices=self.robot.get_step_indices())
 
             # Record control timestamp
             self.realtime_data_manager.set_control_time_marker()
@@ -503,8 +500,6 @@ class VLAClientAsync():
             # Get prob_progress from action data if available
 
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
-            joint_indices = self.realtime_data_manager._get_joint_indices(action_chunk_fitted)
-            step_indices = self.realtime_data_manager._get_step_indices(action_chunk_fitted)
             currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
             # Use inter chunk fusion when control thread is running, otherwise use intra chunk smoother output directly for visualization and monitoring
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
@@ -516,8 +511,8 @@ class VLAClientAsync():
                 currt_action=currt_action if self.is_control_thread_running else None,
                 currt_vel=currt_vel if self.is_control_thread_running else None,
                 currt_acc=currt_acc if self.is_control_thread_running else None,
-                joint_indices=joint_indices if self.is_control_thread_running else None,
-                step_indices=step_indices if self.is_control_thread_running else None,
+                joint_indices=self.robot.get_joint_indices() if self.is_control_thread_running else None,
+                step_indices=self.robot.get_step_indices() if self.is_control_thread_running else None,
             )
             self.realtime_data_manager.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
