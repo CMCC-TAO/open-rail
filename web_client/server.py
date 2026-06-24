@@ -491,8 +491,8 @@ def _get_robot(config):
         robot_instance = RobotBody(config)
     elif robot_type == RobotType.UNITREE_G1:
         import rclpy as _rclpy
-        # 先确保全局 rclpy 初始化（幂等保护），再用独立 context 给 robot
-        # 传 args=[] 避免 sys.argv（如 --port）干扰 rcl 参数解析
+        # First ensure global rclpy initialization (idempotent), then give robot an independent context
+        # Pass args=[] to prevent sys.argv (e.g. --port) from interfering with rcl argument parsing
         if not _rclpy.ok():
             _rclpy.init(args=[])
         _ros_context = _rclpy.Context()
@@ -1093,7 +1093,7 @@ async def load_config_file(req: ConfigFileRequest):
         client_state.config = get_client_config()
     # Guard against path-traversal
     p = Path(req.path)
-    # --- 调试开始 ---
+    # --- Debug start ---
     # print(f"DEBUG: Logger name is: {logger.name}")
     # print(f"DEBUG: Logger effective level is: {logger.getEffectiveLevel()}")
     # print(f"DEBUG: Logging module root level is: {logging.root.getEffectiveLevel()}")

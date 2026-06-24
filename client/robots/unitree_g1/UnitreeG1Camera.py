@@ -8,7 +8,7 @@ import threading
 import time
 from collections import deque
 
-_DEBUG_ENABLED = False          # 开关：True=打印, False=静默
+_DEBUG_ENABLED = False          # Toggle: True=print, False=silent
 _DEBUG_PRINT_INTERVAL = 1.0
 _last_debug_time = 0.0
 
@@ -22,7 +22,7 @@ def _dprint(msg):
         print(f"[DBG UnitreeG1Camera] {msg}")
         _last_debug_time = now
 
-# 如果使用显示窗口，默认不强制 offscreen 平台，避免 Qt 插件初始化失败
+# If using display window, do not force offscreen platform by default to avoid Qt plugin initialization failure
 if "QT_QPA_PLATFORM" in os.environ:
     os.environ.pop("QT_QPA_PLATFORM")
 cv2.setNumThreads(1)
@@ -34,7 +34,7 @@ class UnitreeG1Camera(Node):
         self.fps = fps
         self.period = 1.0 / fps
 
-        # 相机话题（Unitree G1 ROS2 实际 topic）
+        # Camera topics (Unitree G1 ROS2 actual topics)
         self.topic_head = "/head/color/image"
         self.topic_left = "/left/color/image"
         self.topic_right = "/right/color/image"
@@ -44,19 +44,19 @@ class UnitreeG1Camera(Node):
         print(f"[DBG UnitreeG1Camera]   - {self.topic_left}")
         print(f"[DBG UnitreeG1Camera]   - {self.topic_right}")
 
-        # 缓存队列
+        # Cache queues
         self.queue_head = deque(maxlen=queue_size)
         self.queue_left = deque(maxlen=queue_size)
         self.queue_right = deque(maxlen=queue_size)
 
-        # 订阅
+        # Subscriptions
         self.create_subscription(CompressedImage, self.topic_head, self._cb_head, 1)
         self.create_subscription(CompressedImage, self.topic_left, self._cb_left, 1)
         self.create_subscription(CompressedImage, self.topic_right, self._cb_right, 1)
 
         self.get_logger().info("UnitreeG1Camera ready (no internal spin)")
 
-    # 相机回调
+    # Camera callbacks
     def _cb_head(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.compressed_imgmsg_to_cv2(msg, "bgr8")
@@ -75,7 +75,7 @@ class UnitreeG1Camera(Node):
         self.queue_right.append((img, ts))
         _dprint(f"_cb_right: ts={ts:.6f}, img.shape={img.shape}")
 
-    # 外部获取图像，以头部相机时间戳对齐左右腕
+    # External image retrieval, align left/right wrist based on head camera timestamp
     def get_latest_image(self):
         qs = f"head={len(self.queue_head)} left={len(self.queue_left)} right={len(self.queue_right)}"
         if not self.queue_head:
@@ -90,8 +90,8 @@ class UnitreeG1Camera(Node):
     def _find_closest(self, queue, target_ts):
         if not queue:
             return (None, None)
-        # 快照：避免 deque 在迭代时被 ROS2 回调线程 append 导致
-        # "deque mutated during iteration" 异常
+        # Snapshot: avoid deque being appended by ROS2 callback thread during iteration,
+        # causing "deque mutated during iteration" exception
         snapshot = list(queue)
         if not snapshot:
             return (None, None)
@@ -134,7 +134,7 @@ def main():
                     if right_img is not None:
                         cv2.imshow("right", right_img)
 
-                # 只打印一次，不影响每帧显示
+                # Print only once, does not affect per-frame display
                 print(f"head ts={head_ts:.6f}", end="\r")
                 key = cv2.waitKey(1) & 0xFF
             else:

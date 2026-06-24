@@ -61,11 +61,11 @@ def get_mock_config():
 def get_unitree_g1_config():
     """Generate configuration for Unitree G1 humanoid robot.
 
-    Unitree G1 使用 26 维动作/状态接口:
-        action[0:7]   -> 左臂 (7 关节)
-        action[7:14]  -> 右臂 (7 关节)
-        action[14:20] -> 左手 (6 手指)
-        action[20:26] -> 右手 (6 手指)
+    Unitree G1 uses a 26-dimensional action/state interface:
+        action[0:7]   -> left arm (7 joints)
+        action[7:14]  -> right arm (7 joints)
+        action[14:20] -> left hand (6 fingers)
+        action[20:26] -> right hand (6 fingers)
 
     Returns:
         ConfigDict: Configuration dictionary for unitree_g1 robot adapter.
@@ -80,15 +80,15 @@ def get_unitree_g1_config():
         'hand_right': 'hand_right',
     }
     config.proprio_names = ['arm', 'hand']
-    # 默认复位姿态 = 准备抓取姿态（双臂前伸、双手微张）
+    # Default reset pose = ready-to-grasp pose (arms extended forward, hands slightly open)
     config.reset_robot_pos = [
-        # ===== 左臂 (7) =====
+        # ===== Left arm (7) =====
         0.30, 0.15, -0.15, -0.30, 0.0, -0.30, 0.0,
-        # ===== 右臂 (7) =====
+        # ===== Right arm (7) =====
         0.30, -0.15, 0.15, -0.30, 0.0, -0.30, 0.0,
-        # ===== 左手 (6) ===== （张开）
+        # ===== Left hand (6) ===== (open)
         100.0, 100.0, 100.0, 100.0, 150.0, 50.0,
-        # ===== 右手 (6) ===== （张开）
+        # ===== Right hand (6) ===== (open)
         100.0, 100.0, 100.0, 100.0, 150.0, 50.0,
     ]
     config.action_layout = {
@@ -112,7 +112,7 @@ def get_robots_config():
             - unitree_g1: Unitree G1 robot configuration
     """
     config = ConfigDict()
-    config.type = RobotType.UNITREE_G1  # 默认使用 Unitree G1 机器人
+    config.type = RobotType.UNITREE_G1  # Default to Unitree G1 robot
     config.a2d = get_a2d_config()
     config.mock = get_mock_config()
     config.unitree_g1 = get_unitree_g1_config()

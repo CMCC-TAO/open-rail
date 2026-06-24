@@ -10,20 +10,20 @@ import numpy as np
 
 
 # ==============================================
-# 手臂关节 **相对** 限位（弧度/控制步）
-# 含义：单步 action 与当前 state 的最大允许偏差
+# Arm joint **relative** limits (radians/control step)
+# Meaning: maximum allowed deviation between single-step action and current state
 #
-# 数据源：训练集 stats_relative.json 统计分析
-#   推理步 delta = max(5 * avg_std, range * 0.3)
-#   控制步 delta = 推理步 delta / RATIO
+# Data source: statistical analysis from training set stats_relative.json
+#   Inference step delta = max(5 * avg_std, range * 0.3)
+#   Control step delta = inference step delta / RATIO
 #
-# 考虑 G1 关节执行精度（跟踪误差 ~0.01-0.03 rad），
-# delta 下限设为 ~0.015 rad，避免：
-#   1. 跟踪误差 > delta 导致 action 被持续 clamp，手臂不动
-#   2. 编码器噪声在边界处引发抖动
-# wrist 关节运动范围大，delta 适当放宽到 0.050 rad
+# Considering G1 joint execution precision (tracking error ~0.01-0.03 rad),
+# delta lower bound set to ~0.015 rad to avoid:
+#   1. Tracking error > delta causing action to be continuously clamped, arm doesn't move
+#   2. Encoder noise at boundaries causing jitter
+# Wrist joints have large motion range, delta relaxed to 0.050 rad appropriately
 # ==============================================
-# 控制频率与推理频率之比
+# Ratio of control frequency to inference frequency
 _CONTROL_INFER_RATIO = 9  # 30Hz(~33.3ms) / 267Hz(3.75ms)
 
 #                        lsp     lsr     lsy     le      lwr     lwp     lwy
@@ -32,7 +32,7 @@ _LEFT_ARM_DELTA_LIMITS = [0.15, 0.15, 0.15, 0.15, 0.50, 0.25, 0.20]
 #                         rsp     rsr     rsy     re      rwr     rwp     rwy
 _RIGHT_ARM_DELTA_LIMITS = [0.20, 0.15, 0.15, 0.15, 0.50, 0.25, 0.20]
 
-# 绝对安全限幅（最终兜底，防止相对限位失效时飞出）
+# Absolute safety limits (final fallback, prevent flying out when relative limits fail)
 _LEFT_ARM_ABS_LIMITS = [
     (-0.80, 0.80),   # left_shoulder_pitch
     (-0.15, 0.25),   # left_shoulder_roll
@@ -56,18 +56,18 @@ _RIGHT_ARM_ABS_LIMITS = [
 def _clamp_arm_actions(action: np.ndarray, current_arm_state: np.ndarray = None,
                        enable_relative: bool = True,
                        enable_absolute: bool = True) -> np.ndarray:
-    """对 26 维动作中的手臂部分做限幅裁剪
+    """Clamp arm actions in 26-dim action vector
 
-    支持两路独立开关，默认均开启以保持向后兼容。
+    Supports two independent switches, both enabled by default for backward compatibility.
 
     Args:
-        action: 26 维动作向量 [左臂7, 右臂7, 左手6, 右手6]
-        current_arm_state: 14 维当前手臂状态；为 None 时仅做绝对限幅
-        enable_relative:   是否启用相对限幅（单步 delta 保护）
-        enable_absolute:   是否启用绝对限幅（安全兜底）
+        action: 26-dim action vector [left_arm7, right_arm7, left_hand6, right_hand6]
+        current_arm_state: 14-dim current arm state; if None, only absolute limits applied
+        enable_relative:   Whether to enable relative limits (single-step delta protection)
+        enable_absolute:   Whether to enable absolute limits (safety fallback)
     """
     if enable_relative and current_arm_state is not None and len(current_arm_state) >= 14:
-        # —— 相对限幅：action 不能偏离当前 state 超过 delta ——
+        # —— Relative limits: action cannot deviate from current state beyond delta ——
         for i, delta in enumerate(_LEFT_ARM_DELTA_LIMITS):
             lo = current_arm_state[i] - delta
             hi = current_arm_state[i] + delta
@@ -78,7 +78,7 @@ def _clamp_arm_actions(action: np.ndarray, current_arm_state: np.ndarray = None,
             action[7 + i] = np.clip(action[7 + i], lo, hi)
 
     if enable_absolute:
-        # —— 绝对限幅兜底 ——
+        # —— Absolute limits fallback ——
         for i, (lo, hi) in enumerate(_LEFT_ARM_ABS_LIMITS):
             action[i] = np.clip(action[i], lo, hi)
         for i, (lo, hi) in enumerate(_RIGHT_ARM_ABS_LIMITS):
@@ -86,7 +86,7 @@ def _clamp_arm_actions(action: np.ndarray, current_arm_state: np.ndarray = None,
 
     return action
 
-_DEBUG_ENABLED = False          # 开关：True=打印, False=静默
+_DEBUG_ENABLED = False          # Toggle: True=print, False=silent
 _DEBUG_PRINT_INTERVAL = 1.0
 _last_debug_time = 0.0
 
@@ -102,27 +102,27 @@ def _dprint(msg):
 
 
 class UnitreeG1Robot(Node):
-    """Unitree G1 机器人 ROS2 驱动（纯 ROS2 模式，纯灵巧手，无夹爪/腿部）
+    """Unitree G1 Robot ROS2 Driver (Pure ROS2 Mode, Pure Dexterous Hand, No Gripper/Legs)
 
-    26 维动作接口:
-        action[0:7]   -> 左臂 (7 关节)
-        action[7:14]  -> 右臂 (7 关节)
-        action[14:20] -> 左手 (6 手指)
-        action[20:26] -> 右手 (6 手指)
+    26-dim Action Interface:
+        action[0:7]   -> Left arm (7 joints)
+        action[7:14]  -> Right arm (7 joints)
+        action[14:20] -> Left hand (6 fingers)
+        action[20:26] -> Right hand (6 fingers)
     """
 
     def __init__(self, ros_context=None):
         super().__init__("unitree_g1_robot_node", context=ros_context)
 
         # ======================
-        # 订阅话题（状态读取）
+        # Subscription topics (state reading)
         # ======================
         self.topic_joint_states = "/joint_state"
         self.topic_left_hand = "/left_hand/get_angle"
         self.topic_right_hand = "/right_hand/get_angle"
 
         # ======================
-        # 发布话题（控制输出）
+        # Publish topics (control output)
         # ======================
         self.topic_left_arm_cmd = "/left_arm/joint_pos"
         self.topic_right_arm_cmd = "/right_arm/joint_pos"
@@ -135,19 +135,19 @@ class UnitreeG1Robot(Node):
         print(f"[DBG UnitreeG1Robot]   - {self.topic_right_hand}")
         print(f"[DBG UnitreeG1Robot]   (pubs: {self.topic_left_arm_cmd}, {self.topic_right_arm_cmd}, {self.topic_left_hand_cmd}, {self.topic_right_hand_cmd})")
 
-        # 最新状态缓存
+        # Latest state cache
         self.latest_left_arm = None
         self.latest_right_arm = None
         self.latest_left_hand = None
         self.latest_right_hand = None
 
-        # 队列缓存（用于时间戳对齐）
+        # Queue cache (for timestamp alignment)
         self.queue_left_arm = deque(maxlen=30)
         self.queue_right_arm = deque(maxlen=30)
         self.queue_left_hand = deque(maxlen=30)
         self.queue_right_hand = deque(maxlen=30)
 
-        # QoS 匹配机器人驱动
+        # QoS matching robot driver
         qos_correct = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE,
@@ -156,21 +156,21 @@ class UnitreeG1Robot(Node):
         qos_pub = QoSProfile(depth=10)
 
         # ======================
-        # 订阅（读取状态）
+        # Subscriptions (read state)
         # ======================
         self.create_subscription(JointState, self.topic_joint_states, self._cb_joint_states, qos_correct)
         self.create_subscription(JointState, self.topic_left_hand, self._cb_left_hand, qos_correct)
         self.create_subscription(JointState, self.topic_right_hand, self._cb_right_hand, qos_correct)
 
         # ======================
-        # 发布（控制机器人）
+        # Publishers (control robot)
         # ======================
         self.pub_left_arm = self.create_publisher(Jointpos, self.topic_left_arm_cmd, qos_pub)
         self.pub_right_arm = self.create_publisher(Jointpos, self.topic_right_arm_cmd, qos_pub)
         self.pub_left_hand = self.create_publisher(JointState, self.topic_left_hand_cmd, qos_pub)
         self.pub_right_hand = self.create_publisher(JointState, self.topic_right_hand_cmd, qos_pub)
 
-        # 固定关节名
+        # Fixed joint names
         self.left_arm_joint_names = [
             "left_shoulder_pitch_joint", "left_shoulder_roll_joint", "left_shoulder_yaw_joint",
             "left_elbow_joint", "left_wrist_roll_joint", "left_wrist_pitch_joint", "left_wrist_yaw_joint",
@@ -185,32 +185,32 @@ class UnitreeG1Robot(Node):
         self.current_right_hand_state = None
 
         # ======================
-        # 限幅开关（默认全开，保持向后兼容）
+        # Limit switches (all on by default, maintain backward compatibility)
         # ======================
-        self.enable_relative_clamp = True   # 相对限幅（单步 delta 保护）
-        self.enable_absolute_clamp = True   # 绝对限幅（安全兜底）
+        self.enable_relative_clamp = True   # Relative limits (single-step delta protection)
+        self.enable_absolute_clamp = True   # Absolute limits (safety fallback)
 
         self.running = True
 
         # ######################
-        # 新增: 去重标记，避免采样线程重复入队相同时间戳的数据
+        # NEW: Deduplication flag, avoid sampling thread enqueueing same timestamp data repeatedly
         # ######################
         self._last_queue_ts_left_arm = 0.0
         self._last_queue_ts_right_arm = 0.0
         self._last_queue_ts_left_hand = 0.0
         self._last_queue_ts_right_hand = 0.0
 
-        # 采样线程
+        # Sampling thread
         self.sample_thread = threading.Thread(target=self._sample_loop, daemon=True)
         self.sample_thread.start()
 
         self.get_logger().info("UnitreeG1Robot ready")
 
     def _get_current_arm_state(self) -> np.ndarray:
-        """从 ROS2 回调缓存中获取当前 14 维手臂关节位置 [左臂7, 右臂7]
+        """Get current 14-dim arm joint positions [left_arm7, right_arm7] from ROS2 callback cache
 
         Returns:
-            np.ndarray or None: 14 维关节位置；数据缺失时返回 None
+            np.ndarray or None: 14-dim joint positions; returns None if data missing
         """
         la = self.latest_left_arm
         ra = self.latest_right_arm
@@ -225,17 +225,17 @@ class UnitreeG1Robot(Node):
         return np.array(list(la_msg.position) + list(ra_msg.position), dtype=float)
 
     # ======================
-    # 【核心控制函数】26 维动作输入
+    # [Core Control Function] 26-dim action input
     # ======================
     def send_robot_action(self, action):
-        """发送 26 维动作到机器人
+        """Send 26-dim action to robot
 
         Args:
-            action (array-like): [左臂7, 右臂7, 左手6, 右手6]
+            action (array-like): [left_arm7, right_arm7, left_hand6, right_hand6]
         """
         action = np.asarray(action).flatten()
 
-        # 相对限幅保护：在当前手臂状态基础上限制单步最大偏差
+        # Relative limit protection: limit maximum single-step deviation based on current arm state
         current_arm = self._get_current_arm_state()
         action = _clamp_arm_actions(
             action, current_arm,
@@ -248,7 +248,7 @@ class UnitreeG1Robot(Node):
         left_hand_act = action[14:20]
         right_hand_act = action[20:26]
 
-        # 左臂
+        # Left arm
         if left_arm_act[-1] > -100:
             msg = Jointpos()
             msg.joint = left_arm_act.tolist()
@@ -256,7 +256,7 @@ class UnitreeG1Robot(Node):
             msg.dof = 7
             self.pub_left_arm.publish(msg)
 
-        # 右臂
+        # Right arm
         if right_arm_act[-1] > -100:
             msg = Jointpos()
             msg.joint = right_arm_act.tolist()
@@ -264,7 +264,7 @@ class UnitreeG1Robot(Node):
             msg.dof = 7
             self.pub_right_arm.publish(msg)
 
-        # 左手（带防抖：差值 > 50 才发送）
+        # Left hand (with debounce: send only if difference > 50)
         if left_hand_act[-1] > -100:
             if self.current_left_hand_state is not None:
                 left_diff = np.abs(left_hand_act - self.current_left_hand_state).sum()
@@ -277,7 +277,7 @@ class UnitreeG1Robot(Node):
                 self.pub_left_hand.publish(msg)
                 self.current_left_hand_state = left_hand_act
 
-        # 右手（带防抖：差值 > 50 才发送）
+        # Right hand (with debounce: send only if difference > 50)
         if right_hand_act[-1] > -100:
             if self.current_right_hand_state is not None:
                 right_diff = np.abs(right_hand_act - self.current_right_hand_state).sum()
@@ -291,28 +291,28 @@ class UnitreeG1Robot(Node):
                 self.current_right_hand_state = right_hand_act
 
     # ======================
-    # 订阅回调
+    # Subscription callbacks
     # ======================
 
     def _cb_joint_states(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
-        # 按 joint name 构建 name->index 映射
+        # Build name->index mapping by joint name
         name_to_idx = {name: i for i, name in enumerate(msg.name)}
 
-        # 按名称提取左臂位置
+        # Extract left arm positions by name
         left_positions = []
         for name in self.left_arm_joint_names:
             if name in name_to_idx:
                 left_positions.append(msg.position[name_to_idx[name]])
 
-        # 按名称提取右臂位置
+        # Extract right arm positions by name
         right_positions = []
         for name in self.right_arm_joint_names:
             if name in name_to_idx:
                 right_positions.append(msg.position[name_to_idx[name]])
 
-        # 构造合成 JointState 保持下游兼容
+        # Construct synthetic JointState for downstream compatibility
         la_ok = len(left_positions) == len(self.left_arm_joint_names)
         ra_ok = len(right_positions) == len(self.right_arm_joint_names)
         if la_ok:
@@ -351,7 +351,7 @@ class UnitreeG1Robot(Node):
         _dprint(f"_cb_right_hand received: ts={ts:.6f}, positions={msg.position[:3]}...")
 
     # ======================
-    # 采样线程
+    # Sampling thread
     # ======================
     def _sample_loop(self):
         print("[DBG UnitreeG1Robot] _sample_loop started")
@@ -359,7 +359,7 @@ class UnitreeG1Robot(Node):
         while self.running:
             loop_count += 1
             # ######################
-            # 修改: 时间戳去重（浮点比较使用 1ms 阈值）
+            # MODIFIED: Timestamp deduplication (use 1ms threshold for float comparison)
             # ######################
             eps = 1e-4
             if self.latest_left_arm:
@@ -390,26 +390,26 @@ class UnitreeG1Robot(Node):
             time.sleep(0.002)
 
     # ======================
-    # 时间戳对齐
+    # Timestamp alignment
     # ======================
     def _find_nearest(self, queue, target_ts):
         if not queue:
             return (None, 0.0)
-        # 快照：避免 deque 在迭代时被采样线程 append 导致
-        # "deque mutated during iteration" 异常
+        # Snapshot: avoid deque being appended by sampling thread during iteration,
+        # causing "deque mutated during iteration" exception
         snapshot = list(queue)
         if not snapshot:
             return (None, 0.0)
         return min(snapshot, key=lambda x: abs(x[1] - target_ts))
 
     def get_arm_hand_states_nearest_func(self, ref_timestamp):
-        """以 ref_timestamp 为基准，对齐左右臂/手的状态
+        """Align left/right arm/hand states based on ref_timestamp
 
         Args:
-            ref_timestamp (float): 参考时间戳（通常来自头部相机）
+            ref_timestamp (float): Reference timestamp (usually from head camera)
 
         Returns:
-            dict: 包含各部位状态和时间戳
+            dict: Contains states and timestamps for each part
         """
         left_arm, left_arm_ts = self._find_nearest(self.queue_left_arm, ref_timestamp)
         right_arm, right_arm_ts = self._find_nearest(self.queue_right_arm, ref_timestamp)
@@ -433,14 +433,14 @@ class UnitreeG1Robot(Node):
 
 
 # ==============================================
-# main：纯机器人驱动测试（无需相机）
+# main: Pure robot driver test (no camera required)
 # ==============================================
 def main():
     rclpy.init()
 
     robot = UnitreeG1Robot()
 
-    # 启动自旋线程，让 ROS2 回调正常工作
+    # Start spin thread to let ROS2 callbacks work properly
     running = True
     def spin_worker():
         while running:

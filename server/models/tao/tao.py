@@ -32,23 +32,29 @@ class ModelVLA:
         )
 
         # ============================================================
-        # FIX: unitree_g1 embodiment 的 state/action 子组件索引原本基于
-        # 原始 41-DOF 数组 (如 left_arm: [15:22])，但模型内部使用连续
-        # 0-based 索引 (拼接后 left_arm 在 [0:7])。修复为 0-based 以
-        # 适配模型输出维度 (max_action_dim=32) 避免越界。
+        # FIX: The state/action sub-component indices for unitree_g1
+        # embodiment were originally based on the raw 41-DOF array
+        # (e.g. left_arm: [15:22]), but the model internally uses
+        # contiguous 0-based indices (concatenated left_arm at [0:7]).
+        # Fix to 0-based to match model output dimension
+        # (max_action_dim=32) and avoid out-of-bounds.
         #
-        # 关键: decode_action() 在 processing_tao_flow_matching_model.py 中
-        # 会通过 EMBODIMENTS.get(embodiment_tag)() 创建新实例，因此必须
-        # 同时修复 registry，否则新实例仍使用旧的 41D 索引。
+        # Key point: decode_action() in
+        # processing_tao_flow_matching_model.py creates new instances
+        # via EMBODIMENTS.get(embodiment_tag)(), so the registry must
+        # also be fixed. Otherwise new instances would still use the
+        # old 41D indices.
         #
-        # 重要: 只修正索引值，保留原有的 sub_component 名字不变
-        # (如 left_eef/right_eef)，因为 transformations 和归一化参数
-        # 都按原名索引，改名会导致 KeyError 或 IndexError。
+        # Important: Only correct index values; keep original
+        # sub_component names (e.g. left_eef/right_eef) unchanged
+        # because transformations and normalization parameters are
+        # indexed by original name. Renaming would cause KeyError
+        # or IndexError.
         # ============================================================
         if embodiment_tag == 'unitree_g1':
             from tao.registry import EMBODIMENTS
 
-            # 判断是否需要修正: 仅当检测到 41-DOF 索引 (left_arm.start == 15) 时
+            # Determine whether fix is needed: only when 41-DOF indices detected (left_arm.start == 15)
             _needs_fix = False
             state_subs = {}
             if hasattr(self.policy, 'embodiment') and hasattr(self.policy.embodiment, 'indices'):
@@ -58,9 +64,9 @@ class ModelVLA:
                     _needs_fix = True
 
             if _needs_fix:
-                # 从现有 sub_components 读取名字和维度，只改索引值
-                # 默认 0-based 布局: arm(7) + arm(7) + eef/hand(6) + eef/hand(6) = 26
-                sub_keys = list(state_subs.keys())  # 保留原始名字
+                # Read names and dimensions from existing sub_components, only modify index values
+                # Default 0-based layout: arm(7) + arm(7) + eef/hand(6) + eef/hand(6) = 26
+                sub_keys = list(state_subs.keys())  # Preserve original names
                 offsets = [0, 7, 14, 20, 26]  # 0-based 连续索引边界
                 new_state_subs = {}
                 new_action_subs = {}
@@ -71,12 +77,12 @@ class ModelVLA:
                 print(f'[TAO] Fixing unitree_g1 41-DOF indices to 0-based. '
                       f'sub_components: {sub_keys}', flush=True)
 
-                # Fix 1: 修复已存在的 self.policy.embodiment 实例
+                # Fix 1: Fix the existing self.policy.embodiment instance
                 if hasattr(self.policy, 'embodiment') and hasattr(self.policy.embodiment, 'indices'):
                     self.policy.embodiment.indices['state']['sub_components'] = new_state_subs
                     self.policy.embodiment.indices['action']['sub_components'] = new_action_subs
 
-                # Fix 2: 修复 registry，使 decode_action 中创建的新实例也使用修正后的索引
+                # Fix 2: Fix the registry so that new instances created in decode_action also use corrected indices
                 if 'unitree_g1' in EMBODIMENTS._mapping:
                     original_cls = EMBODIMENTS._mapping['unitree_g1']
                     _fixed_state = dict(new_state_subs)
@@ -114,8 +120,9 @@ class ModelVLA:
             'state': obs['state'][None][None], # (B,T,D) where D=26
             'language':[obs['language']]
         }
-        # state 直接使用 26 维传入，因为 embodiment 索引已修正为连续 0-based
-        # (无需再填充到 41 维，详见 __init__ 中的索引修正逻辑)
+        # State is passed directly as 26-dimensional because embodiment indices
+        # have been corrected to contiguous 0-based
+        # (no need to pad to 41 dimensions; see index fix logic in __init__)
         if verbose:
             for key in inp_obs['video'].keys():
                 print(key, inp_obs['video'][key].shape)

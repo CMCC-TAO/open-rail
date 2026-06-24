@@ -10,18 +10,18 @@ import threading
 
 
 class RobotBody(RobotBase):
-    """Unitree G1 机器人业务层（纯 ROS2 + 26 维灵巧手）
+    """Unitree G1 Robot Business Layer (Pure ROS2 + 26-DOF Dexterous Hand)
 
-    使用独立 rclpy.Context 隔离 Camera/Robot 节点的 wait set，
-    避免与外部 dispatcher 共享 context 导致 "wait set index too big" 错误。
+    Uses independent rclpy.Context to isolate Camera/Robot node wait sets,
+    avoiding "wait set index too big" errors caused by sharing context with external dispatcher.
     """
 
     def __init__(self, config, ros_context=None):
         super().__init__()
         self.cfg, self.ori_cfg = config["robots"]["unitree_g1"], config
 
-        # 使用外部传入的 context，或创建独立 context（隔离 wait set）
-        self._ros_context = ros_context  # 由外部管理生命周期（VLAContext）
+        # Use externally passed context, or create independent context (isolates wait set)
+        self._ros_context = ros_context  # Lifecycle managed externally (VLAContext)
         if self._ros_context is None:
             self._ros_context = rclpy.Context()
             if not self._ros_context.ok():
@@ -30,11 +30,11 @@ class RobotBody(RobotBase):
         self.camera = Camera(ros_context=self._ros_context)
         self.robot = Robot(ros_context=self._ros_context)
 
-        # 统一自旋线程
+        # Unified spin thread
         self.running = True
         self._spin_thread = self._start_spin_thread()
 
-        # 状态缓存
+        # State cache
         self.current_timestamp = 0
         self.current_state = None
 
@@ -52,46 +52,46 @@ class RobotBody(RobotBase):
                 try:
                     self._executor.spin_once(timeout_sec=0.005)
                 except Exception:
-                    pass  # spin 异常不中断线程
+                    pass  # Spin exceptions do not interrupt thread
         t = threading.Thread(target=spin_worker, daemon=True)
         t.start()
         return t
 
     # ==================================================================
-    # 控制机器人（26 维动作）
+    # Control robot (26-dim action)
     # ==================================================================
     def control_robot(self, action):
-        """发送 26 维动作
+        """Send 26-dimensional action
 
-        action[0:7]   -> 左臂
-        action[7:14]  -> 右臂
-        action[14:20] -> 左手
-        action[20:26] -> 右手
+        action[0:7]   -> Left arm
+        action[7:14]  -> Right arm
+        action[14:20] -> Left hand
+        action[20:26] -> Right hand
         """
         action = np.array(action).flatten()
         assert len(action) == 26, "must be 26-dim action"
         self.robot.send_robot_action(action)
 
     # ==================================================================
-    # 执行动作（dict 接口，用于手动控制模式）
+    # Execute action (dict interface, for manual control mode)
     # ==================================================================
     def execute_action(self, data):
-        """执行手动控制动作
+        """Execute manual control action
 
-        解析 dict 指令，构建 26 维动作后发送到机器人。
+        Parse dict commands, build 26-dim action and send to robot.
 
         Args:
-            data: dict，如 {'gripper': [left, right]}、{'arm': [14x]}
+            data: dict, e.g. {'gripper': [left, right]}, {'arm': [14x]}
 
-        Unitree G1 动作布局:
-            [0:7]   -> 左臂
-            [7:14]  -> 右臂
-            [14:20] -> 左手 (6 手指, 0~1000)
-            [20:26] -> 右手 (6 手指, 0~1000)
+        Unitree G1 Action Layout:
+            [0:7]   -> Left arm
+            [7:14]  -> Right arm
+            [14:20] -> Left hand (6 fingers, 0~1000)
+            [20:26] -> Right hand (6 fingers, 0~1000)
 
-        gripper 值映射:
-            [0, 0] -> 全开（所有手指 0）
-            [1, 1] -> 全闭（所有手指 1000）
+        Gripper value mapping:
+            [0, 0] -> Fully open (all fingers 0)
+            [1, 1] -> Fully closed (all fingers 1000)
         """
         current_state = getattr(self, 'current_state', None)
         if current_state is None:
@@ -104,7 +104,7 @@ class RobotBody(RobotBase):
         for key, values in data.items():
             values = np.asarray(values).flatten()
             if key == 'gripper' and len(values) >= 2:
-                # [left, right] 映射到左右手各 6 手指
+                # [left, right] maps to 6 fingers each for left and right hands
                 action[14:20] = np.full(6, float(values[0]) * 1000.0)
                 action[20:26] = np.full(6, float(values[1]) * 1000.0)
             elif key == 'arm' and len(values) >= 14:
@@ -112,12 +112,12 @@ class RobotBody(RobotBase):
             elif key == 'hand' and len(values) >= 12:
                 action[14:26] = values[:12]
             elif key == 'head' or key == 'waist' or key == 'wheel':
-                pass  # Unitree G1 26 维动作不包含 head/waist/wheel
+                pass  # Unitree G1 26-dim action does not include head/waist/wheel
 
         self.robot.send_robot_action(action)
 
     # ==================================================================
-    # 复位机器人（使用 ruckig 轨迹规划）
+    # Reset robot (using ruckig trajectory planning)
     # ==================================================================
     def reset_robot(self, target_pose=None, mode="default"):
         if target_pose is None:
@@ -130,7 +130,7 @@ class RobotBody(RobotBase):
                 return
         target_pose = np.array(target_pose)
 
-        # 获取当前状态（优先级：缓存 → ROS2订阅 → retrieve_observation）
+        # Get current state (priority: cache → ROS2 subscription → retrieve_observation)
         current_state = self._get_reset_current_state()
 
         if current_state is not None:
@@ -138,13 +138,13 @@ class RobotBody(RobotBase):
             target_positions = target_pose[:14]
             dis = np.abs(current_positions - target_positions)
             if np.any(dis > np.deg2rad(0.01)):
-                # 以较低速度规划手臂轨迹，确保平滑过渡
+                # Plan arm trajectory at low speed to ensure smooth transition
                 trajs = self.ruckig_planning(
                     current_positions, target_positions,
                     max_velocity=0.5, max_acceleration=0.3, max_jerk=1.0,
                 )
                 n_points = len(trajs)
-                # 获取手部当前状态用于线性插值
+                # Get current hand state for linear interpolation
                 left_hand_current = current_state[14:20]
                 right_hand_current = current_state[20:26]
                 left_hand_target = target_pose[14:20]
@@ -154,7 +154,7 @@ class RobotBody(RobotBase):
                     t = (i + 1) / n_points  # 进度 0→1
                     tmp = target_pose.copy()
                     tmp[:14] = traj
-                    # 手部线性插值：从当前值平滑过渡到目标值
+                    # Hand linear interpolation: smoothly transition from current to target values
                     tmp[14:20] = left_hand_current + t * (left_hand_target - left_hand_current)
                     tmp[20:26] = right_hand_current + t * (right_hand_target - right_hand_current)
                     self.robot.send_robot_action(tmp)
@@ -162,8 +162,8 @@ class RobotBody(RobotBase):
             else:
                 self.robot.send_robot_action(target_pose)
         else:
-            # 连当前状态都获取不到时，使用默认零位做线性插值兜底
-            # （避免一步跳变到目标位姿导致机器人"飞"起来）
+            # Fallback to linear interpolation from zero when current state cannot be obtained
+            # (avoid sudden jump to target pose causing robot to "fly")
             print("[WARN] reset_robot: cannot get current state, using linear interpolation from zero")
             current_positions = np.zeros(14)
             target_positions = target_pose[:14]
@@ -177,7 +177,7 @@ class RobotBody(RobotBase):
                 self.robot.send_robot_action(tmp)
                 time.sleep(0.02)
 
-        # 设置手部初始状态
+        # Set initial hand state
         self.robot.current_left_hand_state = target_pose[14:20]
         self.robot.current_right_hand_state = target_pose[20:26]
 
@@ -185,18 +185,18 @@ class RobotBody(RobotBase):
         print("Unitree G1 reset done")
 
     def _get_reset_current_state(self) -> np.ndarray | None:
-        """获取当前 26 维状态，不依赖相机
+        """Get current 26-dim state without camera dependency
 
-        优先级:
-          1. 直接从 self.robot 的 ROS2 订阅缓存读取（实时，不依赖相机）
-          2. self.current_state（VLA 观察线程缓存，可能过期）
-          3. retrieve_observation() 回退（需要相机）
+        Priority:
+          1. Read directly from self.robot's ROS2 subscription cache (real-time, no camera dependency)
+          2. self.current_state (VLA observation thread cache, may be stale)
+          3. retrieve_observation() fallback (requires camera)
 
-        注：ROS2 缓存由独立 spin 线程实时更新，始终代表机器人实际位置；
-            current_state 只在 VLA observe 线程运行时才更新，
-            一旦 VLA 停止就会过期，不能作为复位轨迹的起点。
+        Note: ROS2 cache is updated in real-time by independent spin thread, always representing actual robot position;
+              current_state only updates when VLA observe thread is running,
+              becomes stale once VLA stops, cannot serve as reset trajectory starting point.
         """
-        # 优先级 1: 直接从 ROS2 缓存读取（不依赖相机，实时最新）
+        # Priority 1: Read directly from ROS2 cache (no camera dependency, real-time latest)
         try:
             robot = self.robot
             la = robot.latest_left_arm
@@ -218,17 +218,17 @@ class RobotBody(RobotBase):
                         + list(rh_msg.position),
                         dtype=float,
                     )
-                    # 同步到 current_state 供其他模块快速访问
+                    # Sync to current_state for quick access by other modules
                     self.current_state = state.copy()
                     return state
         except Exception:
             pass
 
-        # 优先级 2: 使用 VLA 缓存的状态（仅当 ROS2 缓存未初始化时）
+        # Priority 2: Use VLA cached state (only when ROS2 cache not initialized)
         if self.current_state is not None:
             return self.current_state.copy()
 
-        # 优先级 3: 回退 retrieve_observation（需要相机数据）
+        # Priority 3: Fallback to retrieve_observation (requires camera data)
         for _ in range(10):
             obs = self.retrieve_observation()
             if obs is not None and "obs.state" in obs:
@@ -239,7 +239,7 @@ class RobotBody(RobotBase):
         return None
 
     # ==================================================================
-    # 获取观测（图像 + 对齐后的关节角）
+    # Get observation (images + aligned joint angles)
     # ==================================================================
     def retrieve_observation(self):
         try:
@@ -253,24 +253,24 @@ class RobotBody(RobotBase):
                 return None
 
             # ######################
-            # 新增: 任一相机图像为 None 则跳过本轮（防止下游 pad_and_resize 崩溃）
+            # NEW: Skip this round if any camera image is None (prevent pad_and_resize crash downstream)
             # ######################
             if head_img is None or left_img is None or right_img is None:
                 return None
 
             self.current_timestamp = head_ts
 
-            # 图像
+            # Images
             result["cam.head"] = head_img
             result["cam.hand_left"] = left_img
             result["cam.hand_right"] = right_img
             result["ref_timestamp"] = head_ts
 
-            # 机器人状态对齐（以头部相机时间戳为基准）
+            # Robot state alignment (based on head camera timestamp)
             robot_state = self.robot.get_arm_hand_states_nearest_func(head_ts)
 
             # ######################
-            # 修改: 任一部位状态缺失则跳过本轮（避免零填充给模型输入错误数据）
+            # MODIFIED: Skip this round if any part's state is missing (avoid feeding wrong data to model with zero padding)
             # ######################
             if (robot_state["left_arm"] is None
                     or robot_state["right_arm"] is None
@@ -278,7 +278,7 @@ class RobotBody(RobotBase):
                     or robot_state["right_hand"] is None):
                 return None
 
-            # 拼接 26 维 state 向量
+            # Concatenate 26-dim state vector
             state = []
             state.extend(robot_state["left_arm"].position)   # 7
             state.extend(robot_state["right_arm"].position)  # 7
@@ -294,22 +294,22 @@ class RobotBody(RobotBase):
             return None
 
     # ==================================================================
-    # 关闭
+    # Close
     # ==================================================================
     def close(self):
         self.running = False
 
-        # 等待 spin 线程完全退出，避免销毁节点时 wait set 竞争
+        # Wait for spin thread to fully exit, avoid wait set race condition when destroying nodes
         if hasattr(self, '_spin_thread') and self._spin_thread.is_alive():
             self._spin_thread.join(timeout=1.0)
 
         # ######################
-        # 新增: 停止机器人采样线程
+        # NEW: Stop robot sampling thread
         # ######################
         self.robot.stop()
 
         # ######################
-        # 新增: 先移除 executor 中的节点，再销毁 executor
+        # NEW: Remove nodes from executor first, then destroy executor
         # ######################
         if hasattr(self, '_executor'):
             try:
@@ -319,13 +319,13 @@ class RobotBody(RobotBase):
                 pass
 
         # ######################
-        # 销毁 ROS2 节点（释放资源）
+        # Destroy ROS2 nodes (release resources)
         # ######################
         self.camera.destroy_node()
         self.robot.destroy_node()
 
         # ######################
-        # 新增: shutdown 独立 context，避免 GC 阶段 Executor.__del__ 报错
+        # NEW: Shutdown independent context to avoid Executor.__del__ errors during GC phase
         # ######################
         if self._ros_context is not None and self._ros_context.ok():
             try:
@@ -337,7 +337,7 @@ class RobotBody(RobotBase):
 
 
 # ==============================================
-# 测试
+# Test
 # ==============================================
 def test_robot_body():
     print("=" * 60)
@@ -362,7 +362,7 @@ def test_robot_body():
     robot_body = RobotBody(mock_config)
     time.sleep(1.0)
 
-    # 测试 1：获取观测
+    # Test 1: Get observation
     print("\nTest 1: retrieve observation...")
     for _ in range(10):
         obs = robot_body.retrieve_observation()
@@ -373,7 +373,7 @@ def test_robot_body():
     else:
         print("  FAIL - no observation")
 
-    # 测试 2：动作控制
+    # Test 2: Action control
     print("\nTest 2: control robot (right hand close)...")
     action = np.zeros(26)
     action[20:26] = [650.0, 650.0, 650.0, 650.0, 650.0, 250.0]
@@ -381,7 +381,7 @@ def test_robot_body():
     print("  OK")
     time.sleep(1.5)
 
-    # 测试 3：复位
+    # Test 3: Reset
     print("\nTest 3: reset robot...")
     robot_body.reset_robot(mode="default")
     print("  OK")
