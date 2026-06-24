@@ -37,7 +37,7 @@ intra_chunk:
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
 language:
-  auto_mode: true
+  auto_mode: false
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: tea_master

@@ -795,8 +795,10 @@ function setupRecordingPanel() {
 // 更新开始录制函数
 function startRecording() {
   if (!App.isRunning || App.isRecording) return;
+
   const episodeEnabled = $('#chk-record-episode').checked;
   const expdataEnabled = $('#chk-record-expdata').checked;
+  
   // 发送开始录制请求到后端
   sendWsMessage({ type: 'start_recording', payload: { 
     record_episode: episodeEnabled, 
