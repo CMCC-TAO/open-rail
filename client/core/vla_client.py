@@ -75,8 +75,8 @@ class VLAClientAsync():
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
-        self.control_thread_timer = MultiThreadTimer(float(self.config.controller.period), self._control_thread_fun)
-        self.visualize_thread_timer = MultiThreadTimer(float(self.config.controller.period), self._visualize_thread_fun)
+        self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
+        self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
         
         self.show_thread_lock = threading.Lock()
 
@@ -84,7 +84,7 @@ class VLAClientAsync():
         self._img_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_enc")
 
         # Inference variables
-        self.config.observer.period = 1.0 / self.config.observer.fps
+        self.set_observe_period(speed=self.config.controller.speed)
         self._request_id = 0
 
         # Initialize the dataset writer with the provided recording configuration
@@ -100,7 +100,7 @@ class VLAClientAsync():
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
-        action_dim = self.action_dim if self.action_dim > 0 else 16
+        # action_dim = self.action_dim if self.action_dim > 0 else 16
         # self.info_current_action = [0.0] * action_dim
         # self.info_current_state = [0.0] * action_dim
         self.image_process_time = 0.0
@@ -135,7 +135,15 @@ class VLAClientAsync():
 
     def stop_control(self):
         self.is_control_thread_running = False
-
+    
+    def set_control_period(self, period) -> None:
+        self.control_thread_timer.set_interval(period)
+        self.visualize_thread_timer.set_interval(period)
+    
+    def set_observe_period(self, speed) -> None:
+        self.observe_period = 1.0 / speed / self.config.controller.raw_fps
+        # print(f"Debug: control speed = {speed}")
+    
     def update_camera_shape(self) -> dict:
         """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
         if not hasattr(self, "dataset_write") or self.dataset_write is None:
@@ -394,7 +402,7 @@ class VLAClientAsync():
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
                 timestamps,
                 action_chunk,
-                time_step=self.config.intra_chunk.fitting_time_step,
+                time_step=self.config.controller.period,
                 task_progress=prob_progress)
 
             # Record control timestamp
@@ -484,9 +492,9 @@ class VLAClientAsync():
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
                 prob_progress = action_data['ext']['prob_progress']
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
-                timestamps, 
-                action_chunk,  
-                time_step=self.config.intra_chunk.fitting_time_step,
+                timestamps,
+                action_chunk,
+                time_step=self.config.controller.period,
                 task_progress=prob_progress)
 
             # Record control timestamp
@@ -648,7 +656,7 @@ class VLAClientAsync():
             # Generate action and timestamp chunks
             for index, action in enumerate(pred_action):
                 action_chunk.append(action)
-                timestamp_chunk.append(self.config.observer.period * index)
+                timestamp_chunk.append(self.observe_period * index)
             
             # Set first frame timestamp to observation reference timestamp
             timestamp_chunk[0] = ref_timestamp
@@ -789,7 +797,7 @@ class VLAClientAsync():
                 'joints_y': origin_np.tolist()
             })
 
-            dt_origin = self.config.observer.period
+            dt_origin = self.observe_period
             if self.vis_prev_origin is None:
                 origin_vel = np.zeros_like(origin_np)
                 origin_acc = np.zeros_like(origin_np)

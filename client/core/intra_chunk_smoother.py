@@ -55,7 +55,7 @@ class IntraChunkSmoother():
         
         start_time = timestamps[0]
         end_time = timestamps[-1]
-        time_step = time_step/1000
+        time_step = time_step / 1000 # convert milliseconds to seconds
         
         if self.config.intra_chunk_mode == 'raw':
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_raw(
@@ -86,7 +86,8 @@ class IntraChunkSmoother():
                 timestamps=timestamps, 
                 action_chunk=action_chunk, 
                 start_time=start_time, 
-                end_time=end_time 
+                end_time=end_time,
+                time_step=time_step
             )
             task_progress_fitted = self._task_progress_interpolation(
                 timestamps=timestamps,
@@ -100,7 +101,8 @@ class IntraChunkSmoother():
                 timestamps=timestamps, 
                 action_chunk=action_chunk, 
                 start_time=start_time, 
-                end_time=end_time 
+                end_time=end_time,
+                time_step=time_step
             )
             task_progress_fitted = self._task_progress_interpolation(
                 timestamps=timestamps,
@@ -200,7 +202,7 @@ class IntraChunkSmoother():
         return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted), np.zeros_like(gripper_chunk_fitted)  # Gripper velocity and acceleration are not considered
 
     @run_time_decorator
-    def _traj_fitting(self, timestamps, action_chunk, start_time, end_time):
+    def _traj_fitting(self, timestamps, action_chunk, start_time, end_time, time_step):
         """Fit trajectories for both joints and grippers.
         
         Args:
@@ -216,7 +218,6 @@ class IntraChunkSmoother():
         """
         # use config parameters for fitting degree and time step to allow dynamic adjustment without modifying code
         deg=self.config.fitting_deg 
-        time_step=self.config.fitting_time_step / 1000 # convert ms to seconds
 
         futures = []
         for name, seg in self.action_layout.items():
@@ -294,7 +295,6 @@ class IntraChunkSmoother():
         # timestamps = np.asarray(timestamps)
         
         # Create dense timestamps for interpolation
-        # time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
         timestamps_fitted = np.arange(start_time, end_time, time_step)
         
         # Interpolate each joint dimension using CubicSpline
@@ -327,7 +327,6 @@ class IntraChunkSmoother():
             start_time (float): Start time for the interpolated task progress.
             end_time (float): End time for the interpolated task progress.
         """
-        # time_step = self.config.fitting_time_step / 1000  # convert ms to seconds
         timestamps_fitted = np.arange(start_time, end_time, time_step)
         interp_1d = interp1d(timestamps, task_progress, kind='linear', bounds_error=False, fill_value='extrapolate')
         task_progress_fitted = interp_1d(timestamps_fitted)

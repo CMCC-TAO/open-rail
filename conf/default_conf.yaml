@@ -4,6 +4,8 @@
 controller:
   gripper_offset: 5
   period: 3.75
+  raw_fps: 30
+  speed: 1.25
   wait_time: 400
 inter_chunk:
   inter_chunk_mode: search_action
@@ -25,7 +27,6 @@ intra_chunk:
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
-  fitting_time_step: 3.75
   gripper_dim: 2
   head_dim: 2
   intra_chunk_mode: fitting
@@ -42,9 +43,6 @@ language:
   task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
-observer:
-  fps: 30
-  period: 0.03333333333333333
 rdm:
   action_layout:
     arm:
@@ -194,7 +192,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 9
+    - 7
     source:
     - State
     - ActionFitted
