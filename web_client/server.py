@@ -387,6 +387,18 @@ def _apply_flat_patch_new(config, patch: dict):
     if not isinstance(patch, dict) or config is None:
         return
 
+    legacy_inter_chunk_keys = {
+        "inter_chunk.search_length": "inter_chunk.search_action.search_length",
+        "inter_chunk.smooth_action": "inter_chunk.common.smooth_action",
+        "inter_chunk.smooth_length": "inter_chunk.common.smooth_length",
+        "inter_chunk.smooth_base": "inter_chunk.common.smooth_base",
+        "inter_chunk.smooth_ratio": "inter_chunk.common.smooth_ratio",
+    }
+    patch = {
+        legacy_inter_chunk_keys.get(key, key): value
+        for key, value in patch.items()
+    }
+
     def _is_mapping(obj):
         return isinstance(obj, (dict, ConfigDict))
 
@@ -1913,6 +1925,7 @@ async def client_control_reset():
     try:
         paused_state = _pause_vla_client(vla_client)
         robot.reset_robot(mode='default')
+        vla_client.realtime_data_manager.clear()
         _resume_vla_client(vla_client, paused_state)
         await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
         return {"status": "ok", "command": 'reset'}

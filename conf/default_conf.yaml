@@ -9,11 +9,27 @@ controller:
   wait_time: 400
 inter_chunk:
   inter_chunk_mode: search_action
-  search_length: 100
-  smooth_action: false
-  smooth_base: 0.0
-  smooth_length: 50
-  smooth_ratio: 0.75
+  search_action:
+    search_length: 100
+  poly:
+    poly_length: 30
+  smooth_velocity:
+    max_vel: 2.0
+    max_acc: 5.0
+    kp: 5.0
+    kd: 2.0
+  min_jerk:
+    blend_threshold: 0.7
+    adaptive_factor: -1
+  bspline:
+    num_control_points: 6
+    transition_length: 32
+  sync: {}
+  common:
+    smooth_action: false
+    smooth_base: 0.0
+    smooth_length: 50
+    smooth_ratio: 0.75
 intra_chunk:
   action_layout:
     arm:
