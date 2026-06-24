@@ -304,6 +304,7 @@ function setupLangPanel() {
           'language.auto_mode': true,
           'language.sub_task_id': 0,
         });
+        autoStartExecRecord();
         return;
       }
 
@@ -565,6 +566,9 @@ $('btn-lang-send').addEventListener('click', async () => {
   // 3. Send language command to robot
   await sendLanguageSet(lang);
   toast('Language command updated.', 'info');
+
+  // 4. Start execution record (only when running + log enabled)
+  startExecRecord(task, idx, lang);
 });
 $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
 
