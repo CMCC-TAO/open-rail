@@ -1,32 +1,4 @@
 // ═══════════════════════════════════════════════════════
-//  Default demo values for State & Action (shown when client is not running)
-//  Layout: J0-6 = Arm-Left (7), J7-13 = Arm-Right (7), J14-19 = Gripper (6)
-// ═══════════════════════════════════════════════════════
-const DEFAULT_JOINTS = Object.freeze([
-  // Arm-Left  J0-J6  (values in 100-180 range for label width validation)
-  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
-  // Arm-Right J7-J13
-  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000,
-  // Gripper   J14-J19 (6 slots)
-  0.0000, 0.0000, 0.0000, 0.0000, 0.0000, 0.0000
-]);
-
-/** Add small Gaussian-like noise to DEFAULT_JOINTS for a lifelike idle display. */
-function _makeDefaultJointValues(noiseScale = 0.03) {
-  return DEFAULT_JOINTS.map(v => {
-    const noise = (Math.random() + Math.random() + Math.random() - 1.5) * noiseScale;
-    return Math.round((v + noise) * 100) / 100;
-  });
-}
-
-// Cache default values so they don't flicker on every render cycle
-let _defaultStateCache  = null;
-let _defaultActionCache = null;
-
-function getDefaultState()  { if (!_defaultStateCache)  _defaultStateCache  = _makeDefaultJointValues(0.00); return _defaultStateCache; }
-function getDefaultAction() { if (!_defaultActionCache) _defaultActionCache = _makeDefaultJointValues(0.00); return _defaultActionCache; }
-
-// ═══════════════════════════════════════════════════════
 //  Stats rendering
 // ═══════════════════════════════════════════════════════
 function renderStats(data) {
@@ -36,10 +8,14 @@ function renderStats(data) {
   setRunningUI(data.running, data.paused ?? false);
 
   $('val-infer-count').textContent = data.infer_count ?? '–';
+  $('img-proc-time').textContent   = data.img_proc_time != null
+    ? Number(data.img_proc_time).toFixed(1) + ' ms' : '–';
   $('val-infer-time').textContent  = data.avg_infer_time != null
     ? (data.avg_infer_time * 1000).toFixed(1) + ' ms' : '–';
   $('val-traj-time').textContent   = data.avg_traj_time != null
     ? (data.avg_traj_time * 1000).toFixed(1) + ' ms' : '–';
+  $('val-obv-fps').textContent = data.obv_fps != null
+    ? Number(data.obv_fps).toFixed(1) + ' fps' : '–';
 
   updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
 
@@ -65,22 +41,9 @@ function renderStats(data) {
   setResourceValue(cpuEl, Number.isFinite(cpuVal) ? cpuVal.toFixed(1) + '%' : '--', 'CPU');
   setResourceValue(gpuEl, Number.isFinite(gpuVal) ? gpuVal.toFixed(1) + '%' : '--', 'GPU');
   setResourceValue(memEl, Number.isFinite(memVal) ? memVal.toFixed(1) + '%' : '--', 'MEM');
-  setResourceValue(bwEl, Number.isFinite(bwVal) ? bwVal.toFixed(2) + 'M' : '--', 'BW');
+  setResourceValue(bwEl, Number.isFinite(bwVal) ? bwVal.toFixed(1) + 'M' : '--', 'NET');
 
-  // Use default joint values when client is not running and no real data available
-  const stateVals  = (data.current_state  && data.current_state.length)  ? data.current_state  : getDefaultState();
-  const actionVals = (data.current_action && data.current_action.length) ? data.current_action : getDefaultAction();
   App.latestState = Array.isArray(data.current_state) ? data.current_state.slice() : [];
-  renderJointsGrouped('state',  stateVals);
-  renderJointsGrouped('action', actionVals);
-
-  $('debug-info').textContent = data.debug_info || '';
-
-  // Feed trajectory chart from stats only when visual WS stream is unavailable.
-  // Avoid mixing two data sources (different timestamps/rates), which causes jitter.
-  if (!App.camWsAlive) {
-    ingestTrajData(data.current_state || [], data.current_action || [], []);
-  }
 }
 
 function renderKV(containerId, obj) {
@@ -94,17 +57,6 @@ function renderKV(containerId, obj) {
   }
 }
 
-function renderJoints(containerId, values) {
-  const el = $(containerId);
-  if (!el) return;
-  el.innerHTML = '';
-  values.forEach((v, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'joint-chip';
-    chip.textContent = `J${i}: ${typeof v === 'number' ? v.toFixed(3) : v}`;
-    el.appendChild(chip);
-  });
-}
 
 function updateTaskProgress(rawProgress, subTaskId = null) {
   const fillEl = $('task-progress-fill');
@@ -123,6 +75,65 @@ function updateTaskProgress(rawProgress, subTaskId = null) {
   fillEl.style.width = `${(clamped * 100).toFixed(1)}%`;
   valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
   renderSubTask(subTaskId);
+  handleAutoModeCompletion(clamped, subTaskId);
+}
+
+async function handleAutoModeCompletion(progress, subTaskId = null) {
+  const autoChk = $('chk-lang-auto-mode');
+  if (!autoChk || !autoChk.checked) return;
+  if (!App.isRunning || App.isPaused) return;
+
+  if (!App.langAuto || typeof App.langAuto !== 'object') App.langAuto = {};
+  if (App.langAuto.completionInFlight) return;
+
+  const taskSel = $('lang-task-select');
+  const taskName = taskSel ? taskSel.value : null;
+  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  if (!Array.isArray(subtasks) || subtasks.length === 0) return;
+
+  const latestSubTaskId = Number(subTaskId);
+  if (!Number.isFinite(latestSubTaskId)) return;
+
+  const lastSubTaskId = subtasks.length - 1;
+  const thresholdRaw = App.config && App.config.language ? App.config.language.task_progress_threshold : 0.9;
+  const threshold = Number.isFinite(Number(thresholdRaw)) ? Number(thresholdRaw) : 0.9;
+
+  if (latestSubTaskId !== lastSubTaskId || progress < threshold) return;
+
+  App.langAuto.completionInFlight = true;
+  try {
+    const patch = { 'language.sub_task_id': 0 };
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const display = $('conf-path-display');
+    const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+    if (cfgPath) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: cfgPath }),
+      });
+    }
+
+    if (typeof applyLangConfigSelection === 'function') {
+      applyLangConfigSelection(true);
+    }
+
+    await apiFetch('/api/client/pause', {
+      method: 'POST',
+      timeoutMs: 3000,
+      suppressAbortToast: true,
+    });
+
+    toast('Auto Mode reached last sub-task, reset to 0 and paused.', 'info', 2600);
+  } catch (_) {
+    // no-op: apiFetch already handles toasts
+  } finally {
+    App.langAuto.completionInFlight = false;
+  }
 }
 
 function renderSubTask(subTaskId = null) {
@@ -154,75 +165,42 @@ function renderSubTask(subTaskId = null) {
     return;
   }
 
+  const targetIdx = Number(subTaskId);
+  if (!Number.isFinite(targetIdx)) return;
+
   let curIdx = parseInt(subtaskSel.value, 10);
   if (!Number.isFinite(curIdx) || curIdx < 0) curIdx = 0;
 
-  if (subTaskId === curIdx) {
-    // console.log('renderSubTask no-op: target subTaskId equals current', { subTaskId, curIdx });
+  if (targetIdx < 0 || targetIdx >= subtasks.length) {
+    console.warn('renderSubTask aborted: subTaskId out of range', { subTaskId: targetIdx, length: subtasks.length });
     return;
   }
 
-  if (subTaskId < 0 || subTaskId >= subtasks.length) {
-    console.warn('renderSubTask aborted: subTaskId out of range', { subTaskId, length: subtasks.length });
+  const appliedTaskIdRaw = App.config && App.config.language ? App.config.language.task_id : null;
+  const appliedTaskId = appliedTaskIdRaw == null ? null : String(appliedTaskIdRaw);
+
+  if (!App.config || typeof App.config !== 'object') App.config = {};
+  if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+  App.config.language.sub_task_id = targetIdx;
+
+  if (typeof refreshLangAppliedMarkers === 'function') {
+    const markerTaskId = appliedTaskId != null ? appliedTaskId : taskName;
+    refreshLangAppliedMarkers(markerTaskId, targetIdx);
+  }
+
+  if (targetIdx === curIdx) {
+    // console.log('renderSubTask no-op: target subTaskId equals current', { targetIdx, curIdx });
     return;
   }
 
-  // console.log('renderSubTask switching subtask', { from: curIdx, to: subTaskId, taskName, subtaskText: subtasks[subTaskId] });
-  subtaskSel.value = String(subTaskId);
+  // console.log('renderSubTask switching subtask', { from: curIdx, to: targetIdx, taskName, subtaskText: subtasks[targetIdx] });
+  subtaskSel.value = String(targetIdx);
   subtaskSel.dispatchEvent(new Event('change'));
 
-  const lang = subtasks[subTaskId];
+  const lang = subtasks[targetIdx];
   if (typeof lang === 'string' && lang.trim()) {
     textEl.value = lang;
     sendLanguageSet(lang);
-  }
-}
-
-// Joint layout: J0-6 = Arm Left (7), J7-13 = Arm Right (7), J14+ = Gripper/Hand
-const JOINT_ARM_L_COUNT   = 7;
-const JOINT_ARM_R_COUNT   = 7;
-const JOINT_GRIPPER_COUNT = 6;
-// J0..6 → Arm-L, J7..13 → Arm-R, J14..19 → Gripper/Hand (fixed 6 slots)
-
-function renderJointsGrouped(side, values) {
-  // side: 'state' | 'action'
-  const elArmL    = $(`joint-${side}-arm-l`);
-  const elArmR    = $(`joint-${side}-arm-r`);
-  const elGripper = $(`joint-${side}-gripper`);
-  if (!elArmL) return;
-
-  elArmL.innerHTML = '';
-  elArmR.innerHTML = '';
-  elGripper.innerHTML = '';
-
-  values.forEach((v, i) => {
-    const chip = document.createElement('div');
-    chip.className = 'joint-chip';
-    const val = typeof v === 'number' ? v.toFixed(4) : v;
-    if (i < JOINT_ARM_L_COUNT) {
-      // chip.textContent = `L${i}: ${val}`;
-      chip.textContent = `${i}｜${val}`;
-      elArmL.appendChild(chip);
-    } else if (i < JOINT_ARM_L_COUNT + JOINT_ARM_R_COUNT) {
-      // chip.textContent = `R${i - JOINT_ARM_L_COUNT}: ${val}`;
-      chip.textContent = `${i - JOINT_ARM_L_COUNT}｜${val}`;
-      elArmR.appendChild(chip);
-    }
-    // Skip gripper values here - we'll handle them separately below
-  });
-
-  // Always render exactly 6 gripper/hand slots, filled from left to right
-  for (let i = 0; i < JOINT_GRIPPER_COUNT; i++) {
-    const chip = document.createElement('div');
-    chip.className = 'joint-chip';
-    
-    // Get the actual value if available (starting from index 14)
-    const sourceIndex = JOINT_ARM_L_COUNT + JOINT_ARM_R_COUNT + i;
-    const hasValue = sourceIndex < values.length && typeof values[sourceIndex] === 'number';
-    const val = hasValue ? values[sourceIndex].toFixed(2) : '0.00';
-    
-    chip.textContent = `${i}｜${val}`;
-    elGripper.appendChild(chip);
   }
 }
 
@@ -290,21 +268,21 @@ function syncStartPauseButtons(running, paused = false) {
   const btnPause = $('btn-pause');
 
   if (running) {
-    btnStart.textContent = '■ Stop';
+    btnStart.innerHTML = '<i class="fas fa-stop"></i> Stop';
     btnStart.className = 'btn btn-danger btn-sm';
   } else {
-    btnStart.textContent = '▶ Start';
+    btnStart.innerHTML = '<i class="fas fa-play"></i> Start';
     btnStart.className = 'btn btn-success btn-sm';
   }
 
   if (!running) {
-    btnPause.textContent = '⏸ Pause';
+    btnPause.innerHTML = '<i class="fas fa-pause"></i> Pause';
     btnPause.className = 'btn btn-danger  btn-sm';
   } else if (paused) {
-    btnPause.textContent = '▶ Resume';
+    btnPause.innerHTML = '<i class="fas fa-play"></i> Resume';
     btnPause.className = 'btn btn-success btn-sm';
   } else {
-    btnPause.textContent = '⏸ Pause';
+    btnPause.innerHTML = '<i class="fas fa-pause"></i> Pause';
     btnPause.className = 'btn btn-danger  btn-sm';
   }
 
@@ -495,6 +473,12 @@ function wireEvents() {
       if (App.isRunning) {
         // Stop request
         const prevPaused = App.isPaused;
+
+        // If data recording is active, stop recording first.
+        if (App.isRecording && typeof stopDataRecordingIfNeeded === 'function') {
+          await stopDataRecordingIfNeeded({ silent: false, refreshList: false });
+        }
+
         setRunningUI(false, false);
         try {
           await apiFetch('/api/client/stop', { method: 'POST', timeoutMs: 8000 });

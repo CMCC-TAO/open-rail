@@ -71,7 +71,7 @@ class VLAServer:
             numpy.ndarray: Padded and resized image
         """
         height, width = img.shape[:2]
-        # print(f"Debug: raw shape={height}x{width}, target shape={target_width}x{target_height}")
+        print(f"Debug: raw shape={height}x{width}, target shape={target_width}x{target_height}")
         target_ratio = target_width / target_height
         current_ratio = width / height
 
@@ -96,10 +96,10 @@ class VLAServer:
         # Resize to target dimensions (using INTER_AREA interpolation suitable for downscaling)
         if max(height, width) != max(target_width, target_height):
             resized = cv2.resize(padded, (target_width, target_height), interpolation=cv2.INTER_AREA)
-            # print(f"Debug: resized shape={resized.shape}")
+            print(f"Debug: resized shape={resized.shape}")
             return resized
         else:
-            # print(f"Debug: resized shape={padded.shape}")
+            print(f"Debug: resized shape={padded.shape}")
             return padded
 
     def _image_decode_thread_func(self, key, encoded_img):

@@ -10,5 +10,5 @@
   display: flex; flex-direction: column; gap: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,.12);
 }
-.modal-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.modal-title { font-size: var(--font-size-4); font-weight: var(--font-weight-3); color: var(--text); }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }

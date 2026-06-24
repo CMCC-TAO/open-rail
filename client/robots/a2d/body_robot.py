@@ -5,6 +5,7 @@ import pandas as pd
 from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
 from ..base_robot import RobotBase
+# from copy import copy
 
 
 class RobotBody(RobotBase):
@@ -19,6 +20,7 @@ class RobotBody(RobotBase):
         if not hasattr(self.cfg, 'action_layout'):
             self.logger.error("Parameter action_layout is required, please check the configuration.")
         self.action_layout = dict(self.cfg.get('action_layout', {}))
+        print(f"Debug: {self.cfg}")
         self.camera= Camera(list(self.cfg['camera']['names'].values()))
         self.robot = Robot()
         self.current_state = np.zeros(max([v['end'] for v in self.action_layout.values()]) if self.action_layout else 0)
@@ -156,14 +158,16 @@ class RobotBody(RobotBase):
                 self.current_timestamp = ref_timestamp
 
             result['ref_timestamp'] = ref_timestamp
-            result[f'cam.{cam_ref}'] = image[:, :, ::-1] # RGB -> BGR
+            result[f'cam.{cam_ref}'] = image[:, :, ::-1].copy() # RGB -> BGR, cam_ref = head
+            # print(f"Debug:cam.cam_ref={cam_ref}")
             for key, value in cam_names.items():
                 if key == cam_ref:
                     continue
                 image, timestamp = self.camera.get_image_nearest(value, ref_timestamp)
-                if key == 'depth_head':
-                    key = 'depth.head'
-                result[f'cam.{key}'] = image[:, :, ::-1] # BGR -> RGB
+                # if key == 'depth_head':
+                #     key = 'depth.head'
+                result[f'cam.{key}'] = image[:, :, ::-1].copy() # BGR -> RGB, key=hand_left/hand_right
+                # print(f"Debug:cam.{key}={key}")
 
             joint_states, gripper_start = [], 0
             for proprio in self.cfg['proprio_names']:

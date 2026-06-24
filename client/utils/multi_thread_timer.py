@@ -15,7 +15,7 @@ class MultiThreadTimer:
             *args: Positional arguments for the callback function
             **kwargs: Keyword arguments for the callback function
         """
-        self.interval = float(interval)
+        self._interval = interval / 1000 # convert milliseconds to seconds
         self.callback = callback
         self.args = args
         self.kwargs = kwargs
@@ -25,8 +25,9 @@ class MultiThreadTimer:
         self._logger = logging.getLogger(__name__)
 
     def _run(self):
-        interval_s = max(0.001, self.interval / 1000.0)
+        # interval_s = max(0.001, self.interval / 1000.0)
         while not self._stop_event.is_set():
+            # print(f"Debug: interval_s: {self._interval}")
             start_time = time.perf_counter()
             try:
                 self.callback(*self.args, **self.kwargs)
@@ -34,7 +35,7 @@ class MultiThreadTimer:
                 self._logger.exception("MultiThreadTimer callback failed")
 
             elapsed = time.perf_counter() - start_time
-            wait_s = max(0.0, interval_s - elapsed)
+            wait_s = max(0.0, self._interval - elapsed)
             if self._stop_event.wait(wait_s):
                 break
 
@@ -60,6 +61,10 @@ class MultiThreadTimer:
         """Stop the timer and wait for completion."""
         self._stop_event.set()
         self.join(timeout=timeout)
+    
+    def set_interval(self, interval):
+        """Set the timer interval."""
+        self._interval = interval / 1000 # convert milliseconds to seconds
 
 
 # Example function

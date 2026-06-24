@@ -2,33 +2,186 @@
 .topbar {
   position: fixed; top: 0; left: 0; right: 0;
   height: var(--topbar-h);
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; padding: 0 16px;
+  background: var(--topbar-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(199, 201, 205, 0.4);
+  display: flex; align-items: center; padding: 0 20px;
   z-index: 100;
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: all 0.3s ease;
 }
-.topbar-left  { display: flex; align-items: center; gap: 10px; flex: 1; }
+
+.topbar:hover {
+  box-shadow: 
+    0 6px 20px rgba(0, 0, 0, 0.12),
+    0 3px 12px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+.topbar-left  { display: flex; align-items: center; gap: 16px; flex: 1; }
 .topbar-center {
   flex: 1; display: flex; flex-direction: column;
   justify-content: center; align-items: center;
 }
-.topbar-right  { flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.topbar-right  { flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
 
-.logo { font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: 2px; }
-.subtitle { color: var(--text-muted); font-size: 11px; }
+.logo { 
+  font-size: var(--font-size-6); 
+  font-weight: var(--font-weight-5); 
+  background: linear-gradient(90deg, #196ddc, #2f6ccf, #5a9df9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 1.5px;
+  font-family: var(--font);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.subtitle { 
+  color: var(--text-muted); 
+  font-size: var(--font-size-2); 
+  font-weight: var(--font-weight-1);
+  letter-spacing: 0.5px;
+}
 
 /* ── Status badge ── */
 .status-badge {
-  padding: 3px 14px; border-radius: 12px; font-size: 11px;
-  font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
-  transition: all .3s;
+  padding: 4px 16px; 
+  border-radius: 20px; 
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-5); 
+  letter-spacing: 1.0px; 
+  text-transform: capitalize;
+  transition: all .3s ease;
+  border: 1px solid transparent;  /* 初始边框为透明 */
+  box-shadow: 
+    0 2px 6px rgba(0, 0, 0, 0.08),           /* 添加较弱的外阴影 */
+    0 1px 2px rgba(0, 0, 0, 0.05);           /* 添加较弱的内阴影 */
+  backdrop-filter: blur(6px);                 /* 恢复glass效果 */
+  -webkit-backdrop-filter: blur(6px);         /* 恢复glass效果 */
+  position: relative;
+  overflow: hidden;
 }
-.status-badge.running { background: rgba(26,127,55,.1); color: var(--success); border: 1px solid var(--success); }
-.status-badge.stopped { background: rgba(207,34,46,.08); color: var(--danger); border: 1px solid var(--danger); }
-.status-badge.paused  { background: rgba(210,153,34,.1); color: var(--warn); border: 1px solid var(--warn); }
+.status-badge::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 20px;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.2) 0%,              /* 减弱浮光效果 */
+    rgba(255, 255, 255, 0) 50%);
+  pointer-events: none;
+}
+.status-badge.running { 
+  background: linear-gradient(135deg, rgba(24, 128, 56, 0.2), rgba(24, 128, 56, 0.1)); 
+  color: var(--success); 
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);  /* 边框颜色与文字颜色保持一致 */
+}
+.status-badge.stopped { 
+  background: linear-gradient(135deg, rgba(217, 48, 37, 0.2), rgba(217, 48, 37, 0.1)); 
+  color: var(--danger); 
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);  /* 边框颜色与文字颜色保持一致 */
+}
+.status-badge.paused  { 
+  background: linear-gradient(135deg, rgba(176, 106, 0, 0.2), rgba(176, 106, 0, 0.1));
+  color: var(--warn); 
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);  /* 边框颜色与文字颜色保持一致 */
+}
+
+/* Monitor resource usage group */
+.system-resource-group {
+  display: grid;
+  grid-template-columns: repeat(4, 80px); /* Increased width slightly */
+  grid-template-rows: 24px; /* Increased height from 18px to 24px */
+  gap: 0 4px; /* Slightly increased gap */
+  align-content: center;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.resource-pill {
+  font-size: var(--font-size-1); /* Slightly increased font size */
+  color: var(--text-muted);
+  border-radius: 9px; /* Changed to match status badge rounded style */
+  padding: 0 8px; /* Increased padding for better appearance */
+  line-height: 14px; /* Adjusted line height for better text alignment */
+  width: 72px;
+  min-width: 72px;
+  height: 24px; /* Increased height from 18px to 24px */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, 
+    rgba(155, 155, 155, 0.2) 0%, 
+    rgba(105, 105, 105, 0.125) 100%); /* Subtle gradient background similar to status badges */
+  border: 1px solid color-mix(in srgb, var(--bg2) 50%, var(--text-muted) 50%); /* 边框颜色介于背景色和文字颜色之间 */
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.06),          /* 添加较弱的外阴影 */
+    0 1px 1px rgba(0, 0, 0, 0.03);          /* 添加较弱的内阴影 */
+  backdrop-filter: blur(6px);                /* 恢复glass效果 */
+  -webkit-backdrop-filter: blur(6px);        /* 恢复glass效果 */
+  position: relative;
+  overflow: hidden;
+  transition: all .3s ease;
+}
+
+.resource-pill::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 20px; /* Match the pill shape */
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.15) 0%,             /* 减弱浮光效果 */
+    rgba(255, 255, 255, 0) 50%);
+  pointer-events: none;
+  transition: all .3s ease;
+}
+
+.resource-pill:hover {
+  box-shadow: 
+    0 4px 10px rgba(0, 0, 0, 0.12),          /* 调整悬停时的阴影效果 */
+    0 2px 6px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.resource-label {
+  text-transform: none;
+  letter-spacing: 0.2px;
+  font-weight: var(--font-weight-3); /* Made label bold */
+}
+
+.resource-value {
+  font-weight: var(--font-weight-4); /* Increased font weight for value */
+}
 
 /* ── WS indicator ── */
-.ws-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; transition: background .3s; }
-.ws-dot.connected    { background: var(--success); box-shadow: 0 0 6px rgba(26,127,55,.5); }
-.ws-dot.disconnected { background: var(--text-muted); }
-.ws-label { font-size: 11px; color: var(--text-muted); }
+.ws-dot { 
+  width: 8px; 
+  height: 8px; 
+  border-radius: 50%; 
+  display: inline-block; 
+  transition: all .3s ease;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.1);
+}
+.ws-dot.connected    { 
+  background: var(--success); 
+  box-shadow: 0 0 8px rgba(24, 128, 56, 0.4);
+}
+.ws-dot.disconnected { 
+  background: var(--text-muted); 
+  opacity: 0.6;
+}
+.ws-label { 
+  font-size: var(--font-size-2); 
+  color: var(--text-muted); 
+  font-weight: var(--font-weight-1);
+}

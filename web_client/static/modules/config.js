@@ -7,7 +7,7 @@ const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record']);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
-  intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples', 'fitting_time_step'],
+  intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples'],
   inter_chunk: ['inter_chunk_mode', 'search_length', 'smooth_action', 'smooth_base', 'smooth_length', 'smooth_ratio'],
 };
 
@@ -26,7 +26,7 @@ const CONFIG_SELECT_OPTIONS = {
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
   'fitting_num_samples', 'search_length', 'smooth_length', 'gripper_offset',
-  'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
+  'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
@@ -39,11 +39,13 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visualize.camera.open_head',
   'visualize.camera.open_wrist_left',
   'visualize.camera.open_wrist_right',
-  'visualize.trajectory.selected_joints',
+  'visualize.trajectory.play',
   'visualize.trajectory.source',
+  'visualize.trajectory.selected_joints',
   'visualize.trajectory.window_span_sec',
   'record.switch',
   'record.save_dir',
+  'record.record_exp_data',
   'record.info.data_path',
   'record.info.total_chunks',
   'record.info.total_episodes',
@@ -51,6 +53,10 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'record.info.total_tasks',
   'record.info.total_videos',
   'record.info.video_path',
+  'controller.raw_fps',
+  'controller.wait_time',
+  'controller.period',
+  'controller.speed',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
@@ -67,6 +73,7 @@ const DEFAULT_MAIN_PARAMETER_KEYS = {
   'rdm.mode': 'Mode',
   'controller.wait_time': 'Wait Time[ms]',
   'controller.period': 'Control Period[ms]',
+  'controller.speed': 'Control Speed',
   'inter_chunk.inter_chunk_mode': 'Inter-Chunk Mode',
   'intra_chunk.intra_chunk_mode': 'Intra-Chunk Mode',
   'vision.preprocess.mode': 'Preprocess Mode',
@@ -348,7 +355,7 @@ function buildTree_old(obj, prefix, parentEl) {
     for (const [sgName, entries] of Object.entries(sgMap)) {
       if (entries.length === 0) continue;
       const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
-      basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
+      basicBody.appendChild(buildGroup(sgName.replace('_', '-'), rows));
     }
 
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
@@ -360,7 +367,7 @@ function buildTree_old(obj, prefix, parentEl) {
     const body    = document.createElement('div');
     body.className = 'cfg-group-body';
     buildTree(val, dotKey, body);
-    parentEl.appendChild(buildGroupFromEl(key.toUpperCase(), body));
+    parentEl.appendChild(buildGroupFromEl(key, body));
   }
 }
 function buildTree(obj, prefix, parentEl) {
@@ -423,7 +430,7 @@ function buildTree(obj, prefix, parentEl) {
     for (const [sgName, entries] of Object.entries(sgMap)) {
       if (entries.length === 0) continue;
       const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
-      basicBody.appendChild(buildGroup(sgName.toUpperCase().replace('_', '-'), rows));
+      basicBody.appendChild(buildGroup(sgName.replace('_', '-'), rows));
     }
 
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
@@ -469,7 +476,7 @@ function buildTree(obj, prefix, parentEl) {
     } else {
       buildTree(val, dotKey, body);
     }
-    parentEl.appendChild(buildGroupFromEl(key.toUpperCase(), body));
+    parentEl.appendChild(buildGroupFromEl(key, body));
   }
 }
 // ═══════════════════════════════════════════════════════
@@ -558,7 +565,7 @@ function _buildRobotsGroup(obj, parentEl) {
     const body = document.createElement('div');
     body.className = 'cfg-group-body';
     buildTree(v, dotKey, body);
-    const groupEl = buildGroupFromEl(k.toUpperCase(), body);
+    const groupEl = buildGroupFromEl(k, body);
     groupEl.dataset.robotType = k;
     // Show only the group matching current type
     groupEl.style.display = (k === currentType) ? '' : 'none';
@@ -582,7 +589,7 @@ function buildGroup(label, rowEls) {
   group.className = 'cfg-group';
   const header = document.createElement('div');
   header.className = 'cfg-group-header';
-  header.innerHTML = `<span class="cfg-group-toggle">▶</span><span>${label}</span>`;
+  header.innerHTML = `<span class="cfg-group-toggle"><i class="fas fa-chevron-right"></i></span><span>${label}</span>`;
   const body = document.createElement('div');
   body.className = 'cfg-group-body';
   body.style.display = 'none';
@@ -601,7 +608,7 @@ function buildGroupFromEl(label, bodyEl) {
   group.className = 'cfg-group';
   const header = document.createElement('div');
   header.className = 'cfg-group-header';
-  header.innerHTML = `<span class="cfg-group-toggle">▶</span><span>${label}</span>`;
+  header.innerHTML = `<span class="cfg-group-toggle"><i class="fas fa-chevron-right"></i></span><span>${label}</span>`;
   bodyEl.style.display = 'none';
   header.addEventListener('click', () => {
     const open = header.classList.toggle('open');
@@ -668,11 +675,19 @@ function createCfgRow(dotKey, label, value) {
     btn.type = 'button';
     btn.className = 'btn btn-xs';
     btn.textContent = 'Browse';
+    let isBrowsing = false;
 
     btn.addEventListener('click', async () => {
+      if (isBrowsing) return;
+      isBrowsing = true;
+      btn.disabled = true;
+      btn.textContent = 'Browsing...';
+
       let selectedPath = '';
       try {
-        const pickRes = await apiFetch('/api/client/robot/select_directory', {
+        const initialPath = String(value || '').trim();
+        const url = `/api/client/robot/select_directory${initialPath ? `?path=${encodeURIComponent(initialPath)}` : ''}`;
+        const pickRes = await apiFetch(url, {
           // Native directory chooser blocks server response until user confirms/cancels.
           // Use a long timeout to avoid aborting before path is selected.
           timeoutMs: 600000,
@@ -680,7 +695,11 @@ function createCfgRow(dotKey, label, value) {
         });
         selectedPath = String(pickRes?.path || '').trim();
       } catch (_) {
-        return;
+        selectedPath = '';
+      } finally {
+        isBrowsing = false;
+        btn.disabled = false;
+        btn.textContent = 'Browse';
       }
       if (!selectedPath) return;
 
@@ -1069,7 +1088,7 @@ function applyVisualConfig(cfg = App.config) {
   const camAllBtn = $('btn-cam-all-toggle');
   if (camAllBtn) {
     const allOn = App.camOpen.every(v => v);
-    camAllBtn.textContent = allOn ? '⏸ Close All' : '▶ Open All';
+    camAllBtn.innerHTML = allOn ? '<i class="fas fa-pause"></i> Close All' : '<i class="fas fa-play"></i> Open All';
     camAllBtn.className = allOn ? 'btn btn-xs btn-danger' : 'btn btn-xs btn-success';
   }
 
@@ -1133,13 +1152,12 @@ function applyVisualConfig(cfg = App.config) {
   if (chkActionRaw) chkActionRaw.checked = App.traj.source.has('action_raw');
   if (btnAllSource) {
     const allSelected = App.traj.source.has('state') && App.traj.source.has('action_fitted') && App.traj.source.has('action_raw');
-    btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
     btnAllSource.textContent = allSelected ? 'None' : 'All';
   }
   if (btnPlay) {
     btnPlay.innerHTML = App.traj.paused
-      ? '<span class="btn-icon">▶</span> Play'
-      : '<span class="btn-icon">⏸</span> Pause';
+      ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
+      : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
     btnPlay.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
   }
 

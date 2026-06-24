@@ -1,3 +1,7 @@
+/* ── ④ Collapse button: rightmost, vertically centered ── */
+.manual-collapse-btn {
+  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
+}
 /* ── Robot control ── */
 .robot-ctrl-grid {
   display: flex;
@@ -15,17 +19,11 @@
   flex-direction: column;
   gap: 6px;
 }
-.robot-ctrl-section-title {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .4px;
-}
 .robot-ctrl-section-head {
   display: flex;
   align-items: center;
   gap: 8px;
+  padding-bottom: 4px;
 }
 .robot-ctrl-checks-right {
   margin-left: auto;
@@ -45,7 +43,7 @@
   min-width: 56px;
   height: 18px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: var(--font-size-2);
   line-height: 16px;
   display: inline-flex;
   align-items: center;
@@ -64,7 +62,7 @@
 }
 .robot-ctrl-label {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   min-width: 94px;
   flex-shrink: 0;
 }
@@ -72,7 +70,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-2);
   color: var(--text);
 }
 .robot-ctrl-check input { margin: 0; }
@@ -126,7 +124,7 @@
 }
 .robot-axis-tag {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   line-height: 1;
   min-width: 14px;
   text-align: right;
@@ -149,7 +147,7 @@
   right: 4px;
   top: 1px;
   color: var(--danger);
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-4);
   line-height: 1;
 }

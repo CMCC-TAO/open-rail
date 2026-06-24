@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>VLA-RAIL Web Client</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="/static/styles/main.css" />
 </head>
 <body>
@@ -19,6 +21,13 @@
       <span class="subtitle">Web Client Dashboard</span>
     </div>
     <div class="topbar-right">
+      <!-- Resource monitoring pills moved to topbar-right, positioned before WS indicator -->
+      <div class="system-resource-group" title="System resource usage">
+        <span class="resource-pill" id="val-cpu-usage"><span class="resource-label">CPU</span><span class="resource-value">--</span></span>
+        <span class="resource-pill" id="val-gpu-usage"><span class="resource-label">GPU</span><span class="resource-value">--</span></span>
+        <span class="resource-pill" id="val-mem-usage"><span class="resource-label">MEM</span><span class="resource-value">--</span></span>
+        <span class="resource-pill" id="val-bw-usage"><span class="resource-label">NET</span><span class="resource-value">--</span></span>
+      </div>
       <span id="ws-indicator" class="ws-dot disconnected" title="WebSocket"></span>
       <span class="ws-label">WS</span>
     </div>
@@ -27,13 +36,13 @@
   <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
   <main class="layout">
 
-    <!-- ╔══════════════ LEFT: CONFIG + MANUAL CONTROL ══════════════╗ -->
+    <!-- ╔══════════════ LEFT: CONFIG + DATA RECORDING + MANUAL CONTROL ══════════════╗ -->
     <div class="left-col" id="left-col">
       <aside class="panel panel-config panel-expanded" id="panel-config">
         <div class="panel-header" id="panel-config-header">
-          <span>⚙ Configuration</span>
+          <span><i class="fas fa-cog"></i> Configuration</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs panel-collapse-inline" id="btn-config-collapse" title="Collapse / Expand">▲</button>
+            <button class="btn btn-xs conf-collapse-btn" id="btn-config-collapse" title="Collapse / Expand"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body" id="config-body">
@@ -41,18 +50,18 @@
           <!-- Config file bar -->
           <div class="config-file-bar">
             <label class="btn btn-sm" id="btn-load-file" title="Load config file">
-              📂 Load
+              <i class="fas fa-folder-open"></i> Load
               <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
             </label>
-            <button class="btn btn-sm" id="btn-apply-config">✔ Apply</button>
-            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…">💾 Save As…</button>
+            <button class="btn btn-sm" id="btn-apply-config"><i class="fas fa-check"></i> Apply</button>
+            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…"><i class="fas fa-save"></i> Save As…</button>
           </div>
           <!-- Current file path display -->
           <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
 
           <!-- Main parameters (fixed area) -->
           <div id="main-params-section" class="main-params-section">
-            <div class="main-params-title">Main Parameters</div>
+            <div class="section-title">Main Parameters</div>
             <div id="main-params-tree" class="main-params-tree"></div>
           </div>
 
@@ -73,31 +82,35 @@
 
       <section class="panel panel-recording" id="panel-recording">
         <div class="panel-header" id="panel-recording-header">
-          <span>🧾 Data Recording</span>
+          <span><i class="fas fa-database"></i> Data Recording</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs" id="btn-recording-collapse" title="Collapse">▲</button>
+            <button class="btn btn-xs record-collapse-btn" id="btn-recording-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="recording-body">
           <div class="recording-controls">
-            <button class="btn btn-sm btn-success" id="btn-recording-start">Start</button>
-            <button class="btn btn-sm btn-danger" id="btn-recording-stop">Stop</button>
-          </div>
-          <div class="recording-options">
-            <span class="recording-options-title">Save Content</span>
-            <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" checked /> Episode</label>
-            <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label>
+            <button class="btn btn-xs btn-success" id="btn-recording-startstop"><i class="fas fa-play"></i> Start</button>
+            <div class="recording-options-inline">
+              <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" checked /> Episode</label>
+              <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label>
+            </div>
           </div>
           <div class="recording-config-wrap">
-            <div class="recording-config-title">Record Config</div>
+            <div class="section-title">Record Config</div>
             <div id="recording-config-tree" class="recording-config-tree"></div>
           </div>
           <div class="recording-file-wrap">
             <div class="recording-file-filter">
-              <span class="recording-file-filter-label">Tasks</span>
+              <span class="section-title">Tasks</span>
               <select id="recording-task-select" class="recording-task-select"></select>
             </div>
-            <div class="recording-file-title"><span>Episodes</span><label class="recording-chunk-filter"><span class="recording-chunk-filter-label">Chunk</span><select id="recording-chunk-select" class="recording-chunk-select"></select></label></div>
+            <div class="recording-file-title">
+              <span class="section-title">Episodes</span>
+              <label class="recording-chunk-filter">
+                <span class="recording-chunk-filter-label">Chunk</span>
+                <select id="recording-chunk-select" class="recording-chunk-select"></select>
+              </label>
+            </div>
             <div id="recording-file-list" class="recording-file-list"></div>
           </div>
         </div>
@@ -105,16 +118,16 @@
 
       <section class="panel panel-manual" id="panel-manual">
         <div class="panel-header" id="panel-manual-header">
-          <span>🕹 Manual Robot Control</span>
+          <span><i class="fas fa-gamepad"></i> Robot Control</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs" id="btn-manual-collapse" title="Collapse">▲</button>
+            <button class="btn btn-xs manual-collapse-btn" id="btn-manual-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="manual-body">
           <div class="robot-ctrl-grid">
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Arm</div>
+                <div class="section-title">Arm</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-arm-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-arm">Set</button>
@@ -133,7 +146,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Gripper / Hand</div>
+                <div class="section-title">Gripper / Hand</div>
                 <div class="robot-ctrl-checks-right">
                   <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-left" checked /> Left</label>
                   <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-right" checked /> Right</label>
@@ -151,7 +164,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Head</div>
+                <div class="section-title">Head</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-head-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-head">Set</button>
@@ -176,7 +189,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Waist</div>
+                <div class="section-title">Waist</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-waist-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-waist">Set</button>
@@ -201,7 +214,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Body</div>
+                <div class="section-title">Body</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-body-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-body">Set</button>
@@ -216,16 +229,16 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Wheel / Leg</div>
+                <div class="section-title">Wheel / Leg</div>
                 <div class="robot-ctrl-checks-right">
                   <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel-keyboard" /> Keyboard Control</label>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-ctrl-row-actions">
-                <button class="btn btn-sm" id="btn-wheel-forward">↑ Forward</button>
-                <button class="btn btn-sm" id="btn-wheel-backward">↓ Backward</button>
-                <button class="btn btn-sm" id="btn-wheel-left">↺ Turn Left</button>
-                <button class="btn btn-sm" id="btn-wheel-right">↻ Turn Right</button>
+                <button class="btn btn-sm" id="btn-wheel-forward"><i class="fas fa-arrow-up"></i> Forward</button>
+                <button class="btn btn-sm" id="btn-wheel-backward"><i class="fas fa-arrow-down"></i> Backward</button>
+                <button class="btn btn-sm" id="btn-wheel-left"><i class="fas fa-rotate-left"></i> Turn Left</button>
+                <button class="btn btn-sm" id="btn-wheel-right"><i class="fas fa-rotate-right"></i> Turn Right</button>
               </div>
             </section>
 
@@ -239,15 +252,17 @@
 
       <!-- ── Runtime Monitor ── -->
       <section class="panel panel-monitor">
-        <div class="panel-header monitor-header">
-          <span class="monitor-title">📊 Runtime Monitor</span>
+        <!-- <div class="panel-header monitor-header"> -->
+          <!-- <span class="monitor-title"><i class="fas fa-chart-line"></i> Runtime Monitor</span> -->
+        <div class="panel-header">
+          <span><i class="fas fa-chart-line"></i> Runtime Monitor</span>
           <!-- Spacer: push all button groups to the right -->
           <span class="monitor-spacer"></span>
           <!-- Group ①: primary controls -->
           <div class="monitor-ctrl-group">
-            <button class="btn btn-success btn-sm" id="btn-start">▶ Start</button>
-            <button class="btn btn-danger  btn-sm" id="btn-pause" disabled>⏸ Pause</button>
-            <button class="btn btn-xs"             id="btn-reset" disabled>↺ Reset</button>
+            <button class="btn btn-success btn-sm" id="btn-start"><i class="fas fa-play"></i> Start</button>
+            <button class="btn btn-danger  btn-sm" id="btn-pause" disabled><i class="fas fa-pause"></i> Pause</button>
+            <button class="btn btn-sm"             id="btn-reset" disabled><i class="fas fa-rotate-left"></i> Reset</button>
           </div>
           <!-- Separator -->
           <span class="monitor-sep"></span>
@@ -258,75 +273,38 @@
             <button class="btn btn-xs" id="btn-control" title="Start control" disabled><span class="thread-btn-main">Control</span><span class="thread-btn-sub">Start</span></button>
           </div>
           <!-- Separator -->
-          <span class="monitor-sep"></span>
-          <!-- Group ③: system resource usage -->
-          <div class="monitor-ctrl-group monitor-resource-group" title="System resource usage">
-            <span class="resource-pill" id="val-cpu-usage"><span class="resource-label">CPU</span><span class="resource-value">--</span></span>
-            <span class="resource-pill" id="val-gpu-usage"><span class="resource-label">GPU</span><span class="resource-value">--</span></span>
-            <span class="resource-pill" id="val-mem-usage"><span class="resource-label">MEM</span><span class="resource-value">--</span></span>
-            <span class="resource-pill" id="val-bw-usage"><span class="resource-label">BW</span><span class="resource-value">--</span></span>
-          </div>
+          <!-- <span class="monitor-sep"></span> -->
         </div>
         <div class="panel-body">
 
           <!-- Stats inline bar -->
           <div class="section-title">Key Statistics</div>
           <div class="stats-inline">
-            <span class="stat-inline-item">
-              <span class="stat-inline-label">Infer&nbsp;Count</span>
-              <span class="stat-inline-value" id="val-infer-count">–</span>
-            </span>
-            <span class="stat-inline-sep">|</span>
-            <span class="stat-inline-item">
-              <span class="stat-inline-label">Avg&nbsp;Infer</span>
-              <span class="stat-inline-value" id="val-infer-time">–</span>
-            </span>
-            <span class="stat-inline-sep">|</span>
-            <span class="stat-inline-item">
-              <span class="stat-inline-label">Avg&nbsp;Traj</span>
-              <span class="stat-inline-value" id="val-traj-time">–</span>
-            </span>
+            <div class="stat-inline-item">
+              <div class="stat-inline-label">Observe FPS</div>
+              <div class="stat-inline-value" id="val-obv-fps">–</div>
+            </div>
+            <div class="stat-inline-item">
+              <div class="stat-inline-label">Infer Count</div>
+              <div class="stat-inline-value" id="val-infer-count">–</div>
+            </div>
+            <div class="stat-inline-item">
+              <div class="stat-inline-label">Img Proc Time</div>
+              <div class="stat-inline-value" id="img-proc-time">–</div>
+            </div>
+            <div class="stat-inline-item">
+              <div class="stat-inline-label">Avg Infer Time</div>
+              <div class="stat-inline-value" id="val-infer-time">–</div>
+            </div>
+            <div class="stat-inline-item">
+              <div class="stat-inline-label">Avg Traj Time</div>
+              <div class="stat-inline-value" id="val-traj-time">–</div>
+            </div>
           </div>
 
           <!-- hidden KV containers kept for JS compatibility (not rendered) -->
           <div id="config-snapshot" style="display:none"></div>
           <div id="obs-act-info"    style="display:none"></div>
-
-          <!-- Robot state / action -->
-          <div class="section-title">Robot State &amp; Action</div>
-          <div class="joint-grouped-wrap">
-            <!-- State column -->
-            <div class="joint-grouped-col">
-              <div class="joint-group-section">
-                <div class="joint-group-label">Arm · Left <span class="joint-col-tag">State</span></div>
-                <div id="joint-state-arm-l" class="joint-grid"></div>
-              </div>
-              <div class="joint-group-section">
-                <div class="joint-group-label">Arm · Right <span class="joint-col-tag">State</span></div>
-                <div id="joint-state-arm-r" class="joint-grid"></div>
-              </div>
-              <div class="joint-group-section">
-                <div class="joint-group-label">Gripper / Hand <span class="joint-col-tag">State</span></div>
-                <div id="joint-state-gripper" class="joint-grid"></div>
-              </div>
-            </div>
-            <!-- Action column -->
-            <div class="joint-grouped-col">
-              <div class="joint-group-section">
-                <div class="joint-group-label">Arm · Left <span class="joint-col-tag tag-action">Action</span></div>
-                <div id="joint-action-arm-l" class="joint-grid"></div>
-              </div>
-              <div class="joint-group-section">
-                <div class="joint-group-label">Arm · Right <span class="joint-col-tag tag-action">Action</span></div>
-                <div id="joint-action-arm-r" class="joint-grid"></div>
-              </div>
-              <div class="joint-group-section">
-                <div class="joint-group-label">Gripper / Hand <span class="joint-col-tag tag-action">Action</span></div>
-                <div id="joint-action-gripper" class="joint-grid"></div>
-              </div>
-            </div>
-          </div>
-
 
         </div>
       </section>
@@ -334,7 +312,7 @@
       <!-- ── Language Command ── -->
       <section class="panel panel-lang" id="panel-lang">
         <div class="panel-header">
-          <span>🗣 Language Command</span>
+          <span><i class="fas fa-comments"></i> Language Command</span>
           <div class="panel-header-actions">
             <label class="lang-auto-mode" title="Auto switch to next sub-task language command by Task Progress">
               <input id="chk-lang-auto-mode" type="checkbox" />
@@ -345,7 +323,7 @@
               <input id="inp-lang-threshold" class="input-text" type="number" step="0.01" disabled />
             </label>
             <label class="lang-threshold-wrap" title="Sliding window size for task progress average">
-              <span class="lang-threshold-label">win_size</span>
+              <span class="lang-threshold-label">Win-Size</span>
               <input id="inp-lang-win-size" class="input-text" type="number" min="1" step="1" disabled />
             </label>
             <div class="task-progress-wrap" id="task-progress-wrap" title="Task progress (current_prob_progress)">
@@ -356,29 +334,29 @@
               <span class="task-progress-value" id="task-progress-value">--</span>
             </div>
             <label class="btn btn-xs" title="Load task language json file">
-              📂 Load
+              <i class="fas fa-folder-open"></i> Load
               <input id="lang-file-input" type="file" accept=".json" style="display:none" />
             </label>
-            <button class="btn btn-xs" id="btn-lang-collapse" title="Collapse">▲</button>
+            <button class="btn btn-xs lang-collapse-btn" id="btn-lang-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body" id="lang-body">
           <div class="lang-cmd-layout">
             <!-- Task selector (level-1) -->
             <div class="lang-cmd-col">
-              <div class="lang-cmd-col-title">Task</div>
+              <div class="section-title">Task</div>
               <select id="lang-task-select" class="lang-cmd-select" size="5"></select>
             </div>
             <!-- Sub-task selector (level-2) -->
             <div class="lang-cmd-col lang-cmd-col-subtask">
-              <div class="lang-cmd-col-title">Sub-task</div>
+              <div class="section-title">Sub-Task</div>
               <select id="lang-subtask-select" class="lang-cmd-select" size="5"></select>
             </div>
             <!-- Current instruction + send -->
             <div class="lang-cmd-col lang-cmd-col-send">
-              <div class="lang-cmd-col-title">Instruction</div>
+              <div class="section-title">Instruction</div>
               <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
-              <button class="btn btn-sm btn-primary" id="btn-lang-send">▶ Apply</button>
+              <button class="btn btn-sm" id="btn-lang-send"><i class="fas fa-check"></i> Apply</button>
             </div>
           </div>
         </div>
@@ -387,7 +365,7 @@
       <!-- ── Joint Trajectory ── -->
       <section class="panel panel-traj" id="panel-traj">
         <div class="panel-header traj-panel-header" id="traj-panel-header">
-          <span>📈 Trajectory Viewer</span>
+          <span><i class="fas fa-chart-area"></i> Trajectory Viewer</span>
           <div class="panel-header-actions traj-header-actions">
             <!-- spacer: push all groups to the right -->
             <span class="traj-header-spacer"></span>
@@ -400,8 +378,8 @@
                   <span id="traj-window-span-value" class="traj-window-value">10s</span>
                 </div>
                 <div class="traj-window-controls">
-                  <button class="btn btn-xs btn-active" id="btn-traj-pause"><span class="btn-icon">▶</span> Play</button>
-                  <button class="btn btn-xs" id="btn-traj-clear">🗑 Clear</button>
+                  <button class="btn btn-xs" id="btn-traj-pause"><span class="btn-icon"><i class="fas fa-play"></i></span> Play</button>
+                  <button class="btn btn-xs" id="btn-traj-clear"><i class="fas fa-trash-can"></i> Clear</button>
                 </div>
               </div>
             </div>
@@ -429,7 +407,7 @@
                     <span class="traj-src-btn-text">State</span>
                     <span class="traj-line-indicator traj-line-indicator-state" aria-hidden="true"></span>
                   </label>
-                  <button class="btn btn-xs" id="btn-traj-all"><span class="traj-src-btn-text">All</span></button>
+                  <button class="btn btn-xs traj-allnone-btn traj-src-all-btn" id="btn-traj-all"><span class="traj-src-btn-text">All</span></button>
                 </div>
               </div>
             </div>
@@ -450,9 +428,9 @@
               </div>
             </div>
             <!-- Divider -->
-            <span class="traj-header-sep"></span>
+            <!-- <span class="traj-header-sep"></span> -->
             <!-- ④ Collapse: rightmost -->
-            <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse" title="Collapse">▼</button>
+            <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse" title="Collapse"><i class="fas fa-chevron-down"></i></button>
           </div>
         </div>
         <div class="traj-body" id="traj-body">
@@ -468,9 +446,9 @@
     <!-- ╔══════════════ RIGHT: CAMERA VISUAL ══════════════╗ -->
     <aside class="panel panel-visual" id="panel-visual">
       <div class="panel-header">
-        <span>📷 Camera Viewer</span>
+        <span><i class="fas fa-camera"></i> Camera Viewer</span>
         <div class="panel-header-actions">
-          <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle">⏸ Close All</button>
+          <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle"><i class="fas fa-pause"></i> Close All</button>
         </div>
       </div>
       <div class="panel-body" id="camera-body">
@@ -523,10 +501,10 @@
   </main>
 
   <!-- ═══════════════════ PANEL REVEAL BUTTONS (floating, shown when panel is collapsed) ═══════════════════ -->
-  <button class="btn btn-xs panel-reveal-btn panel-reveal-config-hide" id="btn-config-hide" title="Hide Configuration">◀</button>
-  <button class="btn btn-xs panel-reveal-btn panel-reveal-left hidden" id="btn-config-reveal" title="Show Configuration">▶</button>
-  <button class="btn btn-xs panel-reveal-btn panel-reveal-visual-hide" id="btn-visual-collapse" title="Hide Camera Viewer">▶</button>
-  <button class="btn btn-xs panel-reveal-btn panel-reveal-right hidden" id="btn-visual-reveal" title="Show Camera Viewer">◀</button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-config-hide" id="btn-config-hide" title="Hide Configuration"><i class="fas fa-chevron-left"></i></button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-left hidden" id="btn-config-reveal" title="Show Configuration"><i class="fas fa-chevron-right"></i></button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-visual-hide" id="btn-visual-collapse" title="Hide Camera Viewer"><i class="fas fa-chevron-right"></i></button>
+  <button class="btn btn-xs panel-reveal-btn panel-reveal-right hidden" id="btn-visual-reveal" title="Show Camera Viewer"><i class="fas fa-chevron-left"></i></button>
 
   <!-- ═══════════════════ FOOTER ═══════════════════ -->
   <footer class="footer-bar">

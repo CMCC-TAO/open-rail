@@ -1,21 +1,16 @@
 .panel-traj {
-  flex: 1; min-height: 0;
+  min-height: 0;
   overflow: hidden;
-}
-/* When the chart body is collapsed, shrink the panel to header height only,
-   releasing the remaining flex space to Language Command panel above */
-.panel-traj.body-collapsed {
-  flex: 0 0 auto;
 }
 /* ═══════════════════════════════════════════
    JOINT TRAJECTORY PANEL
    ═══════════════════════════════════════════ */
 /* traj header has 2-row content, align top */
-.traj-panel-header { align-items: flex-start; padding-top: 5px; padding-bottom: 5px; }
+.traj-panel-header { align-items: flex-start; padding-top: 12px; padding-bottom: 5px; }
 
 .traj-panel-header .traj-src-label {
-  font-size: 10px; color: var(--text-muted); font-weight: 600;
-  text-transform: uppercase; letter-spacing: .4px;
+  font-size: var(--font-size-1); color: var(--text-muted); font-weight: var(--font-weight-3);
+  text-transform: none; letter-spacing: .2px;
   margin-bottom: 2px; display: block;
 }
 
@@ -83,46 +78,46 @@
 }
 
 .traj-window-slider::-webkit-slider-runnable-track {
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--border);
+  background: var(--accent);
 }
 
 .traj-window-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--accent);
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--accent-strong);
   border-radius: 50%;
-  background: var(--accent);
-  margin-top: -2px;
+  background: #ffffff;
+  margin-top: -4px;
 }
 
 .traj-window-slider::-moz-range-track {
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
-  background: var(--border);
+  background: var(--accent-soft-hover);
 }
 
 .traj-window-slider::-moz-range-progress {
-  height: 3px;
+  height: 4px;
   border-radius: 999px;
   background: var(--accent);
 }
 
 .traj-window-slider::-moz-range-thumb {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--accent);
+  width: 13px;
+  height: 13px;
+  border: 1px solid var(--accent-strong);
   border-radius: 50%;
-  background: var(--accent);
+  background: #ffffff;
 }
 
 .traj-window-value {
   min-width: 20px;
   max-width: 20px;
   text-align: right;
-  font-size: 11px;
+  font-size: var(--font-size-3);
   color: var(--text-muted);
 }
 
@@ -146,7 +141,7 @@
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: var(--font-size-1);
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -159,7 +154,7 @@
 .traj-src-btn-text {
   flex: 0 0 auto;
   text-align: left;
-  font-size: 10px
+  font-size: var(--font-size-1);
 }
 
 .traj-line-indicator {
@@ -187,15 +182,9 @@
   display: flex; gap: 3px; flex-wrap: nowrap; align-items: center;
 }
 
-/* All / None buttons inside joint rows */
-.traj-allnone-btn {
-  width: 42px; text-align: center; flex-shrink: 0;
-  margin-left: 4px;
-}
-
 /* Joint toggle chips */
 .joint-sel-chip {
-  padding: 1px 8px; font-size: 10px;
+  padding: 1px 8px; font-size: var(--font-size-1);
   border: 1px solid var(--border); border-radius: 10px;
   background: var(--bg); color: var(--text-muted);
   cursor: pointer; transition: all .15s; user-select: none;
@@ -203,11 +192,31 @@
 }
 .joint-sel-chip:hover { border-color: var(--accent); color: var(--accent); }
 
+/* All / None buttons in trajectory panel - minimal-tech style */
+.traj-allnone-btn {
+  width: 42px; text-align: center; flex-shrink: 0;
+  margin-left: 4px;
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #1a73e8 20%);
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%);
+  font-weight: var(--font-weight-4);
+  letter-spacing: 0.2px;
+  box-shadow: none;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+}
+
+/* Source group All button - wider to match State checkbox */
+.traj-src-all-btn {
+  width: 88px;
+}
+
 /* Window group controls: Pause/Clear on second row */
 .traj-window-controls {
   display: flex;
   flex-direction: row;
-  gap: 4px;
+  gap: 3px;
   width: 100%;
   height: 22px;
 }
@@ -215,16 +224,51 @@
 .traj-window-controls .btn {
   width: 64px;
   height: 22px;
-  padding: 0;
-  display: flex;
+  padding: 0 0px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #1a73e8 20%);
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%);
+  font-weight: var(--font-weight-4);
+  letter-spacing: 0.2px;
+  box-shadow: none;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+}
+
+/* Align Pause/Play + Clear with Joints All/None style */
+.traj-window-controls .btn:active {
+  opacity: .9;
+}
+.traj-window-controls .btn.btn-active {
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--border) 80%, #1a73e8 20%) !important;
+  color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%) !important;
+  box-shadow: none !important;
+}
+.traj-window-controls .btn .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  margin-right: 3px;
+}
+.traj-window-controls .btn i.fas,
+.traj-window-controls .btn i.far,
+.traj-window-controls .btn i.fab {
+  margin-right: 2px;
+  margin-top: -1px;
+  line-height: 1;
+  vertical-align: middle;
 }
 
 /* ── ④ Collapse button: rightmost, vertically centered ── */
 .traj-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px;
+  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
 }
 
 /* ── Body / chart ── */

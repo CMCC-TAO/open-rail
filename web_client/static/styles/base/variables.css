@@ -1,17 +1,73 @@
 :root {
-  --bg:         #ffffff;
-  --bg2:        #f6f8fa;
-  --bg3:        #eaeef2;
-  --border:     #d0d7de;
-  --accent:     #0969da;
-  --success:    #1a7f37;
-  --danger:     #cf222e;
-  --warn:       #9a6700;
-  --text:       #1f2328;
-  --text-muted: #656d76;
-  --font:       'SF Mono', 'Fira Code', 'Consolas', monospace;
-  --radius:     6px;
+  --bg:         #f5f7fa;
+  --bg2:        #ffffff;
+  --bg3:        #f8fafd;
+  --border:     #d6deea;
+
+  /* Brand Color（Apple/Google 风格：简约高可视） */
+  --accent:            #1a73e8;
+  --accent-strong:     #1558b0;
+  --accent-soft:       #e8f0fe;
+  --accent-soft-hover: #d2e3fc;
+  --accent-soft-active:#aecbfa;
+
+  /* Semantic Colors（与冷灰背景协调） */
+  --success:            #188038;
+  --success-strong:     #136a2d;
+  --success-soft:       #e6f4ea;
+  --success-soft-hover: #ceead6;
+
+  --danger:             #d93025;
+  --danger-strong:      #b3261e;
+  --danger-soft:        #fce8e6;
+  --danger-soft-hover:  #f7d7d4;
+
+  --warn:               #b06a00;
+  --warn-strong:        #8f5300;
+  --warn-soft:          #fef3e0;
+  --warn-soft-hover:    #fbe2b9;
+
+  --text:       #2d3034;
+  --text-muted: #313538;
+
+  /* Typography */
+  --font-family-base: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  --font: var(--font-family-base);
+
+  /* Font Size Scale (5 levels) */
+  --font-size-1: 11px;
+  --font-size-2: 12px;
+  --font-size-3: 13px;
+  --font-size-4: 14px;
+  --font-size-5: 16px; /*Panel header font size */
+  --font-size-6: 24px; /*Top bar logo font size */
+
+  /* Font Weight Scale (5 levels) */
+  --font-weight-1: 400;
+  --font-weight-2: 500;
+  --font-weight-3: 600;
+  --font-weight-4: 700;
+  --font-weight-5: 900;
+  --font-weight-6: 1000;
+  --radius:     8px;
+  --panel-radius: 14px;
+  --panel-border: rgba(199, 201, 205, 0.531);
+  --panel-shadow: 0 6px 14px rgba(15, 23, 42, 0.08), 0 1px 3px rgba(15, 23, 42, 0.05);
+  --panel-shadow-hover: 0 8px 18px rgba(15, 23, 42, 0.12), 0 3px 7px rgba(15, 23, 42, 0.08);
+  --panel-header-bg: linear-gradient(0deg, #f2f4f7 0%, #d5d7de 100%);
+  --panel-header-text: #36383c;
+  --panel-header-divider: rgba(214, 216, 219, 0.26);
+  --panel-header-inner-highlight: transparent;
+  --panel-header-bottom-shadow: transparent;
+
+  --status-glow-success: 0 0 10px rgba(24, 128, 56, 0.42);
+  --overlay-dark: rgba(23, 31, 44, 0.52);
+  --overlay-light: rgba(255, 255, 255, 0.85);
+  --progress-gradient: linear-gradient(90deg, var(--success) 0%, var(--accent) 100%);
+
   --topbar-h:   44px;
+  /* --topbar-bg: linear-gradient(135deg, #f3f5f7 0%, #c0c2c9 50%,  #f3f5f7 100%); */
+  --topbar-bg: linear-gradient(135deg, #f1f3f5 0%, #d9dbde 50%,  #f1f3f5 100%);
   --footer-h:   28px;
-  --panel-gap:  8px;
+  --panel-gap:  12px;
 }

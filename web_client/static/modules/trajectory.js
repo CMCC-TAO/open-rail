@@ -378,6 +378,16 @@ function startTrajUpdateTimer() {
   }, intervalMs);
 }
 
+function updateCenterPanelLayoutState() {
+  const centerCol = document.querySelector('.center-col');
+  const langBody = $('lang-body');
+  const trajBody = $('traj-body');
+  if (!centerCol || !langBody || !trajBody) return;
+
+  centerCol.classList.toggle('lang-collapsed', langBody.classList.contains('collapsed'));
+  centerCol.classList.toggle('traj-collapsed', trajBody.classList.contains('collapsed'));
+}
+
 function syncCenterPanelCollapseUi() {
   const langBody = $('lang-body');
   const langBtn = $('btn-lang-collapse');
@@ -387,13 +397,13 @@ function syncCenterPanelCollapseUi() {
   if (langBtn && langBody) {
     const langCollapsed = langBody.classList.contains('collapsed');
     // Language panel: swap icons for Collapse/Expand as requested.
-    langBtn.textContent = langCollapsed ? '▼' : '▲';
+    langBtn.innerHTML = langCollapsed ? '<i class="fas fa-chevron-down"></i>' : '<i class="fas fa-chevron-up"></i>';
     langBtn.title = langCollapsed ? 'Expand' : 'Collapse';
   }
 
   if (trajBtn && trajBody) {
     const trajCollapsed = trajBody.classList.contains('collapsed');
-    trajBtn.textContent = trajCollapsed ? '▲' : '▼';
+    trajBtn.innerHTML = trajCollapsed ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>';
     trajBtn.title = trajCollapsed ? 'Expand' : 'Collapse';
   }
 }
@@ -416,7 +426,6 @@ function setupTrajPanel() {
     if (btnAllSource) {
       const s = App.traj.source;
       const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
-      btnAllSource.className = 'btn btn-xs' + (allSelected ? ' btn-active' : '');
       btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
   }
@@ -470,9 +479,9 @@ function setupTrajPanel() {
     const btn = $('btn-traj-pause');
     if (!btn) return;
     btn.innerHTML = App.traj.paused
-      ? '<span class="btn-icon">▶</span> Play'
-      : '<span class="btn-icon">⏸</span> Pause';
-    btn.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
+      ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
+      : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
+    btn.className = 'btn btn-xs';
   }
 
   $('btn-traj-pause').addEventListener('click', () => {
@@ -500,26 +509,23 @@ function setupTrajPanel() {
   $('btn-traj-collapse').addEventListener('click', () => {
     const body = $('traj-body');
     const langBody = $('lang-body');
-    const panelT = $('panel-traj');
-    const panelL = $('panel-lang');
 
     // If Language panel is collapsed while Trajectory is normal,
     // this click should restore both panels to normal size.
     if (!body.classList.contains('collapsed') && langBody.classList.contains('collapsed')) {
       langBody.classList.remove('collapsed');
       body.classList.remove('collapsed');
-      panelT.classList.remove('body-collapsed');
-      panelL.classList.remove('expanded');
+      updateCenterPanelLayoutState();
       syncCenterPanelCollapseUi();
       return;
     }
 
-    const collapsed = body.classList.toggle('collapsed');
-    panelT.classList.toggle('body-collapsed', collapsed);
-    panelL.classList.toggle('expanded', collapsed);
+    body.classList.toggle('collapsed');
+    updateCenterPanelLayoutState();
     syncCenterPanelCollapseUi();
   });
 
+  updateCenterPanelLayoutState();
   syncCenterPanelCollapseUi();
 
   // Select all / none

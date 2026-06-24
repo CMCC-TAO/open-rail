@@ -4,7 +4,9 @@
 controller:
   gripper_offset: 5
   period: 3.75
-  wait_time: 250
+  raw_fps: 30
+  speed: 1.25
+  wait_time: 400
 inter_chunk:
   inter_chunk_mode: search_action
   search_length: 100
@@ -25,7 +27,6 @@ intra_chunk:
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
-  fitting_time_step: 3.75
   gripper_dim: 2
   head_dim: 2
   intra_chunk_mode: fitting
@@ -40,11 +41,8 @@ language:
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: tea_master
-  task_progress_threshold: 0.95
+  task_progress_threshold: 0.99
   task_progress_win_size: 10
-observer:
-  fps: 30
-  period: 0.03333333333333333
 rdm:
   action_layout:
     arm:
@@ -57,7 +55,7 @@ rdm:
       start: 14
   max_len: 100
   mode: async
-  record_data: false
+  observe_fps_window_size: 20
 record:
   info:
     action_shape: 22
@@ -68,8 +66,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 480
-        width: 848
+        height: 640
+        width: 640
     cam.hand_right:
       encode:
         codec: mp4v
@@ -77,8 +75,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 480
-        width: 848
+        height: 640
+        width: 640
     cam.head:
       encode:
         codec: mp4v
@@ -86,8 +84,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 800
-        width: 1280
+        height: 640
+        width: 640
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
@@ -97,14 +95,14 @@ record:
       valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 12
-    total_frames: 2732
-    total_tasks: 1
-    total_videos: 36
+    total_episodes: 2
+    total_frames: 900
+    total_tasks: 2
+    total_videos: 6
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
-  resize: false
   save_dir: data/recording
+  save_raw: true
   switch: false
 robots:
   a2d:
@@ -117,7 +115,12 @@ robots:
         end: 16
         policy: stepwise
         start: 14
-    camera: {}
+    camera:
+      names:
+        hand_left: hand_left
+        hand_right: hand_right
+        head: head
+      ref: head
     gripper_freq: 40
     hand_type: gripper
     head_freq: 40
@@ -141,12 +144,12 @@ robots:
     - -0.7299
     - -1.4929
     - 0.1873
-    - 0.0
-    - 0.0
+    - 0
+    - 0
     - 0.0
     - 0.4363
-    - 0.2967
-    - 20.0
+    - 0.4012
+    - 27.0
     - 0.0
     - 0.0
   mock:
@@ -166,59 +169,7 @@ robots:
         head: observation.images.top_head
       ref: head
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
-    hand_type: gripper
-    repo_id: task_39_only1
-  type: unitree_g1
-  unitree_g1:
-    action_layout:
-      arm:
-        end: 14
-        policy: joint
-        start: 0
-      hand:
-        end: 26
-        policy: hand
-        start: 14
-    camera:
-      names:
-        hand_left: hand_left
-        hand_right: hand_right
-        head: head
-      ref: head
-    hand_type: hand
-    proprio_names:
-    - arm
-    - hand
-    reset_robot_pos:
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-    - 0.0
-vis_zmq:
-  client_addr: tcp://localhost:7788
-  server_addr: tcp://*:7788
+  type: mock
 vision:
   history_frame: false
   preprocess:
@@ -241,13 +192,13 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
+    - 7
     source:
-    - ActionRaw
-    - ActionFitted
     - State
+    - ActionFitted
+    - ActionRaw
     update_interval_ms: 50
-    window_span_sec: 8.0
+    window_span_sec: 10.0
 vla_zmq:
   client_addr: tcp://localhost:5566
   server_addr: tcp://*:5566

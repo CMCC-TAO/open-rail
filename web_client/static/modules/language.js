@@ -24,6 +24,69 @@ function buildLangTasksFromData(data) {
   }
 }
 
+function getAppliedLangSelection() {
+  const taskId = App.config && App.config.language ? App.config.language.task_id : undefined;
+  const rawSubTaskId = App.config && App.config.language ? App.config.language.sub_task_id : undefined;
+  const parsedSubTaskId = Number(rawSubTaskId);
+  return {
+    taskId,
+    subTaskId: Number.isFinite(parsedSubTaskId) ? parsedSubTaskId : null,
+  };
+}
+
+function setAppliedOptionMarker(optionEl, isApplied) {
+  if (!optionEl) return;
+  if (isApplied) optionEl.dataset.applied = '1';
+  else delete optionEl.dataset.applied;
+}
+
+function formatLangTaskOptionLabel(taskName) {
+  return taskName;
+}
+
+function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
+  const width = subtaskSelectEl && subtaskSelectEl.clientWidth ? subtaskSelectEl.clientWidth : 0;
+  if (!Number.isFinite(width) || width <= 0) return 36;
+  // Reserve width for index/prefix + right check icon area + select paddings.
+  const reservedPx = 81;
+  const avgCharPx = 7.2;
+  const estimated = Math.floor((width - reservedPx) / avgCharPx);
+  return Math.max(14, estimated);
+}
+
+function formatLangSubtaskOptionLabel(taskName, text, index, maxChars = 36) {
+  const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
+  return `${index + 1}.${clipped}`;
+}
+
+function refreshLangAppliedMarkers(taskId, subTaskId) {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+
+  const applied = getAppliedLangSelection();
+  const fallbackTaskId = applied.taskId != null ? String(applied.taskId) : '';
+  const resolvedTaskId = taskId != null ? String(taskId) : fallbackTaskId;
+
+  const parsedSubTaskId = Number(subTaskId);
+  const resolvedSubTaskId = Number.isFinite(parsedSubTaskId)
+    ? parsedSubTaskId
+    : (Number.isFinite(applied.subTaskId) ? applied.subTaskId : null);
+
+  if (taskSel) {
+    Array.from(taskSel.options).forEach((opt) => {
+      setAppliedOptionMarker(opt, opt.value === resolvedTaskId);
+    });
+  }
+
+  if (subtaskSel) {
+    const visibleTaskId = taskSel ? taskSel.value : resolvedTaskId;
+    const enableSubtaskMarker = visibleTaskId === resolvedTaskId && resolvedSubTaskId != null;
+    Array.from(subtaskSel.options).forEach((opt) => {
+      setAppliedOptionMarker(opt, enableSubtaskMarker && Number(opt.value) === resolvedSubTaskId);
+    });
+  }
+}
+
 function renderLangTaskSelect() {
   const taskSel    = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
@@ -32,10 +95,12 @@ function renderLangTaskSelect() {
   const prevTask = taskSel.value;
   taskSel.innerHTML = '';
 
+  const { taskId: appliedTaskId } = getAppliedLangSelection();
   Object.keys(LangCmd.tasks).forEach(taskName => {
     const opt = document.createElement('option');
     opt.value = taskName;
-    opt.textContent = taskName;
+    opt.textContent = formatLangTaskOptionLabel(taskName);
+    setAppliedOptionMarker(opt, taskName === appliedTaskId);
     taskSel.appendChild(opt);
   });
 
@@ -58,11 +123,14 @@ function renderLangSubtaskSelect() {
   subtaskSel.innerHTML = '';
   const taskName = taskSel ? taskSel.value : null;
   const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  const maxChars = getLangSubtaskMaxCharsByWidth(subtaskSel);
 
+  const { taskId: appliedTaskId, subTaskId: appliedSubTaskId } = getAppliedLangSelection();
   subtasks.forEach((text, i) => {
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = `${i + 1}. ${text.substring(0, 50)}${text.length > 50 ? '…' : ''}`;
+    opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i, maxChars);
+    setAppliedOptionMarker(opt, taskName === appliedTaskId && i === appliedSubTaskId);
     opt.title = text;
     subtaskSel.appendChild(opt);
   });
@@ -188,6 +256,7 @@ function setupLangPanel() {
       syncLangIndexOptions(taskSel.value, 0);
       const cfgIdxSel = $('cfg-language-index');
       if (cfgIdxSel) cfgIdxSel.value = '0';
+      refreshLangAppliedMarkers();
     });
   }
 
@@ -410,6 +479,7 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
 
   // Sync Config panel selects
   syncLangTaskOptions(taskName || task, safeIndex >= 0 ? safeIndex : 0);
+  refreshLangAppliedMarkers(taskName || task, safeIndex >= 0 ? safeIndex : null);
 }
 
 function setupLanguageEvents() {
@@ -502,20 +572,22 @@ $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e
 $('btn-lang-collapse').addEventListener('click', () => {
   const langBody = $('lang-body');
   const trajBody = $('traj-body');
-  const panelT = $('panel-traj');
-  const panelL = $('panel-lang');
 
   // If trajectory is collapsed, this click should restore both panels to normal layout.
   if (trajBody.classList.contains('collapsed')) {
     trajBody.classList.remove('collapsed');
     langBody.classList.remove('collapsed');
-    panelT.classList.remove('body-collapsed');
-    panelL.classList.remove('expanded');
+    if (typeof updateCenterPanelLayoutState === 'function') {
+      updateCenterPanelLayoutState();
+    }
     syncCenterPanelCollapseUi();
     return;
   }
 
   langBody.classList.toggle('collapsed');
+  if (typeof updateCenterPanelLayoutState === 'function') {
+    updateCenterPanelLayoutState();
+  }
   syncCenterPanelCollapseUi();
 });
 

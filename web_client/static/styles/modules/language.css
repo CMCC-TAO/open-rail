@@ -1,27 +1,30 @@
 /* Language Command panel */
 .panel-lang {
-  flex: 0 0 auto;
   overflow: hidden;
   min-height: 0;
+  --lang-task-subtask-content-height: 100%;
+  --lang-task-subtask-bottom: 24px;
+  --lang-apply-btn-height: 28px;
+  --lang-cmd-col-gap: 4px;
 }
-/* When traj panel is collapsed, lang panel can grow to fill freed space */
-.panel-lang.expanded {
-  flex: 1;
+.panel-lang .panel-body {
+  padding: 8px;
+  min-height: 0;
+  overflow: hidden;
 }
-.panel-lang .panel-body { padding: 8px; }
 .panel-lang .panel-body.collapsed { display: none; }
 
 .lang-auto-mode {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 22px;
+  height: 28px;
   padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -36,13 +39,13 @@
   flex-direction: row;
   align-items: center;
   gap: 6px;
-  height: 22px;
+  height: 28px;
   padding: 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   white-space: nowrap;
 }
 
@@ -56,7 +59,12 @@
   width: 60px !important;
   height: 18px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: var(--font-size-2);
+}
+
+.lang-threshold-wrap input::-webkit-inner-spin-button,
+.lang-threshold-wrap input::-webkit-outer-spin-button {
+  margin-right: -4px; /* 通过负边距将箭头区域向右拉近，缩小右侧空白 */
 }
 
 .lang-threshold-wrap input:disabled {
@@ -69,22 +77,22 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
-  height: 22px;
+  height: 28px;
   padding: 2px 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
 }
 .task-progress-label {
-  font-size: 10px;
+  font-size: var(--font-size-2);
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: .3px;
+  text-transform: none;
+  letter-spacing: .2px;
   white-space: nowrap;
 }
 .task-progress-track {
-  width: 160px;
-  height: 80%;
+  width: 120px;
+  height: 75%;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg2);
@@ -93,47 +101,62 @@
 .task-progress-fill {
   width: 0%;
   height: 100%;
-  background: linear-gradient(90deg, #2da44e 0%, #0969da 100%);
+  background: var(--progress-gradient);
   transition: width .2s ease;
 }
 .task-progress-value {
   min-width: 44px;
   text-align: right;
-  font-size: 11px;
+  font-size: var(--font-size-2);
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
-/* When lang panel is expanded (traj collapsed), allow body to fill vertically */
-.panel-lang.expanded .panel-body {
+/* When trajectory is collapsed, language panel can use extra vertical space */
+.center-col.traj-collapsed .panel-lang .panel-body {
   overflow-y: auto;
 }
-.panel-lang.expanded .lang-cmd-layout {
+.center-col.traj-collapsed .panel-lang .lang-cmd-layout {
   flex: 1; min-height: 0;
 }
-.panel-lang.expanded .lang-cmd-select {
+.center-col.traj-collapsed .panel-lang .lang-cmd-select {
   max-height: none;
 }
 
+.lang-collapse-btn {
+  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
+}
 .lang-cmd-layout {
-  display: flex; gap: 8px; min-height: 0;
+  display: flex; 
+  gap: 8px; 
+  min-height: 0;
+  flex: 1;
+  height: 100%;
 }
-/* Task: 3; Sub-task: 4; Instruction: 3 */
-.lang-cmd-col            { display: flex; flex-direction: column; gap: 4px; flex: 3; min-width: 0; }
-.lang-cmd-col-subtask    { flex: 4; }
-.lang-cmd-col-send       { flex: 3; }
-.lang-cmd-col-title {
-  font-size: 10px; font-weight: 700; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: .5px;
-  padding-bottom: 3px; border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+/* Task: 30%; Sub-task: 40%; Instruction: 30% - 总计100% */
+.lang-cmd-col            { 
+  display: flex; 
+  flex-direction: column; 
+  gap: var(--lang-cmd-col-gap); 
+  /* flex: 3;  */
+  min-width: 0; 
+  width: 15%; 
 }
+.lang-cmd-col-subtask    { 
+  /* flex: 4;  */
+  width: 35%; 
+}
+.lang-cmd-col-send       { 
+  /* flex: 3;  */
+  width: 30%; 
+}
+
 .lang-cmd-list {
   display: flex; flex-direction: column; gap: 3px;
   overflow-y: auto; max-height: 120px;
 }
 .lang-cmd-chip {
-  padding: 3px 8px; font-size: 11px;
+  padding: 3px 8px; font-size: var(--font-size-2);
   border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--bg); color: var(--text-muted);
   cursor: pointer; transition: all .15s;
@@ -141,30 +164,104 @@
   flex-shrink: 0;
 }
 .lang-cmd-chip:hover  { border-color: var(--accent); color: var(--accent); }
-.lang-cmd-chip.active { background: rgba(9,105,218,.1); border-color: var(--accent); color: var(--accent); }
+.lang-cmd-chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
 
 /* Select-based task/subtask lists */
 .lang-cmd-select {
-  flex: 1; min-height: 80px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); color: var(--text);
-  font-family: var(--font); font-size: 11px; padding: 2px 0;
-  outline: none; transition: border .15s;
+  flex: 0 0 calc(var(--lang-task-subtask-content-height) - var(--lang-task-subtask-bottom));
+  height: calc(var(--lang-task-subtask-content-height) - var(--lang-task-subtask-bottom));
+  min-height: 72px;
+  background: var(--bg2); 
+  border: 1px solid var(--border);
+  border-radius: var(--radius); 
+  color: var(--text);
+  font-family: var(--font); 
+  font-size: var(--font-size-3); 
+  font-weight: var(--font-weight-2);
+  padding: 4px 0;
+  outline: none; 
+  transition: border .15s;
   overflow-y: auto;
 }
-.lang-cmd-select:focus { border-color: var(--accent); }
+.lang-cmd-select:focus { 
+  border-color: var(--accent); 
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
 .lang-cmd-select option {
-  padding: 3px 8px; cursor: pointer;
+  padding: 5px 34px 5px 8px;
+  cursor: pointer;
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px 12px;
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-2);
+  color: var(--text);
+}
+.lang-cmd-select option[data-applied="1"] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23d93025' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round' d='M3 8.2l3.1 3.1L13 4.7'/%3E%3C/svg%3E");
+  color: var(--accent);
+  font-weight: var(--font-weight-4);
 }
 .lang-cmd-select option:checked {
-  background: rgba(9,105,218,.12); color: var(--accent);
+  background-color: var(--accent-soft);
+  color: var(--accent);
+  font-weight: var(--font-weight-4);
 }
 
 .lang-cmd-textarea {
-  flex: 1; resize: vertical; min-height: 54px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: var(--radius); color: var(--text);
-  font-family: var(--font); font-size: 11px; padding: 5px 8px;
-  outline: none; transition: border .15s;
+  flex: 0 0 calc(var(--lang-task-subtask-content-height) - var(--lang-apply-btn-height) - var(--lang-cmd-col-gap) - var(--lang-task-subtask-bottom));
+  height: calc(var(--lang-task-subtask-content-height) - var(--lang-apply-btn-height) - var(--lang-cmd-col-gap) - var(--lang-task-subtask-bottom));
+  resize: vertical;
+  min-height: 54px;
+  background: var(--bg2); 
+  border: 1px solid var(--border);
+  border-radius: var(--radius); 
+  color: var(--text);
+  font-family: var(--font); 
+  font-size: var(--font-size-3); 
+  font-weight: var(--font-weight-2);
+  padding: 8px 10px;
+  outline: none; 
+  transition: border .15s;
 }
-.lang-cmd-textarea:focus { border-color: var(--accent); }
+.lang-cmd-textarea:focus { 
+  border-color: var(--accent); 
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* Language Apply button: minimal-tech style matching config panel */
+#btn-lang-send {
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #1a73e8 20%);
+  background: transparent;
+  color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%);
+  font-weight: var(--font-weight-3);
+  letter-spacing: 0.2px;
+  box-shadow: none;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+}
+#btn-lang-send::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, #ffffff 14%, transparent) 0%, transparent 45%);
+  opacity: .75;
+}
+#btn-lang-send:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border) 42%);
+  color: color-mix(in srgb, var(--text) 80%, #ffffff 20%);
+  background: color-mix(in srgb, var(--accent-soft) 30%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
+    0 6px 14px color-mix(in srgb, var(--accent) 14%, transparent);
+}
+#btn-lang-send:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, #000000 14%, transparent),
+    0 2px 7px color-mix(in srgb, #0a1626 20%, transparent);
+}

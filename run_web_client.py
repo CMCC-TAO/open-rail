@@ -46,8 +46,8 @@ if __name__ == '__main__':
         )
     except KeyboardInterrupt:
         exit_code = 0
-    except Exception:
-        logger.exception("未知错误")
+    except Exception as e:
+        logger.exception(f"Exception: {e}")
         exit_code = 1
         raise
     finally:

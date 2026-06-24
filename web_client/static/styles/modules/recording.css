@@ -10,6 +10,96 @@
   min-width: 0;
   justify-content: center;
   text-align: center;
+  padding: 4px 8px;
+}
+
+/* ── ④ Collapse button: rightmost, vertically centered ── */
+.record-collapse-btn {
+  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
+}
+/* Recording Start/Stop button: align visual style with Camera Viewer Open/Close All */
+#btn-recording-startstop {
+  position: relative;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, #d93025 20%);
+  background: transparent;
+  color: color-mix(in srgb, var(--danger) 88%, #ffffff 12%);
+  font-weight: var(--font-weight-5);
+  letter-spacing: 0.2px;
+  min-height: 26px;
+  padding: 4px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  line-height: 1;
+  box-shadow: none;
+  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
+}
+
+#btn-recording-startstop.btn-success {
+  color: color-mix(in srgb, var(--accent) 88%, #ffffff 12%);
+  border: 1px solid color-mix(in srgb, var(--border) 80%, var(--accent) 20%);
+}
+
+#btn-recording-startstop.btn-success:hover {
+  color: color-mix(in srgb, var(--accent) 80%, #ffffff 20%);
+  border-color: color-mix(in srgb, var(--accent) 78%, var(--accent-soft) 22%);
+  background: color-mix(in srgb, var(--accent-soft) 30%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
+    0 6px 14px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+#btn-recording-startstop i.fas {
+  margin-right: 0;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#btn-recording-startstop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, color-mix(in srgb, #ffffff 14%, transparent) 0%, transparent 45%);
+  opacity: .75;
+}
+
+#btn-recording-startstop:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--danger) 78%, #fce8e6 22%);
+  color: color-mix(in srgb, var(--danger) 80%, #ffffff 20%);
+  background: color-mix(in srgb, var(--danger-soft) 30%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
+    0 6px 14px color-mix(in srgb, var(--danger) 22%, transparent);
+}
+
+#btn-recording-startstop:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 2px 4px color-mix(in srgb, #000000 14%, transparent),
+    0 2px 7px color-mix(in srgb, #0a1626 20%, transparent);
+}
+
+#btn-recording-startstop:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Inline options layout for recording checkboxes */
+.recording-options-inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  padding: 0 8px;
 }
 
 .recording-options {
@@ -24,9 +114,9 @@
 }
 
 .recording-options-title {
-  font-size: 11px;
+  font-size: var(--font-size-2);
   color: var(--text-muted);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .4px;
 }
 
@@ -34,7 +124,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: var(--font-size-2);
   color: var(--text);
   cursor: pointer;
 }
@@ -52,18 +142,6 @@
   padding: 6px;
 }
 
-.recording-config-title {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: .4px;
-  margin-bottom: 6px;
-}
-
 .recording-config-tree {
   max-height: 220px;
   overflow: auto;
@@ -77,17 +155,9 @@
 .recording-file-filter {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.recording-file-filter-label {
-  flex: 0 0 44px;
-  font-size: 10px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: .4px;
+  gap: 12px;
+  padding-bottom: 8px;
+  /* margin-bottom: 6px; */
 }
 
 .recording-task-select {
@@ -98,8 +168,8 @@
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
-  font-size: 11px;
-  padding: 0 6px;
+  font-size: var(--font-size-3);
+  padding: 2px 6px;
   outline: none;
 }
 
@@ -112,10 +182,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-4);
   color: var(--text-muted);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .4px;
   margin-bottom: 6px;
 }
@@ -127,8 +197,8 @@
 }
 
 .recording-chunk-filter-label {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-4);
   color: var(--text-muted);
   letter-spacing: .3px;
 }
@@ -140,7 +210,7 @@
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
-  font-size: 11px;
+  font-size: var(--font-size-3);
   padding: 0 6px;
   outline: none;
 }
@@ -165,7 +235,7 @@
   border-radius: var(--radius);
   background: var(--bg2);
   padding: 4px 6px;
-  font-size: 11px;
+  font-size: var(--font-size-2);
 }
 
 .recording-file-item {
@@ -180,11 +250,11 @@
 }
 
 .recording-file-item:hover {
-  background: rgba(9,105,218,.06);
+  background: var(--accent-soft);
 }
 
 .recording-file-item.active {
-  background: rgba(9,105,218,.14);
+  background: var(--accent-soft-hover);
   color: var(--accent);
 }
 
@@ -218,7 +288,7 @@
   border: 1px solid transparent;
   border-radius: 4px;
   background: transparent;
-  color: #ff4d4f;
+  color: var(--danger);
   line-height: 1;
   cursor: pointer;
   visibility: hidden;
@@ -233,8 +303,8 @@
 }
 
 .recording-file-item-delete:hover {
-  background: rgba(255,77,79,.10);
-  border-color: rgba(255,77,79,.45);
+  background: var(--danger-soft);
+  border-color: var(--danger);
 }
 
 .recording-file-item.active .recording-file-item-meta {
@@ -245,7 +315,7 @@
   visibility: visible;
   pointer-events: auto;
   background: transparent;
-  border-color: rgba(255,77,79,.35);
+  border-color: var(--danger);
 }
 
 .recording-file-item.empty {
