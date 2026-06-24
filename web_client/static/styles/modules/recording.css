@@ -13,10 +13,6 @@
   padding: 4px 8px;
 }
 
-/* ── ④ Collapse button: rightmost, vertically centered ── */
-.record-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
-}
 /* Recording Start/Stop button: align visual style with Camera Viewer Open/Close All */
 #btn-recording-startstop {
   position: relative;

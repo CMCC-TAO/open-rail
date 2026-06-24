@@ -25,6 +25,14 @@
   font-size: var(--font-size-3);
   margin-right: 4px;
 }
+/* ── ④ Collapse button: rightmost, vertically centered ── */
+.btn-collapse {
+  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
+}
+.btn-collapse i.fas, .btn-collapse i.far, .btn-collapse i.fab {
+  /* font-size: var(--font-size-3); */
+  margin-right: 0px;
+}
 .btn:hover  { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .btn:active { opacity: .9; }
 .btn:disabled { opacity: .55; cursor: default; pointer-events: none; }

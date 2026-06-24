@@ -1,7 +1,3 @@
-/* ── ④ Collapse button: rightmost, vertically centered ── */
-.manual-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
-}
 /* ── Robot control ── */
 .robot-ctrl-grid {
   display: flex;

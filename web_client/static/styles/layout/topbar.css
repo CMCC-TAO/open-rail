@@ -111,7 +111,7 @@
   border-radius: 9px; /* Changed to match status badge rounded style */
   padding: 0 8px; /* Increased padding for better appearance */
   line-height: 14px; /* Adjusted line height for better text alignment */
-  width: 72px;
+  width: 78px;
   min-width: 72px;
   height: 24px; /* Increased height from 18px to 24px */
   display: flex;
