@@ -489,17 +489,6 @@ def _get_robot(config):
     elif robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
         robot_instance = RobotBody(config)
-    elif robot_type == RobotType.UNITREE_G1:
-        import rclpy as _rclpy
-        # First ensure global rclpy initialization (idempotent), then give robot an independent context
-        # Pass args=[] to prevent sys.argv (e.g. --port) from interfering with rcl argument parsing
-        if not _rclpy.ok():
-            _rclpy.init(args=[])
-        _ros_context = _rclpy.Context()
-        if not _ros_context.ok():
-            _ros_context.init(args=[])
-        from client.robots.unitree_g1.body_robot import RobotBody
-        robot_instance = RobotBody(config, ros_context=_ros_context)
     else:
         raise ValueError(f"Unsupported robot type: {robot_type}")
     return robot_instance, False
@@ -1093,7 +1082,7 @@ async def load_config_file(req: ConfigFileRequest):
         client_state.config = get_client_config()
     # Guard against path-traversal
     p = Path(req.path)
-    # --- Debug start ---
+    # --- 调试开始 ---
     # print(f"DEBUG: Logger name is: {logger.name}")
     # print(f"DEBUG: Logger effective level is: {logger.getEffectiveLevel()}")
     # print(f"DEBUG: Logging module root level is: {logging.root.getEffectiveLevel()}")

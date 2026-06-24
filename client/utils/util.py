@@ -238,21 +238,10 @@ def create_layout(info: dict, terminal_size=None):
         if len(data) >= 16:
             left_arm = [f'{x:.3f}' for x in data[:7]]
             right_arm = [f'{x:.3f}' for x in data[7:14]]
+            left_gripper = f'{data[14]:.3f}' if len(data) > 14 else '0.000'
+            right_gripper = f'{data[15]:.3f}' if len(data) > 15 else '0.000'
             
-            # Adaptive display: 6-DOF hand (unitree_g1) vs 1-DOF gripper (others)
-            if len(data) >= 26:
-                left_hand = [f'{x:.3f}' for x in data[14:20]]
-                right_hand = [f'{x:.3f}' for x in data[20:26]]
-                return (f"{label}\n"
-                       f" L-Arm: [{', '.join(left_arm)}]\n"
-                       f" L-Hand: [{', '.join(left_hand)}]\n"
-                       f" R-Arm: [{', '.join(right_arm)}]\n"
-                       f" R-Hand: [{', '.join(right_hand)}]")
-            else:
-                # 16-dim data (single DOF gripper)
-                left_gripper = f'{data[14]:.3f}'
-                right_gripper = f'{data[15]:.3f}'
-                return f"{label}\n L-Arm: [{', '.join(left_arm)}], L-Grip: [{left_gripper}]\n R-Arm: [{', '.join(right_arm)}], R-Grip: [{right_gripper}]"
+            return f"{label}\n L-Arm: [{', '.join(left_arm)}], L-Grip: [{left_gripper}]\n R-Arm: [{', '.join(right_arm)}], R-Grip: [{right_gripper}]"
         else:
             return f'{label}\n\tData not available or incomplete'
     

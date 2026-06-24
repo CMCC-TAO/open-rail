@@ -22,7 +22,7 @@ def get_record_data_config() -> ConfigDict:
     config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
     config.info = ConfigDict(allow_dotted_keys=True)
     config.info.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
-    config.info.robot_type = "unitree_g1"  # Type of robot used
+    config.info.robot_type = "a2d"  # Type of robot used
 
     # Data statistics (initialized to 0)
     config.info.total_episodes = 0

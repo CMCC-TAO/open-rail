@@ -33,9 +33,9 @@ class VLAClientAsync():
                 realtime_data_manager: RealtimeDataManager,
                 inter_chunk_fuser: InterChunkFuser,
                 intra_chunk_smoother: IntraChunkSmoother,
+                task_language_manager: TaskLanguageManager,
                 vla_zmq_client: ZMQClient,
-                robot: RobotBase,
-                task_language_manager: TaskLanguageManager = None):
+                robot: RobotBase):
         """Initialize the VLA Client.
         
         Args:
@@ -51,7 +51,7 @@ class VLAClientAsync():
         self.realtime_data_manager = realtime_data_manager
         self.inter_chunk_fuser = inter_chunk_fuser
         self.intra_chunk_smoother = intra_chunk_smoother
-        self.task_language_manager = task_language_manager or TaskLanguageManager(config=self.config.language)
+        self.task_language_manager = task_language_manager
         self.vla_zmq = vla_zmq_client
         self.robot = robot
         self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
@@ -126,10 +126,6 @@ class VLAClientAsync():
 
     def stop_inference(self):
         self.is_inference_thread_running = False
-
-    def inference_first(self):
-        """Public API for first inference, delegates to internal _inference_first."""
-        self._inference_first()
 
     def start_control(self):
         self.is_running = True
@@ -381,7 +377,7 @@ class VLAClientAsync():
             self.realtime_data_manager.set_infer_time_marker()
             
             # Send data for inference and wait for results
-            result = self._request_inference(data, timeout_ms=2000)
+            result = self._request_inference(data, timeout_ms=500)
             if result is None or 'data' not in result:
                 # print("Debug: infer first timeout.")
                 return
@@ -468,7 +464,7 @@ class VLAClientAsync():
             self.realtime_data_manager.set_infer_time_marker()
             
             # Send data for inference and wait for results
-            result = self._request_inference(data, timeout_ms = 2000)
+            result = self._request_inference(data, timeout_ms = 500)
             if result is None:
                 self.logger.warning("Inference result is None.")
                 return
