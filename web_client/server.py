@@ -1877,6 +1877,10 @@ class LanguageSetRequest(BaseModel):
     language: str = ""
 
 
+class ExecLogSaveRequest(BaseModel):
+    records: list = []
+
+
 class RecordStartRequest(BaseModel):
     save_items: Optional[list[str]] = None
 
@@ -1951,6 +1955,20 @@ async def client_language_set(req: LanguageSetRequest):
         return {"status": "ok", "command": 'set_language'}
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.post('/api/client/exec_log/save')
+async def save_exec_log(req: ExecLogSaveRequest):
+    """Save execution log records to logs/exec_log_<timestamp>.json."""
+    logs_dir = ROOT / 'logs'
+    logs_dir.mkdir(exist_ok=True)
+    ts = time.strftime('%Y%m%d_%H%M%S')
+    out_path = logs_dir / f'exec_log_{ts}.json'
+    try:
+        out_path.write_text(json.dumps(req.records, ensure_ascii=False, indent=2), encoding='utf-8')
+        return {"status": "ok", "path": str(out_path.relative_to(ROOT))}
     except Exception as e:
         raise HTTPException(500, str(e))
 

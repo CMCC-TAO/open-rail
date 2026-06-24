@@ -318,3 +318,243 @@
   color: var(--text-muted);
   cursor: default;
 }
+
+/* ── Execution Log panel (inside recording body) ── */
+.exec-log-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 6px;
+  flex: 1 1 auto; /* Fill remaining space */
+  min-height: 240px;
+  margin-top: 4px;
+}
+
+.exec-log-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  padding: 4px 2px 8px 2px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.exec-log-toolbar-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+/* Row with 4 buttons: Rec, CSV, Save, Clear All */
+.exec-log-toolbar-row .btn-xs {
+  height: 24px;
+  padding: 0 4px; /* Tighter internal padding */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1; /* Equal width distribution */
+  min-width: 0;
+  white-space: nowrap;
+}
+
+#btn-exec-log-rec {
+  min-width: 48px;
+}
+
+#btn-exec-log-rec:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border);
+  color: var(--text-muted);
+  background: transparent;
+}
+
+#btn-log-clear {
+  background: var(--danger-soft);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 20%, var(--border));
+}
+#btn-log-clear:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.exec-score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.exec-score-label {
+  font-size: var(--font-size-1);
+  color: var(--text-muted);
+}
+
+.exec-score-btn {
+  min-width: 44px;
+  height: 22px !important;
+  padding: 0 !important;
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-4);
+  flex: 0 0 auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background .13s, border-color .13s, color .13s;
+  white-space: nowrap;
+}
+.exec-score-btn:hover { border-color: var(--accent); color: var(--accent); }
+.exec-score-btn.exec-score-0  { border-color: color-mix(in srgb, #d93025 40%, var(--border)); }
+.exec-score-btn.exec-score-05 { border-color: color-mix(in srgb, #f59e0b 40%, var(--border)); }
+.exec-score-btn.exec-score-1  { border-color: color-mix(in srgb, #22c55e 40%, var(--border)); }
+.exec-score-btn.exec-score-0:hover  { background: color-mix(in srgb, #d93025 12%, var(--bg2)); }
+.exec-score-btn.exec-score-05:hover { background: color-mix(in srgb, #f59e0b 12%, var(--bg2)); }
+.exec-score-btn.exec-score-1:hover  { background: color-mix(in srgb, #22c55e 12%, var(--bg2)); }
+
+.exec-log-table-wrap {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.exec-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-2);
+  table-layout: fixed;
+}
+/* Table Column Controls - High Density Layout (all left-aligned) */
+.col-id    { width: 32px; text-align: left; } /* Just the #ID */
+.col-inst  { width: 70px; }                     /* Instruction prefix */
+.col-start { width: 52px; font-variant-numeric: tabular-nums; } /* HH:MM:SS */
+.col-dur   { width: 50px; font-variant-numeric: tabular-nums; } /* 0.0s */
+.col-score { width: 40px; }
+.col-note  { width: 60px; }                        /* Flexible, gets extra space when available */
+.col-del   { width: 22px; text-align: left; }
+
+.exec-log-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg2);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-3);
+  padding: 4px 2px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  font-size: 10px;
+}
+
+.exec-log-table tbody td {
+  padding: 3px 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  font-size: 11px;
+}
+
+.exec-log-note-input {
+  width: 100%;
+  background: var(--bg2); /* Add subtle background to make it look like an input */
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 1px 4px;
+  outline: none;
+  font-family: var(--font);
+  box-sizing: border-box;
+}
+
+.exec-log-note-input:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.exec-log-table tbody tr:hover { background: var(--bg2); }
+
+/* Score colors (shared across buttons, select, and scored rows) */
+.exec-score-btn.exec-score-0,
+.exec-log-row.exec-log-scored.exec-log-score-0 td,
+.exec-log-score-sel.score-val-0 { color: #d93025; }
+.exec-score-btn.exec-score-05,
+.exec-log-row.exec-log-scored.exec-log-score-05 td,
+.exec-log-score-sel.score-val-05 { color: #f59e0b; }
+.exec-score-btn.exec-score-1,
+.exec-log-row.exec-log-scored.exec-log-score-1 td,
+.exec-log-score-sel.score-val-1 { color: #22c55e; }
+
+/* Row status */
+.exec-log-row.exec-log-running { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.exec-log-row.exec-log-switched    { opacity: .55; }
+.exec-log-row.exec-log-interrupted { opacity: .75; background: color-mix(in srgb, #f59e0b 6%, transparent); }
+
+/* Running timer pulse */
+.exec-log-timer { color: var(--accent); animation: logTimerPulse 1s ease-in-out infinite; }
+@keyframes logTimerPulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+/* Rec button: active (recording) state */
+#btn-exec-log-rec.recording {
+  color: #d93025;
+  border-color: color-mix(in srgb, #d93025 50%, var(--border));
+}
+#btn-exec-log-rec.recording .fa-circle {
+  animation: recPulse .9s ease-in-out infinite;
+}
+@keyframes recPulse { 0%,100% { opacity:1; } 50% { opacity:.25; } }
+
+/* Score select */
+.exec-log-score-sel {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-3);
+  padding: 1px 2px;
+  outline: none;
+  width: 40px;
+  cursor: pointer;
+}
+
+/* Task# index spans */
+.exec-log-recidx {
+  color: var(--text-muted);
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-3);
+  margin-right: 2px;
+}
+.exec-log-subidx {
+  color: var(--accent);
+  font-size: var(--font-size-1);
+  font-weight: var(--font-weight-3);
+  margin-left: 2px;
+}
+
+/* Delete button */
+.exec-log-del-btn {
+  padding: 1px 5px;
+  font-size: var(--font-size-1);
+  height: 20px;
+  opacity: .6;
+}
+.exec-log-del-btn:hover { opacity: 1; }
+
+/* When ExecLog is open: shrink episodes list more aggressively */
+.exec-log-open .recording-file-list {
+  min-height: 60px !important;
+  max-height: 100px !important;
+}
