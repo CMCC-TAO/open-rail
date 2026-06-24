@@ -369,6 +369,16 @@
   min-width: 48px;
 }
 
+#btn-exec-log-rec:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+  border-color: var(--border);
+  color: var(--text-muted);
+  background: transparent;
+}
+
 #btn-log-clear {
   background: var(--danger-soft);
   color: var(--danger);
