@@ -334,7 +334,7 @@ def _monitor_vla_progress(
                                   error_message=f'Task timed out after {elapsed_total:.1f}s')
 
             # 读取进度
-            current_prob_progress = vla_client.info_act.get('current_prob_progress', 0.0)
+            current_prob_progress = vla_client.current_prob_progress
             elapsed = time.time() - progress_start
             progress_pct = min(int(current_prob_progress * 100), 99)
 

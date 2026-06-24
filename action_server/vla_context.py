@@ -101,7 +101,7 @@ class VLAContext:
         if vc is None:
             return 0.0
         try:
-            return float(getattr(vc, 'info_act', {}).get('current_prob_progress', 0.0))
+            return float(getattr(vc, 'current_prob_progress', 0.0))
         except Exception:
             return 0.0
 
