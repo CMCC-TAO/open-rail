@@ -1,8 +1,7 @@
 """
-放置任务 - 基于录制轨迹回放（左手/右手/单手/双手）
+放置任务 - 将物体放下（左手/右手/单手/双手）
 
-从 replay_data/ 加载 parquet 轨迹数据，进行插值+平滑后回放。
-支持从任意当前位置过渡到轨迹起始位置，回放完成后打开手部释放物体。
+不需要 VLA 推理，直接使用预设的放置位姿 + 线性插值轨迹。
 
 任务接口:
   {
@@ -36,39 +35,27 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-import pandas as pd
-
 from action_server.action_base import (
     AbstractTaskHandler, TaskResult, send_vla_feedback,
-    ERR_PLACE_LEFT_EMPTY, ERR_PLACE_RIGHT_EMPTY,
+    ERR_PLACE_TIMEOUT, ERR_PLACE_LEFT_EMPTY, ERR_PLACE_RIGHT_EMPTY,
     ERR_PLACE_ONE_HAND_BOTH_EMPTY, ERR_PLACE_BOTH_HAND_NOT_BOTH,
     ERR_PLACE_ONE_HAND_STILL_HOLDING,
 )
 
+# ==============================================
+# 放置目标位姿（7 关节，弧度）—— 请根据实测调节
+# LEFT_PLACE_POSE = np.array([-0.0, 0.1, 0.0, 0.72, 0.0, -0.9, 0.0])
+# RIGHT_PLACE_POSE = np.array([-0.0, -0.1, 0.0, 0.72, 0.0, -0.9, 0.0])
+# ==============================================
+LEFT_PLACE_POSE  = np.array([-0.1726,  0.1, 0.0, 1.045, 0.0, -1.393, 0.0])
+RIGHT_PLACE_POSE = np.array([-0.1726, -0.1, 0.0, 1.045, 0.0, -1.393, 0.0])
 
 # ==============================================
-# 常量
+# 时间常量
 # ==============================================
-_REPLAY_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "replay_data")
-
-CONTROL_INTERVAL = 0.02          # 50Hz
-SRC_HZ = 30.0                    # 录制数据频率
-DST_HZ = 50.0                    # 回放目标频率
-TRANSITION_DURATION = 1.5        # 过渡阶段时长（秒）
-HAND_OPEN_HOLD_TIME = 1.5        # 手部打开后保持时间（秒）
-ARM_DIM = 7                      # 单臂关节数
-HAND_DIM = 6                     # 单手手指数
-FULL_DIM = 26                    # 完整动作维度 [左臂7, 右臂7, 左手6, 右手6]
-
-# 轨迹文件映射
-_PLACE_FILES = {
-    "left arm place":  "left_hand_place.parquet",
-    "right arm place": "right_hand_place.parquet",
-    "both arm place":  "both_hand_place.parquet",
-}
-
-# 平滑窗口（必须为奇数）
-SMOOTH_WINDOW = 5
+ARM_INTERPOLATION_TIME = 5.0   # 手臂线性插值时长（秒）
+HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
+CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
 
 
 class PlaceHandler(AbstractTaskHandler):
@@ -158,283 +145,193 @@ class PlaceHandler(AbstractTaskHandler):
             time.sleep(0.05)
         return None
 
-    def _load_parquet_trajectory(self, parquet_path: str, key: str = "action") -> np.ndarray:
-        """加载 parquet 轨迹数据
+    def _linear_interpolate_arms(
+        self, robot_body,
+        left_target: np.ndarray | None,
+        right_target: np.ndarray | None,
+        duration: float,
+        goal_handle,
+        start_progress: int,
+        end_progress: int,
+    ) -> np.ndarray | None:
+        """线性插值手臂到目标位姿，手掌保持当前值不变
 
-        Returns:
-            (N, D) numpy 数组，D 为动作维度
-        """
-        df = pd.read_parquet(parquet_path)
-        if key not in df.columns:
-            raise KeyError(f"Parquet missing column '{key}': {list(df.columns)}")
-
-        actions = df[key].tolist()
-        traj = np.array([np.asarray(a, dtype=np.float64).flatten() for a in actions])
-        return traj
-
-    def _upsample_trajectory(self, traj: np.ndarray) -> np.ndarray:
-        """将轨迹从 SRC_HZ 线性插值到 DST_HZ"""
-        n_src = len(traj)
-        if n_src <= 1:
-            return traj
-
-        duration = (n_src - 1) / SRC_HZ
-        src_times = np.linspace(0, duration, n_src)
-        dst_times = np.arange(0, duration, 1.0 / DST_HZ)
-        # 确保包含终点
-        if len(dst_times) == 0 or abs(dst_times[-1] - duration) > 1e-6:
-            dst_times = np.append(dst_times, duration)
-
-        n_dst = len(dst_times)
-        d = traj.shape[1]
-        result = np.zeros((n_dst, d), dtype=np.float64)
-        for dim in range(d):
-            result[:, dim] = np.interp(dst_times, src_times, traj[:, dim])
-        return result
-
-    def _smooth_trajectory(self, traj: np.ndarray) -> np.ndarray:
-        """移动平均平滑"""
-        n = len(traj)
-        if n < SMOOTH_WINDOW:
-            return traj
-        half = SMOOTH_WINDOW // 2
-        kernel = np.ones(SMOOTH_WINDOW) / SMOOTH_WINDOW
-        result = traj.copy()
-        for dim in range(traj.shape[1]):
-            # 边界值填充，使卷积结果长度不变
-            padded = np.pad(traj[:, dim], (half, half), mode='edge')
-            smoothed = np.convolve(padded, kernel, mode='valid')
-            result[:, dim] = smoothed
-        return result
-
-    def _load_and_process_trajectory(self, parquet_path: str) -> np.ndarray:
-        """完整流水线：加载 → 插值 → 平滑，返回 (M, D) 轨迹"""
-        traj = self._load_parquet_trajectory(parquet_path)
-        traj = self._upsample_trajectory(traj)
-        traj = self._smooth_trajectory(traj)
-
-        # 确保维度为 26
-        if traj.shape[1] < FULL_DIM:
-            pad = np.zeros((traj.shape[0], FULL_DIM - traj.shape[1]))
-            traj = np.concatenate([traj, pad], axis=1)
-        elif traj.shape[1] > FULL_DIM:
-            traj = traj[:, :FULL_DIM]
-
-        return traj
-
-    def _transition_to_trajectory(
-        self, robot_body, current_state: np.ndarray,
-        first_action: np.ndarray,
-        goal_handle, start_progress: int, end_progress: int,
-        which_arm: str = "both",
-    ) -> bool:
-        """从当前位置线性插值到轨迹起始位置
+        注：delta 相对限幅保持开启，插值每步变化很小
+            （~0.01 rad，远小于 0.15~0.50 的限幅阈值），
+            不会触发裁剪，但能防止意外跳变。
 
         Args:
-            which_arm: "left" / "right" / "both" — 哪一侧手臂需要过渡
+            left_target:  左臂 7 维目标位姿，None 表示不动
+            right_target: 右臂 7 维目标位姿，None 表示不动
+            duration:     插值总时长（秒）
+
+        Returns:
+            初始 26 维状态（含手掌值），失败返回 None
         """
-        num_steps = max(1, int(TRANSITION_DURATION / CONTROL_INTERVAL))
-        actual_interval = TRANSITION_DURATION / num_steps
+        current_state = self._get_current_full_state(robot_body)
+        if current_state is None:
+            return None
+
+        num_steps = max(1, int(duration / CONTROL_INTERVAL))
+        actual_interval = duration / num_steps
 
         robot = robot_body.robot
 
         for step in range(num_steps):
-            t = (step + 1) / num_steps
-            action = current_state.copy()
+            t = (step + 1) / num_steps  # 0 → 1
 
-            if which_arm in ("left", "both"):
-                action[0:ARM_DIM] = (
-                    current_state[0:ARM_DIM]
-                    + t * (first_action[0:ARM_DIM] - current_state[0:ARM_DIM])
-                )
-            if which_arm in ("right", "both"):
-                action[ARM_DIM:2 * ARM_DIM] = (
-                    current_state[ARM_DIM:2 * ARM_DIM]
-                    + t * (first_action[ARM_DIM:2 * ARM_DIM] - current_state[ARM_DIM:2 * ARM_DIM])
-                )
-            # 手掌保持当前值，避免中途松开
+            action = current_state.copy()
+            if left_target is not None:
+                action[0:7] = current_state[0:7] + t * (left_target - current_state[0:7])
+            if right_target is not None:
+                action[7:14] = current_state[7:14] + t * (right_target - current_state[7:14])
+            # 手掌保持 current_state 中的值不变
+
             robot.send_robot_action(action)
 
+            # 进度反馈
             pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
             send_vla_feedback(goal_handle, pct,
-                              f"过渡到轨迹起始... {t * 100:.0f}%")
+                              f"手臂过渡中... {t * 100:.0f}%")
+
             time.sleep(actual_interval)
 
-        return True
+        return action  # 返回最后一帧动作（含目标手臂位姿 + 原始手掌值）
 
-    def _replay_full_trajectory(
-        self, robot_body, trajectory: np.ndarray,
-        current_state: np.ndarray,
-        goal_handle, start_progress: int, end_progress: int,
-        which_arm: str = "both",
-    ) -> None:
-        """回放完整轨迹
-
-        只控制指定手臂跟随轨迹，非活跃手臂保持当前位置，手掌保持当前值。
-
-        注：delta 相对限幅保持开启，parquet 轨迹为 50Hz 录制，
-            每帧变化很小，不会触发裁剪，但能防止意外跳变。
-        """
-        robot = robot_body.robot
-
-        n_frames = len(trajectory)
-        for i, frame in enumerate(trajectory):
-            action = current_state.copy()
-            # 手臂跟随轨迹
-            if which_arm in ("left", "both"):
-                action[0:ARM_DIM] = frame[0:ARM_DIM]
-            if which_arm in ("right", "both"):
-                action[ARM_DIM:2 * ARM_DIM] = frame[ARM_DIM:2 * ARM_DIM]
-            # 手掌保持当前值（末尾统一打开）
-            robot.send_robot_action(action)
-
-            pct = start_progress + int((end_progress - start_progress) * (i + 1) / n_frames)
-            send_vla_feedback(goal_handle, pct,
-                              f"轨迹回放中... {i + 1}/{n_frames}")
-            time.sleep(CONTROL_INTERVAL)
-
-    def _open_hand_and_verify(
+    def _open_hand_and_hold(
         self, robot_body, hand_side: str,
-        goal_handle, grasp_detector=None,
-    ) -> bool:
-        """打开手部并验证物体已释放
+        goal_handle, hold_duration: float,
+        base_state: np.ndarray | None = None,
+    ) -> None:
+        """打开手部（全部手指设为 0.0）并保持指定时间
 
-        Returns:
-            True 表示释放成功，False 表示仍有物体
+        Args:
+            hand_side: 'left' / 'right' / 'both'
+            base_state: 基础状态（含期望的手臂位置），None 则从 robot 读取
         """
-        current_state = self._get_current_full_state(robot_body)
-        if current_state is None:
-            return False
-
-        action = current_state.copy()
-        zero_hand = np.zeros(HAND_DIM)
+        if base_state is not None:
+            action = base_state.copy()
+        else:
+            current_state = self._get_current_full_state(robot_body)
+            if current_state is None:
+                return
+            action = current_state.copy()
+        zero_hand = np.zeros(6)
 
         if hand_side in ('left', 'both'):
             action[14:20] = zero_hand
         if hand_side in ('right', 'both'):
             action[20:26] = zero_hand
 
-        robot_body.control_robot(action)
+        # 注：只修改手掌[14:26]，手臂不变，delta 限幅不会触发
         side_label = {'left': '左手', 'right': '右手', 'both': '双手'}.get(hand_side, hand_side)
-        send_vla_feedback(goal_handle, 95, f"{side_label}已打开，确认释放...")
-        time.sleep(HAND_OPEN_HOLD_TIME)
-
-        # 用 grasp_detector 验证是否已释放
-        if grasp_detector is not None:
-            gs = grasp_detector.grasp_state
-            if hand_side == 'left' and gs[0]:
-                return False
-            if hand_side == 'right' and gs[1]:
-                return False
-            if hand_side == 'both' and (gs[0] or gs[1]):
-                return False
-        return True
+        robot_body.control_robot(action)
+        send_vla_feedback(goal_handle, 95, f"{side_label}已打开，保持 {hold_duration:.0f}s...")
+        time.sleep(hold_duration)
 
     # ================================================================
     # 放置逻辑
     # ================================================================
 
-    def _do_place(
-        self, goal_handle, context,
-        which_arm: str,
-    ) -> TaskResult:
-        """通用放置流程"""
+    def _left_arm_place(self, goal_handle, context) -> TaskResult:
+        """左手放置：
+          1. 3s 线性插值 → 左边放置位姿
+          2. 左手手掌全开，维持 1s
+        """
         robot_body = context.robot_body
+        send_vla_feedback(goal_handle, 5, "左手放置开始")
 
-        # 1. 加载轨迹
-        task_key = f"{which_arm} arm place"
-        parquet_file = _PLACE_FILES.get(task_key)
-        if parquet_file is None:
-            return TaskResult(False, error_code=99,
-                              error_message=f"No parquet file for {task_key}")
-        parquet_path = os.path.join(_REPLAY_DIR, parquet_file)
-        if not os.path.exists(parquet_path):
-            return TaskResult(False, error_code=99,
-                              error_message=f"Parquet file not found: {parquet_path}")
-
-        send_vla_feedback(goal_handle, 5, f"{which_arm}放置开始")
-        trajectory = self._load_and_process_trajectory(parquet_path)
-        if len(trajectory) == 0:
-            return TaskResult(False, error_code=99,
-                              error_message="Loaded empty trajectory from parquet")
-
-        # 2. 获取当前状态
-        current_state = self._get_current_full_state(robot_body)
+        current_state = self._linear_interpolate_arms(
+            robot_body,
+            left_target=LEFT_PLACE_POSE,
+            right_target=None,
+            duration=ARM_INTERPOLATION_TIME,
+            goal_handle=goal_handle,
+            start_progress=10, end_progress=90,
+        )
         if current_state is None:
-            return TaskResult(False, error_code=99,
-                              error_message="Failed to get current robot state")
+            return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
+                              error_message="Failed to get current robot state for left arm place")
 
-        # 3. 过渡阶段：从当前位置 → 轨迹起始
-        self._transition_to_trajectory(
-            robot_body, current_state, trajectory[0],
-            goal_handle, start_progress=10, end_progress=20,
-            which_arm=which_arm,
-        )
+        self._open_hand_and_hold(robot_body, 'left', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
-        # 4. 回放完整轨迹（手掌保持当前值，不随轨迹变化）
-        self._replay_full_trajectory(
-            robot_body, trajectory, current_state,
-            goal_handle, start_progress=20, end_progress=90,
-            which_arm=which_arm,
-        )
-
-        # 5. 打开手部释放物体
-        hand_side = which_arm
-        released = self._open_hand_and_verify(
-            robot_body, hand_side,
-            goal_handle,
-            grasp_detector=context.grasp_detector,
-        )
-
-        final_msg = f"{which_arm}放置完成"
-        if not released:
-            final_msg += "（但物体可能未完全释放）"
-        send_vla_feedback(goal_handle, 100, final_msg)
-
-        if not released and which_arm == "both":
-            return TaskResult(False, error_code=ERR_PLACE_ONE_HAND_STILL_HOLDING,
-                              error_message="One hand still holding object after both arm place")
-
+        send_vla_feedback(goal_handle, 100, "左手放置完成")
         return TaskResult(True)
 
-    def _left_arm_place(self, goal_handle, context) -> TaskResult:
-        """左手放置"""
-        grasp_state = context.grasp_detector.grasp_state
-        if not grasp_state[0]:
-            send_vla_feedback(goal_handle, 0, "左手没有物体，无法放置")
-            return TaskResult(False, error_code=ERR_PLACE_LEFT_EMPTY,
-                              error_message="Left hand is empty, cannot do left arm place")
-        return self._do_place(goal_handle, context, which_arm="left")
-
     def _right_arm_place(self, goal_handle, context) -> TaskResult:
-        """右手放置"""
-        grasp_state = context.grasp_detector.grasp_state
-        if not grasp_state[1]:
-            send_vla_feedback(goal_handle, 0, "右手没有物体，无法放置")
-            return TaskResult(False, error_code=ERR_PLACE_RIGHT_EMPTY,
-                              error_message="Right hand is empty, cannot do right arm place")
-        return self._do_place(goal_handle, context, which_arm="right")
+        """右手放置：
+          1. 3s 线性插值 → 右边放置位姿
+          2. 右手手掌全开，维持 1s
+        """
+        robot_body = context.robot_body
+        send_vla_feedback(goal_handle, 5, "右手放置开始")
+
+        current_state = self._linear_interpolate_arms(
+            robot_body,
+            left_target=None,
+            right_target=RIGHT_PLACE_POSE,
+            duration=ARM_INTERPOLATION_TIME,
+            goal_handle=goal_handle,
+            start_progress=10, end_progress=90,
+        )
+        if current_state is None:
+            return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
+                              error_message="Failed to get current robot state for right arm place")
+
+        self._open_hand_and_hold(robot_body, 'right', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
+
+        send_vla_feedback(goal_handle, 100, "右手放置完成")
+        return TaskResult(True)
 
     def _one_arm_place(self, goal_handle, context) -> TaskResult:
         """单手放置：自动判断哪只手有物体"""
-        grasp_state = context.grasp_detector.grasp_state
+        grasp_state = context.grasp_detector.grasp_state  # [left_grasped, right_grasped]
 
-        if grasp_state[1]:   # 右手有物体 → 右手放置
-            send_vla_feedback(goal_handle, 5, "检测到右手有物体，执行右手放置")
+        if grasp_state[1]:   # 右手有东西 → 右手放置
             return self._right_arm_place(goal_handle, context)
-        elif grasp_state[0]:  # 左手有物体 → 左手放置
-            send_vla_feedback(goal_handle, 5, "检测到左手有物体，执行左手放置")
+        elif grasp_state[0]:  # 左手有东西 → 左手放置
             return self._left_arm_place(goal_handle, context)
         else:
+            # 双手都没东西
             send_vla_feedback(goal_handle, 0, "双手都没有物体，无法放置")
             return TaskResult(False, error_code=ERR_PLACE_ONE_HAND_BOTH_EMPTY,
                               error_message="Both hands are empty, cannot do one arm place")
 
     def _both_arm_place(self, goal_handle, context) -> TaskResult:
-        """双手放置：双手必须同时有物体"""
-        grasp_state = context.grasp_detector.grasp_state
+        """双手放置：两只手必须同时有物体"""
+        grasp_state = context.grasp_detector.grasp_state  # [left_grasped, right_grasped]
+
         if not (grasp_state[0] and grasp_state[1]):
             send_vla_feedback(goal_handle, 0, "双手没有同时有物体，无法放置")
             return TaskResult(False, error_code=ERR_PLACE_BOTH_HAND_NOT_BOTH,
                               error_message="Not both hands have objects, cannot do both arm place")
-        return self._do_place(goal_handle, context, which_arm="both")
+
+        robot_body = context.robot_body
+        send_vla_feedback(goal_handle, 5, "双手放置开始")
+
+        # 1. 3s 线性插值，双臂同时到放置位姿
+        current_state = self._linear_interpolate_arms(
+            robot_body,
+            left_target=LEFT_PLACE_POSE,
+            right_target=RIGHT_PLACE_POSE,
+            duration=ARM_INTERPOLATION_TIME,
+            goal_handle=goal_handle,
+            start_progress=10, end_progress=85,
+        )
+        if current_state is None:
+            return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
+                              error_message="Failed to get current robot state for both arm place")
+
+        # 2. 同时打开双手，保持 1s
+        self._open_hand_and_hold(robot_body, 'both', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
+
+        # 3. 等待 0.5s 让 grasp_detector 更新
+        time.sleep(0.5)
+        final_grasp_state = context.grasp_detector.grasp_state
+        if final_grasp_state[0] or final_grasp_state[1]:
+            send_vla_feedback(goal_handle, 98, "有一只手未能放下物体")
+            return TaskResult(False, error_code=ERR_PLACE_ONE_HAND_STILL_HOLDING,
+                              error_message="One hand still holding object after both arm place")
+
+        send_vla_feedback(goal_handle, 100, "双手放置完成")
+        return TaskResult(True)

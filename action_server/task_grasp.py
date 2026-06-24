@@ -170,7 +170,7 @@ class GraspHandler(AbstractTaskHandler):
                 robot_body=robot_body,
                 reset_robot=not context._initialized,
                 max_duration=30.0,
-                thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >95% 直接完成或 30s 超时
+                thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >80% 直接完成或 30s 超时
                 stable_count_threshold=999,
             )
 
@@ -186,7 +186,7 @@ class GraspHandler(AbstractTaskHandler):
                 # 其他错误（复位失败、推理未启动、取消等）→ 原样透传
                 return result
 
-            # VLA 推理成功 (prob_progress > 95%)，验证实际抓握状态
+            # VLA 推理成功 (prob_progress > 80%)，验证实际抓握状态
             hand_type = TARGET_HAND_MAP.get(target.strip(), "one hand")
             grasp_state = context.grasp_detector.grasp_state  # [left, right]
 

@@ -42,12 +42,13 @@ ERR_DELIVER_ONE_HAND_BOTH_EMPTY = 24
 ERR_DELIVER_BOTH_HAND_NOT_BOTH = 25
 ERR_DELIVER_ONE_HAND_STILL_HOLDING = 26
 
-# task_place 专用 (31-35)
-ERR_PLACE_LEFT_EMPTY = 31
-ERR_PLACE_RIGHT_EMPTY = 32
-ERR_PLACE_ONE_HAND_BOTH_EMPTY = 33
-ERR_PLACE_BOTH_HAND_NOT_BOTH = 34
-ERR_PLACE_ONE_HAND_STILL_HOLDING = 35
+# task_place 专用 (31-36)
+ERR_PLACE_TIMEOUT = 31
+ERR_PLACE_LEFT_EMPTY = 32
+ERR_PLACE_RIGHT_EMPTY = 33
+ERR_PLACE_ONE_HAND_BOTH_EMPTY = 34
+ERR_PLACE_BOTH_HAND_NOT_BOTH = 35
+ERR_PLACE_ONE_HAND_STILL_HOLDING = 36
 
 # task_reset 专用 (41)
 ERR_RESET_NO_STATE = 41
@@ -82,6 +83,7 @@ ERR_MSG = {
     ERR_DELIVER_ONE_HAND_STILL_HOLDING: "One hand still holding object after both arm deliver",
 
     # task_place 专用
+    ERR_PLACE_TIMEOUT: "Place task timed out",
     ERR_PLACE_LEFT_EMPTY: "Left hand is empty but left arm place requested",
     ERR_PLACE_RIGHT_EMPTY: "Right hand is empty but right arm place requested",
     ERR_PLACE_ONE_HAND_BOTH_EMPTY: "Both hands are empty but one arm place requested",
@@ -344,13 +346,13 @@ def _monitor_vla_progress(
                 f"[elapsed={int(elapsed)}s] prob_progress={current_prob_progress:.3f}",
             )
 
-            # ===== 条件 1: prob_progress > 95% → 立即完成（无需等待稳定性）+ =====
-            if current_prob_progress > 0.95:
+            # ===== 条件 1: prob_progress > 80% → 立即完成（无需等待稳定性）+ =====
+            if current_prob_progress > 0.80:
                 send_vla_feedback(goal_handle, 100,
                                   f'Task completed (prob_progress={current_prob_progress:.3f})! Elapsed: {elapsed:.1f}s')
                 return TaskResult(True)
 
-            # ===== 条件 2: prob_progress 稳定性检测（原有逻辑，低于95%时兜底）=====
+            # ===== 条件 2: prob_progress 稳定性检测（原有逻辑，低于80%时兜底）=====
             if current_prob_progress > thre_progress:
                 stability_window.append(current_prob_progress)
                 if len(stability_window) > 50:
