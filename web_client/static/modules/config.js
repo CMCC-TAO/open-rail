@@ -18,7 +18,7 @@ const CONFIG_SELECT_OPTIONS = {
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['a2d', 'mock'],
+  type: ['a2d', 'mock', 'ti5_t170c'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1']
 };
