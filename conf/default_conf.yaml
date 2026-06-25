@@ -179,7 +179,7 @@ visualize:
     - State
     - ActionFitted
     - ActionRaw
-    update_interval_ms: 50
+    update_interval_ms: 33
     window_span_sec: 10.0
 vla_zmq:
   client_addr: tcp://localhost:5566
