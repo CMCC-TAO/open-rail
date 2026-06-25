@@ -36,13 +36,13 @@
   <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
   <main class="layout">
 
-    <!-- ╔══════════════ LEFT: CONFIG + MANUAL CONTROL ══════════════╗ -->
+    <!-- ╔══════════════ LEFT: CONFIG + DATA RECORDING + MANUAL CONTROL ══════════════╗ -->
     <div class="left-col" id="left-col">
       <aside class="panel panel-config panel-expanded" id="panel-config">
         <div class="panel-header" id="panel-config-header">
           <span><i class="fas fa-cog"></i> Configuration</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs conf-collapse-btn" id="btn-config-collapse" title="Collapse / Expand"><i class="fas fa-chevron-up"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-config-collapse" title="Collapse / Expand"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body" id="config-body">
@@ -54,14 +54,14 @@
               <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
             </label>
             <button class="btn btn-sm" id="btn-apply-config"><i class="fas fa-check"></i> Apply</button>
-            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…"><i class="fas fa-save"></i> Save As…</button>
+            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…"><i class="fas fa-save"></i> Save As</button>
           </div>
           <!-- Current file path display -->
           <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
 
           <!-- Main parameters (fixed area) -->
           <div id="main-params-section" class="main-params-section">
-            <div class="main-params-title">Main Parameters</div>
+            <div class="section-title">Main Parameters</div>
             <div id="main-params-tree" class="main-params-tree"></div>
           </div>
 
@@ -84,7 +84,7 @@
         <div class="panel-header" id="panel-recording-header">
           <span><i class="fas fa-database"></i> Data Recording</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs record-collapse-btn" id="btn-recording-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-recording-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="recording-body">
@@ -93,18 +93,61 @@
             <div class="recording-options-inline">
               <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" checked /> Episode</label>
               <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label>
+              <label class="recording-option-item"><input type="checkbox" id="chk-record-exec-log" /> ExecLog</label>
             </div>
           </div>
+
+          <!-- Execution Log Panel (moved to top, shown when checked) -->
+          <div id="exec-log-panel" class="exec-log-panel" style="display:none">
+            <div class="section-title"> ExecLog <span id="exec-log-count"></span></div>
+            <div class="exec-log-toolbar">
+              <div class="exec-log-toolbar-row">
+                <button class="btn btn-xs" id="btn-exec-log-rec" title="Start / Stop recording"><i class="fas fa-circle"></i> Exec Rec</button>
+                <button class="btn btn-xs" id="btn-log-export" title="Export CSV"><i class="fas fa-download"></i> CSV</button>
+                <button class="btn btn-xs" id="btn-log-save" title="Save to server"><i class="fas fa-save"></i> Save</button>
+                <button class="btn btn-xs btn-danger" id="btn-log-clear" title="Clear all records">Clear All</button>
+              </div>
+              <div id="exec-score-row" class="exec-score-row" style="display:none">
+                <span class="exec-score-label">Score:</span>
+                <button class="btn exec-score-btn exec-score-0" data-score="0" title="Fail (0)">0</button>
+                <button class="btn exec-score-btn exec-score-05" data-score="0.5" title="Partial (0.5)">0.5</button>
+                <button class="btn exec-score-btn exec-score-1" data-score="1" title="Success (1)">1</button>
+              </div>
+            </div>
+            <div class="exec-log-table-wrap">
+              <table class="exec-log-table">
+                <thead>
+                  <tr>
+                    <th class="col-id">Task#</th>
+                    <th class="col-inst">Inst</th>
+                    <th class="col-start">Start</th>
+                    <th class="col-dur">Dur</th>
+                    <th class="col-score">Sco</th>
+                    <th class="col-note">Note</th>
+                    <th class="col-del"></th>
+                  </tr>
+                </thead>
+                <tbody id="exec-log-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          
           <div class="recording-config-wrap">
-            <div class="recording-config-title">Record Config</div>
+            <div class="section-title">Record Config</div>
             <div id="recording-config-tree" class="recording-config-tree"></div>
           </div>
           <div class="recording-file-wrap">
             <div class="recording-file-filter">
-              <span class="recording-file-filter-label">Tasks</span>
+              <span class="section-title">Tasks</span>
               <select id="recording-task-select" class="recording-task-select"></select>
             </div>
-            <div class="recording-file-title"><span>Episodes</span><label class="recording-chunk-filter"><span class="recording-chunk-filter-label">Chunk</span><select id="recording-chunk-select" class="recording-chunk-select"></select></label></div>
+            <div class="recording-file-title">
+              <span class="section-title">Episodes</span>
+              <label class="recording-chunk-filter">
+                <span class="recording-chunk-filter-label">Chunk</span>
+                <select id="recording-chunk-select" class="recording-chunk-select"></select>
+              </label>
+            </div>
             <div id="recording-file-list" class="recording-file-list"></div>
           </div>
         </div>
@@ -112,16 +155,16 @@
 
       <section class="panel panel-manual" id="panel-manual">
         <div class="panel-header" id="panel-manual-header">
-          <span><i class="fas fa-gamepad"></i> Manual Robot Control</span>
+          <span><i class="fas fa-gamepad"></i> Robot Control</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs manual-collapse-btn" id="btn-manual-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-manual-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="manual-body">
           <div class="robot-ctrl-grid">
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Arm</div>
+                <div class="section-title">Arm</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-arm-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-arm">Set</button>
@@ -140,7 +183,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Gripper / Hand</div>
+                <div class="section-title">Gripper / Hand</div>
                 <div class="robot-ctrl-checks-right">
                   <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-left" checked /> Left</label>
                   <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-right" checked /> Right</label>
@@ -158,7 +201,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Head</div>
+                <div class="section-title">Head</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-head-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-head">Set</button>
@@ -183,7 +226,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Waist</div>
+                <div class="section-title">Waist</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-waist-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-waist">Set</button>
@@ -208,7 +251,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Body</div>
+                <div class="section-title">Body</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-body-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-body">Set</button>
@@ -223,7 +266,7 @@
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="robot-ctrl-section-title">Wheel / Leg</div>
+                <div class="section-title">Wheel / Leg</div>
                 <div class="robot-ctrl-checks-right">
                   <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel-keyboard" /> Keyboard Control</label>
                 </div>
@@ -246,8 +289,10 @@
 
       <!-- ── Runtime Monitor ── -->
       <section class="panel panel-monitor">
-        <div class="panel-header monitor-header">
-          <span class="monitor-title"><i class="fas fa-chart-line"></i> Runtime Monitor</span>
+        <!-- <div class="panel-header monitor-header"> -->
+          <!-- <span class="monitor-title"><i class="fas fa-chart-line"></i> Runtime Monitor</span> -->
+        <div class="panel-header">
+          <span><i class="fas fa-chart-line"></i> Runtime Monitor</span>
           <!-- Spacer: push all button groups to the right -->
           <span class="monitor-spacer"></span>
           <!-- Group ①: primary controls -->
@@ -273,6 +318,10 @@
           <div class="section-title">Key Statistics</div>
           <div class="stats-inline">
             <div class="stat-inline-item">
+              <div class="stat-inline-label">Observe FPS</div>
+              <div class="stat-inline-value" id="val-obv-fps">–</div>
+            </div>
+            <div class="stat-inline-item">
               <div class="stat-inline-label">Infer Count</div>
               <div class="stat-inline-value" id="val-infer-count">–</div>
             </div>
@@ -289,8 +338,12 @@
               <div class="stat-inline-value" id="val-traj-time">–</div>
             </div>
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Observe FPS</div>
-              <div class="stat-inline-value" id="val-obv-fps">–</div>
+              <div class="stat-inline-label">Reserved</div>
+              <div class="stat-inline-value" id="val-reserved-value-1">–</div>
+            </div>
+            <div class="stat-inline-item">
+              <div class="stat-inline-label">Reserved</div>
+              <div class="stat-inline-value" id="val-reserved-value-2">–</div>
             </div>
           </div>
 
@@ -319,7 +372,7 @@
               <input id="inp-lang-win-size" class="input-text" type="number" min="1" step="1" disabled />
             </label>
             <div class="task-progress-wrap" id="task-progress-wrap" title="Task progress (current_prob_progress)">
-              <span class="task-progress-label">Task Progress</span>
+              <span class="task-progress-label">Progress</span>
               <div class="task-progress-track">
                 <div class="task-progress-fill" id="task-progress-fill"></div>
               </div>
@@ -329,24 +382,24 @@
               <i class="fas fa-folder-open"></i> Load
               <input id="lang-file-input" type="file" accept=".json" style="display:none" />
             </label>
-            <button class="btn btn-xs lang-collapse-btn" id="btn-lang-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-lang-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body" id="lang-body">
           <div class="lang-cmd-layout">
             <!-- Task selector (level-1) -->
             <div class="lang-cmd-col">
-              <div class="lang-cmd-col-title">Task</div>
+              <div class="section-title">Task</div>
               <select id="lang-task-select" class="lang-cmd-select" size="5"></select>
             </div>
             <!-- Sub-task selector (level-2) -->
             <div class="lang-cmd-col lang-cmd-col-subtask">
-              <div class="lang-cmd-col-title">Sub-Task</div>
+              <div class="section-title">Sub-Task</div>
               <select id="lang-subtask-select" class="lang-cmd-select" size="5"></select>
             </div>
             <!-- Current instruction + send -->
             <div class="lang-cmd-col lang-cmd-col-send">
-              <div class="lang-cmd-col-title">Instruction</div>
+              <div class="section-title">Instruction</div>
               <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
               <button class="btn btn-sm" id="btn-lang-send"><i class="fas fa-check"></i> Apply</button>
             </div>
@@ -379,7 +432,7 @@
             <span class="traj-header-sep"></span>
             <!-- ② Source: independent group -->
             <div class="traj-src-group">
-              <span class="traj-src-label">Source</span>
+              <span class="traj-src-label">Sources</span>
               <div class="traj-src-rows">
                 <div class="traj-src-col traj-src-col-action">
                   <label class="traj-src-check" title="Toggle Action Fit source">
@@ -422,7 +475,7 @@
             <!-- Divider -->
             <!-- <span class="traj-header-sep"></span> -->
             <!-- ④ Collapse: rightmost -->
-            <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse" title="Collapse"><i class="fas fa-chevron-down"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-traj-collapse" title="Collapse"><i class="fas fa-chevron-down"></i></button>
           </div>
         </div>
         <div class="traj-body" id="traj-body">

@@ -4,28 +4,20 @@
 controller:
   gripper_offset: 5
   period: 3.75
-  wait_time: 4
+  raw_fps: 30
+  speed: 1.25
+  wait_time: 400
 inter_chunk:
-  inter_chunk_mode: min_jerk
+  inter_chunk_mode: search_action
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
   smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
-  action_layout:
-    arm:
-      end: 16
-      policy: gradual
-      start: 0
-    gripper:
-      end: 28
-      policy: stepwise
-      start: 16
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
-  fitting_time_step: 3.75
   gripper_dim: 2
   head_dim: 2
   intra_chunk_mode: fitting
@@ -36,30 +28,16 @@ intra_chunk:
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
 language:
-  auto_mode: false
+  auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: make_coffee
   task_progress_threshold: 0.99
   task_progress_win_size: 10
-language_reset_pos: null
-observer:
-  fps: 30
-  period: 0.03333333333333333
 rdm:
-  action_layout:
-    arm:
-      end: 16
-      policy: gradual
-      start: 0
-    gripper:
-      end: 28
-      policy: stepwise
-      start: 16
   max_len: 100
   mode: async
   observe_fps_window_size: 20
-  record_data: false
 record:
   info:
     action_shape: 22
@@ -99,14 +77,14 @@ record:
       valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 4
-    total_frames: 0
-    total_tasks: 0
-    total_videos: 12
+    total_episodes: 2
+    total_frames: 900
+    total_tasks: 2
+    total_videos: 6
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
-  resize: false
   save_dir: data/recording
+  save_raw: true
   switch: false
 robots:
   a2d:
@@ -242,20 +220,14 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
-    - 1
-    - 2
-    - 3
-    - 4
-    - 5
-    - 6
     - 7
     source:
     - State
     - ActionRaw
     - ActionFitted
-    update_interval_ms: 50
-    window_span_sec: 9.0
+    - ActionRaw
+    update_interval_ms: 33
+    window_span_sec: 10.0
 vla_zmq:
   client_addr: tcp://localhost:5566
   server_addr: tcp://*:5566
