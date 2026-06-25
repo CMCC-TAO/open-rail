@@ -144,14 +144,17 @@ class IntraChunkSmoother():
         # Calculate fitted joint angles using the polynomial
         polynomial = np.poly1d(coefficients)
         joint_chunk_fitted = polynomial(x)
+        # joint_chunk_fitted = np.polyval(coefficients, x)
         
         # Calculate joint velocities using the derivative
         derivative_polynomial = np.poly1d(derivative_coefficients)
         velocity_chunk_fitted = derivative_polynomial(x)
+        # velocity_chunk_fitted = np.polyval(derivative_coefficients, x)
 
         # Calculate joint acceleration using the second derivative
         second_derivative_polynomial = np.poly1d(second_derivative_coefficients)
         acceleration_chunk_fitted = second_derivative_polynomial(x)
+        # acceleration_chunk_fitted = np.polyval(second_derivative_coefficients, x)
         # print(f"fitting degree: {deg}, time_step: {time_step}")
         return index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
@@ -222,6 +225,7 @@ class IntraChunkSmoother():
         deg=self.config.fitting_deg 
 
         futures = []
+        x_eval = np.arange(start_time, end_time, time_step)
         for index in joint_indices:
             joint_chunk = action_chunk[index, :]
             futures.append(self.joint_fitting_executor.submit(
