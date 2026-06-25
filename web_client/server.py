@@ -456,6 +456,10 @@ def _get_robot(robot_type, robot_config):
         module_name = getattr(robot_instance.__class__, "__module__", "")
         if robot_type == RobotType.A2D and module_name.endswith("client.robots.a2d.body_robot"):
             return robot_instance, True
+        
+        if robot_type == RobotType.TI5_T170C and module_name.endswith("client.robots.ti5_t170c.body_robot"):
+            return robot_instance, True
+
         if robot_type == RobotType.MOCK and module_name.endswith("client.robots.mock.body_robot"):
             desired_path = str(getattr(robot_config, 'dataset_path', '') or '')
             current_path = str(getattr(robot_instance, 'dataset_path', '') or '')
@@ -486,6 +490,9 @@ def _get_robot(robot_type, robot_config):
         robot_instance = RobotBody(robot_config)
     elif robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
+        robot_instance = RobotBody(robot_config)
+    elif robot_type == RobotType.TI5_T170C:
+        from client.robots.ti5_t170c.body_robot import RobotBody
         robot_instance = RobotBody(robot_config)
     else:
         raise ValueError(f"Unsupported robot type: {robot_type}")
