@@ -4,7 +4,7 @@
 controller:
   gripper_offset: 5
   period: 3.75
-  wait_time: 250
+  wait_time: 4
 inter_chunk:
   inter_chunk_mode: min_jerk
   search_length: 100
@@ -15,13 +15,13 @@ inter_chunk:
 intra_chunk:
   action_layout:
     arm:
-      end: 14
+      end: 16
       policy: gradual
       start: 0
     gripper:
-      end: 16
+      end: 28
       policy: stepwise
-      start: 14
+      start: 16
   filter_window_size: 4
   fitting_deg: 5
   fitting_num_samples: 64
@@ -39,22 +39,23 @@ language:
   auto_mode: false
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
+  task_id: make_coffee
   task_progress_threshold: 0.99
   task_progress_win_size: 10
+language_reset_pos: null
 observer:
   fps: 30
   period: 0.03333333333333333
 rdm:
   action_layout:
     arm:
-      end: 14
+      end: 16
       policy: gradual
       start: 0
     gripper:
-      end: 16
+      end: 28
       policy: stepwise
-      start: 14
+      start: 16
   max_len: 100
   mode: async
   observe_fps_window_size: 20
@@ -95,7 +96,7 @@ record:
     fps: 30
     robot_type: a2d
     splits:
-      train: 0:3
+      valid: 0:100
     state_shape: 20
     total_chunks: 1
     total_episodes: 4
@@ -120,10 +121,10 @@ robots:
         start: 14
     camera:
       names:
-        hand_left: hand_left
-        hand_right: hand_right
-        head: head
-      ref: head
+        hand_left: left_wrist_rgb
+        hand_right: right_wrist_rgb
+        head: head_rgb
+      ref: head_rgb
     gripper_freq: 40
     hand_type: gripper
     head_freq: 40
@@ -158,20 +159,66 @@ robots:
   mock:
     action_layout:
       arm:
-        end: 14
+        end: 16
         policy: gradual
         start: 0
       gripper:
-        end: 16
+        end: 28
         policy: stepwise
-        start: 14
+        start: 16
     camera:
       names:
-        hand_left: observation.images.hand_left
-        hand_right: observation.images.hand_right
-        head: observation.images.top_head
+        hand_left: observation.images.left_wrist_rgb
+        hand_right: observation.images.right_wrist_rgb
+        head: observation.images.head_rgb
       ref: head
-    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
+    dataset_path: /home/lza/code/dataset/use_coffee_machine/zjrobot_v3_handpose/2026-0411-pick_coffee_left
+  navi_wa2:
+    action_layout:
+      arm:
+        end: 16
+        policy: gradual
+        start: 0
+      hand:
+        end: 28
+        policy: stepwise
+        start: 16
+    camera:
+      topic_dict:
+        hand_left: /zj_humanoid/sensor/realsense_head/color/image_raw/compressed
+        hand_right: /zj_humanoid/sensor/left_wrist/image_raw/compressed
+        head: /zj_humanoid/sensor/right_wrist/image_raw/compressed
+    gain: 900
+    reset_position:
+    - 0.182591655739083
+    - 0.32575521044236666
+    - 0.639202615644364
+    - 0.03292066673111549
+    - -1.9789475037079458
+    - 0.5495126798768879
+    - -0.1635420177877668
+    - -0.03926435617611085
+    - -0.22653780968994397
+    - 0.19016568609004025
+    - -0.6990877950829599
+    - 0.17601231608296075
+    - -1.888115764960776
+    - -0.5459413807557212
+    - -0.38742182124429064
+    - -0.27196253226160444
+    - -0.6
+    - 0.9
+    - 0
+    - 0
+    - 0
+    - 0
+    - -0.2
+    - 0.9
+    - 0
+    - 1
+    - 1
+    - 1
+    tt: 0.02
   type: mock
 vision:
   history_frame: false
@@ -196,10 +243,17 @@ visualize:
     play: true
     selected_joints:
     - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
     source:
     - State
-    - ActionFitted
     - ActionRaw
+    - ActionFitted
     update_interval_ms: 50
     window_span_sec: 9.0
 vla_zmq:

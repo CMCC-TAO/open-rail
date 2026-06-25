@@ -181,8 +181,6 @@ class RealtimeDataManager():
                 timestamp_chunk[index] = timestamp_chunk[index] + timestamp_chunk[0]
             self.action_chunks = action_chunk
             self.timestamp_chunks = timestamp_chunk
-        
-        rounded = [round(x, 4) for x in self.timestamp_chunks]
 
     @run_time_decorator
     def fusionActionChunks(self, action_chunk, timestamp_chunk):

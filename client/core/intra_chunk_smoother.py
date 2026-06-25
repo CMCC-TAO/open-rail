@@ -174,12 +174,12 @@ class IntraChunkSmoother():
                 window_max = currt_index + window_size_half + 1
             mean = np.mean(gripper_chunk[window_min:window_max])
 
-            if mean > self.config.max_gripper_action_threshold:
-                mean = 1.0
-            elif mean < self.config.min_gripper_action_threshold:
-                mean = 0.0
-            else:
-                pass
+            # if mean > self.config.max_gripper_action_threshold:
+            #     mean = 1.0
+            # elif mean < self.config.min_gripper_action_threshold:
+            #     mean = 0.0
+            # else:
+            #     pass
             gripper_chunk[currt_index] = mean
         
         # Interpolate the trajectory using linear interpolation
