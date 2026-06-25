@@ -1329,7 +1329,7 @@ def _ensure_vla_client_created():
     return vla_client
 
 
-async def _bg_start_client():
+async def _start_client():
     loop = asyncio.get_running_loop()
     client_state._loop = loop
 
@@ -1366,7 +1366,7 @@ async def _bg_start_client():
 
     def _run_in_thread():
         try:
-            vla_client.run()
+            vla_client.start()
             asyncio.run_coroutine_threadsafe(
                 _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
                 loop
@@ -1416,7 +1416,7 @@ async def start_client():
             return {"status": "ok", "message": "Client is already starting."}
         client_state.starting = True
 
-    asyncio.create_task(_bg_start_client())
+    asyncio.create_task(_start_client())
     return {"status": "ok", "message": "Client starting…"}
 
 
