@@ -41,7 +41,7 @@ class InterChunkFuser:
             return next_action_chunk, next_vel_chunk, next_acc_chunk, target_chunk_index
 
         if self.config.inter_chunk_mode == 'search_action':
-            action_chunk_smoothed, target_chunk_index = self._search_smooth_action_1(
+            action_chunk_smoothed, target_chunk_index = self._search_smooth_action(
                 next_action_chunk,
                 target_chunk_index,
                 currt_action,
@@ -50,7 +50,7 @@ class InterChunkFuser:
                 search_step = 5)
         elif self.config.inter_chunk_mode == 'poly':
             # can NOT use with search_action at the same time
-            action_chunk_smoothed, target_chunk_index = self._poly_chunk_transition_1(
+            action_chunk_smoothed, target_chunk_index = self._poly_chunk_transition(
                 next_action_chunk,
                 next_vel_chunk,
                 next_timestamps,
@@ -63,7 +63,7 @@ class InterChunkFuser:
             )
         elif self.config.inter_chunk_mode == 'smooth_velocity':
             # sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)
-            action_chunk_smoothed, target_chunk_index = self._smooth_velocity_transition_numba_1(
+            action_chunk_smoothed, target_chunk_index = self._smooth_velocity_transition_numba(
                 next_action_chunk,
                 next_timestamps,
                 target_chunk_index,
@@ -78,7 +78,7 @@ class InterChunkFuser:
             # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
             # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
         elif self.config.inter_chunk_mode == 'min_jerk':
-            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition_1(
+            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition(
                 next_action_chunk,
                 next_vel_chunk,
                 next_acc_chunk,
@@ -92,7 +92,7 @@ class InterChunkFuser:
                 transition_length=32
             )
         elif self.config.inter_chunk_mode == 'bspline':
-            action_chunk_smoothed, target_chunk_index = self._bspline_chunk_transition_1(
+            action_chunk_smoothed, target_chunk_index = self._bspline_chunk_transition(
                 next_action_chunk,
                 next_vel_chunk,
                 next_timestamps,
@@ -151,99 +151,99 @@ class InterChunkFuser:
             action_chunk_smoothed[joint_indices, target_chunk_index + index] = (smooth_base + ratio) * action_chunk_smoothed[joint_indices, target_chunk_index + index] + (1 - smooth_base - ratio) * currt_action[joint_indices]
             # self.logger.debug(f"Smoothing action chunk {target_chunk_index + index} with ratio {ratio}")
         return action_chunk_smoothed
-    @staticmethod
-    @njit(fastmath=True, cache=True)
-    def _smooth_velocity_transition_numba(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
-        """
-        This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
-        Note: Under the same parameter settings, the robot's operation speed using this strategy is slower than 'search_action' and 'poly'. 
-        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
+    # @staticmethod
+    # @njit(fastmath=True, cache=True)
+    # def _smooth_velocity_transition_numba_cp(joint_seq, init_pos, init_vel, init_acc, dt=0.005, max_vel=2.0, max_acc=5.0, kp=5.0, kd=2.0):
+    #     """
+    #     This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
+    #     Note: Under the same parameter settings, the robot's operation speed using this strategy is slower than 'search_action' and 'poly'. 
+    #     Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
 
-        This function is **accelerated by Numba** using `@njit`, which compiles the
-        Python code into optimized machine code in *nopython mode*.
-        Key acceleration strategies:
-        1. `@njit`: eliminates Python interpreter overhead by compiling to native code.
-        2. Loop-based implementation (no Python objects or dynamic typing),
-            enabling efficient JIT optimization.
-        3. `fastmath=True`: allows aggressive floating-point optimizations
-            (acceptable for control / smoothing tasks with tolerance to small
-            numerical errors).
-        4. `cache=True`: caches the compiled binary to disk to avoid recompilation
-            on subsequent runs.
+    #     This function is **accelerated by Numba** using `@njit`, which compiles the
+    #     Python code into optimized machine code in *nopython mode*.
+    #     Key acceleration strategies:
+    #     1. `@njit`: eliminates Python interpreter overhead by compiling to native code.
+    #     2. Loop-based implementation (no Python objects or dynamic typing),
+    #         enabling efficient JIT optimization.
+    #     3. `fastmath=True`: allows aggressive floating-point optimizations
+    #         (acceptable for control / smoothing tasks with tolerance to small
+    #         numerical errors).
+    #     4. `cache=True`: caches the compiled binary to disk to avoid recompilation
+    #         on subsequent runs.
 
-        Note:
-        - All inputs must be NumPy arrays with fixed dtypes (e.g., float32/float64).
-        - Dynamic Python features and object operations are intentionally avoided
-            to ensure compatibility with Numba's nopython mode.
+    #     Note:
+    #     - All inputs must be NumPy arrays with fixed dtypes (e.g., float32/float64).
+    #     - Dynamic Python features and object operations are intentionally avoided
+    #         to ensure compatibility with Numba's nopython mode.
 
-        Parameters
-        ----------
-        joint_seq : ndarray of shape (dof, T)
-            Target joint position sequence to be tracked.
-        init_pos : ndarray of shape (dof,)
-            Initial joint positions.
-        init_vel : ndarray of shape (dof,)
-            Initial joint velocities.
-        init_acc : ndarray of shape (dof,)
-            Initial joint accelerations.
-        dt : float, optional
-            Time step for discrete integration.
-        max_vel : float, optional
-            Maximum allowed joint velocity (symmetric bound).
-        max_acc : float, optional
-            Maximum allowed joint acceleration (symmetric bound).
-        kp : float, optional
-            Proportional gain of the PD controller.
-        kd : float, optional
-            Derivative gain of the PD controller.
+    #     Parameters
+    #     ----------
+    #     joint_seq : ndarray of shape (dof, T)
+    #         Target joint position sequence to be tracked.
+    #     init_pos : ndarray of shape (dof,)
+    #         Initial joint positions.
+    #     init_vel : ndarray of shape (dof,)
+    #         Initial joint velocities.
+    #     init_acc : ndarray of shape (dof,)
+    #         Initial joint accelerations.
+    #     dt : float, optional
+    #         Time step for discrete integration.
+    #     max_vel : float, optional
+    #         Maximum allowed joint velocity (symmetric bound).
+    #     max_acc : float, optional
+    #         Maximum allowed joint acceleration (symmetric bound).
+    #     kp : float, optional
+    #         Proportional gain of the PD controller.
+    #     kd : float, optional
+    #         Derivative gain of the PD controller.
 
-        Returns
-        -------
-        pos_seq : ndarray of shape (dof, T)
-            Smoothed joint position sequence.
-        vel_seq : ndarray of shape (dof, T)
-            Corresponding joint velocity sequence.
-        acc_seq : ndarray of shape (dof, T)
-            Corresponding joint acceleration sequence.
-        """
-        dof, T = joint_seq.shape
+    #     Returns
+    #     -------
+    #     pos_seq : ndarray of shape (dof, T)
+    #         Smoothed joint position sequence.
+    #     vel_seq : ndarray of shape (dof, T)
+    #         Corresponding joint velocity sequence.
+    #     acc_seq : ndarray of shape (dof, T)
+    #         Corresponding joint acceleration sequence.
+    #     """
+    #     dof, T = joint_seq.shape
 
-        pos = init_pos.copy()
-        vel = init_vel.copy()
-        acc = init_acc.copy()
+    #     pos = init_pos.copy()
+    #     vel = init_vel.copy()
+    #     acc = init_acc.copy()
 
-        pos_seq = np.zeros((dof, T))
-        vel_seq = np.zeros((dof, T))
-        acc_seq = np.zeros((dof, T))
+    #     pos_seq = np.zeros((dof, T))
+    #     vel_seq = np.zeros((dof, T))
+    #     acc_seq = np.zeros((dof, T))
 
-        for i in range(T):
-            target = joint_seq[:, i]
-            for j in range(dof):
-                acc[j] = kp * (target[j] - pos[j]) - kd * vel[j]
+    #     for i in range(T):
+    #         target = joint_seq[:, i]
+    #         for j in range(dof):
+    #             acc[j] = kp * (target[j] - pos[j]) - kd * vel[j]
 
-                if acc[j] > max_acc:
-                    acc[j] = max_acc
-                elif acc[j] < -max_acc:
-                    acc[j] = -max_acc
+    #             if acc[j] > max_acc:
+    #                 acc[j] = max_acc
+    #             elif acc[j] < -max_acc:
+    #                 acc[j] = -max_acc
 
-                vel[j] += acc[j] * dt
+    #             vel[j] += acc[j] * dt
 
-                if vel[j] > max_vel:
-                    vel[j] = max_vel
-                elif vel[j] < -max_vel:
-                    vel[j] = -max_vel
+    #             if vel[j] > max_vel:
+    #                 vel[j] = max_vel
+    #             elif vel[j] < -max_vel:
+    #                 vel[j] = -max_vel
 
-                pos[j] += vel[j] * dt
+    #             pos[j] += vel[j] * dt
 
-                pos_seq[j, i] = pos[j]
-                vel_seq[j, i] = vel[j]
-                acc_seq[j, i] = acc[j]
+    #             pos_seq[j, i] = pos[j]
+    #             vel_seq[j, i] = vel[j]
+    #             acc_seq[j, i] = acc[j]
 
-        return pos_seq, vel_seq, acc_seq
+    #     return pos_seq, vel_seq, acc_seq
 
     # @staticmethod
     # @njit(fastmath=True, cache=True)
-    def _smooth_velocity_transition_numba_1(self,
+    def _smooth_velocity_transition_numba(self,
                                     next_action_chunk,
                                     next_timestamps,
                                     target_chunk_index,
@@ -354,7 +354,7 @@ class InterChunkFuser:
         action_chunk_smoothed[joint_indices, target_chunk_index:] = pos_seq
         return action_chunk_smoothed, target_chunk_index 
 
-    def _poly_chunk_transition_1(
+    def _poly_chunk_transition(
         self,
         next_action_chunk,
         next_vel_chunk,
@@ -472,7 +472,7 @@ class InterChunkFuser:
 
         return action_chunk_smoothed, target_chunk_index
 
-    def _min_jerk_chunk_transition_1(self,
+    def _min_jerk_chunk_transition(self,
         next_action_chunk,
         next_vel_chunk,
         next_acc_chunk,
@@ -594,110 +594,7 @@ class InterChunkFuser:
                     action_chunk_smoothed[joint_idx, target_chunk_index + i] = smoothed_pos
         return action_chunk_smoothed, target_chunk_index
 
-    def _bspline_chunk_transition(
-        self,
-        new_action_chunk,
-        new_vel_chunk,
-        new_timestamps,
-        target_index,
-        current_pos,
-        current_vel,
-        num_control_points=6,
-    ):
-        """
-        Smooths the transition between the current state and a new action chunk using a B-spline.
-
-        This method creates a smooth trajectory from the current robot position to the beginning of a new
-        action sequence. It uses a B-spline interpolation to generate a transition that respects
-        velocity constraints at the boundaries, ensuring a physically plausible and smooth motion.
-        If spline generation fails, it falls back to linear interpolation.
-
-        Args:
-            new_action_chunk (np.ndarray): The upcoming chunk of actions (positions).
-            new_vel_chunk (np.ndarray): The upcoming chunk of velocities.
-            new_timestamps (np.ndarray): Timestamps corresponding to the action chunk.
-            target_index (int): The index in the new_action_chunk where the transition should start.
-            current_pos (np.ndarray): The current position of the robot joints.
-            current_vel (np.ndarray): The current velocity of the robot joints.
-            num_control_points (int, optional): The number of control points to use for the spline.
-                                               Defaults to 6.
-
-        Returns:
-            np.ndarray: The action chunk with a smoothed transition applied.
-        """
-        from scipy.interpolate import make_interp_spline
-
-        # If there's no current position, no transition can be made.
-        if current_pos is None:
-            return new_action_chunk
-
-        # Determine the length of the transition. It's a fraction of the chunk size,
-        # but not longer than the remaining part of the chunk.
-        transition_length = min(new_action_chunk.shape[1] // 3, new_action_chunk.shape[1] - target_index)
-
-        # If the transition is too short, it's not worth smoothing.
-        if transition_length <= 3:
-            return new_action_chunk
-
-        smoothed_chunk = new_action_chunk.copy()
-        dt = new_timestamps[1] - new_timestamps[0] if len(new_timestamps) > 1 else 0.005
-
-        # Select indices for control points, spaced evenly through the transition period.
-        control_indices = np.linspace(0, transition_length - 1, num_control_points).astype(int)
-
-        # Apply smoothing for each joint independently.
-        for joint_idx in range(min(14, new_action_chunk.shape[0])):
-            control_points = []
-            control_times = []
-
-            # The first control point is the current position at time 0.
-            control_points.append(current_pos[joint_idx])
-            control_times.append(0.0)
-
-            # Subsequent control points are sampled from the new action chunk.
-            for idx in control_indices[1:]:
-                actual_idx = min(target_index + idx, new_action_chunk.shape[1] - 1)
-                control_points.append(new_action_chunk[joint_idx, actual_idx])
-                control_times.append(idx * dt)
-
-            control_points = np.array(control_points)
-            control_times = np.array(control_times)
-
-            try:
-                # Create a cubic B-spline (k=3).
-                # We set boundary conditions (bc_type) for the derivatives (velocity).
-                # The start velocity is the current velocity, and the end velocity is taken
-                # from the new velocity chunk at the end of the transition.
-                bc_type = (
-                    (1, current_vel[joint_idx]),  # (1, v) means 1st derivative is v
-                    (1, new_vel_chunk[joint_idx, min(target_index + transition_length - 1, new_vel_chunk.shape[1] - 1)]),
-                )
-                spline = make_interp_spline(control_times, control_points, k=3, bc_type=bc_type)
-
-                # Sample the spline to get the smoothed trajectory for the transition period.
-                sample_times = np.linspace(0, control_times[-1], transition_length)
-                smoothed_positions = spline(sample_times)
-
-                # Replace the original action chunk with the new smoothed positions.
-                for i in range(transition_length):
-                    if target_index + i < smoothed_chunk.shape[1]:
-                        smoothed_chunk[joint_idx, target_index + i] = smoothed_positions[i]
-
-            except Exception as e:
-                # If B-spline creation fails, fall back to simple linear interpolation.
-                # TODO: Fix this exception
-                if self.logger is not None:
-                    self.logger.warning(f"B-Spline failed for joint {joint_idx}: {e}, using linear interpolation")
-                for i in range(transition_length):
-                    t = i / (transition_length - 1) if transition_length > 1 else 1.0
-                    target_idx = min(target_index + transition_length - 1, new_action_chunk.shape[1] - 1)
-                    if target_index + i < smoothed_chunk.shape[1]:
-                        # Interpolate from current position to the target position at the end of the transition.
-                        smoothed_chunk[joint_idx, target_index + i] = (1 - t) * current_pos[joint_idx] + t * new_action_chunk[joint_idx, target_idx]
-
-        return smoothed_chunk
-
-    def _bspline_chunk_transition_1(self,
+    def _bspline_chunk_transition(self,
         next_action_chunk,
         next_vel_chunk,
         next_timestamps,
@@ -798,69 +695,7 @@ class InterChunkFuser:
 
         return action_chunk_smoothed, target_chunk_index
 
-    def _search_smooth_action(self, currt_action, currt_vel, candidate_action_chunk, search_length):
-        """
-        Searches for a smooth transition point within a candidate action chunk.
-
-        This method aims to find an index in the candidate action chunk that represents a good
-        point to start a transition from the current action. It prioritizes points where the
-        direction of the candidate action matches the direction of the current velocity for
-        as many moving joints as possible. This helps to avoid jerky movements by ensuring
-        the new action continues the current motion smoothly.
-
-        Args:
-            currt_action (np.ndarray): The current action (position) of the robot.
-            currt_vel (np.ndarray): The current velocity of the robot.
-            candidate_action_chunk (np.ndarray): The chunk of candidate future actions.
-            search_length (int): The number of steps to search within the candidate chunk.
-
-        Returns:
-            int: The index in the candidate chunk that is best suited for a smooth transition.
-        """
-        # Identify joints that are currently in motion (velocity is above a threshold).
-        valid_joints = [index for index, value in enumerate(abs(currt_vel) > 5e-3) if value]
-        if not valid_joints:
-            # If no joints are moving, any point is fine, so start from the beginning.
-            return 0
-
-        # Filter the current state to only consider the moving joints.
-        currt_action = currt_action[valid_joints]
-        currt_vel = currt_vel[valid_joints]
-        target_index = 0
-        valid_joint_num = len(valid_joints)
-        qualified_joint_num = 0
-
-        # Iterate through the candidate actions to find the best match.
-        for candidate_index in range(0, search_length, 5):
-            if candidate_index >= candidate_action_chunk.shape[1]:
-                break
-            candidate_action = candidate_action_chunk[valid_joints, candidate_index]
-            action_diff = candidate_action - currt_action
-            qualified_count = 0
-
-            # Check how many joints continue moving in the same direction.
-            for index in range(valid_joint_num):
-                # This condition is true if the change in action and the current velocity have the same sign.
-                # It means the joint is being commanded to continue its current motion.
-                if action_diff[index] * currt_vel[index] > 0.0:
-                    qualified_count += 1
-
-            # If all moving joints are qualified, we found a perfect transition point.
-            if qualified_count == valid_joint_num:
-                target_index = candidate_index
-                qualified_joint_num = qualified_count
-                break
-
-            # Otherwise, keep track of the point with the most qualified joints found so far.
-            if qualified_count > qualified_joint_num:
-                target_index = candidate_index
-                qualified_joint_num = qualified_count
-
-        if self.logger is not None:
-            self.logger.debug(f"target_index: {target_index}, qualified dim: {qualified_joint_num}")
-        return target_index
-
-    def _search_smooth_action_1(self,
+    def _search_smooth_action(self,
                             next_action_chunk,
                             target_chunk_index,
                             currt_action,
