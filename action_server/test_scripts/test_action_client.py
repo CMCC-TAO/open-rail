@@ -46,7 +46,7 @@ AVAILABLE_TASKS = {
         "name": "grasp one Wahaha",
         "desc": "单手抓取 — 使用一只手从娃哈哈堆中抓取一瓶",
         "params": {
-            "task": "grasb",
+            "task": "grasp",
             "target": "one Wahaha",
             "waypoint": "none",
         },
@@ -55,7 +55,7 @@ AVAILABLE_TASKS = {
         "name": "grasp one Coca-Cola",
         "desc": "单手抓取 — 使用一只手从可口可乐堆中抓取一瓶",
         "params": {
-            "task": "grasb",
+            "task": "grasp",
             "target": "one Coca-Cola",
             "waypoint": "none",
         },
@@ -64,7 +64,7 @@ AVAILABLE_TASKS = {
         "name": "grasp two Wahaha",
         "desc": "双手抓取 — 使用两只手从娃哈哈堆中抓取最近的两瓶",
         "params": {
-            "task": "grasb",
+            "task": "grasp",
             "target": "two Wahaha",
             "waypoint": "none",
         },
@@ -73,7 +73,7 @@ AVAILABLE_TASKS = {
         "name": "grasp two Coca-Cola",
         "desc": "双手抓取 — 使用两只手从可口可乐堆中抓取最近的两瓶",
         "params": {
-            "task": "grasb",
+            "task": "grasp",
             "target": "two Coca-Cola",
             "waypoint": "none",
         },
@@ -268,7 +268,7 @@ class VLAActionTestClient(Node):
 
     def __init__(self):
         super().__init__('vla_action_test_client')
-        self._client = ActionClient(self, ExecutionUnit, 'vla_task')
+        self._client = ActionClient(self, ExecutionUnit, '/vla/action_ctrl')
         self.get_logger().info('VLA Action 测试客户端启动，等待 Action Server...')
 
     def wait_for_server(self, timeout_sec: float = 10.0) -> bool:

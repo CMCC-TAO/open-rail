@@ -490,7 +490,7 @@ class VLAActionDispatcher(Node):
         self._action_server = ActionServer(
             self,
             ExecutionUnit,
-            'vla_task',
+            '/vla/action_ctrl',
             self.execute_callback,
             cancel_callback=self.cancel_callback,
         )

@@ -1,7 +1,7 @@
 """
 抓取任务 - 根据 target 选择语言指令，调用 VLA 模型推理执行抓取
 
-grasb 是一个大类，通过 target 字段区分具体的抓取动作（单手/双手、目标物体）。
+grasp 是一个大类，通过 target 字段区分具体的抓取动作（单手/双手、目标物体）。
 """
 
 import sys
@@ -123,7 +123,7 @@ def _reset_arms_to_default(robot_body, context, duration=2.0):
 
 
 class GraspHandler(AbstractTaskHandler):
-    """'grasb' 任务处理器 — 抓取大类
+    """'grasp' 任务处理器 — 抓取大类
 
     流程:
         1. 根据 params.target 查找对应的语言指令
@@ -134,7 +134,7 @@ class GraspHandler(AbstractTaskHandler):
 
     @property
     def task_name(self) -> str:
-        return "grasb"
+        return "grasp"
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
         # ===== 步骤 1: 解析 target 并获取语言指令 =====
