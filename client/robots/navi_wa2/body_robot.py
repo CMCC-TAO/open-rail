@@ -32,9 +32,9 @@ class RobotBody(RobotBase):
         Args:
             config (dict): Configuration dictionary containing wa2 robot settings
         """
-        super().__init__()
+        super().__init__(config)
         self.logger = logging.getLogger(__name__)
-        self.cfg, self.ori_cfg = config["robots"]['navi_wa2'], config
+        self.cfg = config
         default_action_layout = {
             'arm': {'start': 0, 'end': 16, 'policy': 'gradual'},
             'hand': {'start': 16, 'end': 28, 'policy': 'stepwise'},
@@ -83,6 +83,11 @@ class RobotBody(RobotBase):
         camera_topics = dict(getattr(self.cfg.camera, 'topic_dict', {}))
         self.camera_topic_substribers = {came_name:None for came_name in camera_topics}
         self.camera_image_queue = {came_name:None for came_name in camera_topics}
+        self.camera_stamp_queue = {came_name:None for came_name in camera_topics}
+        self.camera_lock = threading.Lock()
+        configured_ref = str(getattr(getattr(self.cfg, 'camera', None), 'ref', 'head') or 'head')
+        self.camera_ref = configured_ref if configured_ref in camera_topics else next(iter(camera_topics), None)
+        self.current_timestamp = None
         for cam_name, cam_topic in camera_topics.items():
             if not cam_topic:
                 self.logger.warning(f"Skip empty camera topic for {cam_name}")
@@ -103,22 +108,6 @@ class RobotBody(RobotBase):
         self.waist_head_movej_controller=rospy.ServiceProxy('/zj_humanoid/upperlimb/movej/whole_body', MoveJ)
         time.sleep(0.5)
 
-        # --- 离散手势滤波配置 ---
-        # 选项: 'mode' (滑动窗口众数滤波), 'debounce' (状态确认延迟), 'none' (无滤波)
-        self.hand_filter_type = 'none' 
-
-        # 1. 众数滤波 (Mode Filter) 参数
-        self.mode_window_size = 10
-        self.left_history = deque(maxlen=self.mode_window_size)
-        self.right_history = deque(maxlen=self.mode_window_size)
-
-        # 2. 去抖动 (Debouncing) 参数
-        self.debounce_k_frames = 4  # 新状态必须连续出现K帧才生效
-        self.left_candidate_idx = 0
-        self.left_candidate_count = 0
-        self.right_candidate_idx = 0
-        self.right_candidate_count = 0
-
         # 当前实际生效的离散手势索引
         self.current_left_idx = 0
         self.current_right_idx = 0
@@ -133,7 +122,12 @@ class RobotBody(RobotBase):
     def camera_image_callback(self, msg, cam_name):
         try:
             cv_image = self.bridge.compressed_imgmsg_to_cv2(msg, desired_encoding="bgr8")
-            self.camera_image_queue[cam_name] = cv_image
+            stamp = msg.header.stamp.to_nsec() if getattr(msg, 'header', None) is not None else 0
+            if not stamp:
+                stamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+            with self.camera_lock:
+                self.camera_image_queue[cam_name] = cv_image
+                self.camera_stamp_queue[cam_name] = stamp
             return
         except CvBridgeError as e:
             rospy.logerr(f"CvBridge转换错误: {e}")
@@ -153,22 +147,6 @@ class RobotBody(RobotBase):
         """
         self.current_state[16:] = msg.position[:]
         return
-
-    def _apply_kalman(self, measurement, state_x, state_p):
-        """执行简易一维多路卡尔曼滤波"""
-        if state_x is None:
-            return measurement, np.ones_like(measurement) # 初始化第一帧
-
-        # 1. 预测阶段 (Prediction)
-        pred_x = state_x
-        pred_p = state_p + self.kf_q
-        
-        # 2. 更新阶段 (Update)
-        k_gain = pred_p / (pred_p + self.kf_r)            # 计算卡尔曼增益
-        new_x = pred_x + k_gain * (measurement - pred_x)  # 更新状态估计
-        new_p = (1 - k_gain) * pred_p                     # 更新协方差
-
-        return new_x, new_p
     
     def control_robot(self, action):
         """Control the robot arm and gripper based on the given action.
@@ -180,71 +158,11 @@ class RobotBody(RobotBase):
         left_hand_action = np.array(action[16:22])
         right_hand_action = np.array(action[22:28])
 
-        # ==========================================
-        # 2. 离散手势映射层 (Discrete Gesture Mapping)
-        # ==========================================
-        
-
-        # 获取当前网络原始预测的最匹配手势索引
         raw_left_idx = np.argmin([np.linalg.norm(left_hand_action - p) for p in self.hand_poses])
         raw_right_idx = np.argmin([np.linalg.norm(right_hand_action - p) for p in self.hand_poses])
+        self.current_left_idx = raw_left_idx
+        self.current_right_idx = raw_right_idx
 
-        # ==========================================
-        # 3. 离散切换滤波层 (Discrete Filtering)
-        # ==========================================
-        if self.hand_filter_type == 'mode':
-            # --- 策略 A: 滑动窗口众数滤波 ---
-            self.left_history.append(raw_left_idx)
-            self.right_history.append(raw_right_idx)
-
-            # 统计窗口内出现次数最多的状态
-            self.current_left_idx = max(set(self.left_history), key=self.left_history.count)
-            self.current_right_idx = max(set(self.right_history), key=self.right_history.count)
-
-        elif self.hand_filter_type == 'debounce':
-            # --- 策略 B: 状态确认延迟 (去抖动) - 修正版 ---
-            
-            # ====== 左手逻辑 ======
-            if raw_left_idx != self.current_left_idx:
-                # 只有当网络预测出了一个“新”状态时，才开始/继续累加
-                if raw_left_idx == self.left_candidate_idx:
-                    self.left_candidate_count += 1
-                else:
-                    self.left_candidate_idx = raw_left_idx
-                    self.left_candidate_count = 1
-                    
-                # 连续出现次数达到阈值，执行切换
-                if self.left_candidate_count >= self.debounce_k_frames:
-                    self.current_left_idx = self.left_candidate_idx
-                    self.left_candidate_count = 0  # 切换成功，计数器归零
-            else:
-                # 预测状态与当前生效状态一致（说明没有跳变，或者跳变只是闪了一下就恢复了）
-                self.left_candidate_count = 0  # 计数器清零
-                self.left_candidate_idx = raw_left_idx
-
-            # ====== 右手逻辑 ======
-            if raw_right_idx != self.current_right_idx:
-                if raw_right_idx == self.right_candidate_idx:
-                    self.right_candidate_count += 1
-                else:
-                    self.right_candidate_idx = raw_right_idx
-                    self.right_candidate_count = 1
-                    
-                if self.right_candidate_count >= self.debounce_k_frames:
-                    self.current_right_idx = self.right_candidate_idx
-                    self.right_candidate_count = 0  # 切换成功，计数器归零
-            else:
-                self.right_candidate_count = 0
-                self.right_candidate_idx = raw_right_idx
-
-        else:
-            # --- 策略 C: 无滤波，直接跟随 ---
-            self.current_left_idx = raw_left_idx
-            self.current_right_idx = raw_right_idx
-
-        # ==========================================
-        # 4. 指令组合与下发
-        # ==========================================
         target_left = self.hand_poses[self.current_left_idx]
         target_right = self.hand_poses[self.current_right_idx]
         
@@ -345,9 +263,9 @@ class RobotBody(RobotBase):
         print(segments)
         if mode == "dispatch":
             if "waist" in segments:
-                current_arm_position=self.retrieve_observation()['obs.state'][0:16]
                 default_arm_pose=np.array([0.182591655739083, 0.32575521044236666, 0.639202615644364, 0.03292066673111549, -1.9789475037079458, 0.5495126798768879, -0.1635420177877668, -0.5]+[ -0.21499700078493333, 0.1528587929215064, -0.718166681663206, 0.12983709623767936, -1.6508818544817816, -0.38494056388590252, -0.8677823346142831, 0.5])
-                trajs = self.ruckig_planning(current_arm_position, default_arm_pose,dof=16)
+                current_arm_position=np.asarray(self.current_state, dtype=float)[:len(default_arm_pose)].copy()
+                trajs = self.ruckig_planning(current_arm_position, default_arm_pose,dof=len(default_arm_pose))
                 for i, traj in enumerate(trajs):
                     # print(f"Executing trajectory point {i}: {traj}")
                     self.execute_action({'arm': traj})
@@ -357,42 +275,33 @@ class RobotBody(RobotBase):
                 time.sleep(0.5)
                 
             if "arm" in segments:
-                current_arm_position=self.retrieve_observation()['obs.state'][0:16]
                 target_arm_position = np.array(segments['arm'])
+                current_arm_position=np.asarray(self.current_state, dtype=float)[:len(target_arm_position)].copy()
                 # print(f"cur_pos:{current_arm_position}")
-                trajs = self.ruckig_planning(current_arm_position, target_arm_position,dof=16)
+                trajs = self.ruckig_planning(current_arm_position, target_arm_position,dof=len(target_arm_position))
                 for i, traj in enumerate(trajs):
                     # print(f"Executing trajectory point {i}: {traj}")
                     self.execute_action({'arm': traj})
                     time.sleep(0.01)
                 self.execute_action({'hand':np.array(segments['hand'])})
 
-                # # 注释
-                raw_left_idx = np.argmin([np.linalg.norm(segments['hand'][0:6] - p) for p in self.hand_poses])
-                raw_right_idx = np.argmin([np.linalg.norm(segments['hand'][6:12] - p) for p in self.hand_poses])
-                self.left_history = deque([raw_left_idx] * self.mode_window_size,maxlen=self.mode_window_size)
-                self.right_history=deque([raw_right_idx] * self.mode_window_size,maxlen=self.mode_window_size)
                 time.sleep(0.5)
             
         else:
             if "arm" in segments:
-                current_arm_position=self.retrieve_observation()['obs.state'][0:16]
-                target_arm_position = np.array(segments['arm'])
+                target_arm_position = np.asarray(segments['arm'], dtype=float)
+                current_arm_position=np.asarray(self.current_state, dtype=float)[:len(target_arm_position)].copy()
                 # print(f"cur_pos:{current_arm_position}")
                 trajs = self.ruckig_planning(current_arm_position, target_arm_position,dof=16)
                 for i, traj in enumerate(trajs):
                     # print(f"Executing trajectory point {i}: {traj}")
                     self.execute_action({'arm': traj})
                     time.sleep(0.02)
+                    
+            if "hand" in segments:
                 self.execute_action({'hand':np.array(segments['hand'])})
-                # # 注释
-                raw_left_idx = np.argmin([np.linalg.norm(segments['hand'][0:6] - p) for p in self.hand_poses])
-                raw_right_idx = np.argmin([np.linalg.norm(segments['hand'][6:12] - p) for p in self.hand_poses])
-                self.left_history = deque([raw_left_idx] * self.mode_window_size,maxlen=self.mode_window_size)
-                self.right_history=deque([raw_right_idx] * self.mode_window_size,maxlen=self.mode_window_size)
 
-            if "waist" in segments:
-                time.sleep(0.5)
+            if "neck" in segments and "waist" in segments:
                 self.execute_action({'waist_head': np.concatenate([segments['neck'],segments['waist']])},t=5)     
         return
 
@@ -403,15 +312,29 @@ class RobotBody(RobotBase):
             dict: Dictionary containing camera images, joint states, and timestamp from dataset
         """
         try:
-            result = {}
-            ref_timestamp = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
-            for cam_name in self.camera_image_queue:
-                image = self.camera_image_queue[cam_name]
-                if image is None:
+            with self.camera_lock:
+                if self.camera_ref is None:
                     return None
+                ref_timestamp = self.camera_stamp_queue.get(self.camera_ref)
+                if ref_timestamp is None:
+                    return None
+                if ref_timestamp == self.current_timestamp:
+                    return None
+
+                images = {}
+                for cam_name, image in self.camera_image_queue.items():
+                    if image is None:
+                        return None
+                    images[cam_name] = image.copy()
+                self.current_timestamp = ref_timestamp
+
+            result = {f'cam.{self.camera_ref}': images[self.camera_ref]}
+            for cam_name, image in images.items():
+                if cam_name == self.camera_ref:
+                    continue
                 result[f'cam.{cam_name}'] = image
             result['ref_timestamp'] = ref_timestamp
-            result['obs.state'] = self.current_state
+            result['obs.state'] = np.asarray(self.current_state, dtype=float).copy()
             return result
         except Exception as e:
             print(e)
@@ -435,7 +358,16 @@ class RobotBody(RobotBase):
             key: key of data, for example, action, observation.state
         """
         # read parquet file
-        df = pd.read_parquet(parquet_path)
+        df = pd.read_parquet(parquet_path)                # for i, traj in enumerate(trajs):
+                #     # print(f"Executing trajectory point {i}: {traj}")
+                #     self.execute_action({'arm': traj})
+                #     time.sleep(0.02)
+                # self.execute_action({'hand':np.array(segments['hand'])})
+                # # # 注释
+                # raw_left_idx = np.argmin([np.linalg.norm(segments['hand'][0:6] - p) for p in self.hand_poses])
+                # raw_right_idx = np.argmin([np.linalg.norm(segments['hand'][6:12] - p) for p in self.hand_poses])
+                # self.left_history = deque([raw_left_idx] * self.mode_window_size,maxlen=self.mode_window_size)
+                # self.right_history=deque([raw_right_idx] * self.mode_window_size,maxlen=self.mode_window_size)
         data = df[key].tolist()
         # process data of dexterous hand to gripper format
         processed_data = []
