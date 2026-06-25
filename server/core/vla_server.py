@@ -35,7 +35,7 @@ class VLAServer:
         
         # Statistics for Live display
         self.request_count = 0
-        self.total_inference_time = 0.0
+        # self.total_inference_time = 0.0
         self.avg_inference_time = 0.0
         self.inference_times = deque(maxlen=100)  # Keep last 100 inference times
         self.obs_info, self.act_info = {}, {}
@@ -71,7 +71,7 @@ class VLAServer:
             numpy.ndarray: Padded and resized image
         """
         height, width = img.shape[:2]
-        print(f"Debug: raw shape={height}x{width}, target shape={target_width}x{target_height}")
+        # print(f"Debug: raw shape={height}x{width}, target shape={target_width}x{target_height}")
         target_ratio = target_width / target_height
         current_ratio = width / height
 
@@ -96,10 +96,10 @@ class VLAServer:
         # Resize to target dimensions (using INTER_AREA interpolation suitable for downscaling)
         if max(height, width) != max(target_width, target_height):
             resized = cv2.resize(padded, (target_width, target_height), interpolation=cv2.INTER_AREA)
-            print(f"Debug: resized shape={resized.shape}")
+            # print(f"Debug: resized shape={resized.shape}")
             return resized
         else:
-            print(f"Debug: resized shape={padded.shape}")
+            # print(f"Debug: resized shape={padded.shape}")
             return padded
 
     def _image_decode_thread_func(self, key, encoded_img):
@@ -132,7 +132,7 @@ class VLAServer:
         """
         try:
             # Decode image data with parallel processing
-            start_time = time.time()
+            infer_start_time = time.time()
             if isinstance(data, list):
                 # Process multiple data items
                 for data_item in data:
@@ -156,9 +156,9 @@ class VLAServer:
                     data['obs'][key] = img
                     # print(f"Debug: image shape after process: {data['obs'][key].shape}")
             
-            end_time = time.time()
+            image_decode_time = time.time()
             # Calculate and print execution time
-            elapsed_time = end_time - start_time
+            elapsed_time = image_decode_time - infer_start_time
             self.obs_info['img_decode_time'] = round(elapsed_time, 4)
 
             # Update request count
@@ -166,13 +166,13 @@ class VLAServer:
                 self.request_count += 1
             
             # Submit inference task to thread pool with timing
-            inference_start_time = time.time()
+            # inference_start_time = time.time()
             model_data = data if isinstance(data, list) else [data]
-            for idx, item in enumerate(model_data):
-                for k, v in item.get('obs', {}).items():
-                    print(f"Debug: model_data[{idx}]['obs']['{k}'] dtype: {getattr(v, 'dtype', type(v))}")
+            # for idx, item in enumerate(model_data):
+            #     for k, v in item.get('obs', {}).items():
+            #         print(f"Debug: model_data[{idx}]['obs']['{k}'] dtype: {getattr(v, 'dtype', type(v))}")
             future = self.executor.submit(self.model.infer, model_data)
-            future.add_done_callback(lambda f: self.inference_callback(f, inference_start_time, meta=meta))
+            future.add_done_callback(lambda f: self.inference_callback(f, image_decode_time, meta=meta))
             for key, value in model_data[0]['obs'].items():
                 if 'cam.' in key:
                     self.obs_info[key] = value.shape
@@ -201,10 +201,10 @@ class VLAServer:
             inference_time = time.time() - start_time
             with self.thread_lock:
                 self.inference_times.append(inference_time)
-                self.total_inference_time += inference_time
+                self.avg_inference_time = sum(self.inference_times) / len(self.inference_times)
+                # self.total_inference_time += inference_time
                 # Calculate rolling average from recent inference times
-                if self.inference_times:
-                    self.avg_inference_time = sum(self.inference_times) / len(self.inference_times)
+                # if self.inference_times:
             self.zmq_server.sendMessage(result, meta=meta or {})
             self.act_info['pred_action'] = result['pred_action']
         except Exception as e:

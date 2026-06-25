@@ -3,7 +3,7 @@
   overflow: hidden;
   min-height: 0;
   --lang-task-subtask-content-height: 100%;
-  --lang-task-subtask-bottom: 20px;
+  --lang-task-subtask-bottom: 24px;
   --lang-apply-btn-height: 28px;
   --lang-cmd-col-gap: 4px;
 }
@@ -24,7 +24,7 @@
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
@@ -45,7 +45,7 @@
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   white-space: nowrap;
 }
 
@@ -59,7 +59,12 @@
   width: 60px !important;
   height: 18px;
   padding: 0 8px;
-  font-size: 11px;
+  font-size: var(--font-size-2);
+}
+
+.lang-threshold-wrap input::-webkit-inner-spin-button,
+.lang-threshold-wrap input::-webkit-outer-spin-button {
+  margin-right: -4px; /* 通过负边距将箭头区域向右拉近，缩小右侧空白 */
 }
 
 .lang-threshold-wrap input:disabled {
@@ -79,7 +84,7 @@
   background: var(--bg);
 }
 .task-progress-label {
-  font-size: 11px;
+  font-size: var(--font-size-2);
   color: var(--text-muted);
   text-transform: none;
   letter-spacing: .2px;
@@ -102,7 +107,7 @@
 .task-progress-value {
   min-width: 44px;
   text-align: right;
-  font-size: 11px;
+  font-size: var(--font-size-2);
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
@@ -118,9 +123,6 @@
   max-height: none;
 }
 
-.lang-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
-}
 .lang-cmd-layout {
   display: flex; 
   gap: 8px; 
@@ -134,26 +136,18 @@
   flex-direction: column; 
   gap: var(--lang-cmd-col-gap); 
   /* flex: 3;  */
-  min-width: 0; 
-  width: 15%; 
+  min-width: 81px; 
+  width: 20%; 
 }
 .lang-cmd-col-subtask    { 
   /* flex: 4;  */
-  width: 35%; 
+  min-width: 192px;
+  width: 40%; 
 }
 .lang-cmd-col-send       { 
   /* flex: 3;  */
-  width: 30%; 
-}
-.lang-cmd-col-title {
-  font-size: 10px; 
-  font-weight: 800; 
-  color: var(--panel-header-text);
-  text-transform: none; 
-  letter-spacing: .1px;
-  padding-bottom: 3px; 
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  min-width: 192px;
+  width: 40%; 
 }
 
 .lang-cmd-list {
@@ -161,7 +155,7 @@
   overflow-y: auto; max-height: 120px;
 }
 .lang-cmd-chip {
-  padding: 3px 8px; font-size: 11px;
+  padding: 3px 8px; font-size: var(--font-size-2);
   border: 1px solid var(--border); border-radius: var(--radius);
   background: var(--bg); color: var(--text-muted);
   cursor: pointer; transition: all .15s;
@@ -181,8 +175,8 @@
   border-radius: var(--radius); 
   color: var(--text);
   font-family: var(--font); 
-  font-size: 13px; 
-  font-weight: 500;
+  font-size: var(--font-size-3); 
+  font-weight: var(--font-weight-2);
   padding: 4px 0;
   outline: none; 
   transition: border .15s;
@@ -193,24 +187,24 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .lang-cmd-select option {
-  padding: 5px 24px 5px 8px;
+  padding: 5px 34px 5px 8px;
   cursor: pointer;
   background-repeat: no-repeat;
-  background-position: right 6px center;
+  background-position: right 8px center;
   background-size: 12px 12px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--font-size-3);
+  font-weight: var(--font-weight-2);
   color: var(--text);
 }
 .lang-cmd-select option[data-applied="1"] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23d93025' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round' d='M3 8.2l3.1 3.1L13 4.7'/%3E%3C/svg%3E");
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--font-weight-4);
 }
 .lang-cmd-select option:checked {
   background-color: var(--accent-soft);
   color: var(--accent);
-  font-weight: 700;
+  font-weight: var(--font-weight-4);
 }
 
 .lang-cmd-textarea {
@@ -223,8 +217,8 @@
   border-radius: var(--radius); 
   color: var(--text);
   font-family: var(--font); 
-  font-size: 14px; 
-  font-weight: 500;
+  font-size: var(--font-size-3); 
+  font-weight: var(--font-weight-2);
   padding: 8px 10px;
   outline: none; 
   transition: border .15s;
@@ -241,7 +235,7 @@
   border: 1px solid color-mix(in srgb, var(--border) 80%, #1a73e8 20%);
   background: transparent;
   color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%);
-  font-weight: 700;
+  font-weight: var(--font-weight-3);
   letter-spacing: 0.2px;
   box-shadow: none;
   transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;

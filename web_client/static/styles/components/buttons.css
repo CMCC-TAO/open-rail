@@ -3,7 +3,7 @@
   padding: 5px 12px; border: 1px solid var(--border);
   border-radius: var(--radius); background: var(--bg);
   color: var(--text); cursor: pointer; font-family: var(--font);
-  font-size: 12px; transition: all .15s; white-space: nowrap;
+  font-size: var(--font-size-3); transition: all .15s; white-space: nowrap;
   line-height: 1.4;
 }
 /* Inline icon <span> inside buttons: normalise symbol/emoji height */
@@ -14,31 +14,39 @@
 /* Font Awesome icons in buttons */
 .btn i.fas, .btn i.far, .btn i.fab {
   margin-right: 4px;
-  font-size: 12px;
+  font-size: var(--font-size-3);
   vertical-align: middle;
 }
 .btn-xs i.fas, .btn-xs i.far, .btn-xs i.fab {
-  font-size: 11px;
-  margin-right: 3px;
+  font-size: var(--font-size-2);
+  margin-right: -2px;
 }
 .btn-sm i.fas, .btn-sm i.far, .btn-sm i.fab {
-  font-size: 12px;
+  font-size: var(--font-size-3);
   margin-right: 4px;
+}
+/* ── ④ Collapse button: rightmost, vertically centered ── */
+.btn-collapse {
+  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
+}
+.btn-collapse i.fas, .btn-collapse i.far, .btn-collapse i.fab {
+  /* font-size: var(--font-size-3); */
+  margin-right: 0px;
 }
 .btn:hover  { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .btn:active { opacity: .9; }
 .btn:disabled { opacity: .55; cursor: default; pointer-events: none; }
-.btn-xs  { padding: 2px 7px; font-size: 11px; }
-.btn-sm  { padding: 4px 10px; font-size: 12px; }
-.btn-lg  { padding: 7px 20px; font-size: 13px; font-weight: 600; }
+.btn-xs  { padding: 2px 7px; font-size: var(--font-size-2); }
+.btn-sm  { padding: 4px 10px; font-size: var(--font-size-3); }
+.btn-lg  { padding: 7px 20px; font-size: var(--font-size-4); font-weight: var(--font-weight-3); }
 
 /* Keep Start/Stop button width stable while text toggles */
 #btn-start, #btn-pause, #btn-reset {
   min-width: 80px;
   min-height: 34px;
   text-align: center;
-  font-size: 14px;
-  font-weight: 1000;
+  font-size: var(--font-size-5);
+  font-weight: var(--font-weight-5);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -47,11 +55,12 @@
 
 #btn-start i.fas, #btn-pause i.fas, #btn-reset i.fas {
   margin-right: 0;
+  margin-left:-2px;
   line-height: 1;
   vertical-align: middle;
 }
 #btn-observe, #btn-infer, #btn-control {
-  min-width: 80px;
+  min-width: 78px;
   min-height: 34px;
   padding: 2px 6px;
   display: inline-flex;
@@ -62,15 +71,15 @@
   text-align: center;
 }
 .thread-btn-main {
-  font-size: 13px;
+  font-size: var(--font-size-4);
   line-height: 1;
-  font-weight: 1000;
+  font-weight: var(--font-weight-5);
   pointer-events: none;
 }
 .thread-btn-sub {
-  font-size: 10px;
+  font-size: var(--font-size-1);
   line-height: 1;
-  font-weight: 600;
+  font-weight: var(--font-weight-3);
   opacity: .75;
   pointer-events: none;
 }
@@ -79,7 +88,7 @@
 .btn-danger,
 .btn-warn {
   color: #ffffff;
-  font-weight: 600;
+  font-weight: var(--font-weight-3);
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
 }
 

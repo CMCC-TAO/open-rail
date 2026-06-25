@@ -5,9 +5,9 @@
 :root {
   --layout-left-col-width: 17%;
   --layout-right-col-width: 20%;
-  --center-monitor-height: 20%;
-  --center-lang-height: 26%;
-  --center-traj-height: 50%;
+  --center-monitor-height: 17%;
+  --center-lang-height: 25%;
+  --center-traj-height: 46%;
   --center-collapsed-language-header-height: 38px;
   --center-collapsed-trajectory-header-height: 75px;
 }
@@ -53,9 +53,9 @@
   background: var(--bg);
 }
 
-.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 0; }
-.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 0; }
-.center-col .panel-traj { flex: 0 0 var(--center-traj-height); min-height: 0; }
+.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 154px; }
+.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 220px; }
+.center-col .panel-traj { flex: 0 0 var(--center-traj-height); min-height: 300px; }
 
 /* Language collapsed -> keep only header, Trajectory consumes remaining height */
 .center-col.lang-collapsed .panel-lang {
@@ -93,10 +93,14 @@
   background: var(--bg3);
   border-color: var(--border);
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--font-size-2);
   line-height: 1;
   box-shadow: 2px 0 6px rgba(0,0,0,.08);
   writing-mode: initial;
+}
+.panel-reveal-btn i.fas, .panel-reveal-btn i.far, .panel-reveal-btn i.fab {
+  /* font-size: var(--font-size-3); */
+  margin-right: 0px;
 }
 .panel-reveal-btn:hover {
   background: var(--bg2);

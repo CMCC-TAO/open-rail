@@ -3,11 +3,11 @@
 // ═══════════════════════════════════════════════════════
 
 // Keys to exclude from the config tree (handled separately or rendered via createLangLinkRow)
-const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record']);
+const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record', 'controller']);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
-  intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples', 'fitting_time_step'],
+  intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples'],
   inter_chunk: ['inter_chunk_mode', 'search_length', 'smooth_action', 'smooth_base', 'smooth_length', 'smooth_ratio'],
 };
 
@@ -39,11 +39,13 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visualize.camera.open_head',
   'visualize.camera.open_wrist_left',
   'visualize.camera.open_wrist_right',
-  'visualize.trajectory.selected_joints',
+  'visualize.trajectory.play',
   'visualize.trajectory.source',
+  'visualize.trajectory.selected_joints',
   'visualize.trajectory.window_span_sec',
   'record.switch',
   'record.save_dir',
+  'record.record_exp_data',
   'record.info.data_path',
   'record.info.total_chunks',
   'record.info.total_episodes',
@@ -51,6 +53,14 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'record.info.total_tasks',
   'record.info.total_videos',
   'record.info.video_path',
+  'controller.raw_fps',
+  'controller.wait_time',
+  'controller.period',
+  'controller.speed',
+  'controller.gripper_offset',
+  'vision.preprocess.method',
+  'vision.preprocess.width',
+  'rdm.mode',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
@@ -67,10 +77,12 @@ const DEFAULT_MAIN_PARAMETER_KEYS = {
   'rdm.mode': 'Mode',
   'controller.wait_time': 'Wait Time[ms]',
   'controller.period': 'Control Period[ms]',
+  'controller.speed': 'Control Speed',
+  'controller.gripper_offset': 'Gripper Offset',
   'inter_chunk.inter_chunk_mode': 'Inter-Chunk Mode',
   'intra_chunk.intra_chunk_mode': 'Intra-Chunk Mode',
-  'vision.preprocess.mode': 'Preprocess Mode',
-  'vision.preprocess.width': 'Preprocess Width',
+  'vision.preprocess.method': 'Img Proc Method',
+  'vision.preprocess.width': 'Img Proc Width',
 };
 
 let _cfgInputSyncing = false;
@@ -668,11 +680,19 @@ function createCfgRow(dotKey, label, value) {
     btn.type = 'button';
     btn.className = 'btn btn-xs';
     btn.textContent = 'Browse';
+    let isBrowsing = false;
 
     btn.addEventListener('click', async () => {
+      if (isBrowsing) return;
+      isBrowsing = true;
+      btn.disabled = true;
+      btn.textContent = 'Browsing...';
+
       let selectedPath = '';
       try {
-        const pickRes = await apiFetch('/api/client/robot/select_directory', {
+        const initialPath = String(value || '').trim();
+        const url = `/api/client/robot/select_directory${initialPath ? `?path=${encodeURIComponent(initialPath)}` : ''}`;
+        const pickRes = await apiFetch(url, {
           // Native directory chooser blocks server response until user confirms/cancels.
           // Use a long timeout to avoid aborting before path is selected.
           timeoutMs: 600000,
@@ -680,7 +700,11 @@ function createCfgRow(dotKey, label, value) {
         });
         selectedPath = String(pickRes?.path || '').trim();
       } catch (_) {
-        return;
+        selectedPath = '';
+      } finally {
+        isBrowsing = false;
+        btn.disabled = false;
+        btn.textContent = 'Browse';
       }
       if (!selectedPath) return;
 

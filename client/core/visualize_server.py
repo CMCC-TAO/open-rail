@@ -21,7 +21,6 @@ class VisualizeServer:
         # including script/uvicorn execution paths.
         self.logger = logging.getLogger(__name__)
         self.config = visualize_config
-        self.logger.info("Initializing server on %s:%d", self.config.server.host, self.config.server.port)
         self.kill_port(self.config.server.port)
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = False
@@ -43,6 +42,10 @@ class VisualizeServer:
         self.server = None
         self._img_executor = None
         self._create_img_executor()
+        self.vis_global_step = 0
+        self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
+        self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
+        self.logger.info("Initializing server on %s:%d", self.config.server.host, self.config.server.port)
 
     def kill_port(self, port):
         os.system(f'kill -9 $(lsof -t -i:{port})')
@@ -57,22 +60,154 @@ class VisualizeServer:
             self.latest_imgs = imgs.copy()
             self.latest_imgs_seq += 1
 
-    def update_chart_data(self, data: List[Dict]):
-        """Update chart data.
+    # def update_chart_data(self, data: List[Dict]):
+    #     """Update chart data.
+
+    #     Args:
+    #         data (List[Dict]): Data list, each element is
+    #             {'tab': 'position|velocity|acceleration',
+    #              'type': 'origin|action|state',
+    #              'x': step, 'joints_y': values}.
+    #     """
+    #     with self.data_lock:
+    #         for dt in data:
+    #             timestamp = time.time()
+    #             dt_with_ts = {**dt, 'timestamp': timestamp}
+    #             self.data_send_queue.append(dt_with_ts)
+
+    #         # Bounded automatically by deque(maxlen=1000).
+
+    def update_chart_data(self, action_fitted=None, vel_fitted=None, acc_fitted=None, action_raw=None, current_state=None, observe_period=None, control_period=None):
+        """Visualize action and state data for debugging and monitoring.
 
         Args:
-            data (List[Dict]): Data list, each element is
-                {'tab': 'position|velocity|acceleration',
-                 'type': 'origin|action|state',
-                 'x': step, 'joints_y': values}.
+            action_fitted: Predicted action values for robot joints vel_fitted: Predicted velocity values (of action_fitted) for robot joints
+            acc_fitted: Predicted acceleration values (of action_fitted) for robot joints
+            action_raw: Raw action values before fitting
+            current_state: Current robot joint state
         """
+        timestamp = time.time()
+        self.vis_global_step += 1
         with self.data_lock:
-            for dt in data:
-                timestamp = time.time()
-                dt_with_ts = {**dt, 'timestamp': timestamp}
-                self.data_send_queue.append(dt_with_ts)
+            # dt_ctrl = self.config.controller.period / 1000.0
+            # Position data
+            if action_fitted is not None:
+                self.data_send_queue.append({
+                    'tab': 'position',
+                    'type': 'action_fitted',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': action_fitted.tolist()
+                })
+            if current_state is not None:
+                self.data_send_queue.append({
+                    'tab': 'position',
+                    'type': 'state',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': current_state.tolist()
+                })
+            if action_raw is not None:
+                self.data_send_queue.append({
+                    'tab': 'position',
+                    'type': 'action_raw',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': action_raw.tolist()
+                })
 
-            # Bounded automatically by deque(maxlen=1000).
+            # TODO: use real velocity/acceleration
+            # Velocity/acceleration for state (derived from state)
+            state_vel = None
+            state_acc = None
+            if current_state is not None:
+                if self.vis_prev_state is None:
+                    state_vel = np.zeros_like(current_state)
+                    state_acc = np.zeros_like(current_state)
+                else:
+                    try:
+                        state_vel = (current_state - self.vis_prev_state) / control_period
+                        if self.vis_prev_state_vel is None:
+                            state_acc = np.zeros_like(current_state)
+                        else:
+                            state_acc = (state_vel - self.vis_prev_state_vel) / control_period
+                    except Exception as e:
+                        self.logger.warning(f"Error computing state velocity/acceleration: {e}")
+                        state_vel = np.zeros_like(current_state)
+                        state_acc = np.zeros_like(current_state)
+
+                self.data_send_queue.append({
+                    'tab': 'velocity',
+                    'type': 'state',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': state_vel.tolist()
+                })
+                self.data_send_queue.append({
+                    'tab': 'acceleration',
+                    'type': 'state',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': state_acc.tolist()
+                })
+
+            # Velocity/acceleration for action (direct input)
+            if vel_fitted is not None:
+                self.data_send_queue.append({
+                    'tab': 'velocity',
+                    'type': 'action_fitted',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': vel_fitted.tolist()
+                })
+            if acc_fitted is not None:
+                self.data_send_queue.append({
+                    'tab': 'acceleration',
+                    'type': 'action_fitted',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': acc_fitted.tolist()
+                })
+
+            # Origin (raw action) series
+            if action_raw is not None:
+                if self.vis_prev_origin is None:
+                    origin_vel = np.zeros_like(action_raw)
+                    origin_acc = np.zeros_like(action_raw)
+                else:
+                    origin_vel = (action_raw - self.vis_prev_origin) / observe_period
+                    if self.vis_prev_origin_vel is None:
+                        origin_acc = np.zeros_like(action_raw)
+                    else:
+                        origin_acc = (origin_vel - self.vis_prev_origin_vel) / observe_period
+
+                self.data_send_queue.append({
+                    'tab': 'velocity',
+                    'type': 'action_raw',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': origin_vel.tolist()
+                })
+                self.data_send_queue.append({
+                    'tab': 'acceleration',
+                    'type': 'action_raw',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': origin_acc.tolist()
+                })
+                self.vis_prev_origin = action_raw
+                self.vis_prev_origin_vel = origin_vel
+
+
+            # Update previous values only for available inputs
+            if action_fitted is not None:
+                self.vis_prev_action = action_fitted
+            if vel_fitted is not None:
+                self.vis_prev_action_vel = vel_fitted
+            if current_state is not None:
+                self.vis_prev_state = current_state
+            if state_vel is not None:
+                self.vis_prev_state_vel = state_vel
 
     async def register_client(self, websocket):
         """Register a new WebSocket client."""

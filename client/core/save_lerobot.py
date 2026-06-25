@@ -739,7 +739,8 @@ class LeRobotDatasetWriter:
                     expected_shape = self.camera_shape_dict[camera_name]
                     raw_frame = step_state.get(camera_name)
                     # self.logger.info(f"step_state: {step_state.keys()}")
-                    frame = self._prepare_video_frame(raw_frame, self.config.resize, expected_shape)
+                    # TODO: use three threads in the future
+                    frame = self._prepare_video_frame(raw_frame, self.config.save_raw, expected_shape)
                     # self.logger.info(f"expected_shape: {expected_shape}")
                     if frame is None:
                         self.logger.warning(f"{camera_name} frame invalid, skip this frame")
@@ -991,7 +992,7 @@ class LeRobotDatasetWriter:
 
         self.logger.info("All queues cleared.")
 
-    def _prepare_video_frame(self, frame: Any, resize: bool=False, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
+    def _prepare_video_frame(self, frame: Any, save_raw: bool=True, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
         """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
         # print(f"frame ndim={frame.ndim}, dtype={frame.dtype}, shape={frame.shape}, expected_shape={expected_shape}")
         if not isinstance(frame, np.ndarray):
@@ -1007,7 +1008,7 @@ class LeRobotDatasetWriter:
         #     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
         exp_h, exp_w = expected_shape[0], expected_shape[1]
-        if resize and (frame.shape[0] != exp_h or frame.shape[1] != exp_w):
+        if not save_raw and (frame.shape[0] != exp_h or frame.shape[1] != exp_w):
             frame = cv2.resize(frame, (exp_w, exp_h), interpolation=cv2.INTER_LINEAR)
         
         return np.ascontiguousarray(frame)

@@ -260,7 +260,7 @@ if __name__ == "__main__":
     live = None
     console = Console()
     try:
-        vla_client.run()
+        vla_client.start()
         
         if not args.debug:
             terminal_size = console.size

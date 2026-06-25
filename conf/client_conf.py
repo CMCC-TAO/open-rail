@@ -17,7 +17,6 @@ def get_client_config():
             - rdm: Real-time data manager configuration
             - intra_chunk: Intra-chunk smoothing/fitting configuration
             - controller: Robot controller configuration
-            - observer: Observation system configuration
             - robots: Robot-specific configuration
             - zmq: ZMQ communication configuration
             - record: Data recording configuration
@@ -28,7 +27,6 @@ def get_client_config():
     config.intra_chunk = get_intra_chunk_config()
     config.inter_chunk = get_inter_chunk_config()
     config.controller = get_controller_config()
-    config.observer = get_observer_config()
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
     # config.vis_zmq = get_vis_zmq_config()
@@ -48,13 +46,12 @@ def get_rdm_config() -> ConfigDict:
     Returns:
         ConfigDict: Configuration dictionary for RealtimeDataManager containing:
             - max_len: Maximum length of observation data sequence buffer
-            - record_data: Flag to enable/disable data recording
+            - observe_fps_window_size: Window size for FPS estimation
     """
     config = ConfigDict()
     config.mode = 'async'  # inference mode, choices = ('async', 'sync')
     config.max_len = 100  # Maximum length of observation data sequence buffer
     config.observe_fps_window_size = 10  # FPS estimation window size based on latest N added observation frames
-    config.record_data = False  # Enable/disable data recording
     return config
 
 def get_intra_chunk_config() -> ConfigDict:
@@ -79,7 +76,6 @@ def get_intra_chunk_config() -> ConfigDict:
     config.max_gripper_fitting_workers = 2
     config.max_head_fitting_workers = 2
     config.fitting_num_samples = 64
-    config.fitting_time_step = 3.75  # Time step for trajectory fitting in milliseconds
     config.fitting_deg = 4  # Polynomial fitting degree
     config.intra_chunk_mode = 'fitting'  # intra-chunk processing mode, choices = ('raw', 'interpolation', 'fitting')
     config.joint_dim = 14  # Degrees of freedom for dual arms
@@ -112,6 +108,8 @@ def get_controller_config() -> ConfigDict:
     config = ConfigDict()
     config.wait_time = 10  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
     config.period = 3.75   # Control period for sending command to robot in milliseconds
+    config.speed = 1.0     # The execution speed with respect to tele-operation speed
+    config.raw_fps = 30    # The FPS of the dataset used to train vla/wam model
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
     return config
 
