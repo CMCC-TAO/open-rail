@@ -91,8 +91,8 @@
   white-space: nowrap;
 }
 .task-progress-track {
-  width: 120px;
-  height: 75%;
+  width: 108px;
+  height: 72%;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg2);
@@ -137,17 +137,17 @@
   gap: var(--lang-cmd-col-gap); 
   /* flex: 3;  */
   min-width: 81px; 
-  width: 20%; 
+  width: 16%; 
 }
 .lang-cmd-col-subtask    { 
   /* flex: 4;  */
   min-width: 192px;
-  width: 40%; 
+  width: 52%; 
 }
 .lang-cmd-col-send       { 
   /* flex: 3;  */
   min-width: 192px;
-  width: 40%; 
+  width: 32%; 
 }
 
 .lang-cmd-list {
