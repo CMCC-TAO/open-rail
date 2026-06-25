@@ -35,7 +35,7 @@ class VLAServer:
         
         # Statistics for Live display
         self.request_count = 0
-        self.total_inference_time = 0.0
+        # self.total_inference_time = 0.0
         self.avg_inference_time = 0.0
         self.inference_times = deque(maxlen=100)  # Keep last 100 inference times
         self.obs_info, self.act_info = {}, {}
@@ -201,10 +201,10 @@ class VLAServer:
             inference_time = time.time() - start_time
             with self.thread_lock:
                 self.inference_times.append(inference_time)
-                self.total_inference_time += inference_time
+                self.avg_inference_time = sum(self.inference_times) / len(self.inference_times)
+                # self.total_inference_time += inference_time
                 # Calculate rolling average from recent inference times
-                if self.inference_times:
-                    self.avg_inference_time = sum(self.inference_times) / len(self.inference_times)
+                # if self.inference_times:
             self.zmq_server.sendMessage(result, meta=meta or {})
             self.act_info['pred_action'] = result['pred_action']
         except Exception as e:
