@@ -337,6 +337,36 @@ function setRunningUI(running, paused = false) {
   setThreadControlUI();
 }
 
+function isRuntimeShortcutTypingTarget(el) {
+  if (!el) return false;
+  const tag = (el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+}
+
+function clickButtonIfReady(id) {
+  const btn = $(id);
+  if (!btn || btn.disabled || btn.dataset.pending === '1') return;
+  btn.click();
+}
+
+function setupRuntimeShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || isRuntimeShortcutTypingTarget(e.target)) return;
+
+    const key = e.key.toLowerCase();
+    if (key === ' ') {
+      e.preventDefault();
+      clickButtonIfReady('btn-pause');
+      return;
+    }
+
+    if (key === 'r' && e.shiftKey) {
+      e.preventDefault();
+      clickButtonIfReady('btn-reset');
+    }
+  });
+}
+
 // ═══════════════════════════════════════════════════════
 //  Event wiring — config, client control, manual ctrl
 // ═══════════════════════════════════════════════════════
@@ -616,6 +646,7 @@ function wireEvents() {
   // Delegated module setups
   setupLanguageEvents();
   setupManualControlEvents();
+  setupRuntimeShortcuts();
 }
 
 // ═══════════════════════════════════════════════════════
