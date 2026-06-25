@@ -2,7 +2,6 @@ import cv2
 import time
 import threading
 import logging
-import numpy as np
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -93,9 +92,6 @@ class VLAClientAsync():
 
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
-        self.vis_global_step = 0
-        self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
-        self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.image_process_time = 0.0
@@ -159,7 +155,7 @@ class VLAClientAsync():
         if self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.stop(timeout=1.0)
 
-    def run(self):
+    def start(self):
         """Start the VLA client and all associated threads.
 
         This method initializes and starts the observation, control, and inference
@@ -328,18 +324,30 @@ class VLAClientAsync():
                 self.task_language_manager.add_task_progress(progress=prob_progress)
                 self.task_language_manager.advance_subtask()
         current_state = getattr(self.robot, 'current_state', None)
-        self.vis_action_state(action_fitted, vel_fitted, acc_fitted, action_raw, current_state)
+        self.visualize_server.update_chart_data(
+            action_fitted=action_fitted,
+            vel_fitted=vel_fitted,
+            acc_fitted=acc_fitted,
+            action_raw=action_raw,
+            current_state=current_state,
+            observe_period=self.observe_period / 1000,
+            control_period=self.config.controller.period / 1000
+            )
 
     def _visualize_thread_fun(self):
         # Send state data to visualization server for live plotting when control thread is not running
         if not self.is_control_thread_running:
             current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
             action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
-            self.vis_action_state(action_fitted=action_fitted,
-                                vel_fitted=vel_fitted,
-                                acc_fitted=acc_fitted,
-                                action_raw=action_raw,
-                                current_state=current_state)
+            self.visualize_server.update_chart_data(
+                action_fitted=action_fitted,
+                vel_fitted=vel_fitted,
+                acc_fitted=acc_fitted,
+                action_raw=action_raw,
+                current_state=current_state,
+                observe_period=self.observe_period / 1000,
+                control_period=self.config.controller.period / 1000
+                )
     @run_time_decorator
     def _inference_first(self):
         """First inference step, which initializes the control pipeline.
@@ -694,143 +702,6 @@ class VLAClientAsync():
                 keep_ratio=self.config.vision.preprocess.keep_ratio)
         else:
             self._preprocess_func = None
-
-    def vis_action_state(self, action_fitted=None, vel_fitted=None, acc_fitted=None, action_raw=None, current_state=None):
-        """
-        Visualize action and state data for debugging and monitoring.
-
-        Args:
-            action_fitted: Predicted action values for robot joints
-            vel_fitted: Predicted velocity values (of action_fitted) for robot joints
-            acc_fitted: Predicted acceleration values (of action_fitted) for robot joints
-            action_raw: Raw action values before fitting
-            current_state: Current robot joint state
-        """
-        # Convert non-None inputs to numpy arrays
-        # action_np = np.asarray(action_fitted) if action_fitted is not None else None
-        # action_vel = np.asarray(vel_fitted) if vel_fitted is not None else None
-        # action_acc = np.asarray(acc_fitted) if acc_fitted is not None else None
-        # state_np = np.asarray(current_state) if current_state is not None else None
-
-        # Control period in seconds
-        dt_ctrl = self.config.controller.period / 1000.0
-
-        list_data = []
-
-        # Position data
-        if action_fitted is not None:
-            list_data.append({
-                'tab': 'position',
-                'type': 'action_fitted',
-                'x': self.vis_global_step,
-                'joints_y': action_fitted.tolist()
-            })
-        if current_state is not None:
-            list_data.append({
-                'tab': 'position',
-                'type': 'state',
-                'x': self.vis_global_step,
-                'joints_y': current_state.tolist()
-            })
-
-        # TODO: use real velocity/acceleration
-        # Velocity/acceleration for state (derived from state)
-        state_vel = None
-        state_acc = None
-        if current_state is not None:
-            if self.vis_prev_state is None:
-                state_vel = np.zeros_like(current_state)
-                state_acc = np.zeros_like(current_state)
-            else:
-                try:
-                    state_vel = (current_state - self.vis_prev_state) / dt_ctrl
-                    if self.vis_prev_state_vel is None:
-                        state_acc = np.zeros_like(current_state)
-                    else:
-                        state_acc = (state_vel - self.vis_prev_state_vel) / dt_ctrl
-                except Exception as e:
-                    self.logger.warning(f"Error computing state velocity/acceleration: {e}")
-                    state_vel = np.zeros_like(current_state)
-                    state_acc = np.zeros_like(current_state)
-
-            list_data.append({
-                'tab': 'velocity',
-                'type': 'state',
-                'x': self.vis_global_step,
-                'joints_y': state_vel.tolist()
-            })
-            list_data.append({
-                'tab': 'acceleration',
-                'type': 'state',
-                'x': self.vis_global_step,
-                'joints_y': state_acc.tolist()
-            })
-
-        # Velocity/acceleration for action (direct input)
-        if vel_fitted is not None:
-            list_data.append({
-                'tab': 'velocity',
-                'type': 'action_fitted',
-                'x': self.vis_global_step,
-                'joints_y': vel_fitted.tolist()
-            })
-        if acc_fitted is not None:
-            list_data.append({
-                'tab': 'acceleration',
-                'type': 'action_fitted',
-                'x': self.vis_global_step,
-                'joints_y': acc_fitted.tolist()
-            })
-
-        # Origin (raw action) series
-        if action_raw is not None:
-            origin_np = np.asarray(action_raw)
-            list_data.append({
-                'tab': 'position',
-                'type': 'action_raw',
-                'x': self.vis_global_step,
-                'joints_y': origin_np.tolist()
-            })
-
-            dt_origin = self.observe_period
-            if self.vis_prev_origin is None:
-                origin_vel = np.zeros_like(origin_np)
-                origin_acc = np.zeros_like(origin_np)
-            else:
-                origin_vel = (origin_np - self.vis_prev_origin) / dt_origin
-                if self.vis_prev_origin_vel is None:
-                    origin_acc = np.zeros_like(origin_np)
-                else:
-                    origin_acc = (origin_vel - self.vis_prev_origin_vel) / dt_origin
-
-            list_data.append({
-                'tab': 'velocity',
-                'type': 'action_raw',
-                'x': self.vis_global_step,
-                'joints_y': origin_vel.tolist()
-            })
-            list_data.append({
-                'tab': 'acceleration',
-                'type': 'action_raw',
-                'x': self.vis_global_step,
-                'joints_y': origin_acc.tolist()
-            })
-            self.vis_prev_origin = origin_np
-            self.vis_prev_origin_vel = origin_vel
-
-        if list_data:
-            self.visualize_server.update_chart_data(list_data)
-            self.vis_global_step += 1
-
-        # Update previous values only for available inputs
-        if action_fitted is not None:
-            self.vis_prev_action = action_fitted
-        if vel_fitted is not None:
-            self.vis_prev_action_vel = vel_fitted
-        if current_state is not None:
-            self.vis_prev_state = current_state
-        if state_vel is not None:
-            self.vis_prev_state_vel = state_vel
 
 if __name__ == "__main__":
     pass

@@ -19,7 +19,7 @@
 }
 .btn-xs i.fas, .btn-xs i.far, .btn-xs i.fab {
   font-size: var(--font-size-2);
-  margin-right: 3px;
+  margin-right: -2px;
 }
 .btn-sm i.fas, .btn-sm i.far, .btn-sm i.fab {
   font-size: var(--font-size-3);
