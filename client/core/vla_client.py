@@ -674,22 +674,29 @@ class VLAClientAsync():
 
     def _request_inference(self, data, timeout_ms=500):
         request_id = self._next_request_id()
+        # start_time = time.time()
         if not self.vla_zmq.sendMessage(data, meta={'request_id': request_id}):
             return None
+        # end_time = time.time()
+        # print(f"Debug: Net Time = {(end_time - start_time) * 1000} ms")
 
         deadline = time.perf_counter() + timeout_ms / 1000.0
         while True:
             remain_s = deadline - time.perf_counter()
             if remain_s <= 0:
                 return None
+            
+            # start_time = time.time()
             msg = self.vla_zmq.recvMessage(timeout_ms=max(1, int(remain_s * 1000)))
+            # end_time = time.time()
+            # print(f"Debug: Infer Time = {(end_time - start_time) * 1000} ms")
+
             if msg is None:
                 return None
             meta = msg.get('meta') or {}
             if meta.get('request_id') == request_id:
                 return msg
             self.logger.warning(f"Drop stale response with unmatched request_id: {meta.get('request_id')}")
-
     def update_preprocess_func(self):
         """Update the preprocess function when vision.preprocess parameters change."""
         # print(f"Debug: vision.preprocess = {self.config.vision.preprocess}")
