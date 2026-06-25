@@ -36,6 +36,7 @@ def get_client_config():
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
     config.language = get_language_config()
+    config.language_reset_pos = None
     return config
 
 def get_rdm_config() -> ConfigDict:
@@ -109,7 +110,7 @@ def get_controller_config() -> ConfigDict:
             - gripper_offset: Gripper command forward offset with respect to arm command in frames
     """
     config = ConfigDict()
-    config.wait_time = 200  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
+    config.wait_time = 10  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
     config.period = 3.75   # Control period for sending command to robot in milliseconds
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
     return config
@@ -157,10 +158,10 @@ def get_visualize_config() -> ConfigDict:
 
 def get_language_config() -> ConfigDict:
     config = ConfigDict()
-    config.file_path = 'lang_cmd.json'  # Path to language configuration file, must in conf dir.
-    config.task_id = 'pour_tea'
-    config.sub_task_id = 1
-    config.auto_mode = True  # If True, automatically switch language instructions based on probability threshold
+    config.file_path = 'language_cmd.json'  # Path to language configuration file, must in conf dir.
+    config.task_id = 'make_coffee'
+    config.sub_task_id = 0
+    config.auto_mode = False  # If True, automatically switch language instructions based on probability threshold
     config.task_progress_threshold = 0.9  # Probability threshold for switching language instructions
     config.task_progress_win_size = 10 # Sliding window size to compute average task progress
     return config

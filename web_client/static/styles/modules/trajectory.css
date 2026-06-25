@@ -179,7 +179,7 @@
   display: flex; flex-direction: column; gap: 3px;
 }
 .joint-sel-row {
-  display: flex; gap: 3px; flex-wrap: nowrap; align-items: center;
+  display: flex; gap: 3px; flex-wrap: wrap; align-items: center;
 }
 
 /* Joint toggle chips */

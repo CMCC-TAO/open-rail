@@ -54,8 +54,11 @@ class VLAClientAsync():
         self.task_language_manager = task_language_manager
         self.vla_zmq = vla_zmq_client
         self.robot = robot
-        self.action_layout = dict(self.config.action_layout) if hasattr(self.config, 'action_layout') else {}
+        robot_cfg = getattr(config.robots, config.robots.type.value, None)
+        self.action_layout = dict(robot_cfg.action_layout) if hasattr(robot_cfg, 'action_layout') else {}
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
+        self.control_action_jump_threshold = 0.05
+        self._prev_control_action = None
         self.is_running = False
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
@@ -127,12 +130,47 @@ class VLAClientAsync():
 
     def start_control(self):
         self.is_running = True
+        self._prev_control_action = None
         self.is_control_thread_running = True
         if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
 
     def stop_control(self):
         self.is_control_thread_running = False
+        self._prev_control_action = None
+
+    def _stop_control_thread_on_error(self):
+        self.is_control_thread_running = False
+        if self.control_thread_timer.is_alive():
+            self.control_thread_timer.stop(timeout=1.0)
+
+    def _check_control_action_jump(self, action):
+        current_action = np.asarray(action, dtype=float).reshape(-1)
+        prev_action = self._prev_control_action
+        if prev_action is None:
+            self._prev_control_action = current_action.copy()
+            return
+
+        if prev_action.shape != current_action.shape:
+            msg = f"Control action shape changed: previous={prev_action.shape}, current={current_action.shape}."
+            self._stop_control_thread_on_error()
+            raise RuntimeError(msg)
+
+        diff = np.abs(current_action[self.joint_indices] - prev_action[self.joint_indices])
+        max_pos = int(np.argmax(diff))
+        max_diff = float(diff[max_pos])
+        if max_diff > self.control_action_jump_threshold:
+            action_index = self.joint_indices[max_pos]
+            msg = (
+                f"Control action jump detected at action index {action_index}: "
+                f"diff={max_diff:.6f}, threshold={self.control_action_jump_threshold:.6f}, "
+                f"previous={prev_action[action_index]:.6f}, current={current_action[action_index]:.6f}."
+            )
+            self._stop_control_thread_on_error()
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+
+        self._prev_control_action = current_action.copy()
 
     def update_camera_shape(self) -> dict:
         """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
@@ -302,6 +340,7 @@ class VLAClientAsync():
         action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
 
         if action_fitted is not None:
+            self._check_control_action_jump(action_fitted)
             self.robot.control_robot(action_fitted)
             with self.show_thread_lock:
                 self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
