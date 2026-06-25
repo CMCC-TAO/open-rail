@@ -30,8 +30,8 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 0
-  task_id: tea_master
+  sub_task_id: 1
+  task_id: table_bussing
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 rdm:
@@ -77,10 +77,10 @@ record:
       valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 2
-    total_frames: 900
-    total_tasks: 2
-    total_videos: 6
+    total_episodes: 1
+    total_frames: 532
+    total_tasks: 1
+    total_videos: 3
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   save_dir: data/recording
