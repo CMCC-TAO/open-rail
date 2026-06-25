@@ -384,6 +384,8 @@ class VLAClientAsync():
             if result is None or 'data' not in result:
                 # print("Debug: infer first timeout.")
                 return
+            # Record trajectory fitting timestamp
+            self.realtime_data_manager.set_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
 
             action_data = result['data']
@@ -396,8 +398,6 @@ class VLAClientAsync():
             self.realtime_data_manager.set_init_observe_timestamp(timestamp=timestamp_chunk[0])
             self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
-            # Record trajectory fitting timestamp
-            self.realtime_data_manager.set_traj_time_marker()
             timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
             prob_progress = None
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
@@ -474,6 +474,9 @@ class VLAClientAsync():
             if 'data' not in result:
                 self.logger.warning("Inference result doesn't have data.")
                 return
+
+            # Record trajectory fitting timestamp
+            self.realtime_data_manager.set_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
             action_data = result['data']
             
@@ -484,8 +487,6 @@ class VLAClientAsync():
             # Add action data (thread-safe function, no lock needed)
             self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
-            # Record trajectory fitting timestamp
-            self.realtime_data_manager.set_traj_time_marker()
 
             timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
             if timestamps is None:
