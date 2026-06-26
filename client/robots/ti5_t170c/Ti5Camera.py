@@ -19,10 +19,9 @@ class Ti5Camera(Node):
         self.fps = fps
         self.period = 1.0 / fps
 
-        # 相机话题
-        # self.topic_head = "/camera/d435i/color/image_raw"
-        # self.topic_left = "/camera/d405_1/color/image_raw"
-        # self.topic_right = "/camera/d405_2/color/image_raw"
+        # ======================
+        # 订阅话题（相机图像读取）
+        # ======================
         self.topic_head = config.camera.head_camera_topic
         self.topic_left = config.camera.left_hand_camera_topic 
         self.topic_right = config.camera.right_hand_camera_topic
@@ -76,7 +75,9 @@ class Ti5Camera(Node):
             return (None, None)
         return min(queue, key=lambda x: abs(x[1] - target_ts))
 
-
+# ============================================
+# 局部配置（单独调用当前脚本测试机器人相机时使用）
+# ============================================
 def get_ti5_t170c_config():
     """Generate configuration for Ti5 T170C robot (ROS2 bridge)."""
     config = ConfigDict()

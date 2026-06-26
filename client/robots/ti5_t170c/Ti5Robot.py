@@ -310,7 +310,9 @@ class Ti5Robot(Node):
         self.running = False
 
 
-
+# ============================================
+# 局部配置（单独调用当前脚本测试机器人关节驱动时使用）
+# ============================================
 def get_ti5_t170c_config():
     """Generate configuration for Ti5 T170C robot (ROS2 bridge)."""
     config = ConfigDict()
@@ -402,7 +404,6 @@ def get_ti5_t170c_config():
     return config
 
 
-
 # ==============================================
 # main：统一管理两个节点 + 统一 spin + 动作控制测试
 # ==============================================
@@ -473,24 +474,14 @@ def main():
     print("==================================================")
 
     VLA_head_pos = [0.0, 0.0, 0.0]
-    hand_pos = [
-        650.0, 650.0, 650.0, 650.0, 650.0, 250.0
-      ] 
     robot.send_partial_action("head", VLA_head_pos)
     print(f"✅ 头部动作已发送！")
     print("==================================================")
 
     time.sleep(1.5)
 
-    # 退出
-    # running = False
-    # robot.stop()
+    # 执行通过
     print("\n🎉 全部测试成功！")
-
-    # while True:
-    #     time.sleep(0.2)
-    #     a = robot.get_latest_wake_up()
-    #     print(a)
 
 if __name__ == '__main__':
     main()
