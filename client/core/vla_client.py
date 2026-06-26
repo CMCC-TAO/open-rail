@@ -6,7 +6,7 @@ from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc
-from client.utils.util import run_time_decorator,parse_action_layout
+from client.utils.util import run_time_decorator
 from client.utils.multi_thread_timer import MultiThreadTimer
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
@@ -70,12 +70,6 @@ class VLAClientAsync():
         # else:
         #     self._preprocess_func = None
 
-        robot_cfg = getattr(config.robots, config.robots.type.value, None)
-        self.action_layout = dict(robot_cfg.action_layout) if hasattr(robot_cfg, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
-        self.control_action_jump_threshold = 0.05
-        self._prev_control_action = None
-
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
@@ -126,7 +120,6 @@ class VLAClientAsync():
 
     def start_control(self):
         self.is_running = True
-        self._prev_control_action = None
         self.is_control_thread_running = True
         if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
@@ -147,35 +140,6 @@ class VLAClientAsync():
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
 
-    def _check_control_action_jump(self, action):
-        import numpy as np
-        current_action = np.asarray(action, dtype=float).reshape(-1)
-        prev_action = self._prev_control_action
-        if prev_action is None:
-            self._prev_control_action = current_action.copy()
-            return
-
-        if prev_action.shape != current_action.shape:
-            msg = f"Control action shape changed: previous={prev_action.shape}, current={current_action.shape}."
-            self._stop_control_thread_on_error()
-            raise RuntimeError(msg)
-
-        diff = np.abs(current_action[self.joint_indices] - prev_action[self.joint_indices])
-        max_pos = int(np.argmax(diff))
-        max_diff = float(diff[max_pos])
-        if max_diff > self.control_action_jump_threshold:
-            action_index = self.joint_indices[max_pos]
-            msg = (
-                f"Control action jump detected at action index {action_index}: "
-                f"diff={max_diff:.6f}, threshold={self.control_action_jump_threshold:.6f}, "
-                f"previous={prev_action[action_index]:.6f}, current={current_action[action_index]:.6f}."
-            )
-            self._stop_control_thread_on_error()
-            self.logger.error(msg)
-            raise RuntimeError(msg)
-
-        self._prev_control_action = current_action.copy()
-    
     def update_camera_shape(self) -> dict:
         """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
         if not hasattr(self, "dataset_write") or self.dataset_write is None:
@@ -344,8 +308,12 @@ class VLAClientAsync():
         action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
 
         if action_fitted is not None:
-            # self._check_control_action_jump(action_fitted)
-            self.robot.control_robot(action_fitted)
+            try:
+                self.robot.control_robot(action_fitted)
+            except Exception as exc:
+                self._stop_control_thread_on_error()
+                self.logger.error("Robot control failed: %s", exc)
+                raise
             # with self.show_thread_lock:
                 # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
@@ -426,6 +394,8 @@ class VLAClientAsync():
             if result is None or 'data' not in result:
                 # print("Debug: infer first timeout.")
                 return
+            # Record trajectory fitting timestamp
+            self.realtime_data_manager.set_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
 
             action_data = result['data']
@@ -438,8 +408,6 @@ class VLAClientAsync():
             self.realtime_data_manager.set_init_observe_timestamp(timestamp=timestamp_chunk[0])
             self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
-            # Record trajectory fitting timestamp
-            self.realtime_data_manager.set_traj_time_marker()
             timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
             prob_progress = None
             if 'ext' in action_data and 'prob_progress' in action_data['ext']:
@@ -516,6 +484,9 @@ class VLAClientAsync():
             if 'data' not in result:
                 self.logger.warning("Inference result doesn't have data.")
                 return
+
+            # Record trajectory fitting timestamp
+            self.realtime_data_manager.set_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
             action_data = result['data']
             
@@ -526,8 +497,6 @@ class VLAClientAsync():
             # Add action data (thread-safe function, no lock needed)
             self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
-            # Record trajectory fitting timestamp
-            self.realtime_data_manager.set_traj_time_marker()
 
             timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
             if timestamps is None:

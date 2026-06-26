@@ -35,15 +35,8 @@ class RobotBody(RobotBase):
         super().__init__(config)
         self.logger = logging.getLogger(__name__)
         self.cfg = config
-        default_action_layout = {
-            'arm': {'start': 0, 'end': 16, 'policy': 'gradual'},
-            'hand': {'start': 16, 'end': 28, 'policy': 'stepwise'},
-            'neck': {'start': 28, 'end': 30, 'policy': 'gradual'},
-            'waist': {'start': 30, 'end': 34, 'policy': 'gradual'},
-        }
-        self.action_layout = dict(self.cfg.get('action_layout', default_action_layout))
         self.current_state = np.zeros(8*2+6*2)
-        # 总开关
+        # Main stop flag
         self._stop = False
 
         service_name_servo = '/zj_humanoid/upperlimb/set_servo_params'
@@ -52,33 +45,33 @@ class RobotBody(RobotBase):
         rospy.wait_for_service(service_name_servo, timeout=10.0)
         rospy.wait_for_service(service_name_hand, timeout=10.0)
 
-        # 创建订阅者，订阅 /joint_states 话题
+        # Create subscribers for joint state topics
         self.subscriber = rospy.Subscriber(
-            '/zj_humanoid/upperlimb/joint_states',      # 话题名称
-            JointState,           # 消息类型
-            self.joint_states_callback,  # 回调函数
-            queue_size=5 #10         # 队列大小
+            '/zj_humanoid/upperlimb/joint_states',      # Topic name
+            JointState,           # Message type
+            self.joint_states_callback,  # Callback function
+            queue_size=5 #10         # Queue size
         )
         self.subscriber_hand = rospy.Subscriber(
-            '/zj_humanoid/hand/joint_states',      # 话题名称
-            JointState,           # 消息类型
-            self.joint_states_callback_hand,  # 回调函数
-            queue_size=5 #10         # 队列大小
+            '/zj_humanoid/hand/joint_states',      # Topic name
+            JointState,           # Message type
+            self.joint_states_callback_hand,  # Callback function
+            queue_size=5 #10         # Queue size
         )        
-        # 手臂控制器
+        # Arm controller
         rospy.ServiceProxy(service_name_servo, Servo).call(ServoRequest(time=self.cfg['tt'], gain=self.cfg['gain'])) 
         self.servoj = rospy.Publisher('/zj_humanoid/upperlimb/servoj/dual_arm', Joints, queue_size=1)
-        # 手指控制器
+        # Hand controller
         self.hand_controller = rospy.ServiceProxy(service_name_hand, HandJoint)
         self.hand_request_ready = False
         self.hand_request = HandJointRequest()
         self.hand_thread = threading.Thread(
                 target=self.hand_request_func,
                 name="navi_wa2_hand_request_func",
-                daemon=True  # 设为守护线程，主线程结束时自动终止
+                daemon=True  # Run as a daemon so it exits with the main thread
             )
         self.hand_thread.start()
-        # 相机接收器
+        # Camera receiver
         self.bridge = CvBridge()
         camera_topics = dict(getattr(self.cfg.camera, 'topic_dict', {}))
         self.camera_topic_substribers = {came_name:None for came_name in camera_topics}
@@ -93,13 +86,13 @@ class RobotBody(RobotBase):
                 self.logger.warning(f"Skip empty camera topic for {cam_name}")
                 continue
             self.camera_topic_substribers[cam_name] = rospy.Subscriber(
-                cam_topic,  # 话题名称
-                CompressedImage,                                    # 消息类型
-                self.camera_image_callback,                      # 回调函数
-                callback_args=cam_name,  # 通过callback_args传递标识
-                queue_size=1                              # 队列大小（实时性优先）
+                cam_topic,  # Topic name
+                CompressedImage,                                    # Message type
+                self.camera_image_callback,                      # Callback function
+                callback_args=cam_name,  # Pass camera identifier through callback_args
+                queue_size=1                              # Queue size, prioritizing real-time behavior
             )
-        # 手部及腰部movej控制器
+        # Hand and waist MoveJ controllers
         self.waist_movej_controller=rospy.ServiceProxy('/zj_humanoid/upperlimb/movej/waist', MoveJ)
         self.left_arm_movej_controller=rospy.ServiceProxy('/zj_humanoid/upperlimb/movej/left_arm', MoveJ)
         self.right_arm_movej_controller=rospy.ServiceProxy('/zj_humanoid/upperlimb/movej/right_arm', MoveJ)
@@ -108,7 +101,7 @@ class RobotBody(RobotBase):
         self.waist_head_movej_controller=rospy.ServiceProxy('/zj_humanoid/upperlimb/movej/whole_body', MoveJ)
         time.sleep(0.5)
 
-        # 当前实际生效的离散手势索引
+        # Currently active discrete hand gesture indices
         self.current_left_idx = 0
         self.current_right_idx = 0
 
@@ -116,6 +109,7 @@ class RobotBody(RobotBase):
         pose_close = np.array([-0.2, 0.9, 0.0, 1.0, 1.0, 1.0])
         pose_half = np.array([-0.2, 0.9, 0.4, 0.4, 0.4, 0.4])
         self.hand_poses = [pose_open, pose_close, pose_half]
+        self.control_action_jump_threshold = float(self.cfg.get('control_action_jump_threshold', 0.05))
 
 
 
@@ -130,23 +124,52 @@ class RobotBody(RobotBase):
                 self.camera_stamp_queue[cam_name] = stamp
             return
         except CvBridgeError as e:
-            rospy.logerr(f"CvBridge转换错误: {e}")
-        print('X'*100)
+            rospy.logerr(f"CvBridge transfer error: {e}")
         return
 
     def joint_states_callback(self, msg):
         """
-        回调函数：处理接收到的 JointState 消息
+        Callback function for received JointState messages.
         """
         self.current_state[:16] = msg.position[:16]
         return
     
     def joint_states_callback_hand(self, msg):
         """
-        回调函数：处理接收到的 JointState 消息
+        Callback function for received JointState messages.
         """
         self.current_state[16:] = msg.position[:]
         return
+
+    def _check_control_action_jump(self, action):
+        current_action = np.asarray(action, dtype=float).reshape(-1)
+        current_state = np.asarray(self.current_state, dtype=float).reshape(-1)
+        if not self.joint_indices:
+            return current_action
+
+        max_index = max(self.joint_indices)
+        if max_index >= current_state.shape[0] or max_index >= current_action.shape[0]:
+            msg = (
+                f"Control action/state shape mismatch for joint index {max_index}: "
+                f"state={current_state.shape}, action={current_action.shape}."
+            )
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+
+        diff = np.abs(current_action[self.joint_indices] - current_state[self.joint_indices])
+        max_pos = int(np.argmax(diff))
+        max_diff = float(diff[max_pos])
+        if max_diff > self.control_action_jump_threshold:
+            action_index = self.joint_indices[max_pos]
+            msg = (
+                f"Control action jump detected at action index {action_index}: "
+                f"diff={max_diff:.6f}, threshold={self.control_action_jump_threshold:.6f}, "
+                f"state={current_state[action_index]:.6f}, action={current_action[action_index]:.6f}."
+            )
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+
+        return current_action
     
     def control_robot(self, action):
         """Control the robot arm and gripper based on the given action.
@@ -154,7 +177,7 @@ class RobotBody(RobotBase):
         Args:
             action (array-like): Action array containing arm commands (0:14) and gripper commands (14:16)
         """
-        # 提取原始手部指令
+        action = self._check_control_action_jump(action)
         left_hand_action = np.array(action[16:22])
         right_hand_action = np.array(action[22:28])
 
@@ -168,7 +191,7 @@ class RobotBody(RobotBase):
         
         target_hand_action = np.concatenate([target_left, target_right])
 
-        # 执行动作
+        # Execute action
         self.execute_action({'arm': action[:16].tolist()})
         self.execute_action({'hand': target_hand_action})
         
@@ -247,17 +270,15 @@ class RobotBody(RobotBase):
         """
         target_pose = np.asarray(self.cfg['reset_position'] if target_pose is None else target_pose, dtype=float)
         
-        # 获取输入向量的实际长度
         pose_len = len(target_pose)
         segments = {}
         print("reset robot")
         for name, v in self.action_layout.items():
             start = v['start']
-            # 如果 start 已经超出了当前 target_pose 的长度，则跳过该部分
+
             if start >= pose_len:
                 continue
-            
-            # 确保 end 不会超过实际长度 (min 函数防止越界)
+
             end = min(v['end'], pose_len)
             segments[name] = target_pose[start:end]
         print(segments)
@@ -267,7 +288,6 @@ class RobotBody(RobotBase):
                 current_arm_position=np.asarray(self.current_state, dtype=float)[:len(default_arm_pose)].copy()
                 trajs = self.ruckig_planning(current_arm_position, default_arm_pose,dof=len(default_arm_pose))
                 for i, traj in enumerate(trajs):
-                    # print(f"Executing trajectory point {i}: {traj}")
                     self.execute_action({'arm': traj})
                     time.sleep(0.01)
                 
@@ -277,10 +297,8 @@ class RobotBody(RobotBase):
             if "arm" in segments:
                 target_arm_position = np.array(segments['arm'])
                 current_arm_position=np.asarray(self.current_state, dtype=float)[:len(target_arm_position)].copy()
-                # print(f"cur_pos:{current_arm_position}")
                 trajs = self.ruckig_planning(current_arm_position, target_arm_position,dof=len(target_arm_position))
                 for i, traj in enumerate(trajs):
-                    # print(f"Executing trajectory point {i}: {traj}")
                     self.execute_action({'arm': traj})
                     time.sleep(0.01)
                 self.execute_action({'hand':np.array(segments['hand'])})
@@ -291,10 +309,8 @@ class RobotBody(RobotBase):
             if "arm" in segments:
                 target_arm_position = np.asarray(segments['arm'], dtype=float)
                 current_arm_position=np.asarray(self.current_state, dtype=float)[:len(target_arm_position)].copy()
-                # print(f"cur_pos:{current_arm_position}")
                 trajs = self.ruckig_planning(current_arm_position, target_arm_position,dof=16)
                 for i, traj in enumerate(trajs):
-                    # print(f"Executing trajectory point {i}: {traj}")
                     self.execute_action({'arm': traj})
                     time.sleep(0.02)
                     
@@ -358,16 +374,7 @@ class RobotBody(RobotBase):
             key: key of data, for example, action, observation.state
         """
         # read parquet file
-        df = pd.read_parquet(parquet_path)                # for i, traj in enumerate(trajs):
-                #     # print(f"Executing trajectory point {i}: {traj}")
-                #     self.execute_action({'arm': traj})
-                #     time.sleep(0.02)
-                # self.execute_action({'hand':np.array(segments['hand'])})
-                # # # 注释
-                # raw_left_idx = np.argmin([np.linalg.norm(segments['hand'][0:6] - p) for p in self.hand_poses])
-                # raw_right_idx = np.argmin([np.linalg.norm(segments['hand'][6:12] - p) for p in self.hand_poses])
-                # self.left_history = deque([raw_left_idx] * self.mode_window_size,maxlen=self.mode_window_size)
-                # self.right_history=deque([raw_right_idx] * self.mode_window_size,maxlen=self.mode_window_size)
+        df = pd.read_parquet(parquet_path)               
         data = df[key].tolist()
         # process data of dexterous hand to gripper format
         processed_data = []

@@ -144,14 +144,17 @@ class IntraChunkSmoother():
         # Calculate fitted joint angles using the polynomial
         polynomial = np.poly1d(coefficients)
         joint_chunk_fitted = polynomial(x)
+        # joint_chunk_fitted = np.polyval(coefficients, x)
         
         # Calculate joint velocities using the derivative
         derivative_polynomial = np.poly1d(derivative_coefficients)
         velocity_chunk_fitted = derivative_polynomial(x)
+        # velocity_chunk_fitted = np.polyval(derivative_coefficients, x)
 
         # Calculate joint acceleration using the second derivative
         second_derivative_polynomial = np.poly1d(second_derivative_coefficients)
         acceleration_chunk_fitted = second_derivative_polynomial(x)
+        # acceleration_chunk_fitted = np.polyval(second_derivative_coefficients, x)
         # print(f"fitting degree: {deg}, time_step: {time_step}")
         return index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
@@ -184,12 +187,12 @@ class IntraChunkSmoother():
                 window_max = currt_index + window_size_half + 1
             mean = np.mean(gripper_chunk[window_min:window_max])
 
-            # if mean > self.config.max_gripper_action_threshold:
-            #     mean = 1.0
-            # elif mean < self.config.min_gripper_action_threshold:
-            #     mean = 0.0
-            # else:
-            #     pass
+            if mean > self.config.max_gripper_action_threshold:
+                mean = 1.0
+            elif mean < self.config.min_gripper_action_threshold:
+                mean = 0.0
+            else:
+                pass
             gripper_chunk[currt_index] = mean
         
         # Interpolate the trajectory using linear interpolation
@@ -222,6 +225,7 @@ class IntraChunkSmoother():
         deg=self.config.fitting_deg 
 
         futures = []
+        x_eval = np.arange(start_time, end_time, time_step)
         for index in joint_indices:
             joint_chunk = action_chunk[index, :]
             futures.append(self.joint_fitting_executor.submit(

@@ -5,18 +5,18 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.25
-  wait_time: 400
+  speed: 1.0
+  wait_time: 10
 inter_chunk:
-  inter_chunk_mode: search_action
+  inter_chunk_mode: min_jerk
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
-  smooth_length: 50
+  smooth_length: 150
   smooth_ratio: 0.75
 intra_chunk:
   filter_window_size: 4
-  fitting_deg: 5
+  fitting_deg: 4
   fitting_num_samples: 64
   gripper_dim: 2
   head_dim: 2
@@ -28,16 +28,16 @@ intra_chunk:
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
 language:
-  auto_mode: true
+  auto_mode: false
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: make_coffee
-  task_progress_threshold: 0.99
+  task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
   max_len: 100
   mode: async
-  observe_fps_window_size: 20
+  observe_fps_window_size: 10
 record:
   info:
     action_shape: 22
@@ -48,8 +48,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 480
+        width: 848
     cam.hand_right:
       encode:
         codec: mp4v
@@ -57,8 +57,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 480
+        width: 848
     cam.head:
       encode:
         codec: mp4v
@@ -66,8 +66,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 720
+        width: 1280
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
@@ -77,10 +77,10 @@ record:
       valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 2
-    total_frames: 900
-    total_tasks: 2
-    total_videos: 6
+    total_episodes: 0
+    total_frames: 0
+    total_tasks: 0
+    total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   save_dir: data/recording
@@ -99,10 +99,10 @@ robots:
         start: 14
     camera:
       names:
-        hand_left: left_wrist_rgb
-        hand_right: right_wrist_rgb
-        head: head_rgb
-      ref: head_rgb
+        hand_left: hand_left
+        hand_right: hand_right
+        head: head
+      ref: head
     gripper_freq: 40
     hand_type: gripper
     head_freq: 40
@@ -151,6 +151,13 @@ robots:
         head: observation.images.head_rgb
       ref: head
     dataset_path: /home/lza/code/dataset/use_coffee_machine/zjrobot_v3_handpose/2026-0411-pick_coffee_left
+    state_action_range:
+    - !!python/tuple
+      - 0
+      - 16
+    - !!python/tuple
+      - 58
+      - 70
   navi_wa2:
     action_layout:
       arm:
@@ -163,9 +170,9 @@ robots:
         start: 16
     camera:
       topic_dict:
-        hand_left: /zj_humanoid/sensor/realsense_head/color/image_raw/compressed
-        hand_right: /zj_humanoid/sensor/left_wrist/image_raw/compressed
-        head: /zj_humanoid/sensor/right_wrist/image_raw/compressed
+        hand_left: /zj_humanoid/sensor/left_wrist/image_raw/compressed
+        hand_right: /zj_humanoid/sensor/right_wrist/image_raw/compressed
+        head: /zj_humanoid/sensor/realsense_head/color/image_raw/compressed
     gain: 900
     reset_position:
     - 0.182591655739083
@@ -184,24 +191,24 @@ robots:
     - -0.5459413807557212
     - -0.38742182124429064
     - -0.27196253226160444
-    - -0.6
-    - 0.9
-    - 0
-    - 0
-    - 0
-    - 0
     - -0.2
     - 0.9
     - 0
     - 1
     - 1
     - 1
-    tt: 0.02
-  type: mock
+    - -0.6
+    - 0.9
+    - 0
+    - 0
+    - 0
+    - 0
+    tt: 0.033
+  type: navi_wa2
 vision:
   history_frame: false
   preprocess:
-    height: 180
+    height: 480
     keep_ratio: true
     method: resize
     width: 640
@@ -220,13 +227,12 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 7
+    - 0
     source:
     - State
-    - ActionRaw
     - ActionFitted
     - ActionRaw
-    update_interval_ms: 33
+    update_interval_ms: 50
     window_span_sec: 10.0
 vla_zmq:
   client_addr: tcp://localhost:5566

@@ -34,8 +34,7 @@ class RobotBody(RobotBase):
         self.last_timestamp = time.time()
         self.video_caps = {}
         self._io_lock = threading.Lock()
-        self.state_action_ranges = ((0, 16), (58, 70))
-        self.action_dim = sum(end - start for start, end in self.state_action_ranges)
+        self.state_action_ranges = self.config.get('state_action_range')
 
         self.dataset_path = ''
         try:
