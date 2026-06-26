@@ -483,6 +483,82 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
 }
 
 function setupLanguageEvents() {
+function isLanguageShortcutTypingTarget(el) {
+  if (!el) return false;
+  const tag = (el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || el.isContentEditable;
+}
+
+function applyLangSubtaskShortcut(targetIndex) {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  const sendBtn = $('btn-lang-send');
+  const task = taskSel ? taskSel.value : null;
+  const subtasks = (task && LangCmd.tasks[task]) ? LangCmd.tasks[task] : [];
+
+  if (!subtaskSel || !sendBtn || !subtasks.length) {
+    toast('No language instruction available.', 'warn');
+    return;
+  }
+
+  const idx = Number(targetIndex);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= subtasks.length) {
+    toast(`Language instruction ${idx + 1} is not available.`, 'warn');
+    return;
+  }
+
+  subtaskSel.value = String(idx);
+  subtaskSel.selectedIndex = idx;
+  subtaskSel.dispatchEvent(new Event('change'));
+  sendBtn.click();
+}
+
+function setupLanguageShortcuts() {
+  let lKeyDown = false;
+
+  document.addEventListener('keydown', (e) => {
+    if (isLanguageShortcutTypingTarget(e.target)) return;
+
+    const key = String(e.key || '').toLowerCase();
+    if (key === 'l') {
+      lKeyDown = true;
+      return;
+    }
+    if (!lKeyDown || e.repeat) return;
+
+    const subtaskSel = $('lang-subtask-select');
+    const count = subtaskSel ? subtaskSel.options.length : 0;
+    if (!count) return;
+
+    if (/^[0-9]$/.test(key)) {
+      e.preventDefault();
+      const target = key === '0' ? 9 : Number(key) - 1;
+      applyLangSubtaskShortcut(target);
+      return;
+    }
+
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const current = Number.isInteger(subtaskSel.selectedIndex) && subtaskSel.selectedIndex >= 0
+        ? subtaskSel.selectedIndex
+        : 0;
+      const next = e.key === 'ArrowUp'
+        ? (current - 1 + count) % count
+        : (current + 1) % count;
+      applyLangSubtaskShortcut(next);
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (String(e.key || '').toLowerCase() === 'l') lKeyDown = false;
+  });
+
+  window.addEventListener('blur', () => {
+    lKeyDown = false;
+  });
+}
+
+setupLanguageShortcuts();
 // Language Command panel — JSON file picker
 $('lang-file-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
