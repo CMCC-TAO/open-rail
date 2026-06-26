@@ -12,7 +12,7 @@ import threading
 
 class RobotBody(RobotBase):
     def __init__(self, config):
-        """Initialize the A2D robot body with camera and robot instances.
+        """Initialize the Ti5_T170C robot body with camera and robot instances.
         
         Args:
             config (dict): Configuration dictionary containing robot and camera settings
@@ -20,9 +20,9 @@ class RobotBody(RobotBase):
         super().__init__(config)
         self.cfg = config
         
-        # ======================
+        # ============================
         # 初始化 rclpy，再创建 ROS 节点
-        # ======================
+        # ============================
         if not rclpy.ok():
             rclpy.init()
 
@@ -167,9 +167,9 @@ class RobotBody(RobotBase):
         print('✅ RobotBody 已安全关闭')
 
 
-# ==============================================
-# 测试脚本（直接运行此文件即可测试）
-# ==============================================
+# ==================================
+# 联合测试机器人相机和关节控制
+# ==================================
 def test_robot_body():
     # rclpy.init()
     print("=" * 60)
