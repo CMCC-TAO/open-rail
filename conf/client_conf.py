@@ -34,7 +34,6 @@ def get_client_config():
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
     config.language = get_language_config()
-    config.language_reset_pos = None
     return config
 
 def get_rdm_config() -> ConfigDict:

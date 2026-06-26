@@ -54,6 +54,7 @@ def get_mock_config():
         # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
         # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
     }
+    config.state_action_range = [[0, 16], [58, 70]]
     config.dataset_path = '/home/lza/code/dataset/use_coffee_machine/zjrobot_v3_handpose/2026-0411-pick_coffee_left'
     # config.dataset_path = '/home/robot/Music'
     return config

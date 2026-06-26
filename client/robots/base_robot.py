@@ -1,11 +1,6 @@
 import logging
+import ruckig
 from client.utils.util import parse_action_layout
-
-try:
-    import ruckig
-except ImportError:
-    pass
-
 class RobotBase():
     def __init__(self, config):
         self.logger = logging.getLogger(__name__)
