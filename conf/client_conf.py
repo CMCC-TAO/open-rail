@@ -130,24 +130,23 @@ def get_visualize_config() -> ConfigDict:
     """Generate configuration for web visual panels."""
     config = ConfigDict()
 
-    config.server = ConfigDict()
-    config.server.host = '0.0.0.0'
-    config.server.port = 8765
-    config.server.max_size = 10 * 1024 * 1024  # 10MB
-    config.server.ping_interval = 20  # Ping interval in milliseconds
-    config.server.ping_timeout = 10  # Ping timeout in seconds
+    # config.server = ConfigDict()
+    config.host = '0.0.0.0'
+    config.port = 8765
+    config.max_size = 10 * 1024 * 1024  # 10MB
+    config.ping_interval = 20  # Ping interval in milliseconds
+    config.ping_timeout = 10  # Ping timeout in seconds
+    config.updata_fps = 30
 
     config.camera = ConfigDict()
     config.camera.open_head = True
     config.camera.open_wrist_left = True
     config.camera.open_wrist_right = True
-    config.camera.update_interval_ms = 33
 
     config.trajectory = ConfigDict()
     config.trajectory.play = False
     config.trajectory.source = ['State']
     config.trajectory.selected_joints = [0, 1, 2, 3]
-    config.trajectory.update_interval_ms = 50
     config.trajectory.window_span_sec = 10.0
 
     return config

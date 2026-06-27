@@ -30,8 +30,8 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 0
-  task_id: table_bussing
+  sub_task_id: 1
+  task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 rdm:
@@ -279,13 +279,11 @@ visualize:
     open_head: true
     open_wrist_left: true
     open_wrist_right: true
-    update_interval_ms: 33
-  server:
-    host: 0.0.0.0
-    max_size: 10485760
-    ping_interval: 20
-    ping_timeout: 10
-    port: 8765
+  host: 0.0.0.0
+  max_size: 10485760
+  ping_interval: 20
+  ping_timeout: 10
+  port: 8765
   trajectory:
     play: true
     selected_joints:
@@ -294,8 +292,8 @@ visualize:
     - State
     - ActionFitted
     - ActionRaw
-    update_interval_ms: 33
     window_span_sec: 10.0
+  updata_fps: 30
 vla_zmq:
   client_addr: tcp://localhost:5566
   server_addr: tcp://*:5566

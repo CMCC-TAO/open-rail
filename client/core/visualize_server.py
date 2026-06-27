@@ -6,11 +6,9 @@ import logging
 import time
 import threading
 import os
-import cv2
 import numpy as np
 from collections import deque
-from typing import Dict, List, Set, Optional
-from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Set, Optional
 from ml_collections import ConfigDict
 
 # Limits threads used in OpenCV to avoid conflicts.
@@ -21,7 +19,7 @@ class VisualizeServer:
         # including script/uvicorn execution paths.
         self.logger = logging.getLogger(__name__)
         self.config = visualize_config
-        self.kill_port(self.config.server.port)
+        self.kill_port(self.config.port)
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = False
 
@@ -30,22 +28,18 @@ class VisualizeServer:
         self.latest_imgs_seq = 0
         self.sent_imgs_seq = -1
         self.data_lock = threading.Lock()
-        self.camera_send_interval = 1.0 / 30.0
-        self.chart_send_interval = 1.0 / 30.0
-        self._last_camera_send_ts = 0.0
-        self._last_chart_send_ts = 0.0
 
         # Data send queue (deque gives O(1) append/popleft; bounded by maxlen)
         self.data_send_queue = deque(maxlen=1000)
 
         # Server instance
         self.server = None
-        self._img_executor = None
-        self._create_img_executor()
+        # self._img_executor = None
+        # self._create_img_executor()
         self.vis_global_step = 0
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
-        self.logger.info("Initializing server on %s:%d", self.config.server.host, self.config.server.port)
+        self.logger.info("Initializing server on %s:%d", self.config.host, self.config.port)
 
     def kill_port(self, port):
         os.system(f'kill -9 $(lsof -t -i:{port})')
@@ -260,9 +254,7 @@ class VisualizeServer:
         if not self.clients:
             return
 
-        now = time.time()
-        if now - self._last_camera_send_ts < self.camera_send_interval:
-            return
+        current_timestamp = time.time()
 
         disconnected_clients = set()
 
@@ -275,26 +267,21 @@ class VisualizeServer:
 
         camera_open = self._get_camera_open_map()
 
-        sent_camera_ids = set()
-
         for camera_key, img in imgs.items():
             try:
                 camera_id = self._camera_id_from_key(camera_key)
                 if camera_id is None:
-                    continue
-                if camera_id in sent_camera_ids:
+                    self.logger.warning(f"Unknown camera key: {camera_key}")
                     continue
                 if not camera_open.get(camera_id, True):
                     continue
 
                 frame_bytes = img.tobytes()
 
-                sent_camera_ids.add(camera_id)
-
                 header = {
                     'type': 'camera_data_binary',
                     'camera_id': camera_id,
-                    'timestamp': time.time(),
+                    'timestamp': current_timestamp,
                     'data_size': len(frame_bytes)
                 }
                 header_bytes = json.dumps(header).encode('utf-8')
@@ -314,7 +301,6 @@ class VisualizeServer:
             except Exception as e:
                 self.logger.warning("Failed to process camera data for key '%s': %s", camera_key, e)
 
-        self._last_camera_send_ts = now
         with self.data_lock:
             self.sent_imgs_seq = max(self.sent_imgs_seq, img_seq)
 
@@ -325,10 +311,6 @@ class VisualizeServer:
         """Send chart (joint trajectory) data to all clients."""
         if not self.clients or not self.data_send_queue:
             return
-        now = time.time()
-        if now - self._last_chart_send_ts < self.chart_send_interval:
-            return
-        self._last_chart_send_ts = now
 
         disconnected_clients = set()
 
@@ -406,7 +388,7 @@ class VisualizeServer:
             try:
                 await self.send_camera_data()
                 await self.send_chart_data()
-                await asyncio.sleep(0.02)
+                await asyncio.sleep(1/self.config.updata_fps)
             except Exception as e:
                 self.logger.error("Data sender loop error: %s", e)
                 await asyncio.sleep(1)
@@ -417,14 +399,14 @@ class VisualizeServer:
 
         async with websockets.serve(
             self.client_handler,
-            self.config.server.host,
-            self.config.server.port,
-            max_size=self.config.server.max_size,
-            ping_interval=self.config.server.ping_interval,
-            ping_timeout=self.config.server.ping_timeout
+            self.config.host,
+            self.config.port,
+            max_size=self.config.max_size,
+            ping_interval=self.config.ping_interval,
+            ping_timeout=self.config.ping_timeout
         ) as server:
             self.server = server
-            self.logger.info("Server started: ws://%s:%d", self.config.server.host, self.config.server.port)
+            self.logger.info("Server started: ws://%s:%d", self.config.host, self.config.port)
             
             data_sender_task = asyncio.create_task(self.data_sender())
             try:
@@ -452,9 +434,9 @@ class VisualizeServer:
     #         self.server.close()
     #         self.logger.info("Visualize Serverstopped.")
 
-    def _create_img_executor(self):
-        if getattr(self, '_img_executor', None) is None or getattr(self._img_executor, '_shutdown', False):
-            self._img_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vis_img_enc")
+    # def _create_img_executor(self):
+    #     if getattr(self, '_img_executor', None) is None or getattr(self._img_executor, '_shutdown', False):
+    #         self._img_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vis_img_enc")
 
     def _main_thread_fun(self):
         """Run the Visualize Server in a dedicated asyncio event loop (background thread)."""
@@ -467,7 +449,7 @@ class VisualizeServer:
         """Start the server in a background daemon thread (idempotent)."""
         if hasattr(self, 'main_thread') and self.main_thread and self.main_thread.is_alive():
             return
-        self._create_img_executor()
+        # self._create_img_executor()
         self.main_thread = threading.Thread(
             target=self._main_thread_fun,
             daemon=True
