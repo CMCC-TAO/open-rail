@@ -13,7 +13,7 @@ def get_vla_zmq_config():
     """
     config = ConfigDict()
     config.client_addr = 'tcp://localhost:5566'  # Client connection address and port
-    config.server_addr = 'tcp://*:5566'  # Server binding address and port
+    config.server_addr = 'tcp://*:5567'  # Server binding address and port
     return config
 
 
