@@ -26,7 +26,7 @@ const CONFIG_SELECT_OPTIONS = {
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
   'fitting_num_samples', 'search_length', 'smooth_length', 'gripper_offset',
-  'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
+  'fps', 'height', 'width', 'updata_period', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
@@ -298,83 +298,6 @@ function renderConfigTree(cfg) {
   restoreConfigTreeUiState(uiState);
 }
 
-
-
-function buildTree_old(obj, prefix, parentEl) {
-  const basicEntries    = [];
-  const subGroupEntries = [];
-
-  for (const [key, val] of Object.entries(obj)) {
-    // Skip excluded keys at root level
-    if (!prefix && CONFIG_EXCLUDED_KEYS.has(key)) continue;
-
-    const dotKey = prefix ? `${prefix}.${key}` : key;
-    const isGroup = val !== null && typeof val === 'object' && !Array.isArray(val);
-
-    // Record -> info -> features: flatten legacy nested cam group into dotted keys
-    // (cam.hand_left / cam.hand_right / cam.head) so no standalone "cam" subgroup appears.
-    if (prefix === 'record.info.features' && key === 'cam' && isGroup) {
-      for (const [camKey, camVal] of Object.entries(val)) {
-        const mergedKey = `cam.${camKey}`;
-        const mergedDotKey = `${prefix}.${mergedKey}`;
-        const mergedIsGroup = camVal !== null && typeof camVal === 'object' && !Array.isArray(camVal);
-        if (mergedIsGroup) {
-          subGroupEntries.push([mergedKey, camVal]);
-        } else {
-          if (CONFIG_HIDDEN_DOT_KEYS.has(mergedDotKey)) continue;
-          parentEl.appendChild(createCfgRow(mergedDotKey, mergedKey, camVal));
-        }
-      }
-      continue;
-    }
-
-    if (isGroup) {
-      subGroupEntries.push([key, val]);
-    } else if (!prefix) {
-      basicEntries.push([key, val]);
-    } else {
-      if (CONFIG_HIDDEN_DOT_KEYS.has(dotKey)) continue;
-      parentEl.appendChild(createCfgRow(dotKey, key, val));
-    }
-  }
-
-  // BASIC group for root-level leaves — split into sub-groups
-  if (basicEntries.length > 0) {
-    // Assign each basic entry to its sub-group or "others"
-    const sgMap = {};
-    for (const sgName of Object.keys(BASIC_SUBGROUPS)) sgMap[sgName] = [];
-    sgMap['others'] = [];
-
-    for (const [k, v] of basicEntries) {
-      let placed = false;
-      for (const [sgName, keys] of Object.entries(BASIC_SUBGROUPS)) {
-        if (keys.includes(k)) { sgMap[sgName].push([k, v]); placed = true; break; }
-      }
-      if (!placed) sgMap['others'].push([k, v]);
-    }
-
-    // Build the outer BASIC group
-    const basicBody = document.createElement('div');
-    basicBody.className = 'cfg-group-body';
-
-    for (const [sgName, entries] of Object.entries(sgMap)) {
-      if (entries.length === 0) continue;
-      const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
-      basicBody.appendChild(buildGroup(sgName.replace('_', '-'), rows));
-    }
-
-    parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
-  }
-
-  // Sub-groups
-  for (const [key, val] of subGroupEntries) {
-    const dotKey  = prefix ? `${prefix}.${key}` : key;
-    const body    = document.createElement('div');
-    body.className = 'cfg-group-body';
-    buildTree(val, dotKey, body);
-    parentEl.appendChild(buildGroupFromEl(key, body));
-  }
-}
 function buildTree(obj, prefix, parentEl) {
   const basicEntries    = [];
   const subGroupEntries = [];
@@ -1079,7 +1002,7 @@ function applyVisualConfig(cfg = App.config) {
   const camCfg = (visualCfg.camera && typeof visualCfg.camera === 'object') ? visualCfg.camera : {};
   const trajCfg = (visualCfg.trajectory && typeof visualCfg.trajectory === 'object') ? visualCfg.trajectory : {};
 
-  camState.updateInterval = _toInt(camCfg.update_interval_ms, camState.updateInterval || 33, 16);
+  camState.updateInterval = _toInt(camCfg.updata_period, camState.updateInterval || 33, 16);
   restartCameraUpdateTimer();
 
   const hasNamedCamOpen = ['open_head', 'open_wrist_left', 'open_wrist_right'].some(k => k in camCfg);
@@ -1102,7 +1025,7 @@ function applyVisualConfig(cfg = App.config) {
   } else {
     App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
   }
-  App.traj.updateIntervalMs = _toInt(trajCfg.update_interval_ms, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
+  App.traj.updateIntervalMs = _toInt(trajCfg.updata_period, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
   const cfgWindowSpanSec = Number(trajCfg.window_span_sec ?? trajCfg.window_sec ?? trajCfg.window_seconds);
   App.traj.windowSpanSec = normalizeTrajWindowSpanSec(cfgWindowSpanSec, App.traj.windowSpanSec);
   syncTrajWindowSpanUI();
