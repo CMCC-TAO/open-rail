@@ -127,8 +127,8 @@
   gap: 3px;
 }
 
-.traj-src-col-action .traj-src-check { width: 120px; }
-.traj-src-col-state .traj-src-check { width: 88px; }
+.traj-src-col-action .traj-src-check { width: 108px; }
+.traj-src-col-state .traj-src-check { width: 92px; }
 
 .traj-src-check {
   display: inline-flex;
@@ -221,10 +221,12 @@
   height: 22px;
 }
 
-.traj-window-controls .btn {
-  width: 64px;
+.traj-window-controls .btn-ctrl {
+  /* background: transparent !important; */
+  min-width: 68px;
   height: 22px;
   padding: 0 0px;
+  gap: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -241,29 +243,23 @@
 }
 
 /* Align Pause/Play + Clear with Joints All/None style */
-.traj-window-controls .btn:active {
+.traj-window-controls .btn-ctrl:active {
   opacity: .9;
 }
-.traj-window-controls .btn.btn-active {
+.traj-window-controls .btn-ctrl.btn-active {
   background: transparent !important;
   border-color: color-mix(in srgb, var(--border) 80%, #1a73e8 20%) !important;
   color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%) !important;
   box-shadow: none !important;
 }
-.traj-window-controls .btn .btn-icon {
+/* .traj-window-controls .btn-ctrl {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  margin-right: 3px;
-}
-.traj-window-controls .btn i.fas,
-.traj-window-controls .btn i.far,
-.traj-window-controls .btn i.fab {
-  margin-right: 2px;
-  margin-top: -1px;
-  line-height: 1;
-  vertical-align: middle;
+  gap: 6px;
+} */
+.traj-window-controls .btn-ctrl i.fas,
+.traj-window-controls .btn-ctrl i.far,
+.traj-window-controls .btn-ctrl i.fab {
+  font-size: var(--font-size-1);
 }
 
 /* ── Body / chart ── */

@@ -112,6 +112,20 @@
   font-variant-numeric: tabular-nums;
 }
 
+.btn-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-load i.fas,
+.btn-load i.far,
+.btn-load i.fab {
+  /* margin-right: 0px;
+  margin-top: 0px;
+  line-height: 1; */
+  font-size: var(--font-size-1);
+  /* vertical-align: middle; */
+}
 /* When trajectory is collapsed, language panel can use extra vertical space */
 .center-col.traj-collapsed .panel-lang .panel-body {
   overflow-y: auto;

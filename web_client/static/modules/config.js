@@ -1096,7 +1096,6 @@ function applyVisualConfig(cfg = App.config) {
   const chkActionFitted = $('chk-traj-action-fitted');
   const chkActionRaw = $('chk-traj-action-raw');
   const btnAllSource = $('btn-traj-all');
-  const btnPlay = $('btn-traj-pause');
   if (chkState) chkState.checked = App.traj.source.has('state');
   if (chkActionFitted) chkActionFitted.checked = App.traj.source.has('action_fitted');
   if (chkActionRaw) chkActionRaw.checked = App.traj.source.has('action_raw');
@@ -1104,12 +1103,13 @@ function applyVisualConfig(cfg = App.config) {
     const allSelected = App.traj.source.has('state') && App.traj.source.has('action_fitted') && App.traj.source.has('action_raw');
     btnAllSource.textContent = allSelected ? 'None' : 'All';
   }
-  if (btnPlay) {
-    btnPlay.innerHTML = App.traj.paused
-      ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
-      : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
-    btnPlay.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
-  }
+  // const btnPlay = $('btn-traj-pause');
+  // if (btnPlay) {
+  //   btnPlay.innerHTML = App.traj.paused
+  //     ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
+  //     : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
+  //   btnPlay.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
+  // }
 
   startTrajUpdateTimer();
   App.traj.dirty = true;

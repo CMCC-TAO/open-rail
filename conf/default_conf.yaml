@@ -285,10 +285,12 @@ visualize:
   ping_timeout: 10
   port: 8765
   trajectory:
-    play: true
+    play: false
     selected_joints:
     - 0
-    - 7
+    - 1
+    - 2
+    - 3
     source:
     - State
     - ActionFitted
