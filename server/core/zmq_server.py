@@ -1,6 +1,7 @@
 import zmq
 import json
 import pickle
+import logging
 from ml_collections import ConfigDict
 
 class ZMQServer():
@@ -16,15 +17,17 @@ class ZMQServer():
         Args:
             config: Configuration dictionary containing server settings
         """
+        self.logger = logging.getLogger(__name__)
         # Initialize ZMQ server with configuration dictionary
         self.config = config
+        self.server_addr = f'tcp://{config.server_ip}:{config.server_port}'  # Server binding address and port
         self.context = zmq.Context()
         # Create ROUTER socket for handling multiple clients
         self.router = self.context.socket(zmq.ROUTER)
         self.router.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
-        self.router.bind(config.server_addr)
+        self.router.bind(self.server_addr)
         self.client_id = None  # Client identifier for current connection
-        print(f'ZMQ server started, listening on: {config.server_addr}')
+        self.logger.info(f'ZMQ server started, listening on: {self.server_addr}')
 
     def recvMessage(self):
         """Receive message from client
@@ -42,10 +45,10 @@ class ZMQServer():
                 message['meta'] = json.loads(parts[2].decode('utf8'))  # Metadata JSON
                 return message
             else:
-                print("Invalid message format received")
+                self.logger.warning("Invalid message format received")
                 return None
         except Exception as e:
-            print(f"Error receiving message: {e}")
+            self.logger.error(f"Error receiving message: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -59,14 +62,14 @@ class ZMQServer():
         """
         try:
             if self.client_id is None:
-                print("Client ID not found, cannot send message")
+                self.logger.warning("Client ID not found, cannot send message")
                 return
             # Convert data dictionary to byte stream
             data = pickle.dumps(data)
             meta = json.dumps(meta).encode('utf8')
             self.router.send_multipart([self.client_id, data, meta], flags=zmq.NOBLOCK)  # Non-blocking send
         except Exception as e:
-            print(f"Error sending message: {e}")
+            self.logger.error(f"Error sending message: {e}")
             import traceback
             traceback.print_exc()
     
@@ -74,4 +77,4 @@ class ZMQServer():
         """Close ZMQ server and cleanup resources"""
         self.router.close()
         self.context.term()
-        print(f'ZMQ server closed, address was: {self.config.server_addr}')
+        self.logger.info(f'ZMQ server closed, address was: {self.server_addr}')

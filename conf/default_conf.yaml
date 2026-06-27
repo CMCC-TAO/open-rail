@@ -295,5 +295,7 @@ visualize:
     window_span_sec: 10.0
   updata_fps: 30
 vla_zmq:
-  client_addr: tcp://localhost:5566
-  server_addr: tcp://*:5566
+  client_ip: localhost
+  client_port: '5566'
+  server_ip: '*'
+  server_port: '5566'
