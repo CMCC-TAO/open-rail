@@ -35,11 +35,11 @@
   --font: var(--font-family-base);
 
   /* Font Size Scale (5 levels) */
-  --font-size-1: 11px;
-  --font-size-2: 12px;
-  --font-size-3: 13px;
-  --font-size-4: 14px;
-  --font-size-5: 16px; /*Panel header font size */
+  --font-size-1: 12px;
+  --font-size-2: 13px;
+  --font-size-3: 14px;
+  --font-size-4: 16px; /* Start / Pause / Reset Buttons */
+  --font-size-5: 18px; /*Panel header font size */
   --font-size-6: 24px; /*Top bar logo font size */
 
   /* Font Weight Scale (5 levels) */
@@ -48,7 +48,7 @@
   --font-weight-3: 600;
   --font-weight-4: 700;
   --font-weight-5: 900;
-  --font-weight-6: 1000;
+  --font-weight-6: 1200;
   --radius:     8px;
   --panel-radius: 14px;
   --panel-border: rgba(199, 201, 205, 0.531);
