@@ -7,6 +7,7 @@ from .Ti5Camera import Ti5Camera as Camera
 
 from ..base_robot import RobotBase
 
+import logging
 import rclpy
 import threading
 
@@ -19,29 +20,35 @@ class RobotBody(RobotBase):
         """
         super().__init__(config)
         self.cfg = config
+        self.logger = logging.getLogger(__name__)
         
-        # ============================
-        # 初始化 rclpy，再创建 ROS 节点
-        # ============================
+        # ============================================
+        # Initialize rclpy and then create a ROS node
+        # ============================================
         if not rclpy.ok():
             rclpy.init()
 
+        # ============================================
+        # Initialize Ti5 Robot & Camera Nodes
+        # ============================================
         self.camera = Camera(self.cfg)
         self.robot = Robot(self.cfg)
 
-        # ======================
-        # 统一自旋
-        # ======================
+        # =========================
+        # Unified ROS Spinning
+        # =========================
         self.running = True
         self._start_spin_thread()
 
-        # 夹爪状态缓存
+        # =========================
+        # Gripper State Cache
+        # =========================
         self.gripper_cmd = np.zeros(2)
         self.gripper_count = 0
         self.current_timestamp = 0
         self.current_state = None
         
-        print("✅ RobotBody 初始化完成！")
+        self.logger.info("✅ RobotBody initialization completed!")
         time.sleep(2.0)
 
 
@@ -54,35 +61,35 @@ class RobotBody(RobotBase):
         spin_thread.start()
 
     # ==================================================================
-    # 控制机器人（接收 26 维动作！）
+    # Control robot (receives 26-dimensional actions!)
     # ==================================================================
     def control_robot(self, action):
         """
-        action序列拼接顺序：
-        action = 26 维
-        0~7   left_arm
-        7~14  right_arm
-        14~20 left_hand
-        20~26 right_hand
+        Action sequence concatenation order:
+        action = 26-dimensional vector
+        0~7    left_arm
+        7~14   right_arm
+        14~20  left_hand
+        20~26  right_hand
         """
         action = np.array(action).flatten()
-        assert len(action) == 26, "必须输入 26 维动作"
+        assert len(action) == 26, "Action must be 26-dimensional"
         
-        # 直接发送给新版机器人
+        # Send commands directly to the new version robot
         self.robot.send_robot_action(action)
 
     # ==================================================================
-    # 控制机器人部分关节
+    # Control partial joints of the robot
     # ==================================================================
     def control_robot_partial(self, name="default", action=[0.0]):
 
         action = np.array(action).flatten()
         
-        # 直接发送给新版机器人
+        # Send commands directly to the new version robot
         self.robot.send_partial_action(name, action)
 
     # ==================================================================
-    # 复位机器人（使用 26 维动作）
+    # # Reset robot (uses 26-dimensional action)
     # ==================================================================
     def reset_robot(self, target_pose=None, mode='default'):
         if target_pose is None:
@@ -91,16 +98,16 @@ class RobotBody(RobotBase):
             elif mode == 'zero':
                 target_pose = np.zeros(26)
             else:
-                print('[WARN] target_pose is None, can NOT execute reset_robot')
+                self.logger.warning("[WARN] target_pose is None, cannot execute reset_robot")
                 return
 
         target_pose = np.array(target_pose)
         self.robot.send_robot_action(target_pose[:26])
         time.sleep(1.0)
-        print("✅ 机器人复位完成")
+        self.logger.info("✅ Robot reset completed")
 
     # ==================================================================
-    # 获取观测（图像 + 对齐后的关节角）
+    # # Get observation (image + aligned joint angles)
     # ==================================================================
     def retrieve_observation(self):
         try:
@@ -115,37 +122,37 @@ class RobotBody(RobotBase):
 
             self.current_timestamp = head_ts
 
-            # 图像
+            # camera images
             result['cam.head'] = head_img
             result['cam.hand_left'] = left_img
             result['cam.hand_right'] = right_img
             result['ref_timestamp'] = head_ts
 
-            # 机器人状态对齐
+            # Robot State Alignment
             robot_state = self.robot.get_arm_hand_states_nearest_func(head_ts)
 
-            # 拼接成 state 向量
+            # Concatenate into state vector
             state = []
             
-            # 左臂
+            # Left Arm
             if robot_state['left_arm'] is not None:
                 state.extend(robot_state['left_arm'].position)
             else:
                 state.extend([0]*7)
 
-            # 右臂
+            # Right Arm
             if robot_state['right_arm'] is not None:
                 state.extend(robot_state['right_arm'].position)
             else:
                 state.extend([0]*7)
 
-            # 左手
+            # Left Hand
             if robot_state['left_hand'] is not None:
                 state.extend(robot_state['left_hand'].position)
             else:
                 state.extend([0]*6)
 
-            # 右手
+            # Right Hand
             if robot_state['right_hand'] is not None:
                 state.extend(robot_state['right_hand'].position)
             else:
@@ -156,25 +163,25 @@ class RobotBody(RobotBase):
             return result
 
         except Exception as e:
-            print("观测获取失败:", e)
+            self.logger.error(f"Failed to get observation: {e}")
             return None
 
     # ==================================================================
-    # 关闭
+    # Close Robot
     # ==================================================================
     def close(self):
         self.running = False
-        print('✅ RobotBody 已安全关闭')
+        self.logger.info("✅ RobotBody safely shut down")
 
 
-# ==================================
-# 联合测试机器人相机和关节控制
-# ==================================
+# ======================================================
+# # Joint test of robot camera and joint control
+# ======================================================
 def test_robot_body():
     # rclpy.init()
-    print("=" * 60)
-    print("🤖 开始测试 RobotBody + Ti5Camera + Ti5Robot")
-    print("=" * 60)
+    self.logger.info("=" * 60)
+    self.logger.info("🤖 Start testing RobotBody + Ti5Camera + Ti5Robot")
+    self.logger.info("=" * 60)
 
     default_action = [
         -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
@@ -189,7 +196,7 @@ def test_robot_body():
         650.0, 650.0, 650.0, 650.0, 650.0, 250.0
       ]
 
-    # 模拟配置（你真实运行时会从配置文件加载）
+    # Simulation config (loaded from config file in real run)
     mock_config = {
         'robots': {
             'ti5_t170c': {
@@ -199,50 +206,50 @@ def test_robot_body():
         }
     }
 
-    # 初始化
+    # RobotBody Initialization
     robot_body = RobotBody(mock_config)
     time.sleep(1.0)
 
-    # ----------------------
-    # 测试 1：获取观测（图像 + 26维状态）
-    # ----------------------
-    print("\n📷 测试1：获取观测数据...")
+    # ----------------------------------------------------------
+    # Test 1: Get observation (image + 26-dimensional state)
+    # ----------------------------------------------------------
+    robot_body.logger.info("\n📷 Test 1: Retrieving observation data...")
     for _ in range(10):
         obs = robot_body.retrieve_observation()
         if obs is not None:
-            print("✅ 观测获取成功！")
-            print(f"   时间戳: {obs['ref_timestamp']:.6f}")
-            print(f"   状态维度: {obs['obs.state'].shape} (正确=26)")
-            print(f"   头部图像: {obs['cam.head'].shape}")
-            print(f"   左手图像: {obs['cam.hand_left'].shape}")
-            print(f"   右手图像: {obs['cam.hand_right'].shape}")
+            robot_body.logger.info("✅ Observation retrieved successfully!")
+            robot_body.logger.info(f"   Timestamp: {obs['ref_timestamp']:.6f}")
+            robot_body.logger.info(f"   State dimension: {obs['obs.state'].shape} (Expected=26)")
+            robot_body.logger.info(f"   Head camera image shape: {obs['cam.head'].shape}")
+            robot_body.logger.info(f"   Left hand camera image shape: {obs['cam.hand_left'].shape}")
+            robot_body.logger.info(f"   Right hand camera image shape: {obs['cam.hand_right'].shape}")
             break
         time.sleep(0.1)
     else:
-        print("❌ 未获取到观测数据")
+        robot_body.logger.error("❌ Failed to retrieve observation data")
 
-    # ----------------------
-    # 测试 2：动作控制（右手握拳）
-    # ----------------------
-    print("\n🎮 测试2：发送26维动作 - 右手握拳...")
+    # --------------------------------------------
+    # Test 2: Action control (right hand grasp)
+    # --------------------------------------------
+    robot_body.logger.info("\n🎮 Test 2: Send 26-dimensional action - right hand grasp...")
     action = np.zeros(26)
     action[20:26] = [650.0, 650.0, 650.0, 650.0, 650.0, 250.0]
     robot_body.control_robot(action)
-    print("✅ 右手握拳指令已发送！")
+    robot_body.logger.info("✅ Right hand grasp command sent!")
     time.sleep(1.5)
 
     # ----------------------
-    # 测试 3：复位机器人
+    # Test 3: Reset robot
     # ----------------------
-    print("\n🔄 测试3：机器人复位...")
+    robot_body.logger.info("\n🔄 Test 3: Resetting robot...")
     robot_body.reset_robot(mode='default')
     time.sleep(0.5)
 
-    # 结束
+    # End of test
     robot_body.close()
-    print("\n" + "=" * 60)
-    print("🎉 所有测试全部通过！")
-    print("=" * 60)
+    robot_body.logger.info("\n" + "=" * 60)
+    robot_body.logger.info("🎉 All tests passed!")
+    robot_body.logger.info("=" * 60)
 
 
 if __name__ == '__main__':
