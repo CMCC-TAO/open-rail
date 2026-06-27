@@ -222,13 +222,13 @@ class VisualizeServer:
         self.clients.discard(websocket)
         self.logger.info("Client disconnected. Active connections: %d", len(self.clients))
 
-    @staticmethod
-    def _cfg_get(cfg, key, default=False):
-        if cfg is None:
-            return default
-        if isinstance(cfg, dict):
-            return bool(cfg.get(key, default))
-        return bool(getattr(cfg, key, default))
+    # @staticmethod
+    # def _cfg_get(cfg, key, default=False):
+    #     if cfg is None:
+    #         return default
+    #     if isinstance(cfg, dict):
+    #         return bool(cfg.get(key, default))
+    #     return bool(getattr(cfg, key, default))
 
     @staticmethod
     def _camera_id_from_key(camera_key: str):
@@ -242,11 +242,10 @@ class VisualizeServer:
         return None
 
     def _get_camera_open_map(self):
-        camera_cfg = getattr(self.config, 'camera', None)
         return {
-            0: self._cfg_get(camera_cfg, 'open_head', True),
-            1: self._cfg_get(camera_cfg, 'open_wrist_left', True),
-            2: self._cfg_get(camera_cfg, 'open_wrist_right', True),
+            0: getattr(self.config.camera, 'open_head', True),
+            1: getattr(self.config.camera, 'open_wrist_left', True),
+            2: getattr(self.config.camera, 'open_wrist_right', True)
         }
 
     async def send_camera_data(self):
