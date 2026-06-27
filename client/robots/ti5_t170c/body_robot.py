@@ -179,9 +179,9 @@ class RobotBody(RobotBase):
 # ======================================================
 def test_robot_body():
     # rclpy.init()
-    self.logger.info("=" * 60)
-    self.logger.info("🤖 Start testing RobotBody + Ti5Camera + Ti5Robot")
-    self.logger.info("=" * 60)
+    print("=" * 60)
+    print("🤖 Start testing RobotBody + Ti5Camera + Ti5Robot")
+    print("=" * 60)
 
     default_action = [
         -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
@@ -213,43 +213,43 @@ def test_robot_body():
     # ----------------------------------------------------------
     # Test 1: Get observation (image + 26-dimensional state)
     # ----------------------------------------------------------
-    robot_body.logger.info("\n📷 Test 1: Retrieving observation data...")
+    print("\n📷 Test 1: Retrieving observation data...")
     for _ in range(10):
         obs = robot_body.retrieve_observation()
         if obs is not None:
-            robot_body.logger.info("✅ Observation retrieved successfully!")
-            robot_body.logger.info(f"   Timestamp: {obs['ref_timestamp']:.6f}")
-            robot_body.logger.info(f"   State dimension: {obs['obs.state'].shape} (Expected=26)")
-            robot_body.logger.info(f"   Head camera image shape: {obs['cam.head'].shape}")
-            robot_body.logger.info(f"   Left hand camera image shape: {obs['cam.hand_left'].shape}")
-            robot_body.logger.info(f"   Right hand camera image shape: {obs['cam.hand_right'].shape}")
+            print("✅ Observation retrieved successfully!")
+            print(f"   Timestamp: {obs['ref_timestamp']:.6f}")
+            print(f"   State dimension: {obs['obs.state'].shape} (Expected=26)")
+            print(f"   Head camera image shape: {obs['cam.head'].shape}")
+            print(f"   Left hand camera image shape: {obs['cam.hand_left'].shape}")
+            print(f"   Right hand camera image shape: {obs['cam.hand_right'].shape}")
             break
         time.sleep(0.1)
     else:
-        robot_body.logger.error("❌ Failed to retrieve observation data")
+        print("❌ Failed to retrieve observation data")
 
     # --------------------------------------------
     # Test 2: Action control (right hand grasp)
     # --------------------------------------------
-    robot_body.logger.info("\n🎮 Test 2: Send 26-dimensional action - right hand grasp...")
+    print("\n🎮 Test 2: Send 26-dimensional action - right hand grasp...")
     action = np.zeros(26)
     action[20:26] = [650.0, 650.0, 650.0, 650.0, 650.0, 250.0]
     robot_body.control_robot(action)
-    robot_body.logger.info("✅ Right hand grasp command sent!")
+    print("✅ Right hand grasp command sent!")
     time.sleep(1.5)
 
     # ----------------------
     # Test 3: Reset robot
     # ----------------------
-    robot_body.logger.info("\n🔄 Test 3: Resetting robot...")
+    print("\n🔄 Test 3: Resetting robot...")
     robot_body.reset_robot(mode='default')
     time.sleep(0.5)
 
     # End of test
     robot_body.close()
-    robot_body.logger.info("\n" + "=" * 60)
-    robot_body.logger.info("🎉 All tests passed!")
-    robot_body.logger.info("=" * 60)
+    print("\n" + "=" * 60)
+    print("🎉 All tests passed!")
+    print("=" * 60)
 
 
 if __name__ == '__main__':
