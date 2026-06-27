@@ -55,10 +55,12 @@ class RealtimeDataManager():
 
         # Timing markers for inference, trajectory fitting and control
         self.start_infer_marker = 0.0
-        self.start_traj_marker = 0.0
+        self.start_intra_traj_marker = 0.0
+        self.start_inter_traj_marker = 0.0
         self.start_ctrl_marker = 0.0
         self.avg_infer_time = 0.0
-        self.avg_traj_time = 0.0
+        self.avg_intra_traj_time = 0.0
+        self.avg_inter_traj_time = 0.0
         self.infer_count = 0
 
         # Synchronous Running Flag
@@ -97,12 +99,17 @@ class RealtimeDataManager():
         self.start_infer_marker = time.perf_counter()
         # print(f"Start inference at {self.start_infer_marker:.4f} s")
         
-    def set_traj_time_marker(self):
-        """Set the local timestamp when start trajectory fitting. Used for calculating the trajectory fitting time.
+    def set_intra_traj_time_marker(self):
+        """Set the local timestamp when start intra chunk process. Used for calculating the trajectory fitting time.
         """
-        self.start_traj_marker = time.perf_counter()
-        # print(f"Start trajectory fitting at {self.start_traj_marker:.4f} s")
+        self.start_intra_traj_marker = time.perf_counter()
+        # print(f"Start intra chunk process at {self.start_intra_traj_marker:.4f} s")
         
+    def set_inter_traj_time_marker(self):
+        """Set the local timestamp when start inter chunk process. Used for calculating the inter chunk fusion time.
+        """
+        self.start_inter_traj_marker = time.perf_counter()
+        # print(f"Start inter chunk process at {self.start_inter_traj_marker:.4f} s")
     def set_control_time_marker(self):
         """Set the local timestamp when start control. Used for calculating the control time.
         """
@@ -112,19 +119,26 @@ class RealtimeDataManager():
         """Compute the average inference time. The average inference time is used to set the offset of the action chunk.
         """
         # self.last_infer_time = self.currt_infer_time
-        currt_infer_time = self.start_traj_marker - self.start_infer_marker
+        currt_infer_time = self.start_intra_traj_marker - self.start_infer_marker
         self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
         self.logger.debug(f'avg infer time: {self.avg_infer_time:.4f}s')
         # print(f"avg infer time: {self.avg_infer_time}, infer count: {self.infer_count}")
 
-    def compute_avg_traj_time(self):
+    def compute_avg_intra_traj_time(self):
+        """Compute the average intra chunk process time. The average trajectory fitting time is used to set the offset of the action chunk.
+        """
+        # self.last_traj_time = self.currt_traj_time
+        currt_intra_traj_time = self.start_inter_traj_marker - self.start_intra_traj_marker
+        self.avg_intra_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_intra_traj_time) / self.infer_count if self.infer_count > 0 else currt_intra_traj_time
+        self.logger.debug(f'avg intra traj time: {self.avg_intra_traj_time:.4f}s')
+        # self.logger.debug(f'avg traj time: {self.avg_intra_traj_time}')
+    def compute_avg_inter_traj_time(self):
         """Compute the average trajectory fitting time. The average trajectory fitting time is used to set the offset of the action chunk.
         """
         # self.last_traj_time = self.currt_traj_time
-        currt_traj_time = self.start_ctrl_marker - self.start_traj_marker
-        self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count if self.infer_count > 0 else currt_traj_time
-        self.logger.debug(f'avg traj time: {self.avg_traj_time:.4f}s')
-        # self.logger.debug(f'avg traj time: {self.avg_traj_time}')
+        currt_inter_traj_time = self.start_ctrl_marker - self.start_inter_traj_marker
+        self.avg_inter_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_inter_traj_time) / self.infer_count if self.infer_count > 0 else currt_inter_traj_time
+        self.logger.debug(f'avg inter traj time: {self.avg_inter_traj_time:.4f}s')
  
     def add_observe_data(self, frame):
         """Add observe data to buffer. The observe data is a dictionary containing the robot state, camera images and timestamps.
@@ -456,6 +470,13 @@ class RealtimeDataManager():
             self.action_chunks = []
             self.timestamp_chunks = []
             self.infer_count = 0
+            self.start_infer_marker = 0.0
+            self.start_intra_traj_marker = 0.0
+            self.start_inter_traj_marker = 0.0
+            self.start_ctrl_marker = 0.0
+            self.avg_infer_time = 0.0
+            self.avg_intra_traj_time = 0.0
+            self.avg_inter_traj_time = 0.0
 
         with self.observe_thread_lock:
             self.observe_buffer.clear()

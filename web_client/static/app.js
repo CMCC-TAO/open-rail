@@ -7,15 +7,17 @@ function renderStats(data) {
   App.isControlRunning = !!(data?.control_running ?? (data?.running && !data?.paused));
   setRunningUI(data.running, data.paused ?? false);
 
+  $('val-obv-fps').textContent = data.obv_fps != null
+    ? Number(data.obv_fps).toFixed(1) + ' fps' : '–';
   $('val-infer-count').textContent = data.infer_count ?? '–';
   $('img-proc-time').textContent   = data.img_proc_time != null
     ? Number(data.img_proc_time).toFixed(1) + ' ms' : '–';
   $('val-infer-time').textContent  = data.avg_infer_time != null
     ? (data.avg_infer_time * 1000).toFixed(1) + ' ms' : '–';
-  $('val-traj-time').textContent   = data.avg_traj_time != null
-    ? (data.avg_traj_time * 1000).toFixed(1) + ' ms' : '–';
-  $('val-obv-fps').textContent = data.obv_fps != null
-    ? Number(data.obv_fps).toFixed(1) + ' fps' : '–';
+  $('val-intra-chunk-time').textContent   = data.avg_intra_traj_time != null
+    ? (data.avg_intra_traj_time * 1000).toFixed(1) + ' ms' : '–';
+  $('val-inter-chunk-time').textContent   = data.avg_inter_traj_time != null
+    ? (data.avg_inter_traj_time * 1000).toFixed(1) + ' ms' : '–';
 
   updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
 
