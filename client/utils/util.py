@@ -310,7 +310,8 @@ def create_layout(info: dict, terminal_size=None):
     col_layout2_info1 = (
         f"infer_count: {vla_client.realtime_data_manager.infer_count}\n"
         f"avg_infer_time: {vla_client.realtime_data_manager.avg_infer_time: .4f}s\n"
-        f"avg_traj_time: {vla_client.realtime_data_manager.avg_traj_time: .4f}s\n"
+        f"avg_intra_traj_time: {vla_client.realtime_data_manager.avg_intra_traj_time: .4f}s\n"
+        f"avg_inter_traj_time: {vla_client.realtime_data_manager.avg_inter_traj_time: .4f}s\n"
     )
     obs_act_info = {
         "preprocess": config.vision.preprocess,

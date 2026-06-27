@@ -593,7 +593,8 @@ def _collect_stats() -> dict:
         "control_running": False,
         "infer_count": 0,
         "avg_infer_time": 0.0,
-        "avg_traj_time": 0.0,
+        "avg_intra_traj_time": 0.0,
+        "avg_inter_traj_time": 0.0,
         "obv_fps": 0.0,
         "img_proc_time": 0.0,
         "current_prob_progress": 0.0,
@@ -625,7 +626,8 @@ def _collect_stats() -> dict:
         base["current_prob_progress"] = float(getattr(vla_client, "current_prob_progress", 0.0))
         base["infer_count"]     = int(vla_client.realtime_data_manager.infer_count)
         base["avg_infer_time"]  = float(vla_client.realtime_data_manager.avg_infer_time)
-        base["avg_traj_time"]   = float(vla_client.realtime_data_manager.avg_traj_time)
+        base["avg_intra_traj_time"]   = float(vla_client.realtime_data_manager.avg_intra_traj_time)
+        base["avg_inter_traj_time"]   = float(vla_client.realtime_data_manager.avg_inter_traj_time)
         base["obv_fps"]         = float(vla_client.realtime_data_manager.get_observe_fps())
         base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
         # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)

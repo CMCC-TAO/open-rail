@@ -194,6 +194,7 @@ class VLAClientAsync():
         """Backward-compatible alias of pause()."""
         self.pause()
         time.sleep(self.realtime_data_manager.avg_infer_time * 1.5) # make sure inference thread is stopped.
+        self.image_process_time = 0.0
         self.task_language_manager.reset()
         self.realtime_data_manager.clear()
         with self.show_thread_lock:
@@ -285,7 +286,7 @@ class VLAClientAsync():
                 # self.inferenceFirstThreadFun()
                 self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
                 # self.realtime_data_manager.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
-            # print(f'\rInference count: {self.realtime_data_manager.infer_count}, current infer time: {self.realtime_data_manager.start_traj_marker-self.realtime_data_manager.start_infer_marker:.4f}s, current traj time: {self.realtime_data_manager.start_ctrl_marker-self.realtime_data_manager.start_traj_marker:.4f}s', end='', flush=True)
+            # print(f'\rInference count: {self.realtime_data_manager.infer_count}, current infer time: {self.realtime_data_manager.start_intra_traj_marker-self.realtime_data_manager.start_infer_marker:.4f}s, current traj time: {self.realtime_data_manager.start_ctrl_marker-self.realtime_data_manager.start_intra_traj_marker:.4f}s', end='', flush=True)
             # symbol = '=' * 10
     def _control_thread_fun(self):
         """Control thread function for real-time robot action execution.
@@ -385,7 +386,7 @@ class VLAClientAsync():
                 # print("Debug: infer first timeout.")
                 return
             # Record trajectory fitting timestamp
-            self.realtime_data_manager.set_traj_time_marker()
+            self.realtime_data_manager.set_intra_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
 
             action_data = result['data']
@@ -410,8 +411,7 @@ class VLAClientAsync():
                 joint_indices=self.robot.get_joint_indices(),
                 step_indices=self.robot.get_step_indices())
 
-            # Record control timestamp
-            self.realtime_data_manager.set_control_time_marker()
+            self.realtime_data_manager.set_inter_traj_time_marker()
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
             # currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
@@ -426,6 +426,8 @@ class VLAClientAsync():
                 joint_indices=None,
                 step_indices=None,
             )
+            # Record control timestamp
+            self.realtime_data_manager.set_control_time_marker()
             self.realtime_data_manager.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
                 vel_chunk_smoothed=vel_chunk_smoothed,
@@ -437,7 +439,8 @@ class VLAClientAsync():
 
             # Compute average inference and trajectory fitting times
             self.realtime_data_manager.compute_avg_infer_time()
-            self.realtime_data_manager.compute_avg_traj_time()
+            self.realtime_data_manager.compute_avg_intra_traj_time()
+            self.realtime_data_manager.compute_avg_inter_traj_time()
     
     # @run_time_decorator
     def _inference_step(self):
@@ -476,7 +479,7 @@ class VLAClientAsync():
                 return
 
             # Record trajectory fitting timestamp
-            self.realtime_data_manager.set_traj_time_marker()
+            self.realtime_data_manager.set_intra_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
             action_data = result['data']
             
@@ -503,11 +506,7 @@ class VLAClientAsync():
                 joint_indices=self.robot.get_joint_indices(),
                 step_indices=self.robot.get_step_indices())
 
-            # Record control timestamp
-            self.realtime_data_manager.set_control_time_marker()
-            
-            # Get prob_progress from action data if available
-
+            self.realtime_data_manager.set_inter_traj_time_marker()
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
             currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
             # Use inter chunk fusion when control thread is running, otherwise use intra chunk smoother output directly for visualization and monitoring
@@ -523,6 +522,8 @@ class VLAClientAsync():
                 joint_indices=self.robot.get_joint_indices() if self.is_control_thread_running else None,
                 step_indices=self.robot.get_step_indices() if self.is_control_thread_running else None,
             )
+            # Record control timestamp
+            self.realtime_data_manager.set_control_time_marker()
             self.realtime_data_manager.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
                 vel_chunk_smoothed=vel_chunk_smoothed,
@@ -534,7 +535,8 @@ class VLAClientAsync():
 
             # Compute average inference and trajectory fitting times
             self.realtime_data_manager.compute_avg_infer_time()
-            self.realtime_data_manager.compute_avg_traj_time()
+            self.realtime_data_manager.compute_avg_intra_traj_time()
+            self.realtime_data_manager.compute_avg_inter_traj_time()
             if self.config.language.auto_mode == True:
                 self.task_language_manager.reset_task_progress(
                     language_instruction=currt_language_instruction,
