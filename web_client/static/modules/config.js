@@ -3,7 +3,13 @@
 // ═══════════════════════════════════════════════════════
 
 // Keys to exclude from the config tree (handled separately or rendered via createLangLinkRow)
-const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record', 'controller']);
+const CONFIG_EXCLUDED_GROUP_KEYS = new Set(['language', 'record', 'controller']);
+
+// Sub-sub conf groups to exclude from Configuration panel (dot-path)
+const CONFIG_EXCLUDED_SUB_GROUP_KEYS = new Set([
+  'visualize.camera',
+  'visualize.trajectory',
+]);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
@@ -65,6 +71,16 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
 
 // Read-only keys in config tree UI (display only, not editable in panel)
 const CONFIG_READONLY_DOT_KEYS = new Set([
+  'visualize.max_size',
+  'visualize.ping_interval',
+  'visualize.ping_timeout',
+  'visualize.host',
+  'visualize.port',
+  'vla_zmq.client_ip',
+  'vla_zmq.client_port',
+  'vla_zmq.server_ip',
+  'vla_zmq.server_port',
+  'rdm.max_len'
 ]);
 
 // Default key list for the fixed "Main Parameters" area.
@@ -85,6 +101,19 @@ const DEFAULT_MAIN_PARAMETER_KEYS = {
   'vision.preprocess.width': 'Img Proc Width',
 };
 
+// 2. Define custom order for sub-groups
+// List the keys in the order you want them to appear.
+// Keys not listed here will appear at the end in their original order.
+const CUSTOM_GROUP_ORDER = [
+  'robots',
+  'inter_chunk',
+  'intra_chunk',
+  'vision',
+  'rdm',
+  'visualize',
+  'vla_zmq',
+  // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
+];
 let _cfgInputSyncing = false;
 
 function getConfigValueByDotKey(cfg, dotKey) {
@@ -304,7 +333,7 @@ function buildTree(obj, prefix, parentEl) {
 
   for (const [key, val] of Object.entries(obj)) {
     // Skip excluded keys at root level
-    if (!prefix && CONFIG_EXCLUDED_KEYS.has(key)) continue;
+    if (!prefix && CONFIG_EXCLUDED_GROUP_KEYS.has(key)) continue;
 
     const dotKey = prefix ? `${prefix}.${key}` : key;
     const isGroup = val !== null && typeof val === 'object' && !Array.isArray(val);
@@ -327,6 +356,7 @@ function buildTree(obj, prefix, parentEl) {
     }
 
     if (isGroup) {
+      if (CONFIG_EXCLUDED_SUB_GROUP_KEYS.has(dotKey)) continue;
       subGroupEntries.push([key, val]);
     } else if (!prefix) {
       basicEntries.push([key, val]);
@@ -364,16 +394,7 @@ function buildTree(obj, prefix, parentEl) {
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
   }
 
-  // 2. Define custom order for sub-groups
-  // List the keys in the order you want them to appear.
-  // Keys not listed here will appear at the end in their original order.
-  const CUSTOM_GROUP_ORDER = [
-    'robots',
-    'visualize',
-    // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
-  ];
-
-  // 3. Sort subGroupEntries based on CUSTOM_GROUP_ORDER
+  // 2. Sort subGroupEntries based on CUSTOM_GROUP_ORDER
   subGroupEntries.sort((a, b) => {
     const keyA = a[0].toLowerCase();
     const keyB = b[0].toLowerCase();
@@ -734,6 +755,7 @@ function createCfgRow(dotKey, label, value) {
 
   input.className = 'input-text';
   if (CONFIG_READONLY_DOT_KEYS.has(dotKey)) {
+    row.classList.add('cfg-row-readonly');
     input.disabled = true;
     input.title = `${dotKey} is managed by runtime actions and is read-only here.`;
   } else {

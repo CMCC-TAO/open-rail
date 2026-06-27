@@ -70,4 +70,7 @@
   --topbar-bg: linear-gradient(135deg, #f1f3f5 0%, #d9dbde 50%,  #f1f3f5 100%);
   --footer-h:   28px;
   --panel-gap:  12px;
+
+  /* Configuration: readonly input opacity */
+  --config-readonly-opacity: 0.58;
 }

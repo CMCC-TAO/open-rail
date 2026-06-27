@@ -1,6 +1,7 @@
 import zmq
 import json
 import pickle
+import logging
 import threading
 from ml_collections import ConfigDict
 
@@ -17,15 +18,17 @@ class ZMQClient():
         Args:
             config (ConfigDict): Configuration containing client address and other parameters.
         """
+        self.logger = logging.getLogger(__name__)
         self.config = config
+        self.client_addr = f'tcp://{config.client_ip}:{config.client_port}'  # Client connection address and port
         self.context = zmq.Context()
         self.dealer = self.context.socket(zmq.DEALER)
         # self.dealer.setsockopt(zmq.SNDTIMEO, 5000)  # 5 second timeout
         self.dealer.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
-        self.dealer.connect(config.client_addr)
+        self.dealer.connect(self.client_addr)
         self._closed = False
         self._close_lock = threading.Lock()
-        print(f'ZMQ client started, connected to: {config.client_addr}')
+        self.logger.info(f'ZMQ client started, connected to: {self.client_addr}')
 
     def recvMessage(self, timeout_ms=500):
         """Receive message from the VLA inference server.
@@ -47,18 +50,18 @@ class ZMQClient():
                         'data': pickle.loads(parts[0]),
                         'meta': json.loads(parts[1].decode('utf8')),
                     }
-                print("Received data has issues")
+                self.logger.warning("Received data has issues")
             return None
         except zmq.ZMQError as e:
             # Socket may be closed concurrently during shutdown.
             if self._closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM):
                 return None
-            print(f"Error receiving message: {e}")
+            self.logger.error(f"Error receiving message: {e}")
             import traceback
             traceback.print_exc()
             return None
         except Exception as e:
-            print(f"Error receiving message: {e}")
+            self.logger.error(f"Error receiving message: {e}")
             import traceback
             traceback.print_exc()
             return None
@@ -84,12 +87,12 @@ class ZMQClient():
             # EAGAIN means HWM/backpressure in non-blocking mode; treat as soft failure.
             if self._closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM, zmq.EAGAIN):
                 return False
-            print(f"Error sending message: {e}")
+            self.logger.error(f"Error sending message: {e}")
             import traceback
             traceback.print_exc()
             return False
         except Exception as e:
-            print(f"Error sending message: {e}")
+            self.logger.error(f"Error sending message: {e}")
             import traceback
             traceback.print_exc()
             return False
@@ -108,4 +111,4 @@ class ZMQClient():
                 self.context.term()
             except Exception:
                 pass
-        print(f'ZMQ client closed, connection address: {self.config.client_addr}')
+        self.logger.info(f'ZMQ client closed, connection address: {self.client_addr}')

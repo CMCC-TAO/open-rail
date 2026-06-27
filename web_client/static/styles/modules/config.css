@@ -86,6 +86,17 @@
 .cfg-value select[multiple] { min-height: 70px; padding: 4px; }
 .cfg-value select[multiple] option { padding: 1px 2px; }
 
+.cfg-row-readonly .cfg-key,
+.cfg-row-readonly .cfg-value input,
+.cfg-row-readonly .cfg-value select {
+  opacity: var(--config-readonly-opacity);
+}
+
+.cfg-row-readonly .cfg-value input:disabled,
+.cfg-row-readonly .cfg-value select:disabled {
+  cursor: not-allowed;
+}
+
 .config-footer {
   display: flex; align-items: center; gap: 8px;
   padding-top: 6px; border-top: 1px solid var(--border); flex-shrink: 0;
