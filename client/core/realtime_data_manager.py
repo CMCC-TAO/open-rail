@@ -58,9 +58,10 @@ class RealtimeDataManager():
         self.start_intra_traj_marker = 0.0
         self.start_inter_traj_marker = 0.0
         self.start_ctrl_marker = 0.0
-        self.avg_infer_time = 0.0
+        self.avg_comm_infer_time = 0.0
         self.avg_intra_traj_time = 0.0
         self.avg_inter_traj_time = 0.0
+        self.avg_infer_time = 0.0
         self.avg_comm_time = 0.0 # communication latency between vla_client and vla_server
         self.infer_count = 0
 
@@ -116,15 +117,24 @@ class RealtimeDataManager():
         """
         self.start_ctrl_marker = time.perf_counter()
     
-    def compute_avg_infer_time(self):
+    def compute_avg_comm_infer_time(self):
         """Compute the average inference time. The average inference time is used to set the offset of the action chunk.
         """
         # self.last_infer_time = self.currt_infer_time
-        currt_infer_time = self.start_intra_traj_marker - self.start_infer_marker
-        # self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
-        self.avg_infer_time = self.avg_infer_time * 0.8 + currt_infer_time * 0.2 if self.avg_infer_time > 0 else currt_infer_time
-        self.logger.debug(f'avg infer time: {self.avg_infer_time:.4f}s')
-        # print(f"avg infer time: {self.avg_infer_time}, infer count: {self.infer_count}")
+        currt_comm_infer_time = self.start_intra_traj_marker - self.start_infer_marker
+        # self.avg_comm_infer_time = (self.avg_comm_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
+        self.avg_comm_infer_time = self.avg_comm_infer_time * 0.8 + currt_comm_infer_time * 0.2 if self.avg_comm_infer_time > 0 else currt_comm_infer_time
+        self.logger.debug(f'avg communication and inference time: {self.avg_comm_infer_time:.4f}s')
+        # print(f"avg infer time: {self.avg_comm_infer_time}, infer count: {self.infer_count}")
+    
+    def compute_avg_comm_time(self, avg_infer_time):
+        """Compute the average communication time between vla_client and vla_server.
+
+        Args:
+            avg_infer_time (float): The average inference time return from vla_server
+        """
+        self.avg_infer_time = avg_infer_time
+        self.avg_comm_time = self.avg_comm_infer_time - avg_infer_time
 
     def compute_avg_intra_traj_time(self):
         """Compute the average intra chunk process time. The average trajectory fitting time is used to set the offset of the action chunk.
@@ -479,6 +489,7 @@ class RealtimeDataManager():
             self.start_inter_traj_marker = 0.0
             self.start_ctrl_marker = 0.0
             self.avg_infer_time = 0.0
+            self.avg_comm_time = 0.0
             self.avg_intra_traj_time = 0.0
             self.avg_inter_traj_time = 0.0
 

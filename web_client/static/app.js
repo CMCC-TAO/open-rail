@@ -18,6 +18,8 @@ function renderStats(data) {
     ? (data.avg_intra_traj_time * 1000).toFixed(1) + ' ms' : '–';
   $('val-inter-chunk-time').textContent   = data.avg_inter_traj_time != null
     ? (data.avg_inter_traj_time * 1000).toFixed(1) + ' ms' : '–';
+  $('val-net-latency').textContent   = data.avg_comm_time != null
+    ? (data.avg_comm_time * 1000).toFixed(1) + ' ms' : '–';
 
   updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
 
