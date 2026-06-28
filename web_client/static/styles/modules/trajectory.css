@@ -246,16 +246,7 @@
 .traj-window-controls .btn-ctrl:active {
   opacity: .9;
 }
-.traj-window-controls .btn-ctrl.btn-active {
-  background: transparent !important;
-  border-color: color-mix(in srgb, var(--border) 80%, #1a73e8 20%) !important;
-  color: color-mix(in srgb, var(--text) 88%, #f3f8ff 12%) !important;
-  box-shadow: none !important;
-}
-/* .traj-window-controls .btn-ctrl {
-  display: inline-flex;
-  gap: 6px;
-} */
+.traj-window-controls .btn-ctrl:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .traj-window-controls .btn-ctrl i.fas,
 .traj-window-controls .btn-ctrl i.far,
 .traj-window-controls .btn-ctrl i.fab {
