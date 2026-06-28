@@ -66,7 +66,7 @@ class Ti5Robot(Node):
         self.queue_left_hand = deque(maxlen=30)
         self.queue_right_hand = deque(maxlen=30)
         self.state_lock = threading.Lock()
- 
+
         # ============================================
         # QoS matched with robot
         # ============================================
@@ -134,7 +134,7 @@ class Ti5Robot(Node):
         self.sample_thread = threading.Thread(target=self._sample_loop, daemon=True)
         self.sample_thread.start()
 
-        self.get_logger().info("✅ Ti5Robot initialized: state reading and motor control all ready")
+        self.get_logger().info("Ti5Robot initialized: state reading and motor control all ready")
 
     # ============================================
     # Wake-up topic callback function
@@ -147,7 +147,7 @@ class Ti5Robot(Node):
         ts = self.get_clock().now().nanoseconds / 1e9  # timestamp
         with self.state_lock:
             self.latest_wake_up = (msg.data, ts)
-        self.get_logger().info(f"🔔 Wake-up command received: {msg.data}")
+        self.get_logger().info(f"Wake-up command received: {msg.data}")
 
     # ============================================
     # Get latest wake-up command (external call)
@@ -418,7 +418,7 @@ def main():
 
     from Ti5Camera import Ti5Camera
 
-    print("⏳ Starting Ti5Camera + Ti5Robot...")
+    print("Starting Ti5Camera + Ti5Robot...")
     camera = Ti5Camera(config)
     robot = Ti5Robot(config)
 
@@ -434,7 +434,7 @@ def main():
     spin_thread = threading.Thread(target=spin_worker, daemon=True)
     spin_thread.start()
 
-    print("⏳ Waiting for camera and robot data...")
+    print("Waiting for camera and robot data...")
     time.sleep(2.5)
 
     # ======================
@@ -442,26 +442,26 @@ def main():
     # ======================
     cam_data = camera.get_latest_image()
     if not cam_data:
-        print("❌ Failed to read camera data")
+        print("Failed to read camera data")
         running = False
         return
 
     head_img, head_ts, left_img, left_ts, right_img, right_ts = cam_data
-    print("\n✅ Camera synchronization completed")
+    print("\n Camera synchronization completed")
     print(f"  Head timestamp: {head_ts:.6f}, Shape: {head_img.shape}")
 
     # ======================
     # Robot State Alignment
     # ======================
     robot_state = robot.get_arm_hand_states_nearest_func(head_ts)
-    print("\n✅ Robot state alignment completed")
+    print("\n Robot state alignment completed")
     print(f"  Reference timestamp: {robot_state['ref_timestamp']:.6f}")
 
     # ======================
     # Action Control Test
     # ======================
     print("\n==================================================")
-    print("🤖 Test: Send 26D action → Right hand fist")
+    print("Test: Send 26D action → Right hand fist")
     action = [
         -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
       ] + \
@@ -476,17 +476,17 @@ def main():
       ] 
     
     robot.send_robot_action(action)
-    print(f"✅ Body Action sent!")
+    print(f"Body Action sent!")
     print("==================================================")
 
     VLA_head_pos = [0.0, 0.0, 0.0]
     robot.send_partial_action("head", VLA_head_pos)
-    print(f"✅ Head Action sent!")
+    print(f"Head Action sent!")
     print("==================================================")
 
     time.sleep(1.5)
 
-    print("\n🎉 All tests passed!")
+    print("\nAll tests passed!")
 
 if __name__ == '__main__':
     main()

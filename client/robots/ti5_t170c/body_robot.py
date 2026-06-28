@@ -48,7 +48,7 @@ class RobotBody(RobotBase):
         self.current_timestamp = 0
         self.current_state = None
         
-        self.logger.info("✅ RobotBody initialization completed!")
+        self.logger.info("RobotBody initialization completed!")
         time.sleep(2.0)
 
 
@@ -104,7 +104,7 @@ class RobotBody(RobotBase):
         target_pose = np.array(target_pose)
         self.robot.send_robot_action(target_pose[:26])
         time.sleep(1.0)
-        self.logger.info("✅ Robot reset completed")
+        self.logger.info("Robot reset completed")
 
     # ==================================================================
     # # Get observation (image + aligned joint angles)
@@ -171,7 +171,7 @@ class RobotBody(RobotBase):
     # ==================================================================
     def close(self):
         self.running = False
-        self.logger.info("✅ RobotBody safely shut down")
+        self.logger.info("RobotBody safely shut down")
 
 
 # ======================================================
@@ -180,7 +180,7 @@ class RobotBody(RobotBase):
 def test_robot_body():
     # rclpy.init()
     print("=" * 60)
-    print("🤖 Start testing RobotBody + Ti5Camera + Ti5Robot")
+    print("Start testing RobotBody + Ti5Camera + Ti5Robot")
     print("=" * 60)
 
     default_action = [
@@ -213,11 +213,11 @@ def test_robot_body():
     # ----------------------------------------------------------
     # Test 1: Get observation (image + 26-dimensional state)
     # ----------------------------------------------------------
-    print("\n📷 Test 1: Retrieving observation data...")
+    print("\n Test 1: Retrieving observation data...")
     for _ in range(10):
         obs = robot_body.retrieve_observation()
         if obs is not None:
-            print("✅ Observation retrieved successfully!")
+            print("Observation retrieved successfully!")
             print(f"   Timestamp: {obs['ref_timestamp']:.6f}")
             print(f"   State dimension: {obs['obs.state'].shape} (Expected=26)")
             print(f"   Head camera image shape: {obs['cam.head'].shape}")
@@ -226,29 +226,29 @@ def test_robot_body():
             break
         time.sleep(0.1)
     else:
-        print("❌ Failed to retrieve observation data")
+        print("Failed to retrieve observation data")
 
     # --------------------------------------------
     # Test 2: Action control (right hand grasp)
     # --------------------------------------------
-    print("\n🎮 Test 2: Send 26-dimensional action - right hand grasp...")
+    print("\nTest 2: Send 26-dimensional action - right hand grasp...")
     action = np.zeros(26)
     action[20:26] = [650.0, 650.0, 650.0, 650.0, 650.0, 250.0]
     robot_body.control_robot(action)
-    print("✅ Right hand grasp command sent!")
+    print("Right hand grasp command sent!")
     time.sleep(1.5)
 
     # ----------------------
     # Test 3: Reset robot
     # ----------------------
-    print("\n🔄 Test 3: Resetting robot...")
+    print("\n Test 3: Resetting robot...")
     robot_body.reset_robot(mode='default')
     time.sleep(0.5)
 
     # End of test
     robot_body.close()
     print("\n" + "=" * 60)
-    print("🎉 All tests passed!")
+    print("All tests passed!")
     print("=" * 60)
 
 
