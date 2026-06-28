@@ -479,9 +479,9 @@ function setupTrajPanel() {
     const btn = $('btn-traj-pause');
     if (!btn) return;
     btn.innerHTML = App.traj.paused
-      ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
-      : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
-    btn.className = 'btn btn-xs';
+      ? '<i class="fas fa-play"></i> Play'
+      : '<i class="fas fa-pause"></i> Pause';
+    // btn.className = 'btn btn-xs btn-ctrl';
   }
 
   $('btn-traj-pause').addEventListener('click', () => {

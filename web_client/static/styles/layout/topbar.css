@@ -109,7 +109,7 @@
   font-size: var(--font-size-1); /* Slightly increased font size */
   color: var(--text-muted);
   border-radius: 9px; /* Changed to match status badge rounded style */
-  padding: 0 8px; /* Increased padding for better appearance */
+  padding: 0 6px; /* Increased padding for better appearance */
   line-height: 14px; /* Adjusted line height for better text alignment */
   width: 78px;
   min-width: 72px;

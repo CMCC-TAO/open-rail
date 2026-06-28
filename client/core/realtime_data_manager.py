@@ -121,7 +121,8 @@ class RealtimeDataManager():
         """
         # self.last_infer_time = self.currt_infer_time
         currt_infer_time = self.start_intra_traj_marker - self.start_infer_marker
-        self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
+        # self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
+        self.avg_infer_time = self.avg_infer_time * 0.8 + currt_infer_time * 0.2 if self.avg_infer_time > 0 else currt_infer_time
         self.logger.debug(f'avg infer time: {self.avg_infer_time:.4f}s')
         # print(f"avg infer time: {self.avg_infer_time}, infer count: {self.infer_count}")
 
@@ -130,7 +131,8 @@ class RealtimeDataManager():
         """
         # self.last_traj_time = self.currt_traj_time
         currt_intra_traj_time = self.start_inter_traj_marker - self.start_intra_traj_marker
-        self.avg_intra_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_intra_traj_time) / self.infer_count if self.infer_count > 0 else currt_intra_traj_time
+        # self.avg_intra_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_intra_traj_time) / self.infer_count if self.infer_count > 0 else currt_intra_traj_time
+        self.avg_intra_traj_time = self.avg_intra_traj_time * 0.8 + currt_intra_traj_time * 0.2 if self.avg_intra_traj_time > 0 else currt_intra_traj_time
         self.logger.debug(f'avg intra traj time: {self.avg_intra_traj_time:.4f}s')
         # self.logger.debug(f'avg traj time: {self.avg_intra_traj_time}')
     def compute_avg_inter_traj_time(self):
@@ -138,7 +140,8 @@ class RealtimeDataManager():
         """
         # self.last_traj_time = self.currt_traj_time
         currt_inter_traj_time = self.start_ctrl_marker - self.start_inter_traj_marker
-        self.avg_inter_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_inter_traj_time) / self.infer_count if self.infer_count > 0 else currt_inter_traj_time
+        # self.avg_inter_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_inter_traj_time) / self.infer_count if self.infer_count > 0 else currt_inter_traj_time
+        self.avg_inter_traj_time = self.avg_intra_traj_time * 0.8 + currt_inter_traj_time * 0.2 if self.avg_inter_traj_time > 0 else currt_inter_traj_time
         self.logger.debug(f'avg inter traj time: {self.avg_inter_traj_time:.4f}s')
  
     def add_observe_data(self, frame):
