@@ -41,7 +41,7 @@ class Ti5Camera(Node):
         self.create_subscription(Image, self.topic_left, self._cb_left, 10)
         self.create_subscription(Image, self.topic_right, self._cb_right, 10)
 
-        self.get_logger().info("✅ Ti5Camera started (no internal spin)")
+        self.get_logger().info("Ti5Camera started (no internal spin)")
 
     # Camera callback
     def _cb_head(self, msg):
@@ -194,12 +194,12 @@ def main():
 
   if images:
       head_img, head_ts, left_img, left_ts, right_img, right_ts = images
-      print("✅ Call succeeded!")
+      print("Call succeeded!")
       print(f"Head image: {head_img.shape}, timestamp: {head_ts}")
       print(f"Left hand image: {left_img.shape}, timestamp: {left_ts}")
       print(f"Right hand image: {right_img.shape}, timestamp: {right_ts}")
   else:
-      print("❌ No camera data received")
+      print("No camera data received")
 
 if __name__ == '__main__':
     main()
