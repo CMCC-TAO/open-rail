@@ -37,7 +37,7 @@ class VLAServer:
         self.request_count = 0
         # self.total_inference_time = 0.0
         self.avg_inference_time = 0.0
-        self.inference_times = deque(maxlen=100)  # Keep last 100 inference times
+        # self.inference_times = deque(maxlen=100)  # Keep last 100 inference times
         self.obs_info, self.act_info = {}, {}
         self.debug_info = "The debug information or trace information will be displayed here."
         
@@ -200,12 +200,16 @@ class VLAServer:
             # Calculate inference time and update statistics
             inference_time = time.time() - start_time
             with self.thread_lock:
-                self.inference_times.append(inference_time)
-                self.avg_inference_time = sum(self.inference_times) / len(self.inference_times)
+                # self.inference_times.append(inference_time)
+                self.avg_inference_time = self.avg_inference_time * 0.8 + inference_time * 0.2 if self.avg_inference_time > 0 else inference_time
+                if meta is not None:
+                    meta["avg_infer_time"] = self.avg_inference_time
+                else:
+                    meta = {"avg_infer_time": self.avg_inference_time}
                 # self.total_inference_time += inference_time
                 # Calculate rolling average from recent inference times
                 # if self.inference_times:
-            self.zmq_server.sendMessage(result, meta=meta or {})
+            self.zmq_server.sendMessage(result, meta=meta)
             self.act_info['pred_action'] = result['pred_action']
         except Exception as e:
             print(f"Error in inference callback: {e}")

@@ -61,6 +61,7 @@ class RealtimeDataManager():
         self.avg_infer_time = 0.0
         self.avg_intra_traj_time = 0.0
         self.avg_inter_traj_time = 0.0
+        self.avg_comm_time = 0.0 # communication latency between vla_client and vla_server
         self.infer_count = 0
 
         # Synchronous Running Flag
