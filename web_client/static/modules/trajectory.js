@@ -6,12 +6,140 @@
 //  Zoom/pan via chartjs-plugin-zoom.
 // ═══════════════════════════════════════════════════════
 
-// Fixed joint labels for trajectory selector: L0-L6 (idx 0-6), R0-R6 (idx 7-13)
-const TRAJ_JOINT_LABELS = [
+// Default labels; runtime labels are derived from the active robot action_layout.arm.
+const TRAJ_DEFAULT_JOINT_LABELS = [
   'L0','L1','L2','L3','L4','L5','L6',
   'R0','R1','R2','R3','R4','R5','R6',
 ];
-const TRAJ_JOINT_COUNT = TRAJ_JOINT_LABELS.length;  // 14
+const TRAJ_JOINT_COUNT = TRAJ_DEFAULT_JOINT_LABELS.length;
+
+function _asInt(value, fallback = null) {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : fallback;
+}
+
+function _hslToRgb(h, s, l) {
+  s /= 100;
+  l /= 100;
+  const k = n => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [Math.round(255 * f(0)), Math.round(255 * f(8)), Math.round(255 * f(4))];
+}
+
+function getTrajJointColor(idx) {
+  const i = _asInt(idx, 0);
+  if (JOINT_COLORS[i]) return JOINT_COLORS[i];
+  const [r, g, b] = _hslToRgb((i * 137.508) % 360, 72, 42);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function getTrajJointCount() {
+  return Math.max(0, _asInt(App.traj.numJoints, 0));
+}
+
+function getTrajJointLabels() {
+  const labels = Array.isArray(App.traj.jointLabels) ? App.traj.jointLabels : [];
+  return labels.length ? labels : TRAJ_DEFAULT_JOINT_LABELS.slice();
+}
+
+function _getCfgNode(obj, key) {
+  if (!obj || typeof obj !== 'object') return undefined;
+  return obj[key];
+}
+
+function _resolveCurrentActionLayout(cfg = App.config) {
+  const root = (cfg && typeof cfg === 'object') ? cfg : {};
+  const robots = _getCfgNode(root, 'robots');
+  const robotTypeRaw = _getCfgNode(robots, 'type');
+  const robotType = robotTypeRaw && typeof robotTypeRaw === 'object' && 'value' in robotTypeRaw
+    ? String(robotTypeRaw.value)
+    : String(robotTypeRaw || '').trim();
+  const robotCfg = robotType ? _getCfgNode(robots, robotType) : null;
+  const robotLayout = _getCfgNode(robotCfg, 'action_layout');
+  if (robotLayout && typeof robotLayout === 'object') return robotLayout;
+
+  const rdmLayout = _getCfgNode(_getCfgNode(root, 'rdm'), 'action_layout');
+  if (rdmLayout && typeof rdmLayout === 'object') return rdmLayout;
+
+  const intraLayout = _getCfgNode(_getCfgNode(root, 'intra_chunk'), 'action_layout');
+  if (intraLayout && typeof intraLayout === 'object') return intraLayout;
+
+  return null;
+}
+
+function _normalizeActionSegment(seg) {
+  if (!seg || typeof seg !== 'object') return null;
+  const start = _asInt(seg.start, null);
+  const end = _asInt(seg.end, null);
+  if (start === null || end === null || end <= start || start < 0) return null;
+  return { start, end, name: String(seg.name || 'arm') };
+}
+
+function resolveTrajActionSegment(cfg = App.config, fallbackCount = TRAJ_JOINT_COUNT) {
+  const layout = _resolveCurrentActionLayout(cfg);
+  if (layout) {
+    const arm = _normalizeActionSegment(layout.arm);
+    if (arm) return arm;
+
+    for (const [name, seg] of Object.entries(layout)) {
+      if (!seg || typeof seg !== 'object') continue;
+      const normalized = _normalizeActionSegment(Object.assign({}, seg, { name }));
+      const policy = String(seg?.policy || '').toLowerCase();
+      if (normalized && policy === 'gradual') return normalized;
+    }
+  }
+
+  const count = Math.max(0, _asInt(fallbackCount, TRAJ_JOINT_COUNT));
+  return { start: 0, end: count, name: 'arm' };
+}
+
+function _makeTrajJointLabels(count) {
+  const n = Math.max(0, _asInt(count, 0));
+  if (n === TRAJ_DEFAULT_JOINT_LABELS.length) return TRAJ_DEFAULT_JOINT_LABELS.slice();
+  if (n > 1 && n % 2 === 0) {
+    const half = n / 2;
+    return [
+      ...Array.from({ length: half }, (_, i) => `L${i}`),
+      ...Array.from({ length: half }, (_, i) => `R${i}`),
+    ];
+  }
+  return Array.from({ length: n }, (_, i) => `J${i}`);
+}
+
+function _defaultSelectedJoints(count) {
+  return new Set(Array.from({ length: Math.min(4, Math.max(0, count)) }, (_, i) => i));
+}
+
+function syncTrajLayoutFromConfig(cfg = App.config, fallbackCount = TRAJ_JOINT_COUNT) {
+  const t = App.traj;
+  const seg = resolveTrajActionSegment(cfg, fallbackCount);
+  const count = Math.max(0, seg.end - seg.start);
+  const changed = t.actionStart !== seg.start || t.actionEnd !== seg.end || t.actionName !== seg.name || t.numJoints !== count;
+
+  t.actionStart = seg.start;
+  t.actionEnd = seg.end;
+  t.actionName = seg.name;
+  t.numJoints = count;
+  t.jointLabels = _makeTrajJointLabels(count);
+
+  const kept = new Set([...t.selectedJoints].filter(i => Number.isInteger(i) && i >= 0 && i < count));
+  t.selectedJoints = t.jointSelectionInitialized ? kept : _defaultSelectedJoints(count);
+  t.jointSelectionInitialized = true;
+
+  if (changed) renderJointSelector();
+  return changed;
+}
+
+function _sliceTrajArray(arr) {
+  if (!Array.isArray(arr) || arr.length === 0) return [];
+  syncTrajLayoutFromConfig(App.config, arr.length);
+  const { actionStart, actionEnd, numJoints } = App.traj;
+  if (Number.isInteger(actionStart) && Number.isInteger(actionEnd) && arr.length >= actionEnd) {
+    return arr.slice(actionStart, actionEnd);
+  }
+  return arr.slice(0, Math.min(arr.length, numJoints || arr.length));
+}
 
 /* ── Create the single unified Chart.js instance ── */
 function createUnifiedChart() {
@@ -89,27 +217,32 @@ function createUnifiedChart() {
   });
 }
 
-/* ── Build joint selector chips — two rows: L0-L6 (row-l), R0-R6 (row-r) ── */
+/* ── Build joint selector chips from active robot action_layout.arm ── */
 function buildJointSelector(numJoints) {
-  const t = App.traj;
-  // Only build once; ignore subsequent calls
-  if (t.numJoints === TRAJ_JOINT_COUNT) return;
-  t.numJoints = TRAJ_JOINT_COUNT;
+  syncTrajLayoutFromConfig(App.config, numJoints || TRAJ_JOINT_COUNT);
+}
 
-  // Default: first 4 joints selected
-  t.selectedJoints = new Set([0, 1, 2, 3]);
+function renderJointSelector() {
+  const t = App.traj;
+  const count = getTrajJointCount();
+  const labels = getTrajJointLabels();
+  const split = count > 1 ? Math.ceil(count / 2) : count;
 
   // Rows are already in HTML; insert chips BEFORE the All/None buttons
-  const rowL = $('joint-row-l');  // L0-L6 + All
-  const rowR = $('joint-row-r');  // R0-R6 + None
+  const rowL = $('joint-row-l');
+  const rowR = $('joint-row-r');
   const btnAll  = $('btn-joints-all');
   const btnNone = $('btn-joints-none');
+  if (!rowL || !rowR || !btnAll || !btnNone) return;
 
-  for (let i = 0; i < TRAJ_JOINT_COUNT; i++) {
+  rowL.querySelectorAll('.joint-sel-chip').forEach(el => el.remove());
+  rowR.querySelectorAll('.joint-sel-chip').forEach(el => el.remove());
+
+  for (let i = 0; i < count; i++) {
     const chip = document.createElement('span');
-    const color = JOINT_COLORS[i];
+    const color = getTrajJointColor(i);
     chip.className = 'joint-sel-chip' + (t.selectedJoints.has(i) ? ' active' : '');
-    chip.textContent = TRAJ_JOINT_LABELS[i];
+    chip.textContent = labels[i] ?? `J${i}`;
     chip.dataset.idx = i;
     _applyChipColor(chip, t.selectedJoints.has(i), color);
     chip.addEventListener('click', () => {
@@ -125,7 +258,7 @@ function buildJointSelector(numJoints) {
       refreshUnifiedChart();
       schedulePersistVisualState();
     });
-    if (i < 7) {
+    if (i < split) {
       rowL.insertBefore(chip, btnAll);   // insert before All
     } else {
       rowR.insertBefore(chip, btnNone);  // insert before None
@@ -173,7 +306,10 @@ function recomputeTrajXWindow() {
 
 /* ── Ingest new data point ── */
 function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampSec = null) {
-  const n = Math.max(stateArr.length, actionFittedArr.length, actionRawArr.length);
+  const stateSeries = _sliceTrajArray(stateArr);
+  const actionFittedSeries = _sliceTrajArray(actionFittedArr);
+  const actionRawSeries = _sliceTrajArray(actionRawArr);
+  const n = Math.max(stateSeries.length, actionFittedSeries.length, actionRawSeries.length);
   if (n === 0) return;
 
   // Build selector if numJoints changed
@@ -188,16 +324,16 @@ function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampS
   if (x < t.lastX) x = t.lastX;
   t.lastX = x;
 
-  if (stateArr.length > 0) {
-    t.buffer.state.push({ x, joints_y: stateArr.slice() });
+  if (stateSeries.length > 0) {
+    t.buffer.state.push({ x, joints_y: stateSeries });
     trimTrajBufferToMaxWindow('state', x);
   }
-  if (actionFittedArr.length > 0) {
-    t.buffer.action_fitted.push({ x, joints_y: actionFittedArr.slice() });
+  if (actionFittedSeries.length > 0) {
+    t.buffer.action_fitted.push({ x, joints_y: actionFittedSeries });
     trimTrajBufferToMaxWindow('action_fitted', x);
   }
-  if (actionRawArr.length > 0) {
-    t.buffer.action_raw.push({ x, joints_y: actionRawArr.slice() });
+  if (actionRawSeries.length > 0) {
+    t.buffer.action_raw.push({ x, joints_y: actionRawSeries });
     trimTrajBufferToMaxWindow('action_raw', x);
   }
 
@@ -265,11 +401,12 @@ function refreshUnifiedChart() {
   }
   const enabledSources = ['state', 'action_fitted', 'action_raw'].filter(k => src.has(k));
   const showSuffix = enabledSources.length > 1;
+  const labels = getTrajJointLabels();
 
 
   for (const jointIdx of sorted) {
-    const color  = JOINT_COLORS[jointIdx] || 'rgb(100,100,100)';
-    const label  = TRAJ_JOINT_LABELS[jointIdx] ?? `J${jointIdx}`;
+    const color  = getTrajJointColor(jointIdx);
+    const label  = labels[jointIdx] ?? `J${jointIdx}`;
     const alpha  = color.replace('rgb(', 'rgba(').replace(')', ', 0.08)');
 
     if (src.has('state')) {
@@ -531,11 +668,11 @@ function setupTrajPanel() {
   // Select all / none
   $('btn-joints-all').addEventListener('click', () => {
     const t = App.traj;
-    for (let i = 0; i < TRAJ_JOINT_COUNT; i++) {
+    for (let i = 0; i < getTrajJointCount(); i++) {
       if (!t.selectedJoints.has(i)) {
         t.selectedJoints.add(i);
         const chip = document.querySelector(`.joint-sel-chip[data-idx="${i}"]`);
-        if (chip) { chip.classList.add('active'); _applyChipColor(chip, true, JOINT_COLORS[i]); }
+        if (chip) { chip.classList.add('active'); _applyChipColor(chip, true, getTrajJointColor(i)); }
       }
     }
     t.dirty = true;
@@ -547,7 +684,7 @@ function setupTrajPanel() {
     const t = App.traj;
     [...t.selectedJoints].forEach(i => {
       const chip = document.querySelector(`.joint-sel-chip[data-idx="${i}"]`);
-      if (chip) { chip.classList.remove('active'); _applyChipColor(chip, false, JOINT_COLORS[i]); }
+      if (chip) { chip.classList.remove('active'); _applyChipColor(chip, false, getTrajJointColor(i)); }
     });
     t.selectedJoints.clear();
     refreshUnifiedChart();

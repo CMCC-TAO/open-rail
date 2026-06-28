@@ -34,6 +34,7 @@ class RobotBody(RobotBase):
         self.last_timestamp = time.time()
         self.video_caps = {}
         self._io_lock = threading.Lock()
+        self.state_action_ranges = self.config.get('state_action_range')
 
         self.dataset_path = ''
         try:
@@ -142,6 +143,16 @@ class RobotBody(RobotBase):
         next_idx = (self.current_episode_idx + 1) % len(self.episode_files)
         self._load_episode(next_idx)
 
+    def _select_state_action_dims(self, values):
+        values = np.asarray(values, dtype=np.float32).reshape(-1)
+        chunks = []
+        for start, end in self.state_action_ranges:
+            chunk = values[start:min(end, values.shape[0])]
+            if chunk.shape[0] < end - start:
+                chunk = np.pad(chunk, (0, end - start - chunk.shape[0]))
+            chunks.append(chunk)
+        return np.concatenate(chunks)
+
     def execute_action(self, action):
         """Execute the given action on the mock robot.
         
@@ -210,15 +221,11 @@ class RobotBody(RobotBase):
             else:
                 return None
 
-            obs_state = np.asarray(row["observation.state"], dtype=np.float32)
-            if obs_state.shape[0] != self.action_dim:
-                obs_state = obs_state[:self.action_dim] if obs_state.shape[0] > self.action_dim else np.pad(obs_state, (0, self.action_dim - obs_state.shape[0]))
+            obs_state = self._select_state_action_dims(row["observation.state"])
             result['obs.state'] = obs_state
             self.current_state = obs_state
 
-            action = np.asarray(row["action"], dtype=np.float32)
-            if action.shape[0] != self.action_dim:
-                action = action[:self.action_dim] if action.shape[0] > self.action_dim else np.pad(action, (0, self.action_dim - action.shape[0]))
+            action = self._select_state_action_dims(row["action"])
             result['action'] = action
 
             self.currt_index += 1

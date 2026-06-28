@@ -460,6 +460,9 @@ def _get_robot(robot_type, robot_config):
         if robot_type == RobotType.TI5_T170C and module_name.endswith("client.robots.ti5_t170c.body_robot"):
             return robot_instance, True
 
+        if robot_type == RobotType.NAVI_WA2 and module_name.endswith("client.robots.navi_wa2.body_robot"):
+            return robot_instance, True
+
         if robot_type == RobotType.MOCK and module_name.endswith("client.robots.mock.body_robot"):
             desired_path = str(getattr(robot_config, 'dataset_path', '') or '')
             current_path = str(getattr(robot_instance, 'dataset_path', '') or '')
@@ -487,6 +490,9 @@ def _get_robot(robot_type, robot_config):
 
     if robot_type == RobotType.A2D:
         from client.robots.a2d.body_robot import RobotBody
+        robot_instance = RobotBody(robot_config)
+    elif robot_type == RobotType.NAVI_WA2:
+        from client.robots.navi_wa2.body_robot import RobotBody
         robot_instance = RobotBody(robot_config)
     elif robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
@@ -1254,7 +1260,7 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
             sort_keys=False,
         )
 
-    # ── fallback: manual serialiser ──────────────────────────────────────────
+    # ── fallback: manual serializer ──────────────────────────────────────────
     lines = [
         "# VLA-RAIL Client Configuration",
         "# Auto-generated — edit values as needed",
@@ -1515,6 +1521,7 @@ def _stop_control(vla_client):
 
 
 def _pause_vla_client(vla_client) -> dict:
+    # 获取线程状态
     state = _thread_state(vla_client)
     # print(f"_pause_vla_client with state: {state}")
     if state.get("observe_running", False):
@@ -1809,7 +1816,10 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
         keep_robot_alive = False
         if robot is not None and not force_release_robot:
             module_name = getattr(robot.__class__, "__module__", "")
-            keep_robot_alive = module_name.endswith("client.robots.a2d.body_robot")
+            keep_robot_alive = (
+                module_name.endswith("client.robots.a2d.body_robot")
+                or module_name.endswith("client.robots.navi_wa2.body_robot")
+            )
             # print(f"Debug: keep_robot_alive={keep_robot_alive}")
 
         if robot is not None and not keep_robot_alive:
@@ -1922,6 +1932,7 @@ async def client_control_reset():
     try:
         paused_state = _pause_vla_client(vla_client)
         robot.reset_robot(mode='default')
+        vla_client.realtime_data_manager.clear()
         _resume_vla_client(vla_client, paused_state)
         await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
         return {"status": "ok", "command": 'reset'}

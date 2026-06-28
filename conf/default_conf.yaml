@@ -5,18 +5,18 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.25
-  wait_time: 400
+  speed: 1.0
+  wait_time: 10
 inter_chunk:
   inter_chunk_mode: min_jerk
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
-  smooth_length: 50
+  smooth_length: 150
   smooth_ratio: 0.75
 intra_chunk:
   filter_window_size: 4
-  fitting_deg: 5
+  fitting_deg: 4
   fitting_num_samples: 64
   gripper_dim: 2
   head_dim: 2
@@ -28,7 +28,7 @@ intra_chunk:
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
 language:
-  auto_mode: true
+  auto_mode: false
   file_path: language_cmd.json
   sub_task_id: 3
   task_id: tea_master
@@ -37,7 +37,7 @@ language:
 rdm:
   max_len: 100
   mode: async
-  observe_fps_window_size: 20
+  observe_fps_window_size: 10
 record:
   info:
     action_shape: 22
@@ -48,8 +48,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 480
+        width: 848
     cam.hand_right:
       encode:
         codec: mp4v
@@ -57,8 +57,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 480
+        width: 848
     cam.head:
       encode:
         codec: mp4v
@@ -66,8 +66,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 720
+        width: 1280
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
@@ -77,10 +77,10 @@ record:
       valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 1
-    total_frames: 532
-    total_tasks: 1
-    total_videos: 3
+    total_episodes: 0
+    total_frames: 0
+    total_tasks: 0
+    total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   save_dir: data/recording
@@ -137,18 +137,18 @@ robots:
   mock:
     action_layout:
       arm:
-        end: 14
+        end: 16
         policy: gradual
         start: 0
       gripper:
-        end: 16
+        end: 28
         policy: stepwise
-        start: 14
+        start: 16
     camera:
       names:
-        hand_left: observation.images.hand_left
-        hand_right: observation.images.hand_right
-        head: observation.images.top_head
+        hand_left: observation.images.left_wrist_rgb
+        hand_right: observation.images.right_wrist_rgb
+        head: observation.images.head_rgb
       ref: head
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
   ti5_t170c:
@@ -270,7 +270,7 @@ robots:
 vision:
   history_frame: false
   preprocess:
-    height: 180
+    height: 480
     keep_ratio: true
     method: resize
     width: 640

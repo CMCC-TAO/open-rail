@@ -1,4 +1,12 @@
 {
+    "make_coffee":[
+    "[PRIMARY_ARM=LEFT] Tap dispenser button",
+    "[PRIMARY_ARM=LEFT] Grasps the dropped cup, and places it upright under the right coffee nozzle, aligned.",
+    "[PRIMARY_ARM=RIGHT] press the top-center button for Americano.",
+    "[PRIMARY_ARM=RIGHT] tap the second-row left button on the right machine for Latte.",
+    "[PRIMARY_ARM=RIGHT] pick coffee and hold it in hand.",
+    "[PRIMARY_ARM=RIGHT] Place the Latte onto the left placement spot of the gray mat area on the table."
+    ],
   "pour_tea": [
     "[POUR_BLACK_TEA] [RIGHT_ARM] With the right arm, pick up the black-tea pot and pour into the cup.",
     "[POUR_GREEN_TEA] [LEFT_ARM] Using the left arm, lift the green-tea pot and pour into the cup.",

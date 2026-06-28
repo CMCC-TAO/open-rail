@@ -272,6 +272,13 @@ function setThreadControlUI() {
   if (controlSub) controlSub.textContent = controlRunning ? 'Stop' : 'Start';
 }
 
+function applyThreadState(data) {
+  if (!data) return;
+  if (typeof data.observe_running === 'boolean') App.isObserveRunning = data.observe_running;
+  if (typeof data.inference_running === 'boolean') App.isInferenceRunning = data.inference_running;
+  if (typeof data.control_running === 'boolean') App.isControlRunning = data.control_running;
+}
+
 function syncStartPauseButtons(running, paused = false) {
   const btnStart = $('btn-start');
   const btnPause = $('btn-pause');
@@ -525,6 +532,7 @@ function wireEvents() {
         try {
           const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
           App.config = res.config || App.config;
+          applyVisualConfig(App.config);
           App.pendingPatch = {};
           clearPending();
         } catch (e) { 
@@ -574,12 +582,7 @@ function wireEvents() {
 
     try {
       const res = await apiFetch('/api/client/observe/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
+      applyThreadState(res?.data);
       connectCamWS();
       // syncRuntimeCameraConfig();
       // setThreadControlUI();
@@ -601,12 +604,7 @@ function wireEvents() {
 
     try {
       const res = await apiFetch('/api/client/infer/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
+      applyThreadState(res?.data);
       setThreadControlUI();
     } catch (_) { /* toasted */ }
     finally {
@@ -623,12 +621,7 @@ function wireEvents() {
 
     try {
       const res = await apiFetch('/api/client/control/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
+      applyThreadState(res?.data);
       setThreadControlUI();
     } catch (_) { /* toasted */ }
     finally {
@@ -670,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupLeftPanelAccordion();
   setupRecordingPanel();
   createUnifiedChart();                  // create single unified trajectory chart
-  buildJointSelector(TRAJ_JOINT_COUNT);  // pre-build fixed 14-joint selector
+  buildJointSelector();                  // build from the active robot action_layout
   connectWS();
   startStatusPoll();
   wireEvents();

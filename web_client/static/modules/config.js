@@ -24,7 +24,7 @@ const CONFIG_SELECT_OPTIONS = {
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['a2d', 'mock', 'ti5_t170c'],
+  type: ['a2d', 'mock', 'ti5_t170c', 'navi_wa2'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1']
 };
@@ -249,7 +249,7 @@ function getCfgMultiSelectOptions(dotKey) {
   }
 
   if (dotKey === 'visualize.trajectory.selected_joints') {
-    return TRAJ_JOINT_LABELS.map((name, idx) => ({ value: String(idx), label: `${name} (${idx})` }));
+    return getTrajJointLabels().map((name, idx) => ({ value: String(idx), label: `${name} (${idx})` }));
   }
 
   return null;
@@ -1018,6 +1018,7 @@ function syncTrajWindowSpanUI() {
 
 function applyVisualConfig(cfg = App.config) {
   const root = (cfg && typeof cfg === 'object') ? cfg : {};
+  syncTrajLayoutFromConfig(root);
   // Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
   const visualCfg = (root.visualize && typeof root.visualize === 'object')? root.visualize : {};
 
@@ -1067,29 +1068,38 @@ function applyVisualConfig(cfg = App.config) {
   }
 
   const selectedJointsRaw = trajCfg.selected_joints ?? trajCfg.default_selected_joints;
+  const hasSelectedJointsCfg = selectedJointsRaw !== undefined && selectedJointsRaw !== null;
   let jointTokens = [];
   if (Array.isArray(selectedJointsRaw)) {
     jointTokens = selectedJointsRaw;
   } else if (typeof selectedJointsRaw === 'string') {
     jointTokens = selectedJointsRaw.split(',').map(v => v.trim()).filter(Boolean);
   }
-  if (jointTokens.length > 0) {
+  if (hasSelectedJointsCfg && jointTokens.length === 0) {
+    App.traj.selectedJoints = new Set();
+  } else if (jointTokens.length > 0) {
+    const labels = getTrajJointLabels();
+    const labelToIndex = new Map(labels.map((name, idx) => [String(name).toLowerCase(), idx]));
+    const split = Math.ceil(getTrajJointCount() / 2);
     const joints = jointTokens
       .map(v => {
         if (typeof v === 'number') return v;
         const s = String(v).trim();
-        if (/^[LR]\d+$/i.test(s)) return parseInt(s.slice(1), 10) + (s[0].toUpperCase() === 'R' ? 7 : 0);
+        const labelIdx = labelToIndex.get(s.toLowerCase());
+        if (labelIdx !== undefined) return labelIdx;
+        if (/^[LR]\d+$/i.test(s)) return parseInt(s.slice(1), 10) + (s[0].toUpperCase() === 'R' ? split : 0);
         return parseInt(s, 10);
       })
-      .filter(v => Number.isFinite(v) && v >= 0 && v < TRAJ_JOINT_COUNT);
+      .filter(v => Number.isFinite(v) && v >= 0 && v < getTrajJointCount());
     if (joints.length > 0) App.traj.selectedJoints = new Set(joints);
   }
 
+  renderJointSelector();
   document.querySelectorAll('.joint-sel-chip').forEach(chip => {
     const idx = parseInt(chip.dataset.idx, 10);
     const active = App.traj.selectedJoints.has(idx);
     chip.classList.toggle('active', active);
-    _applyChipColor(chip, active, JOINT_COLORS[idx]);
+    _applyChipColor(chip, active, getTrajJointColor(idx));
   });
 
   const chkState = $('chk-traj-state');
@@ -1240,4 +1250,3 @@ async function loadConfigFromServer() {
     toast('Config loaded.', 'ok', 2000);
   } catch (e) { /* already toasted */ }
 }
-
