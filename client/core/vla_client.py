@@ -95,6 +95,7 @@ class VLAClientAsync():
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.image_process_time = 0.0
+        self.avg_infer_time = 0.0
         self.current_prob_progress = 0.0
         # self.info_obs, self.info_act = {}, {}
         self.camera_shape_dict = None
@@ -386,6 +387,7 @@ class VLAClientAsync():
                 # print("Debug: infer first timeout.")
                 return
             # Record trajectory fitting timestamp
+            result.get('meta', {}).get('avg_infer_time', 0.0)
             self.realtime_data_manager.set_intra_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
 
@@ -695,6 +697,7 @@ class VLAClientAsync():
             # print(f"Debug: Infer Time = {(end_time - start_time) * 1000} ms")
 
             if msg is None:
+                self.logger.error(f"Received None from server.")
                 return None
             meta = msg.get('meta') or {}
             if meta.get('request_id') == request_id:
