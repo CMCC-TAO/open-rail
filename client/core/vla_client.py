@@ -95,7 +95,6 @@ class VLAClientAsync():
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.image_process_time = 0.0
-        self.avg_infer_time = 0.0
         self.current_prob_progress = 0.0
         # self.info_obs, self.info_act = {}, {}
         self.camera_shape_dict = None
@@ -387,7 +386,7 @@ class VLAClientAsync():
                 # print("Debug: infer first timeout.")
                 return
             # Record trajectory fitting timestamp
-            result.get('meta', {}).get('avg_infer_time', 0.0)
+            avg_infer_time = result.get('meta', {}).get('avg_infer_time', 0.0)
             self.realtime_data_manager.set_intra_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
 
@@ -440,9 +439,10 @@ class VLAClientAsync():
             )
 
             # Compute average inference and trajectory fitting times
-            self.realtime_data_manager.compute_avg_infer_time()
+            self.realtime_data_manager.compute_avg_comm_infer_time()
             self.realtime_data_manager.compute_avg_intra_traj_time()
             self.realtime_data_manager.compute_avg_inter_traj_time()
+            self.realtime_data_manager.compute_avg_comm_time(avg_infer_time=avg_infer_time)
     
     # @run_time_decorator
     def _inference_step(self):
@@ -480,6 +480,7 @@ class VLAClientAsync():
                 self.logger.warning("Inference result doesn't have data.")
                 return
 
+            avg_infer_time = result.get('meta', {}).get('avg_infer_time', 0.0)
             # Record trajectory fitting timestamp
             self.realtime_data_manager.set_intra_traj_time_marker()
             self.realtime_data_manager.add_infer_count()
@@ -536,9 +537,10 @@ class VLAClientAsync():
             )
 
             # Compute average inference and trajectory fitting times
-            self.realtime_data_manager.compute_avg_infer_time()
+            self.realtime_data_manager.compute_avg_comm_infer_time()
             self.realtime_data_manager.compute_avg_intra_traj_time()
             self.realtime_data_manager.compute_avg_inter_traj_time()
+            self.realtime_data_manager.compute_avg_comm_time(avg_infer_time=avg_infer_time)
             if self.config.language.auto_mode == True:
                 self.task_language_manager.reset_task_progress(
                     language_instruction=currt_language_instruction,

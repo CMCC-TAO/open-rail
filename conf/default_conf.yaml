@@ -30,7 +30,7 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 0
+  sub_task_id: 3
   task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
