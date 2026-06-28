@@ -135,6 +135,11 @@ class VLAClientAsync():
         self.observe_period = 1.0 / speed / self.config.controller.raw_fps
         # print(f"Debug: control speed = {speed}")
     
+    def _stop_control_thread_on_error(self):
+        self.is_control_thread_running = False
+        if self.control_thread_timer.is_alive():
+            self.control_thread_timer.stop(timeout=1.0)
+
     def update_camera_shape(self) -> dict:
         """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
         if not hasattr(self, "dataset_write") or self.dataset_write is None:
@@ -304,7 +309,12 @@ class VLAClientAsync():
         action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
 
         if action_fitted is not None:
-            self.robot.control_robot(action_fitted)
+            try:
+                self.robot.control_robot(action_fitted)
+            except Exception as exc:
+                self._stop_control_thread_on_error()
+                self.logger.error("Robot control failed: %s", exc)
+                raise
             # with self.show_thread_lock:
                 # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
