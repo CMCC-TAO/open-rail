@@ -1113,13 +1113,13 @@ function applyVisualConfig(cfg = App.config) {
     const allSelected = App.traj.source.has('state') && App.traj.source.has('action_fitted') && App.traj.source.has('action_raw');
     btnAllSource.textContent = allSelected ? 'None' : 'All';
   }
-  // const btnPlay = $('btn-traj-pause');
-  // if (btnPlay) {
-  //   btnPlay.innerHTML = App.traj.paused
-  //     ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
-  //     : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
-  //   btnPlay.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
-  // }
+  const btnPlay = $('btn-traj-pause');
+  if (btnPlay) {
+    btnPlay.innerHTML = App.traj.paused
+      ? '<i class="fas fa-play"></i> Play'
+      : '<i class="fas fa-pause"></i> Pause';
+    btnPlay.className = 'btn btn-xs btn-ctrl';
+  }
 
   startTrajUpdateTimer();
   App.traj.dirty = true;

@@ -618,7 +618,7 @@ function setupTrajPanel() {
     btn.innerHTML = App.traj.paused
       ? '<i class="fas fa-play"></i> Play'
       : '<i class="fas fa-pause"></i> Pause';
-    // btn.className = 'btn btn-xs btn-ctrl';
+    btn.className = 'btn btn-xs btn-ctrl';
   }
 
   $('btn-traj-pause').addEventListener('click', () => {
@@ -630,7 +630,7 @@ function setupTrajPanel() {
     }
     schedulePersistVisualState();
   });
-  syncTrajPlayButton();
+  // syncTrajPlayButton();
 
   // Clear
   $('btn-traj-clear').addEventListener('click', () => {
