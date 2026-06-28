@@ -8,7 +8,7 @@ import time
 import numpy as np
 from ml_collections import ConfigDict
 
-# ====== 新增：导入String消息类型 ======
+# ====== Import String message type ======
 from std_msgs.msg import String
 
 
@@ -16,9 +16,9 @@ class Ti5Robot(Node):
     def __init__(self, config):
         super().__init__("ti5_robot_node")
 
-        # ======================
-        # 订阅话题（状态读取）
-        # ======================
+        # ============================================
+        # Subscribe to topics (read robot state)
+        # ============================================
         # self.topic_left_arm = "/left_arm/joint_states"
         # self.topic_right_arm = "/right_arm/joint_states"
         # self.topic_left_hand = "/left_hand/angle_state"
@@ -28,12 +28,12 @@ class Ti5Robot(Node):
         self.topic_left_hand = config.hands.left_hand_joint_states_topic
         self.topic_right_hand = config.hands.right_hand_joint_states_topic
         
-        # ====== 新增：交互机器人语音唤醒专用ros话题 ======
+        # ====== New: ROS topic dedicated to voice wake-up for interactive robot ======
         self.topic_wake_up = "/robot/listen/wake_up"
 
-        # ======================
-        # 发布话题（控制输出）
-        # ======================
+        # ============================================
+        # Publish topics (control output)
+        # ============================================
         # self.topic_left_arm_cmd = "/left_arm/joint_cmd"
         # self.topic_right_arm_cmd = "/right_arm/joint_cmd"
         # self.topic_left_hand_cmd = "/left_hand/angle_cmd"
@@ -47,22 +47,29 @@ class Ti5Robot(Node):
         self.topic_head_cmd = config.head.head_joint_cmd_topic
         self.topic_waist_cmd = config.waist.waist_joint_cmd_topic
 
-        # 最新状态缓存
+        # ============================================
+        # Latest state cache
+        # ============================================
         self.latest_left_arm = None
         self.latest_right_arm = None
         self.latest_left_hand = None
         self.latest_right_hand = None
-        # ====== 新增：唤醒消息缓存 ======
-        self.latest_wake_up = None
 
-        # 队列缓存
+        # ====== Wake-up message cache ======
+        self.latest_wake_up = None
+        
+        # ============================================
+        # Message Queue
+        # ============================================
         self.queue_left_arm = deque(maxlen=30)
         self.queue_right_arm = deque(maxlen=30)
         self.queue_left_hand = deque(maxlen=30)
         self.queue_right_hand = deque(maxlen=30)
         self.state_lock = threading.Lock()
-
-        # QoS 匹配机器人
+ 
+        # ============================================
+        # QoS matched with robot
+        # ============================================
         qos_correct = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE,
@@ -71,18 +78,18 @@ class Ti5Robot(Node):
 
         qos_pub = QoSProfile(depth=10)
 
-        # ======================
-        # 订阅（读取状态）
-        # ======================
+        # ============================================
+        # Subscription (read state data)
+        # ============================================
         self.create_subscription(JointState, self.topic_left_arm, self._cb_left_arm, qos_correct)
         self.create_subscription(JointState, self.topic_right_arm, self._cb_right_arm, qos_correct)
         self.create_subscription(JointState, self.topic_left_hand, self._cb_left_hand, qos_correct)
         self.create_subscription(JointState, self.topic_right_hand, self._cb_right_hand, qos_correct)
-        # ====== 新增：订阅唤醒话题 ======
+        # ====== Subscribe wake-up topic ======
         self.create_subscription(String, self.topic_wake_up, self._cb_wake_up, qos_correct)
 
         # ======================
-        # 发布（控制机器人）
+        # Publisher (robot control)
         # ======================
         self.pub_left_arm = self.create_publisher(JointState, self.topic_left_arm_cmd, qos_pub)
         self.pub_right_arm = self.create_publisher(JointState, self.topic_right_arm_cmd, qos_pub)
@@ -91,7 +98,7 @@ class Ti5Robot(Node):
         self.pub_head = self.create_publisher(JointState, self.topic_head_cmd, qos_pub)
         self.pub_waist = self.create_publisher(JointState, self.topic_waist_cmd, qos_pub)
 
-        # 固定关节名
+        # Fixed joint names
         # self.left_arm_joint_names = [
         #     "L_SHOULDER_P_JOINT",
         #     "L_SHOULDER_R_JOINT",
@@ -123,41 +130,41 @@ class Ti5Robot(Node):
 
         self.running = True
 
-        # 采样线程
+        # Sampling thread
         self.sample_thread = threading.Thread(target=self._sample_loop, daemon=True)
         self.sample_thread.start()
 
-        self.get_logger().info("✅ Ti5Robot 已启动：状态读取 + 电机控制 全部就绪")
+        self.get_logger().info("✅ Ti5Robot initialized: state reading and motor control all ready")
 
-    # ======================
-    # 【新增】唤醒话题回调函数  
-    # ======================
+    # ============================================
+    # Wake-up topic callback function
+    # ============================================
     def _cb_wake_up(self, msg):
         """
-        接收 /robot/listen/wake_up 字符串消息
-        消息内容存在 msg.data 中
+        Receive string messages from /robot/listen/wake_up
+        Message content is stored in msg.data
         """
-        ts = self.get_clock().now().nanoseconds / 1e9  # 本机时间戳
+        ts = self.get_clock().now().nanoseconds / 1e9  # timestamp
         with self.state_lock:
             self.latest_wake_up = (msg.data, ts)
-        self.get_logger().info(f"🔔 收到唤醒指令：{msg.data}")
+        self.get_logger().info(f"🔔 Wake-up command received: {msg.data}")
 
-    # ======================
-    # 【新增】获取最新唤醒指令（外部调用）
-    # ======================
+    # ============================================
+    # Get latest wake-up command (external call)
+    # ============================================
     def get_latest_wake_up(self):
         """
-        返回：(指令字符串, 时间戳)
-        如果未收到过，返回 (None, None)
+        Return: (command string, timestamp)
+        Return (None, None) if no message received yet
         """
         with self.state_lock:
             if self.latest_wake_up is None:
                 return (None, None)
             return self.latest_wake_up
 
-    # ======================
-    # 【核心控制函数】26维动作输入
-    # ======================
+    # ==================================================================
+    # [Core Control Function] 26-dimensional action input
+    # ==================================================================
     def send_robot_action(self, action):
         action = np.asarray(action).flatten()
 
@@ -166,25 +173,25 @@ class Ti5Robot(Node):
         left_hand_act = action[14:20]
         right_hand_act = action[20:26]
 
-        # 左臂
+        # Left Arm
         msg = JointState()
         msg.name = self.left_arm_joint_names
         msg.position = left_arm_act.tolist()
         self.pub_left_arm.publish(msg)
 
-        # 右臂
+        # Right Arm
         msg = JointState()
         msg.name = self.right_arm_joint_names
         msg.position = right_arm_act.tolist()
         self.pub_right_arm.publish(msg)
 
-        # 左手
+        # Left Hand
         msg = JointState()
         msg.name = self.hand_joint_names
         msg.position = left_hand_act.tolist()
         self.pub_left_hand.publish(msg)
 
-        # 右手
+        # Right Hand
         msg = JointState()
         msg.name = self.hand_joint_names
         msg.position = right_hand_act.tolist()
@@ -193,41 +200,39 @@ class Ti5Robot(Node):
     def send_partial_action(self, part_name, action):
         action = np.asarray(action).flatten()
 
-        # 左臂
+        # Left Arm
         if part_name == "left_arm":
-            assert len(action) == 7, "左臂动作长度必须是 7..."
+            assert len(action) == 7, "Left arm action length must be 7..."
             msg = JointState()
             msg.name = self.left_arm_joint_names
             msg.position = action.tolist()
             self.pub_left_arm.publish(msg)
         elif part_name == "right_arm":
-            assert len(action) == 7, "右臂动作长度必须是 7..."
+            assert len(action) == 7, "Right arm action length must be 7..."
             msg = JointState()
             msg.name = self.right_arm_joint_names
             msg.position = action.tolist()
             self.pub_right_arm.publish(msg)
         elif part_name == "left_hand":
-            assert len(action) == 6, "左手动作长度必须是 6..."
+            assert len(action) == 6, "Left Hand action length must be 6..."
             msg = JointState()
             msg.name = self.hand_joint_names
             msg.position = action.tolist()
             self.pub_left_hand.publish(msg)
         elif part_name == "right_hand":
-            assert len(action) == 6, "右手动作长度必须是 6..."
+            assert len(action) == 6, "Right Hand action length must be 6..."
             msg = JointState()
             msg.name = self.hand_joint_names
             msg.position = action.tolist()
             self.pub_right_hand.publish(msg)
         elif part_name == "head":
-            print("#"*60)
-            assert len(action) == 3, "头部动作长度必须是 3..."
+            assert len(action) == 3, "Head action length must be 3..."
             msg = JointState()
             msg.name = self.head_joint_names
             msg.position = action.tolist()
             self.pub_head.publish(msg)
         elif part_name == "waist":
-            print("="*60)
-            assert len(action) == 3, "腰部动作长度必须是 3..."
+            assert len(action) == 3, "Waist action length must be 3..."
             msg = JointState()
             msg.name = self.waist_joint_names
             msg.position = action.tolist()
@@ -235,9 +240,9 @@ class Ti5Robot(Node):
         else:
             pass
 
-    # ======================
-    # 订阅回调
-    # ======================
+    # =================================
+    # Subscription Callback
+    # =================================
     def _cb_left_arm(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         with self.state_lock:
@@ -259,7 +264,7 @@ class Ti5Robot(Node):
             self.latest_right_hand = (msg, ts)
 
     # ======================
-    # 30fps 采样
+    # 30fps Sampling
     # ======================
     def _sample_loop(self):
         while self.running:
@@ -279,7 +284,7 @@ class Ti5Robot(Node):
                 time.sleep(1/30 - elapsed)
 
     # ======================
-    # 时间戳对齐
+    # Timestamp Alignment
     # ======================
     def _find_nearest(self, queue, target_ts):
         with self.state_lock:
@@ -310,9 +315,9 @@ class Ti5Robot(Node):
         self.running = False
 
 
-# ============================================
-# 局部配置（单独调用当前脚本测试机器人关节驱动时使用）
-# ============================================
+# ==============================================================================================
+# Local Configuration (For testing robot joint driver when running this script alone)
+# ==============================================================================================
 def get_ti5_t170c_config():
     """Generate configuration for Ti5 T170C robot (ROS2 bridge)."""
     config = ConfigDict()
@@ -404,20 +409,21 @@ def get_ti5_t170c_config():
     return config
 
 
-# ==============================================
-# main：统一管理两个节点 + 统一 spin + 动作控制测试
-# ==============================================
+# ==========================================================================================
+# main: Manage two nodes uniformly + unified spin + action control test
+# ==========================================================================================
 def main():
     config = get_ti5_t170c_config()
     rclpy.init()
 
     from Ti5Camera import Ti5Camera
-    print("⏳ 启动 Ti5Camera + Ti5Robot...")
+
+    print("⏳ Starting Ti5Camera + Ti5Robot...")
     camera = Ti5Camera(config)
     robot = Ti5Robot(config)
 
     # ======================
-    # 统一自旋线程
+    # Unified Spin Thread
     # ======================
     running = True
     def spin_worker():
@@ -428,34 +434,34 @@ def main():
     spin_thread = threading.Thread(target=spin_worker, daemon=True)
     spin_thread.start()
 
-    print("⏳ 等待相机、机器人数据...")
+    print("⏳ Waiting for camera and robot data...")
     time.sleep(2.5)
 
     # ======================
-    # 读取相机
+    # Call Fetch Images Func
     # ======================
     cam_data = camera.get_latest_image()
     if not cam_data:
-        print("❌ 未读到相机数据")
+        print("❌ Failed to read camera data")
         running = False
         return
 
     head_img, head_ts, left_img, left_ts, right_img, right_ts = cam_data
-    print("\n✅ 相机同步完成")
-    print(f"  头部时间戳: {head_ts:.6f}, Shape: {head_img.shape}")
+    print("\n✅ Camera synchronization completed")
+    print(f"  Head timestamp: {head_ts:.6f}, Shape: {head_img.shape}")
 
     # ======================
-    # 机器人状态对齐
+    # Robot State Alignment
     # ======================
     robot_state = robot.get_arm_hand_states_nearest_func(head_ts)
-    print("\n✅ 机器人状态对齐完成")
-    print(f"  基准时间: {robot_state['ref_timestamp']:.6f}")
+    print("\n✅ Robot state alignment completed")
+    print(f"  Reference timestamp: {robot_state['ref_timestamp']:.6f}")
 
     # ======================
-    # 动作控制测试
+    # Action Control Test
     # ======================
     print("\n==================================================")
-    print("🤖 测试：发送26维动作 → 右手握拳")
+    print("🤖 Test: Send 26D action → Right hand fist")
     action = [
         -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
       ] + \
@@ -470,18 +476,17 @@ def main():
       ] 
     
     robot.send_robot_action(action)
-    print(f"✅ 动作已发送！")
+    print(f"✅ Body Action sent!")
     print("==================================================")
 
     VLA_head_pos = [0.0, 0.0, 0.0]
     robot.send_partial_action("head", VLA_head_pos)
-    print(f"✅ 头部动作已发送！")
+    print(f"✅ Head Action sent!")
     print("==================================================")
 
     time.sleep(1.5)
 
-    # 执行通过
-    print("\n🎉 全部测试成功！")
+    print("\n🎉 All tests passed!")
 
 if __name__ == '__main__':
     main()

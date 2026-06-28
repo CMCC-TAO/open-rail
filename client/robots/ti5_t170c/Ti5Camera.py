@@ -19,27 +19,31 @@ class Ti5Camera(Node):
         self.fps = fps
         self.period = 1.0 / fps
 
-        # ======================
-        # 订阅话题（相机图像读取）
-        # ======================
+        # ============================================
+        # Subscribe to topics (read camera images)
+        # ============================================
         self.topic_head = config.camera.head_camera_topic
         self.topic_left = config.camera.left_hand_camera_topic 
         self.topic_right = config.camera.right_hand_camera_topic
 
-        # 缓存队列
+        # ============================================
+        # Cache queue
+        # ============================================
         self.queue_head = deque(maxlen=queue_size)
         self.queue_left = deque(maxlen=queue_size)
         self.queue_right = deque(maxlen=queue_size)
         self.queue_lock = threading.Lock()
 
-        # 订阅
+        # ============================================
+        # Subscribe
+        # ============================================
         self.create_subscription(Image, self.topic_head, self._cb_head, 10)
         self.create_subscription(Image, self.topic_left, self._cb_left, 10)
         self.create_subscription(Image, self.topic_right, self._cb_right, 10)
 
-        self.get_logger().info("✅ Ti5Camera 已启动（无内部 spin）")
+        self.get_logger().info("✅ Ti5Camera started (no internal spin)")
 
-    # 相机回调
+    # Camera callback
     def _cb_head(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         img = self.bridge.imgmsg_to_cv2(msg, "bgr8")
@@ -58,7 +62,7 @@ class Ti5Camera(Node):
         with self.queue_lock:
             self.queue_right.append((img, ts))
 
-    # 外部获取图像
+    # Fetch image
     def get_latest_image(self):
         with self.queue_lock:
             if not self.queue_head:
@@ -75,9 +79,9 @@ class Ti5Camera(Node):
             return (None, None)
         return min(queue, key=lambda x: abs(x[1] - target_ts))
 
-# ============================================
-# 局部配置（单独调用当前脚本测试机器人相机时使用）
-# ============================================
+# ==============================================================================
+# Local config (used when running this script alone to test robot camera)
+# ==============================================================================
 def get_ti5_t170c_config():
     """Generate configuration for Ti5 T170C robot (ROS2 bridge)."""
     config = ConfigDict()
@@ -169,34 +173,33 @@ def get_ti5_t170c_config():
     return config
 
 def main():
-    config = get_ti5_t170c_config()
-    rclpy.init()
-    camera = Ti5Camera(config)
+  config = get_ti5_t170c_config()
+  rclpy.init()
+  camera = Ti5Camera(config)
 
-    running = True
-    def spin_worker():
-        while running:
-            # 关键：轮流 spin 两个节点
-            rclpy.spin_once(camera, timeout_sec=0.005)
+  running = True
+  def spin_worker():
+      while running:
+          # Key point: Spin two nodes alternately
+          rclpy.spin_once(camera, timeout_sec=0.005)
 
-    spin_thread = threading.Thread(target=spin_worker, daemon=True)
-    spin_thread.start()
+  spin_thread = threading.Thread(target=spin_worker, daemon=True)
+  spin_thread.start()
 
-    # 等待相机数据进来
-    print("等待相机数据...")
-    time.sleep(2.0)
+  print("Waiting for camera data...")
+  time.sleep(2.0)
 
-    # 调用一次
-    images = camera.get_latest_image()
+  # Call Fetch Images Func
+  images = camera.get_latest_image()
 
-    if images:
-        head_img, head_ts, left_img, left_ts, right_img, right_ts = images
-        print("✅ 调用成功！")
-        print("头部图像:", head_img.shape, head_ts)
-        print("左手图像:", left_img.shape, left_ts)
-        print("右手图像:", right_img.shape, right_ts)
-    else:
-        print("❌ 未读到相机数据")
+  if images:
+      head_img, head_ts, left_img, left_ts, right_img, right_ts = images
+      print("✅ Call succeeded!")
+      print(f"Head image: {head_img.shape}, timestamp: {head_ts}")
+      print(f"Left hand image: {left_img.shape}, timestamp: {left_ts}")
+      print(f"Right hand image: {right_img.shape}, timestamp: {right_ts}")
+  else:
+      print("❌ No camera data received")
 
 if __name__ == '__main__':
     main()
