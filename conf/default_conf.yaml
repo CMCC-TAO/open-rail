@@ -5,14 +5,14 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.0
-  wait_time: 10
+  speed: 1.25
+  wait_time: 400
 inter_chunk:
   inter_chunk_mode: min_jerk
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
-  smooth_length: 150
+  smooth_length: 50
   smooth_ratio: 0.75
 intra_chunk:
   filter_window_size: 4
@@ -28,9 +28,9 @@ intra_chunk:
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
 language:
-  auto_mode: false
+  auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 3
+  sub_task_id: 1
   task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
@@ -137,20 +137,71 @@ robots:
   mock:
     action_layout:
       arm:
-        end: 16
+        end: 14
         policy: gradual
         start: 0
       gripper:
+        end: 16
+        policy: stepwise
+        start: 14
+    camera:
+      names:
+        hand_left: observation.images.hand_left
+        hand_right: observation.images.hand_right
+        head: observation.images.top_head
+      ref: head
+    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
+    state_action_range:
+    - - 0
+      - 16
+    - - 58
+      - 70
+  navi_wa2:
+    action_layout:
+      arm:
+        end: 16
+        policy: gradual
+        start: 0
+      hand:
         end: 28
         policy: stepwise
         start: 16
     camera:
-      names:
-        hand_left: observation.images.left_wrist_rgb
-        hand_right: observation.images.right_wrist_rgb
-        head: observation.images.head_rgb
-      ref: head
-    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
+      topic_dict:
+        hand_left: /zj_humanoid/sensor/left_wrist/image_raw/compressed
+        hand_right: /zj_humanoid/sensor/right_wrist/image_raw/compressed
+        head: /zj_humanoid/sensor/realsense_head/color/image_raw/compressed
+    gain: 900
+    reset_position:
+    - 0.182591655739083
+    - 0.32575521044236666
+    - 0.639202615644364
+    - 0.03292066673111549
+    - -1.9789475037079458
+    - 0.5495126798768879
+    - -0.1635420177877668
+    - -0.03926435617611085
+    - -0.22653780968994397
+    - 0.19016568609004025
+    - -0.6990877950829599
+    - 0.17601231608296075
+    - -1.888115764960776
+    - -0.5459413807557212
+    - -0.38742182124429064
+    - -0.27196253226160444
+    - -0.6062110066413879
+    - 0.9023351669311523
+    - 0.006108652334660292
+    - 0.006108652334660292
+    - 0.00901753455400467
+    - 0.015126187354326248
+    - -0.5980661511421204
+    - 0.8994263410568237
+    - 0.012217304669320583
+    - 0.006108652334660292
+    - 0.004363323096185923
+    - 0.0
+    tt: 0.033
   ti5_t170c:
     action_layout:
       arm:
@@ -287,10 +338,7 @@ visualize:
   trajectory:
     play: false
     selected_joints:
-    - 0
-    - 1
-    - 2
-    - 3
+    - 7
     source:
     - State
     - ActionFitted
