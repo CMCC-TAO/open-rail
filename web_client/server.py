@@ -1092,15 +1092,11 @@ class ConfigFileRequest(BaseModel):
 @app.post("/api/client/config/load")
 async def load_config_file(req: ConfigFileRequest):
     """Load a yaml conf file and apply it. Effective immediately when possible."""
-    if client_state.config is None:
-        client_state.config = get_client_config()
     # Guard against path-traversal
     p = Path(req.path)
-    # --- 调试开始 ---
     # print(f"DEBUG: Logger name is: {logger.name}")
     # print(f"DEBUG: Logger effective level is: {logger.getEffectiveLevel()}")
     # print(f"DEBUG: Logging module root level is: {logging.root.getEffectiveLevel()}")
-    # logger.info(f"Loading config from file: {p}")
     if not p.is_absolute():
         p = ROOT / "conf" / p
     try:

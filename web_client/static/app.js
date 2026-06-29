@@ -398,7 +398,9 @@ function wireEvents() {
   $('conf-file-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const path = file.path;
+    // const path = file.path;
+    const path = file.name;
+    // console.log('[DEBUG] file.path:', file.path, 'webkitRelativePath:', file.webkitRelativePath, 'name:', file.name, '-> resolved path:', path);
     // const path = file.path || null;
     try {
       const res = await apiFetch('/api/client/config/load', { method: 'POST', body: JSON.stringify({ path }) });
