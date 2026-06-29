@@ -25,9 +25,9 @@ from action_server.action_base import (
 # ==============================================
 # 显式映射，不依赖字符串前缀判断
 TARGET_HAND_MAP: dict[str, str] = {
-    "one Wahaha": "one hand",
+    "one water": "one hand",
     "one Coca-Cola": "one hand",
-    "two Wahaha": "two hand",
+    "two water": "two hand",
     "two Coca-Cola": "two hand",
 }
 
@@ -36,9 +36,9 @@ TARGET_HAND_MAP: dict[str, str] = {
 # ==============================================
 # key 为 params.target（不区分大小写），value 为对应的语言指令
 TARGET_LANGUAGE_MAP: dict[str, str] = {
-    "one Wahaha": "Use one hand to grab one bottle from a pile of Wahaha drinks.",
+    "one water": "Use one hand to grab one bottle from a pile of Wahaha drinks.",
     "one Coca-Cola": "Use one hand to grab one bottle from a pile of Coca-Cola drinks.",
-    "two Wahaha": "Use both hands to grab the two nearest bottles from a pile of Wahaha drinks.",
+    "two water": "Use both hands to grab the two nearest bottles from a pile of Wahaha drinks.",
     "two Coca-Cola": "Use both hands to grab the two nearest bottles from a pile of Coca-Cola drinks.",
 }
 

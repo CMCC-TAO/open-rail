@@ -45,16 +45,23 @@ ERR_DELIVER_ONE_HAND_BOTH_EMPTY = 24
 ERR_DELIVER_BOTH_HAND_NOT_BOTH = 25
 ERR_DELIVER_ONE_HAND_STILL_HOLDING = 26
 
-# task_place 专用 (31-36)
-ERR_PLACE_TIMEOUT = 31
-ERR_PLACE_LEFT_EMPTY = 32
-ERR_PLACE_RIGHT_EMPTY = 33
-ERR_PLACE_ONE_HAND_BOTH_EMPTY = 34
-ERR_PLACE_BOTH_HAND_NOT_BOTH = 35
-ERR_PLACE_ONE_HAND_STILL_HOLDING = 36
+# task_init_place 专用 (31)
+ERR_INIT_PLACE_FAILED = 31
+# task_place 专用 (32-37)
+ERR_PLACE_TIMEOUT = 32
+ERR_PLACE_LEFT_EMPTY = 33
+ERR_PLACE_RIGHT_EMPTY = 34
+ERR_PLACE_ONE_HAND_BOTH_EMPTY = 35
+ERR_PLACE_BOTH_HAND_NOT_BOTH = 36
+ERR_PLACE_ONE_HAND_STILL_HOLDING = 37
+# task_finish_place 专用 (38)
+ERR_FINISH_PLACE_FAILED = 38
 
 # task_reset 专用 (41)
 ERR_RESET_NO_STATE = 41
+
+# task_release 专用 (42)
+ERR_RELEASE_NO_STATE = 42
 
 ERR_MSG = {
     ERR_SUCCESS: "none",
@@ -88,6 +95,9 @@ ERR_MSG = {
     ERR_DELIVER_BOTH_HAND_NOT_BOTH: "Not both hands have objects but both arm deliver requested",
     ERR_DELIVER_ONE_HAND_STILL_HOLDING: "One hand still holding object after both arm deliver",
 
+    # task_init_place 专用
+    ERR_INIT_PLACE_FAILED: "Init place failed",
+
     # task_place 专用
     ERR_PLACE_TIMEOUT: "Place task timed out",
     ERR_PLACE_LEFT_EMPTY: "Left hand is empty but left arm place requested",
@@ -96,8 +106,14 @@ ERR_MSG = {
     ERR_PLACE_BOTH_HAND_NOT_BOTH: "Not both hands have objects but both arm place requested",
     ERR_PLACE_ONE_HAND_STILL_HOLDING: "One hand still holding object after both arm place",
 
+    # task_finish_place 专用
+    ERR_FINISH_PLACE_FAILED: "Finish place failed",
+
     # task_reset 专用
     ERR_RESET_NO_STATE: "Failed to get current robot state for arm reset",
+
+    # task_release 专用
+    ERR_RELEASE_NO_STATE: "Failed to get current robot state for hand release",
 }
 
 

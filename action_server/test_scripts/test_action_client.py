@@ -43,11 +43,11 @@ AVAILABLE_TASKS = {
         },
     },
     "2": {
-        "name": "grasp one Wahaha",
+        "name": "grasp one water",
         "desc": "单手抓取 — 使用一只手从娃哈哈堆中抓取一瓶",
         "params": {
             "task": "grasp",
-            "target": "one Wahaha",
+            "target": "one water",
             "waypoint": "none",
         },
     },
@@ -61,11 +61,11 @@ AVAILABLE_TASKS = {
         },
     },
     "4": {
-        "name": "grasp two Wahaha",
+        "name": "grasp two water",
         "desc": "双手抓取 — 使用两只手从娃哈哈堆中抓取最近的两瓶",
         "params": {
             "task": "grasp",
-            "target": "two Wahaha",
+            "target": "two water",
             "waypoint": "none",
         },
     },
@@ -79,6 +79,15 @@ AVAILABLE_TASKS = {
         },
     },
     "6": {
+        "name": "finish grasp",
+        "desc": "抓取完成复位 — reset_robot 经安全中间姿态过渡到垂直复位姿态",
+        "params": {
+            "task": "finish grasp",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "7": {
         "name": "left arm deliver",
         "desc": "左手递物 — 3s 线性插值到左递物位姿 → 左手全开 → 保持 1s",
         "params": {
@@ -87,7 +96,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "7": {
+    "8": {
         "name": "right arm deliver",
         "desc": "右手递物 — 3s 线性插值到右递物位姿 → 右手全开 → 保持 1s",
         "params": {
@@ -96,7 +105,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "8": {
+    "9": {
         "name": "one arm deliver",
         "desc": "单手递物 — 自动判断哪只手有物体，路由到左手/右手递物",
         "params": {
@@ -105,7 +114,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "9": {
+    "10": {
         "name": "both arm deliver",
         "desc": "双手递物 — 双臂同时递物，需双手都有物体",
         "params": {
@@ -114,7 +123,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "10": {
+    "11": {
         "name": "left arm place",
         "desc": "左手放置 — 录制轨迹回放（左手），过渡+插补+平滑",
         "params": {
@@ -123,7 +132,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "11": {
+    "12": {
         "name": "right arm place",
         "desc": "右手放置 — 录制轨迹回放（右手），过渡+插补+平滑",
         "params": {
@@ -132,7 +141,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "12": {
+    "13": {
         "name": "one arm place",
         "desc": "单手放置 — 自动判断哪只手有物体，路由到左手/右手放置",
         "params": {
@@ -141,7 +150,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "13": {
+    "14": {
         "name": "both arm place",
         "desc": "双手放置 — 录制轨迹回放（双手），需双手都有物体",
         "params": {
@@ -150,7 +159,25 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "14": {
+    "15": {
+        "name": "init place",
+        "desc": "初始化放置 — reset_robot 经安全中间姿态过渡到默认抓取姿态",
+        "params": {
+            "task": "init place",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "16": {
+        "name": "finish place",
+        "desc": "放置完成复位 — reset_robot 经安全中间姿态过渡到垂直复位姿态",
+        "params": {
+            "task": "finish place",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
+    "17": {
         "name": "left hand release",
         "desc": "左手松手 — 左手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -159,7 +186,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "15": {
+    "18": {
         "name": "right hand release",
         "desc": "右手松手 — 右手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -168,7 +195,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "16": {
+    "19": {
         "name": "both hand release",
         "desc": "双手松手 — 双手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -177,7 +204,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "17": {
+    "20": {
         "name": "left arm reset",
         "desc": "左手复位 — 3s 线性插值到左复位姿态 [0,0.3,0,1.3,0,0,0]，手掌不变",
         "params": {
@@ -186,7 +213,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "18": {
+    "21": {
         "name": "right arm reset",
         "desc": "右手复位 — 3s 线性插值到右复位姿态 [0,-0.3,0,1.3,0,0,0]，手掌不变",
         "params": {
@@ -195,20 +222,11 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "19": {
+    "22": {
         "name": "both arm reset",
         "desc": "双手复位 — 3s 线性插值双臂同时到复位姿态，手掌不变",
         "params": {
             "task": "both arm reset",
-            "target": "none",
-            "waypoint": "none",
-        },
-    },
-    "20": {
-        "name": "finish grasp",
-        "desc": "抓取完成复位 — reset_robot 经安全中间姿态过渡到垂直复位姿态",
-        "params": {
-            "task": "finish grasp",
             "target": "none",
             "waypoint": "none",
         },
@@ -221,58 +239,50 @@ AVAILABLE_TASKS = {
 # ============================================================
 TASK_GROUPS = [
     {
-        "title": "init grasp",
-        "items": [
-            ("1", "init grasp"),
-        ],
-    },
-    {
         "title": "grasp",
         "items": [
-            ("2", "grasp one Wahaha"),
+            ("1", "init grasp"),
+            ("2", "grasp one water"),
             ("3", "grasp one Coca-Cola"),
-            ("4", "grasp two Wahaha"),
+            ("4", "grasp two water"),
             ("5", "grasp two Coca-Cola"),
+            ("6", "finish grasp"),
         ],
     },
     {
         "title": "deliver",
         "items": [
-            ("6", "left arm deliver"),
-            ("7", "right arm deliver"),
-            ("8", "one arm deliver"),
-            ("9", "both arm deliver"),
+            ("7", "left arm deliver"),
+            ("8", "right arm deliver"),
+            ("9", "one arm deliver"),
+            ("10", "both arm deliver"),
         ],
     },
     {
         "title": "place",
         "items": [
-            ("10", "left arm place"),
-            ("11", "right arm place"),
-            ("12", "one arm place"),
-            ("13", "both arm place"),
+            ("11", "left arm place"),
+            ("12", "right arm place"),
+            ("13", "one arm place"),
+            ("14", "both arm place"),
+            ("15", "init place"),
+            ("16", "finish place"),
         ],
     },
     {
         "title": "release",
         "items": [
-            ("14", "left hand release"),
-            ("15", "right hand release"),
-            ("16", "both hand release"),
+            ("17", "left hand release"),
+            ("18", "right hand release"),
+            ("19", "both hand release"),
         ],
     },
     {
         "title": "reset",
         "items": [
-            ("17", "left arm reset"),
-            ("18", "right arm reset"),
-            ("19", "both arm reset"),
-        ],
-    },
-    {
-        "title": "finish grasp",
-        "items": [
-            ("20", "finish grasp"),
+            ("20", "left arm reset"),
+            ("21", "right arm reset"),
+            ("22", "both arm reset"),
         ],
     },
 ]
@@ -430,14 +440,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1-19 / q): ').strip().lower()
+        choice = input('请选择任务编号 (1-22 / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1-19 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-22 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]

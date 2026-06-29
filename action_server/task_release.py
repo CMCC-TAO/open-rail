@@ -31,7 +31,7 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from action_server.action_base import (
-    AbstractTaskHandler, TaskResult, send_vla_feedback,
+    AbstractTaskHandler, TaskResult, ERR_RELEASE_NO_STATE, send_vla_feedback,
 )
 
 # ==============================================
@@ -129,17 +129,20 @@ class ReleaseHandler(AbstractTaskHandler):
     def _release_hand_and_hold(
         self, robot_body, hand_side: str,
         goal_handle, hold_duration: float,
-    ) -> None:
+    ) -> bool:
         """松手：将手部 6 个关节控制量渐变归零，手臂保持不变，保持指定时间
 
         使用均匀插值分步释放，避免一步归零导致手部快速坠落。
 
         Args:
             hand_side: 'left' / 'right' / 'both'
+
+        Returns:
+            True 表示执行成功, False 表示无法获取当前状态
         """
         current_state = self._get_current_full_state(robot_body)
         if current_state is None:
-            return
+            return False
 
         action_start = current_state.copy()
         action_end = current_state.copy()
@@ -162,6 +165,8 @@ class ReleaseHandler(AbstractTaskHandler):
         send_vla_feedback(goal_handle, 50, f"{side_label}已松开，保持 {hold_duration:.0f}s...")
         time.sleep(hold_duration)
 
+        return True
+
     # ================================================================
     # 松手逻辑
     # ================================================================
@@ -175,7 +180,9 @@ class ReleaseHandler(AbstractTaskHandler):
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "左手松手开始")
 
-        self._release_hand_and_hold(robot_body, 'left', goal_handle, HAND_RELEASE_HOLD_TIME)
+        if not self._release_hand_and_hold(robot_body, 'left', goal_handle, HAND_RELEASE_HOLD_TIME):
+            return TaskResult(False, error_code=ERR_RELEASE_NO_STATE,
+                              error_message="无法获取当前机器人状态，左手松手中止")
 
         send_vla_feedback(goal_handle, 100, "左手松手完成")
         return TaskResult(True)
@@ -189,7 +196,9 @@ class ReleaseHandler(AbstractTaskHandler):
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "右手松手开始")
 
-        self._release_hand_and_hold(robot_body, 'right', goal_handle, HAND_RELEASE_HOLD_TIME)
+        if not self._release_hand_and_hold(robot_body, 'right', goal_handle, HAND_RELEASE_HOLD_TIME):
+            return TaskResult(False, error_code=ERR_RELEASE_NO_STATE,
+                              error_message="无法获取当前机器人状态，右手松手中止")
 
         send_vla_feedback(goal_handle, 100, "右手松手完成")
         return TaskResult(True)
@@ -203,7 +212,9 @@ class ReleaseHandler(AbstractTaskHandler):
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "双手松手开始")
 
-        self._release_hand_and_hold(robot_body, 'both', goal_handle, HAND_RELEASE_HOLD_TIME)
+        if not self._release_hand_and_hold(robot_body, 'both', goal_handle, HAND_RELEASE_HOLD_TIME):
+            return TaskResult(False, error_code=ERR_RELEASE_NO_STATE,
+                              error_message="无法获取当前机器人状态，双手松手中止")
 
         send_vla_feedback(goal_handle, 100, "双手松手完成")
         return TaskResult(True)

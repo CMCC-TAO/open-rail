@@ -59,6 +59,16 @@ class InitGraspHandler(AbstractTaskHandler):
             # ===== 步骤 1: 确认机器人连接 =====
             self.send_feedback(goal_handle, 10, "正在确认机器人连接...")
 
+            # ===== 检查手掌数据是否可用 =====
+            self.send_feedback(goal_handle, 15, "正在检查机器人手掌数据...")
+            robot = robot_body.robot
+            lh = robot.latest_left_hand_action
+            rh = robot.latest_right_hand_action
+            if lh is None or rh is None:
+                err_msg = f"{ERR_MSG[ERR_INIT_GRASP_FAILED]}: 未收到机器人手掌数据"
+                self.send_feedback(goal_handle, 0, err_msg)
+                return TaskResult(False, error_code=ERR_INIT_GRASP_FAILED, error_message=err_msg)
+
             # ===== 步骤 2: 过渡到安全中间姿态（抬臂握拳）=====
             self.send_feedback(goal_handle, 20, "正在过渡到安全中间姿态...")
 

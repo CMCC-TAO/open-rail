@@ -212,6 +212,7 @@ class DeliverHandler(AbstractTaskHandler):
         else:
             current_state = self._get_current_full_state(robot_body)
             if current_state is None:
+                print('[WARN] _open_hand_and_hold: 无法获取当前机器人状态，跳过松手')
                 return
             action = current_state.copy()
         zero_hand = np.zeros(6)

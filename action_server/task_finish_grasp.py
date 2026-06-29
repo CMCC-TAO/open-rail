@@ -70,6 +70,16 @@ class FinishGraspHandler(AbstractTaskHandler):
             # ===== 步骤 1: 确认机器人连接 =====
             self.send_feedback(goal_handle, 10, "正在确认机器人连接...")
 
+            # ===== 检查手掌数据是否可用 =====
+            self.send_feedback(goal_handle, 15, "正在检查机器人手掌数据...")
+            robot = robot_body.robot
+            lh = robot.latest_left_hand_action
+            rh = robot.latest_right_hand_action
+            if lh is None or rh is None:
+                err_msg = f"{ERR_MSG[ERR_FINISH_GRASP_FAILED]}: 未收到机器人手掌数据"
+                self.send_feedback(goal_handle, 0, err_msg)
+                return TaskResult(False, error_code=ERR_FINISH_GRASP_FAILED, error_message=err_msg)
+
             # ===== 步骤 2: 获取当前手掌状态（保持抓取物体）=====
             hands = self._get_current_hands(robot_body)
 
