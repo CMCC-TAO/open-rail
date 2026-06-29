@@ -213,7 +213,7 @@ robots:
         start: 14
       head:
         end: 18
-        policy: none
+        policy: manual
         presets:
         - name: Default
           value:
@@ -222,7 +222,7 @@ robots:
         start: 16
       waist:
         end: 20
-        policy: none
+        policy: manual
         presets:
         - name: Default
           value:
@@ -231,7 +231,7 @@ robots:
         start: 18
       wheel:
         end: 22
-        policy: none
+        policy: manual
         presets:
         - name: Default
           value:

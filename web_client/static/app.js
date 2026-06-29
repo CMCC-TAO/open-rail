@@ -386,9 +386,16 @@ function setupRuntimeShortcuts() {
     if (e.repeat || isRuntimeShortcutTypingTarget(e.target)) return;
 
     const key = e.key.toLowerCase();
-    if (key === ' ') {
+    const isSpace = e.code === 'Space' || key === ' ';
+    if (isSpace && !e.ctrlKey) {
       e.preventDefault();
       clickButtonIfReady('btn-pause');
+      return;
+    }
+
+    if (isSpace && e.ctrlKey) {
+      e.preventDefault();
+      clickButtonIfReady('btn-control');
       return;
     }
 

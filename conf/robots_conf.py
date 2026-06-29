@@ -41,17 +41,17 @@ def get_a2d_config():
                 'right': [{'name': 'Default', 'value': [0.0]}, {'name': 'Close', 'value': [1.0]}],
             },
         },
-        # policy='none' is robot/Web-only and must stay after all model policies.
+        # policy='manual' is robot/Web-only and must stay after all model policies.
         'head': {
-            'start': 16, 'end': 18, 'policy': 'none',
+            'start': 16, 'end': 18, 'policy': 'manual',
             'presets': [{'name': 'Default', 'value': [0.0, 0.4363]}],
         },
         'waist': {
-            'start': 18, 'end': 20, 'policy': 'none',
+            'start': 18, 'end': 20, 'policy': 'manual',
             'presets': [{'name': 'Default', 'value': [0.4012, 27.0]}],
         },
         'wheel': {
-            'start': 20, 'end': 22, 'policy': 'none',
+            'start': 20, 'end': 22, 'policy': 'manual',
             'presets': [{'name': 'Default', 'value': [0, 0]}, {'name': 'Forward', 'value': [0.1, 0.]}, {'name': 'Backward', 'value': [-0.1, 0]}, {'name': 'Left', 'value': [0, 0.1]}, {'name': 'Right', 'value': [0, -0.1]}],
         },
     }
@@ -85,8 +85,8 @@ def get_mock_config():
                 'right': [{'name': 'Default', 'value': [0.0]}],
             },
         },
-        # 'head': {'start': 16, 'end': 18, 'policy': 'none'},
-        # 'waist': {'start': 18, 'end': 20, 'policy': 'none'},
+        # 'head': {'start': 16, 'end': 18, 'policy': 'manual'},
+        # 'waist': {'start': 18, 'end': 20, 'policy': 'manual'},
     }
     config.manual_arm_interval = 0.01
     config.state_action_range = [[0, 16], [58, 70]]
