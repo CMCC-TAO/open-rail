@@ -36,8 +36,8 @@ def get_a2d_config():
         'gripper': {
             'start': 14, 'end': 16, 'policy': 'stepwise',
             'presets': {
-                'left': [{'name': 'Default', 'value': [0.0]}, {'name': 'Open', 'value': [1.0]}],
-                'right': [{'name': 'Default', 'value': [0.0]}, {'name': 'Open', 'value': [1.0]}],
+                'left': [{'name': 'Default', 'value': [0.0]}, {'name': 'Close', 'value': [1.0]}],
+                'right': [{'name': 'Default', 'value': [0.0]}, {'name': 'Close', 'value': [1.0]}],
             },
         },
         # policy='none' is robot/Web-only and must stay after all model policies.
@@ -48,6 +48,10 @@ def get_a2d_config():
         'waist': {
             'start': 18, 'end': 20, 'policy': 'none',
             'presets': [{'name': 'Default', 'value': [0.4012, 27.0]}],
+        },
+        'wheel': {
+            'start': 20, 'end': 22, 'policy': 'none',
+            'presets': [{'name': 'Default', 'value': [0, 0]}, {'name': 'Forward', 'value': [0.1, 0.]}, {'name': 'Backward', 'value': [-0.1, 0]}, {'name': 'Left', 'value': [0, 0.1]}, {'name': 'Right', 'value': [0, -0.1]}],
         },
     }
     return config

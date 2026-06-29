@@ -21,7 +21,9 @@ const readPreset = (id) => {
 const populate = (selectId, checkId, action, side = null) => {
   const select = $(selectId);
   const check = $(checkId);
+  const edit = $(`${selectId}-edit`);
   if (!select || !check) return;
+  const wasDisabled = check.disabled;
   const previous = select.value;
   select.innerHTML = '';
   presets(action, side).forEach(({ name, value }) => {
@@ -38,8 +40,9 @@ const populate = (selectId, checkId, action, side = null) => {
   const reason = !layoutAvailable
     ? `Disabled: action_layout does not define "${action}".`
     : `Disabled: no presets configured for "${action}".`;
-  const targets = [select.closest('.robot-preset-row'), select, check].filter(Boolean);
+  const targets = [select.closest('.robot-preset-row'), select, check, edit].filter(Boolean);
   if (supported) {
+    if (wasDisabled) check.checked = true;
     if ([...select.options].some(option => option.value === previous)) select.value = previous;
     targets.forEach(target => target.removeAttribute('title'));
   } else {
@@ -52,6 +55,7 @@ const populate = (selectId, checkId, action, side = null) => {
   check.disabled = !supported;
   if (!supported) check.checked = false;
   select.disabled = !supported || !check.checked;
+  if (edit) edit.disabled = select.disabled;
 };
 const selectDefault = (id) => {
   const select = $(id);
@@ -70,9 +74,100 @@ const refreshControls = () => {
   const hand = handAction();
   populate('gripper-left-preset', 'chk-gripper-left', hand, 'left');
   populate('gripper-right-preset', 'chk-gripper-right', hand, 'right');
-  ['head', 'waist', 'body'].forEach(action => {
+  ['head', 'waist', 'body', 'wheel', 'leg'].forEach(action => {
     populate(`${action}-preset`, `chk-${action}`, action);
   });
+};
+
+const requestPresetValue = (name, current) => new Promise(resolve => {
+  const modal = $('modal-preset-edit');
+  const title = $('preset-edit-title');
+  const input = $('preset-edit-value');
+  const confirm = $('btn-preset-edit-confirm');
+  const cancel = $('btn-preset-edit-cancel');
+  if (!modal || !title || !input || !confirm || !cancel) {
+    resolve(null);
+    return;
+  }
+
+  const finish = value => {
+    modal.classList.add('hidden');
+    document.removeEventListener('keydown', onKeyDown);
+    resolve(value);
+  };
+  const onKeyDown = event => {
+    if (event.key === 'Enter') finish(input.value);
+    if (event.key === 'Escape') finish(null);
+  };
+
+  title.textContent = `Edit Preset: ${name}`;
+  input.value = JSON.stringify(current);
+  confirm.onclick = () => finish(input.value);
+  cancel.onclick = () => finish(null);
+  modal.onclick = event => {
+    if (event.target === modal) finish(null);
+  };
+  document.addEventListener('keydown', onKeyDown);
+  modal.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+});
+
+const editPreset = async (selectId, action, side = null) => {
+  const select = $(selectId);
+  const option = select?.selectedOptions?.[0];
+  const current = readPreset(selectId);
+  if (!option?.dataset.name || !current) return;
+
+  const name = option.dataset.name;
+  const input = await requestPresetValue(name, current);
+  if (input === null) return;
+
+  let value;
+  try {
+    value = JSON.parse(input);
+  } catch (_) {
+    toast('Preset value must be a valid JSON array.', 'error');
+    return;
+  }
+  if (!Array.isArray(value) || value.length !== current.length || !value.every(Number.isFinite)) {
+    toast(`Preset value must contain ${current.length} finite numbers.`, 'error');
+    return;
+  }
+
+  const type = String(App.config?.robots?.type || '');
+  const items = presets(action, side);
+  const updated = items.map(item => (
+    String(item.name) === name ? { ...item, value } : item
+  ));
+  const suffix = side ? `.${side}` : '';
+  const patch = {
+    [`robots.${type}.action_layout.${action}.presets${suffix}`]: updated,
+  };
+
+  try {
+    const res = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = res.config || App.config;
+    refreshControls();
+    const refreshed = $(selectId);
+    const selected = [...refreshed.options].find(item => item.dataset.name === name);
+    if (selected) refreshed.value = selected.value;
+
+    const display = $('conf-path-display');
+    const path = display?.dataset.fullPath || display?.textContent.trim() || '';
+    if (path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path }),
+      });
+    }
+    toast(`Preset "${name}" updated.`, 'ok');
+  } catch (_) { /* apiFetch already toasted */ }
 };
 
 [
@@ -83,10 +178,30 @@ const refreshControls = () => {
   ['chk-head', 'head-preset'],
   ['chk-waist', 'waist-preset'],
   ['chk-body', 'body-preset'],
+  ['chk-wheel', 'wheel-preset'],
+  ['chk-leg', 'leg-preset'],
 ].forEach(([checkId, selectId]) => {
   $(checkId)?.addEventListener('change', () => {
     const select = $(selectId);
     if (select) select.disabled = !checked(checkId);
+    const edit = $(`${selectId}-edit`);
+    if (edit) edit.disabled = !checked(checkId);
+  });
+});
+
+[
+  ['arm-left-preset', () => 'arm', 'left'],
+  ['arm-right-preset', () => 'arm', 'right'],
+  ['gripper-left-preset', handAction, 'left'],
+  ['gripper-right-preset', handAction, 'right'],
+  ['head-preset', () => 'head'],
+  ['waist-preset', () => 'waist'],
+  ['body-preset', () => 'body'],
+  ['wheel-preset', () => 'wheel'],
+  ['leg-preset', () => 'leg'],
+].forEach(([selectId, getAction, side = null]) => {
+  $(`${selectId}-edit`)?.addEventListener('click', () => {
+    editPreset(selectId, getAction(), side);
   });
 });
 
@@ -100,23 +215,25 @@ const sendPair = async (endpoint, action, prefix) => {
   return Object.keys(payload).length > 1 && sendControl(endpoint, payload);
 };
 
-const sendBody = async () => {
+const sendActions = async (endpoint, actions) => {
   const payload = { source: 'manual' };
-  ['head', 'waist', 'body'].forEach(action => {
+  actions.forEach(action => {
     if (checked(`chk-${action}`)) {
       const value = readPreset(`${action}-preset`);
       if (value) payload[action] = value;
     }
   });
-  return Object.keys(payload).length > 1 && sendControl('body', payload);
+  return Object.keys(payload).length > 1 && sendControl(endpoint, payload);
 };
 
 $('btn-arm')?.addEventListener('click', async () => {
+  toast('Arm setting...', 'info');
   if (await sendPair('arm', 'arm', 'arm')) toast('Arm set.', 'ok');
 });
 $('btn-arm-reset')?.addEventListener('click', async () => {
   if (checked('chk-arm-left')) selectDefault('arm-left-preset');
   if (checked('chk-arm-right')) selectDefault('arm-right-preset');
+  toast('Arm resetting...', 'info');
   if (await sendPair('arm', 'arm', 'arm')) toast('Arm reset.', 'ok');
 });
 $('btn-gripper')?.addEventListener('click', async () => {
@@ -128,23 +245,24 @@ $('btn-gripper-reset')?.addEventListener('click', async () => {
   if (await sendPair('gripper', handAction(), 'gripper')) toast('Gripper / Hand reset.', 'ok');
 });
 $('btn-body')?.addEventListener('click', async () => {
-  if (await sendBody()) toast('Head / Waist / Body set.', 'ok');
+  if (await sendActions('body', ['head', 'waist', 'body'])) toast('Head / Waist / Body set.', 'ok');
 });
 $('btn-body-reset')?.addEventListener('click', async () => {
   ['head', 'waist', 'body'].forEach(action => {
     if (checked(`chk-${action}`)) selectDefault(`${action}-preset`);
   });
-  if (await sendBody()) toast('Head / Waist / Body reset.', 'ok');
+  if (await sendActions('body', ['head', 'waist', 'body'])) toast('Head / Waist / Body reset.', 'ok');
 });
 
-const sendWheel = async (linear, angular, message) => {
-  await sendControl('wheel', { pos: [linear, angular] });
-  toast(message, 'ok');
-};
-$('btn-wheel-forward')?.addEventListener('click', () => sendWheel(0.1, 0, 'Wheel forward.'));
-$('btn-wheel-backward')?.addEventListener('click', () => sendWheel(-0.1, 0, 'Wheel backward.'));
-$('btn-wheel-left')?.addEventListener('click', () => sendWheel(0, 0.1, 'Wheel turn left.'));
-$('btn-wheel-right')?.addEventListener('click', () => sendWheel(0, -0.1, 'Wheel turn right.'));
+$('btn-wheel')?.addEventListener('click', async () => {
+  if (await sendActions('wheel', ['wheel', 'leg'])) toast('Wheel / Leg set.', 'ok');
+});
+$('btn-wheel-reset')?.addEventListener('click', async () => {
+  ['wheel', 'leg'].forEach(action => {
+    if (checked(`chk-${action}`)) selectDefault(`${action}-preset`);
+  });
+  if (await sendActions('wheel', ['wheel', 'leg'])) toast('Wheel / Leg reset.', 'ok');
+});
 
 document.addEventListener('app-config-updated', refreshControls);
 refreshControls();

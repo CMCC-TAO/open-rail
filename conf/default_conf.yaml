@@ -35,10 +35,44 @@ intra_chunk:
     arm:
       end: 14
       policy: gradual
+      presets:
+        left:
+        - &id001
+          name: Default
+          value:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+        right:
+        - &id002
+          name: Default
+          value:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
       start: 0
     gripper:
       end: 16
       policy: stepwise
+      presets:
+        left:
+        - &id003
+          name: Default
+          value:
+          - 0.0
+        right:
+        - &id004
+          name: Default
+          value:
+          - 0.0
       start: 14
   filter_window_size: 4
   fitting_deg: 5
@@ -64,10 +98,20 @@ rdm:
     arm:
       end: 14
       policy: gradual
+      presets:
+        left:
+        - *id001
+        right:
+        - *id002
       start: 0
     gripper:
       end: 16
       policy: stepwise
+      presets:
+        left:
+        - *id003
+        right:
+        - *id004
       start: 14
   max_len: 100
   mode: async
@@ -129,10 +173,24 @@ robots:
         presets:
           left:
           - name: Default
-            value: [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]
+            value:
+            - -1.0748
+            - 0.6107
+            - 0.2816
+            - -1.2823
+            - 0.7292
+            - 1.4957
+            - -0.1869
           right:
           - name: Default
-            value: [1.072, -0.6103, -0.278, 1.2822, -0.7299, -1.4929, 0.1873]
+            value:
+            - 1.072
+            - -0.6103
+            - -0.278
+            - 1.2822
+            - -0.7299
+            - -1.4929
+            - 0.1873
         start: 0
       gripper:
         end: 16
@@ -140,29 +198,62 @@ robots:
         presets:
           left:
           - name: Default
-            value: [0.0]
-          - name: Open
-            value: [1.0]
+            value:
+            - 0.0
+          - name: Close
+            value:
+            - 1.0
           right:
           - name: Default
-            value: [0.0]
-          - name: Open
-            value: [1.0]
+            value:
+            - 0.0
+          - name: Close
+            value:
+            - 1.0
         start: 14
       head:
         end: 18
         policy: none
         presets:
         - name: Default
-          value: [0.0, 0.4363]
+          value:
+          - 0.0
+          - 0.4363
         start: 16
       waist:
         end: 20
         policy: none
         presets:
         - name: Default
-          value: [0.4012, 27.0]
+          value:
+          - 0.4012
+          - 27.0
         start: 18
+      wheel:
+        end: 22
+        policy: none
+        presets:
+        - name: Default
+          value:
+          - 0
+          - 0
+        - name: Forward
+          value:
+          - 0.1
+          - 0.0
+        - name: Backward
+          value:
+          - -0.1
+          - 0
+        - name: Left
+          value:
+          - 0
+          - 0.1
+        - name: Right
+          value:
+          - 0
+          - -0.1
+        start: 20
     camera:
       names:
         hand_left: hand_left
@@ -185,22 +276,18 @@ robots:
         policy: gradual
         presets:
           left:
-          - name: Default
-            value: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+          - *id001
           right:
-          - name: Default
-            value: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+          - *id002
         start: 0
       gripper:
         end: 16
         policy: stepwise
         presets:
           left:
-          - name: Default
-            value: [0.0]
+          - *id003
           right:
-          - name: Default
-            value: [0.0]
+          - *id004
         start: 14
     camera:
       names:
@@ -210,7 +297,7 @@ robots:
       ref: head
     dataset_path: /home/zl/zl/mdata/0615
     manual_arm_interval: 0.01
-  type: mock
+  type: a2d
 vision:
   history_frame: false
   preprocess:

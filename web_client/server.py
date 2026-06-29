@@ -61,6 +61,16 @@ from client.robots.base_robot import RobotBase
 
 logger = logging.getLogger(__name__)
 
+
+def _finalize_pyarrow_s3():
+    """Release PyArrow's global S3 resources on graceful shutdown."""
+    try:
+        import pyarrow.fs as arrow_fs
+        arrow_fs.finalize_s3()
+    except (ImportError, AttributeError, RuntimeError) as e:
+        logger.debug(f"PyArrow S3 cleanup skipped: {e}")
+
+
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 # lifespan replaces the deprecated @app.on_event("startup"/"shutdown") pattern.
 # The context manager is defined inline here; module-level globals (client_state, etc.)
@@ -96,6 +106,7 @@ async def _lifespan(_: FastAPI):
     # which can crash (segfault) during interpreter shutdown.
     _cleanup(force_release_robot=True, skip_robot_close_if_threads_alive=True)
     _api_executor.shutdown(wait=False)
+    _finalize_pyarrow_s3()
 
 app = FastAPI(title="VLA Web Client", version="1.0.0", lifespan=_lifespan)
 
@@ -1034,11 +1045,15 @@ async def patch_config(req: ConfigPatchRequest):
     finally:
         client_state.lock.release()
 
-    if robot_type_changed and prev_robot_type != next_robot_type and current_vla_client is not None:
+    if (
+        robot_type_changed
+        and is_running
+        and current_vla_client is not None
+        and prev_robot_type != next_robot_type
+    ):
         paused_state = None
         try:
-            if is_running:
-                paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
+            paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
             await asyncio.to_thread(_ensure_config_robot_bound, True)
             logger.info(f"Robot type changed: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
         except Exception as e:
@@ -1118,11 +1133,14 @@ async def load_config_file(req: ConfigFileRequest):
         current_vla_client = client_state.vla_client
         is_running = bool(client_state.running)
 
-    if prev_robot_type != next_robot_type and current_vla_client is not None:
+    if (
+        is_running
+        and current_vla_client is not None
+        and prev_robot_type != next_robot_type
+    ):
         paused_state = None
         try:
-            if is_running:
-                paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
+            paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
             await asyncio.to_thread(_ensure_config_robot_bound, True)
             logger.info(f"Robot type changed by config load: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
         finally:
@@ -1887,10 +1905,6 @@ async def client_status():
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: runtime controls
 # ─────────────────────────────────────────────────────────────────────────────
-class PositionRequest(BaseModel):
-    pos: Optional[list[float]] = None
-
-
 class ManualControlRequest(BaseModel):
     source: str = "manual"
     l_arm: Optional[list[float]] = None
@@ -1904,6 +1918,8 @@ class ManualControlRequest(BaseModel):
     head: Optional[list[float]] = None
     waist: Optional[list[float]] = None
     body: Optional[list[float]] = None
+    wheel: Optional[list[float]] = None
+    leg: Optional[list[float]] = None
 
 
 class LanguageSetRequest(BaseModel):
@@ -1924,16 +1940,6 @@ def _require_runtime(command_name: str):
     return vla_client, robot
 
 
-def _safe_pos(pos, default):
-    return pos if isinstance(pos, list) else default
-
-
-def _run_control_action(command: str, action: str, pos):
-    _, robot = _require_runtime(command)
-    robot.execute_action({action: pos})
-    return {"status": "ok", "command": command}
-
-
 async def _run_web_control(command: str, req: ManualControlRequest):
     _, robot = _require_runtime(command)
     if robot.current_state is None:
@@ -1943,7 +1949,7 @@ async def _run_web_control(command: str, req: ManualControlRequest):
         if value is not None
     }
     try:
-        await asyncio.to_thread(robot.web_control_robot, data)
+        await asyncio.to_thread(robot._control_robot, data)
     except ValueError as e:
         raise HTTPException(400, str(e))
     except RuntimeError as e:
@@ -1985,8 +1991,8 @@ async def client_control_body(req: ManualControlRequest):
 
 
 @app.post('/api/client/control/wheel')
-async def client_control_wheel(req: PositionRequest):
-    return _run_control_action('wheel', 'wheel', _safe_pos(req.pos, [0.0, 0.0]))
+async def client_control_wheel(req: ManualControlRequest):
+    return await _run_web_control('wheel', req)
 
 
 @app.post('/api/client/language/set')
