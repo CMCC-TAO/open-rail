@@ -75,7 +75,6 @@ class InterChunkFuser:
                 currt_acc,
                 poly_length=self._cfg_value(mode_cfg, 'poly_length', 30),
                 joint_indices=joint_indices,
-                poly_length=30,
             )
         elif mode == 'smooth_velocity':
             # sim_action, sim_vel, sim_acc = self._smooth_velocity_transition(target_action_segment, currt_action, currt_vel, currt_acc, delat_t)

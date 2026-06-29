@@ -56,7 +56,7 @@ from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
-from client.utils.util import load_user_config, apply_user_config
+from client.utils.util import load_user_config, apply_user_config, parse_action_layout
 from client.robots.base_robot import RobotBase
 
 logger = logging.getLogger(__name__)
@@ -536,6 +536,21 @@ def _bind_robot_to_vla_client(vla_client, robot):
             client_state.robot = robot
 
 
+def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
+    if robot_config is None or not hasattr(robot_config, 'action_layout'):
+        return
+    layout = robot_config.action_layout
+    client_config.rdm.action_layout = layout
+    client_config.intra_chunk.action_layout = layout
+    if vla_client is not None:
+        changed = vla_client.intra_chunk_smoother.action_layout != dict(layout)
+        smoother = vla_client.intra_chunk_smoother
+        smoother.action_layout = dict(layout)
+        smoother.action_dim, smoother.joint_indices, smoother.step_indices = parse_action_layout(layout)
+        if changed:
+            vla_client.realtime_data_manager.clear()
+
+
 def _ensure_config_robot_bound(force_recreate: bool = False):
     """Create robot by current config and inject into existing vla_client."""
     global robot_instance
@@ -559,6 +574,7 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
         robot_instance = None
 
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
+    _sync_robot_action_layout(client_config, robot_config, vla_client)
 
     robot, _ = _get_robot(client_config.robots.type, robot_config)
     if current_robot is robot:
@@ -1342,6 +1358,7 @@ def _ensure_vla_client_created():
     client_config = client_state.config
 
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
+    _sync_robot_action_layout(client_config, robot_config)
 
     vla_zmq_client = None
     robot = RobotBase(robot_config)
