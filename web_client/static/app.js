@@ -398,7 +398,7 @@ function wireEvents() {
   $('conf-file-input').addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const path = file.path || (CONF_DIR + '/' + file.name);
+    const path = file.path;
     // const path = file.path || null;
     try {
       const res = await apiFetch('/api/client/config/load', { method: 'POST', body: JSON.stringify({ path }) });
@@ -426,7 +426,7 @@ function wireEvents() {
   $('btn-saveas-file').addEventListener('click', () => {
     const display = $('conf-path-display');
     const current = (display && display.dataset.fullPath) || '';
-    $('saveas-path').value = current || (CONF_DIR + '/my_config.py');
+    $('saveas-path').value = current;
     $('modal-saveas').classList.remove('hidden');
   });
   $('btn-saveas-confirm').addEventListener('click', async () => {
