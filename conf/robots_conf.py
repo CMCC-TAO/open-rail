@@ -24,12 +24,31 @@ def get_a2d_config():
     config.proprio_names = ['arm', 'hand' if 'hand' in config.hand_type else 'gripper', 'head', 'waist']
     config.gripper_freq = 40
     config.head_freq = 40
-    config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.4012, 27.0] + [0.0, 0.0] # default pose (teleoperation default pose)
+    config.manual_arm_interval = 0.01
     config.action_layout = {
-        'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
-        'gripper': {'start': 14, 'end': 16, 'policy': 'stepwise'},
-        # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
-        # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
+        'arm': {
+            'start': 0, 'end': 14, 'policy': 'gradual',
+            'presets': {
+                'left': [{'name': 'Default', 'value': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]}],
+                'right': [{'name': 'Default', 'value': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]}],
+            },
+        },
+        'gripper': {
+            'start': 14, 'end': 16, 'policy': 'stepwise',
+            'presets': {
+                'left': [{'name': 'Default', 'value': [0.0]}, {'name': 'Open', 'value': [1.0]}],
+                'right': [{'name': 'Default', 'value': [0.0]}, {'name': 'Open', 'value': [1.0]}],
+            },
+        },
+        # policy='none' is robot/Web-only and must stay after all model policies.
+        'head': {
+            'start': 16, 'end': 18, 'policy': 'none',
+            'presets': [{'name': 'Default', 'value': [0.0, 0.4363]}],
+        },
+        'waist': {
+            'start': 18, 'end': 20, 'policy': 'none',
+            'presets': [{'name': 'Default', 'value': [0.4012, 27.0]}],
+        },
     }
     return config
 
@@ -48,11 +67,24 @@ def get_mock_config():
                            'hand_left': 'observation.images.hand_left',
                            'hand_right': 'observation.images.hand_right'}
     config.action_layout = {
-        'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
-        'gripper': {'start': 14, 'end': 16, 'policy': 'stepwise'},
-        # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
-        # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
+        'arm': {
+            'start': 0, 'end': 14, 'policy': 'gradual',
+            'presets': {
+                'left': [{'name': 'Default', 'value': [0.0] * 7}],
+                'right': [{'name': 'Default', 'value': [0.0] * 7}],
+            },
+        },
+        'gripper': {
+            'start': 14, 'end': 16, 'policy': 'stepwise',
+            'presets': {
+                'left': [{'name': 'Default', 'value': [0.0]}],
+                'right': [{'name': 'Default', 'value': [0.0]}],
+            },
+        },
+        # 'head': {'start': 16, 'end': 18, 'policy': 'none'},
+        # 'waist': {'start': 18, 'end': 20, 'policy': 'none'},
     }
+    config.manual_arm_interval = 0.01
     config.dataset_path = '/home/robot/Music/task_39_only1'
     # config.dataset_path = '/home/robot/Music'
     return config

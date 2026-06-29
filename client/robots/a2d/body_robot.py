@@ -37,7 +37,11 @@ class RobotBody(RobotBase):
             action (array-like): Action array containing arm commands (0:14), gripper commands (14:16), and head commands (16:18)
         """
         action = np.asarray(action)
-        segments = {name: action[v['start']:v['end']] for name, v in self.action_layout.items()}
+        segments = {
+            name: action[v['start']:v['end']]
+            for name, v in self.action_layout.items()
+            if v['end'] <= action.size
+        }
         if 'arm' in segments:
             self.execute_action({'arm': segments['arm'].tolist()})
 
@@ -87,60 +91,13 @@ class RobotBody(RobotBase):
             self.robot.move_head(data['head'])
         if 'waist' in data:
             self.robot.move_waist(data['waist'])
+        if 'body' in data:
+            self.robot.move_wbc_waist(data['body'])
         if 'wheel' in data:
             self.robot.move_wheel(data['wheel'][0], data['wheel'][1])
         if 'hand' in data:
             self.robot.move_hand(data['hand'])
     
-    def reset_robot(self, target_pose=None, mode='default'):
-        """Reset the robot to its default position.
-        """
-        if target_pose is None:
-            if mode == 'default':
-                target_pose = np.array(self.cfg['reset_robot_pos'])
-            elif mode == 'zero':
-                arm_dim = self.action_layout['arm']['end'] - self.action_layout['arm']['start'] if 'arm' in self.action_layout else 14
-                target_pose = np.array([0] * arm_dim + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
-            else:
-                print('[WARN] target_pose is None, can NOT execute reset_robot')
-                return
-        else:
-            target_pose = np.array(target_pose)
-        
-        segments = {name: target_pose[v['start']:v['end']] for name, v in self.action_layout.items()}
-        # action_layout has no head and waist, but we still want to reset them to default position
-        segments['head'] = target_pose[16:18]
-        segments['waist'] = target_pose[18:20]
-        
-        current_obs = self.retrieve_observation()
-        current_positions = current_obs['obs.state'][:len(segments.get('arm', []))]
-        target_positions = segments.get('arm', target_pose[:len(current_positions)])
-        # Calculate joint position differences
-        dis = np.abs(current_positions - target_positions)
-        mask = dis > np.deg2rad(0.01)  # Decide whether to use interpolation strategy
-        # If difference is small, move directly to target position
-        if not np.any(mask):
-            if 'arm' in segments:
-                self.execute_action({'arm': target_positions.tolist()})
-            time.sleep(0.01)
-            return
-        # Otherwise plan trajectory
-        trajs = self.ruckig_planning(current_positions, target_positions)
-        for i, traj in enumerate(trajs):
-            # print(f"Executing trajectory point {i}: {traj}")
-            print(f'\r{i}', end='')
-            self.execute_action({'arm': traj})
-            time.sleep(0.01)
-
-        if 'gripper' in self.cfg['hand_type'] and 'gripper' in segments:
-            self.execute_action({self.cfg['hand_type']: segments['gripper'].tolist()})
-        if 'hand' in segments:
-            self.execute_action({'hand': segments['hand'].tolist()})
-        if 'head' in segments:
-            self.execute_action({'head': segments['head'].tolist()})
-        if 'waist' in segments:
-            self.execute_action({'waist': segments['waist'].tolist()})
-
     def retrieve_observation(self):
         """Retrieve current observation data including camera images and joint states.
         
