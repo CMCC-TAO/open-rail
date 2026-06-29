@@ -225,17 +225,21 @@ class IntraChunkSmoother():
         deg=self.config.fitting_deg 
 
         futures = []
-        x_eval = np.arange(start_time, end_time, time_step)
-        for index in joint_indices:
-            joint_chunk = action_chunk[index, :]
-            futures.append(self.joint_fitting_executor.submit(
-                self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
-            ))
-        for index in step_indices:
-            joint_chunk = action_chunk[index, :]
-            futures.append(self.gripper_fitting_executor.submit(
-                self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
-            ))
+        for name, seg in self.action_layout.items():
+            if seg['policy'] == 'none':
+                continue
+            for index in range(seg['start'], seg['end']):
+                joint_chunk = np.array(action_chunk[index, :])
+                if seg['policy'] == 'gradual':
+                    futures.append(self.joint_fitting_executor.submit(
+                        self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
+                    ))
+                elif seg['policy'] == 'stepwise':
+                    futures.append(self.gripper_fitting_executor.submit(
+                        self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
+                    ))
+                else:
+                    raise ValueError(f"Unknown policy: {seg['policy']}")
 
         results = [future.result() for future in futures]
         

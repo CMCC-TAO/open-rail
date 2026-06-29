@@ -85,7 +85,50 @@ def get_intra_chunk_config() -> ConfigDict:
 def get_inter_chunk_config() -> ConfigDict:
     config = ConfigDict()
     config.inter_chunk_mode = 'min_jerk'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync')
-    config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
+    config.search_action = get_search_action_config()
+    config.poly = get_poly_inter_chunk_config()
+    config.smooth_velocity = get_smooth_velocity_config()
+    config.min_jerk = get_min_jerk_config()
+    config.bspline = get_bspline_config()
+    config.sync = get_sync_inter_chunk_config()
+    config.common = get_inter_chunk_common_config()
+    return config
+
+def get_search_action_config() -> ConfigDict:
+    config = ConfigDict()
+    config.search_length = 100  # Forward search length. Note: if robot hesitates, increase it.
+    return config
+
+def get_poly_inter_chunk_config() -> ConfigDict:
+    config = ConfigDict()
+    config.poly_length = 30  # Transition length for polynomial blending.
+    return config
+
+def get_smooth_velocity_config() -> ConfigDict:
+    config = ConfigDict()
+    config.max_vel = 2.0
+    config.max_acc = 5.0
+    config.kp = 5.0
+    config.kd = 2.0
+    return config
+
+def get_min_jerk_config() -> ConfigDict:
+    config = ConfigDict()
+    config.blend_threshold = 0.7
+    config.adaptive_factor = -1
+    return config
+
+def get_bspline_config() -> ConfigDict:
+    config = ConfigDict()
+    config.num_control_points = 6
+    config.transition_length = 32
+    return config
+
+def get_sync_inter_chunk_config() -> ConfigDict:
+    return ConfigDict()
+
+def get_inter_chunk_common_config() -> ConfigDict:
+    config = ConfigDict()
     config.smooth_action = False  # Enable action smoothing (Beta)
     config.smooth_length = 150  # Action smoothing length
     config.smooth_base = 0.0  # Base value for action smoothing, smaller values mean more smoothing
