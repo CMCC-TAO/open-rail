@@ -95,7 +95,16 @@
   padding: 2px 8px;
   line-height: 1.2;
 }
+.robot-preset-row .robot-preset-edit {
+  flex: 0 0 auto;
+  min-width: 48px;
+  height: 36px;
+}
 .robot-preset-input:disabled {
   opacity: .6;
   cursor: not-allowed;
+}
+.preset-edit-label {
+  color: var(--text-muted);
+  font-size: var(--font-size-2);
 }

@@ -136,10 +136,12 @@
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> L</label>
                 <select id="arm-left-preset" class="input-text robot-preset-input" aria-label="Left arm preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="arm-left-preset-edit">Edit</button>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> R</label>
                 <select id="arm-right-preset" class="input-text robot-preset-input" aria-label="Right arm preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="arm-right-preset-edit">Edit</button>
               </div>
             </section>
 
@@ -154,16 +156,18 @@
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-left" checked /> L</label>
                 <select id="gripper-left-preset" class="input-text robot-preset-input" aria-label="Left gripper or hand preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="gripper-left-preset-edit">Edit</button>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-right" checked /> R</label>
                 <select id="gripper-right-preset" class="input-text robot-preset-input" aria-label="Right gripper or hand preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="gripper-right-preset-edit">Edit</button>
               </div>
             </section>
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="section-title">Head / Waist / Body</div>
+                <div class="section-title">Body</div>
                 <div class="robot-ctrl-actions-right">
                   <button class="btn btn-sm" id="btn-body-reset">Reset</button>
                   <button class="btn btn-sm" id="btn-body">Set</button>
@@ -172,29 +176,37 @@
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-head" checked /> Head</label>
                 <select id="head-preset" class="input-text robot-preset-input" aria-label="Head preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="head-preset-edit">Edit</button>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-waist" checked /> Waist</label>
                 <select id="waist-preset" class="input-text robot-preset-input" aria-label="Waist preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="waist-preset-edit">Edit</button>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-body" checked /> Body</label>
                 <select id="body-preset" class="input-text robot-preset-input" aria-label="Body preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="body-preset-edit">Edit</button>
               </div>
             </section>
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
                 <div class="section-title">Wheel / Leg</div>
-                <div class="robot-ctrl-checks-right">
-                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel-keyboard" /> Keyboard Control</label>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-wheel-reset">Reset</button>
+                  <button class="btn btn-sm" id="btn-wheel">Set</button>
                 </div>
               </div>
-              <div class="robot-ctrl-row robot-ctrl-row-actions">
-                <button class="btn btn-sm" id="btn-wheel-forward"><i class="fas fa-arrow-up"></i> Forward</button>
-                <button class="btn btn-sm" id="btn-wheel-backward"><i class="fas fa-arrow-down"></i> Backward</button>
-                <button class="btn btn-sm" id="btn-wheel-left"><i class="fas fa-rotate-left"></i> Turn Left</button>
-                <button class="btn btn-sm" id="btn-wheel-right"><i class="fas fa-rotate-right"></i> Turn Right</button>
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel" checked /> Wheel</label>
+                <select id="wheel-preset" class="input-text robot-preset-input" aria-label="Wheel preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="wheel-preset-edit">Edit</button>
+              </div>
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-leg" checked /> Leg</label>
+                <select id="leg-preset" class="input-text robot-preset-input" aria-label="Leg preset"></select>
+                <button class="btn btn-sm robot-preset-edit" id="leg-preset-edit">Edit</button>
               </div>
             </section>
 
@@ -486,6 +498,19 @@
       <div class="modal-actions">
         <button class="btn btn-primary" id="btn-saveas-confirm">Save</button>
         <button class="btn" id="btn-saveas-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ MODAL: Edit Robot Preset ═══════════════════ -->
+  <div id="modal-preset-edit" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title" id="preset-edit-title">Edit Preset</div>
+      <label class="preset-edit-label" for="preset-edit-value">Value (JSON array)</label>
+      <input id="preset-edit-value" class="input-text" type="text" spellcheck="false" />
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btn-preset-edit-confirm">Save</button>
+        <button class="btn" id="btn-preset-edit-cancel">Cancel</button>
       </div>
     </div>
   </div>

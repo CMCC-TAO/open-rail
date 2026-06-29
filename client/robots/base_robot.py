@@ -28,8 +28,16 @@ class RobotBase():
             {'arm': [0, 0, 0, 0, 0, 0], 'gripper': [0, 0], 'head': [0, 0], 'waist': [0, 0], 'wheel': [0, 0]}
         """
         raise NotImplementedError('execute_action is not implemented')
+    
+    def retrieve_observation(self):
+        """
+        Get current observation from robot
+        Returns:
+            obs: current robot observation, obs['state'] is current pose
+        """
+        raise NotImplementedError('retrieve_observation is not implemented')
 
-    def web_control_robot(self, data):
+    def _control_robot(self, data):
         """Execute manual Web controls using current values for -1000."""
         if not isinstance(data, dict):
             raise ValueError('action data must be a dict')
@@ -64,7 +72,7 @@ class RobotBase():
                 command = cfg.get('hand_type', action) if action == 'gripper' else action
                 self.execute_action({command: target_pose.tolist()})
 
-        for action in ('head', 'waist', 'body'):
+        for action in ('head', 'waist', 'body', 'wheel', 'leg'):
             if action not in data:
                 continue
             current_pose = self._current_pose(action)
@@ -89,14 +97,6 @@ class RobotBase():
         keep = target_pose == -1000
         target_pose[keep] = current_pose[keep]
         return target_pose
-
-    def retrieve_observation(self):
-        """
-        Get current observation from robot
-        Returns:
-            obs: current robot observation, obs['state'] is current pose
-        """
-        raise NotImplementedError('retrieve_observation is not implemented')
     
     @staticmethod
     def _default_preset(presets):
@@ -131,7 +131,7 @@ class RobotBase():
                     data[action] = value
 
         if len(data) > 1:
-            self.web_control_robot(data)
+            self._control_robot(data)
 
     def ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):
         """

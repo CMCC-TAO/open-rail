@@ -134,7 +134,6 @@ camera.txt
 hal.txt
 user_conf_*.py
 !user_conf_example.py
-
-# Local Codex workflow artifacts
-docs/superpowers/
+specs/
 AGENTS.md
+a2d_description
