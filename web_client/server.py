@@ -700,19 +700,11 @@ async def favicon():
 #  REST: config
 # ─────────────────────────────────────────────────────────────────────────────
 @app.get("/api/client/config/path")
-async def get_conf_file():
+async def get_conf_dir():
     """Return the absolute path of the project conf/ directory."""
     # conf_dir = ROOT / "conf" / client_state.conf_file
     return {"status": "ok", "path": str(client_state.conf_file)}
 
-class ConfFileRequest(BaseModel):
-    path: str
-@app.post("/api/client/config/path")
-async def set_conf_file(req: ConfFileRequest):
-    """Set the absolute path of the project conf/ directory."""
-    # print(f"Loading language file: {req.path}")
-    client_state.conf_file = req.path
-    return {"status": "ok", "path": str(client_state.conf_file)}
 
 @app.get("/api/client/robot/select_directory")
 async def select_directory(path: Optional[str] = None):

@@ -20,8 +20,8 @@
 
 /* Config file select dropdown */
 #conf-file-select {
-  min-width: 120px;
-  max-width: 160px;
+  min-width: 160px;
+  max-width: 200px;
   height: 28px;
   padding: 2px 8px;
   font-size: var(--font-size-2);
@@ -64,6 +64,18 @@
   display: block;
   border-color: var(--border); background: var(--bg);
   color: var(--accent);
+}
+.config-file-section {
+  flex: 0 0 auto;
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .main-params-section {
   flex: 0 0 auto;
