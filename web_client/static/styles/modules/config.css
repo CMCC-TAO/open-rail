@@ -20,8 +20,8 @@
 
 /* Config file select dropdown */
 #conf-file-select {
-  min-width: 160px;
-  max-width: 200px;
+  min-width: 120px;
+  max-width: 160px;
   height: 28px;
   padding: 2px 8px;
   font-size: var(--font-size-2);

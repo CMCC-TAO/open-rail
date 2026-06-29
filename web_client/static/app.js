@@ -435,6 +435,10 @@ async function wireEvents() {
         await loadDefaultLangFile();
         applyLangConfigSelection();
         applyVisualConfig(App.config);
+        const confRes = await apiFetch('/api/client/config/path', { 
+          method: 'POST', 
+          body: JSON.stringify({ path: selectedFile }) 
+        });
         toast(`Config ${selectedFile} loaded.`, 'ok');
       } catch (e) {
         toast('Failed to load config file.', 'error');
@@ -444,8 +448,14 @@ async function wireEvents() {
   }
 
   // Save As — modal with conf/ as default prefix
-  $('btn-saveas-file').addEventListener('click', () => {
-    $('saveas-path').value = CONF_FILE;
+  $('btn-saveas-file').addEventListener('click', async () => {
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      $('saveas-path').value = confRes.path.replace(/\.yaml$/, '_1.yaml');
+    }
+    else {
+      $('saveas-path').value = 'new_conf.yaml';
+    }
     $('modal-saveas').classList.remove('hidden');
   });
   $('btn-saveas-confirm').addEventListener('click', async () => {
@@ -479,10 +489,10 @@ async function wireEvents() {
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
-      toast(`Config ${CONF_FILE} applied.`, 'ok');
       // Auto-save after apply
       const confRes = await apiFetch('/api/client/config/path');
       if (confRes.path) {
+        toast(`Config ${confRes.path} applied.`, 'ok');
         await apiFetch('/api/client/config/save', {
           method: 'POST',
           body: JSON.stringify({ path: confRes.path }),
@@ -684,6 +694,6 @@ document.addEventListener('DOMContentLoaded', () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
     applyLangConfigSelection(true);
+    wireEvents();
   });
-  wireEvents();
 });
