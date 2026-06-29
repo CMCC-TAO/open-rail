@@ -19,7 +19,7 @@ const BASIC_SUBGROUPS = {
 
 // Select options for specific keys
 const CONFIG_SELECT_OPTIONS = {
-  inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline'],
+  inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync'],
   intra_chunk_mode: ['raw', 'interpolation', 'fitting'],
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
@@ -31,9 +31,13 @@ const CONFIG_SELECT_OPTIONS = {
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
-  'fitting_num_samples', 'search_length', 'smooth_length', 'gripper_offset',
-  'fps', 'height', 'width', 'updata_period', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
+  'fitting_num_samples', 'search_length', 'smooth_length', 'poly_length', 'transition_length', 'num_control_points', 'gripper_offset',
+  'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
+
+const CONFIG_NUMBER_RANGES = {
+  adaptive_factor: { min: -1, max: 1, step: 0.01, manualMin: 0 },
+};
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.task_id',
@@ -216,7 +220,7 @@ function syncCfgInputsByDotKey(dotKey, value, sourceInput = null) {
       setCfgInputValue(input, dotKey, value);
       input.style.borderColor = '';
 
-      if (dotKey === 'robots.type' && input.tagName === 'SELECT') {
+      if ((dotKey === 'robots.type' || dotKey === 'inter_chunk.inter_chunk_mode') && input.tagName === 'SELECT') {
         input.dispatchEvent(new Event('change'));
       }
     });
@@ -325,6 +329,7 @@ function renderConfigTree(cfg) {
   renderMainParameters(cfg);
   buildTree(cfg, '', root);
   restoreConfigTreeUiState(uiState);
+  document.dispatchEvent(new CustomEvent('app-config-updated'));
 }
 
 function buildTree(obj, prefix, parentEl) {
@@ -422,6 +427,8 @@ function buildTree(obj, prefix, parentEl) {
     // ROBOTS group: custom rendering with type-driven sub-group visibility
     if (!prefix && key === 'robots') {
       _buildRobotsGroup(val, body);
+    } else if (!prefix && key === 'inter_chunk') {
+      _buildInterChunkGroup(val, body);
     } else {
       buildTree(val, dotKey, body);
     }
@@ -527,6 +534,104 @@ function _buildRobotsGroup(obj, parentEl) {
     typeInput.addEventListener('change', () => {
       const selected = typeInput.value;
       for (const [k, el] of Object.entries(subGroupEls)) {
+        el.style.display = (k === selected) ? '' : 'none';
+      }
+    });
+  }
+}
+
+function _buildInterChunkGroup(obj, parentEl) {
+  const MODE_KEY = 'inter_chunk_mode';
+  const COMMON_KEY = 'common';
+  const currentMode = String(obj[MODE_KEY] ?? '');
+  const leaves = [];
+  const modeGroups = [];
+  let commonGroup = null;
+
+  for (const [k, v] of Object.entries(obj)) {
+    const isGroup = v !== null && typeof v === 'object' && !Array.isArray(v);
+    if (isGroup) {
+      if (k === COMMON_KEY) commonGroup = [k, v];
+      else modeGroups.push([k, v]);
+    } else {
+      leaves.push([k, v]);
+    }
+  }
+
+  const modeEntry = leaves.find(([k]) => k === MODE_KEY);
+  const otherLeaves = leaves.filter(([k]) => k !== MODE_KEY);
+  const orderedLeaves = modeEntry ? [modeEntry, ...otherLeaves] : otherLeaves;
+  const knownModes = modeGroups.map(([k]) => k);
+
+  let modeInput = null;
+  for (const [k, v] of orderedLeaves) {
+    const dotKey = `inter_chunk.${k}`;
+    const row = document.createElement('div');
+    row.className = 'cfg-row';
+    row.dataset.key = dotKey;
+
+    const keyEl = document.createElement('div');
+    keyEl.className = 'cfg-key';
+    keyEl.title = dotKey;
+    keyEl.textContent = k;
+
+    const valEl = document.createElement('div');
+    valEl.className = 'cfg-value';
+
+    let input;
+    if (k === MODE_KEY && knownModes.length > 0) {
+      input = document.createElement('select');
+      knownModes.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt;
+        o.textContent = opt;
+        if (opt === currentMode) o.selected = true;
+        input.appendChild(o);
+      });
+      modeInput = input;
+    } else {
+      input = document.createElement('input');
+      input.type = 'text';
+      input.value = v === null ? '' : String(v);
+    }
+    input.className = 'input-text';
+    input.addEventListener('input', () => onCfgChange(dotKey, input, v));
+    input.addEventListener('change', () => onCfgChange(dotKey, input, v));
+    valEl.appendChild(input);
+    row.appendChild(keyEl);
+    row.appendChild(valEl);
+    parentEl.appendChild(row);
+  }
+
+  const modeGroupEls = {};
+  for (const [k, v] of modeGroups) {
+    const dotKey = `inter_chunk.${k}`;
+    const body = document.createElement('div');
+    body.className = 'cfg-group-body';
+    buildTree(v, dotKey, body);
+    const groupEl = buildGroupFromEl(k, body);
+    groupEl.dataset.interChunkMode = k;
+    groupEl.setAttribute('data-inter-chunk-mode', k);
+    groupEl.style.display = (k === currentMode) ? '' : 'none';
+    modeGroupEls[k] = groupEl;
+    parentEl.appendChild(groupEl);
+  }
+
+  if (commonGroup) {
+    const [k, v] = commonGroup;
+    const body = document.createElement('div');
+    body.className = 'cfg-group-body';
+    buildTree(v, `inter_chunk.${k}`, body);
+    const groupEl = buildGroupFromEl(k, body);
+    groupEl.dataset.interChunkCommon = 'true';
+    groupEl.setAttribute('data-inter-chunk-common', 'true');
+    parentEl.appendChild(groupEl);
+  }
+
+  if (modeInput) {
+    modeInput.addEventListener('change', () => {
+      const selected = modeInput.value;
+      for (const [k, el] of Object.entries(modeGroupEls)) {
         el.style.display = (k === selected) ? '' : 'none';
       }
     });
@@ -745,6 +850,14 @@ function createCfgRow(dotKey, label, value) {
   } else if (Array.isArray(value)) {
     input = document.createElement('input');
     input.type = 'text'; input.value = JSON.stringify(value); input.title = 'JSON array';
+  } else if (CONFIG_NUMBER_RANGES[bareKey]) {
+    const range = CONFIG_NUMBER_RANGES[bareKey];
+    input = document.createElement('input');
+    input.type = 'number';
+    input.min = String(range.min);
+    input.max = String(range.max);
+    input.step = String(range.step);
+    input.value = value === null ? '' : String(Number(value));
   } else if (CONFIG_INT_KEYS.has(bareKey)) {
     input = document.createElement('input');
     input.type = 'number'; input.step = '1'; input.value = value === null ? '' : String(Math.round(Number(value)));
@@ -801,6 +914,15 @@ function onCfgChange(dotKey, input, originalValue) {
   let parsed;
   if (typeof originalValue === 'boolean') {
     parsed = raw === 'true';
+  } else if (CONFIG_NUMBER_RANGES[bareKey]) {
+    parsed = Number(raw);
+    const range = CONFIG_NUMBER_RANGES[bareKey];
+    const manualMin = range.manualMin ?? range.min;
+    const isAutoSentinel = parsed === -1;
+    if (isNaN(parsed) || parsed < range.min || parsed > range.max || (!isAutoSentinel && parsed < manualMin)) {
+      input.style.borderColor = 'var(--danger)';
+      return;
+    }
   } else if (CONFIG_INT_KEYS.has(bareKey)) {
     parsed = parseInt(raw, 10);
     if (isNaN(parsed)) { input.style.borderColor = 'var(--danger)'; return; }
@@ -944,7 +1066,7 @@ function filterConfigTree(query) {
   $('config-tree').querySelectorAll('.cfg-group').forEach(g => {
     // Robot type sub-groups (data-robot-type) are controlled exclusively by the
     // type select in _buildRobotsGroup; never let the filter override their visibility.
-    if (g.dataset.robotType) return;
+    if (g.dataset.robotType || g.dataset.interChunkMode) return;
     if (!q) { g.style.display = ''; return; }
     const body = g.querySelector('.cfg-group-body');
     if (!body) return;
