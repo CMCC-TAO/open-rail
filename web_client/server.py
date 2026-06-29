@@ -1891,6 +1891,21 @@ class PositionRequest(BaseModel):
     pos: Optional[list[float]] = None
 
 
+class ManualControlRequest(BaseModel):
+    source: str = "manual"
+    l_arm: Optional[list[float]] = None
+    r_arm: Optional[list[float]] = None
+    l_gripper: Optional[list[float]] = None
+    r_gripper: Optional[list[float]] = None
+    l_hand: Optional[list[float]] = None
+    r_hand: Optional[list[float]] = None
+    l_hand_as_gripper: Optional[list[float]] = None
+    r_hand_as_gripper: Optional[list[float]] = None
+    head: Optional[list[float]] = None
+    waist: Optional[list[float]] = None
+    body: Optional[list[float]] = None
+
+
 class LanguageSetRequest(BaseModel):
     language: str = ""
 
@@ -1919,6 +1934,23 @@ def _run_control_action(command: str, action: str, pos):
     return {"status": "ok", "command": command}
 
 
+async def _run_web_control(command: str, req: ManualControlRequest):
+    _, robot = _require_runtime(command)
+    if robot.current_state is None:
+        raise HTTPException(400, 'Current robot state is unavailable. Start observation first.')
+    data = {
+        name: value for name, value in vars(req).items()
+        if value is not None
+    }
+    try:
+        await asyncio.to_thread(robot.web_control_robot, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
+    return {"status": "ok", "command": command}
+
+
 @app.post('/api/client/control/reset')
 async def client_control_reset():
     vla_client, robot = _require_runtime('reset')
@@ -1936,23 +1968,20 @@ async def client_control_reset():
 
 
 @app.post('/api/client/control/arm')
-async def client_control_arm(req: PositionRequest):
-    return _run_control_action('arm', 'arm', _safe_pos(req.pos, [0.0] * 14))
+async def client_control_arm(req: ManualControlRequest):
+    return await _run_web_control('arm', req)
 
 
 @app.post('/api/client/control/gripper')
-async def client_control_gripper(req: PositionRequest):
-    return _run_control_action('gripper', 'gripper', _safe_pos(req.pos, [0.0, 0.0]))
+async def client_control_gripper(req: ManualControlRequest):
+    return await _run_web_control('gripper', req)
 
 
 @app.post('/api/client/control/head')
-async def client_control_head(req: PositionRequest):
-    return _run_control_action('head', 'head', _safe_pos(req.pos, [0.0, 0.436, 0.0]))
-
-
 @app.post('/api/client/control/waist')
-async def client_control_waist(req: PositionRequest):
-    return _run_control_action('waist', 'waist', _safe_pos(req.pos, [0.0, 0.297, 0.0]))
+@app.post('/api/client/control/body')
+async def client_control_body(req: ManualControlRequest):
+    return await _run_web_control('body', req)
 
 
 @app.post('/api/client/control/wheel')

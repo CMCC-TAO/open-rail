@@ -221,6 +221,8 @@ class IntraChunkSmoother():
 
         futures = []
         for name, seg in self.action_layout.items():
+            if seg['policy'] == 'none':
+                continue
             for index in range(seg['start'], seg['end']):
                 joint_chunk = np.array(action_chunk[index, :])
                 if seg['policy'] == 'gradual':

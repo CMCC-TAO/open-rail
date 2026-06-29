@@ -300,6 +300,7 @@ function renderConfigTree(cfg) {
   renderMainParameters(cfg);
   buildTree(cfg, '', root);
   restoreConfigTreeUiState(uiState);
+  document.dispatchEvent(new CustomEvent('app-config-updated'));
 }
 
 

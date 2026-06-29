@@ -180,6 +180,8 @@ def parse_action_layout(action_layout):
     Args:
         action_layout (dict): A dictionary describing the action layout.
             Example: {'arm': {'start': 0, 'end': 7, 'policy': 'gradual'}, 'gripper': {'start': 7, 'end': 8, 'policy': 'stepwise'}}
+            Segments with policy 'none' are excluded from the model action and
+            must appear after all gradual/stepwise segments.
 
     Returns:
         tuple[int, list[int], list[int]]: A tuple containing:
@@ -187,13 +189,23 @@ def parse_action_layout(action_layout):
             - gradual_indices (list[int]): Action indices for the 'gradual' policy.
             - stepwise_indices (list[int]): Action indices for the 'stepwise' policy.
     """
-    action_dim = max([v['end'] for v in action_layout.values()]) if action_layout else 0
+    action_dim = 0
     gradual_indices, stepwise_indices = [], []
-    for v in action_layout.values():
-        if v['policy'] == 'gradual':
+    seen_none = False
+    for _, v in sorted(action_layout.items(), key=lambda item: item[1]['start']):
+        policy = v['policy']
+        if policy == 'none':
+            seen_none = True
+            continue
+        if seen_none:
+            raise ValueError('none policy segments must be trailing')
+        action_dim = max(action_dim, v['end'])
+        if policy == 'gradual':
             gradual_indices.extend(range(v['start'], v['end']))
-        elif v['policy'] == 'stepwise':
+        elif policy == 'stepwise':
             stepwise_indices.extend(range(v['start'], v['end']))
+        else:
+            raise ValueError(f'unknown action policy: {policy}')
     return action_dim, gradual_indices, stepwise_indices
 
 def command_prompt(info: dict):
