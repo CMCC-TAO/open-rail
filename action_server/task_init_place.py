@@ -37,9 +37,16 @@ class InitPlaceHandler(AbstractTaskHandler):
 
     流程:
         1. 获取当前手掌状态（保持物体不松手）
-        2. reset_robot 到安全抬臂姿态（手掌不变）
-        3. reset_robot 到默认抓取姿态（手掌不变，为放置做准备）
-        4. 完成
+        2. 读取 grasp_state，决定初始化哪只手
+        3. reset_robot 到安全抬臂姿态（手掌不变）
+        4. reset_robot 到默认抓取姿态（手掌不变，为放置做准备）
+        5. 完成
+
+    grasp_state 驱动:
+        - [True, True]  → 双臂初始化（原行为）
+        - [True, False] → 左手初始化，右手保持当前位置
+        - [False, True] → 右手初始化，左手保持当前位置
+        - [False, False] → 报错：无物体可放置
     """
 
     @property
@@ -65,6 +72,48 @@ class InitPlaceHandler(AbstractTaskHandler):
         # 兜底：全开（安全值）
         return np.zeros(12, dtype=float)
 
+    def _get_current_full_state(self, robot_body) -> np.ndarray | None:
+        """获取当前 26 维完整状态（优先从 action 缓存读取，用于确定非移动臂位姿）
+
+        优先级:
+          1. Action 缓存 — /joint_action + /left_hand/set_angle + /right_hand/set_angle
+          2. robot_body.current_state（VLA 观察线程缓存）
+        """
+        # 优先级 1: 从 action 订阅缓存读取
+        try:
+            robot = robot_body.robot
+            la = robot.latest_left_arm_action
+            ra = robot.latest_right_arm_action
+            lh = robot.latest_left_hand_action
+            rh = robot.latest_right_hand_action
+            if all(x is not None for x in (la, ra, lh, rh)):
+                la_msg, _ = la
+                ra_msg, _ = ra
+                lh_msg, _ = lh
+                rh_msg, _ = rh
+                if (la_msg and ra_msg and lh_msg and rh_msg
+                        and la_msg.position and ra_msg.position
+                        and lh_msg.position and rh_msg.position):
+                    return np.array(
+                        list(la_msg.position)
+                        + list(ra_msg.position)
+                        + list(lh_msg.position)
+                        + list(rh_msg.position),
+                        dtype=float,
+                    )
+        except Exception:
+            pass
+
+        # 优先级 2: 使用 VLA 缓存的状态
+        try:
+            cs = getattr(robot_body, 'current_state', None)
+            if cs is not None:
+                return cs.copy()
+        except Exception:
+            pass
+
+        return None
+
     def execute(self, goal_handle, params: dict, context: Any) -> TaskResult:
         robot_body = context.robot_body
         default_pose = _get_default_pose(context)
@@ -85,26 +134,53 @@ class InitPlaceHandler(AbstractTaskHandler):
             # ===== 步骤 2: 获取当前手掌状态（保持抓取物体）=====
             hands = self._get_current_hands(robot_body)
 
-            # ===== 步骤 3: 过渡到安全中间姿态（抬臂，手掌不变）=====
-            self.send_feedback(goal_handle, 30, "正在过渡到安全中间姿态...")
-            safe_pose = np.array([
-                *_SAFE_LEFT_ARM,
-                *_SAFE_RIGHT_ARM,
-                *hands,
-            ])
+            # ===== 步骤 3: 读取 grasp_state，决定初始化哪只手 =====
+            grasp_state = context.grasp_detector.grasp_state  # [left_grasped, right_grasped]
+
+            # 获取当前完整状态（非移动臂保持原位）
+            current_state = self._get_current_full_state(robot_body)
+            if current_state is None:
+                err_msg = f"{ERR_MSG[ERR_INIT_PLACE_FAILED]}: 无法获取当前机器人状态"
+                self.send_feedback(goal_handle, 0, err_msg)
+                return TaskResult(False, error_code=ERR_INIT_PLACE_FAILED, error_message=err_msg)
+
+            if grasp_state[0] and grasp_state[1]:
+                # 双手都抓了 → 双臂过渡到默认姿态
+                safe_left, safe_right = _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM
+                target_left = default_pose[0:7]
+                target_right = default_pose[7:14]
+                side_label = "双手"
+            elif grasp_state[0]:
+                # 左手抓了 → 左手过渡，右手保持当前位姿
+                safe_left = _SAFE_LEFT_ARM
+                safe_right = current_state[7:14]
+                target_left = default_pose[0:7]
+                target_right = current_state[7:14]
+                side_label = "左手"
+            elif grasp_state[1]:
+                # 右手抓了 → 右手过渡，左手保持当前位姿
+                safe_left = current_state[0:7]
+                safe_right = _SAFE_RIGHT_ARM
+                target_left = current_state[0:7]
+                target_right = default_pose[7:14]
+                side_label = "右手"
+            else:
+                err_msg = f"{ERR_MSG[ERR_INIT_PLACE_FAILED]}: 未检测到任何手部抓取物体"
+                self.send_feedback(goal_handle, 0, err_msg)
+                return TaskResult(False, error_code=ERR_INIT_PLACE_FAILED, error_message=err_msg)
+
+            # ===== 步骤 4: 过渡到安全中间姿态（抬臂，手掌不变）=====
+            self.send_feedback(goal_handle, 30, f"正在过渡到安全中间姿态（{side_label}）...")
+            safe_pose = np.array([*safe_left, *safe_right, *hands])
             robot_body.reset_robot(target_pose=safe_pose)
 
-            # ===== 步骤 4: 过渡到默认抓取姿态（手掌不变）=====
-            self.send_feedback(goal_handle, 60, "正在过渡到默认抓取姿态...")
-            target_pose = np.array([
-                *default_pose[0:7],
-                *default_pose[7:14],
-                *hands,
-            ])
+            # ===== 步骤 5: 过渡到默认抓取姿态（抓物臂到默认，非移动臂保持）=====
+            self.send_feedback(goal_handle, 60, f"正在过渡到默认抓取姿态（{side_label}）...")
+            target_pose = np.array([*target_left, *target_right, *hands])
             robot_body.reset_robot(target_pose=target_pose)
 
-            # ===== 步骤 5: 完成 =====
-            self.send_feedback(goal_handle, 100, "放置初始化完成，机器人已就绪")
+            # ===== 步骤 6: 完成 =====
+            self.send_feedback(goal_handle, 100, f"放置初始化完成（{side_label}）")
             return TaskResult(True, error_code=ERR_SUCCESS, error_message=ERR_MSG[ERR_SUCCESS])
 
         except Exception as e:

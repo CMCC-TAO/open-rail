@@ -169,15 +169,6 @@ AVAILABLE_TASKS = {
         },
     },
     "16": {
-        "name": "finish place",
-        "desc": "放置完成复位 — reset_robot 经安全中间姿态过渡到垂直复位姿态",
-        "params": {
-            "task": "finish place",
-            "target": "none",
-            "waypoint": "none",
-        },
-    },
-    "17": {
         "name": "left hand release",
         "desc": "左手松手 — 左手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -186,7 +177,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "18": {
+    "17": {
         "name": "right hand release",
         "desc": "右手松手 — 右手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -195,7 +186,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "19": {
+    "18": {
         "name": "both hand release",
         "desc": "双手松手 — 双手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -204,7 +195,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "20": {
+    "19": {
         "name": "left arm reset",
         "desc": "左手复位 — 3s 线性插值到左复位姿态 [0,0.3,0,1.3,0,0,0]，手掌不变",
         "params": {
@@ -213,7 +204,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "21": {
+    "20": {
         "name": "right arm reset",
         "desc": "右手复位 — 3s 线性插值到右复位姿态 [0,-0.3,0,1.3,0,0,0]，手掌不变",
         "params": {
@@ -222,7 +213,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "22": {
+    "21": {
         "name": "both arm reset",
         "desc": "双手复位 — 3s 线性插值双臂同时到复位姿态，手掌不变",
         "params": {
@@ -266,23 +257,22 @@ TASK_GROUPS = [
             ("13", "one arm place"),
             ("14", "both arm place"),
             ("15", "init place"),
-            ("16", "finish place"),
         ],
     },
     {
         "title": "release",
         "items": [
-            ("17", "left hand release"),
-            ("18", "right hand release"),
-            ("19", "both hand release"),
+            ("16", "left hand release"),
+            ("17", "right hand release"),
+            ("18", "both hand release"),
         ],
     },
     {
         "title": "reset",
         "items": [
-            ("20", "left arm reset"),
-            ("21", "right arm reset"),
-            ("22", "both arm reset"),
+            ("19", "left arm reset"),
+            ("20", "right arm reset"),
+            ("21", "both arm reset"),
         ],
     },
 ]

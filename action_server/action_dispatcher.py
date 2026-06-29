@@ -359,7 +359,8 @@ class ObsDataBridge:
             "cam.hand_left": 1,
             "cam.hand_right": 2,
         }
-        last_cam_ts = 0.0
+        last_push_time = 0.0   # 上次推送的 wall clock 时间（用于限流）
+        last_ros_ts = 0.0      # 上次推送的 ROS 时间戳（用于去重）
         last_state_ts = 0.0
         last_grasp_ts = 0.0
 
@@ -370,12 +371,20 @@ class ObsDataBridge:
                 now = time.time()
 
                 # ── 相机帧 ──
+                #   root cause: 原代码用 last_cam_ts = head_ts（ROS 时间戳）
+                #   同时作为去重和限流的基准，但 now - ROS_timestamp 可正可负
+                #   （ROS 时钟与系统时钟不同步），导致条件永远无法满足。
+                #   修复：去重用 ROS 时间戳，限流用 wall clock，各自独立
                 if cam is not None:
                     cam_data = cam.get_latest_image()
                     if cam_data is not None:
                         head_img, head_ts, left_img, left_ts, right_img, right_ts = cam_data
-                        if head_ts != last_cam_ts and now - last_cam_ts >= 0.033:
-                            last_cam_ts = head_ts
+
+                        # 条件1：ROS 时间戳变化（新帧去重）
+                        # 条件2：距离上次推送 >= 33ms（wall clock 限流）
+                        if head_ts != last_ros_ts and now - last_push_time >= 0.033:
+                            last_push_time = now
+                            last_ros_ts = head_ts
                             for cam_key, cam_id in camera_id_map.items():
                                 img = None
                                 if cam_key == "cam.head" and head_img is not None:
@@ -563,12 +572,6 @@ class VLAActionDispatcher(Node):
             self.register_handler(InitPlaceHandler())
         except ImportError as e:
             self.get_logger().warn(f'Failed to load init_place handler: {e}')
-
-        try:
-            from action_server.task_finish_place import FinishPlaceHandler
-            self.register_handler(FinishPlaceHandler())
-        except ImportError as e:
-            self.get_logger().warn(f'Failed to load finish_place handler: {e}')
 
         try:
             from action_server.task_release import ReleaseHandler

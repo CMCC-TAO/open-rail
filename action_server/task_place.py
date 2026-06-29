@@ -57,10 +57,24 @@ LEFT_RETRACT_POSE  = np.array([0.5,  0.1, 0.0, 0.0, 0.0, -0.8, 0.0])
 RIGHT_RETRACT_POSE = np.array([0.5, -0.1, 0.0, 0.0, 0.0, -0.8, 0.0])
 
 # ==============================================
+# 安全中间姿态（与 task_init_grasp.py 一致）
+# ==============================================
+_SAFE_LEFT_ARM = np.array([1.5,   0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
+_SAFE_RIGHT_ARM = np.array([1.5, -0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
+
+# ==============================================
+# 垂直复位姿态（与 task_reset.py 一致）
+# ==============================================
+_LEFT_RESET_POSE = np.array([0, 0.3, 0, 1.3, 0, 0, 0])
+_RIGHT_RESET_POSE = np.array([0, -0.3, 0, 1.3, 0, 0, 0])
+
+# ==============================================
 # 时间常量
 # ==============================================
 ARM_INTERPOLATION_TIME = 3.0   # 手臂线性插值时长（秒）
 ARM_RETRACT_TIME = 3.0          # 放置后手臂回缩时长（秒）
+ARM_SAFE_TIME = 4.0             # 手臂安全姿态过渡时长（秒）
+ARM_RESET_TIME = 4.0            # 手臂垂直复位时长（秒）
 HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
 CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
 
@@ -242,70 +256,124 @@ class PlaceHandler(AbstractTaskHandler):
     # ================================================================
 
     def _left_arm_place(self, goal_handle, context) -> TaskResult:
-        """左手放置：
-          1. 3s 线性插值 → 左边放置位姿
+        """左手放置 + 放置后复位
+
+        完整序列:
+          1. 3s 线性插值 → 左放置位姿
           2. 左手手掌全开，维持 1s
+          3. 3s 线性插值 → 左回缩位姿
+          4. 3s 线性插值 → 左安全中间姿态
+          5. 3s 线性插值 → 左垂直复位姿态
         """
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "左手放置开始")
 
+        # 1. 3s 线性插值 → 放置位姿
         current_state = self._linear_interpolate_arms(
             robot_body,
             left_target=LEFT_PLACE_POSE,
             right_target=None,
             duration=ARM_INTERPOLATION_TIME,
             goal_handle=goal_handle,
-            start_progress=10, end_progress=90,
+            start_progress=10, end_progress=50,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
                               error_message="Failed to get current robot state for left arm place")
 
+        # 2. 打开左手，保持
         self._open_hand_and_hold(robot_body, 'left', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
-        # 3. 1s 手臂回缩到安全位置
+        # 3. 手臂回缩到安全位置
         self._linear_interpolate_arms(
             robot_body,
             left_target=LEFT_RETRACT_POSE,
             right_target=None,
             duration=ARM_RETRACT_TIME,
             goal_handle=goal_handle,
-            start_progress=95, end_progress=99,
+            start_progress=55, end_progress=70,
+        )
+
+        # 4. 过渡到安全中间姿态
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=_SAFE_LEFT_ARM,
+            right_target=None,
+            duration=ARM_SAFE_TIME,
+            goal_handle=goal_handle,
+            start_progress=75, end_progress=88,
+        )
+
+        # 5. 过渡到垂直复位姿态
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=_LEFT_RESET_POSE,
+            right_target=None,
+            duration=ARM_RESET_TIME,
+            goal_handle=goal_handle,
+            start_progress=90, end_progress=99,
         )
 
         send_vla_feedback(goal_handle, 100, "左手放置完成")
         return TaskResult(True)
 
     def _right_arm_place(self, goal_handle, context) -> TaskResult:
-        """右手放置：
-          1. 3s 线性插值 → 右边放置位姿
+        """右手放置 + 放置后复位
+
+        完整序列:
+          1. 3s 线性插值 → 右放置位姿
           2. 右手手掌全开，维持 1s
+          3. 3s 线性插值 → 右回缩位姿
+          4. 3s 线性插值 → 右安全中间姿态
+          5. 3s 线性插值 → 右垂直复位姿态
         """
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "右手放置开始")
 
+        # 1. 3s 线性插值 → 放置位姿
         current_state = self._linear_interpolate_arms(
             robot_body,
             left_target=None,
             right_target=RIGHT_PLACE_POSE,
             duration=ARM_INTERPOLATION_TIME,
             goal_handle=goal_handle,
-            start_progress=10, end_progress=90,
+            start_progress=10, end_progress=50,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
                               error_message="Failed to get current robot state for right arm place")
 
+        # 2. 打开右手，保持
         self._open_hand_and_hold(robot_body, 'right', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
-        # 3. 1s 手臂回缩到安全位置
+        # 3. 手臂回缩到安全位置
         self._linear_interpolate_arms(
             robot_body,
             left_target=None,
             right_target=RIGHT_RETRACT_POSE,
             duration=ARM_RETRACT_TIME,
             goal_handle=goal_handle,
-            start_progress=95, end_progress=99,
+            start_progress=55, end_progress=70,
+        )
+
+        # 4. 过渡到安全中间姿态
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=None,
+            right_target=_SAFE_RIGHT_ARM,
+            duration=ARM_SAFE_TIME,
+            goal_handle=goal_handle,
+            start_progress=75, end_progress=88,
+        )
+
+        # 5. 过渡到垂直复位姿态
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=None,
+            right_target=_RIGHT_RESET_POSE,
+            duration=ARM_RESET_TIME,
+            goal_handle=goal_handle,
+            start_progress=90, end_progress=99,
         )
 
         send_vla_feedback(goal_handle, 100, "右手放置完成")
@@ -326,7 +394,16 @@ class PlaceHandler(AbstractTaskHandler):
                               error_message="Both hands are empty, cannot do one arm place")
 
     def _both_arm_place(self, goal_handle, context) -> TaskResult:
-        """双手放置：两只手必须同时有物体"""
+        """双手放置 + 放置后复位
+
+        完整序列:
+          1. 3s 线性插值 → 双臂放置位姿
+          2. 同时打开双手，维持 1s
+          3. 等待 0.5s 检测是否所有物体已放下
+          4. 3s 线性插值 → 双臂回缩位姿
+          5. 3s 线性插值 → 双臂安全中间姿态
+          6. 3s 线性插值 → 双臂垂直复位姿态
+        """
         grasp_state = context.grasp_detector.grasp_state  # [left_grasped, right_grasped]
 
         if not (grasp_state[0] and grasp_state[1]):
@@ -344,7 +421,7 @@ class PlaceHandler(AbstractTaskHandler):
             right_target=RIGHT_PLACE_POSE,
             duration=ARM_INTERPOLATION_TIME,
             goal_handle=goal_handle,
-            start_progress=10, end_progress=85,
+            start_progress=10, end_progress=45,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
@@ -357,9 +434,39 @@ class PlaceHandler(AbstractTaskHandler):
         time.sleep(0.5)
         final_grasp_state = context.grasp_detector.grasp_state
         if final_grasp_state[0] or final_grasp_state[1]:
-            send_vla_feedback(goal_handle, 98, "有一只手未能放下物体")
+            send_vla_feedback(goal_handle, 50, "有一只手未能放下物体")
             return TaskResult(False, error_code=ERR_PLACE_ONE_HAND_STILL_HOLDING,
                               error_message="One hand still holding object after both arm place")
+
+        # 4. 双臂回缩
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=LEFT_RETRACT_POSE,
+            right_target=RIGHT_RETRACT_POSE,
+            duration=ARM_RETRACT_TIME,
+            goal_handle=goal_handle,
+            start_progress=55, end_progress=70,
+        )
+
+        # 5. 双臂过渡到安全中间姿态
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=_SAFE_LEFT_ARM,
+            right_target=_SAFE_RIGHT_ARM,
+            duration=ARM_SAFE_TIME,
+            goal_handle=goal_handle,
+            start_progress=75, end_progress=88,
+        )
+
+        # 6. 双臂过渡到垂直复位姿态
+        self._linear_interpolate_arms(
+            robot_body,
+            left_target=_LEFT_RESET_POSE,
+            right_target=_RIGHT_RESET_POSE,
+            duration=ARM_RESET_TIME,
+            goal_handle=goal_handle,
+            start_progress=90, end_progress=99,
+        )
 
         send_vla_feedback(goal_handle, 100, "双手放置完成")
         return TaskResult(True)

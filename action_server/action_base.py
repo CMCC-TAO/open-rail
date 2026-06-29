@@ -54,8 +54,6 @@ ERR_PLACE_RIGHT_EMPTY = 34
 ERR_PLACE_ONE_HAND_BOTH_EMPTY = 35
 ERR_PLACE_BOTH_HAND_NOT_BOTH = 36
 ERR_PLACE_ONE_HAND_STILL_HOLDING = 37
-# task_finish_place 专用 (38)
-ERR_FINISH_PLACE_FAILED = 38
 
 # task_reset 专用 (41)
 ERR_RESET_NO_STATE = 41
@@ -105,9 +103,6 @@ ERR_MSG = {
     ERR_PLACE_ONE_HAND_BOTH_EMPTY: "Both hands are empty but one arm place requested",
     ERR_PLACE_BOTH_HAND_NOT_BOTH: "Not both hands have objects but both arm place requested",
     ERR_PLACE_ONE_HAND_STILL_HOLDING: "One hand still holding object after both arm place",
-
-    # task_finish_place 专用
-    ERR_FINISH_PLACE_FAILED: "Finish place failed",
 
     # task_reset 专用
     ERR_RESET_NO_STATE: "Failed to get current robot state for arm reset",
