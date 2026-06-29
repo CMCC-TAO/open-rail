@@ -162,11 +162,6 @@ function setupLangPanel() {
     if (winSizeInput) winSizeInput.disabled = !enabled;
   };
 
-  const getConfigSavePath = () => {
-    const display = $('conf-path-display');
-    return (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-  };
-
   const persistLanguagePatch = async (patch) => {
     if (!App.config || typeof App.config !== 'object') App.config = {};
     if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
@@ -190,11 +185,11 @@ function setupLangPanel() {
       Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
       if (!Object.keys(App.pendingPatch).length) clearPending();
 
-      const path = getConfigSavePath();
-      if (path) {
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
         await apiFetch('/api/client/config/save', {
           method: 'POST',
-          body: JSON.stringify({ path }),
+          body: JSON.stringify({ path: confRes.path }),
         });
       }
       return true;
@@ -510,10 +505,12 @@ $('lang-file-input').addEventListener('change', async (e) => {
       delete App.pendingPatch['language.file_path'];
       if (!Object.keys(App.pendingPatch).length) clearPending();
 
-      const display = $('conf-path-display');
-      const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-      if (cfgPath) {
-        await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          body: JSON.stringify({ path: confRes.path }),
+        });
       }
     } catch (_) {
       App.pendingPatch['language.file_path'] = path;

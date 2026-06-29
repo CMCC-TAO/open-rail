@@ -113,12 +113,11 @@ async function handleAutoModeCompletion(progress, subTaskId = null) {
     });
     App.config = patchRes.config || App.config;
 
-    const display = $('conf-path-display');
-    const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-    if (cfgPath) {
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
       await apiFetch('/api/client/config/save', {
         method: 'POST',
-        body: JSON.stringify({ path: cfgPath }),
+        body: JSON.stringify({ path: confRes.path }),
       });
     }
 
@@ -382,7 +381,7 @@ function _confRelPath(fullPath) {
 
 /**
  * 初始化并绑定页面中各功能面板的事件处理程序
- * - 配置面板：支持通过文件选择器加载配置、保存、另存为、搜索过滤、应用待改动、重置为服务器配置；加载成功后渲染配置树与语言预设，并在界面上显示配置相对路径
+ * - 配置面板：支持下拉选择配置文件、保存、另存为、搜索过滤、应用待改动、重置为服务器配置；加载成功后渲染配置树与语言预设，并在界面上显示配置相对路径
  * - 布局控制：支持折叠配置面板并动态调整主布局列宽
  * - 运行控制：绑定客户端的 Start/Stop/Pause/Resume/Reset 按钮，必要时在启动前自动提交待改动补丁
  * - 数据录制/回放：切换录制状态、选择回放目录并发送回放命令，同时在界面上显示选择的目录
@@ -393,42 +392,60 @@ function _confRelPath(fullPath) {
  * @returns {void} 无返回值
  * @throws {Error} 当必需的 DOM 元素缺失导致事件绑定失败，或个别未被内部捕获的 API/渲染异常发生时可能抛出错误
  */
-function wireEvents() {
-  // Config file bar — Load via file picker
-  $('conf-file-input').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    // const path = file.path;
-    const path = file.name;
-    // console.log('[DEBUG] file.path:', file.path, 'webkitRelativePath:', file.webkitRelativePath, 'name:', file.name, '-> resolved path:', path);
-    // const path = file.path || null;
+async function wireEvents() {
+  // Config file dropdown — load selected config
+  const confSelect = $('conf-file-select');
+  if (confSelect) {
+    // Load available yaml files
     try {
-      const res = await apiFetch('/api/client/config/load', { method: 'POST', body: JSON.stringify({ path }) });
-      App.config = res.config || {}; App.pendingPatch = {};
-      clearPending();
-      renderConfigTree(App.config);
-      renderRecordingConfigTree(App.config);
-      await loadDefaultLangFile();
-      applyLangConfigSelection();
-      applyVisualConfig(App.config);
-      // Show relative path from /conf onward
-      const display = $('conf-path-display');
-      if (display) {
-        const rel = _confRelPath(path);
-        display.textContent = rel;
-        display.title = path;
-        display.dataset.fullPath = path;
+      const res = await apiFetch('/api/client/config/yaml_files');
+      const files = res.files || [];
+      // confSelect.innerHTML = '<option value="">-- Select Config File --</option>';
+      files.forEach(file => {
+        const option = document.createElement('option');
+        option.value = file;
+        option.textContent = file;
+        confSelect.appendChild(option);
+      });
+      
+      // Set default value from CONF_FILE
+      const defaultFile = String(CONF_FILE).split('/').pop();
+      if (files.includes(defaultFile)) {
+        confSelect.value = defaultFile;
       }
-      toast('Config file loaded.', 'ok');
-    } catch (e) { /* toasted */ }
-    e.target.value = '';
-  });
+    } catch (e) {
+      console.error('Failed to load yaml files:', e);
+    }
+
+    // Handle config file selection change
+    confSelect.addEventListener('change', async (e) => {
+      const selectedFile = e.target.value;
+      if (!selectedFile) return;
+      
+      try {
+        const res = await apiFetch('/api/client/config/load', { 
+          method: 'POST', 
+          body: JSON.stringify({ path: selectedFile }) 
+        });
+        App.config = res.config || {}; 
+        App.pendingPatch = {};
+        clearPending();
+        renderConfigTree(App.config);
+        renderRecordingConfigTree(App.config);
+        await loadDefaultLangFile();
+        applyLangConfigSelection();
+        applyVisualConfig(App.config);
+        toast(`Config ${selectedFile} loaded.`, 'ok');
+      } catch (e) {
+        toast('Failed to load config file.', 'error');
+        console.error(e);
+      }
+    });
+  }
 
   // Save As — modal with conf/ as default prefix
   $('btn-saveas-file').addEventListener('click', () => {
-    const display = $('conf-path-display');
-    const current = (display && display.dataset.fullPath) || '';
-    $('saveas-path').value = current;
+    $('saveas-path').value = CONF_FILE;
     $('modal-saveas').classList.remove('hidden');
   });
   $('btn-saveas-confirm').addEventListener('click', async () => {
@@ -436,10 +453,8 @@ function wireEvents() {
     if (!path) return;
     $('modal-saveas').classList.add('hidden');
     try {
-      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
-      const display = $('conf-path-display');
-      if (display) { display.textContent = _confRelPath(path); display.title = path; display.dataset.fullPath = path; }
-      toast(`Saved as ${_confRelPath(path)}`, 'ok');
+      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: path }) });
+      toast(`Saved as ${path}`, 'ok');
     } catch (e) { /* toasted */ }
   });
   $('btn-saveas-cancel').addEventListener('click', () => $('modal-saveas').classList.add('hidden'));
@@ -464,15 +479,15 @@ function wireEvents() {
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
-      toast('Config applied.', 'ok');
+      toast(`Config ${CONF_FILE} applied.`, 'ok');
       // Auto-save after apply
-      const display = $('conf-path-display');
-      const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-      if (path) {
-        try {
-          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
-          toast(`Saved to ${_confRelPath(path)}`, 'ok');
-        } catch (_) { /* toasted */ }
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          body: JSON.stringify({ path: confRes.path }),
+        });
+        toast(`Saved to ${confRes.path}`, 'ok');
       }
     } catch (e) { /* toasted */ }
   });
@@ -655,9 +670,6 @@ function startStatusPoll() {
   }, 4000);
 }
 
-// ═══════════════════════════════════════════════════════
-//  Init
-// ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   setupCameraPanel();
   setupTrajPanel();
@@ -668,10 +680,10 @@ document.addEventListener('DOMContentLoaded', () => {
   buildJointSelector();                  // build from the active robot action_layout
   connectWS();
   startStatusPoll();
-  wireEvents();
   initConfDir().then(async () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
     applyLangConfigSelection(true);
   });
+  wireEvents();
 });
