@@ -1,7 +1,9 @@
 """
 init grasp 任务 - 机器人从当前状态过渡到准备抓取姿态（双臂和双手）
 
-复用 RobotBody.reset_robot() 实现轨迹过渡，自身只负责定义目标姿态。
+共两段:
+  1. reset_robot 到安全抬臂握拳姿态（避免碰撞桌子）
+  2. reset_robot 到准备抓取姿态
 """
 
 import sys
@@ -29,14 +31,21 @@ def _get_init_grasp_pose(context):
     return np.array(robot_cfg.reset_robot_pos, dtype=np.float64)
 
 
+# ==============================================
+# 安全中间姿态
+# ==============================================
+_SAFE_LEFT_ARM = np.array([1.5,   0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
+_SAFE_RIGHT_ARM = np.array([1.5, -0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
+
+
 class InitGraspHandler(AbstractTaskHandler):
     """'init grasp' 任务处理器
 
     流程:
         1. 建立 RobotBody 连接
-        2. 读取当前机器人状态
-        3. 规划平滑轨迹并过渡到准备抓取姿态
-        4. 清理资源
+        2. reset_robot 到安全抬臂握拳姿态
+        3. reset_robot 到准备抓取姿态
+        4. 完成
     """
 
     @property
@@ -50,14 +59,25 @@ class InitGraspHandler(AbstractTaskHandler):
             # ===== 步骤 1: 确认机器人连接 =====
             self.send_feedback(goal_handle, 10, "正在确认机器人连接...")
 
-            # ===== 步骤 2: 过渡到准备抓取姿态 =====
-            # 注：delta 相对限幅保持开启（0.15~0.50 rad），
-            #     ruckig 轨迹每步变化 ~0.01 rad（50Hz × 0.5 rad/s），
-            #     远小于限幅阈值，不会触发裁剪，但能防止意外跳变。
-            self.send_feedback(goal_handle, 30, "正在过渡到准备抓取姿态...")
+            # ===== 步骤 2: 过渡到安全中间姿态（抬臂握拳）=====
+            self.send_feedback(goal_handle, 20, "正在过渡到安全中间姿态...")
+
+            safe_pose = np.array([
+                # Left arm: raised
+                *_SAFE_LEFT_ARM,
+                # Right arm: raised
+                *_SAFE_RIGHT_ARM,
+                # Both hands: fist (1000)
+                1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0,
+                1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0,
+            ])
+            robot_body.reset_robot(target_pose=safe_pose)
+
+            # ===== 步骤 3: 过渡到准备抓取姿态 =====
+            self.send_feedback(goal_handle, 50, "正在过渡到准备抓取姿态...")
             robot_body.reset_robot(target_pose=init_grasp_pose)
 
-            # ===== 步骤 3: 完成 =====
+            # ===== 步骤 4: 完成 =====
             context._initialized = True
             self.send_feedback(goal_handle, 100, "机器人已就绪，准备抓取姿态完成")
             return TaskResult(True, error_code=ERR_SUCCESS, error_message=ERR_MSG[ERR_SUCCESS])

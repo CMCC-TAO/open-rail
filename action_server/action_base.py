@@ -34,6 +34,9 @@ ERR_TWO_HAND_BOTH_FAILED = 15
 ERR_MISSING_TARGET = 16
 ERR_UNKNOWN_TARGET = 17
 
+# task_finish_grasp 专用 (18)
+ERR_FINISH_GRASP_FAILED = 18
+
 # task_deliver 专用 (21-26)
 ERR_DELIVER_TIMEOUT = 21
 ERR_DELIVER_LEFT_EMPTY = 22
@@ -65,6 +68,9 @@ ERR_MSG = {
     # task_init_grasp 专用
     ERR_INIT_GRASP_FAILED: "Init grasp failed",
     
+    # task_finish_grasp 专用
+    ERR_FINISH_GRASP_FAILED: "Finish grasp failed",
+
     # task_grasp 专用
     ERR_GRASP_TIMEOUT: "Grasp task timed out",
     ERR_ONE_HAND_FAILED: "One-hand grasp failed",

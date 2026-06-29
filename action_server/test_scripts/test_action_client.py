@@ -204,6 +204,15 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
+    "20": {
+        "name": "finish grasp",
+        "desc": "抓取完成复位 — reset_robot 经安全中间姿态过渡到垂直复位姿态",
+        "params": {
+            "task": "finish grasp",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
 }
 
 
@@ -258,6 +267,12 @@ TASK_GROUPS = [
             ("17", "left arm reset"),
             ("18", "right arm reset"),
             ("19", "both arm reset"),
+        ],
+    },
+    {
+        "title": "finish grasp",
+        "items": [
+            ("20", "finish grasp"),
         ],
     },
 ]

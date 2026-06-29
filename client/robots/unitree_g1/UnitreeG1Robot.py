@@ -26,30 +26,30 @@ import numpy as np
 # Ratio of control frequency to inference frequency
 _CONTROL_INFER_RATIO = 9  # 30Hz(~33.3ms) / 267Hz(3.75ms)
 
-#                        lsp     lsr     lsy     le      lwr     lwp     lwy
-_LEFT_ARM_DELTA_LIMITS = [0.15, 0.15, 0.15, 0.15, 0.50, 0.25, 0.20]
+#                         lsp    lsr   lsy   le    lwr   lwp   lwy
+_LEFT_ARM_DELTA_LIMITS  = [0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20]
 
-#                         rsp     rsr     rsy     re      rwr     rwp     rwy
-_RIGHT_ARM_DELTA_LIMITS = [0.20, 0.15, 0.15, 0.15, 0.50, 0.25, 0.20]
+#                         rsp    rsr   rsy   re    rwr   rwp   rwy
+_RIGHT_ARM_DELTA_LIMITS = [0.20, 0.20, 0.20, 0.20, 0.20, 0.20, 0.20]
 
 # Absolute safety limits (final fallback, prevent flying out when relative limits fail)
 _LEFT_ARM_ABS_LIMITS = [
-    (-0.80, 0.80),   # left_shoulder_pitch
-    (-0.15, 0.25),   # left_shoulder_roll
-    (-0.50, 0.36),   # left_shoulder_yaw
-    (-0.50, 1.35),   # left_elbow
-    (-0.50, 0.86),   # left_wrist_roll
-    (-1.36, 0.40),   # left_wrist_pitch
-    (-0.58, 1.16),   # left_wrist_yaw
+    (-2.0, 2.0),   # left_shoulder_pitch
+    (-1.0, 1.0),   # left_shoulder_roll
+    (-1.0, 1.0),   # left_shoulder_yaw
+    (-1.0, 1.0),   # left_elbow
+    (-1.0, 1.0),   # left_wrist_roll
+    (-1.0, 1.0),   # left_wrist_pitch
+    (-1.0, 1.0),   # left_wrist_yaw
 ]
 _RIGHT_ARM_ABS_LIMITS = [
-    (-0.80, 0.80),   # right_shoulder_pitch
-    (-0.52, 0.10),   # right_shoulder_roll
-    (-0.48, 0.42),   # right_shoulder_yaw
-    (-0.70, 1.30),   # right_elbow
-    (-0.73, 0.45),   # right_wrist_roll
-    (-1.28, 0.36),   # right_wrist_pitch
-    (-0.80, 0.60),   # right_wrist_yaw
+    (-2.0, 2.0),     # right_shoulder_pitch
+    (-1.0, 1.0),   # right_shoulder_roll
+    (-1.0, 1.0),   # right_shoulder_yaw
+    (-1.0, 1.0),   # right_wrist_roll
+    (-1.0, 1.0),   # right_wrist_pitch
+    (-1.0, 1.0),   # right_wrist_yaw
+    (-1.0, 1.0),   # right_wrist_yaw
 ]
 
 
