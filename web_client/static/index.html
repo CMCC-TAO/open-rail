@@ -266,8 +266,8 @@
           <!-- Group ①: primary controls -->
           <div class="monitor-ctrl-group">
             <button class="btn btn-success btn-sm" id="btn-start"><i class="fas fa-play"></i> Start</button>
-            <button class="btn btn-danger  btn-sm" id="btn-pause" disabled><i class="fas fa-pause"></i> Pause</button>
-            <button class="btn btn-sm"             id="btn-reset" disabled><i class="fas fa-rotate-left"></i> Reset</button>
+            <button class="btn btn-danger  btn-sm" id="btn-pause" title="Pause/resume client (Space)" disabled><i class="fas fa-pause"></i> Pause</button>
+            <button class="btn btn-sm"             id="btn-reset" title="Reset robot (Shift+R)" disabled><i class="fas fa-rotate-left"></i> Reset</button>
           </div>
           <!-- Separator -->
           <span class="monitor-sep"></span>
@@ -275,7 +275,7 @@
           <div class="monitor-ctrl-group">
             <button class="btn btn-xs" id="btn-observe" title="Start observe and visualize"><span class="thread-btn-main">Observe</span><span class="thread-btn-sub">Start</span></button>
             <button class="btn btn-xs" id="btn-infer" title="Start inference" disabled><span class="thread-btn-main">Infer</span><span class="thread-btn-sub">Start</span></button>
-            <button class="btn btn-xs" id="btn-control" title="Start control" disabled><span class="thread-btn-main">Control</span><span class="thread-btn-sub">Start</span></button>
+            <button class="btn btn-xs" id="btn-control" title="Start/stop control (Ctrl+Space)" disabled><span class="thread-btn-main">Control</span><span class="thread-btn-sub">Start</span></button>
           </div>
           <!-- Separator -->
           <!-- <span class="monitor-sep"></span> -->
@@ -369,7 +369,7 @@
             <div class="lang-cmd-col lang-cmd-col-send">
               <div class="section-title">Instruction</div>
               <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
-              <button class="btn btn-sm" id="btn-lang-send"><i class="fas fa-check"></i> Apply</button>
+              <button class="btn btn-sm" id="btn-lang-send" title="Apply language command"><i class="fas fa-check"></i> Apply</button>
             </div>
           </div>
         </div>
