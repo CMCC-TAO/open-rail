@@ -115,20 +115,15 @@ class VisualizeServer:
             state_vel = None
             state_acc = None
             if current_state is not None:
-                if self.vis_prev_state is None:
+                if self.vis_prev_state is None or np.shape(self.vis_prev_state) != np.shape(current_state):
                     state_vel = np.zeros_like(current_state)
                     state_acc = np.zeros_like(current_state)
                 else:
-                    try:
-                        state_vel = (current_state - self.vis_prev_state) / control_period
-                        if self.vis_prev_state_vel is None:
-                            state_acc = np.zeros_like(current_state)
-                        else:
-                            state_acc = (state_vel - self.vis_prev_state_vel) / control_period
-                    except Exception as e:
-                        self.logger.warning(f"Error computing state velocity/acceleration: {e}")
-                        state_vel = np.zeros_like(current_state)
+                    state_vel = (current_state - self.vis_prev_state) / control_period
+                    if self.vis_prev_state_vel is None or np.shape(self.vis_prev_state_vel) != np.shape(state_vel):
                         state_acc = np.zeros_like(current_state)
+                    else:
+                        state_acc = (state_vel - self.vis_prev_state_vel) / control_period
 
                 self.data_send_queue.append({
                     'tab': 'velocity',
@@ -165,12 +160,12 @@ class VisualizeServer:
 
             # Origin (raw action) series
             if action_raw is not None:
-                if self.vis_prev_origin is None:
+                if self.vis_prev_origin is None or np.shape(self.vis_prev_origin) != np.shape(action_raw):
                     origin_vel = np.zeros_like(action_raw)
                     origin_acc = np.zeros_like(action_raw)
                 else:
                     origin_vel = (action_raw - self.vis_prev_origin) / observe_period
-                    if self.vis_prev_origin_vel is None:
+                    if self.vis_prev_origin_vel is None or np.shape(self.vis_prev_origin_vel) != np.shape(origin_vel):
                         origin_acc = np.zeros_like(action_raw)
                     else:
                         origin_acc = (origin_vel - self.vis_prev_origin_vel) / observe_period

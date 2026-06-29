@@ -22,15 +22,9 @@ class RobotBody(RobotBase):
         Args:
             config (dict): Configuration dictionary containing mock robot settings
         """
-        super().__init__()
+        super().__init__(config)
         self.logger = logging.getLogger(__name__)
-        self.cfg, self.ori_cfg = config['robots']['mock'], config
-        if not hasattr(self.cfg, 'action_layout'):
-            self.logger.error("Parameter action_layout is required, please check the configuration.")
-        self.action_layout = dict(self.cfg.get('action_layout', {}))
-        self.action_dim, _, _ = parse_action_layout(self.action_layout)
-        self.state_dim = max((v['end'] for v in self.action_layout.values()), default=0)
-        self.current_state = np.zeros(self.state_dim)
+        self.current_state = np.zeros(self.action_dim)
         self.dataset = None
         self.episode_files = []
         self.current_episode_idx = 0
@@ -116,8 +110,6 @@ class RobotBody(RobotBase):
             else:
                 self._load_episode(0)
 
-            self.current_state = np.zeros(self.state_dim)
-
         self.logger.info(f"Mock robot reset complete. dataset={self.dataset_path}, episode=0, frame=0")
 
     def _load_episode(self, episode_list_idx: int):
@@ -168,7 +160,10 @@ class RobotBody(RobotBase):
 
     def reset_robot(self, target_pose=None, mode='zero'):
         """Reset the robot to its default position and rewind mock dataset playback."""
-        super().reset_robot(target_pose, mode)
+        if target_pose is None:
+            if mode == 'zero':
+                target_pose = np.zeros(self.action_dim)
+        self.current_state = target_pose if target_pose is not None else self.current_state
         # Mock robot reset should also rewind to episode-0 / frame-0.
         self.reset(reload_dataset=False)
 
@@ -176,7 +171,6 @@ class RobotBody(RobotBase):
         """Retrieve observation data from local lerobot-format files."""
         if self.dataset is None or len(self.dataset) == 0:
             return None
-
 
         with self._io_lock:
             if self.currt_index >= len(self.dataset):
@@ -223,9 +217,7 @@ class RobotBody(RobotBase):
             else:
                 return None
 
-            obs_state = np.asarray(row["observation.state"], dtype=np.float32)
-            if obs_state.shape[0] != self.state_dim:
-                obs_state = obs_state[:self.state_dim] if obs_state.shape[0] > self.state_dim else np.pad(obs_state, (0, self.state_dim - obs_state.shape[0]))
+            obs_state = self._select_state_action_dims(row["observation.state"])
             result['obs.state'] = obs_state
             self.current_state = obs_state
 

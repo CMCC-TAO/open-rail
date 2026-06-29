@@ -1,6 +1,9 @@
 import time
 import cv2
 import numpy as np
+import logging
+
+from client.utils.util import parse_action_layout
 
 try:
     import ruckig
@@ -8,9 +11,17 @@ except ImportError:
     ruckig = None
 
 class RobotBase():
-    def __init__(self):
+    def __init__(self, config):
         self.robot = None
-        self.current_state = None
+        self.logger = logging.getLogger(__name__)
+        self.config = config
+        # TODO: Make action_layout value changing tasks effects in realtime
+        if not hasattr(self.config, 'action_layout'):
+            self.logger.error("Parameter action_layout is required, please check the configuration.")
+        self.action_layout = dict(self.config.get('action_layout', {}))
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
+        self.state_dim = max((v['end'] for v in self.action_layout.values()), default=0)
+        self.current_state = np.zeros(self.state_dim)
 
     def control_robot(self, data):
         """

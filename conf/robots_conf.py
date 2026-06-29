@@ -89,6 +89,7 @@ def get_mock_config():
         # 'waist': {'start': 18, 'end': 20, 'policy': 'none'},
     }
     config.manual_arm_interval = 0.01
+    config.state_action_range = [[0, 16], [58, 70]]
     config.dataset_path = '/home/robot/Music/task_39_only1'
     # config.dataset_path = '/home/robot/Music'
     return config
