@@ -67,7 +67,6 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'vision.preprocess.method',
   'vision.preprocess.width',
   'rdm.mode',
-  'others.conf_file',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
@@ -670,17 +669,11 @@ function createCfgRow(dotKey, label, value) {
         renderConfigTree(App.config);
         renderRecordingConfigTree(App.config);
 
-        const display = $('conf-path-display');
         try {
           await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
-          if (display) {
-            display.textContent = 'conf/' + String(CONF_FILE).split('conf/').pop();
-            display.title = CONF_FILE;
-            display.dataset.fullPath = CONF_FILE;
-          }
-          toast('dataset_path updated and saved to default_conf.yaml.', 'ok', 2200);
+          toast(`dataset_path updated and saved to ${CONF_FILE}.`, 'ok', 2200);
         } catch (_) {
-          toast('dataset_path updated, but save to default_conf.yaml failed.', 'warn', 2600);
+          toast(`dataset_path updated, but save to ${CONF_FILE} failed.`, 'warn', 2600);
         }
       } catch (_) {
         App.pendingPatch[dotKey] = selectedPath;
@@ -958,7 +951,7 @@ function filterConfigTree(query) {
 // ═══════════════════════════════════════════════════════
 
 // Conf directory path (absolute), fetched once from server
-let CONF_FILE = 'conf/default_conf.yaml';
+let CONF_FILE = 'default_conf.yaml';
 
 async function initConfDir() {
   try {
@@ -1206,11 +1199,7 @@ async function persistVisualStateNow() {
     });
     App.config = res.config || App.config;
 
-    const display = $('conf-path-display');
-    const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-    if (path) {
-      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
-    }
+    await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
   } catch (_) {
     // no-op: visual state already effective in UI
   } finally {
@@ -1238,13 +1227,6 @@ async function loadConfigFromServer() {
     // Apply language-related UI state from config (task/sub-task/auto/threshold/win_size)
     // On initial startup from YAML config, default sub-task to first entry.
     applyLangConfigSelection(true);
-    // Set default path display on startup
-    const display = $('conf-path-display');
-    if (display && !display.dataset.fullPath) {
-      display.textContent = 'conf/' + String(CONF_FILE).split('conf/').pop();
-      display.title = CONF_FILE;
-      display.dataset.fullPath = CONF_FILE;
-    }
-    toast('Config loaded.', 'ok', 2000);
+    toast(`Config ${CONF_FILE} loaded.`, 'ok', 2000);
   } catch (e) { /* already toasted */ }
 }

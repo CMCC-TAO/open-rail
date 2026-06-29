@@ -49,15 +49,16 @@
 
           <!-- Config file bar -->
           <div class="config-file-bar">
-            <label class="btn btn-sm" id="btn-load-file" title="Load config file">
-              <i class="fas fa-folder-open"></i> Load
-              <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
-            </label>
             <button class="btn btn-sm" id="btn-apply-config"><i class="fas fa-check"></i> Apply</button>
             <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…"><i class="fas fa-save"></i> Save As</button>
           </div>
-          <!-- Current file path display -->
-          <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
+          <div class="config-file-bar">
+            <div class="section-title">Config</div>
+            <select id="conf-file-select" class="input-text" title="Select config file">
+              <!-- <option value="">-- Select Config File --</option> -->
+            </select>
+          </div>
+          <!-- Current file path display (hidden, kept for compatibility) -->
 
           <!-- Main parameters (fixed area) -->
           <div id="main-params-section" class="main-params-section">

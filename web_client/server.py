@@ -702,8 +702,8 @@ async def favicon():
 @app.get("/api/client/config/path")
 async def get_conf_dir():
     """Return the absolute path of the project conf/ directory."""
-    conf_dir = ROOT / "conf" / client_state.conf_file
-    return {"status": "ok", "path": str(conf_dir)}
+    # conf_dir = ROOT / "conf" / client_state.conf_file
+    return {"status": "ok", "path": str(client_state.conf_file)}
 
 
 @app.get("/api/client/robot/select_directory")
@@ -926,6 +926,19 @@ async def get_config():
     return {"status": "ok", "config": cfg_dict}
 
 
+@app.get("/api/client/config/yaml_files")
+async def list_yaml_configs():
+    """List all .yaml files in the conf directory."""
+    conf_dir = ROOT / "conf"
+    yaml_files = []
+    if conf_dir.exists():
+        for f in sorted(conf_dir.glob("*.yaml")):
+            yaml_files.append(f.name)
+        for f in sorted(conf_dir.glob("*.yml")):
+            yaml_files.append(f.name)
+    return {"status": "ok", "files": yaml_files}
+
+
 class ConfigPatchRequest(BaseModel):
     patch: dict   # flat dot-key → value  OR  nested dict
 
@@ -1140,13 +1153,13 @@ async def save_config_file(req: ConfigFileRequest):
 
     Supported formats (determined by file extension):
       .yaml / .yml  →  YAML  (via _dict_to_user_conf_yaml)
-      .py           →  Python get_user_config() module (via _dict_to_user_conf_py)
     """
     if client_state.config is None:
         raise HTTPException(400, "No config loaded.")
+    # print(f"DEBUG: save path = {req.path}")
     save_path = Path(req.path)
     if not save_path.is_absolute():
-        save_path = ROOT / save_path
+        save_path = ROOT / 'conf' / save_path
     # Guard against path-traversal: resolved path must stay inside ROOT
     try:
         save_path.resolve().relative_to(ROOT.resolve())
