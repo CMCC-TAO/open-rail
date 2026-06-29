@@ -67,6 +67,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'vision.preprocess.method',
   'vision.preprocess.width',
   'rdm.mode',
+  'others.conf_file',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
@@ -669,14 +670,13 @@ function createCfgRow(dotKey, label, value) {
         renderConfigTree(App.config);
         renderRecordingConfigTree(App.config);
 
-        const defaultCfgPath = `${CONF_DIR}/default_conf.yaml`;
         const display = $('conf-path-display');
         try {
-          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: defaultCfgPath }) });
+          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
           if (display) {
-            display.textContent = 'conf/default_conf.yaml';
-            display.title = defaultCfgPath;
-            display.dataset.fullPath = defaultCfgPath;
+            display.textContent = 'conf/' + String(CONF_FILE).split('conf/').pop();
+            display.title = CONF_FILE;
+            display.dataset.fullPath = CONF_FILE;
           }
           toast('dataset_path updated and saved to default_conf.yaml.', 'ok', 2200);
         } catch (_) {
@@ -958,12 +958,12 @@ function filterConfigTree(query) {
 // ═══════════════════════════════════════════════════════
 
 // Conf directory path (absolute), fetched once from server
-let CONF_DIR = 'conf';
+let CONF_FILE = 'conf/default_conf.yaml';
 
 async function initConfDir() {
   try {
-    const res = await apiFetch('/api/conf_dir');
-    if (res.path) CONF_DIR = res.path;
+    const res = await apiFetch('/api/client/config/path');
+    if (res.path) CONF_FILE = res.path;
   } catch (_) { /* fallback to 'conf' */ }
 }
 
@@ -1241,11 +1241,9 @@ async function loadConfigFromServer() {
     // Set default path display on startup
     const display = $('conf-path-display');
     if (display && !display.dataset.fullPath) {
-      const defaultRel = 'conf/default_conf.yaml';
-      const defaultFull = CONF_DIR.replace(/\/conf$/, '') + '/' + defaultRel;
-      display.textContent = defaultRel;
-      display.title = defaultFull;
-      display.dataset.fullPath = defaultFull;
+      display.textContent = 'conf/' + String(CONF_FILE).split('conf/').pop();
+      display.title = CONF_FILE;
+      display.dataset.fullPath = CONF_FILE;
     }
     toast('Config loaded.', 'ok', 2000);
   } catch (e) { /* already toasted */ }

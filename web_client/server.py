@@ -3,11 +3,11 @@ VLA Web Client Server
 FastAPI-based web server that wraps run_client.py logic for browser-based control.
 
 Architecture:
-  - REST API  : config load/save/update, client start/stop
-  - WebSocket : real-time runtime stats push (replaces Rich Live)
-  - Port 9000 : this server (HTTP + WS)
-  - Port 8765 : visual/ WebSocket data stream  (visual integration ready)
-  - Port 8080 : visual/ static file server      (visual integration ready)
+    - REST API  : config load/save/update, client start/stop
+    - WebSocket : real-time runtime stats push (replaces Rich Live)
+    - Port 9000 : this server (HTTP + WS)
+    - Port 8765 : visual/ WebSocket data stream  (visual integration ready)
+    - Port 8080 : visual/ static file server      (visual integration ready)
 """
 
 import asyncio
@@ -56,7 +56,6 @@ from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
-from client.utils.util import load_user_config, apply_user_config
 from client.robots.base_robot import RobotBase
 
 logger = logging.getLogger(__name__)
@@ -70,12 +69,15 @@ async def _lifespan(_: FastAPI):
     # ── startup ──
     setup_logging("client.log")
     client_state.config = get_client_config()
+    client_state.conf_file = os.environ.get("conf_file", "default_conf.yaml")
     # print(f"Initial client.record config: {client_state.config.record}")
+    DEFAULT_YAML = ROOT / "conf" / client_state.conf_file
     if DEFAULT_YAML.exists():
         try:
             _apply_yaml_config(client_state.config, DEFAULT_YAML)
         except Exception as e:
             logger.warning(f"Failed to apply yaml conf: {e}")
+    # print(f"Debug: config_file = {client_state.conf_file}")
     # print(f"Initial client.record config: {client_state.config.record}")
     # print(f"Final client config: {client_state.config.visualize}")
 
@@ -103,7 +105,6 @@ STATIC_DIR  = Path(__file__).parent / "static"
 VISUAL_DIR  = ROOT / "visual"
 
 # Default config files bundled with the project
-DEFAULT_YAML     = ROOT / "conf" / "default_conf.yaml"
 DEFAULT_LANG_CMD = ROOT / "conf" / "lang_cmd.json"
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -120,6 +121,7 @@ class ClientState:
         self.vla_client = None
         self.robot = None
         self.config = None
+        self.conf_file = None
         self.running = False
         self.starting = False
         self.stopping = False
@@ -697,10 +699,10 @@ async def favicon():
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: config
 # ─────────────────────────────────────────────────────────────────────────────
-@app.get("/api/conf_dir")
+@app.get("/api/client/config/path")
 async def get_conf_dir():
     """Return the absolute path of the project conf/ directory."""
-    conf_dir = ROOT / "conf"
+    conf_dir = ROOT / "conf" / client_state.conf_file
     return {"status": "ok", "path": str(conf_dir)}
 
 
@@ -1132,11 +1134,6 @@ async def load_config_file(req: ConfigFileRequest):
                 except Exception as e:
                     logger.error(f"Failed to resume client after config-load robot recreate: {e}")
 
-    # user_cfg = load_user_config(str(p))
-    # if user_cfg is None:
-    #     raise HTTPException(400, f"Failed to load config from: {p}")
-    # base_cfg = get_client_config()
-    # client_state.config = apply_user_config(base_cfg, user_cfg)
     cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     return {"status": "ok", "config": cfg_dict}
 
