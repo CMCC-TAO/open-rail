@@ -14,12 +14,12 @@ const CONFIG_EXCLUDED_SUB_GROUP_KEYS = new Set([
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
   intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples'],
-  inter_chunk: ['inter_chunk_mode', 'search_length', 'smooth_action', 'smooth_base', 'smooth_length', 'smooth_ratio'],
+  inter_chunk: ['inter_chunk_mode', 'search_length'],
 };
 
 // Select options for specific keys
 const CONFIG_SELECT_OPTIONS = {
-  inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline'],
+  inter_chunk_mode: ['search_action', 'smooth_velocity', 'min_jerk'],
   intra_chunk_mode: ['raw', 'interpolation', 'fitting'],
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
@@ -31,13 +31,14 @@ const CONFIG_SELECT_OPTIONS = {
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
-  'fitting_num_samples', 'search_length', 'smooth_length', 'poly_length', 'transition_length', 'num_control_points', 'gripper_offset',
+  'fitting_num_samples', 'search_length', 'gripper_offset',
   'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
 
 const CONFIG_NUMBER_RANGES = {
   adaptive_factor: { min: -1, max: 1, step: 0.01, manualMin: 0 },
 };
+const CONTROL_SPEED_PRESETS = ['0.5', '0.8', '1.0', '1.25', '1.5', '1.75', '2.0'];
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.task_id',
@@ -238,8 +239,9 @@ function renderMainParameters(cfg) {
   params.forEach(({ key: dotKey, label }) => {
     const value = getConfigValueByDotKey(cfg, dotKey);
     if (value === undefined) return;
+    const options = dotKey === 'controller.speed' ? { speedPresets: true } : undefined;
     // Use the custom label instead of the dotKey for display
-    root.appendChild(createCfgRow(dotKey, label, value));
+    root.appendChild(createCfgRow(dotKey, label, value, options));
   });
 }
 
@@ -542,18 +544,14 @@ function _buildRobotsGroup(obj, parentEl) {
 
 function _buildInterChunkGroup(obj, parentEl) {
   const MODE_KEY = 'inter_chunk_mode';
-  const COMMON_KEY = 'common';
   const currentMode = String(obj[MODE_KEY] ?? '');
   const leaves = [];
   const modeGroups = [];
-  let commonGroup = null;
 
   for (const [k, v] of Object.entries(obj)) {
     const isGroup = v !== null && typeof v === 'object' && !Array.isArray(v);
-    if (isGroup) {
-      if (k === COMMON_KEY) commonGroup = [k, v];
-      else modeGroups.push([k, v]);
-    } else {
+    if (isGroup) modeGroups.push([k, v]);
+    else {
       leaves.push([k, v]);
     }
   }
@@ -561,7 +559,7 @@ function _buildInterChunkGroup(obj, parentEl) {
   const modeEntry = leaves.find(([k]) => k === MODE_KEY);
   const otherLeaves = leaves.filter(([k]) => k !== MODE_KEY);
   const orderedLeaves = modeEntry ? [modeEntry, ...otherLeaves] : otherLeaves;
-  const knownModes = modeGroups.map(([k]) => k);
+  const knownModes = modeGroups.map(([k]) => k).filter(mode => mode !== 'sync');
 
   let modeInput = null;
   for (const [k, v] of orderedLeaves) {
@@ -614,17 +612,6 @@ function _buildInterChunkGroup(obj, parentEl) {
     groupEl.setAttribute('data-inter-chunk-mode', k);
     groupEl.style.display = (k === currentMode) ? '' : 'none';
     modeGroupEls[k] = groupEl;
-    parentEl.appendChild(groupEl);
-  }
-
-  if (commonGroup) {
-    const [k, v] = commonGroup;
-    const body = document.createElement('div');
-    body.className = 'cfg-group-body';
-    buildTree(v, `inter_chunk.${k}`, body);
-    const groupEl = buildGroupFromEl(k, body);
-    groupEl.dataset.interChunkCommon = 'true';
-    groupEl.setAttribute('data-inter-chunk-common', 'true');
     parentEl.appendChild(groupEl);
   }
 
@@ -687,7 +674,7 @@ function setConfigValueByDotKey(cfg, dotKey, value) {
   node[parts[parts.length - 1]] = value;
 }
 
-function createCfgRow(dotKey, label, value) {
+function createCfgRow(dotKey, label, value, options = {}) {
   const row = document.createElement('div');
   row.className = 'cfg-row';
   row.dataset.key = dotKey;
@@ -860,15 +847,43 @@ function createCfgRow(dotKey, label, value) {
   }
 
   input.className = 'input-text';
-  if (CONFIG_READONLY_DOT_KEYS.has(dotKey)) {
+  const isActionLayout = /^robots\.[^.]+\.action_layout(?:\.|$)/.test(dotKey);
+  if (CONFIG_READONLY_DOT_KEYS.has(dotKey) || isActionLayout) {
     row.classList.add('cfg-row-readonly');
     input.disabled = true;
-    input.title = `${dotKey} is managed by runtime actions and is read-only here.`;
+    input.title = `${dotKey} is read-only here.`;
   } else {
     input.addEventListener('input',  () => onCfgChange(dotKey, input, value));
     input.addEventListener('change', () => onCfgChange(dotKey, input, value));
   }
   valEl.appendChild(input);
+  if (options.speedPresets) {
+    const select = document.createElement('select');
+    select.className = 'input-text cfg-speed-preset';
+    select.title = 'Quick select control speed';
+
+    CONTROL_SPEED_PRESETS.forEach(speed => {
+      const option = document.createElement('option');
+      option.value = speed;
+      option.textContent = speed;
+      select.appendChild(option);
+    });
+
+    const syncPreset = () => {
+      const match = CONTROL_SPEED_PRESETS.find(speed => Number(speed) === Number(input.value));
+      select.value = match || '';
+    };
+    select.addEventListener('change', () => {
+      if (!select.value) return;
+      input.value = select.value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    input.addEventListener('input', syncPreset);
+    syncPreset();
+
+    valEl.classList.add('cfg-value-with-preset');
+    valEl.appendChild(select);
+  }
   row.appendChild(keyEl);
   row.appendChild(valEl);
   return row;

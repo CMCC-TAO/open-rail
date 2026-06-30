@@ -95,28 +95,29 @@
   flex: 0 0 48px;
 }
 .robot-preset-select {
-  width: 52%;
+  flex: 1 1 auto;
+  width: auto;
   min-width: 72px;
 }
-.robot-preset-edit {
-  width: 38%;
-  min-width: 64px;
+.robot-preset-edit,
+.robot-preset-add {
+  flex: 0 0 30px;
+  width: 30px;
+  min-width: 30px;
+  padding: 4px;
 }
-.robot-preset-row .btn {
-  padding: 4px 8px;
-  min-width: 64px; /* 设置按钮固定宽度 */
-}
-.robot-preset-row .btn i.fas,
-.robot-preset-row .btn i.far,
-.robot-preset-row .btn i.fab {
-  margin-right: 4px; /* 调整图标边距 */
+.robot-preset-edit i.fas,
+.robot-preset-add i.fas {
+  margin-right: 0;
   font-size: var(--font-size-2);
 }
 .robot-preset-right {
-  display: inline-flex;
-  align-items: right;
-  gap: 9px; /* select 和 edit 按钮之间的间距 */
-  margin-left: auto; /* 确保推到最右侧 */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 .robot-preset-input:disabled {
   opacity: .6;

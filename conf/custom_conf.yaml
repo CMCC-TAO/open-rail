@@ -10,10 +10,6 @@ controller:
 inter_chunk:
   inter_chunk_mode: min_jerk
   search_length: 100
-  smooth_action: false
-  smooth_base: 0.0
-  smooth_length: 50
-  smooth_ratio: 0.75
 intra_chunk:
   filter_window_size: 4
   fitting_deg: 4
