@@ -36,7 +36,8 @@
   flex-wrap: wrap;
 }
 .robot-ctrl-actions-right .btn {
-  min-width: 56px;
+  min-width: 36px;
+  padding: 4 2px;
   /* height: 18px; */
   /* padding: 0 8px; */
   font-size: var(--font-size-2);
@@ -45,10 +46,11 @@
   align-items: center;
   justify-content: center;
 }
+
 .robot-ctrl-actions-right .btn i.fas,
 .robot-ctrl-actions-right .btn i.far,
 .robot-ctrl-actions-right .btn i.fab {
-  margin-right: 4px; /* 调整图标边距 */
+  margin-right: 2px; /* 调整图标边距 */
   font-size: var(--font-size-1);
 }
 .robot-ctrl-row {
@@ -93,16 +95,16 @@
   flex: 0 0 48px;
 }
 .robot-preset-select {
-  width: 128px;
-  min-width: 128px;
+  width: 52%;
+  min-width: 72px;
 }
 .robot-preset-edit {
-  width: 72px;
-  min-width: 48px;
+  width: 38%;
+  min-width: 64px;
 }
 .robot-preset-row .btn {
   padding: 4px 8px;
-  min-width: 48px; /* 设置按钮固定宽度 */
+  min-width: 64px; /* 设置按钮固定宽度 */
 }
 .robot-preset-row .btn i.fas,
 .robot-preset-row .btn i.far,
@@ -112,7 +114,7 @@
 }
 .robot-preset-right {
   display: inline-flex;
-  align-items: center;
+  align-items: right;
   gap: 9px; /* select 和 edit 按钮之间的间距 */
   margin-left: auto; /* 确保推到最右侧 */
 }

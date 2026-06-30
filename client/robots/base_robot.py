@@ -87,7 +87,7 @@ class RobotBase():
             if action not in data:
                 continue
             current_pose = self._current_pose(action)
-            if current_pose is not None:
+            if current_pose is not None and current_pose.size > 0:
                 self.execute_action({
                     action: self._target_pose(current_pose, data[action]).tolist()
                 })
