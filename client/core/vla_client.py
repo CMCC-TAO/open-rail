@@ -445,7 +445,9 @@ class VLAClientAsync():
                 acc_chunk_smoothed=acc_chunk_smoothed,
                 timestamps_smoothed=timestamps_fitted,
                 target_chunk_index=target_chunk_index,
-                prob_progress=task_progress_fitted
+                prob_progress=task_progress_fitted,
+                step_indices=self.robot.get_step_indices(),
+                gripper_offset=self.config.controller.gripper_offset,
             )
 
             # Compute average inference and trajectory fitting times
@@ -543,7 +545,9 @@ class VLAClientAsync():
                 acc_chunk_smoothed=acc_chunk_smoothed,
                 timestamps_smoothed=timestamps_fitted,
                 target_chunk_index=target_chunk_index,
-                prob_progress=task_progress_fitted
+                prob_progress=task_progress_fitted,
+                step_indices=self.robot.get_step_indices(),
+                gripper_offset=self.config.controller.gripper_offset,
             )
 
             # Compute average inference and trajectory fitting times

@@ -22,6 +22,7 @@ const populate = (selectId, checkId, action, side = null) => {
   const select = $(selectId);
   const check = $(checkId);
   const edit = $(`${selectId}-edit`);
+  const add = $(`${selectId}-add`);
   if (!select || !check) return;
   const wasDisabled = check.disabled;
   const previous = select.value;
@@ -40,7 +41,7 @@ const populate = (selectId, checkId, action, side = null) => {
   const reason = !layoutAvailable
     ? `Disabled: action_layout does not define "${action}".`
     : `Disabled: no presets configured for "${action}".`;
-  const targets = [select.closest('.robot-preset-row'), select, check, edit].filter(Boolean);
+  const targets = [select.closest('.robot-preset-row'), select, check].filter(Boolean);
   if (supported) {
     if (wasDisabled) check.checked = true;
     if ([...select.options].some(option => option.value === previous)) select.value = previous;
@@ -55,7 +56,14 @@ const populate = (selectId, checkId, action, side = null) => {
   check.disabled = !supported;
   if (!supported) check.checked = false;
   select.disabled = !supported || !check.checked;
-  if (edit) edit.disabled = select.disabled;
+  if (edit) {
+    edit.disabled = select.disabled;
+    edit.title = edit.disabled ? reason : 'Edit preset';
+  }
+  if (add) {
+    add.disabled = !layoutAvailable;
+    add.title = add.disabled ? reason : 'Add preset';
+  }
 };
 const selectDefault = (id) => {
   const select = $(id);
@@ -79,30 +87,37 @@ const refreshControls = () => {
   });
 };
 
-const requestPresetValue = (name, current) => new Promise(resolve => {
+const requestPreset = (name, current, adding = false) => new Promise(resolve => {
   const modal = $('modal-preset-edit');
   const title = $('preset-edit-title');
-  const input = $('preset-edit-value');
+  const nameInput = $('preset-edit-name');
+  const valueInput = $('preset-edit-value');
   const confirm = $('btn-preset-edit-confirm');
   const cancel = $('btn-preset-edit-cancel');
-  if (!modal || !title || !input || !confirm || !cancel) {
+  if (!modal || !title || !nameInput || !valueInput || !confirm || !cancel) {
     resolve(null);
     return;
   }
 
-  const finish = value => {
+  const finish = result => {
     modal.classList.add('hidden');
     document.removeEventListener('keydown', onKeyDown);
-    resolve(value);
+    resolve(result);
   };
+  const submit = () => finish({
+    name: nameInput.value.trim(),
+    value: valueInput.value,
+  });
   const onKeyDown = event => {
-    if (event.key === 'Enter') finish(input.value);
+    if (event.key === 'Enter') submit();
     if (event.key === 'Escape') finish(null);
   };
 
-  title.textContent = `Edit Preset: ${name}`;
-  input.value = JSON.stringify(current);
-  confirm.onclick = () => finish(input.value);
+  title.textContent = adding ? 'Add Preset' : `Edit Preset: ${name}`;
+  nameInput.value = adding ? '' : name;
+  nameInput.readOnly = !adding;
+  valueInput.value = JSON.stringify(current);
+  confirm.onclick = submit;
   cancel.onclick = () => finish(null);
   modal.onclick = event => {
     if (event.target === modal) finish(null);
@@ -110,41 +125,30 @@ const requestPresetValue = (name, current) => new Promise(resolve => {
   document.addEventListener('keydown', onKeyDown);
   modal.classList.remove('hidden');
   requestAnimationFrame(() => {
+    const input = adding ? nameInput : valueInput;
     input.focus();
     input.select();
   });
 });
 
-const editPreset = async (selectId, action, side = null) => {
-  const select = $(selectId);
-  const option = select?.selectedOptions?.[0];
-  const current = readPreset(selectId);
-  if (!option?.dataset.name || !current) return;
-
-  const name = option.dataset.name;
-  const input = await requestPresetValue(name, current);
-  if (input === null) return;
-
-  let value;
+const parsePresetValue = (input, length) => {
   try {
-    value = JSON.parse(input);
+    const value = JSON.parse(input);
+    if (Array.isArray(value) && value.length === length && value.every(Number.isFinite)) {
+      return value;
+    }
   } catch (_) {
-    toast('Preset value must be a valid JSON array.', 'error');
-    return;
+    // Fall through to the shared validation message.
   }
-  if (!Array.isArray(value) || value.length !== current.length || !value.every(Number.isFinite)) {
-    toast(`Preset value must contain ${current.length} finite numbers.`, 'error');
-    return;
-  }
+  toast(`Preset value must contain ${length} finite numbers.`, 'error');
+  return null;
+};
 
+const savePresets = async (selectId, action, side, items, selectedName, verb) => {
   const type = String(App.config?.robots?.type || '');
-  const items = presets(action, side);
-  const updated = items.map(item => (
-    String(item.name) === name ? { ...item, value } : item
-  ));
   const suffix = side ? `.${side}` : '';
   const patch = {
-    [`robots.${type}.action_layout.${action}.presets${suffix}`]: updated,
+    [`robots.${type}.action_layout.${action}.presets${suffix}`]: items,
   };
 
   try {
@@ -154,9 +158,9 @@ const editPreset = async (selectId, action, side = null) => {
     });
     App.config = res.config || App.config;
     refreshControls();
-    const refreshed = $(selectId);
-    const selected = [...refreshed.options].find(item => item.dataset.name === name);
-    if (selected) refreshed.value = selected.value;
+    const select = $(selectId);
+    const selected = [...select.options].find(item => item.dataset.name === selectedName);
+    if (selected) select.value = selected.value;
 
     const display = $('conf-path-display');
     const path = display?.dataset.fullPath || display?.textContent.trim() || '';
@@ -166,8 +170,59 @@ const editPreset = async (selectId, action, side = null) => {
         body: JSON.stringify({ path }),
       });
     }
-    toast(`Preset "${name}" updated.`, 'ok');
+    toast(`Preset "${selectedName}" ${verb}.`, 'ok');
   } catch (_) { /* apiFetch already toasted */ }
+};
+
+const editPreset = async (selectId, action, side = null) => {
+  const option = $(selectId)?.selectedOptions?.[0];
+  const current = readPreset(selectId);
+  if (!option?.dataset.name || !current) return;
+
+  const name = option.dataset.name;
+  const result = await requestPreset(name, current);
+  if (!result) return;
+  const value = parsePresetValue(result.value, current.length);
+  if (!value) return;
+
+  const updated = presets(action, side).map(item => (
+    String(item.name) === name ? { ...item, value } : item
+  ));
+  await savePresets(selectId, action, side, updated, name, 'updated');
+};
+
+const addPreset = async (selectId, action, side = null) => {
+  const layout = robotConfig().action_layout?.[action];
+  if (!layout) return;
+  const items = presets(action, side);
+  const selected = readPreset(selectId);
+  const totalLength = Number(layout.end) - Number(layout.start);
+  const length = selected?.length || (side ? totalLength / 2 : totalLength);
+  if (!Number.isInteger(length) || length <= 0) {
+    toast(`Cannot determine preset length for "${action}".`, 'error');
+    return;
+  }
+
+  const result = await requestPreset('', selected || Array(length).fill(0), true);
+  if (!result) return;
+  if (!result.name) {
+    toast('Preset name is required.', 'error');
+    return;
+  }
+  if (items.some(item => String(item.name).toLowerCase() === result.name.toLowerCase())) {
+    toast(`Preset "${result.name}" already exists.`, 'error');
+    return;
+  }
+  const value = parsePresetValue(result.value, length);
+  if (!value) return;
+  await savePresets(
+    selectId,
+    action,
+    side,
+    [...items, { name: result.name, value }],
+    result.name,
+    'added',
+  );
 };
 
 [
@@ -202,6 +257,9 @@ const editPreset = async (selectId, action, side = null) => {
 ].forEach(([selectId, getAction, side = null]) => {
   $(`${selectId}-edit`)?.addEventListener('click', () => {
     editPreset(selectId, getAction(), side);
+  });
+  $(`${selectId}-add`)?.addEventListener('click', () => {
+    addPreset(selectId, getAction(), side);
   });
 });
 
