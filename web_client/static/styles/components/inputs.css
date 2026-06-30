@@ -7,3 +7,27 @@
 .input-text { width: 100%; }
 .input-num  { width: 70px; }
 .input-text:focus, .input-num:focus { border-color: var(--accent); }
+
+.item-select {
+  min-width: 150px;
+  /* max-width: 200px; */
+  height: 28px;
+  padding: 2px 8px;
+  font-size: var(--font-size-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.item-select:hover {
+  border-color: var(--accent);
+}
+
+.item-select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
