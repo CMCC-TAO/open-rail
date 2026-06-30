@@ -16,13 +16,13 @@
 
 /* Configuration buttons: tighten icon/text and horizontal padding */
 .config-file-bar .btn {
-  padding: 4px 10px;
-  min-width: 80px; /* 设置按钮固定宽度 */
+  padding: 4px 6px;
+  min-width: 64px; /* 设置按钮固定宽度 */
 }
 .config-file-bar .btn i.fas,
 .config-file-bar .btn i.far,
 .config-file-bar .btn i.fab {
-  margin-right: 2px; /* 调整图标边距 */
+  margin-right: -2px; /* 调整图标边距 */
 }
 .config-path-display {
   font-size: var(--font-size-1); color: var(--text-muted); padding: 2px 6px;
