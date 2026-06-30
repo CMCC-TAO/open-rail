@@ -104,8 +104,16 @@ async function apiFetch(url, opts = {}) {
 
 async function sendControl(action, payload = {}) {
   try {
-    await apiFetch(`/api/client/control/${action}`, { method: 'POST', body: JSON.stringify(payload || {}) });
-  } catch (e) { /* toasted */ }
+    const timeoutMs = action === 'arm' ? 30000 : 3000;
+    await apiFetch(`/api/client/control/${action}`, {
+      method: 'POST',
+      body: JSON.stringify(payload || {}),
+      timeoutMs,
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 async function sendLanguageSet(language = '') {

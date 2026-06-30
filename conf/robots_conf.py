@@ -25,12 +25,35 @@ def get_a2d_config():
     config.proprio_names = ['arm', 'hand' if 'hand' in config.hand_type else 'gripper', 'head', 'waist']
     config.gripper_freq = 40
     config.head_freq = 40
-    config.reset_robot_pos = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.4012, 27.0] + [0.0, 0.0] # default pose (teleoperation default pose)
+    config.manual_arm_interval = 0.01
     config.action_layout = {
-        'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
-        'gripper': {'start': 14, 'end': 16, 'policy': 'stepwise'},
-        # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
-        # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
+        'arm': {
+            'start': 0, 'end': 14, 'policy': 'gradual',
+            'presets': {
+                'left': [{'name': 'Default', 'value': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]}],
+                'right': [{'name': 'Default', 'value': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]}],
+            },
+        },
+        'gripper': {
+            'start': 14, 'end': 16, 'policy': 'stepwise',
+            'presets': {
+                'left': [{'name': 'Default', 'value': [0.0]}, {'name': 'Close', 'value': [1.0]}],
+                'right': [{'name': 'Default', 'value': [0.0]}, {'name': 'Close', 'value': [1.0]}],
+            },
+        },
+        # policy='manual' is robot/Web-only and must stay after all model policies.
+        'head': {
+            'start': 16, 'end': 18, 'policy': 'manual',
+            'presets': [{'name': 'Default', 'value': [0.0, 0.4363]}],
+        },
+        'waist': {
+            'start': 18, 'end': 20, 'policy': 'manual',
+            'presets': [{'name': 'Default', 'value': [0.4012, 27.0]}],
+        },
+        'wheel': {
+            'start': 20, 'end': 22, 'policy': 'manual',
+            'presets': [{'name': 'Default', 'value': [0, 0]}, {'name': 'Forward', 'value': [0.1, 0.]}, {'name': 'Backward', 'value': [-0.1, 0]}, {'name': 'Left', 'value': [0, 0.1]}, {'name': 'Right', 'value': [0, -0.1]}],
+        },
     }
     return config
 
@@ -48,13 +71,26 @@ def get_mock_config():
                         'hand_left': 'observation.images.left_wrist_rgb',
                         'hand_right': 'observation.images.right_wrist_rgb'}
     config.action_layout = {
-        'arm': {'start': 0, 'end': 16, 'policy': 'gradual'},
-        'gripper': {'start': 16, 'end': 28, 'policy': 'stepwise'},
-        # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
-        # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
+        'arm': {
+            'start': 0, 'end': 14, 'policy': 'gradual',
+            'presets': {
+                'left': [{'name': 'Default', 'value': [0.0] * 7}],
+                'right': [{'name': 'Default', 'value': [0.0] * 7}],
+            },
+        },
+        'gripper': {
+            'start': 14, 'end': 16, 'policy': 'stepwise',
+            'presets': {
+                'left': [{'name': 'Default', 'value': [0.0]}],
+                'right': [{'name': 'Default', 'value': [0.0]}],
+            },
+        },
+        # 'head': {'start': 16, 'end': 18, 'policy': 'manual'},
+        # 'waist': {'start': 18, 'end': 20, 'policy': 'manual'},
     }
+    config.manual_arm_interval = 0.01
     config.state_action_range = [[0, 16], [58, 70]]
-    config.dataset_path = '/home/lza/code/dataset/use_coffee_machine/zjrobot_v3_handpose/2026-0411-pick_coffee_left'
+    config.dataset_path = '/home/robot/Music/task_39_only1'
     # config.dataset_path = '/home/robot/Music'
     return config
 

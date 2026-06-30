@@ -3,7 +3,7 @@ import numpy as np
 from scipy.interpolate import CubicSpline, interp1d
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from client.utils.util import run_time_decorator
+from client.utils.util import run_time_decorator, parse_action_layout
 
 class IntraChunkSmoother():
     """Trajectory generator for robot motion planning and control.
@@ -19,6 +19,8 @@ class IntraChunkSmoother():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
+        self.action_layout = dict(getattr(config, 'action_layout', {}) or {})
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         # Create thread pools for parallel trajectory fitting
         self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers)
         self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers)
@@ -225,17 +227,21 @@ class IntraChunkSmoother():
         deg=self.config.fitting_deg 
 
         futures = []
-        x_eval = np.arange(start_time, end_time, time_step)
-        for index in joint_indices:
-            joint_chunk = action_chunk[index, :]
-            futures.append(self.joint_fitting_executor.submit(
-                self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
-            ))
-        for index in step_indices:
-            joint_chunk = action_chunk[index, :]
-            futures.append(self.gripper_fitting_executor.submit(
-                self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
-            ))
+        for name, seg in self.action_layout.items():
+            if seg['policy'] == 'manual':
+                continue
+            for index in range(seg['start'], seg['end']):
+                joint_chunk = np.array(action_chunk[index, :])
+                if seg['policy'] == 'gradual':
+                    futures.append(self.joint_fitting_executor.submit(
+                        self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
+                    ))
+                elif seg['policy'] == 'stepwise':
+                    futures.append(self.gripper_fitting_executor.submit(
+                        self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
+                    ))
+                else:
+                    raise ValueError(f"Unknown policy: {seg['policy']}")
 
         results = [future.result() for future in futures]
         
