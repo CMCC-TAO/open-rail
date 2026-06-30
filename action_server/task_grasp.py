@@ -56,10 +56,7 @@ def _get_language_instruction(target: str) -> str | None:
 
 
 def _reset_arms_to_default(robot_body, context, duration=2.0):
-    """将双臂和手掌在指定时间内线性过渡到默认位置（手掌同步张开）
-
-    每次 grasp 任务结束后强制调用，无论 _initialized 标志位如何，
-    确保手掌状态被清空复位，避免后续任务从异常手掌状态开始推理。
+    """将双臂在指定时间内线性过渡到默认位置，手掌保持当前控制量不变
 
     Args:
         robot_body: RobotBody 实例
@@ -69,7 +66,7 @@ def _reset_arms_to_default(robot_body, context, duration=2.0):
     import numpy as np
     import time
 
-    # 获取默认位置配置（含手掌张开值）
+    # 获取默认位置配置
     robot_type = context.config.robots.type.value
     robot_cfg = getattr(context.config.robots, robot_type)
     default_pose = np.array(robot_cfg.reset_robot_pos, dtype=np.float64)
@@ -77,44 +74,52 @@ def _reset_arms_to_default(robot_body, context, duration=2.0):
     # 获取当前机器人完整状态（26维）
     current_state = robot_body._get_reset_current_state()
     if current_state is None:
-        print('[GraspHandler] WARN: 无法获取当前机器人状态，跳过复位')
+        print('[GraspHandler] WARN: 无法获取当前机器人状态，跳过手臂复位')
         return
 
     current_arm = current_state[:14]  # 当前手臂位置
 
-    current_left_hand = current_state[14:20]
-    current_right_hand = current_state[20:26]
+    # 获取当前手掌控制量（保持手掌不变）
+    # 优先从 robot 的缓存状态中读取（由 VLA 推理过程中更新）
+    left_hand = getattr(robot_body.robot, 'current_left_hand_state', None)
+    right_hand = getattr(robot_body.robot, 'current_right_hand_state', None)
+
+    # 如果缓存中无手掌状态，从当前状态中取
+    if left_hand is None and len(current_state) >= 20:
+        left_hand = current_state[14:20]
+    if right_hand is None and len(current_state) >= 26:
+        right_hand = current_state[20:26]
+
+    # 兜底使用默认姿态的手掌值
+    if left_hand is None:
+        left_hand = default_pose[14:20]
+    if right_hand is None:
+        right_hand = default_pose[20:26]
+
+    left_hand = np.asarray(left_hand, dtype=float)
+    right_hand = np.asarray(right_hand, dtype=float)
 
     target_arm = default_pose[:14]
-    target_left_hand = default_pose[14:20]   # 默认手掌张开值
-    target_right_hand = default_pose[20:26]  # 默认手掌张开值
 
     # 计算手臂距离，如果已经接近则跳过
     arm_dist = np.max(np.abs(current_arm - target_arm))
     if arm_dist < np.deg2rad(0.5):
-        # 仅手臂在默认位置，但手掌仍需复位
-        print(f'[GraspHandler] 手臂已在默认位置附近，直接复位手掌到张开位置')
-        action = np.zeros(26)
-        action[:14] = target_arm
-        action[14:20] = target_left_hand
-        action[20:26] = target_right_hand
-        robot_body.robot.send_robot_action(action)
-        time.sleep(0.1)
+        print(f'[GraspHandler] 手臂已在默认位置附近 (max_diff={arm_dist:.4f} rad)，跳过复位')
         return
 
     n_steps = max(1, int(duration / 0.02))  # 50Hz
-    print(f'[GraspHandler] 双臂回归默认位置 + 手掌张开 ({duration}s, {n_steps} steps)...')
+    print(f'[GraspHandler] 双臂回归默认位置 ({duration}s, {n_steps} steps)...')
 
     for i in range(1, n_steps + 1):
         t = i / n_steps
         action = np.zeros(26)
         action[:14] = current_arm + t * (target_arm - current_arm)
-        action[14:20] = current_left_hand + t * (target_left_hand - current_left_hand)
-        action[20:26] = current_right_hand + t * (target_right_hand - current_right_hand)
+        action[14:20] = left_hand
+        action[20:26] = right_hand
         robot_body.robot.send_robot_action(action)
         time.sleep(0.02)
 
-    print('[GraspHandler] 复位完成（手臂+手掌）')
+    print('[GraspHandler] 双臂回归默认位置完成')
 
 
 class GraspHandler(AbstractTaskHandler):
@@ -132,10 +137,17 @@ class GraspHandler(AbstractTaskHandler):
         return "grasp"
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
+        import time
+        import threading as _thr
+        _tname = _thr.current_thread().name
+        _t0 = time.time()
+        print(f'[DEBUG GraspHandler] ENTER on {_tname}, params={params}')
+        
         # ===== 步骤 1: 解析 target 并获取语言指令 =====
         target = params.get("target", "")
         if not target:
             self.send_feedback(goal_handle, 0, "缺少 target 字段")
+            print(f'[DEBUG GraspHandler] EXIT early: missing target')
             return TaskResult(False, error_code=ERR_MISSING_TARGET,
                               error_message='Missing "target" field in params')
 
@@ -143,17 +155,20 @@ class GraspHandler(AbstractTaskHandler):
         if instruction is None:
             self.send_feedback(goal_handle, 0,
                                f"未知 target: {target}")
+            print(f'[DEBUG GraspHandler] EXIT early: unknown target={target}')
             return TaskResult(False, error_code=ERR_UNKNOWN_TARGET,
                               error_message=f'Unknown target="{target}". '
                                             f'Supported: {list(TARGET_LANGUAGE_MAP.keys())}')
 
         self.send_feedback(goal_handle, 5,
                            f"抓取目标: {target}, 语言指令: {instruction}")
+        print(f'[DEBUG GraspHandler] target={target} instruction="{instruction}" → creating VLA components...')
 
         # ===== 步骤 2: 创建 VLA 组件 =====
         components = context.create_vla_components()
         vla_client = components["vla_client"]
         robot_body = context.robot_body
+        print(f'[DEBUG GraspHandler] VLA components created, starting inference...')
 
         try:
             # ===== 步骤 3: 执行 VLA 推理 =====
@@ -168,6 +183,9 @@ class GraspHandler(AbstractTaskHandler):
                 thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >80% 直接完成或 30s 超时
                 stable_count_threshold=999,
             )
+
+            # ===== 无论推理成功还是失败，先将双臂回归默认位置（手掌不变）=====
+            _reset_arms_to_default(robot_body, context, duration=2.0)
 
             # ===== 步骤 4: 分析结果，结合手势判断具体错误 =====
             if not result.success:
@@ -202,7 +220,9 @@ class GraspHandler(AbstractTaskHandler):
                               error_message="Right hand grasp failed")
 
         finally:
-            # ===== 步骤 5: 复位手臂和手掌 + 清理 per-task 组件 =====
-            _reset_arms_to_default(robot_body, context, duration=2.0)
+            # ===== 步骤 5: 清理 per-task 组件 =====
             context._active_vla_client = None
+            _elapsed = time.time() - _t0
+            print(f'[DEBUG GraspHandler] EXIT after {_elapsed:.1f}s, running destroy_vla_components...')
             context.destroy_vla_components(components)
+            print(f'[DEBUG GraspHandler] destroy_vla_components done')

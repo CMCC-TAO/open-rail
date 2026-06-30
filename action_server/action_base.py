@@ -275,7 +275,10 @@ def run_vla_inference(
         send_vla_feedback(goal_handle, 10, "正在启动 VLA 推理...")
         vla_client.run()                    # 先启动观察/控制/WebSocket 线程
         time.sleep(0.5)                     # 等待观测数据积累
-        vla_client.inference_first()        # 首帧推理
+        # 注意: 不要在这里调 inference_first()!
+        # _inference_thread_fun 内部已经有 infer_count==0 的自调用首帧逻辑
+        # 如果这里再调一次，会与推理线程 (Thread-43) 竞争同一个 ZMQ socket
+        # 导致响应被错抢 → 推理线程永久阻塞 → prob_progress 卡死
         vla_client.is_running_action = True # 允许推理线程持续推理
     except Exception as e:
         return TaskResult(False, error_code=ERR_INFERENCE_START_FAILED,
@@ -335,11 +338,18 @@ def _monitor_vla_progress(
     progress_start = time.time()
     stable_count = 0
     stability_window = []
+    last_prob = -1.0
+    stuck_count = 0
+    loop_count = 0
+
+    print(f'[DEBUG _monitor_vla_progress] ENTER max_duration={max_duration}s thre_progress={thre_progress} stable_threshold={stable_count_threshold}')
 
     try:
         while True:
+            loop_count += 1
             # 检查外部停止信号
             if not vla_client.is_running_action:
+                # is_running_action=False → 外部停止
                 send_vla_feedback(goal_handle, 0, "VLA task stopped by external signal")
                 return TaskResult(False, error_code=ERR_TASK_CANCELLED,
                                   error_message='VLA task cancelled')
@@ -347,6 +357,7 @@ def _monitor_vla_progress(
             # 检查超时
             elapsed_total = time.time() - progress_start
             if elapsed_total > max_duration:
+                # 超时
                 send_vla_feedback(goal_handle, 0,
                                   f'Task timed out after {elapsed_total:.1f}s')
                 return TaskResult(False, error_code=ERR_TASK_TIMEOUT,
@@ -356,6 +367,15 @@ def _monitor_vla_progress(
             current_prob_progress = vla_client.current_prob_progress
             elapsed = time.time() - progress_start
             progress_pct = min(int(current_prob_progress * 100), 99)
+
+            # 检测 prob_progress 是否卡住
+            if abs(current_prob_progress - last_prob) < 5e-4:
+                stuck_count += 1
+            else:
+                stuck_count = 0
+            last_prob = current_prob_progress
+            if stuck_count > 0 and stuck_count % 10 == 0:
+                pass
 
             # 发送 feedback
             send_vla_feedback(
@@ -396,6 +416,8 @@ def _monitor_vla_progress(
             time.sleep(feedback_interval)
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return TaskResult(False, error_code=ERR_MONITOR_ERROR,
                           error_message=f'Monitoring error: {str(e)}')
 

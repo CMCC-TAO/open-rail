@@ -73,8 +73,8 @@ _RIGHT_RESET_POSE = np.array([0, -0.3, 0, 1.3, 0, 0, 0])
 # ==============================================
 ARM_INTERPOLATION_TIME = 3.0   # 手臂线性插值时长（秒）
 ARM_RETRACT_TIME = 3.0          # 放置后手臂回缩时长（秒）
-ARM_SAFE_TIME = 4.0             # 手臂安全姿态过渡时长（秒）
-ARM_RESET_TIME = 4.0            # 手臂垂直复位时长（秒）
+ARM_SAFE_TIME = 5.0             # 手臂安全姿态过渡时长（秒）
+ARM_RESET_TIME = 5.0            # 手臂垂直复位时长（秒）
 HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
 CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
 
