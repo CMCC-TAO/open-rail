@@ -56,9 +56,20 @@ from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
+from client.utils.util import load_user_config, apply_user_config, parse_action_layout
 from client.robots.base_robot import RobotBase
 
 logger = logging.getLogger(__name__)
+
+
+def _finalize_pyarrow_s3():
+    """Release PyArrow's global S3 resources on graceful shutdown."""
+    try:
+        import pyarrow.fs as arrow_fs
+        arrow_fs.finalize_s3()
+    except (ImportError, AttributeError, RuntimeError) as e:
+        logger.debug(f"PyArrow S3 cleanup skipped: {e}")
+
 
 # ── FastAPI app ──────────────────────────────────────────────────────────────
 # lifespan replaces the deprecated @app.on_event("startup"/"shutdown") pattern.
@@ -98,6 +109,7 @@ async def _lifespan(_: FastAPI):
     # which can crash (segfault) during interpreter shutdown.
     _cleanup(force_release_robot=True, skip_robot_close_if_threads_alive=True)
     _api_executor.shutdown(wait=False)
+    _finalize_pyarrow_s3()
 
 app = FastAPI(title="VLA Web Client", version="1.0.0", lifespan=_lifespan)
 
@@ -389,6 +401,18 @@ def _apply_flat_patch_new(config, patch: dict):
     if not isinstance(patch, dict) or config is None:
         return
 
+    legacy_inter_chunk_keys = {
+        "inter_chunk.search_length": "inter_chunk.search_action.search_length",
+        "inter_chunk.smooth_action": "inter_chunk.common.smooth_action",
+        "inter_chunk.smooth_length": "inter_chunk.common.smooth_length",
+        "inter_chunk.smooth_base": "inter_chunk.common.smooth_base",
+        "inter_chunk.smooth_ratio": "inter_chunk.common.smooth_ratio",
+    }
+    patch = {
+        legacy_inter_chunk_keys.get(key, key): value
+        for key, value in patch.items()
+    }
+
     def _is_mapping(obj):
         return isinstance(obj, (dict, ConfigDict))
 
@@ -515,6 +539,21 @@ def _bind_robot_to_vla_client(vla_client, robot):
             client_state.robot = robot
 
 
+def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
+    if robot_config is None or not hasattr(robot_config, 'action_layout'):
+        return
+    layout = robot_config.action_layout
+    client_config.rdm.action_layout = layout
+    client_config.intra_chunk.action_layout = layout
+    if vla_client is not None:
+        changed = vla_client.intra_chunk_smoother.action_layout != dict(layout)
+        smoother = vla_client.intra_chunk_smoother
+        smoother.action_layout = dict(layout)
+        smoother.action_dim, smoother.joint_indices, smoother.step_indices = parse_action_layout(layout)
+        if changed:
+            vla_client.realtime_data_manager.clear()
+
+
 def _ensure_config_robot_bound(force_recreate: bool = False):
     """Create robot by current config and inject into existing vla_client."""
     global robot_instance
@@ -538,6 +577,7 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
         robot_instance = None
 
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
+    _sync_robot_action_layout(client_config, robot_config, vla_client)
 
     robot, _ = _get_robot(client_config.robots.type, robot_config)
     if current_robot is robot:
@@ -1049,11 +1089,15 @@ async def patch_config(req: ConfigPatchRequest):
     finally:
         client_state.lock.release()
 
-    if robot_type_changed and prev_robot_type != next_robot_type and current_vla_client is not None:
+    if (
+        robot_type_changed
+        and is_running
+        and current_vla_client is not None
+        and prev_robot_type != next_robot_type
+    ):
         paused_state = None
         try:
-            if is_running:
-                paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
+            paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
             await asyncio.to_thread(_ensure_config_robot_bound, True)
             logger.info(f"Robot type changed: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
         except Exception as e:
@@ -1129,11 +1173,14 @@ async def load_config_file(req: ConfigFileRequest):
         current_vla_client = client_state.vla_client
         is_running = bool(client_state.running)
 
-    if prev_robot_type != next_robot_type and current_vla_client is not None:
+    if (
+        is_running
+        and current_vla_client is not None
+        and prev_robot_type != next_robot_type
+    ):
         paused_state = None
         try:
-            if is_running:
-                paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
+            paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
             await asyncio.to_thread(_ensure_config_robot_bound, True)
             logger.info(f"Robot type changed by config load: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
         finally:
@@ -1318,6 +1365,7 @@ def _ensure_vla_client_created():
     client_config = client_state.config
 
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
+    _sync_robot_action_layout(client_config, robot_config)
 
     vla_zmq_client = None
     robot = RobotBase(robot_config)
@@ -1896,8 +1944,21 @@ async def client_status():
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: runtime controls
 # ─────────────────────────────────────────────────────────────────────────────
-class PositionRequest(BaseModel):
-    pos: Optional[list[float]] = None
+class ManualControlRequest(BaseModel):
+    source: str = "manual"
+    l_arm: Optional[list[float]] = None
+    r_arm: Optional[list[float]] = None
+    l_gripper: Optional[list[float]] = None
+    r_gripper: Optional[list[float]] = None
+    l_hand: Optional[list[float]] = None
+    r_hand: Optional[list[float]] = None
+    l_hand_as_gripper: Optional[list[float]] = None
+    r_hand_as_gripper: Optional[list[float]] = None
+    head: Optional[list[float]] = None
+    waist: Optional[list[float]] = None
+    body: Optional[list[float]] = None
+    wheel: Optional[list[float]] = None
+    leg: Optional[list[float]] = None
 
 
 class LanguageSetRequest(BaseModel):
@@ -1922,13 +1983,20 @@ def _require_runtime(command_name: str):
     return vla_client, robot
 
 
-def _safe_pos(pos, default):
-    return pos if isinstance(pos, list) else default
-
-
-def _run_control_action(command: str, action: str, pos):
+async def _run_web_control(command: str, req: ManualControlRequest):
     _, robot = _require_runtime(command)
-    robot.execute_action({action: pos})
+    if robot.current_state is None:
+        raise HTTPException(400, 'Current robot state is unavailable. Start observation first.')
+    data = {
+        name: value for name, value in vars(req).items()
+        if value is not None
+    }
+    try:
+        await asyncio.to_thread(robot._control_robot, data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
     return {"status": "ok", "command": command}
 
 
@@ -1949,28 +2017,25 @@ async def client_control_reset():
 
 
 @app.post('/api/client/control/arm')
-async def client_control_arm(req: PositionRequest):
-    return _run_control_action('arm', 'arm', _safe_pos(req.pos, [0.0] * 14))
+async def client_control_arm(req: ManualControlRequest):
+    return await _run_web_control('arm', req)
 
 
 @app.post('/api/client/control/gripper')
-async def client_control_gripper(req: PositionRequest):
-    return _run_control_action('gripper', 'gripper', _safe_pos(req.pos, [0.0, 0.0]))
+async def client_control_gripper(req: ManualControlRequest):
+    return await _run_web_control('gripper', req)
 
 
 @app.post('/api/client/control/head')
-async def client_control_head(req: PositionRequest):
-    return _run_control_action('head', 'head', _safe_pos(req.pos, [0.0, 0.436, 0.0]))
-
-
 @app.post('/api/client/control/waist')
-async def client_control_waist(req: PositionRequest):
-    return _run_control_action('waist', 'waist', _safe_pos(req.pos, [0.0, 0.297, 0.0]))
+@app.post('/api/client/control/body')
+async def client_control_body(req: ManualControlRequest):
+    return await _run_web_control('body', req)
 
 
 @app.post('/api/client/control/wheel')
-async def client_control_wheel(req: PositionRequest):
-    return _run_control_action('wheel', 'wheel', _safe_pos(req.pos, [0.0, 0.0]))
+async def client_control_wheel(req: ManualControlRequest):
+    return await _run_web_control('wheel', req)
 
 
 @app.post('/api/client/language/set')

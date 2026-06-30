@@ -9,8 +9,7 @@ import threading
 
 # from launch import Action
 from ..base_robot import RobotBase
-from client.utils.util import run_time_decorator
-
+from client.utils.util import parse_action_layout
 
 # 限制 OpenCV/FFmpeg 线程，避免多线程解码冲突（pthread_frame async_lock）
 # os.environ.setdefault("OPENCV_FFMPEG_CAPTURE_OPTIONS", "threads;1")
@@ -24,7 +23,7 @@ class RobotBody(RobotBase):
             config (dict): Configuration dictionary containing mock robot settings
         """
         super().__init__(config)
-        self.logger = logging.getLogger(__name__) # required for correct logging output
+        self.logger = logging.getLogger(__name__)
         self.current_state = np.zeros(self.action_dim)
         self.dataset = None
         self.episode_files = []
@@ -111,8 +110,6 @@ class RobotBody(RobotBase):
             else:
                 self._load_episode(0)
 
-            self.current_state = np.zeros(self.action_dim)
-
         self.logger.info(f"Mock robot reset complete. dataset={self.dataset_path}, episode=0, frame=0")
 
     def _load_episode(self, episode_list_idx: int):
@@ -174,7 +171,6 @@ class RobotBody(RobotBase):
         """Retrieve observation data from local lerobot-format files."""
         if self.dataset is None or len(self.dataset) == 0:
             return None
-
 
         with self._io_lock:
             if self.currt_index >= len(self.dataset):
