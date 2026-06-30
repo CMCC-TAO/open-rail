@@ -11,8 +11,8 @@
   --center-collapsed-language-header-height: 38px;
   --center-collapsed-trajectory-header-height: 75px;
 }
-.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 158px; }
-.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 220px; }
+.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 164px; }
+.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 228px; }
 .center-col .panel-traj { flex: 0 0 var(--center-traj-height); min-height: 300px; }
 
 .layout {
