@@ -29,6 +29,7 @@
 import sys
 import os
 import time
+import math
 import numpy as np
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -54,6 +55,14 @@ RIGHT_DELIVER_POSE = np.array([-1.0, -0.1, 0.0, 0.5, 0.0, 0.0, 0.0])
 ARM_INTERPOLATION_TIME = 3.0   # 手臂线性插值时长（秒）
 HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
 CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
+
+# ==============================================
+# 拖拽检测参数
+# ==============================================
+TUG_DETECTION_THRESHOLD_DEG = 5.0   # 拖拽检测阈值（度），手腕关节偏差超过此值触发松手
+TUG_DETECTION_TIMEOUT = 30.0        # 等待拖拽超时（秒），超时后强制松手
+TUG_STABILIZE_TIME = 1.0            # 到位后等待 state 稳定的时间（秒）
+TUG_MONITOR_INTERVAL = 0.05         # 监测周期（秒），~20Hz
 
 
 class DeliverHandler(AbstractTaskHandler):
@@ -196,6 +205,111 @@ class DeliverHandler(AbstractTaskHandler):
 
         return action  # 返回最后一帧动作（含目标手臂位姿 + 原始手掌值）
 
+    def _hold_and_wait_for_tug(
+        self, robot_body, hand_side: str,
+        goal_handle, base_state: np.ndarray,
+    ) -> bool:
+        """到位后保持位姿，建立 measured state 基线，监测拖拽干扰，检测后松手。
+
+        对于 G1 这类控制精度低的机器人，commanded action 与 measured state
+        存在稳定偏差，因此不能直接用 action 作参考。先等待机械臂稳定，
+        读取当前 state 作为基线，再基于基线检测拖拽尖峰。
+
+        Args:
+            hand_side: 'left' / 'right' / 'both'
+            base_state: 26-dim 目标位姿（手臂+手掌），持续下发保持
+
+        Returns:
+            True = 拖拽触发后松手, False = 超时后强制松手
+        """
+        WRIST_IDXS = [0]  # shoulder_pitch（第一个关节，人拽动时受力最直接）
+        threshold = math.radians(TUG_DETECTION_THRESHOLD_DEG)
+
+        robot = robot_body.robot
+
+        # --- Step 1: 到位后持续下发保持位姿，等待 state 稳定 ---
+        robot.send_robot_action(base_state)
+        print(f'[Deliver] 到位，等待 {TUG_STABILIZE_TIME}s 让 state 稳定...')
+        t0 = time.time()
+        while time.time() - t0 < TUG_STABILIZE_TIME:
+            robot.send_robot_action(base_state)
+            time.sleep(TUG_MONITOR_INTERVAL)
+
+        # --- Step 2: 采集 measured state 作为基线（取 5 次 median，抗噪） ---
+        left_samples, right_samples = [], []
+        for _ in range(5):
+            if hand_side in ('left', 'both'):
+                arm = robot.latest_left_arm
+                if arm is not None:
+                    msg, _ = arm
+                    left_samples.append(np.array([msg.position[i] for i in WRIST_IDXS]))
+            if hand_side in ('right', 'both'):
+                arm = robot.latest_right_arm
+                if arm is not None:
+                    msg, _ = arm
+                    right_samples.append(np.array([msg.position[i] for i in WRIST_IDXS]))
+            robot.send_robot_action(base_state)
+            time.sleep(0.05)
+
+        baseline_left = np.median(left_samples, axis=0) if left_samples else None
+        baseline_right = np.median(right_samples, axis=0) if right_samples else None
+
+        left_str = baseline_left.round(4).tolist() if baseline_left is not None else "N/A"
+        right_str = baseline_right.round(4).tolist() if baseline_right is not None else "N/A"
+        print(f'[Deliver] 手腕基线(rad) - left: {left_str}, right: {right_str}')
+
+        # --- Step 3: 持续下发保持 + 监测拖拽 ---
+        start_time = time.time()
+        check_count = 0
+        while time.time() - start_time < TUG_DETECTION_TIMEOUT:
+            robot.send_robot_action(base_state)
+
+            tug_detected = False
+
+            if baseline_left is not None:
+                arm = robot.latest_left_arm
+                if arm is not None:
+                    msg, _ = arm
+                    wrist = np.array([msg.position[i] for i in WRIST_IDXS])
+                    diff = np.abs(wrist - baseline_left)
+                    if np.any(diff > threshold):
+                        diff_deg = np.rad2deg(diff).round(2)
+                        print(f'[Deliver] 左手拖拽检测到！diff={diff_deg} deg')
+                        tug_detected = True
+
+            if not tug_detected and baseline_right is not None:
+                arm = robot.latest_right_arm
+                if arm is not None:
+                    msg, _ = arm
+                    wrist = np.array([msg.position[i] for i in WRIST_IDXS])
+                    diff = np.abs(wrist - baseline_right)
+                    if np.any(diff > threshold):
+                        diff_deg = np.rad2deg(diff).round(2)
+                        print(f'[Deliver] 右手拖拽检测到！diff={diff_deg} deg')
+                        tug_detected = True
+
+            if tug_detected:
+                side_label = {'left': '左手', 'right': '右手',
+                              'both': '双手'}.get(hand_side, hand_side)
+                print(f'[Deliver] {side_label}拖拽触发，松手！')
+                self._open_hand_and_hold(robot_body, hand_side, goal_handle,
+                                         HAND_OPEN_HOLD_TIME, base_state=base_state)
+                return True
+
+            time.sleep(TUG_MONITOR_INTERVAL)
+            check_count += 1
+            if check_count % 100 == 0:
+                elapsed = time.time() - start_time
+                print(f'[Deliver] 等待拖拽中... {elapsed:.0f}s / {TUG_DETECTION_TIMEOUT:.0f}s')
+
+        # --- Step 4: 超时，强制松手 ---
+        side_label = {'left': '左手', 'right': '右手',
+                      'both': '双手'}.get(hand_side, hand_side)
+        print(f'[Deliver] 超时 {TUG_DETECTION_TIMEOUT}s，{side_label}强制松手')
+        self._open_hand_and_hold(robot_body, hand_side, goal_handle,
+                                 HAND_OPEN_HOLD_TIME, base_state=base_state)
+        return False
+
     def _open_hand_and_hold(
         self, robot_body, hand_side: str,
         goal_handle, hold_duration: float,
@@ -252,7 +366,7 @@ class DeliverHandler(AbstractTaskHandler):
             return TaskResult(False, error_code=ERR_DELIVER_TIMEOUT,
                               error_message="Failed to get current robot state for left arm deliver")
 
-        self._open_hand_and_hold(robot_body, 'left', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
+        self._hold_and_wait_for_tug(robot_body, 'left', goal_handle, current_state)
 
         send_vla_feedback(goal_handle, 100, "左手递物完成")
         return TaskResult(True)
@@ -277,7 +391,7 @@ class DeliverHandler(AbstractTaskHandler):
             return TaskResult(False, error_code=ERR_DELIVER_TIMEOUT,
                               error_message="Failed to get current robot state for right arm deliver")
 
-        self._open_hand_and_hold(robot_body, 'right', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
+        self._hold_and_wait_for_tug(robot_body, 'right', goal_handle, current_state)
 
         send_vla_feedback(goal_handle, 100, "右手递物完成")
         return TaskResult(True)
@@ -321,16 +435,8 @@ class DeliverHandler(AbstractTaskHandler):
             return TaskResult(False, error_code=ERR_DELIVER_TIMEOUT,
                               error_message="Failed to get current robot state for both arm deliver")
 
-        # 2. 同时打开双手，保持 1s
-        self._open_hand_and_hold(robot_body, 'both', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
-
-        # 3. 等待 0.5s 让 grasp_detector 更新
-        time.sleep(0.5)
-        final_grasp_state = context.grasp_detector.grasp_state
-        if final_grasp_state[0] or final_grasp_state[1]:
-            send_vla_feedback(goal_handle, 98, "有一只手未能放下物体")
-            return TaskResult(False, error_code=ERR_DELIVER_ONE_HAND_STILL_HOLDING,
-                              error_message="One hand still holding object after both arm deliver")
+        # 2. 保持位姿，等待拖拽检测，检测到后松手
+        self._hold_and_wait_for_tug(robot_body, 'both', goal_handle, current_state)
 
         send_vla_feedback(goal_handle, 100, "双手递物完成")
         return TaskResult(True)
