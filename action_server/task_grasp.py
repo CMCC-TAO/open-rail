@@ -122,6 +122,133 @@ def _reset_arms_to_default(robot_body, context, duration=2.0):
     print('[GraspHandler] 双臂回归默认位置完成')
 
 
+def _apply_smooth_start_blend(vla_client, robot_body, blend_duration=3.0):
+    """Monkey-patch vla_client 首帧推理，添加从当前 action → 模型轨迹的平滑过渡。
+
+    对于控制精度低的机械臂，state（传感器读数）与 action（下发指令）偏差很大且存在延迟/噪声。
+    使用最近下发的 action 作为起点，可以避免因 state-action 差异导致的启动抖动。
+    
+    本函数在首帧推理中把 action_chunk 前 N 步从当前 action 线性插值到模型原始轨迹，消除突变。
+
+    通过临时替换 _process_action_chunk 实例方法实现，不影响类的其他实例。
+
+    Args:
+        vla_client: VLAClientAsync 实例
+        robot_body: RobotBody 实例
+        blend_duration: 过渡时长（秒），默认 3.0
+    """
+    import types
+    import numpy as np
+    import time
+
+    print(f'[SmoothStart] === Enter _apply_smooth_start_blend ===')
+
+    # 捕获当前正在执行的 action（而非 sensor state）
+    # 原因：对于控制精度低的机器人，state 有延迟和噪声，而 action 是实时下发的控制目标
+    # 使用 action 作为起点可以避免因 state-action 偏差导致的启动抖动
+    current_action = None
+    try:
+        # 优先从 robot_body 获取最近下发的 action（reset 阶段刚执行完，有缓存）
+        # _get_reset_current_action() 的优先级：
+        #   1. Action cache — /joint_action + /left_hand/set_angle + /right_hand/set_angle
+        #      （最近一次通过 send_robot_action 下发到机器人的指令）
+        #   2. VLA cached state
+        #   3. retrieve_observation() fallback
+        act = robot_body._get_reset_current_action()
+        if act is not None:
+            current_action = np.asarray(act, dtype=np.float64)
+            print(f'[SmoothStart] Current action captured from robot_body._get_reset_current_action(), '
+                  f'dim={len(current_action)}, first 4 values: {current_action[:4].round(4).tolist()}')
+        else:
+            # Fallback: try realtime_data_manager (VLA 已开始但不一定有缓存)
+            rdm = vla_client.realtime_data_manager
+            currt_act, _, _ = rdm.get_current_state()
+            if currt_act is not None:
+                current_action = np.asarray(currt_act, dtype=np.float64)
+                print(f'[SmoothStart] Current action captured from RDM, dim={len(current_action)}, '
+                      f'first 4 values: {current_action[:4].round(4).tolist()}')
+            else:
+                print(f'[SmoothStart] WARN: both robot_body and RDM returned None for current action')
+    except Exception as e:
+        print(f'[SmoothStart] WARN: failed to capture current action: {e}')
+
+    if current_action is None:
+        print('[SmoothStart] SKIP: no current action available, smooth start disabled')
+        return
+
+    observe_period = vla_client.observe_period
+    original_infer_first = vla_client._inference_first
+    print(f'[SmoothStart] observe_period={observe_period:.4f}s')
+
+    def _patched_inference_first(self):
+        """带平滑启动的 _inference_first 包装。"""
+        print(f'[SmoothStart] >>> _patched_inference_first called (infer_count={self.realtime_data_manager.infer_count})')
+
+        # 保存原始的 _process_action_chunk（bound method）
+        original_process = self._process_action_chunk
+
+        def _blended_process(action_raw):
+            """在 _process_action_chunk 返回值上叠加线性插值 blend。
+
+            注意：这里直接赋值为实例属性（不用 MethodType），
+            所以 action_raw 是原始的 action_data 参数，不会多一个 self。
+            """
+            t0 = time.perf_counter()
+            action_chunk, ts, loc_ts = original_process(action_raw)
+
+            if action_chunk is not None and len(action_chunk) > 1:
+                total = len(action_chunk)
+                num_blend = min(int(blend_duration / observe_period), total - 1)
+
+                print(f'[SmoothStart]   _blended_process: total={total}, num_blend={num_blend}, '
+                      f'action_chunk[0] first 4 before: '
+                      f'{np.array(action_chunk[0], dtype=np.float64)[:4].round(4).tolist()}')
+
+                if num_blend >= 1:
+                    for i in range(num_blend + 1):
+                        alpha = i / num_blend
+                        act = np.array(action_chunk[i], dtype=np.float64)
+                        dim = min(len(act), len(current_action))
+                        act[:dim] = (1 - alpha) * current_action[:dim] + alpha * act[:dim]
+                        action_chunk[i] = act
+
+                    print(f'[SmoothStart]   AFTER blend: action_chunk[0] first 4 = '
+                          f'{np.array(action_chunk[0], dtype=np.float64)[:4].round(4).tolist()}')
+                    print(f'[SmoothStart]   Blended first {num_blend+1}/{total} steps '
+                          f'(duration={blend_duration}s, elapsed={time.perf_counter()-t0:.3f}s)')
+                else:
+                    print(f'[SmoothStart]   num_blend={num_blend} < 1, skip blend')
+            else:
+                print(f'[SmoothStart]   SKIP blend: action_chunk={type(action_chunk).__name__}, len={len(action_chunk) if action_chunk else 0}')
+
+            return action_chunk, ts, loc_ts
+
+        # 临时替换实例方法（作为普通函数，不用 MethodType）
+        # 这样 self._process_action_chunk(action_data) 调用时，
+        # action_data 直接传给 action_raw 参数，不会多绑一个 self
+        self._process_action_chunk = _blended_process
+
+        try:
+            original_infer_first()
+            print(f'[SmoothStart] <<< original _inference_first completed OK')
+        except Exception as e:
+            import traceback
+            print(f'[SmoothStart] ERROR in original _inference_first: {e}')
+            traceback.print_exc()
+        finally:
+            # 删除实例属性，恢复原始类方法
+            try:
+                del self._process_action_chunk
+                print(f'[SmoothStart]   _process_action_chunk restored')
+            except AttributeError:
+                print(f'[SmoothStart]   _process_action_chunk restore skipped (no instance attr)')
+
+    vla_client._inference_first = types.MethodType(_patched_inference_first, vla_client)
+    print(f'[SmoothStart] === Patch applied successfully ===')
+    print(f'[SmoothStart]    blend_duration={blend_duration}s, observe_period={observe_period:.4f}s, '
+          f'expected blend steps={int(blend_duration/observe_period)}')
+
+
 class GraspHandler(AbstractTaskHandler):
     """'grasp' 任务处理器 — 抓取大类
 
@@ -167,7 +294,20 @@ class GraspHandler(AbstractTaskHandler):
         # ===== 步骤 2: 创建 VLA 组件 =====
         components = context.create_vla_components()
         vla_client = components["vla_client"]
+        task_language_manager = components["task_language_manager"]
         robot_body = context.robot_body
+
+        # Override language instruction in task_language_manager
+        # （因为 create_vla_components() 中 auto_mode=False，但初始化时已经从 config.language.task_id="pour_tea"
+        # 读取了默认指令，需要手动覆盖为当前任务的指令）
+        print(f'[DEBUG GraspHandler] Overriding language instruction: "{instruction}"')
+        task_language_manager.currt_language_instruction = instruction
+        task_language_manager.config.sub_task_id = 0  # Reset sub_task_id to avoid confusion
+
+        # Apply smooth start: blend from current state to model trajectory (first N steps)
+        # 消除启动时因模型输出与实际 state 差异大导致的抖动和图像模糊
+        _apply_smooth_start_blend(vla_client, robot_body, blend_duration=3.0)
+
         print(f'[DEBUG GraspHandler] VLA components created, starting inference...')
 
         try:
