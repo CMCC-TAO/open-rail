@@ -36,8 +36,8 @@
   flex-wrap: wrap;
 }
 .robot-ctrl-actions-right .btn {
-  min-width: 36px;
-  padding: 4 2px;
+  /* min-width: 36px; */
+  padding: 4 0px;
   /* height: 18px; */
   /* padding: 0 8px; */
   font-size: var(--font-size-2);
