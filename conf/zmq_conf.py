@@ -16,7 +16,8 @@ def get_vla_zmq_config():
     # config.server_addr = 'tcp://*:5566'  # Server binding address and port
     config.ip = '127.0.0.1'  # Client connection address
     config.port = '5566'     # Client connect port
-    config.timeout = 500     # Timeout for zmq.recv(), milliseconds
+    config.infer_timeout = 500     # Timeout for zmq.recv(), milliseconds
+    config.heartbeat_timeout = 30000  # Timeout for remove unconnected client, milliseconds
     # config.server_ip = '*'          # Server binding address
     # config.server_port = '5566'     # Server binding port
     return config
