@@ -123,7 +123,7 @@ class VLAServer:
 
         return results
     
-    def inference(self, data, meta=None):
+    def inference(self, client_id, data, meta=None):
         """Process inference request with image decoding and model inference
         
         Args:
@@ -172,7 +172,7 @@ class VLAServer:
             #     for k, v in item.get('obs', {}).items():
             #         print(f"Debug: model_data[{idx}]['obs']['{k}'] dtype: {getattr(v, 'dtype', type(v))}")
             future = self.executor.submit(self.model.infer, model_data)
-            future.add_done_callback(lambda f: self.inference_callback(f, image_decode_time, meta=meta))
+            future.add_done_callback(lambda f: self.inference_callback(f, client_id=client_id, start_time=image_decode_time, meta=meta))
             for key, value in model_data[0]['obs'].items():
                 if 'cam.' in key:
                     self.obs_info[key] = value.shape
@@ -186,7 +186,7 @@ class VLAServer:
             import traceback
             traceback.print_exc()
     
-    def inference_callback(self, future, start_time, meta=None):
+    def inference_callback(self, future, client_id, start_time, meta=None):
         """Callback function for handling inference results
         
         Args:
@@ -209,7 +209,7 @@ class VLAServer:
                 # self.total_inference_time += inference_time
                 # Calculate rolling average from recent inference times
                 # if self.inference_times:
-            self.zmq_server.sendMessage(result, meta=meta)
+            self.zmq_server.sendMessage(client_id=client_id, data=result, meta=meta)
             self.act_info['pred_action'] = result['pred_action']
         except Exception as e:
             print(f"Error in inference callback: {e}")
@@ -223,7 +223,7 @@ class VLAServer:
             message = self.zmq_server.recvMessage()
             if message is None or 'data' not in message:
                 continue
-            self.inference(message['data'], message.get('meta', {}))
+            self.inference(client_id=message['client_id'], data=message['data'], meta=message.get('meta', {}))
         print('Stop to receive data...')
     
     def close(self):

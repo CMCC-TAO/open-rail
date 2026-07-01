@@ -38,9 +38,12 @@ class ZMQServer():
         try:
             # Receive message (blocking), ROUTER socket includes sender identity and multipart message
             parts = self.router.recv_multipart()
-            self.client_id = parts[0]  # Client identifier
+            # self.client_id = parts[0]  # Client identifier
+            # client_id = b'\x00k\x8bEg'
+            # print(f"Debug: client_id: {self.client_id}")
             message = {}
             if len(parts) >= 2:
+                message['client_id'] = parts[0]
                 message['data'] = pickle.loads(parts[1])  # Binary data
                 message['meta'] = json.loads(parts[2].decode('utf8'))  # Metadata JSON
                 return message
@@ -53,7 +56,7 @@ class ZMQServer():
             traceback.print_exc()
             return None
     
-    def sendMessage(self, data, meta={}):
+    def sendMessage(self, client_id, data, meta={}):
         """Send message to client
         
         Args:
@@ -67,7 +70,7 @@ class ZMQServer():
             # Convert data dictionary to byte stream
             data = pickle.dumps(data)
             meta = json.dumps(meta).encode('utf8')
-            self.router.send_multipart([self.client_id, data, meta], flags=zmq.NOBLOCK)  # Non-blocking send
+            self.router.send_multipart([client_id, data, meta], flags=zmq.NOBLOCK)  # Non-blocking send
         except Exception as e:
             self.logger.error(f"Error sending message: {e}")
             import traceback

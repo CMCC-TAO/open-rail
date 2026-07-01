@@ -28,8 +28,19 @@
         <span class="resource-pill" id="val-mem-usage"><span class="resource-label">MEM</span><span class="resource-value">--</span></span>
         <span class="resource-pill" id="val-bw-usage"><span class="resource-label">NET</span><span class="resource-value">--</span></span>
       </div>
-      <span id="ws-indicator" class="ws-dot disconnected" title="WebSocket"></span>
-      <span class="ws-label">Visualize Server</span>
+      <!-- Separator between system resource group and ws indicator -->
+      <div class="topbar-sep"></div>
+      <!-- Network indicator group with two-line layout -->
+      <div class="net-indicator-group">
+        <div>
+          <span id="ws-indicator" class="ws-dot disconnected" title="Visualize Server"></span>
+          <span class="ws-label">Visualize Server</span>
+        </div>
+        <div>
+          <span id="zmq-indicator" class="ws-dot disconnected" title="Model Server"></span>
+          <span class="ws-label">Model Server</span>
+        </div>
+      </div>
     </div>
   </header>
 

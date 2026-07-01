@@ -163,6 +163,31 @@
   font-weight: var(--font-weight-4); /* Increased font weight for value */
 }
 
+/* Vertical separator between system resource group and ws indicator */
+.topbar-sep {
+  width: 1px; 
+  height: 24px;
+  background: var(--border);
+  flex-shrink: 0; 
+  margin: 0 2px; 
+  align-self: center;
+}
+
+/* Network indicator group with two-line layout */
+.net-indicator-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 80px;
+}
+
+.net-indicator-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* ── WS indicator ── */
 .ws-dot { 
   width: 8px; 
