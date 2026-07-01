@@ -89,7 +89,7 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 0
+  sub_task_id: 1
   task_id: point_bottle
   task_progress_threshold: 0.99
   task_progress_win_size: 10
@@ -482,7 +482,7 @@ visualize:
   ping_timeout: 10
   port: 8765
   trajectory:
-    play: false
+    play: true
     selected_joints:
     - 7
     source:
@@ -492,7 +492,5 @@ visualize:
     window_span_sec: 10.0
   updata_fps: 30
 vla_zmq:
-  client_ip: localhost
-  client_port: '5566'
-  server_ip: '*'
-  server_port: '5566'
+  ip: 127.0.0.1
+  port: '5566'
