@@ -8,13 +8,72 @@ controller:
   speed: 1.27
   wait_time: 400
 inter_chunk:
+  bspline:
+    num_control_points: 6
+    transition_length: 32
+  common:
+    smooth_action: false
+    smooth_base: 0.0
+    smooth_length: 50
+    smooth_ratio: 0.75
   inter_chunk_mode: min_jerk
-  search_length: 100
-  smooth_action: false
-  smooth_base: 0.0
-  smooth_length: 50
-  smooth_ratio: 0.75
+  min_jerk:
+    adaptive_factor: -1
+    blend_threshold: 0.7
+  poly:
+    poly_length: 30
+  search_action:
+    search_length: 100
+  smooth_velocity:
+    kd: 2.0
+    kp: 5.0
+    max_acc: 5.0
+    max_vel: 2.0
+  sync: {}
 intra_chunk:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      presets:
+        left:
+        - &id001
+          name: Default
+          value:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+        right:
+        - &id002
+          name: Default
+          value:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      presets:
+        left:
+        - &id003
+          name: Default
+          value:
+          - 0.0
+        right:
+        - &id004
+          name: Default
+          value:
+          - 0.0
+      start: 14
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -31,10 +90,29 @@ language:
   auto_mode: true
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
+  task_id: point_bottle
   task_progress_threshold: 0.99
   task_progress_win_size: 10
 rdm:
+  action_layout:
+    arm:
+      end: 14
+      policy: gradual
+      presets:
+        left:
+        - *id001
+        right:
+        - *id002
+      start: 0
+    gripper:
+      end: 16
+      policy: stepwise
+      presets:
+        left:
+        - *id003
+        right:
+        - *id004
+      start: 14
   max_len: 100
   mode: async
   observe_fps_window_size: 10
@@ -92,11 +170,90 @@ robots:
       arm:
         end: 14
         policy: gradual
+        presets:
+          left:
+          - name: Default
+            value:
+            - -1.0748
+            - 0.6107
+            - 0.2816
+            - -1.2823
+            - 0.7292
+            - 1.4957
+            - -0.1869
+          right:
+          - name: Default
+            value:
+            - 1.072
+            - -0.6103
+            - -0.278
+            - 1.2822
+            - -0.7299
+            - -1.4929
+            - 0.1873
         start: 0
       gripper:
         end: 16
         policy: stepwise
+        presets:
+          left:
+          - name: Default
+            value:
+            - 0.0
+          - name: Close
+            value:
+            - 1.0
+          right:
+          - name: Default
+            value:
+            - 0.0
+          - name: Close
+            value:
+            - 1.0
         start: 14
+      head:
+        end: 18
+        policy: manual
+        presets:
+        - name: Default
+          value:
+          - 0.0
+          - 0.4363
+        start: 16
+      waist:
+        end: 20
+        policy: manual
+        presets:
+        - name: Default
+          value:
+          - 0.4012
+          - 27.0
+        start: 18
+      wheel:
+        end: 22
+        policy: manual
+        presets:
+        - name: Default
+          value:
+          - 0
+          - 0
+        - name: Forward
+          value:
+          - 0.1
+          - 0.0
+        - name: Backward
+          value:
+          - -0.1
+          - 0
+        - name: Left
+          value:
+          - 0
+          - 0.1
+        - name: Right
+          value:
+          - 0
+          - -0.1
+        start: 20
     camera:
       names:
         hand_left: hand_left
@@ -106,43 +263,31 @@ robots:
     gripper_freq: 40
     hand_type: gripper
     head_freq: 40
+    manual_arm_interval: 0.01
     proprio_names:
     - arm
     - gripper
     - head
     - waist
-    reset_robot_pos:
-    - -1.0748
-    - 0.6107
-    - 0.2816
-    - -1.2823
-    - 0.7292
-    - 1.4957
-    - -0.1869
-    - 1.072
-    - -0.6103
-    - -0.278
-    - 1.2822
-    - -0.7299
-    - -1.4929
-    - 0.1873
-    - 0
-    - 0
-    - 0.0
-    - 0.4363
-    - 0.4012
-    - 27.0
-    - 0.0
-    - 0.0
   mock:
     action_layout:
       arm:
         end: 14
         policy: gradual
+        presets:
+          left:
+          - *id001
+          right:
+          - *id002
         start: 0
       gripper:
         end: 16
         policy: stepwise
+        presets:
+          left:
+          - *id003
+          right:
+          - *id004
         start: 14
     camera:
       names:
@@ -151,6 +296,7 @@ robots:
         head: observation.images.top_head
       ref: head
     dataset_path: /home/robot/Downloads/tea_model_data/task_1196
+    manual_arm_interval: 0.01
     state_action_range:
     - - 0
       - 16
