@@ -64,9 +64,9 @@ class ZMQServer():
             meta: Metadata dictionary (will be JSON encoded)
         """
         try:
-            if self.client_id is None:
-                self.logger.warning("Client ID not found, cannot send message")
-                return
+            # if self.client_id is None:
+            #     self.logger.warning("Client ID not found, cannot send message")
+            #     return
             # Convert data dictionary to byte stream
             data = pickle.dumps(data)
             meta = json.dumps(meta).encode('utf8')
