@@ -20,7 +20,7 @@ class ZMQClient():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
-        self.client_addr = f'tcp://{config.client_ip}:{config.client_port}'  # Client connection address and port
+        self.client_addr = f'tcp://{config.ip}:{config.port}'  # Client connection address and port
         self.context = zmq.Context()
         self.dealer = self.context.socket(zmq.DEALER)
         # self.dealer.setsockopt(zmq.SNDTIMEO, 5000)  # 5 second timeout

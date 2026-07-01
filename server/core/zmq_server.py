@@ -20,7 +20,7 @@ class ZMQServer():
         self.logger = logging.getLogger(__name__)
         # Initialize ZMQ server with configuration dictionary
         self.config = config
-        self.server_addr = f'tcp://{config.server_ip}:{config.server_port}'  # Server binding address and port
+        self.server_addr = f'tcp://*:{config.port}'  # Server binding address and port
         self.context = zmq.Context()
         # Create ROUTER socket for handling multiple clients
         self.router = self.context.socket(zmq.ROUTER)
