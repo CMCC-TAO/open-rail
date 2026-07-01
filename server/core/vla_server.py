@@ -206,6 +206,7 @@ class VLAServer:
                     meta["avg_infer_time"] = self.avg_inference_time
                 else:
                     meta = {"avg_infer_time": self.avg_inference_time}
+                # print(f"DEBUG: Inference time: {inference_time:.4f} seconds")
                 # self.total_inference_time += inference_time
                 # Calculate rolling average from recent inference times
                 # if self.inference_times:
