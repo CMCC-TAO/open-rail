@@ -156,9 +156,9 @@ def get_visualize_config() -> ConfigDict:
 def get_language_config() -> ConfigDict:
     config = ConfigDict()
     config.file_path = 'language_cmd.json'  # Path to language configuration file, must in conf dir.
-    config.task_id = 'pour_tea'
-    config.sub_task_id = 1
-    config.auto_mode = True  # If True, automatically switch language instructions based on probability threshold
+    config.task_id = 'grasp'
+    config.sub_task_id = 0
+    config.auto_mode = False  # If True, automatically switch language instructions based on probability threshold
     config.task_progress_threshold = 0.9  # Probability threshold for switching language instructions
     config.task_progress_win_size = 10 # Sliding window size to compute average task progress
     return config

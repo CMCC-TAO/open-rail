@@ -19,6 +19,5 @@
 @import url('./modules/trajectory.css');
 @import url('./modules/camera.css');
 @import url('./modules/manual.css');
-
 /* 工具类 */
 .hidden { display: none !important; }

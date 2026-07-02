@@ -5,8 +5,39 @@
 //  Tasks → <select> level-1; Sub-tasks → <select> level-2 (ordered Array)
 // ═══════════════════════════════════════════════════════
 const LangCmd = {
-  tasks: {},        // { taskName: [instruction0, instruction1, ...] }  — ordered array
+  tasks: {},        // { taskName: [{ name, instruction }, ...] } — ordered array
 };
+
+function normalizeLangEntry(entry, index) {
+  if (typeof entry === 'string') {
+    const instruction = entry.trim();
+    if (!instruction) return null;
+    return { name: `Sub-task ${index + 1}`, instruction };
+  }
+
+  if (entry && typeof entry === 'object') {
+    const instruction = String(entry.instruction ?? entry.text ?? entry.value ?? '').trim();
+    if (!instruction) return null;
+    const name = String(entry.name ?? `Sub-task ${index + 1}`).trim() || `Sub-task ${index + 1}`;
+    return { name, instruction };
+  }
+
+  return null;
+}
+
+function getLangEntries(taskName) {
+  return (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+}
+
+function getLangInstruction(entry) {
+  if (!entry || typeof entry !== 'object') return '';
+  return String(entry.instruction || '');
+}
+
+function getLangEntryName(entry, fallbackIndex = 0) {
+  if (!entry || typeof entry !== 'object') return `Sub-task ${fallbackIndex + 1}`;
+  return String(entry.name || `Sub-task ${fallbackIndex + 1}`);
+}
 
 function buildLangTasksFromData(data) {
   LangCmd.tasks = {};
@@ -14,11 +45,16 @@ function buildLangTasksFromData(data) {
 
   if (Array.isArray(data)) {
     // Flat array → single "Default" task
-    LangCmd.tasks['Default'] = data.filter(x => typeof x === 'string');
+    const entries = data
+      .map((entry, index) => normalizeLangEntry(entry, index))
+      .filter(Boolean);
+    LangCmd.tasks.Default = entries;
   } else {
     for (const [taskName, subtasks] of Object.entries(data)) {
       if (Array.isArray(subtasks)) {
-        LangCmd.tasks[taskName] = subtasks.filter(x => typeof x === 'string');
+        LangCmd.tasks[taskName] = subtasks
+          .map((entry, index) => normalizeLangEntry(entry, index))
+          .filter(Boolean);
       }
     }
   }
@@ -54,8 +90,9 @@ function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
   return Math.max(14, estimated);
 }
 
-function formatLangSubtaskOptionLabel(taskName, text, index, maxChars = 36) {
-  const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
+function formatLangSubtaskOptionLabel(taskName, entry, index, maxChars = 36) {
+  const label = getLangEntryName(entry, index);
+  const clipped = label.length > maxChars ? `${label.substring(0, maxChars)}…` : label;
   return `${index + 1}.${clipped}`;
 }
 
@@ -122,16 +159,16 @@ function renderLangSubtaskSelect() {
 
   subtaskSel.innerHTML = '';
   const taskName = taskSel ? taskSel.value : null;
-  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  const subtasks = getLangEntries(taskName);
   const maxChars = getLangSubtaskMaxCharsByWidth(subtaskSel);
 
   const { taskId: appliedTaskId, subTaskId: appliedSubTaskId } = getAppliedLangSelection();
-  subtasks.forEach((text, i) => {
+  subtasks.forEach((entry, i) => {
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i, maxChars);
+    opt.textContent = formatLangSubtaskOptionLabel(taskName, entry, i, maxChars);
     setAppliedOptionMarker(opt, taskName === appliedTaskId && i === appliedSubTaskId);
-    opt.title = text;
+    opt.title = getLangInstruction(entry);
     subtaskSel.appendChild(opt);
   });
   // Sync Config panel sub_task_id options (preserve current selection)
@@ -239,7 +276,7 @@ function setupLangPanel() {
 
       // Default select first sub-task after task switch.
       const taskName = taskSel.value;
-      const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+      const subtasks = getLangEntries(taskName);
       if (subtaskSel) {
         if (subtaskSel.options.length > 0) {
           subtaskSel.selectedIndex = 0;
@@ -248,7 +285,7 @@ function setupLangPanel() {
           subtaskSel.value = '';
         }
       }
-      $('lang-cmd-text').value = subtasks[0] ?? '';
+      $('lang-cmd-text').value = getLangInstruction(subtasks[0]);
 
       // Sync Config panel selects to task + first sub-task.
       const cfgTaskSel = $('cfg-language-task');
@@ -264,10 +301,10 @@ function setupLangPanel() {
   if (subtaskSel) {
     subtaskSel.addEventListener('change', () => {
       const taskName = taskSel ? taskSel.value : null;
-      const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+      const subtasks = getLangEntries(taskName);
       const idx = parseInt(subtaskSel.value, 10);
       if (!isNaN(idx) && subtasks[idx] !== undefined) {
-        $('lang-cmd-text').value = subtasks[idx];
+        $('lang-cmd-text').value = getLangInstruction(subtasks[idx]);
       }
       const cfgIdxSel = $('cfg-language-index');
       if (cfgIdxSel && cfgIdxSel.value !== subtaskSel.value) {
@@ -284,7 +321,7 @@ function setupLangPanel() {
 
       if (enabled) {
         const taskName = taskSel ? taskSel.value : null;
-        const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+        const subtasks = getLangEntries(taskName);
 
         if (subtaskSel) {
           if (subtaskSel.options.length > 0) {
@@ -297,7 +334,7 @@ function setupLangPanel() {
         }
 
         if (subtasks[0] !== undefined) {
-          $('lang-cmd-text').value = subtasks[0];
+          $('lang-cmd-text').value = getLangInstruction(subtasks[0]);
         }
 
         await persistLanguagePatch({
@@ -457,7 +494,7 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   // Sync Lang Panel Sub-task select
   const subtaskSel = $('lang-subtask-select');
   const taskName = taskSel ? taskSel.value : null;
-  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  const subtasks = getLangEntries(taskName);
   const safeIndex = subtasks.length > 0
     ? Math.max(0, Math.min(index, subtasks.length - 1))
     : -1;
@@ -465,7 +502,7 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   if (subtaskSel) {
     if (safeIndex >= 0) {
       subtaskSel.value = String(safeIndex);
-      $('lang-cmd-text').value = subtasks[safeIndex] ?? '';
+      $('lang-cmd-text').value = getLangInstruction(subtasks[safeIndex]);
     } else {
       subtaskSel.value = '';
       $('lang-cmd-text').value = '';
@@ -530,7 +567,7 @@ $('btn-lang-send').addEventListener('click', async () => {
   const subtaskSel = $('lang-subtask-select');
   const autoChk = $('chk-lang-auto-mode');
   const task = taskSel ? taskSel.value : null;
-  const subtasks = (task && LangCmd.tasks[task]) ? LangCmd.tasks[task] : [];
+  const subtasks = getLangEntries(task);
 
   let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
   if (!Number.isFinite(idx) || idx < 0) idx = 0;
@@ -546,7 +583,7 @@ $('btn-lang-send').addEventListener('click', async () => {
 
   let lang = $('lang-cmd-text').value.trim();
   if (autoChk && autoChk.checked && subtasks[0] !== undefined) {
-    lang = String(subtasks[0]).trim();
+    lang = getLangInstruction(subtasks[0]).trim();
     $('lang-cmd-text').value = lang;
   }
 

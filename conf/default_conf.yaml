@@ -5,10 +5,10 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.25
-  wait_time: 400
+  speed: 1.0
+  wait_time: 200
 inter_chunk:
-  inter_chunk_mode: search_action
+  inter_chunk_mode: min_jerk
   search_length: 100
   smooth_action: false
   smooth_base: 0.0
@@ -25,7 +25,7 @@ intra_chunk:
       policy: hand
       start: 14
   filter_window_size: 4
-  fitting_deg: 5
+  fitting_deg: 4
   fitting_num_samples: 64
   gripper_dim: 2
   head_dim: 2
@@ -37,11 +37,11 @@ intra_chunk:
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
 language:
-  auto_mode: true
+  auto_mode: false
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: pour_tea
-  task_progress_threshold: 0.99
+  task_id: grasp
+  task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
   action_layout:
@@ -220,7 +220,7 @@ robots:
 vision:
   history_frame: false
   preprocess:
-    height: 180
+    height: 480
     keep_ratio: true
     method: resize
     width: 640

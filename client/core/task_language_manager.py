@@ -20,7 +20,7 @@ class TaskLanguageManager:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-        self.task_language_map: Dict[str, List[str]] = self._load_task_language_map(
+        self.task_language_map: Dict[str, List[Dict[str, str]]] = self._load_task_language_map(
             getattr(self.config, "file_path", "")
         )
         self.currt_language_instruction: str = self._sync_language_from_config()
@@ -39,19 +39,48 @@ class TaskLanguageManager:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return file_path if os.path.isabs(file_path) else os.path.join(root_dir, "conf", file_path)
 
-    def _load_task_language_map(self, file_path: str) -> Dict[str, List[str]]:
+    def _normalize_task_entry(self, item, default_name: str) -> Optional[Dict[str, str]]:
+        if isinstance(item, str):
+            text = item.strip()
+            if not text:
+                return None
+            return {"name": default_name, "instruction": text}
+
+        if isinstance(item, dict):
+            name = str(item.get("name", "") or default_name).strip()
+            instruction = str(
+                item.get("instruction", item.get("text", item.get("value", ""))) or ""
+            ).strip()
+            if not instruction:
+                return None
+            return {"name": name or default_name, "instruction": instruction}
+
+        return None
+
+    def _load_task_language_map(self, file_path: str) -> Dict[str, List[Dict[str, str]]]:
         target_path = self._resolve_task_file_path(file_path)
         try:
             with open(target_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list):
-                return {"Default": [x for x in data if isinstance(x, str)]}
+                entries = []
+                for idx, item in enumerate(data):
+                    normalized = self._normalize_task_entry(item, f"Sub-task {idx + 1}")
+                    if normalized is not None:
+                        entries.append(normalized)
+                return {"Default": entries}
             if isinstance(data, dict):
-                return {
-                    k: [x for x in v if isinstance(x, str)]
-                    for k, v in data.items()
-                    if isinstance(v, list)
-                }
+                task_map: Dict[str, List[Dict[str, str]]] = {}
+                for task_name, values in data.items():
+                    if not isinstance(values, list):
+                        continue
+                    entries = []
+                    for idx, item in enumerate(values):
+                        normalized = self._normalize_task_entry(item, f"Sub-task {idx + 1}")
+                        if normalized is not None:
+                            entries.append(normalized)
+                    task_map[str(task_name)] = entries
+                return task_map
         except Exception as e:
             self.logger.warning(
                 f"Failed to load language command file: {target_path}, error: {e}"
@@ -75,7 +104,7 @@ class TaskLanguageManager:
 
         sub_task_id = max(0, min(sub_task_id, len(task_cmds) - 1))
         self.config.sub_task_id = sub_task_id
-        return task_cmds[sub_task_id]
+        return task_cmds[sub_task_id]["instruction"]
 
     def advance_subtask(self) -> None:
         """Advance sub task id cyclically under current task and return language."""
@@ -95,7 +124,7 @@ class TaskLanguageManager:
                 sub_task_id = int(getattr(self.config, "sub_task_id", 0))
                 sub_task_id = (sub_task_id + 1) % len(task_cmds)
                 self.sub_task_id_tmp = sub_task_id
-                self.currt_language_instruction = task_cmds[sub_task_id]
+                self.currt_language_instruction = task_cmds[sub_task_id]["instruction"]
             # else:
             #     self.logger.debug(f"Not ready for advance. Avg task progress: {avg_task_progress:.2f}")
             #     return  # Not ready to advance yet

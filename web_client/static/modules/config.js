@@ -972,11 +972,13 @@ function syncLangIndexOptions(taskName, currentIndex) {
   if (!sel) return;
   const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
   sel.innerHTML = '';
-  subtasks.forEach((text, i) => {
+  subtasks.forEach((entry, i) => {
+    const name = String(entry && entry.name ? entry.name : `Sub-task ${i + 1}`);
+    const instruction = String(entry && entry.instruction ? entry.instruction : '');
     const o = document.createElement('option');
     o.value = i;
-    o.textContent = `${i + 1}. ${text.substring(0, 60)}${text.length > 60 ? '…' : ''}`;
-    o.title = text;
+    o.textContent = `${i + 1}. ${name.substring(0, 60)}${name.length > 60 ? '…' : ''}`;
+    o.title = instruction;
     sel.appendChild(o);
   });
   // Pre-select given index, or restore previous

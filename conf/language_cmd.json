@@ -25,5 +25,23 @@
     "[PRIMARY_ARM=RIGHT]Add water",
     "[PRIMARY_ARM=LEFT] Put the kettle",
     "[PRIMARY_ARM=LEFT] Divide tea"
+  ],
+  "grasp": [
+    {
+      "name": "grasp one water",
+      "instruction": "Use one hand to grab one bottle from a pile of Wahaha drinks."
+    },
+    {
+      "name": "grasp one Coca-Cola",
+      "instruction": "Use one hand to grab one bottle from a pile of Coca-Cola drinks."
+    },
+    {
+      "name": "grasp two water",
+      "instruction": "Use both hands to grab the two nearest bottles from a pile of Wahaha drinks."
+    },
+    {
+      "name": "grasp two Coca-Cola",
+      "instruction": "Use both hands to grab the two nearest bottles from a pile of Coca-Cola drinks."
+    }
   ]
 }

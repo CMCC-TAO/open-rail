@@ -104,7 +104,7 @@ VISUAL_DIR  = ROOT / "visual"
 
 # Default config files bundled with the project
 DEFAULT_YAML     = ROOT / "conf" / "default_conf.yaml"
-DEFAULT_LANG_CMD = ROOT / "conf" / "lang_cmd.json"
+DEFAULT_LANG_CMD = ROOT / "conf" / "language_cmd.json"
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 # Expose visual/ libs (Chart.js, hammer, zoom plugin) used by web_client
@@ -130,6 +130,7 @@ class ClientState:
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self.paused_thread_state: Optional[dict] = None
         self.worker_thread: Optional[threading.Thread] = None
+
 
 client_state = ClientState()
 select_directory_lock = asyncio.Lock()
@@ -1383,9 +1384,11 @@ async def _bg_start_client():
 
     def _run_in_thread():
         try:
-            vla_client.run()
+            # Do NOT auto-start observe/inference/control threads on startup.
+            # The user will manually start each stage via the Observe/Infer/Control buttons.
+            # This prevents the robot from moving immediately when "Start" is clicked.
             asyncio.run_coroutine_threadsafe(
-                _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
+                _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client started (threads idle)."}}),
                 loop
             )
 
