@@ -1569,6 +1569,10 @@ async def _bg_resume_and_broadcast(vla_client):
     try:
         with client_state.lock:
             restore_state = client_state.paused_thread_state
+        # For grasp tasks, apply smooth start blend before resuming inference
+        _task_id = str(getattr(getattr(client_state.config, 'language', None), 'task_id', ''))
+        if _task_id == 'grasp':
+            await asyncio.to_thread(_apply_smooth_start_blend_web, vla_client, client_state.robot)
         await asyncio.to_thread(_resume_vla_client, vla_client, restore_state)
         with client_state.lock:
             client_state.paused_thread_state = None
@@ -1887,6 +1891,77 @@ async def client_status():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+#  Smooth start blend for grasp tasks (web client)
+# ─────────────────────────────────────────────────────────────────────────────
+def _apply_smooth_start_blend_web(vla_client, robot_body, blend_duration=3.0):
+    """Apply one-shot smooth start blend for the next inference cycle.
+
+    Monkey-patches _process_action_chunk to linearly blend the first N steps
+    of the next action_chunk from current action → model trajectory, then
+    auto-restores the original method.
+
+    Mirrors action_server/task_grasp.py:_apply_smooth_start_blend, adapted
+    for the web client where inference is already running continuously.
+    """
+    import numpy as np
+    import time as _time
+
+    # Capture current action (latest commanded, not measured state)
+    current_action = None
+    try:
+        act = robot_body._get_reset_current_action() if hasattr(robot_body, '_get_reset_current_action') else None
+        if act is not None:
+            current_action = np.asarray(act, dtype=np.float64)
+            logger.info(f'[SmoothStart-Web] Current action captured, dim={len(current_action)}')
+        else:
+            rdm = getattr(vla_client, 'realtime_data_manager', None)
+            if rdm is not None:
+                currt_act, _, _ = rdm.get_current_state()
+                if currt_act is not None:
+                    current_action = np.asarray(currt_act, dtype=np.float64)
+                    logger.info(f'[SmoothStart-Web] Current action from RDM, dim={len(current_action)}')
+    except Exception as e:
+        logger.warning(f'[SmoothStart-Web] Failed to capture current action: {e}')
+
+    if current_action is None:
+        logger.warning('[SmoothStart-Web] No current action available, smooth start disabled')
+        return
+
+    observe_period = getattr(vla_client, 'observe_period', 0.1)
+    logger.info(f'[SmoothStart-Web] observe_period={observe_period:.4f}s')
+
+    # Save original _process_action_chunk bound method
+    original_process = vla_client._process_action_chunk
+    blended = [False]  # mutable flag to track one-shot
+
+    def _blended_process(action_raw):
+        """One-shot: blend first N steps, then delegate to original."""
+        if blended[0]:
+            return original_process(action_raw)
+
+        blended[0] = True
+        t0 = _time.perf_counter()
+        action_chunk, ts, loc_ts = original_process(action_raw)
+
+        if action_chunk is not None and len(action_chunk) > 1:
+            total = len(action_chunk)
+            num_blend = min(int(blend_duration / observe_period), total - 1)
+            if num_blend >= 1:
+                for i in range(num_blend + 1):
+                    alpha = i / num_blend
+                    act = np.array(action_chunk[i], dtype=np.float64)
+                    dim = min(len(act), len(current_action))
+                    act[:dim] = (1 - alpha) * current_action[:dim] + alpha * act[:dim]
+                    action_chunk[i] = act
+                logger.info(f'[SmoothStart-Web] Blended first {num_blend+1}/{total} steps '
+                            f'({blend_duration}s, elapsed={_time.perf_counter()-t0:.3f}s)')
+
+        return action_chunk, ts, loc_ts
+
+    vla_client._process_action_chunk = _blended_process
+    logger.info(f'[SmoothStart-Web] Smooth start blend armed for next inference')
+
+# ─────────────────────────────────────────────────────────────────────────────
 #  REST: runtime controls
 # ─────────────────────────────────────────────────────────────────────────────
 class PositionRequest(BaseModel):
@@ -1927,6 +2002,7 @@ async def client_control_reset():
     try:
         paused_state = _pause_vla_client(vla_client)
         robot.reset_robot(mode='default')
+        vla_client.realtime_data_manager.clear()
         _resume_vla_client(vla_client, paused_state)
         await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
         return {"status": "ok", "command": 'reset'}
