@@ -21,6 +21,11 @@ function renderStats(data) {
   $('val-net-latency').textContent   = data.avg_comm_time != null
     ? (data.avg_comm_time * 1000).toFixed(1) + ' ms' : '–';
 
+  // Update ZMQ indicator based on zmq_connected status from server
+  if (typeof data.zmq_connected !== 'undefined') {
+    updateZMQIndicator(!!data.zmq_connected);
+  }
+
   updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
 
   const cpuVal = Number(data.cpu_usage);
