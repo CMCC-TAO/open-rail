@@ -41,14 +41,6 @@ function connectWS() {
   App.ws.onerror = () => App.ws.close();
 }
 
-// Add function to update ZMQ indicator
-function updateZMQIndicator(connected) {
-  const zmqIndicator = document.getElementById('zmq-indicator');
-  if (zmqIndicator) {
-    zmqIndicator.className = `ws-dot ${connected ? 'connected' : 'disconnected'}`;
-  }
-}
-
 // ═══════════════════════════════════════════════════════
 //  Camera WebSocket (VisualizeServer — port 8765)
 // ═══════════════════════════════════════════════════════

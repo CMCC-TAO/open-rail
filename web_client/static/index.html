@@ -36,9 +36,32 @@
           <span id="ws-indicator" class="ws-dot disconnected" title="Visualize Server"></span>
           <span class="ws-label">Visualize Server</span>
         </div>
-        <div>
+        <div id="zmq-indicator-container" class="zmq-indicator-container">
           <span id="zmq-indicator" class="ws-dot disconnected" title="Model Server"></span>
           <span class="ws-label">Model Server</span>
+          <!-- ZMQ Indicator Hover Panel -->
+          <div id="zmq-info-panel" class="hover-info-panel hidden">
+            <div class="hover-info-row">
+              <span class="info-label">IP:</span>
+              <span id="zmq-ip" class="info-value">--</span>
+            </div>
+            <div class="hover-info-row">
+              <span class="info-label">Port:</span>
+              <span id="zmq-port" class="info-value">--</span>
+            </div>
+            <div class="hover-info-row">
+              <span class="info-label">Model Type:</span>
+              <span id="zmq-model-type" class="info-value">--</span>
+            </div>
+            <div class="hover-info-row">
+              <span class="info-label">Model Path:</span>
+              <span id="zmq-model-path" class="info-value">--</span>
+            </div>
+            <div class="hover-info-row">
+              <span class="info-label">Language Cmd:</span>
+              <span id="zmq-language-cmd" class="info-value">--</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
