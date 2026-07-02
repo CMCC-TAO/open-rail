@@ -684,6 +684,8 @@ def _collect_stats() -> dict:
         # 添加 ZMQ 客户端连接状态
         if hasattr(vla_client, 'vla_zmq') and vla_client.vla_zmq is not None:
             base["zmq_connected"] = bool(getattr(vla_client.vla_zmq, "is_connected", False))
+            # Update server_ip, server_port, model_type, model_path, lang_cmd
+            base.update(vla_client.vla_zmq.get_heartbeat_info())
         
         # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
         # acquired = vla_client.show_thread_lock.acquire(timeout=0.05)

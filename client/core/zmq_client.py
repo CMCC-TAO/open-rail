@@ -38,6 +38,7 @@ class ZMQClient():
         # Heartbeat thread
         self.heartbeat_thread = None
         self.last_heartbeat_time = time.time()
+        self.heartbeat_info = {}
         
         self.logger.info(f'ZMQ client started, connected to: {self.client_addr}')
         
@@ -160,6 +161,7 @@ class ZMQClient():
                     # Handle heartbeat responses
                     if isinstance(data, dict) and data.get('type') == 'heartbeat':
                         # print(f"Debug: heartbeat_info={data}")
+                        self.heartbeat_info = data
                         self.last_heartbeat_time = time.time()
                         self.is_connected = True
                         # Don't return heartbeat responses to the caller, continue to next message
@@ -222,18 +224,14 @@ class ZMQClient():
             self.is_connected = False
             return False
 
-    def get_connection_status(self):
+    def get_heartbeat_info(self):
         """Get current connection status.
         
         Returns:
             dict: Connection status information including connectivity and last heartbeat time.
         """
-        return {
-            'is_connected': self.is_connected,
-            'last_heartbeat_time': self.last_heartbeat_time,
-            'current_address': self.client_addr,
-            'time_since_last_heartbeat': time.time() - self.last_heartbeat_time
-        }
+        # print(f"Debug: heartbeat_info: {self.heartbeat_info}")
+        return self.heartbeat_info.copy()
 
     def close(self):
         """Close the ZMQ client and clean up resources."""
