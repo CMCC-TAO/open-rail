@@ -1083,6 +1083,17 @@ async def patch_config(req: ConfigPatchRequest):
                     current_vla_client.set_observe_period(float(flat[k]))
                 else:
                     pass
+            elif k.startswith('vla_zmq.ip'):
+                if current_vla_client is not None:
+                    current_vla_client.vla_zmq.update_connection(new_ip=flat[k])
+                else:
+                    pass
+            elif k.startswith('vla_zmq.port'):
+                # print(f"Debug: key={k}, value={flat[k]}")
+                if current_vla_client is not None:
+                    current_vla_client.vla_zmq.update_connection(new_port=flat[k])
+                else:
+                    pass
             else:
                 # print(f"Debug: key={k}, value={flat[k]}")
                 pass
