@@ -80,8 +80,8 @@ const CONFIG_READONLY_DOT_KEYS = new Set([
   'visualize.ping_timeout',
   'visualize.host',
   'visualize.port',
-  // 'vla_zmq.client_ip',
-  // 'vla_zmq.client_port',
+  'vla_zmq.heartbeat_interval',
+  'vla_zmq.heartbeat_timeout',
   // 'vla_zmq.server_ip',
   // 'vla_zmq.server_port',
   'rdm.max_len'
