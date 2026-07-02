@@ -658,6 +658,7 @@ def _collect_stats() -> dict:
         "gpu_usage": None,
         "mem_usage": None,
         "bandwidth_m": None,
+        "zmq_connected": False,  # 添加 ZMQ 连接状态
     }
     with client_state.lock:
         vla_client = client_state.vla_client
@@ -680,6 +681,11 @@ def _collect_stats() -> dict:
         base["avg_inter_traj_time"]   = float(vla_client.realtime_data_manager.avg_inter_traj_time)
         base["obv_fps"]         = float(vla_client.realtime_data_manager.get_observe_fps())
         base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
+        
+        # 添加 ZMQ 客户端连接状态
+        if hasattr(vla_client, 'vla_zmq') and vla_client.vla_zmq is not None:
+            base["zmq_connected"] = bool(getattr(vla_client.vla_zmq, "is_connected", False))
+        
         # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
         # acquired = vla_client.show_thread_lock.acquire(timeout=0.05)
         # try:
