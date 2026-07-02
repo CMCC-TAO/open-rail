@@ -41,8 +41,9 @@ class ZMQServer():
         # Start heartbeat monitoring thread
         self._start_heartbeat_monitor()
         self._heartbeat_info = {'status': 'pong', 'type': 'heartbeat'}
-        self._heartbeat_info['ip'] = self.get_local_ip()
-        self._heartbeat_info['port'] = config.port
+        # self._heartbeat_info['server_ip'] = self.get_local_ip()
+        self._heartbeat_info['server_ip'] = '*'
+        self._heartbeat_info['server_port'] = config.port
         self._heartbeat_meta = {'type': 'heartbeat_response', 'action': 'pong'}
         
         self.logger.info(f'ZMQ server started, listening on: {self.server_addr}')
@@ -64,6 +65,7 @@ class ZMQServer():
             self._heartbeat_info['model_path'] = model_path
         if lang_cmd is not None:
             self._heartbeat_info['lang_cmd'] = lang_cmd
+        self._heartbeat_info['timestamp'] = time.time()
     def _start_heartbeat_monitor(self):
         """Start heartbeat monitoring thread"""
         self._monitor_thread = threading.Thread(target=self._heartbeat_monitor, daemon=True)

@@ -14,7 +14,7 @@
   border-radius: var(--radius);
   box-shadow: var(--panel-shadow);
   padding: 12px;
-  min-width: 220px;
+  min-width: 360px;
   z-index: 1000;
   font-size: var(--font-size-2);
   color: var(--text);
@@ -61,15 +61,15 @@
 .info-label {
   font-weight: var(--font-weight-2);
   color: var(--text-muted);
-  margin-right: 10px;
-  flex: 0 0 100px; /* Fixed width for labels */
+  /* margin-right: 2px; */
+  flex: 0 0 42px; /* Fixed width for labels */
   text-align: left;
 }
 
 .info-value {
   font-weight: var(--font-weight-3);
   color: var(--text);
-  text-align: right;
+  text-align: left;
   flex: 1;
   word-break: break-all;
   min-width: 0; /* Allows flex child to shrink below content size */

@@ -68,13 +68,14 @@ function updateZmqInfoPanel(data) {
   const modelTypeElement = document.getElementById('zmq-model-type');
   const modelPathElement = document.getElementById('zmq-model-path');
   const languageCmdElement = document.getElementById('zmq-language-cmd');
+  const timestampElement = document.getElementById('zmq-timestamp');
   
-  if (ipElement && data.zmq_ip) {
-    ipElement.textContent = data.zmq_ip;
+  if (ipElement && data.server_ip) {
+    ipElement.textContent = data.server_ip;
   }
   
-  if (portElement && data.zmq_port) {
-    portElement.textContent = data.zmq_port;
+  if (portElement && data.server_port) {
+    portElement.textContent = data.server_port;
   }
   
   if (modelTypeElement && data.model_type) {
@@ -85,8 +86,11 @@ function updateZmqInfoPanel(data) {
     modelPathElement.textContent = data.model_path;
   }
   
-  if (languageCmdElement && data.language_cmd) {
-    languageCmdElement.textContent = data.language_cmd;
+  if (languageCmdElement && data.lang_cmd) {
+    languageCmdElement.textContent = data.lang_cmd;
+  }
+  if (timestampElement && data.timestamp) {
+    timestampElement.textContent = data.timestamp;
   }
 }
 
