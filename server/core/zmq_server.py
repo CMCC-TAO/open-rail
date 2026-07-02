@@ -1,5 +1,6 @@
 import zmq
 import json
+import socket
 import pickle
 import logging
 import threading
@@ -39,9 +40,30 @@ class ZMQServer():
         
         # Start heartbeat monitoring thread
         self._start_heartbeat_monitor()
+        self._heartbeat_info = {'status': 'pong', 'type': 'heartbeat'}
+        self._heartbeat_info['ip'] = self.get_local_ip()
+        self._heartbeat_info['port'] = config.port
+        self._heartbeat_meta = {'type': 'heartbeat_response', 'action': 'pong'}
         
         self.logger.info(f'ZMQ server started, listening on: {self.server_addr}')
-
+    def get_local_ip(self):
+        """Get the local machine's IP address within the network"""
+        temp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            temp_socket.connect(("8.8.8.8", 80))
+            local_ip = temp_socket.getsockname()[0]
+        except Exception:
+            local_ip = "127.0.0.1"
+        finally:
+            temp_socket.close()
+        return local_ip
+    def set_heartbeat_info(self, model_type: str = None, model_path: str = None, lang_cmd: str = None):
+        if model_type is not None:
+            self._heartbeat_info['model_type'] = model_type
+        if model_path is not None:
+            self._heartbeat_info['model_path'] = model_path
+        if lang_cmd is not None:
+            self._heartbeat_info['lang_cmd'] = lang_cmd
     def _start_heartbeat_monitor(self):
         """Start heartbeat monitoring thread"""
         self._monitor_thread = threading.Thread(target=self._heartbeat_monitor, daemon=True)
@@ -137,9 +159,7 @@ class ZMQServer():
     def sendHeartbeatResponse(self, client_id):
         """Send heartbeat response to client"""
         try:
-            response_data = {'status': 'pong', 'timestamp': time.time(), 'type': 'heartbeat'}
-            response_meta = {'type': 'heartbeat_response', 'action': 'pong'}
-            self.sendMessage(client_id, response_data, response_meta)
+            self.sendMessage(client_id, self._heartbeat_info, self._heartbeat_meta)
         except Exception as e:
             self.logger.error(f"Error sending heartbeat response: {e}")
     

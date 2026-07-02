@@ -159,6 +159,7 @@ class ZMQClient():
                     
                     # Handle heartbeat responses
                     if isinstance(data, dict) and data.get('type') == 'heartbeat':
+                        # print(f"Debug: heartbeat_info={data}")
                         self.last_heartbeat_time = time.time()
                         self.is_connected = True
                         # Don't return heartbeat responses to the caller, continue to next message
