@@ -63,7 +63,7 @@ class ZMQClient():
                 # print("Failed to send heartbeat, connection may be lost")
                 self.is_connected = False
                 # Attempt to reconnect if connection is lost
-                # self._attempt_reconnect()
+                self._attempt_reconnect()
             else:
                 self.last_heartbeat_time = time.time()
                 self.is_connected = True
@@ -71,31 +71,26 @@ class ZMQClient():
 
     def _attempt_reconnect(self):
         """Attempt to reconnect to the server."""
-        if self._reconnect_lock.locked():
-            return  # Another thread is already trying to reconnect
             
         with self._reconnect_lock:
-            while not self.is_closed and not self.is_connected:
-                # Close old socket
-                try:
-                    self.dealer.close(linger=0)
-                except:
-                    pass
-                    
-                self.dealer = self.context.socket(zmq.DEALER)
-                self.dealer.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
-                self.dealer.connect(self.client_addr)
+            # Close old socket
+            try:
+                self.dealer.close(linger=0)
+            except:
+                pass
                 
-                # Test connection by sending two message, the first message will return true anyway.
-                self.sendMessage({'type': 'test_connection', 'timestamp': time.time()}, {'action': 'test'})
-                if self.sendMessage({'type': 'test_connection', 'timestamp': time.time()}, {'action': 'test'}):
-                    self.logger.info("Reconnection successful")
-                    self.is_connected = True
-                    self.last_heartbeat_time = time.time()
-                    return
-                else:
-                    self.logger.warning("Reconnection unsuccessful")
-                    time.sleep(self.config.reconnect_interval/1000)
+            self.dealer = self.context.socket(zmq.DEALER)
+            self.dealer.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
+            self.dealer.connect(self.client_addr)
+            
+            # Test connection by sending two message, the first message will return true anyway.
+            self.sendMessage({'type': 'test_connection', 'timestamp': time.time()}, {'action': 'test'})
+            if self.sendMessage({'type': 'test_connection', 'timestamp': time.time()}, {'action': 'test'}):
+                self.logger.info("Reconnection successful")
+                self.is_connected = True
+                self.last_heartbeat_time = time.time()
+            else:
+                self.logger.warning("Reconnection unsuccessful")
             
     def update_connection(self, new_ip=None, new_port=None):
         """Update connection parameters and reconnect to the server.
@@ -115,8 +110,13 @@ class ZMQClient():
             # Create a new socket and connect
             try:
                 # Update the connection address
+                if new_ip is None:
+                    new_ip = self.config.ip
+                if new_port is None:
+                    new_port = self.config.port
                 self.client_addr = f'tcp://{new_ip}:{new_port}'
                 self.logger.info(f"Updating connection to: {self.client_addr}")
+                print(f"Updating connection to: {self.client_addr}")
                 self.dealer = self.context.socket(zmq.DEALER)
                 self.dealer.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
                 self.dealer.connect(self.client_addr)
@@ -210,9 +210,6 @@ class ZMQClient():
             # import traceback
             # traceback.print_exc()
             self.is_connected = False
-            # Attempt reconnection if message fails to send
-            if not self.is_closed:
-                threading.Thread(target=self._attempt_reconnect, daemon=True).start()
             # EAGAIN means HWM/backpressure in non-blocking mode; treat as soft failure.
             if self.is_closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM, zmq.EAGAIN):
                 return False
@@ -222,9 +219,6 @@ class ZMQClient():
             # import traceback
             # traceback.print_exc()
             self.is_connected = False
-            # Attempt reconnection if message fails to send
-            if not self.is_closed:
-                threading.Thread(target=self._attempt_reconnect, daemon=True).start()
             return False
 
     def get_connection_status(self):
@@ -250,6 +244,7 @@ class ZMQClient():
             # Stop heartbeat thread
             if self.heartbeat_thread:
                 self.heartbeat_thread.join(timeout=1)
+            self.is_connected = False
             
             try:
                 self.dealer.close(linger=0)
