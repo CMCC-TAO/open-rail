@@ -51,6 +51,11 @@ function renderStats(data) {
   
   // Update ZMQ info panel with data from the server
   updateZmqInfoPanel(data);
+  // Update ZMQ indicator based on zmq_connected status from server
+  if (typeof data.zmq_connected !== 'undefined') {
+    updateZMQIndicator(!!data.zmq_connected);
+  }
+
 }
 
 // Function to update ZMQ info panel

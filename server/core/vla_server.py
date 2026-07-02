@@ -30,6 +30,7 @@ class VLAServer:
         self.config = config
         self.zmq_server = zmq_server
         self.model = model
+        self.zmq_server.set_heartbeat_info(model_type=str(config.models.type), model_path=model.cfg['model_path'], lang_cmd='No language command received.')
 
         self.running = False
         
@@ -180,6 +181,7 @@ class VLAServer:
                     self.obs_info[key] = value.shape
                 elif 'language' in key:
                     self.obs_info[key] = value
+                    self.zmq_server.set_heartbeat_info(lang_cmd=value)
             self.obs_info['obs_comm_delay'] = time.perf_counter() - model_data[0]['loc_timestamp']
         except Exception as e:
             print(f"Error processing inference queue: {e}")
