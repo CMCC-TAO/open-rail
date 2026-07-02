@@ -8,7 +8,7 @@
 .hover-info-panel {
   position: absolute;
   top: calc(100% + 8px);  /* Position below the indicator with some gap */
-  right: 0;  /* Align to the right */
+  right: -40px;  /* Align to the right */
   background: var(--bg2);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -20,7 +20,7 @@
   color: var(--text);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(255, 255, 255, 0.90);
   box-shadow: 
     0 8px 30px rgba(0, 0, 0, 0.12),
     0 4px 14px rgba(0, 0, 0, 0.08),
@@ -31,7 +31,7 @@
   content: '';
   position: absolute;
   top: -6px;  /* Position the arrow at the top */
-  right: 20px;  /* Position the arrow appropriately */
+  right: 96px;  /* Position the arrow appropriately */
   border-left: 6px solid transparent;
   border-right: 6px solid transparent;
   border-bottom: 6px solid var(--border);
@@ -41,7 +41,7 @@
   content: '';
   position: absolute;
   top: -5px;  /* Slightly above the border */
-  right: 21px;  /* Aligned with the border arrow */
+  right: 97px;  /* Aligned with the border arrow */
   border-left: 5px solid transparent;
   border-right: 5px solid transparent;
   border-bottom: 5px solid var(--bg2);
@@ -49,6 +49,7 @@
 
 .hover-info-row {
   display: flex;
+  flex-direction: column;
   justify-content: space-between;
   padding: 5px 0;
   border-bottom: 1px solid var(--border);
@@ -61,8 +62,8 @@
 .info-label {
   font-weight: var(--font-weight-2);
   color: var(--text-muted);
-  /* margin-right: 2px; */
-  flex: 0 0 42px; /* Fixed width for labels */
+  margin-bottom: 2px;
+  flex: none; /* Fixed width for labels */
   text-align: left;
 }
 
@@ -70,7 +71,8 @@
   font-weight: var(--font-weight-3);
   color: var(--text);
   text-align: left;
-  flex: 1;
+  /* padding-left: 16px; */
+  flex: none;
   word-break: break-all;
   min-width: 0; /* Allows flex child to shrink below content size */
 }

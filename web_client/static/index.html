@@ -42,13 +42,13 @@
           <!-- ZMQ Indicator Hover Panel -->
           <div id="zmq-info-panel" class="hover-info-panel hidden">
             <div class="hover-info-row">
-              <span class="info-label">IP:</span>
-              <span id="zmq-ip" class="info-value">--</span>
+              <span class="info-label">Server Address:</span>
+              <span id="zmq-server-address" class="info-value">--</span>
             </div>
-            <div class="hover-info-row">
+            <!-- <div class="hover-info-row">
               <span class="info-label">Port:</span>
               <span id="zmq-port" class="info-value">--</span>
-            </div>
+            </div> -->
             <div class="hover-info-row">
               <span class="info-label">Model Type:</span>
               <span id="zmq-model-type" class="info-value">--</span>
@@ -58,7 +58,7 @@
               <span id="zmq-model-path" class="info-value">--</span>
             </div>
             <div class="hover-info-row">
-              <span class="info-label">Lang Cmd:</span>
+              <span class="info-label">Language Instruction:</span>
               <span id="zmq-language-cmd" class="info-value">--</span>
             </div>
             <div class="hover-info-row">
@@ -215,14 +215,14 @@
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> Left</label>
                 <div class="robot-preset-right">
                   <select id="arm-left-preset" class="input-text item-select robot-preset-select" aria-label="Left arm preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="arm-left-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="arm-left-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> Right</label>
                 <div class="robot-preset-right">
                   <select id="arm-right-preset" class="input-text item-select robot-preset-select" aria-label="Right arm preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="arm-right-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="arm-right-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
             </section>
@@ -239,14 +239,14 @@
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-left" checked /> Left</label>
                 <div class="robot-preset-right">
                   <select id="gripper-left-preset" class="input-text item-select robot-preset-select" aria-label="Left gripper or hand preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="gripper-left-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="gripper-left-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-right" checked /> Right</label>
                 <div class="robot-preset-right">
                   <select id="gripper-right-preset" class="input-text item-select robot-preset-select" aria-label="Right gripper or hand preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="gripper-right-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="gripper-right-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
             </section>
@@ -263,21 +263,21 @@
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-head" checked /> Head</label>
                 <div class="robot-preset-right">
                   <select id="head-preset" class="input-text item-select robot-preset-select" aria-label="Head preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="head-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="head-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-waist" checked /> Waist</label>
                 <div class="robot-preset-right">
                   <select id="waist-preset" class="input-text item-select robot-preset-select" aria-label="Waist preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="waist-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="waist-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-body" checked /> Body</label>
                 <div class="robot-preset-right">
                   <select id="body-preset" class="input-text item-select robot-preset-select" aria-label="Body preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="body-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="body-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
             </section>
@@ -294,14 +294,14 @@
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel" checked /> Wheel</label>
                 <div class="robot-preset-right">
                   <select id="wheel-preset" class="input-text item-select robot-preset-select" aria-label="Wheel preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="wheel-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="wheel-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
                 <label class="robot-ctrl-check"><input type="checkbox" id="chk-leg" checked /> Leg</label>
                 <div class="robot-preset-right">
                   <select id="leg-preset" class="input-text item-select robot-preset-select" aria-label="Leg preset"></select>
-                  <button class="btn btn-sm robot-preset-edit" id="leg-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i>Edit</button>
+                  <button class="btn btn-sm robot-preset-edit" id="leg-preset-edit" title="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
             </section>
