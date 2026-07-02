@@ -63,34 +63,30 @@ function updateZmqInfoPanel(data) {
   if (!data) return;
   
   // Update the individual fields in the ZMQ info panel
-  const ipElement = document.getElementById('zmq-ip');
-  const portElement = document.getElementById('zmq-port');
+  const serverAddressElement = document.getElementById('zmq-server-address');
+  // const portElement = document.getElementById('zmq-port');
   const modelTypeElement = document.getElementById('zmq-model-type');
   const modelPathElement = document.getElementById('zmq-model-path');
   const languageCmdElement = document.getElementById('zmq-language-cmd');
   const timestampElement = document.getElementById('zmq-timestamp');
   
-  if (ipElement && data.server_ip) {
-    ipElement.textContent = data.server_ip;
-  }
-  
-  if (portElement && data.server_port) {
-    portElement.textContent = data.server_port;
+  if (serverAddressElement && data.server_ip && data.server_port) {
+    serverAddressElement.textContent = `--tcp://${data.server_ip}:${data.server_port}`
   }
   
   if (modelTypeElement && data.model_type) {
-    modelTypeElement.textContent = data.model_type;
+    modelTypeElement.textContent = `--${data.model_type}`;
   }
   
   if (modelPathElement && data.model_path) {
-    modelPathElement.textContent = data.model_path;
+    modelPathElement.textContent = `--${data.model_path}`;
   }
   
   if (languageCmdElement && data.lang_cmd) {
-    languageCmdElement.textContent = data.lang_cmd;
+    languageCmdElement.textContent = `--${data.lang_cmd}`;
   }
   if (timestampElement && data.timestamp) {
-    timestampElement.textContent = data.timestamp;
+    timestampElement.textContent = `--${data.timestamp}`;
   }
 }
 
