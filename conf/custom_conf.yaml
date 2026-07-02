@@ -492,6 +492,9 @@ visualize:
     window_span_sec: 10.0
   updata_fps: 30
 vla_zmq:
+  heartbeat_interval: 1000
+  heartbeat_timeout: 30000
+  infer_timeout: 500
   ip: 127.0.0.1
   port: '5566'
-  timeout: 500
+  reconnect_interval: 1000

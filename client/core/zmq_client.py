@@ -22,12 +22,8 @@ class ZMQClient():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
-        
-        # Heartbeat and reconnection parameters
-        self.heartbeat_interval = getattr(config, 'heartbeat_interval', 5)  # seconds
-        self.reconnect_interval = getattr(config, 'reconnect_interval', 2)  # seconds
-        
         self.context = zmq.Context()
+
         self.client_addr = f'tcp://{config.ip}:{config.port}'  # Client connection address and port
         self.dealer = self.context.socket(zmq.DEALER)
         # self.dealer.setsockopt(zmq.SNDTIMEO, 5000)  # 5 second timeout
@@ -56,7 +52,7 @@ class ZMQClient():
     def _heartbeat_worker(self):
         """Heartbeat worker function to periodically send heartbeat messages."""
         while not self.is_closed:
-            time.sleep(self.heartbeat_interval)
+            time.sleep(self.config.heartbeat_interval/1000)
             
             if self.is_closed:
                 break
@@ -64,12 +60,14 @@ class ZMQClient():
             # Send a heartbeat message to check connection
             if not self.sendMessage({'type': 'heartbeat', 'timestamp': time.time()}, {'action': 'ping'}):
                 self.logger.warning("Failed to send heartbeat, connection may be lost")
+                # print("Failed to send heartbeat, connection may be lost")
                 self.is_connected = False
                 # Attempt to reconnect if connection is lost
                 self._attempt_reconnect()
             else:
                 self.last_heartbeat_time = time.time()
                 self.is_connected = True
+                # print(f"Heartbeat keep alive, is_connected: {self.is_connected}, heartbeat_time: {self.last_heartbeat_time}")
 
     def _attempt_reconnect(self):
         """Attempt to reconnect to the server."""
@@ -100,7 +98,7 @@ class ZMQClient():
                         raise Exception("Test message failed after reconnect")
                         
                 except Exception as e:
-                    time.sleep(self.reconnect_interval)
+                    time.sleep(self.config.reconnect_interval/1000)
             
     def update_connection(self, new_ip=None, new_port=None):
         """Update connection parameters and reconnect to the server.
@@ -150,6 +148,8 @@ class ZMQClient():
             dict: Message containing 'data' and 'meta' fields, or None if no data/error/closed.
         """
         if self.is_closed:
+            return None
+        if not self.is_connected:
             return None
 
         try:
