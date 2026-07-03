@@ -96,6 +96,9 @@ class RobotBase():
         layout = self.action_layout.get(action)
         if layout is None:
             return None
+        current_obs = self.retrieve_observation() # update current_state
+        if current_obs is None:
+            return None
         if self.current_state is None:
             raise RuntimeError('current robot state is unavailable')
         return np.asarray(self.current_state, dtype=float)[layout['start']:layout['end']].copy()
@@ -112,7 +115,11 @@ class RobotBase():
     @staticmethod
     def _default_preset(presets):
         return next(
-            (preset['value'] for preset in presets if preset.get('name') == 'Default'),
+            (
+                preset['value']
+                for preset in presets
+                if preset.get('key', preset.get('name')) == 'Default'
+            ),
             None,
         )
 
