@@ -120,3 +120,11 @@ function handleWSMessage(msg) {
 function updateWSIndicator(connected) {
   $('ws-indicator').className = `ws-dot ${connected ? 'connected' : 'disconnected'}`;
 }
+
+// Add function to update ZMQ indicator
+function updateZMQIndicator(connected) {
+  const zmqIndicator = document.getElementById('zmq-indicator');
+  if (zmqIndicator) {
+    zmqIndicator.className = `ws-dot ${connected ? 'connected' : 'disconnected'}`;
+  }
+}
