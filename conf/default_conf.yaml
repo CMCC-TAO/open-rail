@@ -5,23 +5,13 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.23
-  wait_time: 400
+  speed: 1.0
+  wait_time: 10
 inter_chunk:
-  bspline:
-    num_control_points: 6
-    transition_length: 32
-  common:
-    smooth_action: false
-    smooth_base: 0.0
-    smooth_length: 50
-    smooth_ratio: 0.75
-  inter_chunk_mode: search_action
+  inter_chunk_mode: min_jerk
   min_jerk:
-    adaptive_factor: -1
+    adaptive_factor: -1.0
     blend_threshold: 0.7
-  poly:
-    poly_length: 30
   search_action:
     search_length: 100
   smooth_velocity:
@@ -40,40 +30,123 @@ intra_chunk:
         - &id001
           name: Default
           value:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-        right:
+          - -1.0748
+          - 0.6107
+          - 0.2816
+          - -1.2823
+          - 0.7292
+          - 1.4957
+          - -0.1869
         - &id002
+          name: Custom
+          value:
+          - -1.0748
+          - 0.6107
+          - 0.2816
+          - -1.2823
+          - 0.7292
+          - 1.4957
+          - -0.1869
+        right:
+        - &id003
           name: Default
           value:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - 1.072
+          - -0.6103
+          - -0.278
+          - 1.2822
+          - -0.7299
+          - -1.4929
+          - 0.1873
+        - &id004
+          name: Custom
+          value:
+          - 1.072
+          - -0.6103
+          - -0.278
+          - 1.2822
+          - -0.7299
+          - -1.4929
+          - 0.1873
       start: 0
     gripper:
       end: 16
       policy: stepwise
       presets:
         left:
-        - &id003
+        - &id005
           name: Default
           value:
           - 0.0
+        - &id006
+          name: Close
+          value:
+          - 1.0
         right:
-        - &id004
+        - &id007
           name: Default
           value:
           - 0.0
+        - &id008
+          name: Close
+          value:
+          - 1.0
       start: 14
+    head:
+      end: 18
+      policy: manual
+      presets:
+      - &id009
+        name: Default
+        value:
+        - 0
+        - 0.4363
+      - &id010
+        name: Default1
+        value:
+        - 0
+        - 0.4363
+      start: 16
+    waist:
+      end: 20
+      policy: manual
+      presets:
+      - &id011
+        name: Default
+        value:
+        - 0.4012
+        - 27.0
+      start: 18
+    wheel:
+      end: 22
+      policy: manual
+      presets:
+      - &id012
+        name: Default
+        value:
+        - 0
+        - 0
+      - &id013
+        name: Forward
+        value:
+        - 0.1
+        - 0.0
+      - &id014
+        name: Backward
+        value:
+        - -0.1
+        - 0
+      - &id015
+        name: Left
+        value:
+        - 0
+        - 0.1
+      - &id016
+        name: Right
+        value:
+        - 0
+        - -0.1
+      start: 20
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -90,8 +163,8 @@ language:
   auto_mode: false
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
-  task_progress_threshold: 0.99
+  task_id: make_coffee
+  task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
   action_layout:
@@ -101,18 +174,45 @@ rdm:
       presets:
         left:
         - *id001
-        right:
         - *id002
+        right:
+        - *id003
+        - *id004
       start: 0
     gripper:
       end: 16
       policy: stepwise
       presets:
         left:
-        - *id003
+        - *id005
+        - *id006
         right:
-        - *id004
+        - *id007
+        - *id008
       start: 14
+    head:
+      end: 18
+      policy: manual
+      presets:
+      - *id009
+      - *id010
+      start: 16
+    waist:
+      end: 20
+      policy: manual
+      presets:
+      - *id011
+      start: 18
+    wheel:
+      end: 22
+      policy: manual
+      presets:
+      - *id012
+      - *id013
+      - *id014
+      - *id015
+      - *id016
+      start: 20
   max_len: 100
   mode: async
   observe_fps_window_size: 10
@@ -172,87 +272,45 @@ robots:
         policy: gradual
         presets:
           left:
-          - name: Default
-            value:
-            - -1.0748
-            - 0.6107
-            - 0.2816
-            - -1.2823
-            - 0.7292
-            - 1.4957
-            - -0.1869
+          - *id001
+          - *id002
           right:
-          - name: Default
-            value:
-            - 1.072
-            - -0.6103
-            - -0.278
-            - 1.2822
-            - -0.7299
-            - -1.4929
-            - 0.1873
+          - *id003
+          - *id004
         start: 0
       gripper:
         end: 16
         policy: stepwise
         presets:
           left:
-          - name: Default
-            value:
-            - 0.0
-          - name: Close
-            value:
-            - 1.0
+          - *id005
+          - *id006
           right:
-          - name: Default
-            value:
-            - 0.0
-          - name: Close
-            value:
-            - 1.0
+          - *id007
+          - *id008
         start: 14
       head:
         end: 18
         policy: manual
         presets:
-        - name: Default
-          value:
-          - 0.0
-          - 0.4363
+        - *id009
+        - *id010
         start: 16
       waist:
         end: 20
         policy: manual
         presets:
-        - name: Default
-          value:
-          - 0.4012
-          - 27.0
+        - *id011
         start: 18
       wheel:
         end: 22
         policy: manual
         presets:
-        - name: Default
-          value:
-          - 0
-          - 0
-        - name: Forward
-          value:
-          - 0.1
-          - 0.0
-        - name: Backward
-          value:
-          - -0.1
-          - 0
-        - name: Left
-          value:
-          - 0
-          - 0.1
-        - name: Right
-          value:
-          - 0
-          - -0.1
+        - *id012
+        - *id013
+        - *id014
+        - *id015
+        - *id016
         start: 20
     camera:
       names:
@@ -276,26 +334,46 @@ robots:
         policy: gradual
         presets:
           left:
-          - *id001
+          - name: Default
+            value:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
           right:
-          - *id002
+          - name: Default
+            value:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
         start: 0
       gripper:
         end: 16
         policy: stepwise
         presets:
           left:
-          - *id003
+          - name: Default
+            value:
+            - 0.0
           right:
-          - *id004
+          - name: Default
+            value:
+            - 0.0
         start: 14
     camera:
       names:
-        hand_left: cam.hand_left
-        hand_right: cam.hand_right
-        head: cam.head
+        hand_left: observation.images.hand_left
+        hand_right: observation.images.hand_right
+        head: observation.images.top_head
       ref: head
-    dataset_path: /home/zl/zl/mdata/0615
+    dataset_path: /home/zl/zl/mdata/task_1196
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -463,7 +541,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: a2d
 vision:
   history_frame: false
   preprocess:
@@ -482,9 +560,12 @@ visualize:
   ping_timeout: 10
   port: 8765
   trajectory:
-    play: true
+    play: false
     selected_joints:
-    - 7
+    - 0
+    - 1
+    - 2
+    - 3
     source:
     - State
     - ActionFitted

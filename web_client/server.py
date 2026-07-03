@@ -403,10 +403,6 @@ def _apply_flat_patch_new(config, patch: dict):
 
     legacy_inter_chunk_keys = {
         "inter_chunk.search_length": "inter_chunk.search_action.search_length",
-        "inter_chunk.smooth_action": "inter_chunk.common.smooth_action",
-        "inter_chunk.smooth_length": "inter_chunk.common.smooth_length",
-        "inter_chunk.smooth_base": "inter_chunk.common.smooth_base",
-        "inter_chunk.smooth_ratio": "inter_chunk.common.smooth_ratio",
     }
     patch = {
         legacy_inter_chunk_keys.get(key, key): value

@@ -340,13 +340,32 @@ class RealtimeDataManager():
                 end_index = min(self.action_chunk_index + index_offset + num_samples, total_len)
                 return self.timestamps_fitted[start_index:end_index], self.action_chunk_fitted[:, start_index:end_index]
     
+    @staticmethod
+    def _apply_gripper_offset(action_chunk, step_indices, gripper_offset):
+        source = np.asarray(action_chunk)
+        if source.ndim != 2:
+            raise ValueError(f'action_chunk must be 2D, got shape {source.shape}')
+        shifted = source.copy()
+        offset = int(gripper_offset)
+        indices = [] if step_indices is None else list(step_indices)
+        chunk_length = shifted.shape[1]
+        if not indices or offset == 0 or abs(offset) >= chunk_length:
+            return shifted
+        if offset > 0:
+            shifted[indices, :-offset] = source[indices, offset:]
+        else:
+            shifted[indices, -offset:] = source[indices, :chunk_length + offset]
+        return shifted
+
     def update_action_chunk_fitted(self,
                                 action_chunk_smoothed,
                                 vel_chunk_smoothed,
                                 acc_chunk_smoothed,
                                 timestamps_smoothed,
                                 target_chunk_index,
-                                prob_progress=None):
+                                prob_progress=None,
+                                step_indices=None,
+                                gripper_offset=0):
         """Update action chunk with the new fitted action chunk.
 
         Args:
@@ -356,7 +375,12 @@ class RealtimeDataManager():
             timestamps_smoothed ()
             target_chunk_index
             prob_progress (np.array, optional): Array of prob_progress values aligned with action chunk. Defaults to None.
+            step_indices (list[int], optional): Stepwise action dimensions.
+            gripper_offset (int): Frames to shift stepwise commands forward/backward.
         """
+        action_chunk_smoothed = self._apply_gripper_offset(
+            action_chunk_smoothed, step_indices, gripper_offset
+        )
         with self.polynomial_thread_lock:
             self.action_chunk_index = target_chunk_index if self.action_chunk_index is not None else 0
             self.action_chunk_fitted = action_chunk_smoothed
