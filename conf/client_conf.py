@@ -22,6 +22,7 @@ def get_client_config():
             - record: Data recording configuration
             - Various inference and control parameters
     """
+    # Note: Don't define any new fields in root dict, please define them in the respective sub-configs.
     config = ConfigDict()
     config.rdm = get_rdm_config()
     config.intra_chunk = get_intra_chunk_config()
@@ -29,7 +30,6 @@ def get_client_config():
     config.controller = get_controller_config()
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
-    # config.vis_zmq = get_vis_zmq_config()
     config.visualize = get_visualize_config()
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()

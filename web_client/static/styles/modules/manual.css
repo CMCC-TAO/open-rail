@@ -37,12 +37,12 @@
 }
 .robot-ctrl-actions-right .btn {
   /* min-width: 36px; */
-  padding: 4 0px;
+  padding: 4px 4px;
   /* height: 18px; */
   /* padding: 0 8px; */
   font-size: var(--font-size-2);
   /* line-height: 16px; */
-  /* display: inline-flex; */
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
@@ -64,17 +64,12 @@
 .robot-ctrl-row-actions .btn {
   flex: 1 1 110px;
 }
-.robot-ctrl-label {
-  color: var(--text-muted);
-  font-size: var(--font-size-2);
-  min-width: 94px;
-  flex-shrink: 0;
-}
 .robot-ctrl-check {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: var(--font-size-2);
+  font-weight: var(--font-weight-3);
   color: var(--text);
 }
 .robot-ctrl-check input { margin: 0; }
@@ -99,8 +94,8 @@
   min-width: 81px;
 }
 .robot-preset-edit {
-  width: 38%;
-  min-width: 64px;
+  width: 16px;
+  max-width: 24px;
 }
 .robot-preset-row .btn {
   padding: 4px 8px;

@@ -391,7 +391,7 @@ class VLAClientAsync():
             self.realtime_data_manager.set_infer_time_marker()
             
             # Send data for inference and wait for results
-            result = self._request_inference(data, timeout_ms=500)
+            result = self._request_inference(data, timeout_ms=self.config.vla_zmq.infer_timeout * 4)
             if result is None or 'data' not in result:
                 # print("Debug: infer first timeout.")
                 return
@@ -482,7 +482,7 @@ class VLAClientAsync():
             self.realtime_data_manager.set_infer_time_marker()
             
             # Send data for inference and wait for results
-            result = self._request_inference(data, timeout_ms = 500)
+            result = self._request_inference(data, timeout_ms = self.config.vla_zmq.infer_timeout)
             if result is None:
                 self.logger.warning("Inference result is None.")
                 return

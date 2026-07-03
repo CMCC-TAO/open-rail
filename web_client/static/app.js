@@ -48,6 +48,46 @@ function renderStats(data) {
   setResourceValue(bwEl, Number.isFinite(bwVal) ? bwVal.toFixed(1) + 'M' : '--', 'NET');
 
   App.latestState = Array.isArray(data.current_state) ? data.current_state.slice() : [];
+  
+  // Update ZMQ info panel with data from the server
+  updateZmqInfoPanel(data);
+  // Update ZMQ indicator based on zmq_connected status from server
+  if (typeof data.zmq_connected !== 'undefined') {
+    updateZMQIndicator(!!data.zmq_connected);
+  }
+
+}
+
+// Function to update ZMQ info panel
+function updateZmqInfoPanel(data) {
+  if (!data) return;
+  
+  // Update the individual fields in the ZMQ info panel
+  const serverAddressElement = document.getElementById('zmq-server-address');
+  // const portElement = document.getElementById('zmq-port');
+  const modelTypeElement = document.getElementById('zmq-model-type');
+  const modelPathElement = document.getElementById('zmq-model-path');
+  const languageCmdElement = document.getElementById('zmq-language-cmd');
+  const timestampElement = document.getElementById('zmq-timestamp');
+  
+  if (serverAddressElement && data.server_ip && data.server_port) {
+    serverAddressElement.textContent = `--tcp://${data.server_ip}:${data.server_port}`
+  }
+  
+  if (modelTypeElement && data.model_type) {
+    modelTypeElement.textContent = `--${data.model_type}`;
+  }
+  
+  if (modelPathElement && data.model_path) {
+    modelPathElement.textContent = `--${data.model_path}`;
+  }
+  
+  if (languageCmdElement && data.lang_cmd) {
+    languageCmdElement.textContent = `--${data.lang_cmd}`;
+  }
+  if (timestampElement && data.timestamp) {
+    timestampElement.textContent = `--${data.timestamp}`;
+  }
 }
 
 function renderKV(containerId, obj) {
@@ -430,6 +470,28 @@ function _confRelPath(fullPath) {
  * @throws {Error} 当必需的 DOM 元素缺失导致事件绑定失败，或个别未被内部捕获的 API/渲染异常发生时可能抛出错误
  */
 async function wireEvents() {
+  // Add event listeners for ZMQ indicator hover
+  const zmqIndicatorContainer = document.getElementById('zmq-indicator-container');
+  const zmqInfoPanel = document.getElementById('zmq-info-panel');
+  
+  if (zmqIndicatorContainer && zmqInfoPanel) {
+    zmqIndicatorContainer.addEventListener('mouseenter', () => {
+      zmqInfoPanel.classList.remove('hidden');
+    });
+    
+    zmqIndicatorContainer.addEventListener('mouseleave', () => {
+      zmqInfoPanel.classList.add('hidden');
+    });
+    
+    // zmqInfoPanel.addEventListener('mouseenter', () => {
+    //   zmqInfoPanel.classList.remove('hidden');
+    // });
+    
+    // zmqInfoPanel.addEventListener('mouseleave', () => {
+    //   zmqInfoPanel.classList.add('hidden');
+    // });
+  }
+  
   // Config file dropdown — load selected config
   const confSelect = $('conf-file-select');
   if (confSelect) {

@@ -133,7 +133,7 @@ class RealtimeDataManager():
         Args:
             avg_infer_time (float): The average inference time return from vla_server
         """
-        self.avg_infer_time = avg_infer_time
+        self.avg_infer_time = self.avg_infer_time * 0.8 + avg_infer_time * 0.2 if self.avg_infer_time > 0.0 else avg_infer_time
         self.avg_comm_time = self.avg_comm_infer_time - avg_infer_time
 
     def compute_avg_intra_traj_time(self):
