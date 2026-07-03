@@ -17,19 +17,7 @@ inter_chunk:
     smooth_length: 50
     smooth_ratio: 0.75
   inter_chunk_mode: min_jerk
-  min_jerk:
-    adaptive_factor: -1
-    blend_threshold: 0.7
-  poly:
-    poly_length: 30
-  search_action:
-    search_length: 100
-  smooth_velocity:
-    kd: 2.0
-    kp: 5.0
-    max_acc: 5.0
-    max_vel: 2.0
-  sync: {}
+  search_length: 100
 intra_chunk:
   action_layout:
     arm:
