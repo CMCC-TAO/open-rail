@@ -1,6 +1,18 @@
 from enum import Enum
 from ml_collections import ConfigDict
 
+
+def _ordered_config(value):
+    if isinstance(value, dict):
+        return ConfigDict(
+            {key: _ordered_config(item) for key, item in value.items()},
+            sort_keys=False,
+        )
+    if isinstance(value, list):
+        return [_ordered_config(item) for item in value]
+    return value
+
+
 class RobotType(str, Enum):
     A2D = 'a2d'
     MOCK = 'mock'
@@ -26,35 +38,35 @@ def get_a2d_config():
     config.gripper_freq = 40
     config.head_freq = 40
     config.manual_arm_interval = 0.01
-    config.action_layout = {
+    config.action_layout = _ordered_config({
         'arm': {
             'start': 0, 'end': 14, 'policy': 'gradual',
             'presets': {
-                'left': [{'key': 'Default', 'value': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]}, {'key': 'Custom', 'value': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]}],
-                'right': [{'key': 'Default', 'value': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]}, {'key': 'Custom', 'value': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]}],
+                'left': {'Default': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869], 'Custom': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]},
+                'right': {'Default': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873], 'Custom': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]},
             },
         },
         'gripper': {
             'start': 14, 'end': 16, 'policy': 'stepwise',
             'presets': {
-                'left': [{'key': 'Default', 'value': [0.0]}, {'key': 'Open', 'value': [0.0]}, {'key': 'Close', 'value': [1.0]}],
-                'right': [{'key': 'Default', 'value': [0.0]}, {'key': 'Open', 'value': [0.0]}, {'key': 'Close', 'value': [1.0]}],
+                'left': {'Default': [0.0], 'Custom': [0.5], 'Open': [0.0], 'Close': [1.0]},
+                'right': {'Default': [0.0], 'Custom': [0.5], 'Open': [0.0], 'Close': [1.0]},
             },
         },
         # policy='manual' is robot/Web-only and must stay after all model policies.
         'head': {
             'start': 16, 'end': 18, 'policy': 'manual',
-            'presets': [{'key': 'Default', 'value': [0.0, 0.4363]}, {'key': 'Custom', 'value': [0.0, 0.4363]}],
+            'presets': {'Default': [0.0, 0.4363], 'Custom': [0.0, 0.4363]},
         },
         'waist': {
             'start': 18, 'end': 20, 'policy': 'manual',
-            'presets': [{'key': 'Default', 'value': [0.4012, 27.0]}, {'key': 'Custom', 'value': [0.4012, 27.0]}],
+            'presets': {'Default': [0.4012, 27.0], 'Custom': [0.4012, 27.0]},
         },
         'wheel': {
             'start': 20, 'end': 22, 'policy': 'manual',
-            'presets': [{'key': 'Default', 'value': [0, 0]}, {'key': 'Forward', 'value': [0.1, 0.]}, {'key': 'Backward', 'value': [-0.1, 0]}, {'key': 'Left', 'value': [0, 0.1]}, {'key': 'Right', 'value': [0, -0.1]}],
+            'presets': {'Default': [0, 0], 'Forward': [0.1, 0.], 'Backward': [-0.1, 0], 'Left': [0, 0.1], 'Right': [0, -0.1]},
         },
-    }
+    })
     return config
 
 def get_mock_config():
@@ -70,24 +82,24 @@ def get_mock_config():
     config.camera.names = {'head': 'observation.images.head_rgb',
                         'hand_left': 'observation.images.left_wrist_rgb',
                         'hand_right': 'observation.images.right_wrist_rgb'}
-    config.action_layout = {
+    config.action_layout = _ordered_config({
         'arm': {
             'start': 0, 'end': 14, 'policy': 'gradual',
             'presets': {
-                'left': [{'key': 'Default', 'value': [0.0] * 7}, {'key': 'Custom', 'value': [0.0] * 7}],
-                'right': [{'key': 'Default', 'value': [0.0] * 7}, {'key': 'Custom', 'value': [0.0] * 7}],
+                'left': {'Default': [0.0] * 7, 'Custom': [0.0] * 7},
+                'right': {'Default': [0.0] * 7, 'Custom': [0.0] * 7},
             },
         },
         'gripper': {
             'start': 14, 'end': 16, 'policy': 'stepwise',
             'presets': {
-                'left': [{'key': 'Default', 'value': [0.0]}, {'key': 'Custom', 'value': [0.0]}],
-                'right': [{'key': 'Default', 'value': [0.0]}, {'key': 'Custom', 'value': [0.0]}],
+                'left': {'Default': [0.0], 'Custom': [0.0]},
+                'right': {'Default': [0.0], 'Custom': [0.0]},
             },
         },
         # 'head': {'start': 16, 'end': 18, 'policy': 'manual'},
         # 'waist': {'start': 18, 'end': 20, 'policy': 'manual'},
-    }
+    })
     config.manual_arm_interval = 0.01
     config.state_action_range = [[0, 16], [58, 70]]
     config.dataset_path = '/home/robot/Music/task_39_only1'
@@ -182,12 +194,12 @@ def get_ti5_t170c_config():
         1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
       ]
 
-    config.action_layout = {
+    config.action_layout = _ordered_config({
         'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
         'gripper': {'start': 14, 'end': 26, 'policy': 'gradual'},
         # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
         # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
-    }
+    })
 
     return config
 
@@ -202,10 +214,10 @@ def get_navi_wa2_config():
         'hand_left': '/zj_humanoid/sensor/left_wrist/image_raw/compressed',
         'hand_right': '/zj_humanoid/sensor/right_wrist/image_raw/compressed',
     }
-    config.action_layout = {
+    config.action_layout = _ordered_config({
         'arm': {'start': 0, 'end': 16, 'policy': 'gradual'},
         'hand': {'start': 16, 'end': 28, 'policy': 'stepwise'}
-        }
+        })
     config.reset_position = [0.182591655739083, 0.32575521044236666, 0.639202615644364, 0.03292066673111549, -1.9789475037079458, 0.5495126798768879, -0.1635420177877668, -0.039264356176110845,-0.22653780968994397, 0.19016568609004025, -0.6990877950829599, 0.17601231608296075, -1.888115764960776, -0.5459413807557212, -0.38742182124429064, -0.27196253226160444]+\
         [-0.6062110066413879, 0.9023351669311523, 0.006108652334660292, 0.006108652334660292, 0.00901753455400467, 0.015126187354326248,-0.5980661511421204, 0.8994263410568237, 0.012217304669320583, 0.006108652334660292, 0.004363323096185923, 0.0]
 

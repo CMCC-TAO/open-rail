@@ -114,6 +114,8 @@ class RobotBase():
     
     @staticmethod
     def _default_preset(presets):
+        if hasattr(presets, 'get'):
+            return presets.get('Default')
         return next(
             (
                 preset['value']
@@ -138,7 +140,7 @@ class RobotBase():
                 continue
 
             presets = layout.get('presets', [])
-            if hasattr(presets, 'get'):
+            if hasattr(presets, 'get') and ('left' in presets or 'right' in presets):
                 for side in ('left', 'right'):
                     value = self._default_preset(presets.get(side, []))
                     if value is not None:

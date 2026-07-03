@@ -116,7 +116,14 @@
   opacity: .6;
   cursor: not-allowed;
 }
-.preset-edit-label {
-  color: var(--text-muted);
-  font-size: var(--font-size-2);
+#modal-preset-edit .modal-box {
+  width: min(480px, calc(100vw - 32px));
+  min-width: 0;
+  padding: 24px;
+  gap: 16px;
+}
+#preset-edit-value {
+  min-height: 128px;
+  resize: vertical;
+  line-height: 1.4;
 }
