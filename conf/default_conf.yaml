@@ -28,7 +28,7 @@ intra_chunk:
       presets:
         left:
         - &id001
-          name: Default
+          key: Default
           value:
           - -1.0748
           - 0.6107
@@ -38,7 +38,7 @@ intra_chunk:
           - 1.4957
           - -0.1869
         - &id002
-          name: Custom
+          key: Custom
           value:
           - -1.0748
           - 0.6107
@@ -49,7 +49,7 @@ intra_chunk:
           - -0.1869
         right:
         - &id003
-          name: Default
+          key: Default
           value:
           - 1.072
           - -0.6103
@@ -59,7 +59,7 @@ intra_chunk:
           - -1.4929
           - 0.1873
         - &id004
-          name: Custom
+          key: Custom
           value:
           - 1.072
           - -0.6103
@@ -75,20 +75,28 @@ intra_chunk:
       presets:
         left:
         - &id005
-          name: Default
+          key: Default
           value:
           - 0.0
         - &id006
-          name: Close
+          key: Open
+          value:
+          - 0.0
+        - &id007
+          key: Close
           value:
           - 1.0
         right:
-        - &id007
-          name: Default
+        - &id008
+          key: Default
           value:
           - 0.0
-        - &id008
-          name: Close
+        - &id009
+          key: Open
+          value:
+          - 0.0
+        - &id010
+          key: Close
           value:
           - 1.0
       start: 14
@@ -96,23 +104,28 @@ intra_chunk:
       end: 18
       policy: manual
       presets:
-      - &id009
-        name: Default
+      - &id011
+        key: Default
         value:
-        - 0
+        - 0.0
         - 0.4363
-      - &id010
-        name: Default1
+      - &id012
+        key: Custom
         value:
-        - 0
+        - 0.0
         - 0.4363
       start: 16
     waist:
       end: 20
       policy: manual
       presets:
-      - &id011
-        name: Default
+      - &id013
+        key: Default
+        value:
+        - 0.4012
+        - 27.0
+      - &id014
+        key: Custom
         value:
         - 0.4012
         - 27.0
@@ -121,28 +134,28 @@ intra_chunk:
       end: 22
       policy: manual
       presets:
-      - &id012
-        name: Default
+      - &id015
+        key: Default
         value:
         - 0
         - 0
-      - &id013
-        name: Forward
+      - &id016
+        key: Forward
         value:
         - 0.1
         - 0.0
-      - &id014
-        name: Backward
+      - &id017
+        key: Backward
         value:
         - -0.1
         - 0
-      - &id015
-        name: Left
+      - &id018
+        key: Left
         value:
         - 0
         - 0.1
-      - &id016
-        name: Right
+      - &id019
+        key: Right
         value:
         - 0
         - -0.1
@@ -186,32 +199,35 @@ rdm:
         left:
         - *id005
         - *id006
-        right:
         - *id007
+        right:
         - *id008
+        - *id009
+        - *id010
       start: 14
     head:
       end: 18
       policy: manual
       presets:
-      - *id009
-      - *id010
+      - *id011
+      - *id012
       start: 16
     waist:
       end: 20
       policy: manual
       presets:
-      - *id011
+      - *id013
+      - *id014
       start: 18
     wheel:
       end: 22
       policy: manual
       presets:
-      - *id012
-      - *id013
-      - *id014
       - *id015
       - *id016
+      - *id017
+      - *id018
+      - *id019
       start: 20
   max_len: 100
   mode: async
@@ -285,32 +301,35 @@ robots:
           left:
           - *id005
           - *id006
-          right:
           - *id007
+          right:
           - *id008
+          - *id009
+          - *id010
         start: 14
       head:
         end: 18
         policy: manual
         presets:
-        - *id009
-        - *id010
+        - *id011
+        - *id012
         start: 16
       waist:
         end: 20
         policy: manual
         presets:
-        - *id011
+        - *id013
+        - *id014
         start: 18
       wheel:
         end: 22
         policy: manual
         presets:
-        - *id012
-        - *id013
-        - *id014
         - *id015
         - *id016
+        - *id017
+        - *id018
+        - *id019
         start: 20
     camera:
       names:
@@ -334,7 +353,16 @@ robots:
         policy: gradual
         presets:
           left:
-          - name: Default
+          - key: Default
+            value:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+          - key: Custom
             value:
             - 0.0
             - 0.0
@@ -344,7 +372,16 @@ robots:
             - 0.0
             - 0.0
           right:
-          - name: Default
+          - key: Default
+            value:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+          - key: Custom
             value:
             - 0.0
             - 0.0
@@ -359,21 +396,27 @@ robots:
         policy: stepwise
         presets:
           left:
-          - name: Default
+          - key: Default
+            value:
+            - 0.0
+          - key: Custom
             value:
             - 0.0
           right:
-          - name: Default
+          - key: Default
+            value:
+            - 0.0
+          - key: Custom
             value:
             - 0.0
         start: 14
     camera:
       names:
-        hand_left: observation.images.hand_left
-        hand_right: observation.images.hand_right
-        head: observation.images.top_head
+        hand_left: observation.images.left_wrist_rgb
+        hand_right: observation.images.right_wrist_rgb
+        head: observation.images.head_rgb
       ref: head
-    dataset_path: /home/zl/zl/mdata/task_1196
+    dataset_path: /home/robot/Music/task_39_only1
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -568,12 +611,11 @@ visualize:
     - 3
     source:
     - State
-    - ActionFitted
-    - ActionRaw
     window_span_sec: 10.0
   updata_fps: 30
 vla_zmq:
-  client_ip: localhost
-  client_port: '5566'
-  server_ip: '*'
-  server_port: '5566'
+  heartbeat_interval: 1000
+  heartbeat_timeout: 30000
+  infer_timeout: 500
+  ip: 127.0.0.1
+  port: '5566'

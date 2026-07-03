@@ -137,3 +137,5 @@ user_conf_*.py
 specs/
 AGENTS.md
 a2d_description
+install
+log

@@ -30,29 +30,29 @@ def get_a2d_config():
         'arm': {
             'start': 0, 'end': 14, 'policy': 'gradual',
             'presets': {
-                'left': [{'name': 'Default', 'value': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]}, {'name': 'Custom', 'value': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]}],
-                'right': [{'name': 'Default', 'value': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]}, {'name': 'Custom', 'value': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]}],
+                'left': [{'key': 'Default', 'value': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]}, {'key': 'Custom', 'value': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]}],
+                'right': [{'key': 'Default', 'value': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]}, {'key': 'Custom', 'value': [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]}],
             },
         },
         'gripper': {
             'start': 14, 'end': 16, 'policy': 'stepwise',
             'presets': {
-                'left': [{'name': 'Default', 'value': [0.0]}, {'name': 'Close', 'value': [1.0]}],
-                'right': [{'name': 'Default', 'value': [0.0]}, {'name': 'Close', 'value': [1.0]}],
+                'left': [{'key': 'Default', 'value': [0.0]}, {'key': 'Open', 'value': [0.0]}, {'key': 'Close', 'value': [1.0]}],
+                'right': [{'key': 'Default', 'value': [0.0]}, {'key': 'Open', 'value': [0.0]}, {'key': 'Close', 'value': [1.0]}],
             },
         },
         # policy='manual' is robot/Web-only and must stay after all model policies.
         'head': {
             'start': 16, 'end': 18, 'policy': 'manual',
-            'presets': [{'name': 'Default', 'value': [0.0, 0.4363]}],
+            'presets': [{'key': 'Default', 'value': [0.0, 0.4363]}, {'key': 'Custom', 'value': [0.0, 0.4363]}],
         },
         'waist': {
             'start': 18, 'end': 20, 'policy': 'manual',
-            'presets': [{'name': 'Default', 'value': [0.4012, 27.0]}],
+            'presets': [{'key': 'Default', 'value': [0.4012, 27.0]}, {'key': 'Custom', 'value': [0.4012, 27.0]}],
         },
         'wheel': {
             'start': 20, 'end': 22, 'policy': 'manual',
-            'presets': [{'name': 'Default', 'value': [0, 0]}, {'name': 'Forward', 'value': [0.1, 0.]}, {'name': 'Backward', 'value': [-0.1, 0]}, {'name': 'Left', 'value': [0, 0.1]}, {'name': 'Right', 'value': [0, -0.1]}],
+            'presets': [{'key': 'Default', 'value': [0, 0]}, {'key': 'Forward', 'value': [0.1, 0.]}, {'key': 'Backward', 'value': [-0.1, 0]}, {'key': 'Left', 'value': [0, 0.1]}, {'key': 'Right', 'value': [0, -0.1]}],
         },
     }
     return config
@@ -74,15 +74,15 @@ def get_mock_config():
         'arm': {
             'start': 0, 'end': 14, 'policy': 'gradual',
             'presets': {
-                'left': [{'name': 'Default', 'value': [0.0] * 7}],
-                'right': [{'name': 'Default', 'value': [0.0] * 7}],
+                'left': [{'key': 'Default', 'value': [0.0] * 7}, {'key': 'Custom', 'value': [0.0] * 7}],
+                'right': [{'key': 'Default', 'value': [0.0] * 7}, {'key': 'Custom', 'value': [0.0] * 7}],
             },
         },
         'gripper': {
             'start': 14, 'end': 16, 'policy': 'stepwise',
             'presets': {
-                'left': [{'name': 'Default', 'value': [0.0]}],
-                'right': [{'name': 'Default', 'value': [0.0]}],
+                'left': [{'key': 'Default', 'value': [0.0]}, {'key': 'Custom', 'value': [0.0]}],
+                'right': [{'key': 'Default', 'value': [0.0]}, {'key': 'Custom', 'value': [0.0]}],
             },
         },
         # 'head': {'start': 16, 'end': 18, 'policy': 'manual'},

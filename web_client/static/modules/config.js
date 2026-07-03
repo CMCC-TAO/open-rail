@@ -7,6 +7,8 @@ const CONFIG_EXCLUDED_GROUP_KEYS = new Set(['language', 'record', 'controller'])
 
 // Sub-sub conf groups to exclude from Configuration panel (dot-path)
 const CONFIG_EXCLUDED_SUB_GROUP_KEYS = new Set([
+  'intra_chunk.action_layout',
+  'rdm.action_layout',
   'visualize.camera',
   'visualize.trajectory',
 ]);

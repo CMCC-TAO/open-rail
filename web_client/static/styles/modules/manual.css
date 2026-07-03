@@ -94,15 +94,13 @@
   width: auto;
   min-width: 72px;
 }
-.robot-preset-edit,
-.robot-preset-add {
+.robot-preset-edit {
   flex: 0 0 30px;
   width: 30px;
   min-width: 30px;
   padding: 4px;
 }
-.robot-preset-edit i.fas,
-.robot-preset-add i.fas {
+.robot-preset-edit i.fas {
   margin-right: 0;
   font-size: var(--font-size-2);
 }
