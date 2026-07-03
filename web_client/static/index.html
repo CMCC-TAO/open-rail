@@ -207,8 +207,7 @@
               <div class="robot-ctrl-section-head">
                 <div class="section-title">Arm</div>
                 <div class="robot-ctrl-actions-right">
-                  <button class="btn btn-sm" id="btn-arm-reset"><i class="fas fa-rotate-left"></i>Reset</button>
-                  <button class="btn btn-sm" id="btn-arm"><i class="fas fa-check"></i>Set</button>
+                  <button class="btn btn-sm" id="btn-arm"><i class="fas fa-paper-plane"></i>Send Cmd</button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
@@ -231,8 +230,7 @@
               <div class="robot-ctrl-section-head">
                 <div class="section-title">Gripper/Hand</div>
                 <div class="robot-ctrl-actions-right">
-                  <button class="btn btn-sm" id="btn-gripper-reset"><i class="fas fa-rotate-left"></i>Reset</button>
-                  <button class="btn btn-sm" id="btn-gripper"><i class="fas fa-check"></i>Set</button>
+                  <button class="btn btn-sm" id="btn-gripper"><i class="fas fa-paper-plane"></i>Send Cmd</button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
@@ -255,8 +253,7 @@
               <div class="robot-ctrl-section-head">
                 <div class="section-title">Body</div>
                 <div class="robot-ctrl-actions-right">
-                  <button class="btn btn-sm" id="btn-body-reset"><i class="fas fa-rotate-left"></i>Reset</button>
-                  <button class="btn btn-sm" id="btn-body"><i class="fas fa-check"></i>Set</button>
+                  <button class="btn btn-sm" id="btn-body"><i class="fas fa-paper-plane"></i>Send Cmd</button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
@@ -286,8 +283,7 @@
               <div class="robot-ctrl-section-head">
                 <div class="section-title">Wheel/Leg</div>
                 <div class="robot-ctrl-actions-right">
-                  <button class="btn btn-sm" id="btn-wheel-reset"><i class="fas fa-rotate-left"></i>Reset</button>
-                  <button class="btn btn-sm" id="btn-wheel"><i class="fas fa-check"></i>Set</button>
+                  <button class="btn btn-sm" id="btn-wheel"><i class="fas fa-paper-plane"></i>Send Cmd</button>
                 </div>
               </div>
               <div class="robot-ctrl-row robot-preset-row">
@@ -602,10 +598,7 @@
   <div id="modal-preset-edit" class="modal hidden">
     <div class="modal-box">
       <div class="modal-title" id="preset-edit-title">Edit Preset</div>
-      <label class="preset-edit-label" for="preset-edit-key">Key</label>
-      <input id="preset-edit-key" class="input-text" type="text" spellcheck="false" />
-      <label class="preset-edit-label" for="preset-edit-value">Value (JSON array)</label>
-      <input id="preset-edit-value" class="input-text" type="text" spellcheck="false" />
+      <textarea id="preset-edit-value" class="input-text" rows="6" spellcheck="false"></textarea>
       <div class="modal-actions">
         <button class="btn btn-primary" id="btn-preset-edit-confirm">Save</button>
         <button class="btn" id="btn-preset-edit-cancel">Cancel</button>

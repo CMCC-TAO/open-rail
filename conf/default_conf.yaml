@@ -23,13 +23,12 @@ inter_chunk:
 intra_chunk:
   action_layout:
     arm:
+      start: 0
       end: 14
       policy: gradual
       presets:
         left:
-        - &id001
-          key: Default
-          value:
+          Default:
           - -1.0748
           - 0.6107
           - 0.2816
@@ -37,9 +36,7 @@ intra_chunk:
           - 0.7292
           - 1.4957
           - -0.1869
-        - &id002
-          key: Custom
-          value:
+          Custom:
           - -1.0748
           - 0.6107
           - 0.2816
@@ -48,9 +45,7 @@ intra_chunk:
           - 1.4957
           - -0.1869
         right:
-        - &id003
-          key: Default
-          value:
+          Default:
           - 1.072
           - -0.6103
           - -0.278
@@ -58,9 +53,7 @@ intra_chunk:
           - -0.7299
           - -1.4929
           - 0.1873
-        - &id004
-          key: Custom
-          value:
+          Custom:
           - 1.072
           - -0.6103
           - -0.278
@@ -68,98 +61,71 @@ intra_chunk:
           - -0.7299
           - -1.4929
           - 0.1873
-      start: 0
     gripper:
+      start: 14
       end: 16
       policy: stepwise
       presets:
         left:
-        - &id005
-          key: Default
-          value:
+          Default:
           - 0.0
-        - &id006
-          key: Open
-          value:
+          Custom:
+          - 0.5
+          Open:
           - 0.0
-        - &id007
-          key: Close
-          value:
+          Close:
           - 1.0
         right:
-        - &id008
-          key: Default
-          value:
+          Default:
           - 0.0
-        - &id009
-          key: Open
-          value:
+          Custom:
+          - 0.5
+          Open:
           - 0.0
-        - &id010
-          key: Close
-          value:
+          Close:
           - 1.0
-      start: 14
     head:
+      start: 16
       end: 18
       policy: manual
       presets:
-      - &id011
-        key: Default
-        value:
+        Default:
         - 0.0
         - 0.4363
-      - &id012
-        key: Custom
-        value:
+        Custom:
         - 0.0
         - 0.4363
-      start: 16
     waist:
+      start: 18
       end: 20
       policy: manual
       presets:
-      - &id013
-        key: Default
-        value:
+        Default:
         - 0.4012
         - 27.0
-      - &id014
-        key: Custom
-        value:
+        Custom:
         - 0.4012
         - 27.0
-      start: 18
     wheel:
+      start: 20
       end: 22
       policy: manual
       presets:
-      - &id015
-        key: Default
-        value:
+        Default:
         - 0
         - 0
-      - &id016
-        key: Forward
-        value:
+        Forward:
         - 0.1
         - 0.0
-      - &id017
-        key: Backward
-        value:
+        Backward:
         - -0.1
         - 0
-      - &id018
-        key: Left
-        value:
+        Left:
         - 0
         - 0.1
-      - &id019
-        key: Right
-        value:
+        Right:
         - 0
         - -0.1
-      start: 20
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -182,53 +148,109 @@ language:
 rdm:
   action_layout:
     arm:
+      start: 0
       end: 14
       policy: gradual
       presets:
         left:
-        - *id001
-        - *id002
+          Default:
+          - -1.0748
+          - 0.6107
+          - 0.2816
+          - -1.2823
+          - 0.7292
+          - 1.4957
+          - -0.1869
+          Custom:
+          - -1.0748
+          - 0.6107
+          - 0.2816
+          - -1.2823
+          - 0.7292
+          - 1.4957
+          - -0.1869
         right:
-        - *id003
-        - *id004
-      start: 0
+          Default:
+          - 1.072
+          - -0.6103
+          - -0.278
+          - 1.2822
+          - -0.7299
+          - -1.4929
+          - 0.1873
+          Custom:
+          - 1.072
+          - -0.6103
+          - -0.278
+          - 1.2822
+          - -0.7299
+          - -1.4929
+          - 0.1873
     gripper:
+      start: 14
       end: 16
       policy: stepwise
       presets:
         left:
-        - *id005
-        - *id006
-        - *id007
+          Default:
+          - 0.0
+          Custom:
+          - 0.5
+          Open:
+          - 0.0
+          Close:
+          - 1.0
         right:
-        - *id008
-        - *id009
-        - *id010
-      start: 14
+          Default:
+          - 0.0
+          Custom:
+          - 0.5
+          Open:
+          - 0.0
+          Close:
+          - 1.0
     head:
+      start: 16
       end: 18
       policy: manual
       presets:
-      - *id011
-      - *id012
-      start: 16
+        Default:
+        - 0.0
+        - 0.4363
+        Custom:
+        - 0.0
+        - 0.4363
     waist:
+      start: 18
       end: 20
       policy: manual
       presets:
-      - *id013
-      - *id014
-      start: 18
+        Default:
+        - 0.4012
+        - 27.0
+        Custom:
+        - 0.4012
+        - 27.0
     wheel:
+      start: 20
       end: 22
       policy: manual
       presets:
-      - *id015
-      - *id016
-      - *id017
-      - *id018
-      - *id019
-      start: 20
+        Default:
+        - 0
+        - 0
+        Forward:
+        - 0.1
+        - 0.0
+        Backward:
+        - -0.1
+        - 0
+        Left:
+        - 0
+        - 0.1
+        Right:
+        - 0
+        - -0.1
   max_len: 100
   mode: async
   observe_fps_window_size: 10
@@ -284,53 +306,109 @@ robots:
   a2d:
     action_layout:
       arm:
+        start: 0
         end: 14
         policy: gradual
         presets:
           left:
-          - *id001
-          - *id002
+            Default:
+            - -1.0748
+            - 0.6107
+            - 0.2816
+            - -1.2823
+            - 0.7292
+            - 1.4957
+            - -0.1869
+            Custom:
+            - -1.0748
+            - 0.6107
+            - 0.2816
+            - -1.2823
+            - 0.7292
+            - 1.4957
+            - -0.1869
           right:
-          - *id003
-          - *id004
-        start: 0
+            Default:
+            - 1.072
+            - -0.6103
+            - -0.278
+            - 1.2822
+            - -0.7299
+            - -1.4929
+            - 0.1873
+            Custom:
+            - 1.072
+            - -0.6103
+            - -0.278
+            - 1.2822
+            - -0.7299
+            - -1.4929
+            - 0.1873
       gripper:
+        start: 14
         end: 16
         policy: stepwise
         presets:
           left:
-          - *id005
-          - *id006
-          - *id007
+            Default:
+            - 0.0
+            Custom:
+            - 0.5
+            Open:
+            - 0.0
+            Close:
+            - 1.0
           right:
-          - *id008
-          - *id009
-          - *id010
-        start: 14
+            Default:
+            - 0.0
+            Custom:
+            - 0.5
+            Open:
+            - 0.0
+            Close:
+            - 1.0
       head:
+        start: 16
         end: 18
         policy: manual
         presets:
-        - *id011
-        - *id012
-        start: 16
+          Default:
+          - 0.0
+          - 0.4363
+          Custom:
+          - 0.0
+          - 0.4363
       waist:
+        start: 18
         end: 20
         policy: manual
         presets:
-        - *id013
-        - *id014
-        start: 18
+          Default:
+          - 0.4012
+          - 27.0
+          Custom:
+          - 0.4012
+          - 27.0
       wheel:
+        start: 20
         end: 22
         policy: manual
         presets:
-        - *id015
-        - *id016
-        - *id017
-        - *id018
-        - *id019
-        start: 20
+          Default:
+          - 0
+          - 0
+          Forward:
+          - 0.1
+          - 0.0
+          Backward:
+          - -0.1
+          - 0
+          Left:
+          - 0
+          - 0.1
+          Right:
+          - 0
+          - -0.1
     camera:
       names:
         hand_left: hand_left
@@ -349,12 +427,12 @@ robots:
   mock:
     action_layout:
       arm:
+        start: 0
         end: 14
         policy: gradual
         presets:
           left:
-          - key: Default
-            value:
+            Default:
             - 0.0
             - 0.0
             - 0.0
@@ -362,8 +440,7 @@ robots:
             - 0.0
             - 0.0
             - 0.0
-          - key: Custom
-            value:
+            Custom:
             - 0.0
             - 0.0
             - 0.0
@@ -372,8 +449,7 @@ robots:
             - 0.0
             - 0.0
           right:
-          - key: Default
-            value:
+            Default:
             - 0.0
             - 0.0
             - 0.0
@@ -381,8 +457,7 @@ robots:
             - 0.0
             - 0.0
             - 0.0
-          - key: Custom
-            value:
+            Custom:
             - 0.0
             - 0.0
             - 0.0
@@ -390,26 +465,21 @@ robots:
             - 0.0
             - 0.0
             - 0.0
-        start: 0
       gripper:
+        start: 14
         end: 16
         policy: stepwise
         presets:
           left:
-          - key: Default
-            value:
+            Default:
             - 0.0
-          - key: Custom
-            value:
+            Custom:
             - 0.0
           right:
-          - key: Default
-            value:
+            Default:
             - 0.0
-          - key: Custom
-            value:
+            Custom:
             - 0.0
-        start: 14
     camera:
       names:
         hand_left: observation.images.left_wrist_rgb
@@ -426,13 +496,13 @@ robots:
   navi_wa2:
     action_layout:
       arm:
+        start: 0
         end: 16
         policy: gradual
-        start: 0
       hand:
+        start: 16
         end: 28
         policy: stepwise
-        start: 16
     camera:
       topic_dict:
         hand_left: /zj_humanoid/sensor/left_wrist/image_raw/compressed
@@ -472,13 +542,13 @@ robots:
   ti5_t170c:
     action_layout:
       arm:
+        start: 0
         end: 14
         policy: gradual
-        start: 0
       gripper:
+        start: 14
         end: 26
         policy: gradual
-        start: 14
     arms:
       left_arm_joint_cmd_topic: /left_arm/joint_cmd
       left_arm_joint_names:

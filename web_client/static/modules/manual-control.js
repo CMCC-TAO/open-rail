@@ -5,12 +5,19 @@ const robotConfig = () => {
   return App.config?.robots?.[type] || {};
 };
 const hasLayout = (action) => !!robotConfig().action_layout?.[action];
-const presets = (action, side = null) => {
+const presetGroup = (action, side = null) => {
   const group = robotConfig().action_layout?.[action]?.presets;
-  const items = side ? group?.[side] : group;
-  return Array.isArray(items) ? items : [];
+  return side ? group?.[side] : group;
 };
 const presetKey = preset => String(preset?.key ?? preset?.name ?? '');
+const presets = (action, side = null) => {
+  const group = presetGroup(action, side);
+  if (Array.isArray(group)) return group;
+  if (group && typeof group === 'object') {
+    return Object.entries(group).map(([key, value]) => ({ key, value }));
+  }
+  return [];
+};
 const readPreset = (id) => {
   try {
     const value = JSON.parse($(id)?.value || '');
@@ -18,6 +25,14 @@ const readPreset = (id) => {
   } catch (_) {
     return null;
   }
+};
+const updateEditState = (select, edit, disabledReason = 'Preset control is disabled.') => {
+  if (!select || !edit) return;
+  const isDefault = select.selectedOptions?.[0]?.dataset.key === 'Default';
+  edit.disabled = select.disabled || isDefault;
+  edit.title = select.disabled
+    ? disabledReason
+    : isDefault ? 'Default preset is read-only.' : 'Edit preset';
 };
 const populate = (selectId, checkId, action, side = null) => {
   const select = $(selectId);
@@ -58,18 +73,8 @@ const populate = (selectId, checkId, action, side = null) => {
   check.disabled = !supported;
   if (!supported) check.checked = false;
   select.disabled = !supported || !check.checked;
-  if (edit) {
-    edit.disabled = select.disabled;
-    edit.title = edit.disabled ? reason : 'Edit preset';
-  }
+  updateEditState(select, edit, reason);
 };
-const selectDefault = (id) => {
-  const select = $(id);
-  if (!select) return;
-  const option = [...select.options].find(item => item.dataset.key === 'Default');
-  if (option) select.value = option.value;
-};
-
 const handAction = () => {
   const action = String(robotConfig().hand_type || 'gripper');
   return hasLayout(action) ? action : 'gripper';
@@ -88,11 +93,10 @@ const refreshControls = () => {
 const requestPreset = (key, current) => new Promise(resolve => {
   const modal = $('modal-preset-edit');
   const title = $('preset-edit-title');
-  const keyInput = $('preset-edit-key');
   const valueInput = $('preset-edit-value');
   const confirm = $('btn-preset-edit-confirm');
   const cancel = $('btn-preset-edit-cancel');
-  if (!modal || !title || !keyInput || !valueInput || !confirm || !cancel) {
+  if (!modal || !title || !valueInput || !confirm || !cancel) {
     resolve(null);
     return;
   }
@@ -103,7 +107,6 @@ const requestPreset = (key, current) => new Promise(resolve => {
     resolve(result);
   };
   const submit = () => finish({
-    key: keyInput.value.trim(),
     value: valueInput.value,
   });
   const onKeyDown = event => {
@@ -112,8 +115,6 @@ const requestPreset = (key, current) => new Promise(resolve => {
   };
 
   title.textContent = `Edit Preset: ${key}`;
-  keyInput.value = key;
-  keyInput.readOnly = true;
   valueInput.value = JSON.stringify(current);
   confirm.onclick = submit;
   cancel.onclick = () => finish(null);
@@ -144,9 +145,10 @@ const parsePresetValue = (input, length) => {
 const savePresets = async (selectId, action, side, items, selectedKey, verb) => {
   const type = String(App.config?.robots?.type || '');
   const suffix = side ? `.${side}` : '';
-  const patch = {
-    [`robots.${type}.action_layout.${action}.presets${suffix}`]: items,
-  };
+  const path = `robots.${type}.action_layout.${action}.presets${suffix}`;
+  const patch = Array.isArray(items)
+    ? { [path]: items }
+    : { [`${path}.${selectedKey}`]: items[selectedKey] };
 
   try {
     const res = await apiFetch('/api/client/config/patch', {
@@ -158,6 +160,7 @@ const savePresets = async (selectId, action, side, items, selectedKey, verb) => 
     const select = $(selectId);
     const selected = [...select.options].find(item => item.dataset.key === selectedKey);
     if (selected) select.value = selected.value;
+    updateEditState(select, $(`${selectId}-edit`));
 
     const display = $('conf-path-display');
     const path = display?.dataset.fullPath || display?.textContent.trim() || '';
@@ -174,7 +177,7 @@ const savePresets = async (selectId, action, side, items, selectedKey, verb) => 
 const editPreset = async (selectId, action, side = null) => {
   const option = $(selectId)?.selectedOptions?.[0];
   const current = readPreset(selectId);
-  if (!option?.dataset.key || !current) return;
+  if (!option?.dataset.key || option.dataset.key === 'Default' || !current) return;
 
   const key = option.dataset.key;
   const result = await requestPreset(key, current);
@@ -182,12 +185,15 @@ const editPreset = async (selectId, action, side = null) => {
   const value = parsePresetValue(result.value, current.length);
   if (!value) return;
 
-  const updated = presets(action, side).map(item => {
-    if (presetKey(item) !== key) return item;
-    const normalized = { ...item, key, value };
-    delete normalized.name;
-    return normalized;
-  });
+  const group = presetGroup(action, side);
+  const updated = Array.isArray(group)
+    ? group.map(item => {
+        if (presetKey(item) !== key) return item;
+        const normalized = { ...item, key, value };
+        delete normalized.name;
+        return normalized;
+      })
+    : { ...group, [key]: value };
   await savePresets(selectId, action, side, updated, key, 'updated');
 };
 
@@ -206,7 +212,7 @@ const editPreset = async (selectId, action, side = null) => {
     const select = $(selectId);
     if (select) select.disabled = !checked(checkId);
     const edit = $(`${selectId}-edit`);
-    if (edit) edit.disabled = !checked(checkId);
+    updateEditState(select, edit);
   });
 });
 
@@ -221,6 +227,9 @@ const editPreset = async (selectId, action, side = null) => {
   ['wheel-preset', () => 'wheel'],
   ['leg-preset', () => 'leg'],
 ].forEach(([selectId, getAction, side = null]) => {
+  $(selectId)?.addEventListener('change', () => {
+    updateEditState($(selectId), $(`${selectId}-edit`));
+  });
   $(`${selectId}-edit`)?.addEventListener('click', () => {
     editPreset(selectId, getAction(), side);
   });
@@ -248,41 +257,18 @@ const sendActions = async (endpoint, actions) => {
 };
 
 $('btn-arm')?.addEventListener('click', async () => {
-  toast('Arm setting...', 'info');
-  if (await sendPair('arm', 'arm', 'arm')) toast('Arm set.', 'ok');
-});
-$('btn-arm-reset')?.addEventListener('click', async () => {
-  if (checked('chk-arm-left')) selectDefault('arm-left-preset');
-  if (checked('chk-arm-right')) selectDefault('arm-right-preset');
-  toast('Arm resetting...', 'info');
-  if (await sendPair('arm', 'arm', 'arm')) toast('Arm reset.', 'ok');
+  toast('Sending arm command...', 'info');
+  if (await sendPair('arm', 'arm', 'arm')) toast('Arm command sent.', 'ok');
 });
 $('btn-gripper')?.addEventListener('click', async () => {
-  if (await sendPair('gripper', handAction(), 'gripper')) toast('Gripper / Hand set.', 'ok');
-});
-$('btn-gripper-reset')?.addEventListener('click', async () => {
-  if (checked('chk-gripper-left')) selectDefault('gripper-left-preset');
-  if (checked('chk-gripper-right')) selectDefault('gripper-right-preset');
-  if (await sendPair('gripper', handAction(), 'gripper')) toast('Gripper / Hand reset.', 'ok');
+  if (await sendPair('gripper', handAction(), 'gripper')) toast('Gripper / Hand command sent.', 'ok');
 });
 $('btn-body')?.addEventListener('click', async () => {
-  if (await sendActions('body', ['head', 'waist', 'body'])) toast('Head / Waist / Body set.', 'ok');
-});
-$('btn-body-reset')?.addEventListener('click', async () => {
-  ['head', 'waist', 'body'].forEach(action => {
-    if (checked(`chk-${action}`)) selectDefault(`${action}-preset`);
-  });
-  if (await sendActions('body', ['head', 'waist', 'body'])) toast('Head / Waist / Body reset.', 'ok');
+  if (await sendActions('body', ['head', 'waist', 'body'])) toast('Head / Waist / Body command sent.', 'ok');
 });
 
 $('btn-wheel')?.addEventListener('click', async () => {
-  if (await sendActions('wheel', ['wheel', 'leg'])) toast('Wheel / Leg set.', 'ok');
-});
-$('btn-wheel-reset')?.addEventListener('click', async () => {
-  ['wheel', 'leg'].forEach(action => {
-    if (checked(`chk-${action}`)) selectDefault(`${action}-preset`);
-  });
-  if (await sendActions('wheel', ['wheel', 'leg'])) toast('Wheel / Leg reset.', 'ok');
+  if (await sendActions('wheel', ['wheel', 'leg'])) toast('Wheel / Leg command sent.', 'ok');
 });
 
 document.addEventListener('app-config-updated', refreshControls);
