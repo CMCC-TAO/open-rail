@@ -629,7 +629,7 @@ class LeRobotDatasetWriter:
         
         observation['language_instruction'] = language_instruction
         # check state shape 
-        if observation['obs.state'].shape[0] != self.state_shape:
+        if observation['obs.state'].shape[0] < self.state_shape:
             # self.logger.warning(f"obs shape {observation['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
             # assert state['obs.state'].shape[0] <= self.state_shape, \
             # f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
@@ -637,8 +637,6 @@ class LeRobotDatasetWriter:
                 observation['obs.state'],
                 np.zeros(self.state_shape - observation['obs.state'].shape[0], dtype=observation['obs.state'].dtype)
             ], axis=0)
-        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
-            return
 
         self.record_queue.put((observation, action))
                 # print(f"Write successful: {timestamp}")
@@ -658,7 +656,7 @@ class LeRobotDatasetWriter:
             return
 
         # check action shape 
-        if action.shape[0]!= self.action_shape:
+        if action.shape[0] < self.action_shape:
             # self.logger.warning(f"Action shape {action.shape[0]} is not correct, config shape is {self.action_shape} , add 0 to the action")
             # self.logger.warning(f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}")
             action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)

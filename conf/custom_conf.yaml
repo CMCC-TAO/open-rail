@@ -8,26 +8,35 @@ controller:
   speed: 1.27
   wait_time: 400
 inter_chunk:
-  bspline:
-    num_control_points: 6
-    transition_length: 32
-  common:
-    smooth_action: false
-    smooth_base: 0.0
-    smooth_length: 50
-    smooth_ratio: 0.75
   inter_chunk_mode: min_jerk
-  search_length: 100
+  min_jerk:
+    adaptive_factor: -1.0
+    blend_threshold: 0.7
+  search_action:
+    search_length: 100
+  smooth_velocity:
+    kd: 2.0
+    kp: 5.0
+    max_acc: 5.0
+    max_vel: 2.0
+  sync: {}
 intra_chunk:
   action_layout:
     arm:
+      start: 0
       end: 14
       policy: gradual
       presets:
         left:
-        - &id001
-          name: Default
-          value:
+          Default:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          Custom:
           - 0.0
           - 0.0
           - 0.0
@@ -36,9 +45,7 @@ intra_chunk:
           - 0.0
           - 0.0
         right:
-        - &id002
-          name: Default
-          value:
+          Default:
           - 0.0
           - 0.0
           - 0.0
@@ -46,22 +53,29 @@ intra_chunk:
           - 0.0
           - 0.0
           - 0.0
-      start: 0
+          Custom:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
     gripper:
+      start: 14
       end: 16
       policy: stepwise
       presets:
         left:
-        - &id003
-          name: Default
-          value:
+          Default:
+          - 0.0
+          Custom:
           - 0.0
         right:
-        - &id004
-          name: Default
-          value:
+          Default:
           - 0.0
-      start: 14
+          Custom:
+          - 0.0
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -84,23 +98,59 @@ language:
 rdm:
   action_layout:
     arm:
+      start: 0
       end: 14
       policy: gradual
       presets:
         left:
-        - *id001
+          Default:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          Custom:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
         right:
-        - *id002
-      start: 0
+          Default:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          Custom:
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
+          - 0.0
     gripper:
+      start: 14
       end: 16
       policy: stepwise
       presets:
         left:
-        - *id003
+          Default:
+          - 0.0
+          Custom:
+          - 0.0
         right:
-        - *id004
-      start: 14
+          Default:
+          - 0.0
+          Custom:
+          - 0.0
   max_len: 100
   mode: async
   observe_fps_window_size: 10
@@ -114,8 +164,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 480
-        width: 848
+        height: 640
+        width: 640
     cam.hand_right:
       encode:
         codec: mp4v
@@ -123,8 +173,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 480
-        width: 848
+        height: 640
+        width: 640
     cam.head:
       encode:
         codec: mp4v
@@ -132,21 +182,21 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 720
-        width: 1280
+        height: 640
+        width: 640
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
     fps: 30
     robot_type: a2d
     splits:
-      valid: 0:100
+      train: 0:1
     state_shape: 20
     total_chunks: 1
-    total_episodes: 0
+    total_episodes: 2
     total_frames: 0
     total_tasks: 0
-    total_videos: 0
+    total_videos: 6
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   record_exp_data: false
   save_dir: data/recording
@@ -156,12 +206,20 @@ robots:
   a2d:
     action_layout:
       arm:
+        start: 0
         end: 14
         policy: gradual
         presets:
           left:
-          - name: Default
-            value:
+            Default:
+            - -1.0748
+            - 0.6107
+            - 0.2816
+            - -1.2823
+            - 0.7292
+            - 1.4957
+            - -0.1869
+            Custom:
             - -1.0748
             - 0.6107
             - 0.2816
@@ -170,8 +228,7 @@ robots:
             - 1.4957
             - -0.1869
           right:
-          - name: Default
-            value:
+            Default:
             - 1.072
             - -0.6103
             - -0.278
@@ -179,69 +236,79 @@ robots:
             - -0.7299
             - -1.4929
             - 0.1873
-        start: 0
+            Custom:
+            - 1.072
+            - -0.6103
+            - -0.278
+            - 1.2822
+            - -0.7299
+            - -1.4929
+            - 0.1873
       gripper:
+        start: 14
         end: 16
         policy: stepwise
         presets:
           left:
-          - name: Default
-            value:
+            Default:
             - 0.0
-          - name: Close
-            value:
+            Custom:
+            - 0.5
+            Open:
+            - 0.0
+            Close:
             - 1.0
           right:
-          - name: Default
-            value:
+            Default:
             - 0.0
-          - name: Close
-            value:
+            Custom:
+            - 0.5
+            Open:
+            - 0.0
+            Close:
             - 1.0
-        start: 14
       head:
+        start: 16
         end: 18
         policy: manual
         presets:
-        - name: Default
-          value:
+          Default:
           - 0.0
           - 0.4363
-        start: 16
+          Custom:
+          - 0.0
+          - 0.4363
       waist:
+        start: 18
         end: 20
         policy: manual
         presets:
-        - name: Default
-          value:
+          Default:
           - 0.4012
           - 27.0
-        start: 18
+          Custom:
+          - 0.4012
+          - 27.0
       wheel:
+        start: 20
         end: 22
         policy: manual
         presets:
-        - name: Default
-          value:
+          Default:
           - 0
           - 0
-        - name: Forward
-          value:
+          Forward:
           - 0.1
           - 0.0
-        - name: Backward
-          value:
+          Backward:
           - -0.1
           - 0
-        - name: Left
-          value:
+          Left:
           - 0
           - 0.1
-        - name: Right
-          value:
+          Right:
           - 0
           - -0.1
-        start: 20
     camera:
       names:
         hand_left: hand_left
@@ -260,23 +327,59 @@ robots:
   mock:
     action_layout:
       arm:
+        start: 0
         end: 14
         policy: gradual
         presets:
           left:
-          - *id001
+            Default:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            Custom:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
           right:
-          - *id002
-        start: 0
+            Default:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            Custom:
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
       gripper:
+        start: 14
         end: 16
         policy: stepwise
         presets:
           left:
-          - *id003
+            Default:
+            - 0.0
+            Custom:
+            - 0.0
           right:
-          - *id004
-        start: 14
+            Default:
+            - 0.0
+            Custom:
+            - 0.0
     camera:
       names:
         hand_left: observation.images.hand_left
@@ -293,13 +396,13 @@ robots:
   navi_wa2:
     action_layout:
       arm:
+        start: 0
         end: 16
         policy: gradual
-        start: 0
       hand:
+        start: 16
         end: 28
         policy: stepwise
-        start: 16
     camera:
       topic_dict:
         hand_left: /zj_humanoid/sensor/left_wrist/image_raw/compressed
@@ -339,13 +442,13 @@ robots:
   ti5_t170c:
     action_layout:
       arm:
+        start: 0
         end: 14
         policy: gradual
-        start: 0
       gripper:
+        start: 14
         end: 26
         policy: gradual
-        start: 14
     arms:
       left_arm_joint_cmd_topic: /left_arm/joint_cmd
       left_arm_joint_names:
