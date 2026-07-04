@@ -638,7 +638,6 @@ $('btn-lang-send').addEventListener('click', async () => {
   // 3. Send language command to robot
   await sendLanguageSet(lang);
   toast('Language command updated.', 'info');
-
 });
 $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
 
