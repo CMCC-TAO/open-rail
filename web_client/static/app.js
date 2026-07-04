@@ -171,9 +171,6 @@ async function handleAutoModeCompletion(progress, subTaskId = null) {
       suppressAbortToast: true,
     });
 
-    // Finalize the current log record — full auto cycle completed
-    if (typeof interruptRunningExecRecord === 'function') interruptRunningExecRecord();
-
     toast('Auto Mode reached last sub-task, reset to 0 and paused.', 'info', 2600);
   } catch (_) {
     // no-op: apiFetch already handles toasts
@@ -247,8 +244,6 @@ function renderSubTask(subTaskId = null) {
   if (typeof lang === 'string' && lang.trim()) {
     textEl.value = lang;
     sendLanguageSet(lang);
-    // Finalize current record and start a new one with the updated instruction
-    if (typeof autoStartExecRecord === 'function') autoStartExecRecord();
   }
 }
 
@@ -353,20 +348,6 @@ function setRunningUI(running, paused = false) {
   App.isPaused  = paused;
 
   if (!unchanged) {
-    // Exec log: start/stop/pause/resume transitions
-    if (!wasRunning && running && !paused) {
-      // START: auto-create new record from current instruction
-      if (typeof autoStartExecRecord === 'function') autoStartExecRecord();
-    } else if (wasRunning && !running) {
-      // STOP: finalize current record as interrupted
-      if (typeof interruptRunningExecRecord === 'function') interruptRunningExecRecord();
-    } else if (wasRunning && running && !wasPaused && paused) {
-      // PAUSE: freeze timer
-      if (typeof pauseExecRecord === 'function') pauseExecRecord();
-    } else if (wasRunning && running && wasPaused && !paused) {
-      // RESUME: unfreeze timer
-      if (typeof resumeExecRecord === 'function') resumeExecRecord();
-    }
     // Camera Visual: connect dedicated WS server when running
     if (running) {
       connectCamWS();
