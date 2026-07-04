@@ -9,10 +9,10 @@ function syncRecordingSwitchUI() {
   // Update button text/icon/style based on recording status
   if (recording) {
     btnStartStop.innerHTML = '<i class="fas fa-stop"></i> Stop';
-    btnStartStop.className = 'btn btn-xs btn-danger';
+    btnStartStop.className = 'btn btn-sm btn-danger';
   } else {
     btnStartStop.innerHTML = '<i class="fas fa-play"></i> Start';
-    btnStartStop.className = 'btn btn-xs btn-success';
+    btnStartStop.className = 'btn btn-sm btn-success';
   }
 }
 
@@ -28,7 +28,8 @@ function renderRecordingConfigTree(cfg = App.config) {
 function getRecordingSaveItems() {
   const items = [];
   if ($('chk-record-episode')?.checked) items.push('Episode');
-  if ($('chk-record-expdata')?.checked) items.push('ExpData');
+  // if ($('chk-record-expdata')?.checked) items.push('ExpData');
+  if ($('chk-record-eval-log')?.checked) items.push('Evaluation');
   return items;
 }
 
@@ -61,7 +62,7 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
   }
 }
 
-function renderRecordingFileList(data) {
+async function renderRecordingFileList(data) {
   const listEl = $('recording-file-list');
   const taskSel = $('recording-task-select');
   const chunkSel = $('recording-chunk-select');
@@ -398,7 +399,6 @@ function setupRecordingPanel() {
             App.recordingChunk = null;
             App.recordingChunksSnapshot = [];
           } else if (currentTask) {
-            // Fallback for older backend: select newest dir with task prefix.
             App.recordingTask = currentTask;
             App.recordingChunk = null;
             App.recordingChunksSnapshot = [];
@@ -435,76 +435,100 @@ function setupRecordingPanel() {
   syncRecordingFileListPolling();
 }
 
-// TODO Check if needed
-// 更新开始录制函数
-function startRecording() {
-  if (!App.isRunning || App.isRecording) return;
-
-  const episodeEnabled = $('#chk-record-episode').checked;
-  const expdataEnabled = $('#chk-record-expdata').checked;
-  
-  // 发送开始录制请求到后端
-  sendWsMessage({ type: 'start_recording', payload: { 
-    record_episode: episodeEnabled, 
-    record_expdata: expdataEnabled 
-  }});
-}
-
-// 更新停止录制函数
-function stopRecording() {
-  if (!App.isRunning || !App.isRecording) return;
-  
-  // 发送停止录制请求到后端
-  sendWsMessage({ type: 'stop_recording', payload: {} });
-}
-
-// ── Execution Log initialization ──────────────────────────
+// ── Evaluation Log initialization ──────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
-  // 为单一按钮添加事件监听器
-  const startStopBtn = $('btn-recording-startstop');
-  if (startStopBtn) {
-    startStopBtn.addEventListener('click', function() {
-      if (App.isRecording) {
-        stopRecording();
-      } else {
-        startRecording();
+  // Record Config collapse/expand
+  const cfgCollapseBtn = $('btn-recording-config-collapse');
+  if (cfgCollapseBtn) {
+    cfgCollapseBtn.addEventListener('click', () => {
+      const wrap = $('recording-config-wrap');
+      if (!wrap) return;
+      wrap.classList.toggle('collapsed');
+      const icon = cfgCollapseBtn.querySelector('i');
+      if (icon) {
+        icon.className = wrap.classList.contains('collapsed') ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
       }
     });
   }
 
-  // ExecLog checkbox: toggle panel visibility
-  const execlogChk = $('chk-record-exec-log');
-  if (execlogChk) {
-    execlogChk.addEventListener('change', () => {
-      if (typeof toggleExecLog === 'function') toggleExecLog(execlogChk.checked);
+  // Restore checkbox states from localStorage and config
+  const episodeChk = $('chk-record-episode');
+  const evallogChk = $('chk-record-eval-log');
+
+  if (episodeChk) {
+    // Initial state based on config
+    if (App.config && App.config.record && App.config.record.is_record_episode !== undefined) {
+      episodeChk.checked = App.config.record.is_record_episode;
+    }
+    // Add event listener to update config when checkbox changes
+    episodeChk.addEventListener('change', async () => {
+      // Update config
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+      App.config.record.is_record_episode = episodeChk.checked;
+      
+      // Sync to backend
+      try {
+        await apiFetch('/api/client/config/patch', {
+          method: 'POST',
+          body: JSON.stringify({ patch: { 'record.is_record_episode': episodeChk.checked } }),
+        });
+        
+        // Save config to file
+        const display = $('conf-path-display');
+        const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+        if (path) {
+          try {
+            await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
+          } catch (e) {
+            console.error('Failed to save config:', e);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to update config via API:', e);
+    }
+  });
+  }
+
+  // Eval log checkbox: enable/disable panel visibility and config binding
+  if (evallogChk) {
+    // Initial state based on config
+    if (App.config && App.config.record && App.config.record.is_record_eval_log !== undefined) {
+      evallogChk.checked = App.config.record.is_record_eval_log;
+    }
+    
+    evallogChk.addEventListener('change', async () => {
+      // Update config
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+      App.config.record.is_record_eval_log = evallogChk.checked;
+
+      // Update eval log panel visibility based on checkbox
+      if (typeof setEvalLogEnabled === 'function') setEvalLogEnabled(evallogChk.checked);
+      
+      // Sync to backend
+      try {
+        await apiFetch('/api/client/config/patch', {
+          method: 'POST',
+          body: JSON.stringify({ patch: { 'record.is_record_eval_log': evallogChk.checked } }),
+        });
+        
+        // Save config to file
+        const display = $('conf-path-display');
+        const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+        if (path) {
+          try {
+            await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
+          } catch (e) {
+            console.error('Failed to save config:', e);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to update config via API:', e);
+      }
     });
   }
 
-  // Rec button: start / interrupt
-  $('btn-exec-log-rec')?.addEventListener('click', () => {
-    if (typeof ExecLog === 'undefined') return;
-    const isRecording = ExecLog.records.some(r => r.status === 'running');
-    if (isRecording) {
-      if (typeof interruptRunningExecRecord === 'function') interruptRunningExecRecord();
-    } else {
-      if (typeof autoStartExecRecord === 'function') autoStartExecRecord();
-    }
-  });
-
-  // Score buttons
-  document.querySelectorAll('.exec-score-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (typeof scoreExecRecord === 'function') scoreExecRecord(Number(btn.dataset.score));
-    });
-  });
-
-  // Toolbar actions
-  $('btn-log-export')?.addEventListener('click', () => {
-    if (typeof exportExecLogCSV === 'function') exportExecLogCSV();
-  });
-  $('btn-log-save')?.addEventListener('click', () => {
-    if (typeof saveExecLogToServer === 'function') saveExecLogToServer();
-  });
   $('btn-log-clear')?.addEventListener('click', () => {
     if (typeof ExecLog === 'undefined') return;
     if (!confirm('Clear all execution log records?')) return;

@@ -1,5 +1,5 @@
 {
-    "make_coffee":[
+  "make_coffee": [
     "[PRIMARY_ARM=LEFT] Tap dispenser button",
     "[PRIMARY_ARM=LEFT] Grasps the dropped cup, and places it upright under the right coffee nozzle, aligned.",
     "[PRIMARY_ARM=RIGHT] press the top-center button for Americano.",

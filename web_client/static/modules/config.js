@@ -28,7 +28,8 @@ const CONFIG_SELECT_OPTIONS = {
   method: ['resize', 'none'],
   type: ['a2d', 'mock', 'ti5_t170c', 'navi_wa2'],
   mode: ['async', 'sync'],
-  codec: ['mp4v', 'avc1']
+  codec: ['mp4v', 'avc1'],
+  eval_log_format: ['json', 'csv', 'both'],
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
@@ -57,15 +58,6 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visualize.trajectory.selected_joints',
   'visualize.trajectory.window_span_sec',
   'record.switch',
-  'record.save_dir',
-  'record.record_exp_data',
-  'record.info.data_path',
-  'record.info.total_chunks',
-  'record.info.total_episodes',
-  'record.info.total_frames',
-  'record.info.total_tasks',
-  'record.info.total_videos',
-  'record.info.video_path',
   'controller.raw_fps',
   'controller.wait_time',
   'controller.period',
@@ -83,11 +75,52 @@ const CONFIG_READONLY_DOT_KEYS = new Set([
   'visualize.ping_timeout',
   'visualize.host',
   'visualize.port',
+  'rdm.max_len',
+  'record.save_dir',
+  'record.save_raw',
+  'record.info.action_shape',
+  'record.info.chunks_size',
+  'record.info.codebase_version',
+  'record.info.data_path',
+  'record.info.fps',
+  'record.info.robot_type',
+  'record.info.splits',
+  'record.info.state_shape',
+  'record.info.total_chunks',
+  'record.info.total_episodes',
+  'record.info.total_frames',
+  'record.info.total_tasks',
+  'record.info.total_videos',
+  'record.info.video_path',
+  'record.info.cam.head',
+  'record.info.cam.head.encode',
+  'record.info.cam.head.encode.codec',
+  'record.info.cam.head.encode.has_audio',
+  'record.info.cam.head.encode.is_depth_map',
+  'record.info.cam.head.shape',
+  'record.info.cam.head.shape.channel',
+  'record.info.cam.head.shape.height',
+  'record.info.cam.head.shape.width',
+  'record.info.cam.hand_left',
+  'record.info.cam.hand_left.encode',
+  'record.info.cam.hand_left.encode.codec',
+  'record.info.cam.hand_left.encode.has_audio',
+  'record.info.cam.hand_left.encode.is_depth_map',
+  'record.info.cam.hand_left.shape',
+  'record.info.cam.hand_left.shape.channel',
+  'record.info.cam.hand_left.shape.height',
+  'record.info.cam.hand_left.shape.width',
+  'record.info.cam.hand_right',
+  'record.info.cam.hand_right.encode',
+  'record.info.cam.hand_right.encode.codec',
+  'record.info.cam.hand_right.encode.has_audio',
+  'record.info.cam.hand_right.encode.is_depth_map',
+  'record.info.cam.hand_right.shape',
+  'record.info.cam.hand_right.shape.channel',
+  'record.info.cam.hand_right.shape.height',
+  'record.info.cam.hand_right.shape.width',
   'vla_zmq.heartbeat_interval',
   'vla_zmq.heartbeat_timeout',
-  // 'vla_zmq.server_ip',
-  // 'vla_zmq.server_port',
-  'rdm.max_len'
 ]);
 
 // Default key list for the fixed "Main Parameters" area.
@@ -765,9 +798,9 @@ function createCfgRow(dotKey, label, value, options = {}) {
 
         try {
           await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
-          toast(`dataset_path updated and saved to ${CONF_FILE}.`, 'ok', 2200);
+          toast(`${dotKey} updated and saved to ${CONF_FILE}.`, 'ok', 2200);
         } catch (_) {
-          toast(`dataset_path updated, but save to ${CONF_FILE} failed.`, 'warn', 2600);
+          toast(`${dotKey} updated, but save to ${CONF_FILE} failed.`, 'warn', 2600);
         }
       } catch (_) {
         App.pendingPatch[dotKey] = selectedPath;
@@ -1172,7 +1205,7 @@ function applyVisualConfig(cfg = App.config) {
   if (camAllBtn) {
     const allOn = App.camOpen.every(v => v);
     camAllBtn.innerHTML = allOn ? '<i class="fas fa-pause"></i> Close All' : '<i class="fas fa-play"></i> Open All';
-    camAllBtn.className = allOn ? 'btn btn-xs btn-danger' : 'btn btn-xs btn-success';
+    camAllBtn.className = allOn ? 'btn btn-danger btn-xs' : 'btn btn-success btn-xs';
   }
 
   if (typeof trajCfg.play === 'boolean') {

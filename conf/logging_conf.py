@@ -214,7 +214,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "propagate": False,
             },
             "client.core.save_lerobot": {
-                "handlers": ["file"],
+                "handlers": ["console", "file"],
                 "level": "DEBUG",
                 "propagate": False,
             },

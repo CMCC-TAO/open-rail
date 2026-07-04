@@ -821,9 +821,8 @@ def _ask_directory_with_tk(initial_dir: str) -> str:
 @app.get("/api/client/record/episodes")
 async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] = None):
     """List recording task folders and parsed LeRobot episode records."""
-    recoding_dir = ROOT / "data" / "recoding"
-    fallback_dir = ROOT / "data" / "recording"
-    base_dir = recoding_dir if (recoding_dir.exists() or not fallback_dir.exists()) else fallback_dir
+    save_dir = str(getattr(getattr(client_state.config, 'record', None), 'save_dir', 'data/recording') or 'data/recording')
+    base_dir = ROOT / save_dir.lstrip('/').lstrip('\\')
 
     if not base_dir.exists():
         return {
@@ -957,6 +956,32 @@ async def load_lang_file(req: LangFileRequest):
         return {"status": "ok", "data": data}
     except Exception as e:
         raise HTTPException(400, f"Failed to parse JSON: {e}")
+
+
+class LangSaveRequest(BaseModel):
+    path: str
+    data: dict
+
+
+@app.post("/api/client/language/save")
+async def save_lang_file(req: LangSaveRequest):
+    """Save the language command JSON file."""
+    p = Path(req.path)
+    if "conf" not in req.path:
+        p = "conf" / p
+    if not p.is_absolute():
+        p = ROOT / p
+    try:
+        p = p.resolve()
+        p.relative_to(ROOT.resolve())
+    except ValueError:
+        raise HTTPException(400, "Path is outside the allowed project directory.")
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(req.data, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"status": "ok", "path": str(p.relative_to(ROOT))}
+    except Exception as e:
+        raise HTTPException(500, f"Failed to save language file: {e}")
 
 
 @app.get("/api/client/config")
@@ -2048,6 +2073,8 @@ async def client_language_set(req: LanguageSetRequest):
         raise
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
 
 @app.post('/api/client/record/start')
 async def client_record_start(req: RecordStartRequest):

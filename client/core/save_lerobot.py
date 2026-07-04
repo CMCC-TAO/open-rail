@@ -1,23 +1,23 @@
 import os
 import re
-import numpy as np
 import json
 import cv2
 import time
-from pathlib import Path
-from ml_collections import ConfigDict
-from collections import deque
+import logging
+import threading
+import traceback
+import numpy as np
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-import pandas as pd
-import threading
-from multiprocessing import Process, Manager,Queue
 from queue import Empty
-from typing import Any, Dict, List, Optional, Union
-import logging
-from concurrent.futures import ThreadPoolExecutor
-import traceback
+from pathlib import Path
 from datetime import datetime
+from collections import deque
+from ml_collections import ConfigDict
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Process, Manager,Queue
+from typing import Any, Dict, List, Optional, Union
 class LeRobotDatasetParser:
     """Parse LeRobot dataset episodes from one task recording directory."""
 
@@ -328,6 +328,7 @@ class LeRobotDatasetWriter:
 
         self.save_path = self._build_full_save_path(self.save_dir, task)
         self.meta_dir = os.path.join(self.save_path, 'meta')
+        # self.logger.info(f"_check_meta_path_and_dir: save_dir={self.save_dir!r}, save_path={self.save_path!r}, meta_dir={self.meta_dir!r}")
 
         if not os.path.exists(self.meta_dir):
             os.makedirs(self.meta_dir, exist_ok=True)
@@ -355,7 +356,8 @@ class LeRobotDatasetWriter:
             self.config['info']["total_episodes"] = 0
             self.config['info']["total_frames"] = 0
             self.config['info']["total_videos"] = 0
-        # self._parse_config_info(self.config["info"])
+            self.config['info']['chunks_size'] = 1000
+            self._sync_shared_data_from_config()
     
     def _check_required_meta_files(self, required_files: List[str] = ['info.json', 'episodes.jsonl', 'tasks.jsonl']) -> bool:
         # Check for required files
@@ -389,14 +391,18 @@ class LeRobotDatasetWriter:
         # Load info.json and update dataset info
         info_file_path = os.path.join(self.meta_dir, 'info.json')
         self._update_dataset_info_from_meta_file(info_file_path)
-        self.shared_data.total_frames.value = int(self.config['info']['total_frames'])
-        self.shared_data.total_videos.value = int(self.config['info']['total_videos'])
-        self.shared_data.episode_index.value = int(self.config['info']['total_episodes'])
-        self.shared_data.episode_chunk.value = int(self.config['info']['total_episodes']) // int(self.config['info']['chunks_size'])
+        self._sync_shared_data_from_config()
 
         # Load tasks.jsonl and update task languages
         task_file_path = os.path.join(self.meta_dir, 'tasks.jsonl')
         self._update_task_languages_from_meta_file(task_file_path)
+
+    def _sync_shared_data_from_config(self) -> None:
+        """Sync config['info'] values to shared_data."""
+        self.shared_data.total_frames.value = int(self.config['info']['total_frames'])
+        self.shared_data.total_videos.value = int(self.config['info']['total_videos'])
+        self.shared_data.episode_index.value = int(self.config['info']['total_episodes'])
+        self.shared_data.episode_chunk.value = int(self.config['info']['total_episodes']) // int(self.config['info']['chunks_size'])
 
     def _update_dataset_info_from_meta_file(self, file_path: str) -> None:
         """
@@ -588,12 +594,10 @@ class LeRobotDatasetWriter:
         # Invalidate future async tasks from next cycle; current queue will still be drained.
         self._bump_recording_session_id()
 
-        wp = getattr(self, "writer_process", None)
-        if wp is not None and wp.is_alive():
+        if self.writer_process is not None and self.writer_process.is_alive():
             self.logger.info("Waiting writer process to flush queued data...")
-            wp.join()
-            self.logger.info("Writer process exited after queue drain.")
-        elif wp is None:
+            self.writer_process.join()
+        elif self.writer_process is None:
             self.logger.debug("stop_recording called but writer process is not initialized.")
 
         self.writer_process = None
@@ -639,7 +643,6 @@ class LeRobotDatasetWriter:
             ], axis=0)
 
         self.record_queue.put((observation, action))
-                # print(f"Write successful: {timestamp}")
 
     def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int) -> None:
         """
@@ -679,7 +682,6 @@ class LeRobotDatasetWriter:
             KeyboardInterrupt: If user interrupts execution via keyboard (e.g., Ctrl+C)
             Exception: Any other exception during writing will terminate the thread
         """
-        # Wait until the first data arrives
         self.logger.info("Starting write process loop...")
 
         try:
@@ -827,11 +829,7 @@ class LeRobotDatasetWriter:
     def close(self):
         """Release all dataset writer resources safely and idempotently."""
         self.logger.info("Closing LeRobotDatasetWriter...")
-        if getattr(self, "_closed", False):
-            return
-        self._closed = True
 
-        self.logger.info("Closing LeRobotDatasetWriter...")
         try:
             self.stop_recording()
         except Exception:
@@ -1091,9 +1089,9 @@ class LeRobotDatasetWriter:
     def _release_parquet_writer(self):
         """Release opened parquet writer safely."""
         parquet_writer = getattr(self, 'parquet_writer', None)
-        if not parquet_writer:
+        if parquet_writer:
             parquet_writer.close()
-            parquet_writer = None
+            self.parquet_writer = None
             self.logger.info(f"Successfully wrote Parquet file.")
     # def write_parquet_file(self):
     #     """Writes the Parquet file containing the collected data."""

@@ -156,10 +156,10 @@ function setupCameraPanel() {
     const btn = $('btn-cam-all-toggle');
     if (allOn) {
       btn.innerHTML = '<i class="fas fa-pause"></i> Close All';
-      btn.className = 'btn btn-xs btn-danger';
+      btn.className = 'btn btn-danger btn-xs';
     } else {
       btn.innerHTML = '<i class="fas fa-play"></i> Open All';
-      btn.className = 'btn btn-xs btn-success';
+      btn.className = 'btn btn-success btn-xs';
     }
   }
   $('btn-cam-all-toggle').addEventListener('click', () => {

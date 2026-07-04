@@ -179,7 +179,7 @@ async function handleAutoModeCompletion(progress, subTaskId = null) {
   }
 }
 
-function renderSubTask(subTaskId = null) {
+async function renderSubTask(subTaskId = null) {
   // console.log('renderSubTask called', { subTaskId });
 
   const autoChk = $('chk-lang-auto-mode');
@@ -243,7 +243,7 @@ function renderSubTask(subTaskId = null) {
   const lang = subtasks[targetIdx];
   if (typeof lang === 'string' && lang.trim()) {
     textEl.value = lang;
-    sendLanguageSet(lang);
+    await sendLanguageSet(lang);
   }
 }
 
@@ -343,6 +343,7 @@ function syncStartPauseButtons(running, paused = false) {
 function setRunningUI(running, paused = false) {
   const unchanged = (App.isRunning === running && App.isPaused === paused);
   const wasRunning = App.isRunning === true;
+  const wasPaused  = App.isPaused === true;
   App.isRunning = running;
   App.isPaused  = paused;
 
