@@ -74,7 +74,7 @@
   <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
   <main class="layout">
 
-    <!-- ╔══════════════ LEFT: CONFIG + DATA RECORDING + MANUAL CONTROL ══════════════╗ -->
+    <!-- ╔══════════════ LEFT: CONFIGURATION + RECORDING + ROBOT CONTROL ══════════════╗ -->
     <div class="left-col" id="left-col">
       <aside class="panel panel-config panel-expanded" id="panel-config">
         <div class="panel-header" id="panel-config-header">
@@ -123,38 +123,71 @@
 
       <section class="panel panel-recording" id="panel-recording">
         <div class="panel-header" id="panel-recording-header">
-          <span><i class="fas fa-database"></i> Data Recording</span>
+          <span><i class="fas fa-database"></i> Recording</span>
           <div class="panel-header-actions">
             <button class="btn btn-xs btn-collapse" id="btn-recording-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="recording-body">
           <div class="recording-controls">
-            <button class="btn btn-xs btn-success" id="btn-recording-startstop"><i class="fas fa-play"></i> Start</button>
+            <button class="btn btn-sm btn-success" id="btn-recording-startstop"><i class="fas fa-play"></i> Start</button>
             <div class="recording-options-inline">
-              <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" checked /> Episode</label>
-              <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label>
-              <!-- <label class="recording-option-item"><input type="checkbox" id="chk-record-exec-log" /> ExecLog</label> -->
+              <label class="recording-option-item"><input type="checkbox" id="chk-record-eval-log" />Evaluation Results</label>
+              <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" />LeRobot Episodes</label>
+              <!-- <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label> -->
             </div>
           </div>
-          <div class="recording-config-wrap">
-            <div class="section-title">Record Config</div>
+
+          <!-- Record Config -->
+          <div class="recording-config-wrap" id="recording-config-wrap">
+            <div class="recording-config-header">
+              <div class="section-title">Config</div>
+              <button class="btn btn-xs btn-collapse" id="btn-recording-config-collapse" title="Collapse / expand"><i class="fas fa-chevron-up"></i></button>
+            </div>
             <div id="recording-config-tree" class="recording-config-tree"></div>
           </div>
+
           <div class="recording-file-wrap">
-            <div class="recording-file-filter">
+            <div class="recording-file-section">
+              <div class="recording-file-subsection">
               <span class="section-title">Tasks</span>
               <select id="recording-task-select" class="recording-task-select"></select>
             </div>
-            <div class="recording-file-title">
-              <span class="section-title">Episodes</span>
-              <label class="recording-chunk-filter">
-                <span class="recording-chunk-filter-label">Chunk</span>
-                <select id="recording-chunk-select" class="recording-chunk-select"></select>
-              </label>
+            </div>
+            <div class="recording-file-section">
+              <div class="recording-file-subsection">
+                <span class="section-title">Evaluation Results</span>
+              </div>
+              <div class="recording-file-row">
+                <span class="recording-file-label">Counts: <span id="eval-log-count" class="eval-count-badge">0</span></span>
+                <button class="btn btn-xs" id="btn-log-clear" title="Clear all current records and start a new session">New Session</button>
+              </div>
+              <div class="eval-log-table-wrap">
+                <table class="eval-log-table">
+                  <thead>
+                    <tr>
+                      <th class="col-id" title="Record ID">ID</th>
+                      <th class="col-task" title="Task Index and Sub-Task Index">Task</th>
+                      <th class="col-dur" title="Duration in seconds (hover a row for start time)">Dur[s]</th>
+                      <th class="col-score" title="Evaluation score (select to score)">Score</th>
+                      <th class="col-note" title="Notes for this record">Note</th>
+                      <th class="col-del"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="eval-log-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="recording-file-section">
+              <div class="recording-file-subsection">
+                <span class="section-title">LeRobot Episodes</span>
+              </div>
+              <div class="recording-file-row">
+                <span class="recording-file-label">Chunks: <select id="recording-chunk-select" class="recording-chunk-select"></select></span>
             </div>
             <div id="recording-file-list" class="recording-file-list"></div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -282,11 +315,10 @@
           <span><i class="fas fa-chart-line"></i> Runtime Monitor</span>
           <!-- Spacer: push all button groups to the right -->
           <span class="monitor-spacer"></span>
-          <!-- Group ①: primary controls -->
+          <!-- Group ①: system controls -->
           <div class="monitor-ctrl-group">
-            <button class="btn btn-success btn-sm" id="btn-start"><i class="fas fa-play"></i> Start</button>
-            <button class="btn btn-danger  btn-sm" id="btn-pause" title="Pause/resume client (Space)" disabled><i class="fas fa-pause"></i> Pause</button>
-            <button class="btn btn-sm"             id="btn-reset" title="Reset robot (Shift+R)" disabled><i class="fas fa-rotate-left"></i> Reset</button>
+            <button class="btn btn-danger  btn-sm" id="btn-pause" disabled><i class="fas fa-pause"></i> Pause</button>
+            <button class="btn btn-sm"             id="btn-reset" disabled><i class="fas fa-rotate-left"></i> Reset</button>
           </div>
           <!-- Separator -->
           <span class="monitor-sep"></span>
@@ -297,7 +329,11 @@
             <button class="btn btn-xs" id="btn-control" title="Start/stop control (Ctrl+Space)" disabled><span class="thread-btn-main">Control</span><span class="thread-btn-sub">Start</span></button>
           </div>
           <!-- Separator -->
-          <!-- <span class="monitor-sep"></span> -->
+          <span class="monitor-sep"></span>
+          <!-- Group ③: primary control -->
+          <div class="monitor-ctrl-group">
+            <button class="btn btn-success btn-sm" id="btn-start"><i class="fas fa-play"></i> Start</button>
+          </div>
         </div>
         <div class="panel-body">
 
@@ -365,10 +401,10 @@
               </div>
               <span class="task-progress-value" id="task-progress-value">--</span>
             </div>
-            <label class="btn btn-xs btn-load" title="Load task language json file">
+            <!-- <label class="btn btn-xs btn-load" title="Load task language json file">
               <i class="fas fa-folder-open"></i> Load
               <input id="lang-file-input" type="file" accept=".json" style="display:none" />
-            </label>
+            </label> -->
             <button class="btn btn-xs btn-collapse" id="btn-lang-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
@@ -388,7 +424,12 @@
             <div class="lang-cmd-col lang-cmd-col-send">
               <div class="section-title">Instruction</div>
               <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
-              <button class="btn btn-sm" id="btn-lang-send" title="Apply language command"><i class="fas fa-check"></i> Apply</button>
+              <div class="lang-cmd-btn-row">
+                <button class="btn btn-sm" id="btn-lang-edit" title="Update the selected sub-task instruction"><i class="fas fa-rotate"></i> Upd</button>
+                <button class="btn btn-sm" id="btn-lang-add" title="Add a new sub-task to the current task"><i class="fas fa-plus"></i> Add</button>
+                <button class="btn btn-sm" id="btn-lang-del" title="Delete the selected sub-task from the current task"><i class="fas fa-xmark"></i> Del</button>
+                <button class="btn btn-sm" id="btn-lang-send" title="Send the instruction to the VLA server"><i class="fas fa-check"></i> Apply</button>
+              </div>
             </div>
           </div>
         </div>
@@ -480,7 +521,7 @@
       <div class="panel-header">
         <span><i class="fas fa-camera"></i> Camera Viewer</span>
         <div class="panel-header-actions">
-          <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle"><i class="fas fa-pause"></i> Close All</button>
+          <button class="btn btn-danger btn-xs" id="btn-cam-all-toggle"><i class="fas fa-pause"></i> Close All</button>
         </div>
       </div>
       <div class="panel-body" id="camera-body">

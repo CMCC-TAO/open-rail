@@ -1,128 +1,36 @@
 .recording-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: flex-start;
+  gap: 16px;
   flex-wrap: nowrap;
+  padding: 6px 0px;
 }
 
 .recording-controls .btn {
-  flex: 1 1 0;
-  min-width: 0;
-  justify-content: center;
-  text-align: center;
-  padding: 4px 8px;
-}
-
-/* Recording Start/Stop button: align visual style with Camera Viewer Open/Close All */
-#btn-recording-startstop {
-  position: relative;
-  border-radius: 9px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, #d93025 20%);
-  background: transparent;
-  color: color-mix(in srgb, var(--danger) 88%, #ffffff 12%);
-  font-weight: var(--font-weight-5);
-  letter-spacing: 0.2px;
-  min-height: 26px;
-  padding: 4px 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  line-height: 1;
-  box-shadow: none;
-  transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
-}
-
-#btn-recording-startstop.btn-success {
-  color: color-mix(in srgb, var(--accent) 88%, #ffffff 12%);
-  border: 1px solid color-mix(in srgb, var(--border) 80%, var(--accent) 20%);
-}
-
-#btn-recording-startstop.btn-success:hover {
-  color: color-mix(in srgb, var(--accent) 80%, #ffffff 20%);
-  border-color: color-mix(in srgb, var(--accent) 78%, var(--accent-soft) 22%);
-  background: color-mix(in srgb, var(--accent-soft) 30%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
-    0 6px 14px color-mix(in srgb, var(--accent) 22%, transparent);
-}
-
-#btn-recording-startstop i.fas {
-  margin-right: 0;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-#btn-recording-startstop::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(180deg, color-mix(in srgb, #ffffff 14%, transparent) 0%, transparent 45%);
-  opacity: .75;
-}
-
-#btn-recording-startstop:hover {
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--danger) 78%, #fce8e6 22%);
-  color: color-mix(in srgb, var(--danger) 80%, #ffffff 20%);
-  background: color-mix(in srgb, var(--danger-soft) 30%, transparent);
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
-    0 6px 14px color-mix(in srgb, var(--danger) 22%, transparent);
-}
-
-#btn-recording-startstop:active {
-  transform: translateY(0);
-  box-shadow:
-    inset 0 2px 4px color-mix(in srgb, #000000 14%, transparent),
-    0 2px 7px color-mix(in srgb, #0a1626 20%, transparent);
-}
-
-#btn-recording-startstop:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
+  /* flex: 0 0 auto;
+  min-width: 84px; */
+  padding: 8px 8px;
 }
 
 /* Inline options layout for recording checkboxes */
 .recording-options-inline {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  padding: 0 8px;
-}
-
-.recording-options {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-}
-
-.recording-options-title {
-  font-size: var(--font-size-2);
-  color: var(--text-muted);
-  text-transform: none;
-  letter-spacing: .4px;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: left;
 }
 
 .recording-option-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   font-size: var(--font-size-2);
   color: var(--text);
   cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
 }
 
 .recording-option-item input {
@@ -130,12 +38,35 @@
   cursor: pointer;
 }
 
-.recording-config-wrap,
+.recording-config-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 4px 6px;
+}
 .recording-file-wrap {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
-  padding: 6px;
+  padding: 4px 6px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 6px;
+}
+
+.recording-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.recording-config-wrap.collapsed .recording-config-tree {
+  display: none;
+}
+.recording-config-wrap.collapsed {
+  padding-bottom: 6px;
 }
 
 .recording-config-tree {
@@ -148,18 +79,17 @@
   min-width: 112px;
 }
 
-.recording-file-filter {
+.recording-file-section {
   display: flex;
-  align-items: center;
-  gap: 12px;
-  padding-bottom: 8px;
-  /* margin-bottom: 6px; */
+  flex-direction: column;
+  /* align-items: center; */
+  padding: 2px 0px;
 }
 
 .recording-task-select {
-  flex: 1;
-  min-width: 0;
-  height: 24px;
+  /* flex: 1; */
+  max-width: 128;
+  height: 28px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -173,35 +103,9 @@
   border-color: var(--accent);
 }
 
-.recording-file-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  font-size: var(--font-size-3);
-  font-weight: var(--font-weight-4);
-  color: var(--text-muted);
-  text-transform: none;
-  letter-spacing: .4px;
-  margin-bottom: 6px;
-}
-
-.recording-chunk-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.recording-chunk-filter-label {
-  font-size: var(--font-size-3);
-  font-weight: var(--font-weight-4);
-  color: var(--text-muted);
-  letter-spacing: .3px;
-}
-
 .recording-chunk-select {
   height: 22px;
-  min-width: 68px;
+  min-width: 88px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
@@ -215,17 +119,10 @@
   border-color: var(--accent);
 }
 
-.recording-file-wrap {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
 .recording-file-list {
-  flex: 1 1 auto;
-  min-height: 220px;
-  max-height: none;
+  flex: 1;
+  min-height: 192px;
+  max-height: 192px;
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -299,7 +196,6 @@
 }
 
 .recording-file-item-delete:hover {
-  background: var(--danger-soft);
   border-color: var(--danger);
 }
 
@@ -318,3 +214,173 @@
   color: var(--text-muted);
   cursor: default;
 }
+
+/* ── Evaluation Log panel (inside recording body) ── */
+
+.recording-file-subsection {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  flex-shrink: 0;
+  /* padding-top: 4px; */
+  /* border-bottom: 1px solid var(--border-soft); */
+}
+.recording-file-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 2px 6px;
+  /* border-bottom: 1px solid var(--border-soft); */
+}
+
+.recording-file-row .btn-xs {
+  padding: 4px 6px;
+}
+
+.recording-file-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-2);
+  color: var(--text-muted);
+}
+
+.eval-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 0 6px;
+  height: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg2);
+  color: var(--text);
+  font-size: var(--font-size-2);
+}
+.eval-log-table-wrap {
+  overflow: auto;
+  flex: 1;
+  min-height: 192px;
+  max-height: 192px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg2);
+}
+.eval-log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-2);
+  font-family: var(--font);
+  table-layout: fixed;
+}
+/* Table Column Controls */
+.col-id    { width: 10%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-task  { width: 20%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-dur   { width: 20%; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.col-score { width: 22%; text-align: center; }
+.col-note  { width: 20%; text-align: center; }
+.col-del   { width:  8%; min-width: 22px; text-align: center; }
+
+.eval-log-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg2);
+  color: var(--text-muted);
+  font-weight: var(--font-weight-3);
+  padding: 4px 2px;
+  white-space: nowrap;
+  font-size: var(--font-size-2);
+}
+
+.eval-log-table tbody td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: pointer;
+  padding: 1px 4px;
+  line-height: 1.5;
+}
+.eval-log-table tbody td.col-note,
+.eval-log-table tbody td.col-score {
+  cursor: text;
+}
+
+.eval-log-note-input {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: var(--font-size-2);
+  padding: 1px 3px;
+  outline: none;
+  font-family: var(--font);
+  box-sizing: border-box;
+}
+
+.eval-log-note-input:focus {
+  background: var(--bg);
+}
+
+.eval-log-table tbody tr:hover { background: var(--accent-soft); }
+
+/* Score colors (only for score buttons, not for rows or select) — commented out
+.score-color-low { color: var(--danger); }
+.score-color-mid { color: var(--warn); }
+.score-color-high { color: var(--success); }
+End of score colors */
+
+/* Row highlight — running and selected rows are blue like episode list */
+.eval-log-row.active { background: var(--accent-soft-hover); color: var(--accent); }
+.eval-log-row.eval-log-running { background: var(--accent-soft-hover); }
+.eval-log-table tbody tr.eval-log-row.active:hover,
+.eval-log-table tbody tr.eval-log-row.eval-log-running:hover { background: var(--accent-soft-hover); }
+.eval-log-timer { color: var(--accent); }
+
+/* Score select */
+.eval-log-score-sel {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: var(--font-size-2);
+  padding: 1px 2px;
+  outline: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.eval-log-score-sel:hover { background: var(--bg2); }
+.eval-log-score-sel:focus { background: var(--bg); }
+.eval-log-score-sel option { color: var(--text); }
+
+/* Delete button — hidden by default, shown on row hover/active, centered */
+.eval-log-del-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--danger);
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  visibility: hidden;
+  pointer-events: none;
+  margin: 0 auto;
+}
+.eval-log-row.active .eval-log-del-btn {
+  visibility: visible;
+  pointer-events: auto;
+  border-color: var(--danger);
+}
+.eval-log-del-btn:hover {
+  border-color: var(--danger);
+}
+
