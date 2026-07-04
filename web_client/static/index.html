@@ -137,42 +137,6 @@
               <!-- <label class="recording-option-item"><input type="checkbox" id="chk-record-exec-log" /> ExecLog</label> -->
             </div>
           </div>
-
-          <!-- Execution Log Panel (moved to top, shown when checked) -->
-          <div id="exec-log-panel" class="exec-log-panel" style="display:none">
-            <div class="section-title"> ExecLog <span id="exec-log-count"></span></div>
-            <div class="exec-log-toolbar">
-              <div class="exec-log-toolbar-row">
-                <button class="btn btn-xs" id="btn-exec-log-rec" title="Start / Stop recording"><i class="fas fa-circle"></i> Exec Rec</button>
-                <button class="btn btn-xs" id="btn-log-export" title="Export CSV"><i class="fas fa-download"></i> CSV</button>
-                <button class="btn btn-xs" id="btn-log-save" title="Save to server"><i class="fas fa-save"></i> Save</button>
-                <button class="btn btn-xs btn-danger" id="btn-log-clear" title="Clear all records">Clear All</button>
-              </div>
-              <div id="exec-score-row" class="exec-score-row" style="display:none">
-                <span class="exec-score-label">Score:</span>
-                <button class="btn exec-score-btn exec-score-0" data-score="0" title="Fail (0)">0</button>
-                <button class="btn exec-score-btn exec-score-05" data-score="0.5" title="Partial (0.5)">0.5</button>
-                <button class="btn exec-score-btn exec-score-1" data-score="1" title="Success (1)">1</button>
-              </div>
-            </div>
-            <div class="exec-log-table-wrap">
-              <table class="exec-log-table">
-                <thead>
-                  <tr>
-                    <th class="col-id">Task#</th>
-                    <th class="col-inst">Inst</th>
-                    <th class="col-start">Start</th>
-                    <th class="col-dur">Dur</th>
-                    <th class="col-score">Sco</th>
-                    <th class="col-note">Note</th>
-                    <th class="col-del"></th>
-                  </tr>
-                </thead>
-                <tbody id="exec-log-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-          
           <div class="recording-config-wrap">
             <div class="section-title">Record Config</div>
             <div id="recording-config-tree" class="recording-config-tree"></div>

@@ -343,7 +343,6 @@ function syncStartPauseButtons(running, paused = false) {
 function setRunningUI(running, paused = false) {
   const unchanged = (App.isRunning === running && App.isPaused === paused);
   const wasRunning = App.isRunning === true;
-  const wasPaused  = App.isPaused === true;
   App.isRunning = running;
   App.isPaused  = paused;
 
@@ -381,7 +380,6 @@ function setRunningUI(running, paused = false) {
       App.isRecording = false;
     }
     syncRecordingSwitchUI();
-    syncExecLogRecButton();
   }
 
   syncStartPauseButtons(running, paused);
