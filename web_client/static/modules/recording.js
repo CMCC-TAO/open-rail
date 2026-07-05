@@ -482,14 +482,26 @@ function setupRecordingPanel() {
 document.addEventListener('DOMContentLoaded', function() {
   // Record Config collapse/expand
   const cfgCollapseBtn = $('btn-recording-config-collapse');
+  const wrap = $('recording-config-wrap');
+
   if (cfgCollapseBtn) {
+    const icon = cfgCollapseBtn.querySelector('i');
+
+    if (wrap) {
+      wrap.classList.add('collapsed');
+    }
+
+    if (icon) {
+      icon.className = 'fas fa-chevron-down';
+    }
+
     cfgCollapseBtn.addEventListener('click', () => {
-      const wrap = $('recording-config-wrap');
       if (!wrap) return;
       wrap.classList.toggle('collapsed');
-      const icon = cfgCollapseBtn.querySelector('i');
       if (icon) {
-        icon.className = wrap.classList.contains('collapsed') ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+        icon.className = wrap.classList.contains('collapsed')
+          ? 'fas fa-chevron-down'
+          : 'fas fa-chevron-up';
       }
     });
   }
