@@ -7,17 +7,25 @@
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
-
+  gap: 0px;
   width: auto;
   /* padding: 0 6px; */
+}
+
+.config-file-bar:last-of-type {
+  justify-content: flex-end;
 }
 
 .config-file-bar label.btn { position: relative; overflow: hidden; cursor: pointer; }
 
 /* Configuration buttons: tighten icon/text and horizontal padding */
 .config-file-bar .btn {
-  padding: 4px 6px;
-  min-width: 64px; /* 设置按钮固定宽度 */
+  padding: 2px 8px;
+  min-width: 72px; /* 设置按钮固定宽度 */
+}
+
+.config-file-bar:last-of-type .btn {
+  margin-left: 6px;
 }
 .config-file-bar .btn i.fas,
 .config-file-bar .btn i.far,
@@ -49,7 +57,7 @@
 }
 .main-params-section {
   flex: 0 0 auto;
-  max-height: 250px;
+  max-height: 200px;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);

@@ -30,6 +30,7 @@ const CONFIG_SELECT_OPTIONS = {
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1'],
   eval_log_format: ['json', 'csv', 'both'],
+  speed: ['0.5', '0.6', '0.7', '0.8', '0.9', '1.0', '1.1', '1.2', '1.3', '1.4', '1.5', '1.75', '2.0', '2.25', '2.5', '2.75', '3.0'],
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
@@ -41,7 +42,6 @@ const CONFIG_INT_KEYS = new Set([
 const CONFIG_NUMBER_RANGES = {
   adaptive_factor: { min: -1, max: 1, step: 0.01, manualMin: 0 },
 };
-const CONTROL_SPEED_PRESETS = ['0.5', '0.8', '1.0', '1.25', '1.5', '1.75', '2.0'];
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.task_id',
@@ -58,6 +58,8 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visualize.trajectory.selected_joints',
   'visualize.trajectory.window_span_sec',
   'record.switch',
+  'record.is_record_episode',
+  'record.is_record_eval_log',
   'controller.raw_fps',
   'controller.wait_time',
   'controller.period',
@@ -892,33 +894,6 @@ function createCfgRow(dotKey, label, value, options = {}) {
     input.addEventListener('change', () => onCfgChange(dotKey, input, value));
   }
   valEl.appendChild(input);
-  if (options.speedPresets) {
-    const select = document.createElement('select');
-    select.className = 'input-text cfg-speed-preset';
-    select.title = 'Quick select control speed';
-
-    CONTROL_SPEED_PRESETS.forEach(speed => {
-      const option = document.createElement('option');
-      option.value = speed;
-      option.textContent = speed;
-      select.appendChild(option);
-    });
-
-    const syncPreset = () => {
-      const match = CONTROL_SPEED_PRESETS.find(speed => Number(speed) === Number(input.value));
-      select.value = match || '';
-    };
-    select.addEventListener('change', () => {
-      if (!select.value) return;
-      input.value = select.value;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    input.addEventListener('input', syncPreset);
-    syncPreset();
-
-    valEl.classList.add('cfg-value-with-preset');
-    valEl.appendChild(select);
-  }
   row.appendChild(keyEl);
   row.appendChild(valEl);
   return row;

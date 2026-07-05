@@ -43,8 +43,11 @@
 
 /* ── Section title ── */
 .section-title {
-  font-size: var(--font-size-4); font-weight: var(--font-weight-4); color: var(--panel-header-text);
+  font-size: var(--font-size-4);
+  font-weight: var(--font-weight-4);
+  color: var(--panel-header-text);
   text-transform: none; letter-spacing: .2px;
   border-left: 2px solid var(--accent); padding-left: 6px;
   margin-top: 4px; cursor: pointer; user-select: none;
+  padding-right: 8px;
 }

@@ -19,15 +19,17 @@ def get_record_data_config() -> ConfigDict:
     config.switch = False  # Enable/disable data recording
     config.save_dir = "data/recording"  # Relative to project root
     
-    # Evaluation
-    config.eval_log_format = "json"  # Evaluation log save format: json | csv | both
-    config.eval_scores = [0, 0.5, 1]  # Score options for evaluation log scoring buttons
 
-    # Episode
+    # Option
     config.is_record_episode = False  # Runtime flag: whether episode recording is active
     config.is_record_eval_log = False  # Runtime flag: whether eval log recording is active
     config.save_raw = True  # Save raw image without resizing or not.
 
+    # Evaluation info
+    config.evaluation = ConfigDict(allow_dotted_keys=True)
+    # Evaluation
+    config.evaluation.log_format = "json"  # Evaluation log save format: json | csv | both
+    config.evaluation.scores = [0, 0.5, 1]  # Score options for evaluation log scoring buttons
     # Episode info (metadata)
     config.info = ConfigDict(allow_dotted_keys=True)
     config.info.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
