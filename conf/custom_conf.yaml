@@ -91,7 +91,7 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 0
+  sub_task_id: 1
   task_id: tea_master
   task_progress_threshold: 0.99
   task_progress_win_size: 10
@@ -155,12 +155,15 @@ rdm:
   mode: async
   observe_fps_window_size: 10
 record:
-  eval_log_format: json
-  eval_scores:
-  - 0
-  - 0.5
-  - 1
-  info:
+  evaluation:
+    log_format: json
+    scores:
+    - 0
+    - 0.5
+    - 1
+  is_record_episode: true
+  is_record_eval_log: true
+  lerobot:
     action_shape: 22
     cam.hand_left:
       encode:
@@ -198,13 +201,12 @@ record:
       valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 3
-    total_frames: 695
+    total_episodes: 0
+    total_frames: 0
     total_tasks: 2
-    total_videos: 9
+    total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
-  is_record_episode: true
-  is_record_eval_log: true
+  record_exp_data: false
   save_dir: data/recording
   save_raw: true
   switch: false

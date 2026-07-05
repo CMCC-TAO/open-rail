@@ -258,10 +258,11 @@ class LeRobotDatasetWriter:
         # if meta_required_file_exists:
         #     self._update_config_from_meta_file()
         # else:
-        #     self.config['info']["total_episodes"] = 0
-        #     self.config['info']["total_frames"] = 0
-        #     self.config['info']["total_videos"] = 0
-        self._parse_config_info(self.config["info"])
+        #     lerobot_cfg = self._get_lerobot_config()
+        #     lerobot_cfg["total_episodes"] = 0
+        #     lerobot_cfg["total_frames"] = 0
+        #     lerobot_cfg["total_videos"] = 0
+        self._parse_config_info(self.config["lerobot"])
 
         # Shared Queue
         self.record_queue = Queue()
@@ -353,10 +354,11 @@ class LeRobotDatasetWriter:
         if meta_required_file_exists:
             self._update_config_from_meta_file()
         else:
-            self.config['info']["total_episodes"] = 0
-            self.config['info']["total_frames"] = 0
-            self.config['info']["total_videos"] = 0
-            self.config['info']['chunks_size'] = 1000
+            lerobot_cfg = self.config["lerobot"]
+            lerobot_cfg["total_episodes"] = 0
+            lerobot_cfg["total_frames"] = 0
+            lerobot_cfg["total_videos"] = 0
+            lerobot_cfg['chunks_size'] = 1000
             self._sync_shared_data_from_config()
     
     def _check_required_meta_files(self, required_files: List[str] = ['info.json', 'episodes.jsonl', 'tasks.jsonl']) -> bool:
@@ -398,11 +400,12 @@ class LeRobotDatasetWriter:
         self._update_task_languages_from_meta_file(task_file_path)
 
     def _sync_shared_data_from_config(self) -> None:
-        """Sync config['info'] values to shared_data."""
-        self.shared_data.total_frames.value = int(self.config['info']['total_frames'])
-        self.shared_data.total_videos.value = int(self.config['info']['total_videos'])
-        self.shared_data.episode_index.value = int(self.config['info']['total_episodes'])
-        self.shared_data.episode_chunk.value = int(self.config['info']['total_episodes']) // int(self.config['info']['chunks_size'])
+        """Sync record lerobot values to shared_data."""
+        lerobot_cfg = self.config["lerobot"]
+        self.shared_data.total_frames.value = int(lerobot_cfg['total_frames'])
+        self.shared_data.total_videos.value = int(lerobot_cfg['total_videos'])
+        self.shared_data.episode_index.value = int(lerobot_cfg['total_episodes'])
+        self.shared_data.episode_chunk.value = int(lerobot_cfg['total_episodes']) // int(lerobot_cfg['chunks_size'])
 
     def _update_dataset_info_from_meta_file(self, file_path: str) -> None:
         """
@@ -413,41 +416,40 @@ class LeRobotDatasetWriter:
             data = json.loads(file.read())
         
         # Update the dataset info in the config using the loaded JSON data
-        # print(f"Debug: before update config.info={self.config.info}")
-        # self.config["info"] = ConfigDict(data, allow_dotted_keys=True)
         try:
-            self.config['info']['chunks_size'] = data['chunks_size']
-            self.config['info']['codebase_version'] = data['codebase_version']
-            self.config['info']['data_path'] = data['data_path']
-            self.config['info']['video_path'] = data['video_path']
-            self.config['info']['total_videos'] = data['total_videos']
-            self.config['info']['total_frames'] = data['total_frames']
-            self.config['info']['total_tasks'] = data['total_tasks']
-            self.config['info']['total_episodes'] = data['total_episodes']
-            self.config['info']['total_chunks'] = data['total_chunks']
-            self.config['info']['fps'] = int(data['fps'])
-            self.config['info']['robot_type'] = data['robot_type']
-            self.config['info']['splits'] = data['splits']
-            self.config['info']['state_shape'] = data['features']['observation.state']['shape'][0]
-            self.config['info']['action_shape'] = data['features']['action']['shape'][0]
-            self.config['info']['cam.head']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
-            self.config['info']['cam.head']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
-            self.config['info']['cam.head']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
-            self.config['info']['cam.head']['shape']['height'] = data['features']['cam.head']['info']['video.height']
-            self.config['info']['cam.head']['shape']['width'] = data['features']['cam.head']['info']['video.width']
-            self.config['info']['cam.head']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
-            self.config['info']['cam.hand_left']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
-            self.config['info']['cam.hand_left']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
-            self.config['info']['cam.hand_left']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
-            self.config['info']['cam.hand_left']['shape']['height'] = data['features']['cam.head']['info']['video.height']
-            self.config['info']['cam.hand_left']['shape']['width'] = data['features']['cam.head']['info']['video.width']
-            self.config['info']['cam.hand_left']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
-            self.config['info']['cam.hand_right']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
-            self.config['info']['cam.hand_right']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
-            self.config['info']['cam.hand_right']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
-            self.config['info']['cam.hand_right']['shape']['height'] = data['features']['cam.head']['info']['video.height']
-            self.config['info']['cam.hand_right']['shape']['width'] = data['features']['cam.head']['info']['video.width']
-            self.config['info']['cam.hand_right']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
+            lerobot_cfg = self.config["lerobot"]
+            lerobot_cfg['chunks_size'] = data['chunks_size']
+            lerobot_cfg['codebase_version'] = data['codebase_version']
+            lerobot_cfg['data_path'] = data['data_path']
+            lerobot_cfg['video_path'] = data['video_path']
+            lerobot_cfg['total_videos'] = data['total_videos']
+            lerobot_cfg['total_frames'] = data['total_frames']
+            lerobot_cfg['total_tasks'] = data['total_tasks']
+            lerobot_cfg['total_episodes'] = data['total_episodes']
+            lerobot_cfg['total_chunks'] = data['total_chunks']
+            lerobot_cfg['fps'] = int(data['fps'])
+            lerobot_cfg['robot_type'] = data['robot_type']
+            lerobot_cfg['splits'] = data['splits']
+            lerobot_cfg['state_shape'] = data['features']['observation.state']['shape'][0]
+            lerobot_cfg['action_shape'] = data['features']['action']['shape'][0]
+            lerobot_cfg['cam.head']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
+            lerobot_cfg['cam.head']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
+            lerobot_cfg['cam.head']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
+            lerobot_cfg['cam.head']['shape']['height'] = data['features']['cam.head']['info']['video.height']
+            lerobot_cfg['cam.head']['shape']['width'] = data['features']['cam.head']['info']['video.width']
+            lerobot_cfg['cam.head']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
+            lerobot_cfg['cam.hand_left']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
+            lerobot_cfg['cam.hand_left']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
+            lerobot_cfg['cam.hand_left']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
+            lerobot_cfg['cam.hand_left']['shape']['height'] = data['features']['cam.head']['info']['video.height']
+            lerobot_cfg['cam.hand_left']['shape']['width'] = data['features']['cam.head']['info']['video.width']
+            lerobot_cfg['cam.hand_left']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
+            lerobot_cfg['cam.hand_right']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
+            lerobot_cfg['cam.hand_right']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
+            lerobot_cfg['cam.hand_right']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
+            lerobot_cfg['cam.hand_right']['shape']['height'] = data['features']['cam.head']['info']['video.height']
+            lerobot_cfg['cam.hand_right']['shape']['width'] = data['features']['cam.head']['info']['video.width']
+            lerobot_cfg['cam.hand_right']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
         except Exception as e:
             print(f"Error: exception: {e}")
         # self._normalize_record_features_cam()
@@ -515,13 +517,14 @@ class LeRobotDatasetWriter:
             if camera_name not in self.camera_name_list:
                 self.camera_name_list.append(camera_name)
 
-            camera_info = self.config["info"].get(camera_name, ConfigDict(allow_dotted_keys=False))
+            lerobot_cfg = self.config["lerobot"]
+            camera_info = lerobot_cfg.get(camera_name, ConfigDict(allow_dotted_keys=False))
             # print(f"Debug: camera={camera_name}, feature={camera_feature}")
             camera_info["shape"]["height"] = height
             camera_info["shape"]["width"] = width
             camera_info["shape"]["channel"] = channel
 
-            self.config["info"][camera_name] = camera_info
+            lerobot_cfg[camera_name] = camera_info
             updated[camera_name] = normalized_shape
 
         if updated:
@@ -1023,7 +1026,7 @@ class LeRobotDatasetWriter:
         filename = f"{'episode'}_{episode_index:06d}.{'mp4'}"
         video_write_dict = {}
         # self.camera_shape_dict = {}
-        fps = float(self.config['info'].get('fps', 30))
+        fps = float(self.config["lerobot"].get('fps', 30))
 
         for camera_name in self.camera_name_list:
             shape_list = self.camera_shape_dict[camera_name]
@@ -1066,7 +1069,7 @@ class LeRobotDatasetWriter:
 
         parquet_file_path = os.path.join(
             self.save_path,
-            self.config['info']['data_path'].format(episode_chunk=episode_chunk, episode_index=episode_index)
+            self.config["lerobot"]['data_path'].format(episode_chunk=episode_chunk, episode_index=episode_index)
         )
         os.makedirs(os.path.dirname(parquet_file_path), exist_ok=True)
         parquet_writer = pq.ParquetWriter(parquet_file_path, parquet_schema)
@@ -1147,111 +1150,112 @@ class LeRobotDatasetWriter:
 
             # Write info.json file (always overwrite to keep metadata in sync)
             info_file_path = os.path.join(self.meta_dir, 'info.json')
-            self.config['info']["total_episodes"] = total_episodes
-            self.config['info']["total_frames"] = total_frames
-            self.config['info']["total_videos"] = total_videos
-            self.config['info']["splits"] = {"test": f"0:{total_episodes-1}"} 
+            lerobot_cfg = self.config["lerobot"]
+            lerobot_cfg["total_episodes"] = total_episodes
+            lerobot_cfg["total_frames"] = total_frames
+            lerobot_cfg["total_videos"] = total_videos
+            lerobot_cfg["splits"] = {"test": f"0:{total_episodes-1}"}
             # Define complete metadata dictionary structure
             meta_info_dict = {
-                'chunks_size': self.config['info']['chunks_size'],
-                'codebase_version': self.config['info']['codebase_version'],
-                'data_path': self.config['info']['data_path'],
+                'chunks_size': lerobot_cfg['chunks_size'],
+                'codebase_version': lerobot_cfg['codebase_version'],
+                'data_path': lerobot_cfg['data_path'],
                 'features': {
-                    'action': {'dtype': 'float32', 'shape': [self.config['info']['action_shape']]},
+                    'action': {'dtype': 'float32', 'shape': [lerobot_cfg['action_shape']]},
                     'cam.hand_left': {
                         'dtype': 'video',
                         'info': {
-                            'has_audio': self.config['info']['cam.hand_left']['encode']['has_audio'],
-                            'video.channels': self.config['info']['cam.hand_left']['shape']['channel'],
-                            'video.codec': self.config['info']['cam.hand_left']['encode']['codec'],
-                            'video.fps': float(self.config['info']['fps']),
-                            'video.height': self.config['info']['cam.hand_left']['shape']['height'],
-                            'video.is_depth_map': self.config['info']['cam.hand_left']['encode']['is_depth_map'],
+                            'has_audio': lerobot_cfg['cam.hand_left']['encode']['has_audio'],
+                            'video.channels': lerobot_cfg['cam.hand_left']['shape']['channel'],
+                            'video.codec': lerobot_cfg['cam.hand_left']['encode']['codec'],
+                            'video.fps': float(lerobot_cfg['fps']),
+                            'video.height': lerobot_cfg['cam.hand_left']['shape']['height'],
+                            'video.is_depth_map': lerobot_cfg['cam.hand_left']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p',
-                            'video.width': self.config['info']['cam.hand_left']['shape']['width'],
+                            'video.width': lerobot_cfg['cam.hand_left']['shape']['width'],
                         },
                         'names': ['height', 'width', 'channel'],
                         'shape': [
-                            self.config['info']['cam.hand_left']['shape']['height'],
-                            self.config['info']['cam.hand_left']['shape']['width'],
-                            self.config['info']['cam.hand_left']['shape']['channel']
+                            lerobot_cfg['cam.hand_left']['shape']['height'],
+                            lerobot_cfg['cam.hand_left']['shape']['width'],
+                            lerobot_cfg['cam.hand_left']['shape']['channel']
                             ],
                         'video_info': {
-                            'has_audio': self.config['info']['cam.hand_left']['encode']['has_audio'],
-                            'video.codec': self.config['info']['cam.hand_left']['encode']['codec'],
-                            'video.fps': float(self.config['info']['fps']),
-                            'video.is_depth_map': self.config['info']['cam.hand_left']['encode']['is_depth_map'],
+                            'has_audio': lerobot_cfg['cam.hand_left']['encode']['has_audio'],
+                            'video.codec': lerobot_cfg['cam.hand_left']['encode']['codec'],
+                            'video.fps': float(lerobot_cfg['fps']),
+                            'video.is_depth_map': lerobot_cfg['cam.hand_left']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p'
                         }
                     },
                     'cam.hand_right': {
                         'dtype': 'video',
                         'info': {
-                            'has_audio': self.config['info']['cam.hand_right']['encode']['has_audio'],
-                            'video.channels': self.config['info']['cam.hand_right']['shape']['channel'],
-                            'video.codec': self.config['info']['cam.hand_right']['encode']['codec'],
-                            'video.fps': float(self.config['info']['fps']),
-                            'video.height': self.config['info']['cam.hand_right']['shape']['height'],
-                            'video.is_depth_map': self.config['info']['cam.hand_right']['encode']['is_depth_map'],
+                            'has_audio': lerobot_cfg['cam.hand_right']['encode']['has_audio'],
+                            'video.channels': lerobot_cfg['cam.hand_right']['shape']['channel'],
+                            'video.codec': lerobot_cfg['cam.hand_right']['encode']['codec'],
+                            'video.fps': float(lerobot_cfg['fps']),
+                            'video.height': lerobot_cfg['cam.hand_right']['shape']['height'],
+                            'video.is_depth_map': lerobot_cfg['cam.hand_right']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p',
-                            'video.width': self.config['info']['cam.hand_right']['shape']['width'],
+                            'video.width': lerobot_cfg['cam.hand_right']['shape']['width'],
                         },
                         'names': ['height', 'width', 'channel'],
                         'shape': [
-                            self.config['info']['cam.hand_right']['shape']['height'],
-                            self.config['info']['cam.hand_right']['shape']['width'],
-                            self.config['info']['cam.hand_right']['shape']['channel']
+                            lerobot_cfg['cam.hand_right']['shape']['height'],
+                            lerobot_cfg['cam.hand_right']['shape']['width'],
+                            lerobot_cfg['cam.hand_right']['shape']['channel']
                             ],
                         'video_info': {
-                            'has_audio': self.config['info']['cam.hand_right']['encode']['has_audio'],
-                            'video.codec': self.config['info']['cam.hand_right']['encode']['codec'],
-                            'video.fps': float(self.config['info']['fps']),
-                            'video.is_depth_map': self.config['info']['cam.hand_right']['encode']['is_depth_map'],
+                            'has_audio': lerobot_cfg['cam.hand_right']['encode']['has_audio'],
+                            'video.codec': lerobot_cfg['cam.hand_right']['encode']['codec'],
+                            'video.fps': float(lerobot_cfg['fps']),
+                            'video.is_depth_map': lerobot_cfg['cam.hand_right']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p'
                         }
                     },
                     'cam.head': {
                         'dtype': 'video',
                         'info': {
-                            'has_audio': self.config['info']['cam.head']['encode']['has_audio'],
-                            'video.channels': self.config['info']['cam.head']['shape']['channel'],
-                            'video.codec': self.config['info']['cam.head']['encode']['codec'],
-                            'video.fps': float(self.config['info']['fps']),
-                            'video.height': self.config['info']['cam.head']['shape']['height'],
-                            'video.is_depth_map': self.config['info']['cam.head']['encode']['is_depth_map'],
+                            'has_audio': lerobot_cfg['cam.head']['encode']['has_audio'],
+                            'video.channels': lerobot_cfg['cam.head']['shape']['channel'],
+                            'video.codec': lerobot_cfg['cam.head']['encode']['codec'],
+                            'video.fps': float(lerobot_cfg['fps']),
+                            'video.height': lerobot_cfg['cam.head']['shape']['height'],
+                            'video.is_depth_map': lerobot_cfg['cam.head']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p',
-                            'video.width': self.config['info']['cam.head']['shape']['width'],
+                            'video.width': lerobot_cfg['cam.head']['shape']['width'],
                         },
                         'names': ['height', 'width', 'channel'],
                         'shape': [
-                            self.config['info']['cam.head']['shape']['height'],
-                            self.config['info']['cam.head']['shape']['width'],
-                            self.config['info']['cam.head']['shape']['channel']
+                            lerobot_cfg['cam.head']['shape']['height'],
+                            lerobot_cfg['cam.head']['shape']['width'],
+                            lerobot_cfg['cam.head']['shape']['channel']
                             ],
                         'video_info': {
-                            'has_audio': self.config['info']['cam.head']['encode']['has_audio'],
-                            'video.codec': self.config['info']['cam.head']['encode']['codec'],
-                            'video.fps': float(self.config['info']['fps']),
-                            'video.is_depth_map': self.config['info']['cam.head']['encode']['is_depth_map'],
+                            'has_audio': lerobot_cfg['cam.head']['encode']['has_audio'],
+                            'video.codec': lerobot_cfg['cam.head']['encode']['codec'],
+                            'video.fps': float(lerobot_cfg['fps']),
+                            'video.is_depth_map': lerobot_cfg['cam.head']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p'
                         }
                     },
                     'episode_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
                     'frame_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
                     'index': {'dtype': 'int64', 'names': None, 'shape': [1]},
-                    'observation.state': {'dtype': 'float32', 'shape': [self.config['info']['state_shape']]},
+                    'observation.state': {'dtype': 'float32', 'shape': [lerobot_cfg['state_shape']]},
                     'task_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
                     'timestamp': {'dtype': 'float32', 'names': None, 'shape': [1]}
                 },
-                'fps': float(self.config['info']['fps']),
-                'robot_type': self.config['info']['robot_type'],
+                'fps': float(lerobot_cfg['fps']),
+                'robot_type': lerobot_cfg['robot_type'],
                 'splits': {'train': f'0:{total_episodes-1}'},
                 'total_chunks': 1,
                 'total_episodes': total_episodes,
                 'total_frames': total_frames,
                 'total_tasks': len(self.task_language_dict.keys()), # TODO: assign total tasks
                 'total_videos': total_videos,
-                'video_path': self.config['info']['video_path']
+                'video_path': lerobot_cfg['video_path']
             }
             # print(f"Debug: info_file: {meta_info_dict}")
             with open(info_file_path, 'w', encoding='utf-8') as f:

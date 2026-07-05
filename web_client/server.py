@@ -376,15 +376,13 @@ def _config_to_dict(cfg) -> dict:
 
 
 def _normalize_record_features_cam(cfg_dict: dict) -> dict:
-    """Normalize legacy nested record.info.features.cam.* into dotted cam.* keys."""
+    """Normalize legacy nested record.lerobot.features.cam.* into dotted cam.* keys."""
     if not isinstance(cfg_dict, dict):
         return cfg_dict
 
-    features = (
-        cfg_dict.get("record", {})
-        .get("info", {})
-        .get("features", {})
-    )
+    record_cfg = cfg_dict.get("record", {})
+    lerobot_cfg = record_cfg.get("lerobot")
+    features = lerobot_cfg.get("features", {}) if isinstance(lerobot_cfg, dict) else {}
     if isinstance(features, dict):
         cam = features.get("cam")
         if isinstance(cam, dict):
@@ -1284,12 +1282,12 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
 
     flat = _flatten(data)
     # print(f"config patch: {flat}")
-    # cam_head = config.record.info.features.get('cam.head')
-    # print(f"config before flat patch: {config.record.info.features.keys()}")
+    # cam_head = config.record.lerobot.features.get('cam.head')
+    # print(f"config before flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config before flat patch: {cam_head}")
     _apply_flat_patch_new(config, flat)
     # print(f"config after flat patch: {config}")
-    # print(f"config after flat patch: {config.record.info.features.keys()}")
+    # print(f"config after flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config after flat patch: {cam_head}")
     config.language.sub_task_id = 0  # reset sub_task_id to avoid invalid value after patch
     logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
