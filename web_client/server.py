@@ -846,7 +846,7 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
 
         if selected_task:
-            from client.core.save_lerobot import LeRobotDatasetParser
+            from client.core.data_recorder import LeRobotDatasetParser
 
             task_dir = base_dir / selected_task
             parser = LeRobotDatasetParser(str(task_dir), logger=logger)
@@ -900,7 +900,7 @@ async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
         raise HTTPException(404, f"Task directory not found: {task}")
 
     try:
-        from client.core.save_lerobot import LeRobotDatasetParser
+        from client.core.data_recorder import LeRobotDatasetParser
 
         parser = LeRobotDatasetParser(str(task_dir), logger=logger)
         result = parser.delete_episode(req.episode_id)
@@ -2084,7 +2084,7 @@ async def client_record_start(req: RecordStartRequest):
         task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
         if not hasattr(vla_client, 'dataset_write') or vla_client.dataset_write is None:
             try:
-                from client.core.save_lerobot import LeRobotDatasetWriter
+                from client.core.data_recorder import LeRobotDatasetWriter
                 vla_client.dataset_write = LeRobotDatasetWriter(record_config=client_state.config.record, task=task_id)
             except Exception as e:
                 raise HTTPException(500, f'Failed to initialize recorder: {e}')
