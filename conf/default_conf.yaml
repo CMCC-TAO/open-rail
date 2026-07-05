@@ -155,7 +155,7 @@ rdm:
   mode: async
   observe_fps_window_size: 10
 record:
-  info:
+  lerobot:
     action_shape: 22
     cam.hand_left:
       encode:
