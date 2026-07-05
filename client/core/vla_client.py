@@ -14,7 +14,7 @@ from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.core.visualize_server import VisualizeServer
-from client.core.save_lerobot import LeRobotDatasetWriter
+from client.core.data_recorder import LeRobotDatasetWriter
 from client.robots.base_robot import RobotBase
 
 

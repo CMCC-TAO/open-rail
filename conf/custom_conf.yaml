@@ -155,6 +155,7 @@ rdm:
   mode: async
   observe_fps_window_size: 10
 record:
+  auto: true
   evaluation:
     log_format: json
     scores:
@@ -163,6 +164,7 @@ record:
     - 1
   is_record_episode: true
   is_record_eval_log: true
+  is_record_expe_data: false
   lerobot:
     action_shape: 22
     cam.hand_left:
