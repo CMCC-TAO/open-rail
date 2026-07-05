@@ -85,7 +85,7 @@ class VLAClientAsync():
         self._request_id = 0
 
         # Initialize the dataset writer with the provided recording configuration
-        self.dataset_write = LeRobotDatasetWriter(
+        self.data_recorder = LeRobotDatasetWriter(
             record_config=self.config.record,
             task=getattr(self.config.language, 'task_id', None)
         )
@@ -142,12 +142,12 @@ class VLAClientAsync():
 
     def update_camera_shape(self) -> dict:
         """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
-        if not hasattr(self, "dataset_write") or self.dataset_write is None:
-            self.logger.warning("dataset_write is not initialized, skip update_camera_shape.")
+        if not hasattr(self, "data_recorder") or self.data_recorder is None:
+            self.logger.warning("data_recorder is not initialized, skip update_camera_shape.")
             return {}
 
         # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
-        self.dataset_write.update_camera_shape_dict(self.camera_shape_dict)
+        self.data_recorder.update_camera_shape_dict(self.camera_shape_dict)
         self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
         return self.camera_shape_dict
 
@@ -232,8 +232,8 @@ class VLAClientAsync():
         if self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.stop(timeout=1.0)
         
-        if hasattr(self, 'dataset_write') and self.dataset_write is not None:
-            self.dataset_write.close()
+        if hasattr(self, 'data_recorder') and self.data_recorder is not None:
+            self.data_recorder.close()
 
         self.vla_zmq.close()
         self.visualize_server.stop_server()
@@ -264,7 +264,7 @@ class VLAClientAsync():
             # timestamp_2 = None
             if observations is not None:
                 if self.config.record.switch :
-                    self.dataset_write.add_observation_async(observations, self.task_language_manager.get_current_language(), time.perf_counter())
+                    self.data_recorder.add_observation_async(observations, self.task_language_manager.get_current_language(), time.perf_counter())
                     # timestamp_2 = time.time()
                     # print(f"Debug: record time={(timestamp_2-timestamp_1) * 1000} ms")
                 # Decide whether to change language instruction based on the task progress predicted by the VLA model
@@ -319,7 +319,7 @@ class VLAClientAsync():
                 # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
             if self.config.record.switch and self.is_control_thread_running and self.is_running:
-                self.dataset_write.add_action_async(action_fitted, time.perf_counter())
+                self.data_recorder.add_action_async(action_fitted, time.perf_counter())
             
             # with self.show_thread_lock:
             #     self.info_act['action'] = action_fitted.shape

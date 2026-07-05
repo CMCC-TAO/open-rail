@@ -2082,14 +2082,14 @@ async def client_record_start(req: RecordStartRequest):
         client_state.config.record.switch = True
         client_state.config.record.record_exp_data = ('ExpData' in save_items)
         task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
-        if not hasattr(vla_client, 'dataset_write') or vla_client.dataset_write is None:
+        if not hasattr(vla_client, 'data_recorder') or vla_client.data_recorder is None:
             try:
                 from client.core.data_recorder import LeRobotDatasetWriter
-                vla_client.dataset_write = LeRobotDatasetWriter(record_config=client_state.config.record, task=task_id)
+                vla_client.data_recorder = LeRobotDatasetWriter(record_config=client_state.config.record, task=task_id)
             except Exception as e:
                 raise HTTPException(500, f'Failed to initialize recorder: {e}')
         else:
-            vla_client.dataset_write.set_task(task_id)
+            vla_client.data_recorder.set_task(task_id)
 
         updated_camera_shapes = {}
         if not bool(getattr(client_state.config.record, 'resize', False)):
@@ -2098,11 +2098,11 @@ async def client_record_start(req: RecordStartRequest):
             except Exception as e:
                 logger.warning(f'Failed to update camera shapes before start_recording: {e}')
 
-        vla_client.dataset_write.start_recording()
-        current_recording_task = str(getattr(vla_client.dataset_write, 'current_task', '') or '')
+        vla_client.data_recorder.start_recording()
+        current_recording_task = str(getattr(vla_client.data_recorder, 'current_task', '') or '')
         current_recording_dir = ''
         try:
-            save_path = str(getattr(vla_client.dataset_write, 'save_path', '') or '')
+            save_path = str(getattr(vla_client.data_recorder, 'save_path', '') or '')
             if save_path:
                 current_recording_dir = Path(save_path).name
         except Exception:
@@ -2124,10 +2124,10 @@ async def client_record_start(req: RecordStartRequest):
 async def client_record_stop():
     vla_client, _ = _require_runtime('stop_recording')
     try:
-        if not hasattr(vla_client, 'dataset_write') or vla_client.dataset_write is None:
+        if not hasattr(vla_client, 'data_recorder') or vla_client.data_recorder is None:
             raise HTTPException(400, 'Recorder is not initialized.')
         client_state.config.record.switch = False
-        vla_client.dataset_write.stop_recording()
+        vla_client.data_recorder.stop_recording()
         return {'status': 'ok', 'command': 'stop_recording'}
     except HTTPException:
         raise
