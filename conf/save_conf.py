@@ -17,12 +17,14 @@ def get_record_data_config() -> ConfigDict:
 
     # Record Common
     config.switch = False  # Enable/disable data recording
+    config.auto = False  # Enable/disable data recording
     config.save_dir = "data/recording"  # Relative to project root
     
 
     # Option
     config.is_record_episode = False  # Runtime flag: whether episode recording is active
     config.is_record_eval_log = False  # Runtime flag: whether eval log recording is active
+    config.is_record_expe_data = False  # Runtime flag: whether experiment data recording is active
     config.save_raw = True  # Save raw image without resizing or not.
 
     # Evaluation info

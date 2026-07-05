@@ -2,19 +2,27 @@
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: nowrap;
-  padding: 6px 0px;
+  padding: 2px 2px;
 }
 
 .recording-controls .btn {
   /* flex: 0 0 auto;
   min-width: 84px; */
-  padding: 8px 8px;
+  padding: 2px 8px;
 }
 
+.recording-controls-sep {
+  width: 1px; 
+  height: 24px;
+  background: var(--border);
+  flex-shrink: 0; 
+  margin: 0 2px; 
+  align-self: center;
+}
 /* Inline options layout for recording checkboxes */
-.recording-options-inline {
+.recording-control-column {
   display: flex;
   flex-direction: column;
   flex-wrap: nowrap;
