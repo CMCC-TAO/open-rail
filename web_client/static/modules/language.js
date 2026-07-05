@@ -765,26 +765,24 @@ $('btn-lang-add').addEventListener('click', addLangSubtask);
 $('btn-lang-del').addEventListener('click', deleteLangSubtask);
 
 // Language Command panel collapse
-$('btn-lang-collapse').addEventListener('click', () => {
-  const langBody = $('lang-body');
-  const trajBody = $('traj-body');
+$('btn-lang-collapse').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
 
-  // If trajectory is collapsed, this click should restore both panels to normal layout.
-  if (trajBody.classList.contains('collapsed')) {
-    trajBody.classList.remove('collapsed');
-    langBody.classList.remove('collapsed');
-    if (typeof updateCenterPanelLayoutState === 'function') {
-      updateCenterPanelLayoutState();
-    }
-    syncCenterPanelCollapseUi();
+  if (typeof handleCenterPanelCollapseToggle === 'function') {
+    handleCenterPanelCollapseToggle('lang');
     return;
   }
 
+  const langBody = $('lang-body');
+  if (!langBody) return;
   langBody.classList.toggle('collapsed');
   if (typeof updateCenterPanelLayoutState === 'function') {
     updateCenterPanelLayoutState();
   }
-  syncCenterPanelCollapseUi();
+  if (typeof syncCenterPanelCollapseUi === 'function') {
+    syncCenterPanelCollapseUi();
+  }
 });
 
 }

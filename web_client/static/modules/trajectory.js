@@ -545,6 +545,44 @@ function syncCenterPanelCollapseUi() {
   }
 }
 
+function restoreCenterPanelsToInitialState() {
+  const langBody = $('lang-body');
+  const trajBody = $('traj-body');
+  if (!langBody || !trajBody) return;
+
+  langBody.classList.remove('collapsed');
+  trajBody.classList.remove('collapsed');
+  updateCenterPanelLayoutState();
+  syncCenterPanelCollapseUi();
+}
+
+function handleCenterPanelCollapseToggle(target) {
+  const langBody = $('lang-body');
+  const trajBody = $('traj-body');
+  if (!langBody || !trajBody) return;
+
+  const isLangTarget = target === 'lang';
+  const isTrajTarget = target === 'traj';
+  if (!isLangTarget && !isTrajTarget) return;
+
+  const targetBody = isLangTarget ? langBody : trajBody;
+  const otherBody = isLangTarget ? trajBody : langBody;
+
+  const targetCollapsed = targetBody.classList.contains('collapsed');
+  const otherCollapsed = otherBody.classList.contains('collapsed');
+
+  // 规则：当另一面板已折叠且当前面板处于展开时，点击当前面板折叠按钮 -> 恢复到初始状态（两面板都展开）。
+  if (!targetCollapsed && otherCollapsed) {
+    restoreCenterPanelsToInitialState();
+    return;
+  }
+
+  // 其他场景：仅切换当前面板折叠状态。
+  targetBody.classList.toggle('collapsed');
+  updateCenterPanelLayoutState();
+  syncCenterPanelCollapseUi();
+}
+
 /* ── Wire trajectory controls ── */
 function setupTrajPanel() {
   // Source checkboxes: toggle independently; all can be deselected
@@ -643,23 +681,10 @@ function setupTrajPanel() {
   });
 
   // Collapse
-  $('btn-traj-collapse').addEventListener('click', () => {
-    const body = $('traj-body');
-    const langBody = $('lang-body');
-
-    // If Language panel is collapsed while Trajectory is normal,
-    // this click should restore both panels to normal size.
-    if (!body.classList.contains('collapsed') && langBody.classList.contains('collapsed')) {
-      langBody.classList.remove('collapsed');
-      body.classList.remove('collapsed');
-      updateCenterPanelLayoutState();
-      syncCenterPanelCollapseUi();
-      return;
-    }
-
-    body.classList.toggle('collapsed');
-    updateCenterPanelLayoutState();
-    syncCenterPanelCollapseUi();
+  $('btn-traj-collapse').addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    handleCenterPanelCollapseToggle('traj');
   });
 
   updateCenterPanelLayoutState();

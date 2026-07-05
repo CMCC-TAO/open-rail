@@ -60,17 +60,21 @@
 /* Language collapsed -> keep only header, Trajectory consumes remaining height */
 .center-col.lang-collapsed .panel-lang {
   flex: 0 0 var(--center-collapsed-language-header-height);
+  min-height: var(--center-collapsed-language-header-height);
 }
 .center-col.lang-collapsed .panel-traj {
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Trajectory collapsed -> keep only header, Language consumes remaining height */
 .center-col.traj-collapsed .panel-traj {
   flex: 0 0 var(--center-collapsed-trajectory-header-height);
+  min-height: var(--center-collapsed-trajectory-header-height);
 }
 .center-col.traj-collapsed .panel-lang {
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Left column collapsed — zero width, content clipped, stays in grid flow */
