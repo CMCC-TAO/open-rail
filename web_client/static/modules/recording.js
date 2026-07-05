@@ -16,12 +16,55 @@ function syncRecordingSwitchUI() {
   }
 }
 
+function syncRecordingCheckboxesFromConfig(cfg = App.config) {
+  const episodeChk = $('chk-record-episode');
+  const evalLogChk = $('chk-record-eval-log');
+  const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : null;
+
+  if (episodeChk && recordCfg && typeof recordCfg.is_record_episode === 'boolean') {
+    episodeChk.checked = recordCfg.is_record_episode;
+  }
+  if (evalLogChk && recordCfg && typeof recordCfg.is_record_eval_log === 'boolean') {
+    evalLogChk.checked = recordCfg.is_record_eval_log;
+  }
+  if (evalLogChk && typeof setEvalLogEnabled === 'function') {
+    setEvalLogEnabled(!!evalLogChk.checked);
+  }
+}
+
+async function persistRecordingConfigChange(patch) {
+  if (!patch || typeof patch !== 'object' || !Object.keys(patch).length) return App.config;
+
+  const res = await apiFetch('/api/client/config/patch', {
+    method: 'POST',
+    body: JSON.stringify({ patch }),
+  });
+  App.config = res.config || App.config;
+  renderRecordingConfigTree(App.config);
+  syncRecordingCheckboxesFromConfig(App.config);
+
+  try {
+    const confRes = await apiFetch('/api/client/config/path');
+    const path = (confRes && typeof confRes === 'object' && typeof confRes.path === 'string')
+      ? confRes.path.trim()
+      : '';
+    if (path) {
+      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
+    }
+  } catch (e) {
+    console.error('Failed to save recording config:', e);
+  }
+
+  return App.config;
+}
+
 function renderRecordingConfigTree(cfg = App.config) {
   const root = $('recording-config-tree');
   if (!root) return;
   root.innerHTML = '';
   const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : {};
   buildTree(recordCfg, 'record', root);
+  syncRecordingCheckboxesFromConfig(cfg);
   syncRecordingSwitchUI();
 }
 
@@ -451,80 +494,46 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Restore checkbox states from localStorage and config
+  // Restore checkbox states from config and keep UI in sync
   const episodeChk = $('chk-record-episode');
   const evallogChk = $('chk-record-eval-log');
 
+  syncRecordingCheckboxesFromConfig(App.config);
+
   if (episodeChk) {
-    // Initial state based on config
-    if (App.config && App.config.record && App.config.record.is_record_episode !== undefined) {
-      episodeChk.checked = App.config.record.is_record_episode;
-    }
-    // Add event listener to update config when checkbox changes
     episodeChk.addEventListener('change', async () => {
-      // Update config
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+
+      const previousValue = !!App.config.record.is_record_episode;
       App.config.record.is_record_episode = episodeChk.checked;
-      
-      // Sync to backend
+
       try {
-        await apiFetch('/api/client/config/patch', {
-          method: 'POST',
-          body: JSON.stringify({ patch: { 'record.is_record_episode': episodeChk.checked } }),
-        });
-        
-        // Save config to file
-        const display = $('conf-path-display');
-        const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-        if (path) {
-          try {
-            await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
-          } catch (e) {
-            console.error('Failed to save config:', e);
-          }
-        }
+        await persistRecordingConfigChange({ 'record.is_record_episode': episodeChk.checked });
       } catch (e) {
-        console.error('Failed to update config via API:', e);
-    }
-  });
+        App.config.record.is_record_episode = previousValue;
+        episodeChk.checked = previousValue;
+        syncRecordingCheckboxesFromConfig(App.config);
+        console.error('Failed to update recording episode config:', e);
+      }
+    });
   }
 
-  // Eval log checkbox: enable/disable panel visibility and config binding
   if (evallogChk) {
-    // Initial state based on config
-    if (App.config && App.config.record && App.config.record.is_record_eval_log !== undefined) {
-      evallogChk.checked = App.config.record.is_record_eval_log;
-    }
-    
     evallogChk.addEventListener('change', async () => {
-      // Update config
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+
+      const previousValue = !!App.config.record.is_record_eval_log;
       App.config.record.is_record_eval_log = evallogChk.checked;
 
-      // Update eval log panel visibility based on checkbox
-      if (typeof setEvalLogEnabled === 'function') setEvalLogEnabled(evallogChk.checked);
-      
-      // Sync to backend
       try {
-        await apiFetch('/api/client/config/patch', {
-          method: 'POST',
-          body: JSON.stringify({ patch: { 'record.is_record_eval_log': evallogChk.checked } }),
-        });
-        
-        // Save config to file
-        const display = $('conf-path-display');
-        const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-        if (path) {
-          try {
-            await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
-          } catch (e) {
-            console.error('Failed to save config:', e);
-          }
-        }
+        await persistRecordingConfigChange({ 'record.is_record_eval_log': evallogChk.checked });
       } catch (e) {
-        console.error('Failed to update config via API:', e);
+        App.config.record.is_record_eval_log = previousValue;
+        evallogChk.checked = previousValue;
+        syncRecordingCheckboxesFromConfig(App.config);
+        console.error('Failed to update evaluation log config:', e);
       }
     });
   }
