@@ -219,10 +219,10 @@ def handle_user_input(vla_client, robot):
             vla_client._inference_first()
             input('\nRobot reset completed, program paused, press Enter to continue...')
     elif cmd == 's' and vla_client.config.record.switch:
-        # vla_client.dataset_write.save_writed_data()
+        # vla_client.data_recorder.save_writed_data()
         input('Data saved, press Enter to continue...')
     elif cmd == 'd' and vla_client.config.record.switch:
-        # vla_client.dataset_write.abandon_record_data()
+        # vla_client.data_recorder.abandon_record_data()
         input('Data deleted, press Enter to continue...')
     elif cmd == 'q':
         return False  # Signal to quit
