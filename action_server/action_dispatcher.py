@@ -536,6 +536,12 @@ class VLAActionDispatcher(Node):
             self.get_logger().warn(f'Failed to load init_grasp handler: {e}')
 
         try:
+            from action_server.task_init_zero import InitZeroHandler
+            self.register_handler(InitZeroHandler())
+        except ImportError as e:
+            self.get_logger().warn(f'Failed to load init_zero handler: {e}')
+
+        try:
             from action_server.task_finish_grasp import FinishGraspHandler
             self.register_handler(FinishGraspHandler())
         except ImportError as e:

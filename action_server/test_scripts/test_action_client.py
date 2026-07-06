@@ -222,6 +222,15 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
+    "23": {
+        "name": "init zero",
+        "desc": "直接初始化 — 一步到位过渡到默认准备姿态（终点=init grasp，跳过中间安全姿态）",
+        "params": {
+            "task": "init zero",
+            "target": "none",
+            "waypoint": "none",
+        },
+    },
 }
 
 
@@ -273,6 +282,7 @@ TASK_GROUPS = [
             ("19", "left arm reset"),
             ("20", "right arm reset"),
             ("21", "both arm reset"),
+            ("23", "init zero"),
         ],
     },
 ]
@@ -430,14 +440,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1-22 / q): ').strip().lower()
+        choice = input('请选择任务编号 (1-22, 23 / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1-22 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-22、23 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]
