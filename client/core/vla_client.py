@@ -14,7 +14,7 @@ from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.core.visualize_server import VisualizeServer
-from client.core.data_recorder import LeRobotDatasetWriter
+from client.core.data_recorder import DataRecorder
 from client.robots.base_robot import RobotBase
 
 
@@ -85,7 +85,7 @@ class VLAClientAsync():
         self._request_id = 0
 
         # Initialize the dataset writer with the provided recording configuration
-        self.data_recorder = LeRobotDatasetWriter(
+        self.data_recorder = DataRecorder(
             record_config=self.config.record,
             task=getattr(self.config.language, 'task_id', None)
         )
