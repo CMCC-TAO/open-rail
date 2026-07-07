@@ -609,12 +609,17 @@ class VLAClientAsync():
         encoded_imgs = {}
         for key, encoded_img in results:
             encoded_imgs[key] = encoded_img
+            # Print the size of encoded_img in MB
+            # Encoded image size for cam.hand_left: 66376 bytes (0.0633 MB)
+            # Encoded image size for cam.hand_right: 69349 bytes (0.0661 MB)
+            # Encoded image size for cam.head: 94484 bytes (0.0901 MB)
+            # encoded_img_size_mb = len(encoded_img) / (1024 * 1024)
+            # print(f"Encoded image size for {key}: {len(encoded_img)} bytes ({encoded_img_size_mb:.4f} MB)")
 
         # Calculate processing time in milliseconds
         self.image_process_time = self.image_process_time * 0.8 +  (time.perf_counter() - start_time) * 1000 * 0.2
         # Send images to visualization interface
         self.visualize_server.update_image_data(encoded_imgs)
-
         return encoded_imgs
 
     # @run_time_decorator
