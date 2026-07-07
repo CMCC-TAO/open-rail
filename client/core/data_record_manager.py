@@ -226,7 +226,7 @@ class LeRobotDatasetParser:
         }
 
 
-class DataRecorder:
+class DataRecordManager:
     """
     A class to manage writing robotic observation and action data to disk in a structured format.
 
@@ -237,7 +237,7 @@ class DataRecorder:
 
     def __init__(self, record_config: ConfigDict, task: Optional[str] = None) -> None:
         """
-        Initializes the DataRecorder instance with the given configuration.
+        Initializes the DataRecordManager instance with the given configuration.
 
         Sets up directories, loads or initializes metadata, prepares video writers, and starts
         the writer process for asynchronous disk writing.
@@ -828,27 +828,27 @@ class DataRecorder:
 
     def close(self):
         """Release all dataset writer resources safely and idempotently."""
-        self.logger.info("Closing DataRecorder...")
+        self.logger.info("Closing DataRecordManager...")
 
         try:
             self.stop_recording()
         except Exception:
             self.logger.debug("stop_recording failed during close", exc_info=True)
 
-        self.logger.info("Closing DataRecorder, recording stopped.")
+        self.logger.info("Closing DataRecordManager, recording stopped.")
         try:
             if getattr(self, "record_obs_executor", None) is not None:
                 self.record_obs_executor.shutdown(wait=True, cancel_futures=True)
         except Exception:
             self.logger.debug("record_obs_executor shutdown failed", exc_info=True)
-        self.logger.info("Closing DataRecorder, observation executor shutdown.")
+        self.logger.info("Closing DataRecordManager, observation executor shutdown.")
 
         try:
             if getattr(self, "record_action_executor", None) is not None:
                 self.record_action_executor.shutdown(wait=True, cancel_futures=True)
         except Exception:
             self.logger.debug("record_action_executor shutdown failed", exc_info=True)
-        self.logger.info("Closing DataRecorder, action executor shutdown.")
+        self.logger.info("Closing DataRecordManager, action executor shutdown.")
 
         try:
             if getattr(self, "record_queue", None) is not None:
@@ -856,14 +856,14 @@ class DataRecorder:
                 self.record_queue.cancel_join_thread()
         except Exception:
             self.logger.debug("record_queue close/join failed", exc_info=True)
-        self.logger.info("Closing DataRecorder, record queue closed.")
+        self.logger.info("Closing DataRecordManager, record queue closed.")
         try:
             if getattr(self, "manager", None) is not None:
                 self.manager.shutdown()
         except Exception:
             self.logger.debug("manager shutdown failed", exc_info=True)
 
-        self.logger.info("DataRecorder closed successfully.")
+        self.logger.info("DataRecordManager closed successfully.")
         
     
     # def save_writed_data(self):
@@ -1326,7 +1326,7 @@ if __name__ == "__main__":
     config = get_client_config()
 
     # Initialize writer
-    writer = DataRecorder(config.record)
+    writer = DataRecordManager(config.record)
 
     print("Starting to simulate data writing...")
 
