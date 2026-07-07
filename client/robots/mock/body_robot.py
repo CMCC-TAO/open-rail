@@ -166,6 +166,7 @@ class RobotBody(RobotBase):
         self.current_state = target_pose if target_pose is not None else self.current_state
         # Mock robot reset should also rewind to episode-0 / frame-0.
         self.reset(reload_dataset=False)
+        time.sleep(0.5)
 
     def retrieve_observation(self):
         """Retrieve observation data from local lerobot-format files."""

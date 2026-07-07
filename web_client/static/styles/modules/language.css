@@ -55,7 +55,7 @@
 }
 
 .lang-threshold-wrap input {
-  flex: 0 0 60px;
+  flex: 0 0 66px;
   width: 60px !important;
   height: 18px;
   padding: 0 8px;
@@ -105,7 +105,7 @@
   transition: width .2s ease;
 }
 .task-progress-value {
-  min-width: 44px;
+  min-width: 48px;
   text-align: right;
   font-size: var(--font-size-2);
   color: var(--accent);
