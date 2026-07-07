@@ -846,7 +846,7 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
 
         if selected_task:
-            from client.core.data_recorder import LeRobotDatasetParser
+            from client.core.data_record_manager import LeRobotDatasetParser
 
             task_dir = base_dir / selected_task
             parser = LeRobotDatasetParser(str(task_dir), logger=logger)
@@ -900,7 +900,7 @@ async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
         raise HTTPException(404, f"Task directory not found: {task}")
 
     try:
-        from client.core.data_recorder import LeRobotDatasetParser
+        from client.core.data_record_manager import LeRobotDatasetParser
 
         parser = LeRobotDatasetParser(str(task_dir), logger=logger)
         result = parser.delete_episode(req.episode_id)
@@ -2082,14 +2082,14 @@ async def client_record_start(req: RecordStartRequest):
         client_state.config.record.switch = True
         client_state.config.record.record_exp_data = ('ExpData' in save_items)
         task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
-        if not hasattr(vla_client, 'data_recorder') or vla_client.data_recorder is None:
+        if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
             try:
-                from client.core.data_recorder import DataRecorder
-                vla_client.data_recorder = DataRecorder(record_config=client_state.config.record, task=task_id)
+                from client.core.data_record_manager import DataRecorder
+                vla_client.data_record_manager = DataRecorder(record_config=client_state.config.record, task=task_id)
             except Exception as e:
                 raise HTTPException(500, f'Failed to initialize recorder: {e}')
         else:
-            vla_client.data_recorder.set_task(task_id)
+            vla_client.data_record_manager.set_task(task_id)
 
         updated_camera_shapes = {}
         if not bool(getattr(client_state.config.record, 'resize', False)):
@@ -2098,11 +2098,11 @@ async def client_record_start(req: RecordStartRequest):
             except Exception as e:
                 logger.warning(f'Failed to update camera shapes before start_recording: {e}')
 
-        vla_client.data_recorder.start_recording()
-        current_recording_task = str(getattr(vla_client.data_recorder, 'current_task', '') or '')
+        vla_client.data_record_manager.start_recording()
+        current_recording_task = str(getattr(vla_client.data_record_manager, 'current_task', '') or '')
         current_recording_dir = ''
         try:
-            save_path = str(getattr(vla_client.data_recorder, 'save_path', '') or '')
+            save_path = str(getattr(vla_client.data_record_manager, 'save_path', '') or '')
             if save_path:
                 current_recording_dir = Path(save_path).name
         except Exception:
@@ -2124,10 +2124,10 @@ async def client_record_start(req: RecordStartRequest):
 async def client_record_stop():
     vla_client, _ = _require_runtime('stop_recording')
     try:
-        if not hasattr(vla_client, 'data_recorder') or vla_client.data_recorder is None:
+        if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
             raise HTTPException(400, 'Recorder is not initialized.')
         client_state.config.record.switch = False
-        vla_client.data_recorder.stop_recording()
+        vla_client.data_record_manager.stop_recording()
         return {'status': 'ok', 'command': 'stop_recording'}
     except HTTPException:
         raise
