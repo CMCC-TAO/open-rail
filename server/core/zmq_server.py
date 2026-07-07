@@ -36,7 +36,8 @@ class ZMQServer():
         self.heartbeat_timeout = getattr(config, 'heartbeat_timeout', 30)  # Heartbeat timeout in seconds
         self._running = True
         self._monitor_thread = None
-        self._lock = threading.RLock()  # Reentrant lock for thread safety
+        self._client_lock = threading.Lock()  # Lock for thread safety, receive message thread and monitor thread
+        self._send_msg_lock = threading.Lock()  # Lock for thread safety, send message thread and monitor thread
         
         # Start heartbeat monitoring thread
         self._start_heartbeat_monitor()
@@ -75,7 +76,7 @@ class ZMQServer():
         """Monitor heartbeat from client and handle disconnection"""
         while self._running:
             time.sleep(1)  # Check every second
-            with self._lock:
+            with self._client_lock:
                 current_time = time.time()
                 # Remove inactive clients
                 inactive_clients = []
@@ -107,7 +108,7 @@ class ZMQServer():
                 meta_part = json.loads(parts[2].decode('utf8'))  # Metadata JSON
                 
                 # Update client tracking info
-                with self._lock:
+                with self._client_lock:
                     current_time = time.time()
                     # Store client info
                     self.clients[client_id] = {
@@ -149,10 +150,11 @@ class ZMQServer():
             meta: Metadata dictionary (will be JSON encoded)
         """
         try:
-            # Convert data dictionary to byte stream
-            data_bytes = pickle.dumps(data)
-            meta_bytes = json.dumps(meta).encode('utf8')
-            self.router.send_multipart([client_id, data_bytes, meta_bytes], flags=zmq.NOBLOCK)  # Non-blocking send
+            with self._send_msg_lock:
+                # Convert data dictionary to byte stream
+                data_bytes = pickle.dumps(data)
+                meta_bytes = json.dumps(meta).encode('utf8')
+                self.router.send_multipart([client_id, data_bytes, meta_bytes], flags=zmq.NOBLOCK)  # Non-blocking send
         except Exception as e:
             self.logger.error(f"Error sending message: {e}")
             import traceback
@@ -165,38 +167,38 @@ class ZMQServer():
         except Exception as e:
             self.logger.error(f"Error sending heartbeat response: {e}")
     
-    def isClientConnected(self):
-        """Check if any client is currently connected"""
-        with self._lock:
-            if not self.clients:
-                return False
-            # Check if any client has sent heartbeat recently
-            current_time = time.time()
-            for client_info in self.clients.values():
-                if (current_time - client_info['last_seen']) <= self.heartbeat_timeout:
-                    return True
-            return False
+    # def isClientConnected(self):
+    #     """Check if any client is currently connected"""
+    #     with self._client_lock:
+    #         if not self.clients:
+    #             return False
+    #         # Check if any client has sent heartbeat recently
+    #         current_time = time.time()
+    #         for client_info in self.clients.values():
+    #             if (current_time - client_info['last_seen']) <= self.heartbeat_timeout:
+    #                 return True
+    #         return False
     
-    def getClientInfo(self):
-        """Get information about the connected client(s)"""
-        with self._lock:
-            if not self.clients:
-                return {}  # Return empty dict instead of None to be consistent
+    # def getClientInfo(self):
+    #     """Get information about the connected client(s)"""
+    #     with self._client_lock:
+    #         if not self.clients:
+    #             return {}  # Return empty dict instead of None to be consistent
             
-            # Return info for all connected clients
-            client_info_dict = {}
-            current_time = time.time()
+    #         # Return info for all connected clients
+    #         client_info_dict = {}
+    #         current_time = time.time()
             
-            for client_id, info in self.clients.items():
-                client_hex = client_id.hex() if isinstance(client_id, bytes) else str(client_id)
-                client_info_dict[client_hex] = {
-                    'last_seen': info['last_seen'],
-                    'time_since_last_seen': current_time - info['last_seen'],
-                    'is_active': (current_time - info['last_seen']) <= self.heartbeat_timeout,
-                    'address': info['address']
-                }
+    #         for client_id, info in self.clients.items():
+    #             client_hex = client_id.hex() if isinstance(client_id, bytes) else str(client_id)
+    #             client_info_dict[client_hex] = {
+    #                 'last_seen': info['last_seen'],
+    #                 'time_since_last_seen': current_time - info['last_seen'],
+    #                 'is_active': (current_time - info['last_seen']) <= self.heartbeat_timeout,
+    #                 'address': info['address']
+    #             }
             
-            return client_info_dict
+    #         return client_info_dict
 
     def close(self):
         """Close ZMQ server and cleanup resources"""
