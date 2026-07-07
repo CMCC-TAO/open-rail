@@ -343,9 +343,6 @@ class DataRecorder:
             self.logger.warning("set_task ignored because recording is running")
             return
 
-        date_str = datetime.now().strftime("%Y%m%d")
-        task_name = self._sanitize_task_name(task)
-        candidate_dir = task_name + '_' + date_str
         # if self.current_task == task_name and os.path.exists(os.path.join(self.project_root_path, self.save_dir, candidate_dir)):
         #     self.logger.info(f"set_task with the same task name {task_name} and existing directory, reuse it.")
         #     return
