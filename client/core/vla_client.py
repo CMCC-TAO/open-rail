@@ -242,7 +242,8 @@ class VLAClientAsync():
             self._img_executor.shutdown(wait=False)
 
         self.logger.info('Inference client closed.')
-
+    def reset(self):
+        self.image_process_time = 0.0
     #################### VLA Client Inline functions ####################
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.

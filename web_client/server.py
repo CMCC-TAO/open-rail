@@ -746,6 +746,14 @@ async def get_conf_dir():
     # conf_dir = ROOT / "conf" / client_state.conf_file
     return {"status": "ok", "path": str(client_state.conf_file)}
 
+class ConfigFileRequest(BaseModel):
+    path: str
+
+@app.post("/api/client/config/path")
+async def set_conf_dir(req: ConfigFileRequest):
+    """Load a yaml conf file and apply it. Effective immediately when possible."""
+    client_state.conf_file = req.path
+    return {"status": "ok", "path": str(client_state.conf_file)}
 
 @app.get("/api/client/robot/select_directory")
 async def select_directory(path: Optional[str] = None):
@@ -1120,18 +1128,18 @@ async def patch_config(req: ConfigPatchRequest):
         and current_vla_client is not None
         and prev_robot_type != next_robot_type
     ):
-        paused_state = None
         try:
-            paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
+            with client_state.lock:
+                client_state.paused_thread_state = _pause_vla_client(current_vla_client)
             await asyncio.to_thread(_ensure_config_robot_bound, True)
             logger.info(f"Robot type changed: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
         except Exception as e:
             logger.error(f"Failed to recreate robot for type change {prev_robot_type} -> {next_robot_type}: {e}")
             raise HTTPException(500, f"Failed to recreate robot for type change: {e}")
         finally:
-            if paused_state is not None:
+            with client_state.lock:
                 try:
-                    await asyncio.to_thread(_resume_vla_client, current_vla_client, paused_state)
+                    _resume_vla_client(current_vla_client, client_state.paused_thread_state)
                 except Exception as e:
                     logger.error(f"Failed to resume client after robot recreate: {e}")
 
@@ -1148,27 +1156,24 @@ async def patch_config(req: ConfigPatchRequest):
                 continue
             if not hasattr(robot, 'reset'):
                 continue
-            paused_state = None
             try:
                 if is_running and current_vla_client is not None and robot is current_robot:
-                    paused_state = _pause_vla_client(current_vla_client)
+                    with client_state.lock:
+                        client_state.paused_thread_state = _pause_vla_client(current_vla_client)
                 robot.reset(dataset_path=next_dataset_path or None, reload_dataset=True)
                 logger.info(f"Applied mock dataset_path change: {next_dataset_path}")
             except Exception as e:
                 logger.error(f"Failed to apply mock dataset_path change '{next_dataset_path}': {e}")
                 raise HTTPException(500, f"Failed to reload mock dataset: {e}")
             finally:
-                if paused_state is not None:
+                with client_state.lock:
                     try:
-                        _resume_vla_client(current_vla_client, paused_state)
+                        _resume_vla_client(current_vla_client, client_state.paused_thread_state)
                     except Exception as e:
                         logger.error(f"Failed to resume client after dataset reload: {e}")
 
     return {"status": "ok", "config": cfg_dict}
 
-
-class ConfigFileRequest(BaseModel):
-    path: str
 
 
 @app.post("/api/client/config/load")
@@ -1203,15 +1208,15 @@ async def load_config_file(req: ConfigFileRequest):
         and current_vla_client is not None
         and prev_robot_type != next_robot_type
     ):
-        paused_state = None
         try:
-            paused_state = await asyncio.to_thread(_pause_vla_client, current_vla_client)
+            with client_state.lock:
+                client_state.paused_thread_state = _pause_vla_client(current_vla_client)
             await asyncio.to_thread(_ensure_config_robot_bound, True)
             logger.info(f"Robot type changed by config load: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
         finally:
-            if paused_state is not None:
+            with client_state.lock:
                 try:
-                    await asyncio.to_thread(_resume_vla_client, current_vla_client, paused_state)
+                    await asyncio.to_thread(_resume_vla_client, current_vla_client, client_state.paused_thread_state)
                 except Exception as e:
                     logger.error(f"Failed to resume client after config-load robot recreate: {e}")
 
@@ -2025,11 +2030,13 @@ async def _run_web_control(command: str, req: ManualControlRequest):
 async def client_control_reset():
     vla_client, robot = _require_runtime('reset')
     try:
-        paused_state = _pause_vla_client(vla_client)
+        with client_state.lock:
+            client_state.paused_thread_state = _pause_vla_client(vla_client)
         robot.reset_robot(mode='default')
         vla_client.realtime_data_manager.clear()
-        _resume_vla_client(vla_client, paused_state)
-        await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": False, "message": "Robot reset complete, client resumed."}})
+        vla_client.reset()
+        # _resume_vla_client(vla_client, paused_state)
+        await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": True, "message": "Robot reset complete, client paused."}})
         return {"status": "ok", "command": 'reset'}
     except HTTPException:
         raise
@@ -2063,9 +2070,11 @@ async def client_control_wheel(req: ManualControlRequest):
 async def client_language_set(req: LanguageSetRequest):
     vla_client, _ = _require_runtime('set_language')
     try:
-        paused_state = _pause_vla_client(vla_client)
+        with client_state.lock:
+            client_state.paused_thread_state = _pause_vla_client(vla_client)
         vla_client.task_language_manager.currt_language_instruction = req.language if isinstance(req.language, str) else ''
-        _resume_vla_client(vla_client, paused_state)
+        with client_state.lock:
+            _resume_vla_client(vla_client, client_state.paused_thread_state)
         return {"status": "ok", "command": 'set_language'}
     except HTTPException:
         raise

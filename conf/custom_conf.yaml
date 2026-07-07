@@ -6,7 +6,7 @@ controller:
   period: 3.75
   raw_fps: 30
   speed: 1.0
-  wait_time: 400
+  wait_time: 10
 inter_chunk:
   inter_chunk_mode: min_jerk
   min_jerk:
@@ -91,9 +91,9 @@ intra_chunk:
 language:
   auto_mode: true
   file_path: language_cmd.json
-  sub_task_id: 3
-  task_id: tea_master
-  task_progress_threshold: 0.99
+  sub_task_id: 0
+  task_id: make_coffee
+  task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
   action_layout:
@@ -174,8 +174,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 480
+        width: 848
     cam.hand_right:
       encode:
         codec: mp4v
@@ -183,8 +183,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 480
+        width: 848
     cam.head:
       encode:
         codec: mp4v
@@ -192,23 +192,22 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 640
-        width: 640
+        height: 720
+        width: 1280
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
     fps: 30
     robot_type: a2d
     splits:
-      train: 0:0
+      valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 1
-    total_frames: 233
-    total_tasks: 2
-    total_videos: 3
+    total_episodes: 0
+    total_frames: 0
+    total_tasks: 0
+    total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
-  record_exp_data: false
   save_dir: data/recording
   save_raw: true
   switch: false

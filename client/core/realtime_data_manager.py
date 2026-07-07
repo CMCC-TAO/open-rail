@@ -418,8 +418,12 @@ class RealtimeDataManager():
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:
                 return None, None, None, None
+            if len(self.action_chunks) == 0:
+                return None, None, None, None
+            if self.action_chunk_fitted.shape[1] == 0:
+                return None, None, None, None
             if self.mode != 'control' and mode == 'control':
-                print(f"Switching to control mode, current action_chunk_index={self.action_chunk_index}, reset action_chunk_index to 0.")
+                # print(f"Switching to control mode, current action_chunk_index={self.action_chunk_index}, reset action_chunk_index to 0.")
                 self.action_chunk_index = 0
             self.mode = mode
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
