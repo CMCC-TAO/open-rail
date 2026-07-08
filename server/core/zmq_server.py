@@ -4,6 +4,7 @@ import socket
 import pickle
 import logging
 import threading
+import queue
 import time
 from ml_collections import ConfigDict
 
@@ -36,11 +37,16 @@ class ZMQServer():
         self.heartbeat_timeout = getattr(config, 'heartbeat_timeout', 30)  # Heartbeat timeout in seconds
         self._running = True
         self._monitor_thread = None
+        self._sender_thread = None
         self._client_lock = threading.Lock()  # Lock for thread safety, receive message thread and monitor thread
-        self._send_msg_lock = threading.Lock()  # Lock for thread safety, send message thread and monitor thread
-        
-        # Start heartbeat monitoring thread
+
+        # Thread-safe send queue: producers enqueue in any thread, single sender thread sends.
+        self._send_queue_maxsize = getattr(config, 'send_queue_maxsize', 1000)
+        self._send_queue = queue.Queue(maxsize=self._send_queue_maxsize)
+
+        # Start background workers
         self._start_heartbeat_monitor()
+        self._start_sender_worker()
         self._heartbeat_info = {'status': 'pong', 'type': 'heartbeat'}
         # self._heartbeat_info['server_ip'] = self.get_local_ip()
         self._heartbeat_info['server_ip'] = '*'
@@ -71,6 +77,29 @@ class ZMQServer():
         """Start heartbeat monitoring thread"""
         self._monitor_thread = threading.Thread(target=self._heartbeat_monitor, daemon=True)
         self._monitor_thread.start()
+
+    def _start_sender_worker(self):
+        """Start sender worker thread for queued outgoing messages."""
+        self._sender_thread = threading.Thread(target=self._sender_worker, daemon=True)
+        self._sender_thread.start()
+
+    def _sender_worker(self):
+        """Continuously send queued messages in a single thread for thread safety."""
+        while self._running or not self._send_queue.empty():
+            try:
+                client_id, data, meta = self._send_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+
+            try:
+                data_bytes = pickle.dumps(data)
+                meta_bytes = json.dumps(meta).encode('utf8')
+                self.router.send_multipart([client_id, data_bytes, meta_bytes])
+            except zmq.ZMQError as e:
+                if self._running and e.errno not in (zmq.ETERM, zmq.ENOTSOCK):
+                    self.logger.error(f"Error sending message in sender worker: {e}")
+            except Exception as e:
+                self.logger.error(f"Error sending message in sender worker: {e}")
 
     def _heartbeat_monitor(self):
         """Monitor heartbeat from client and handle disconnection"""
@@ -141,24 +170,32 @@ class ZMQServer():
             traceback.print_exc()
             return None
     
-    def sendMessage(self, client_id, data, meta={}):
-        """Send message to client
-        
+    def sendMessage(self, client_id, data, meta=None):
+        """Enqueue message to client.
+
         Args:
             client_id: Client identifier to send message to
             data: Data to send (will be pickled)
             meta: Metadata dictionary (will be JSON encoded)
+
+        Returns:
+            bool: True if queued successfully, False otherwise.
         """
+        if meta is None:
+            meta = {}
+
+        if not self._running:
+            return False
+
         try:
-            with self._send_msg_lock:
-                # Convert data dictionary to byte stream
-                data_bytes = pickle.dumps(data)
-                meta_bytes = json.dumps(meta).encode('utf8')
-                self.router.send_multipart([client_id, data_bytes, meta_bytes], flags=zmq.NOBLOCK)  # Non-blocking send
+            self._send_queue.put_nowait((client_id, data, meta))
+            return True
+        except queue.Full:
+            self.logger.warning("Send queue is full, dropping outgoing message")
+            return False
         except Exception as e:
-            self.logger.error(f"Error sending message: {e}")
-            import traceback
-            traceback.print_exc()
+            self.logger.error(f"Error enqueueing message: {e}")
+            return False
     
     def sendHeartbeatResponse(self, client_id):
         """Send heartbeat response to client"""
@@ -205,6 +242,8 @@ class ZMQServer():
         self._running = False
         if self._monitor_thread:
             self._monitor_thread.join(timeout=2)  # Wait up to 2 seconds for thread to finish
+        if self._sender_thread:
+            self._sender_thread.join(timeout=2)  # Wait up to 2 seconds for sender thread to finish
         self.router.close()
         self.context.term()
         self.logger.info(f'ZMQ server closed, address was: {self.server_addr}')
