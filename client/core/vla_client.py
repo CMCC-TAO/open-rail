@@ -1,7 +1,8 @@
 import cv2
 import time
-import threading
 import logging
+import threading
+import numpy as np
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -412,9 +413,7 @@ class VLAClientAsync():
             self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
 
             timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
-            prob_progress = None
-            if 'ext' in action_data and 'prob_progress' in action_data['ext']:
-                prob_progress = action_data['ext']['prob_progress']
+            prob_progress = self._parse_prob_progress(action_data)
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
                 timestamps,
                 action_chunk,
@@ -511,9 +510,7 @@ class VLAClientAsync():
             if timestamps is None:
                 self.logger.warning("Return None when pop action chunk from realtime_data_manager.")
                 return
-            prob_progress = None
-            if 'ext' in action_data and 'prob_progress' in action_data['ext']:
-                prob_progress = action_data['ext']['prob_progress']
+            prob_progress = self._parse_prob_progress(action_data)
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
                 timestamps,
                 action_chunk,
@@ -622,7 +619,14 @@ class VLAClientAsync():
         # Send images to visualization interface
         self.visualize_server.update_image_data(encoded_imgs)
         return encoded_imgs
-
+    def _parse_prob_progress(self, action_data):
+        prob_progress = None
+        if 'ext' in action_data and 'prob_progress' in action_data['ext']:
+            prob_progress = action_data['ext']['prob_progress']
+            if np.isnan(prob_progress).any():
+                prob_progress = None
+                self.logger.warning("prob_progress contains nan values, return None")
+        return prob_progress
     # @run_time_decorator
     # TODO: rename to pack_data
     def _process_data(self, frame):
