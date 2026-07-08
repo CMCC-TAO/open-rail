@@ -3,13 +3,79 @@
 
 action_layout:
   arm:
+    start: 0
     end: 14
     policy: gradual
-    start: 0
+    presets:
+      left:
+        Default:
+        - 0.3
+        - 0.15
+        - -0.15
+        - -0.3
+        - 0.0
+        - -0.3
+        - 0.0
+        Custom:
+        - 0.3
+        - 0.15
+        - -0.15
+        - -0.3
+        - 0.0
+        - -0.3
+        - 0.0
+      right:
+        Default:
+        - 0.3
+        - -0.15
+        - 0.15
+        - -0.3
+        - 0.0
+        - -0.3
+        - 0.0
+        Custom:
+        - 0.3
+        - -0.15
+        - 0.15
+        - -0.3
+        - 0.0
+        - -0.3
+        - 0.0
   hand:
+    start: 14
     end: 26
     policy: hand
-    start: 14
+    presets:
+      left:
+        Default:
+        - 100.0
+        - 100.0
+        - 100.0
+        - 100.0
+        - 150.0
+        - 50.0
+        Custom:
+        - 100.0
+        - 100.0
+        - 100.0
+        - 100.0
+        - 150.0
+        - 50.0
+      right:
+        Default:
+        - 100.0
+        - 100.0
+        - 100.0
+        - 100.0
+        - 150.0
+        - 50.0
+        Custom:
+        - 100.0
+        - 100.0
+        - 100.0
+        - 100.0
+        - 150.0
+        - 50.0
 controller:
   gripper_offset: 5
   period: 3.75
@@ -32,13 +98,79 @@ inter_chunk:
 intra_chunk:
   action_layout:
     arm:
+      start: 0
       end: 14
       policy: gradual
-      start: 0
+      presets:
+        left:
+          Default:
+          - 0.3
+          - 0.15
+          - -0.15
+          - -0.3
+          - 0.0
+          - -0.3
+          - 0.0
+          Custom:
+          - 0.3
+          - 0.15
+          - -0.15
+          - -0.3
+          - 0.0
+          - -0.3
+          - 0.0
+        right:
+          Default:
+          - 0.3
+          - -0.15
+          - 0.15
+          - -0.3
+          - 0.0
+          - -0.3
+          - 0.0
+          Custom:
+          - 0.3
+          - -0.15
+          - 0.15
+          - -0.3
+          - 0.0
+          - -0.3
+          - 0.0
     hand:
+      start: 14
       end: 26
       policy: hand
-      start: 14
+      presets:
+        left:
+          Default:
+          - 100.0
+          - 100.0
+          - 100.0
+          - 100.0
+          - 150.0
+          - 50.0
+          Custom:
+          - 100.0
+          - 100.0
+          - 100.0
+          - 100.0
+          - 150.0
+          - 50.0
+        right:
+          Default:
+          - 100.0
+          - 100.0
+          - 100.0
+          - 100.0
+          - 150.0
+          - 50.0
+          Custom:
+          - 100.0
+          - 100.0
+          - 100.0
+          - 100.0
+          - 150.0
+          - 50.0
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -62,13 +194,79 @@ language:
 rdm:
   action_layout:
     arm:
+      start: 0
       end: 14
       policy: gradual
-      start: 0
+      presets:
+        left:
+          Default:
+          - 0.3
+          - 0.15
+          - -0.15
+          - -0.3
+          - 0.0
+          - -0.3
+          - 0.0
+          Custom:
+          - 0.3
+          - 0.15
+          - -0.15
+          - -0.3
+          - 0.0
+          - -0.3
+          - 0.0
+        right:
+          Default:
+          - 0.3
+          - -0.15
+          - 0.15
+          - -0.3
+          - 0.0
+          - -0.3
+          - 0.0
+          Custom:
+          - 0.3
+          - -0.15
+          - 0.15
+          - -0.3
+          - 0.0
+          - -0.3
+          - 0.0
     hand:
+      start: 14
       end: 26
       policy: hand
-      start: 14
+      presets:
+        left:
+          Default:
+          - 100.0
+          - 100.0
+          - 100.0
+          - 100.0
+          - 150.0
+          - 50.0
+          Custom:
+          - 100.0
+          - 100.0
+          - 100.0
+          - 100.0
+          - 150.0
+          - 50.0
+        right:
+          Default:
+          - 100.0
+          - 100.0
+          - 100.0
+          - 100.0
+          - 150.0
+          - 50.0
+          Custom:
+          - 100.0
+          - 100.0
+          - 100.0
+          - 100.0
+          - 150.0
+          - 50.0
   max_len: 100
   mode: async
   observe_fps_window_size: 10
@@ -126,7 +324,6 @@ record:
     total_tasks: 0
     total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
-  record_exp_data: false
   save_dir: data/recording
   save_raw: true
   switch: false
@@ -486,13 +683,80 @@ robots:
   unitree_g1:
     action_layout:
       arm:
+        start: 0
         end: 14
         policy: gradual
-        start: 0
+        presets:
+          left:
+            Default:
+            - 0.3
+            - 0.15
+            - -0.15
+            - -0.3
+            - 0.0
+            - -0.3
+            - 0.0
+            Custom:
+            - 0.3
+            - 0.15
+            - -0.15
+            - -0.3
+            - 0.0
+            - -0.3
+            - 0.0
+          right:
+            Default:
+            - 0.3
+            - -0.15
+            - 0.15
+            - -0.3
+            - 0.0
+            - -0.3
+            - 0.0
+            Custom:
+            - 0.3
+            - -0.15
+            - 0.15
+            - -0.3
+            - 0.0
+            - -0.3
+            - 0.0
       hand:
+        start: 14
         end: 26
         policy: hand
-        start: 14
+        presets:
+          left:
+            Default:
+            - 100.0
+            - 100.0
+            - 100.0
+            - 100.0
+            - 150.0
+            - 50.0
+            Custom:
+            - 100.0
+            - 100.0
+            - 100.0
+            - 100.0
+            - 150.0
+            - 50.0
+          right:
+            Default:
+            - 100.0
+            - 100.0
+            - 100.0
+            - 100.0
+            - 150.0
+            - 50.0
+            Custom:
+            - 100.0
+            - 100.0
+            - 100.0
+            - 100.0
+            - 150.0
+            - 50.0
+    hand_type: hand
     reset_robot_pos:
     - 0.3
     - 0.15

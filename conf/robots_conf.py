@@ -231,11 +231,36 @@ def get_unitree_g1_config():
         ConfigDict: Configuration dictionary for Unitree G1 robot.
     """
     config = ConfigDict()
+    config.hand_type = 'hand'
     config.reset_robot_pos = [0.0] * 26
-    config.action_layout = {
-        'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
-        'hand': {'start': 14, 'end': 26, 'policy': 'hand'},
-    }
+    config.action_layout = _ordered_config({
+        'arm': {
+            'start': 0, 'end': 14, 'policy': 'gradual',
+            'presets': {
+                'left': {
+                    'Default': [0.3, 0.15, -0.15, -0.3, 0.0, -0.3, 0.0],
+                    'Custom': [0.3, 0.15, -0.15, -0.3, 0.0, -0.3, 0.0],
+                },
+                'right': {
+                    'Default': [0.3, -0.15, 0.15, -0.3, 0.0, -0.3, 0.0],
+                    'Custom': [0.3, -0.15, 0.15, -0.3, 0.0, -0.3, 0.0],
+                },
+            },
+        },
+        'hand': {
+            'start': 14, 'end': 26, 'policy': 'hand',
+            'presets': {
+                'left': {
+                    'Default': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                    'Custom': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                },
+                'right': {
+                    'Default': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                    'Custom': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                },
+            },
+        },
+    })
     return config
 
 
