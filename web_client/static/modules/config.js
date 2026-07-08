@@ -284,6 +284,62 @@ function renderMainParameters(cfg) {
   });
 }
 
+function setupMainParamsResize() {
+  const mainSection = $('main-params-section');
+  const resizer = $('main-params-resizer');
+  if (!mainSection || !resizer) return;
+
+  const parsePx = (raw, fallback) => {
+    const num = Number.parseFloat(raw);
+    return Number.isFinite(num) ? num : fallback;
+  };
+
+  const getHeightLimits = () => {
+    const style = getComputedStyle(mainSection);
+    const min = parsePx(style.minHeight, 120);
+    const max = Math.max(parsePx(style.maxHeight, 360), min);
+    return { min, max };
+  };
+
+  let dragging = false;
+  let dragStartY = 0;
+  let dragStartHeight = 0;
+
+  const applyHeight = (height) => {
+    const { min, max } = getHeightLimits();
+    const clamped = Math.min(max, Math.max(min, height));
+    mainSection.style.height = `${clamped}px`;
+  };
+
+  const onMouseMove = (e) => {
+    if (!dragging) return;
+    const nextHeight = dragStartHeight + (e.clientY - dragStartY);
+    applyHeight(nextHeight);
+  };
+
+  const stopDragging = () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove('main-params-resizing');
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', stopDragging);
+  };
+
+  resizer.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+
+    dragging = true;
+    dragStartY = e.clientY;
+    dragStartHeight = mainSection.getBoundingClientRect().height;
+    applyHeight(dragStartHeight);
+
+    document.body.classList.add('main-params-resizing');
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', stopDragging);
+  });
+}
+
 function getCfgMultiSelectOptions(dotKey) {
   if (dotKey === 'visualize.trajectory.source') {
     return [
