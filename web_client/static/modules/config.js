@@ -26,7 +26,7 @@ const CONFIG_SELECT_OPTIONS = {
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['a2d', 'mock', 'ti5_t170c', 'navi_wa2'],
+  type: ['a2d', 'mock', 'ti5_t170c', 'navi_wa2', 'unitree_g1'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1'],
   eval_log_format: ['json', 'csv', 'both'],

@@ -9,67 +9,27 @@ controller:
   wait_time: 200
 inter_chunk:
   inter_chunk_mode: min_jerk
-  search_length: 100
-  smooth_action: false
-  smooth_base: 0.0
-  smooth_length: 50
-  smooth_ratio: 0.75
+  min_jerk:
+    adaptive_factor: -1.0
+    blend_threshold: 0.7
+  search_action:
+    search_length: 100
+  smooth_velocity:
+    kd: 2.0
+    kp: 5.0
+    max_acc: 5.0
+    max_vel: 2.0
+  sync: {}
 intra_chunk:
   action_layout:
     arm:
-      start: 0
       end: 14
       policy: gradual
-      presets:
-        left:
-          Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-        right:
-          Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+      start: 0
     gripper:
-      start: 14
-      end: 16
+      end: 26
       policy: stepwise
-      presets:
-        left:
-          Default:
-          - 0.0
-          Custom:
-          - 0.0
-        right:
-          Default:
-          - 0.0
-          Custom:
-          - 0.0
+      start: 14
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -92,63 +52,27 @@ language:
 rdm:
   action_layout:
     arm:
-      start: 0
       end: 14
       policy: gradual
-      presets:
-        left:
-          Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-        right:
-          Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+      start: 0
     gripper:
-      start: 14
-      end: 16
+      end: 26
       policy: stepwise
-      presets:
-        left:
-          Default:
-          - 0.0
-          Custom:
-          - 0.0
-        right:
-          Default:
-          - 0.0
-          Custom:
-          - 0.0
+      start: 14
   max_len: 100
   mode: async
   observe_fps_window_size: 10
 record:
+  auto: false
+  evaluation:
+    log_format: json
+    scores:
+    - 0
+    - 0.5
+    - 1
+  is_record_episode: false
+  is_record_eval_log: false
+  is_record_expe_data: false
   lerobot:
     action_shape: 22
     cam.hand_left:
@@ -192,7 +116,6 @@ record:
     total_tasks: 0
     total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
-  record_exp_data: false
   save_dir: data/recording
   save_raw: true
   switch: false
@@ -548,7 +471,44 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: unitree_g1
+  unitree_g1:
+    action_layout:
+      arm:
+        end: 14
+        policy: gradual
+        start: 0
+      gripper:
+        end: 26
+        policy: stepwise
+        start: 14
+    reset_robot_pos:
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
 vision:
   history_frame: false
   preprocess:
@@ -567,14 +527,14 @@ visualize:
   ping_timeout: 10
   port: 8765
   trajectory:
-    play: false
+    play: true
     selected_joints:
     - 0
-    - 1
-    - 2
-    - 3
+    - 7
     source:
     - State
+    - ActionFitted
+    - ActionRaw
     window_span_sec: 10.0
   updata_fps: 30
 vla_zmq:

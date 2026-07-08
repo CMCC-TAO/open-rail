@@ -469,7 +469,7 @@ def _apply_flat_patch_new(config, patch: dict):
 robot_instance = None
 _cleanup_guard = threading.Lock()
 
-def _get_robot(robot_type, robot_config):
+def _get_robot(robot_type, robot_config, client_config=None):
     global robot_instance
 
     # Reuse existing robot instance when the type matches.
@@ -483,6 +483,9 @@ def _get_robot(robot_type, robot_config):
             return robot_instance, True
 
         if robot_type == RobotType.NAVI_WA2 and module_name.endswith("client.robots.navi_wa2.body_robot"):
+            return robot_instance, True
+
+        if robot_type == RobotType.UNITREE_G1 and module_name.endswith("client.robots.unitree_g1.body_robot"):
             return robot_instance, True
 
         if robot_type == RobotType.MOCK and module_name.endswith("client.robots.mock.body_robot"):
@@ -522,6 +525,15 @@ def _get_robot(robot_type, robot_config):
     elif robot_type == RobotType.TI5_T170C:
         from client.robots.ti5_t170c.body_robot import RobotBody
         robot_instance = RobotBody(robot_config)
+    elif robot_type == RobotType.UNITREE_G1:
+        import rclpy as _rclpy
+        if not _rclpy.ok():
+            _rclpy.init(args=[])
+        _ros_context = _rclpy.Context()
+        if not _ros_context.ok():
+            _ros_context.init(args=[])
+        from client.robots.unitree_g1.body_robot import RobotBody
+        robot_instance = RobotBody(client_config or robot_config, ros_context=_ros_context)
     else:
         raise ValueError(f"Unsupported robot type: {robot_type}")
     return robot_instance, False
@@ -575,7 +587,7 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
     _sync_robot_action_layout(client_config, robot_config, vla_client)
 
-    robot, _ = _get_robot(client_config.robots.type, robot_config)
+    robot, _ = _get_robot(client_config.robots.type, robot_config, client_config)
     if current_robot is robot:
         _bind_robot_to_vla_client(vla_client, robot)
         return robot
