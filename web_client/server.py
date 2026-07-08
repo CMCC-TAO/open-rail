@@ -446,6 +446,7 @@ def _apply_flat_patch_new(config, patch: dict):
             continue
 
         value = patch[dotkey]
+        # logger.info(f"Applied config key= {dotkey}, value = {value}")
         if isinstance(current_val, enum.Enum):
             enum_cls = current_val.__class__
             try:
@@ -1107,6 +1108,7 @@ async def patch_config(req: ConfigPatchRequest):
                 else:
                     pass
             elif k.startswith('controller.speed'):
+                # print(f"Debug: key={k}, value={flat[k]}")
                 if current_vla_client is not None:
                     current_vla_client.set_observe_period(float(flat[k]))
                 else:
