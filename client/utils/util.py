@@ -200,9 +200,9 @@ def parse_action_layout(action_layout):
         if seen_manual:
             raise ValueError('manual policy segments must be trailing')
         action_dim = max(action_dim, v['end'])
-        if policy == 'gradual':
+        if policy in ('gradual', 'joint'):
             gradual_indices.extend(range(v['start'], v['end']))
-        elif policy == 'stepwise':
+        elif policy in ('stepwise', 'hand', 'gripper'):
             stepwise_indices.extend(range(v['start'], v['end']))
         else:
             raise ValueError(f'unknown action policy: {policy}')

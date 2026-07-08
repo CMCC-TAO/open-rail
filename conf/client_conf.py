@@ -73,6 +73,7 @@ def get_intra_chunk_config() -> ConfigDict:
     config.max_gripper_action_threshold = 0.95  # Maximum gripper action threshold, values above this are set to 1.0
     config.max_joint_fitting_workers = 14
     config.max_gripper_fitting_workers = 2
+    config.max_hand_fitting_workers = 12
     config.max_head_fitting_workers = 2
     config.fitting_num_samples = 64
     config.fitting_deg = 4  # Polynomial fitting degree
@@ -126,7 +127,7 @@ def get_controller_config() -> ConfigDict:
             - gripper_offset: Gripper command forward offset with respect to arm command in frames
     """
     config = ConfigDict()
-    config.wait_time = 10  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
+    config.wait_time = 200  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
     config.period = 3.75   # Control period for sending command to robot in milliseconds
     config.speed = 1.0     # The execution speed with respect to tele-operation speed
     config.raw_fps = 30    # The FPS of the dataset used to train vla/wam model

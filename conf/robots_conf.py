@@ -234,7 +234,7 @@ def get_unitree_g1_config():
     config.reset_robot_pos = [0.0] * 26
     config.action_layout = {
         'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
-        'gripper': {'start': 14, 'end': 26, 'policy': 'stepwise'},
+        'hand': {'start': 14, 'end': 26, 'policy': 'hand'},
     }
     return config
 

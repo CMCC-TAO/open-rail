@@ -551,6 +551,7 @@ def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
     if robot_config is None or not hasattr(robot_config, 'action_layout'):
         return
     layout = robot_config.action_layout
+    client_config.action_layout = layout
     client_config.rdm.action_layout = layout
     client_config.intra_chunk.action_layout = layout
     if vla_client is not None:

@@ -1,6 +1,15 @@
 # VLA-RAIL Client Configuration
 # Auto-generated — edit values as needed
 
+action_layout:
+  arm:
+    end: 14
+    policy: gradual
+    start: 0
+  hand:
+    end: 26
+    policy: hand
+    start: 14
 controller:
   gripper_offset: 5
   period: 3.75
@@ -26,9 +35,9 @@ intra_chunk:
       end: 14
       policy: gradual
       start: 0
-    gripper:
+    hand:
       end: 26
-      policy: stepwise
+      policy: hand
       start: 14
   filter_window_size: 4
   fitting_deg: 4
@@ -39,6 +48,7 @@ intra_chunk:
   joint_dim: 14
   max_gripper_action_threshold: 0.95
   max_gripper_fitting_workers: 2
+  max_hand_fitting_workers: 12
   max_head_fitting_workers: 2
   max_joint_fitting_workers: 14
   min_gripper_action_threshold: 0.05
@@ -55,9 +65,9 @@ rdm:
       end: 14
       policy: gradual
       start: 0
-    gripper:
+    hand:
       end: 26
-      policy: stepwise
+      policy: hand
       start: 14
   max_len: 100
   mode: async
@@ -83,7 +93,7 @@ record:
       shape:
         channel: 3
         height: 480
-        width: 848
+        width: 640
     cam.hand_right:
       encode:
         codec: mp4v
@@ -92,7 +102,7 @@ record:
       shape:
         channel: 3
         height: 480
-        width: 848
+        width: 640
     cam.head:
       encode:
         codec: mp4v
@@ -100,8 +110,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 720
-        width: 1280
+        height: 480
+        width: 640
     chunks_size: 1000
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
@@ -116,6 +126,7 @@ record:
     total_tasks: 0
     total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
+  record_exp_data: false
   save_dir: data/recording
   save_raw: true
   switch: false
@@ -478,9 +489,9 @@ robots:
         end: 14
         policy: gradual
         start: 0
-      gripper:
+      hand:
         end: 26
-        policy: stepwise
+        policy: hand
         start: 14
     reset_robot_pos:
     - 0.3
