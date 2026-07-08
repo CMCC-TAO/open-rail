@@ -1,8 +1,11 @@
 import zmq
 import json
 import pickle
+import logging
 import threading
+import time
 from ml_collections import ConfigDict
+
 
 class ZMQClient():
     """ZMQ client for communication with VLA inference server.
@@ -17,15 +20,180 @@ class ZMQClient():
         Args:
             config (ConfigDict): Configuration containing client address and other parameters.
         """
+        self.logger = logging.getLogger(__name__)
         self.config = config
         self.context = zmq.Context()
-        self.dealer = self.context.socket(zmq.DEALER)
-        # self.dealer.setsockopt(zmq.SNDTIMEO, 5000)  # 5 second timeout
-        self.dealer.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
-        self.dealer.connect(config.client_addr)
-        self._closed = False
+
+        self.client_addr = f'tcp://{config.ip}:{config.port}'  # Client connection address and port
+        self.dealer = self._create_dealer(hwm=1)
+        self.heartbeat_dealer = self._create_dealer(hwm=100)
+        
+        self.is_closed = False
+        self.is_connected = False
         self._close_lock = threading.Lock()
-        print(f'ZMQ client started, connected to: {config.client_addr}')
+        self._reconnect_lock = threading.Lock()
+        
+        # Heartbeat thread
+        self.heartbeat_thread = None
+        self.last_heartbeat_time = time.time()
+        self.heartbeat_info = {}
+        
+        self.logger.info(f'ZMQ client started, connected to: {self.client_addr}')
+        
+        # Start heartbeat thread
+        self.start_heartbeat()
+
+    def _create_dealer(self, hwm=1):
+        """Create and connect a DEALER socket."""
+        dealer = self.context.socket(zmq.DEALER)
+        dealer.setsockopt(zmq.SNDHWM, hwm)
+        dealer.connect(self.client_addr)
+        return dealer
+
+    def start_heartbeat(self):
+        """Start the heartbeat thread to detect connection status."""
+        self.heartbeat_thread = threading.Thread(target=self._heartbeat_worker, daemon=True)
+        self.heartbeat_thread.start()
+
+    def send_heartbeat(self):
+        """Send heartbeat ping through dedicated heartbeat dealer."""
+        if self.is_closed:
+            return False
+
+        try:
+            data = pickle.dumps({'type': 'heartbeat', 'timestamp': time.time()})
+            meta = json.dumps({'action': 'ping'}).encode('utf8')
+            self.heartbeat_dealer.send_multipart([data, meta], flags=zmq.NOBLOCK)
+            return True
+        except zmq.ZMQError as e:
+            if self.is_closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM, zmq.EAGAIN):
+                return False
+            return False
+        except Exception as e:
+            self.logger.error(f"Error sending heartbeat: {e}")
+            return False
+
+    def receive_heartbeat(self, timeout_ms=500):
+        """Receive heartbeat response through dedicated heartbeat dealer."""
+        if self.is_closed:
+            return False
+
+        try:
+            if self.heartbeat_dealer.poll(timeout=timeout_ms) == 0:
+                return False
+
+            parts = self.heartbeat_dealer.recv_multipart()
+            if len(parts) < 2:
+                return False
+
+            data = pickle.loads(parts[0])
+            meta = json.loads(parts[1].decode('utf8'))
+
+            if isinstance(data, dict) and data.get('type') == 'heartbeat' and meta.get('action') == 'pong':
+                self.heartbeat_info = data
+                self.last_heartbeat_time = time.time()
+                self.is_connected = True
+                return True
+            return False
+        except zmq.ZMQError as e:
+            if self.is_closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM):
+                return False
+            self.logger.error(f"Error receiving heartbeat: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error receiving heartbeat: {e}")
+            return False
+
+    def _heartbeat_worker(self):
+        """Heartbeat worker function to periodically send heartbeat messages."""
+        while not self.is_closed:
+            time.sleep(self.config.heartbeat_interval / 1000)
+
+            if self.is_closed:
+                break
+
+            heartbeat_ok = False
+            with self._reconnect_lock:
+                if self.send_heartbeat():
+                    heartbeat_ok = self.receive_heartbeat(timeout_ms=1500)
+
+            if not heartbeat_ok:
+                self.logger.warning(f"Heartbeat failed, connection may be lost, is_closed={self.is_closed}")
+                self.is_connected = False
+                self._attempt_reconnect()
+
+    def _attempt_reconnect(self):
+        """Attempt to reconnect to the server."""
+        with self._reconnect_lock:
+            # Close old sockets
+            try:
+                self.dealer.close(linger=0)
+            except Exception:
+                pass
+
+            try:
+                self.heartbeat_dealer.close(linger=0)
+            except Exception:
+                pass
+
+            # Recreate sockets
+            self.dealer = self._create_dealer(hwm=1)
+            self.heartbeat_dealer = self._create_dealer(hwm=100)
+
+            # Test connection via dedicated heartbeat dealer
+            if self.send_heartbeat() and self.receive_heartbeat(timeout_ms=500):
+                self.logger.info("Reconnection successful")
+                self.is_connected = True
+                self.last_heartbeat_time = time.time()
+            else:
+                self.logger.warning("Reconnection unsuccessful")
+            
+    def update_connection(self, new_ip=None, new_port=None):
+        """Update connection parameters and reconnect to the server.
+
+        Args:
+            new_ip (str, optional): New IP address to connect to
+            new_port (int, optional): New port to connect to
+        """
+        with self._reconnect_lock:
+            # Close old sockets
+            try:
+                self.dealer.close(linger=0)
+            except Exception:
+                pass
+
+            try:
+                self.heartbeat_dealer.close(linger=0)
+            except Exception:
+                pass
+
+            # Create new sockets and connect
+            try:
+                # Update the connection address
+                if new_ip is None:
+                    new_ip = self.config.ip
+                if new_port is None:
+                    new_port = self.config.port
+                self.client_addr = f'tcp://{new_ip}:{new_port}'
+                self.logger.info(f"Updating connection to: {self.client_addr}")
+                print(f"Updating connection to: {self.client_addr}")
+
+                self.dealer = self._create_dealer(hwm=1)
+                self.heartbeat_dealer = self._create_dealer(hwm=100)
+
+                # Test connection with dedicated heartbeat dealer
+                if self.send_heartbeat() and self.receive_heartbeat(timeout_ms=500):
+                    self.logger.info("Connection update successful")
+                    self.is_connected = True
+                    self.last_heartbeat_time = time.time()
+                    return True
+
+                self.logger.error("Connection test failed after update")
+                return False
+
+            except Exception as e:
+                self.logger.error(f"Connection update failed: {e}")
+                return False
 
     def recvMessage(self, timeout_ms=500):
         """Receive message from the VLA inference server.
@@ -36,31 +204,49 @@ class ZMQClient():
         Returns:
             dict: Message containing 'data' and 'meta' fields, or None if no data/error/closed.
         """
-        if self._closed:
+        if self.is_closed:
+            return None
+        if not self.is_connected:
             return None
 
         try:
             if self.dealer.poll(timeout=timeout_ms) != 0:
                 parts = self.dealer.recv_multipart()
                 if len(parts) >= 2:
+                    # Check if this is a heartbeat response
+                    data = pickle.loads(parts[0])
+                    meta = json.loads(parts[1].decode('utf8'))
+                    
+                    # Handle heartbeat responses
+                    if isinstance(data, dict) and data.get('type') == 'heartbeat':
+                        # print(f"Debug: heartbeat_info={data}")
+                        self.heartbeat_info = data
+                        self.last_heartbeat_time = time.time()
+                        self.is_connected = True
+                        # Don't return heartbeat responses to the caller, continue to next message
+                        if meta.get('action') == 'pong':
+                            return self.recvMessage(timeout_ms)  # Recursively get next message
+                    
                     return {
-                        'data': pickle.loads(parts[0]),
-                        'meta': json.loads(parts[1].decode('utf8')),
+                        'data': data,
+                        'meta': meta,
                     }
-                print("Received data has issues")
+                self.logger.warning("Received data has issues")
             return None
         except zmq.ZMQError as e:
             # Socket may be closed concurrently during shutdown.
-            if self._closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM):
+            if self.is_closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM):
                 return None
-            print(f"Error receiving message: {e}")
+            self.logger.error(f"Error receiving message: {e}")
             import traceback
             traceback.print_exc()
+            self.is_connected = False
             return None
         except Exception as e:
-            print(f"Error receiving message: {e}")
+            self.logger.error(f"Error receiving message: {e}")
             import traceback
             traceback.print_exc()
+            self.is_connected = False
             return None
 
     def sendMessage(self, data, meta=None):
@@ -69,7 +255,7 @@ class ZMQClient():
         Returns:
             bool: True if sent successfully, False otherwise.
         """
-        if self._closed:
+        if self.is_closed:
             return False
 
         if meta is None:
@@ -79,33 +265,55 @@ class ZMQClient():
             data = pickle.dumps(data)
             meta = json.dumps(meta).encode('utf8')
             self.dealer.send_multipart([data, meta], flags=zmq.NOBLOCK)
+            # print(f"DEBUG: sending data")
             return True
         except zmq.ZMQError as e:
+            # self.logger.error(f"Error sending message: {e}")
+            # import traceback
+            # traceback.print_exc()
+            self.is_connected = False
             # EAGAIN means HWM/backpressure in non-blocking mode; treat as soft failure.
-            if self._closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM, zmq.EAGAIN):
+            if self.is_closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM, zmq.EAGAIN):
                 return False
-            print(f"Error sending message: {e}")
-            import traceback
-            traceback.print_exc()
             return False
         except Exception as e:
-            print(f"Error sending message: {e}")
-            import traceback
-            traceback.print_exc()
+            self.logger.error(f"Error sending message: {e}")
+            # import traceback
+            # traceback.print_exc()
+            self.is_connected = False
             return False
+
+    def get_heartbeat_info(self):
+        """Get current connection status.
+        
+        Returns:
+            dict: Connection status information including connectivity and last heartbeat time.
+        """
+        # print(f"Debug: heartbeat_info: {self.heartbeat_info}")
+        return self.heartbeat_info.copy()
 
     def close(self):
         """Close the ZMQ client and clean up resources."""
         with self._close_lock:
-            if self._closed:
+            if self.is_closed:
                 return
-            self._closed = True
+            self.is_closed = True
+            
+            # Stop heartbeat thread
+            if self.heartbeat_thread:
+                self.heartbeat_thread.join(timeout=1)
+            self.is_connected = False
+            
             try:
                 self.dealer.close(linger=0)
+            except Exception:
+                pass
+            try:
+                self.heartbeat_dealer.close(linger=0)
             except Exception:
                 pass
             try:
                 self.context.term()
             except Exception:
                 pass
-        print(f'ZMQ client closed, connection address: {self.config.client_addr}')
+        self.logger.info(f'ZMQ client closed, connection address: {self.client_addr}')

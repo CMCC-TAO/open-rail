@@ -58,7 +58,7 @@ const TRAJ_RENDER_POINT_MAX = 700;
 // Default trajectory chart update interval in ms (20 FPS)
 const DEFAULT_TRAJ_UPDATE_MS = 50;
 
-// Per-joint colour palette (14 colours, one per joint L0-L6 R0-R6)
+// Base per-joint colour palette; extra joints get generated colours at runtime.
 const JOINT_COLORS = [
   // L0-L6: High contrast bright colors
   'rgb(220, 20, 60)',   // L0 - Crimson red
@@ -135,6 +135,12 @@ const App = {
     paused: true,
     // Number of joints (determined from first data push)
     numJoints: 0,
+    // Active robot action_layout segment shown in the trajectory panel
+    actionStart: 0,
+    actionEnd: 0,
+    actionName: 'arm',
+    jointLabels: [],
+    jointSelectionInitialized: false,
     // Which joints to display  Set<number>
     selectedJoints: new Set(),
     // Data buffer: { state: [...], action_fitted: [...], action_raw: [...] }
@@ -165,4 +171,3 @@ const App = {
   latestState: [],
   isRecording: false,
 };
-

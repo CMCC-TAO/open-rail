@@ -22,6 +22,7 @@ def get_client_config():
             - record: Data recording configuration
             - Various inference and control parameters
     """
+    # Note: Don't define any new fields in root dict, please define them in the respective sub-configs.
     config = ConfigDict()
     config.rdm = get_rdm_config()
     config.intra_chunk = get_intra_chunk_config()
@@ -29,7 +30,6 @@ def get_client_config():
     config.controller = get_controller_config()
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
-    # config.vis_zmq = get_vis_zmq_config()
     config.visualize = get_visualize_config()
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
@@ -84,13 +84,34 @@ def get_intra_chunk_config() -> ConfigDict:
 
 def get_inter_chunk_config() -> ConfigDict:
     config = ConfigDict()
-    config.inter_chunk_mode = 'min_jerk'  # inter-chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline', 'sync')
-    config.search_length = 100  # Forward search length. Note: robot to hesitate, increase it.
-    config.smooth_action = False  # Enable action smoothing (Beta)
-    config.smooth_length = 150  # Action smoothing length
-    config.smooth_base = 0.0  # Base value for action smoothing, smaller values mean more smoothing
-    config.smooth_ratio = 0.75  # Action smoothing ratio, recommended 0.5
+    config.inter_chunk_mode = 'min_jerk'  # choices = ('search_action', 'smooth_velocity', 'min_jerk', 'sync')
+    config.search_action = get_search_action_config()
+    config.smooth_velocity = get_smooth_velocity_config()
+    config.min_jerk = get_min_jerk_config()
+    config.sync = get_sync_inter_chunk_config()
     return config
+
+def get_search_action_config() -> ConfigDict:
+    config = ConfigDict()
+    config.search_length = 100  # Forward search length. Note: if robot hesitates, increase it.
+    return config
+
+def get_smooth_velocity_config() -> ConfigDict:
+    config = ConfigDict()
+    config.max_vel = 2.0
+    config.max_acc = 5.0
+    config.kp = 5.0
+    config.kd = 2.0
+    return config
+
+def get_min_jerk_config() -> ConfigDict:
+    config = ConfigDict()
+    config.blend_threshold = 0.7
+    config.adaptive_factor = -1.0
+    return config
+
+def get_sync_inter_chunk_config() -> ConfigDict:
+    return ConfigDict()
 
 def get_controller_config() -> ConfigDict:
     """Generate configuration for robot controller system.
@@ -105,7 +126,7 @@ def get_controller_config() -> ConfigDict:
             - gripper_offset: Gripper command forward offset with respect to arm command in frames
     """
     config = ConfigDict()
-    config.wait_time = 200  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
+    config.wait_time = 10  # Wait time for the next inference step in millisecond. Note: if robot hesitate to action, increase it.
     config.period = 3.75   # Control period for sending command to robot in milliseconds
     config.speed = 1.0     # The execution speed with respect to tele-operation speed
     config.raw_fps = 30    # The FPS of the dataset used to train vla/wam model
@@ -130,24 +151,23 @@ def get_visualize_config() -> ConfigDict:
     """Generate configuration for web visual panels."""
     config = ConfigDict()
 
-    config.server = ConfigDict()
-    config.server.host = '0.0.0.0'
-    config.server.port = 8765
-    config.server.max_size = 10 * 1024 * 1024  # 10MB
-    config.server.ping_interval = 20  # Ping interval in milliseconds
-    config.server.ping_timeout = 10  # Ping timeout in seconds
+    # config.server = ConfigDict()
+    config.host = '0.0.0.0'
+    config.port = 8765
+    config.max_size = 10 * 1024 * 1024  # 10MB
+    config.ping_interval = 20  # Ping interval in milliseconds
+    config.ping_timeout = 10  # Ping timeout in seconds
+    config.updata_fps = 30
 
     config.camera = ConfigDict()
     config.camera.open_head = True
     config.camera.open_wrist_left = True
     config.camera.open_wrist_right = True
-    config.camera.update_interval_ms = 33
 
     config.trajectory = ConfigDict()
     config.trajectory.play = False
     config.trajectory.source = ['State']
     config.trajectory.selected_joints = [0, 1, 2, 3]
-    config.trajectory.update_interval_ms = 50
     config.trajectory.window_span_sec = 10.0
 
     return config

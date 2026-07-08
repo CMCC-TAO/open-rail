@@ -7,15 +7,19 @@ function renderStats(data) {
   App.isControlRunning = !!(data?.control_running ?? (data?.running && !data?.paused));
   setRunningUI(data.running, data.paused ?? false);
 
+  $('val-obv-fps').textContent = data.obv_fps != null
+    ? Number(data.obv_fps).toFixed(1) + ' fps' : '–';
   $('val-infer-count').textContent = data.infer_count ?? '–';
   $('img-proc-time').textContent   = data.img_proc_time != null
     ? Number(data.img_proc_time).toFixed(1) + ' ms' : '–';
   $('val-infer-time').textContent  = data.avg_infer_time != null
     ? (data.avg_infer_time * 1000).toFixed(1) + ' ms' : '–';
-  $('val-traj-time').textContent   = data.avg_traj_time != null
-    ? (data.avg_traj_time * 1000).toFixed(1) + ' ms' : '–';
-  $('val-obv-fps').textContent = data.obv_fps != null
-    ? Number(data.obv_fps).toFixed(1) + ' fps' : '–';
+  $('val-intra-chunk-time').textContent   = data.avg_intra_traj_time != null
+    ? (data.avg_intra_traj_time * 1000).toFixed(1) + ' ms' : '–';
+  $('val-inter-chunk-time').textContent   = data.avg_inter_traj_time != null
+    ? (data.avg_inter_traj_time * 1000).toFixed(1) + ' ms' : '–';
+  $('val-net-latency').textContent   = data.avg_comm_time != null
+    ? (data.avg_comm_time * 1000).toFixed(1) + ' ms' : '–';
 
   updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
 
@@ -44,6 +48,46 @@ function renderStats(data) {
   setResourceValue(bwEl, Number.isFinite(bwVal) ? bwVal.toFixed(1) + 'M' : '--', 'NET');
 
   App.latestState = Array.isArray(data.current_state) ? data.current_state.slice() : [];
+  
+  // Update ZMQ info panel with data from the server
+  updateZmqInfoPanel(data);
+  // Update ZMQ indicator based on zmq_connected status from server
+  if (typeof data.zmq_connected !== 'undefined') {
+    updateZMQIndicator(!!data.zmq_connected);
+  }
+
+}
+
+// Function to update ZMQ info panel
+function updateZmqInfoPanel(data) {
+  if (!data) return;
+  
+  // Update the individual fields in the ZMQ info panel
+  const serverAddressElement = document.getElementById('zmq-server-address');
+  // const portElement = document.getElementById('zmq-port');
+  const modelTypeElement = document.getElementById('zmq-model-type');
+  const modelPathElement = document.getElementById('zmq-model-path');
+  const languageCmdElement = document.getElementById('zmq-language-cmd');
+  const timestampElement = document.getElementById('zmq-timestamp');
+  
+  if (serverAddressElement && data.server_ip && data.server_port) {
+    serverAddressElement.textContent = `--tcp://${data.server_ip}:${data.server_port}`
+  }
+  
+  if (modelTypeElement && data.model_type) {
+    modelTypeElement.textContent = `--${data.model_type}`;
+  }
+  
+  if (modelPathElement && data.model_path) {
+    modelPathElement.textContent = `--${data.model_path}`;
+  }
+  
+  if (languageCmdElement && data.lang_cmd) {
+    languageCmdElement.textContent = `--${data.lang_cmd}`;
+  }
+  if (timestampElement && data.timestamp) {
+    timestampElement.textContent = `--${data.timestamp}`;
+  }
 }
 
 function renderKV(containerId, obj) {
@@ -109,12 +153,11 @@ async function handleAutoModeCompletion(progress, subTaskId = null) {
     });
     App.config = patchRes.config || App.config;
 
-    const display = $('conf-path-display');
-    const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-    if (cfgPath) {
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
       await apiFetch('/api/client/config/save', {
         method: 'POST',
-        body: JSON.stringify({ path: cfgPath }),
+        body: JSON.stringify({ path: confRes.path }),
       });
     }
 
@@ -136,7 +179,7 @@ async function handleAutoModeCompletion(progress, subTaskId = null) {
   }
 }
 
-function renderSubTask(subTaskId = null) {
+async function renderSubTask(subTaskId = null) {
   // console.log('renderSubTask called', { subTaskId });
 
   const autoChk = $('chk-lang-auto-mode');
@@ -200,7 +243,7 @@ function renderSubTask(subTaskId = null) {
   const lang = subtasks[targetIdx];
   if (typeof lang === 'string' && lang.trim()) {
     textEl.value = lang;
-    sendLanguageSet(lang);
+    await sendLanguageSet(lang);
   }
 }
 
@@ -263,6 +306,13 @@ function setThreadControlUI() {
   if (controlSub) controlSub.textContent = controlRunning ? 'Stop' : 'Start';
 }
 
+function applyThreadState(data) {
+  if (!data) return;
+  if (typeof data.observe_running === 'boolean') App.isObserveRunning = data.observe_running;
+  if (typeof data.inference_running === 'boolean') App.isInferenceRunning = data.inference_running;
+  if (typeof data.control_running === 'boolean') App.isControlRunning = data.control_running;
+}
+
 function syncStartPauseButtons(running, paused = false) {
   const btnStart = $('btn-start');
   const btnPause = $('btn-pause');
@@ -293,6 +343,7 @@ function syncStartPauseButtons(running, paused = false) {
 function setRunningUI(running, paused = false) {
   const unchanged = (App.isRunning === running && App.isPaused === paused);
   const wasRunning = App.isRunning === true;
+  const wasPaused  = App.isPaused === true;
   App.isRunning = running;
   App.isPaused  = paused;
 
@@ -337,6 +388,43 @@ function setRunningUI(running, paused = false) {
   setThreadControlUI();
 }
 
+function isRuntimeShortcutTypingTarget(el) {
+  if (!el) return false;
+  const tag = (el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+}
+
+function clickButtonIfReady(id) {
+  const btn = $(id);
+  if (!btn || btn.disabled || btn.dataset.pending === '1') return;
+  btn.click();
+}
+
+function setupRuntimeShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    if (e.repeat || isRuntimeShortcutTypingTarget(e.target)) return;
+
+    const key = e.key.toLowerCase();
+    const isSpace = e.code === 'Space' || key === ' ';
+    if (isSpace && !e.ctrlKey) {
+      e.preventDefault();
+      clickButtonIfReady('btn-pause');
+      return;
+    }
+
+    if (isSpace && e.ctrlKey) {
+      e.preventDefault();
+      clickButtonIfReady('btn-control');
+      return;
+    }
+
+    if (key === 'r' && e.shiftKey) {
+      e.preventDefault();
+      clickButtonIfReady('btn-reset');
+    }
+  });
+}
+
 // ═══════════════════════════════════════════════════════
 //  Event wiring — config, client control, manual ctrl
 // ═══════════════════════════════════════════════════════
@@ -350,7 +438,7 @@ function _confRelPath(fullPath) {
 
 /**
  * 初始化并绑定页面中各功能面板的事件处理程序
- * - 配置面板：支持通过文件选择器加载配置、保存、另存为、搜索过滤、应用待改动、重置为服务器配置；加载成功后渲染配置树与语言预设，并在界面上显示配置相对路径
+ * - 配置面板：支持下拉选择配置文件、保存、另存为、搜索过滤、应用待改动、重置为服务器配置；加载成功后渲染配置树与语言预设，并在界面上显示配置相对路径
  * - 布局控制：支持折叠配置面板并动态调整主布局列宽
  * - 运行控制：绑定客户端的 Start/Stop/Pause/Resume/Reset 按钮，必要时在启动前自动提交待改动补丁
  * - 数据录制/回放：切换录制状态、选择回放目录并发送回放命令，同时在界面上显示选择的目录
@@ -361,40 +449,92 @@ function _confRelPath(fullPath) {
  * @returns {void} 无返回值
  * @throws {Error} 当必需的 DOM 元素缺失导致事件绑定失败，或个别未被内部捕获的 API/渲染异常发生时可能抛出错误
  */
-function wireEvents() {
-  // Config file bar — Load via file picker
-  $('conf-file-input').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const path = file.path || (CONF_DIR + '/' + file.name);
-    // const path = file.path || null;
+async function wireEvents() {
+  // Add event listeners for ZMQ indicator hover
+  const zmqIndicatorContainer = document.getElementById('zmq-indicator-container');
+  const zmqInfoPanel = document.getElementById('zmq-info-panel');
+  
+  if (zmqIndicatorContainer && zmqInfoPanel) {
+    zmqIndicatorContainer.addEventListener('mouseenter', () => {
+      zmqInfoPanel.classList.remove('hidden');
+    });
+    
+    zmqIndicatorContainer.addEventListener('mouseleave', () => {
+      zmqInfoPanel.classList.add('hidden');
+    });
+    
+    // zmqInfoPanel.addEventListener('mouseenter', () => {
+    //   zmqInfoPanel.classList.remove('hidden');
+    // });
+    
+    // zmqInfoPanel.addEventListener('mouseleave', () => {
+    //   zmqInfoPanel.classList.add('hidden');
+    // });
+  }
+  
+  // Config file dropdown — load selected config
+  const confSelect = $('conf-file-select');
+  if (confSelect) {
+    // Load available yaml files
     try {
-      const res = await apiFetch('/api/client/config/load', { method: 'POST', body: JSON.stringify({ path }) });
-      App.config = res.config || {}; App.pendingPatch = {};
-      clearPending();
-      renderConfigTree(App.config);
-      renderRecordingConfigTree(App.config);
-      await loadDefaultLangFile();
-      applyLangConfigSelection();
-      applyVisualConfig(App.config);
-      // Show relative path from /conf onward
-      const display = $('conf-path-display');
-      if (display) {
-        const rel = _confRelPath(path);
-        display.textContent = rel;
-        display.title = path;
-        display.dataset.fullPath = path;
+      const res = await apiFetch('/api/client/config/yaml_files');
+      const files = res.files || [];
+      // confSelect.innerHTML = '<option value="">-- Select Config File --</option>';
+      files.forEach(file => {
+        const option = document.createElement('option');
+        option.value = file;
+        option.textContent = file;
+        confSelect.appendChild(option);
+      });
+      
+      // Set default value from CONF_FILE
+      const defaultFile = String(CONF_FILE).split('/').pop();
+      if (files.includes(defaultFile)) {
+        confSelect.value = defaultFile;
       }
-      toast('Config file loaded.', 'ok');
-    } catch (e) { /* toasted */ }
-    e.target.value = '';
-  });
+    } catch (e) {
+      console.error('Failed to load yaml files:', e);
+    }
+
+    // Handle config file selection change
+    confSelect.addEventListener('change', async (e) => {
+      const selectedFile = e.target.value;
+      if (!selectedFile) return;
+      
+      try {
+        const res = await apiFetch('/api/client/config/load', { 
+          method: 'POST', 
+          body: JSON.stringify({ path: selectedFile }) 
+        });
+        App.config = res.config || {}; 
+        App.pendingPatch = {};
+        clearPending();
+        renderConfigTree(App.config);
+        renderRecordingConfigTree(App.config);
+        await loadDefaultLangFile();
+        applyLangConfigSelection();
+        applyVisualConfig(App.config);
+        const confRes = await apiFetch('/api/client/config/path', { 
+          method: 'POST', 
+          body: JSON.stringify({ path: selectedFile }) 
+        });
+        toast(`Config ${selectedFile} loaded.`, 'ok');
+      } catch (e) {
+        toast('Failed to load config file.', 'error');
+        console.error(e);
+      }
+    });
+  }
 
   // Save As — modal with conf/ as default prefix
-  $('btn-saveas-file').addEventListener('click', () => {
-    const display = $('conf-path-display');
-    const current = (display && display.dataset.fullPath) || '';
-    $('saveas-path').value = current || (CONF_DIR + '/my_config.py');
+  $('btn-saveas-file').addEventListener('click', async () => {
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      $('saveas-path').value = confRes.path.replace(/\.yaml$/, '_1.yaml');
+    }
+    else {
+      $('saveas-path').value = 'new_conf.yaml';
+    }
     $('modal-saveas').classList.remove('hidden');
   });
   $('btn-saveas-confirm').addEventListener('click', async () => {
@@ -402,10 +542,8 @@ function wireEvents() {
     if (!path) return;
     $('modal-saveas').classList.add('hidden');
     try {
-      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
-      const display = $('conf-path-display');
-      if (display) { display.textContent = _confRelPath(path); display.title = path; display.dataset.fullPath = path; }
-      toast(`Saved as ${_confRelPath(path)}`, 'ok');
+      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: path }) });
+      toast(`Saved as ${path}`, 'ok');
     } catch (e) { /* toasted */ }
   });
   $('btn-saveas-cancel').addEventListener('click', () => $('modal-saveas').classList.add('hidden'));
@@ -430,15 +568,15 @@ function wireEvents() {
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
-      toast('Config applied.', 'ok');
       // Auto-save after apply
-      const display = $('conf-path-display');
-      const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-      if (path) {
-        try {
-          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
-          toast(`Saved to ${_confRelPath(path)}`, 'ok');
-        } catch (_) { /* toasted */ }
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
+        toast(`Config ${confRes.path} applied.`, 'ok');
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          body: JSON.stringify({ path: confRes.path }),
+        });
+        toast(`Saved to ${confRes.path}`, 'ok');
       }
     } catch (e) { /* toasted */ }
   });
@@ -500,6 +638,7 @@ function wireEvents() {
         try {
           const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
           App.config = res.config || App.config;
+          applyVisualConfig(App.config);
           App.pendingPatch = {};
           clearPending();
         } catch (e) { 
@@ -549,12 +688,7 @@ function wireEvents() {
 
     try {
       const res = await apiFetch('/api/client/observe/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
+      applyThreadState(res?.data);
       connectCamWS();
       // syncRuntimeCameraConfig();
       // setThreadControlUI();
@@ -576,12 +710,7 @@ function wireEvents() {
 
     try {
       const res = await apiFetch('/api/client/infer/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
+      applyThreadState(res?.data);
       setThreadControlUI();
     } catch (_) { /* toasted */ }
     finally {
@@ -598,12 +727,7 @@ function wireEvents() {
 
     try {
       const res = await apiFetch('/api/client/control/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
-      const data = res?.data;
-      if (data) {
-        App.isObserveRunning = !!data.observe_running;
-        App.isInferenceRunning = !!data.inference_running;
-        App.isControlRunning = !!data.control_running;
-      }
+      applyThreadState(res?.data);
       setThreadControlUI();
     } catch (_) { /* toasted */ }
     finally {
@@ -616,6 +740,7 @@ function wireEvents() {
   // Delegated module setups
   setupLanguageEvents();
   setupManualControlEvents();
+  setupRuntimeShortcuts();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -635,9 +760,6 @@ function startStatusPoll() {
   }, 4000);
 }
 
-// ═══════════════════════════════════════════════════════
-//  Init
-// ═══════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', () => {
   setupCameraPanel();
   setupTrajPanel();
@@ -645,13 +767,13 @@ document.addEventListener('DOMContentLoaded', () => {
   setupLeftPanelAccordion();
   setupRecordingPanel();
   createUnifiedChart();                  // create single unified trajectory chart
-  buildJointSelector(TRAJ_JOINT_COUNT);  // pre-build fixed 14-joint selector
+  buildJointSelector();                  // build from the active robot action_layout
   connectWS();
   startStatusPoll();
-  wireEvents();
   initConfDir().then(async () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
     applyLangConfigSelection(true);
+    wireEvents();
   });
 });

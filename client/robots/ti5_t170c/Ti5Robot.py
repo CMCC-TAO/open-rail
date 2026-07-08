@@ -1,66 +1,75 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64MultiArray, Bool
 from sensor_msgs.msg import JointState
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
 from collections import deque
 import threading
 import time
 import numpy as np
+from ml_collections import ConfigDict
+
+# ====== Import String message type ======
+from std_msgs.msg import String
+
 
 class Ti5Robot(Node):
-    def __init__(self):
+    def __init__(self, config):
         super().__init__("ti5_robot_node")
 
-        # ======================
-        # 订阅话题（状态读取）
-        # ======================
-        # self.hand_cmd_counter = 0
+        # ============================================
+        # Subscribe to topics (read robot state)
+        # ============================================
+        # self.topic_left_arm = "/left_arm/joint_states"
+        # self.topic_right_arm = "/right_arm/joint_states"
+        # self.topic_left_hand = "/left_hand/angle_state"
+        # self.topic_right_hand = "/right_hand/angle_state"
+        self.topic_left_arm = config.arms.left_arm_joint_states_topic
+        self.topic_right_arm = config.arms.right_arm_joint_states_topic
+        self.topic_left_hand = config.hands.left_hand_joint_states_topic
+        self.topic_right_hand = config.hands.right_hand_joint_states_topic
+        
+        # ====== New: ROS topic dedicated to voice wake-up for interactive robot ======
+        self.topic_wake_up = "/robot/listen/wake_up"
 
-        self.current_right_hand_state = None
-        self.current_left_hand_state = None
-        self.arm_mode = 'ros' # ros
+        # ============================================
+        # Publish topics (control output)
+        # ============================================
+        # self.topic_left_arm_cmd = "/left_arm/joint_cmd"
+        # self.topic_right_arm_cmd = "/right_arm/joint_cmd"
+        # self.topic_left_hand_cmd = "/left_hand/angle_cmd"
+        # self.topic_right_hand_cmd = "/right_hand/angle_cmd"
+        # self.topic_head_cmd = "/head_motor/joint_cmd"
+        # self.topic_waist_cmd = "/waist_motor/joint_cmd"
+        self.topic_left_arm_cmd = config.arms.left_arm_joint_cmd_topic
+        self.topic_right_arm_cmd = config.arms.right_arm_joint_cmd_topic
+        self.topic_left_hand_cmd = config.hands.left_hand_joint_cmd_topic
+        self.topic_right_hand_cmd = config.hands.right_hand_joint_cmd_topic 
+        self.topic_head_cmd = config.head.head_joint_cmd_topic
+        self.topic_waist_cmd = config.waist.waist_joint_cmd_topic
 
-        if self.arm_mode != 'ros':
-            from .tianji.tj_dual_arm import TJDualArm
-            self.tj_arm = TJDualArm()
-
-        if self.arm_mode == 'ros':  
-            self.topic_left_arm = "/left_arm/joint_states"
-            self.topic_right_arm = "/right_arm/joint_states"
-        self.topic_left_hand = "/left_hand/angle_state"
-        self.topic_right_hand = "/right_hand/angle_state"
-        self.topic_leg_pos = "/leg_motor/joint_states"
-
-        # ======================
-        # 发布话题（控制输出）
-        # ======================
-        self.topic_head_cmd = "/head_motor/joint_cmd"
-
-        if self.arm_mode == 'ros':
-            self.topic_left_arm_cmd = "/left_arm/joint_cmd"
-            self.topic_right_arm_cmd = "/right_arm/joint_cmd"
-
-        self.topic_left_hand_cmd = "/left_hand/angle_cmd"
-        self.topic_right_hand_cmd = "/right_hand/angle_cmd"
-        self.topic_leg_cmd = "/leg_motor/set_height"
-
-        # 最新状态缓存
+        # ============================================
+        # Latest state cache
+        # ============================================
         self.latest_left_arm = None
         self.latest_right_arm = None
         self.latest_left_hand = None
         self.latest_right_hand = None
-        self.latest_leg_pos = None
 
-        # 队列缓存
-        if self.arm_mode == 'ros':
-            self.queue_left_arm = deque(maxlen=30)
-            self.queue_right_arm = deque(maxlen=30)
+        # ====== Wake-up message cache ======
+        self.latest_wake_up = None
+        
+        # ============================================
+        # Message Queue
+        # ============================================
+        self.queue_left_arm = deque(maxlen=30)
+        self.queue_right_arm = deque(maxlen=30)
         self.queue_left_hand = deque(maxlen=30)
         self.queue_right_hand = deque(maxlen=30)
-        self.queue_leg = deque(maxlen=30)
+        self.state_lock = threading.Lock()
 
-        # QoS 匹配机器人
+        # ============================================
+        # QoS matched with robot
+        # ============================================
         qos_correct = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE,
@@ -69,213 +78,224 @@ class Ti5Robot(Node):
 
         qos_pub = QoSProfile(depth=10)
 
-        # ======================
-        # 订阅（读取状态）
-        # ======================
-
-        if self.arm_mode == 'ros':
-            self.create_subscription(JointState, self.topic_left_arm, self._cb_left_arm, qos_correct)
-            self.create_subscription(JointState, self.topic_right_arm, self._cb_right_arm, qos_correct)
+        # ============================================
+        # Subscription (read state data)
+        # ============================================
+        self.create_subscription(JointState, self.topic_left_arm, self._cb_left_arm, qos_correct)
+        self.create_subscription(JointState, self.topic_right_arm, self._cb_right_arm, qos_correct)
         self.create_subscription(JointState, self.topic_left_hand, self._cb_left_hand, qos_correct)
         self.create_subscription(JointState, self.topic_right_hand, self._cb_right_hand, qos_correct)
-        self.create_subscription(JointState, self.topic_leg_pos, self._cb_leg_pos, qos_correct)
+        # ====== Subscribe wake-up topic ======
+        self.create_subscription(String, self.topic_wake_up, self._cb_wake_up, qos_correct)
+
         # ======================
-        # 发布（控制机器人）
+        # Publisher (robot control)
         # ======================
-        
-        if self.arm_mode == 'ros':
-            self.pub_left_arm = self.create_publisher(JointState, self.topic_left_arm_cmd, qos_pub)
-            self.pub_right_arm = self.create_publisher(JointState, self.topic_right_arm_cmd, qos_pub)
+        self.pub_left_arm = self.create_publisher(JointState, self.topic_left_arm_cmd, qos_pub)
+        self.pub_right_arm = self.create_publisher(JointState, self.topic_right_arm_cmd, qos_pub)
         self.pub_left_hand = self.create_publisher(JointState, self.topic_left_hand_cmd, qos_pub)
         self.pub_right_hand = self.create_publisher(JointState, self.topic_right_hand_cmd, qos_pub)
-        self.pub_leg = self.create_publisher(Float64MultiArray, self.topic_leg_cmd, qos_pub)
+        self.pub_head = self.create_publisher(JointState, self.topic_head_cmd, qos_pub)
+        self.pub_waist = self.create_publisher(JointState, self.topic_waist_cmd, qos_pub)
 
-        # 固定关节名
+        # Fixed joint names
+        # self.left_arm_joint_names = [
+        #     "L_SHOULDER_P_JOINT",
+        #     "L_SHOULDER_R_JOINT",
+        #     "L_SHOULDER_Y_JOINT",
+        #     "L_ELBOW_JOINT",
+        #     "L_WRIST_Y_JOINT",
+        #     "L_WRIST_R_JOINT",
+        #     "L_WRIST_P_JOINT",
+        # ]
+        self.left_arm_joint_names = config.arms.left_arm_joint_names
 
-        if self.arm_mode == 'ros':
-            self.left_arm_joint_names = [
-                "L_SHOULDER_P_JOINT",
-                "L_SHOULDER_R_JOINT",
-                "L_SHOULDER_Y_JOINT",
-                "L_ELBOW_JOINT",
-                "L_WRIST_Y_JOINT",
-                "L_WRIST_R_JOINT",
-                "L_WRIST_P_JOINT",
-            ]
-
-            self.right_arm_joint_names = [
-                "R_SHOULDER_P_JOINT",
-                "R_SHOULDER_R_JOINT",
-                "R_SHOULDER_Y_JOINT",
-                "R_ELBOW_JOINT",
-                "R_WRIST_Y_JOINT",
-                "R_WRIST_R_JOINT",
-                "R_WRIST_P_JOINT",
-            ]
+        # self.right_arm_joint_names = [
+        #     "R_SHOULDER_P_JOINT",
+        #     "R_SHOULDER_R_JOINT",
+        #     "R_SHOULDER_Y_JOINT",
+        #     "R_ELBOW_JOINT",
+        #     "R_WRIST_Y_JOINT",
+        #     "R_WRIST_R_JOINT",
+        #     "R_WRIST_P_JOINT",
+        # ]
+        self.right_arm_joint_names = config.arms.right_arm_joint_names
         
-        self.hand_joint_names = ["thumb", "index", "middle", "ring", "pinky", "thumb_rotation"]
-
+        # self.hand_joint_names = ["pinky", "ring", "middle", "index", "thumb", "thumb_rot"]
+        # self.head_joint_names = ["NECK_Y_JOINT", "NECK_P_JOINT", "NECK_R_JOINT"]
+        # self.waist_joint_names = ["WAIST_Y_JOINT", "WAIST_R_JOINT", "WAIST_P_JOINT"]
+        self.hand_joint_names = config.hands.hand_joint_names
+        self.head_joint_names = config.head.head_joint_names
+        self.waist_joint_names = config.waist.waist_joint_names
 
         self.running = True
 
-        # 采样线程
+        # Sampling thread
         self.sample_thread = threading.Thread(target=self._sample_loop, daemon=True)
         self.sample_thread.start()
 
-        self.get_logger().info("✅ Ti5Robot 已启动：读取 + 控制 全部就绪")
+        self.get_logger().info("Ti5Robot initialized: state reading and motor control all ready")
 
-    def clear_state_buffer(self):
-        self.queue_head.clear()
+    # ============================================
+    # Wake-up topic callback function
+    # ============================================
+    def _cb_wake_up(self, msg):
+        """
+        Receive string messages from /robot/listen/wake_up
+        Message content is stored in msg.data
+        """
+        ts = self.get_clock().now().nanoseconds / 1e9  # timestamp
+        with self.state_lock:
+            self.latest_wake_up = (msg.data, ts)
+        self.get_logger().info(f"Wake-up command received: {msg.data}")
 
-        if self.arm_mode == 'ros':
-            self.queue_left_arm.clear()
-            self.queue_right_arm.clear()
-        self.queue_left_hand.clear()
+    # ============================================
+    # Get latest wake-up command (external call)
+    # ============================================
+    def get_latest_wake_up(self):
+        """
+        Return: (command string, timestamp)
+        Return (None, None) if no message received yet
+        """
+        with self.state_lock:
+            if self.latest_wake_up is None:
+                return (None, None)
+            return self.latest_wake_up
 
-        self.queue_right_hand.clear()
-        self.queue_waist.clear()
-        self.queue_leg.clear()
-
-
-    # ======================
-    # 【核心控制函数】26维动作输入
-    # ======================
+    # ==================================================================
+    # [Core Control Function] 26-dimensional action input
+    # ==================================================================
     def send_robot_action(self, action):
         action = np.asarray(action).flatten()
+
         left_arm_act = action[0:7]
         right_arm_act = action[7:14]
         left_hand_act = action[14:20]
         right_hand_act = action[20:26]
-        try:
-            leg_act = action[26:27]
-        except:
-            leg_act = None
 
-        # 左臂
-        if left_arm_act[-1] > -100:
-            if self.arm_mode == 'ros':
-                msg = JointState()
-                msg.name = self.left_arm_joint_names
-                msg.position = left_arm_act.tolist()
-                self.pub_left_arm.publish(msg)
-            else:
-                left_arm_joints = {'left_arm':left_arm_act}
-                self.tj_arm.set_joints(left_arm_joints)
+        # Left Arm
+        msg = JointState()
+        msg.name = self.left_arm_joint_names
+        msg.position = left_arm_act.tolist()
+        self.pub_left_arm.publish(msg)
 
-        # 右臂
-        if right_arm_act[-1] > -100:
+        # Right Arm
+        msg = JointState()
+        msg.name = self.right_arm_joint_names
+        msg.position = right_arm_act.tolist()
+        self.pub_right_arm.publish(msg)
 
-            if self.arm_mode == 'ros':
-                msg = JointState()
-                msg.name = self.right_arm_joint_names
-                msg.position = right_arm_act.tolist()
-                self.pub_right_arm.publish(msg)
-            else:
-                right_arm_joints = {'right_arm':right_arm_act}
-                self.tj_arm.set_joints(right_arm_joints)
+        # Left Hand
+        msg = JointState()
+        msg.name = self.hand_joint_names
+        msg.position = left_hand_act.tolist()
+        self.pub_left_hand.publish(msg)
 
-        # 左手
-        if left_hand_act[-1] > -100:
-            # if self.hand_cmd_counter > 100000:
-            #     self.hand_cmd_counter = 0
-            # if self.hand_cmd_counter % 5 == 0:
-            
-            if self.current_left_hand_state is not None:
-                left_diff = np.abs(left_hand_act - self.current_left_hand_state).sum()
-            else:
-                left_diff = 0
-            if self.current_left_hand_state is None or left_diff > 50:
-                # print("###"*30)
-                # print(left_diff)
-                msg = JointState()
-                msg.name = self.hand_joint_names
-                msg.position = left_hand_act.tolist()
-                self.pub_left_hand.publish(msg)
-                self.current_left_hand_state = left_hand_act
-                # self.hand_cmd_counter += 1
+        # Right Hand
+        msg = JointState()
+        msg.name = self.hand_joint_names
+        msg.position = right_hand_act.tolist()
+        self.pub_right_hand.publish(msg)
 
+    def send_partial_action(self, part_name, action):
+        action = np.asarray(action).flatten()
 
-        # 右手
-        if right_hand_act[-1] > -100:
-            if self.current_right_hand_state is not None:
-                right_diff = np.abs(right_hand_act - self.current_right_hand_state).sum()
-            else:
-                right_diff = 0
-            if self.current_right_hand_state is None or right_diff > 50:
-                msg = JointState()
-                msg.name = self.hand_joint_names
-                msg.position = right_hand_act.tolist()
-                self.pub_right_hand.publish(msg)
-                self.current_right_hand_state = right_hand_act
+        # Left Arm
+        if part_name == "left_arm":
+            assert len(action) == 7, "Left arm action length must be 7..."
+            msg = JointState()
+            msg.name = self.left_arm_joint_names
+            msg.position = action.tolist()
+            self.pub_left_arm.publish(msg)
+        elif part_name == "right_arm":
+            assert len(action) == 7, "Right arm action length must be 7..."
+            msg = JointState()
+            msg.name = self.right_arm_joint_names
+            msg.position = action.tolist()
+            self.pub_right_arm.publish(msg)
+        elif part_name == "left_hand":
+            assert len(action) == 6, "Left Hand action length must be 6..."
+            msg = JointState()
+            msg.name = self.hand_joint_names
+            msg.position = action.tolist()
+            self.pub_left_hand.publish(msg)
+        elif part_name == "right_hand":
+            assert len(action) == 6, "Right Hand action length must be 6..."
+            msg = JointState()
+            msg.name = self.hand_joint_names
+            msg.position = action.tolist()
+            self.pub_right_hand.publish(msg)
+        elif part_name == "head":
+            assert len(action) == 3, "Head action length must be 3..."
+            msg = JointState()
+            msg.name = self.head_joint_names
+            msg.position = action.tolist()
+            self.pub_head.publish(msg)
+        elif part_name == "waist":
+            assert len(action) == 3, "Waist action length must be 3..."
+            msg = JointState()
+            msg.name = self.waist_joint_names
+            msg.position = action.tolist()
+            self.pub_waist.publish(msg)
+        else:
+            pass
 
-        # 腿
-        if leg_act is not None:
-            msg = Float64MultiArray()
-            msg.data = leg_act.tolist()
-            self.pub_leg.publish(msg)
-
-
-    # ======================
-    # 订阅回调
-    # ======================
-
+    # =================================
+    # Subscription Callback
+    # =================================
     def _cb_left_arm(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        self.latest_left_arm = (msg, ts)
+        with self.state_lock:
+            self.latest_left_arm = (msg, ts)
 
     def _cb_right_arm(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        self.latest_right_arm = (msg, ts)
+        with self.state_lock:
+            self.latest_right_arm = (msg, ts)
 
     def _cb_left_hand(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        self.latest_left_hand = (msg, ts)
+        with self.state_lock:
+            self.latest_left_hand = (msg, ts)
 
     def _cb_right_hand(self, msg):
         ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
-        self.latest_right_hand = (msg, ts)
-    def _cb_leg_pos(self, msg):
-        self.latest_leg_pos = msg
-
+        with self.state_lock:
+            self.latest_right_hand = (msg, ts)
 
     # ======================
-    # 30fps 采样
+    # 30fps Sampling
     # ======================
     def _sample_loop(self):
         while self.running:
             start = time.time()
-            if self.latest_left_arm:
-                self.queue_left_arm.append(self.latest_left_arm)
-            if self.latest_right_arm:
-                self.queue_right_arm.append(self.latest_right_arm)
-            if self.latest_left_hand:
-                self.queue_left_hand.append(self.latest_left_hand)
-            if self.latest_right_hand:
-                self.queue_right_hand.append(self.latest_right_hand)
+            with self.state_lock:
+                if self.latest_left_arm:
+                    self.queue_left_arm.append(self.latest_left_arm)
+                if self.latest_right_arm:
+                    self.queue_right_arm.append(self.latest_right_arm)
+                if self.latest_left_hand:
+                    self.queue_left_hand.append(self.latest_left_hand)
+                if self.latest_right_hand:
+                    self.queue_right_hand.append(self.latest_right_hand)
 
             elapsed = time.time() - start
-            time.sleep(0.002)
-            # if elapsed < 1/100:
-            #     time.sleep(1/100 - elapsed)
+            if elapsed < 1/30:
+                time.sleep(1/30 - elapsed)
 
     # ======================
-    # 时间戳对齐
+    # Timestamp Alignment
     # ======================
     def _find_nearest(self, queue, target_ts):
-        if not queue:
+        with self.state_lock:
+            queue_snapshot = list(queue)
+        if not queue_snapshot:
             return (None, 0.0)
-        return min(queue, key=lambda x: abs(x[1] - target_ts))
+        return min(queue_snapshot, key=lambda x: abs(x[1] - target_ts))
 
     def get_arm_hand_states_nearest_func(self, ref_timestamp):
-        if self.arm_mode == 'ros':
-            left_arm, left_arm_ts = self._find_nearest(self.queue_left_arm, ref_timestamp)
-            right_arm, right_arm_ts = self._find_nearest(self.queue_right_arm, ref_timestamp)
-        else:
-            arm_state = self.tj_arm.get_current_joints()
-            left_arm = arm_state['left_arm'].tolist()
-            right_arm = arm_state['right_arm'].tolist()
-            left_arm_ts = arm_state['timestamp']
-            right_arm_ts = arm_state['timestamp']
+        left_arm, left_arm_ts = self._find_nearest(self.queue_left_arm, ref_timestamp)
+        right_arm, right_arm_ts = self._find_nearest(self.queue_right_arm, ref_timestamp)
         left_hand, left_hand_ts = self._find_nearest(self.queue_left_hand, ref_timestamp)
         right_hand, right_hand_ts = self._find_nearest(self.queue_right_hand, ref_timestamp)
 
@@ -284,7 +304,6 @@ class Ti5Robot(Node):
             "right_arm": right_arm,
             "left_hand": left_hand,
             "right_hand": right_hand,
-            "leg_pos": self.latest_leg_pos,
             "ref_timestamp": ref_timestamp,
             "left_arm_timestamp": left_arm_ts,
             "right_arm_timestamp": right_arm_ts,
@@ -295,19 +314,116 @@ class Ti5Robot(Node):
     def stop(self):
         self.running = False
 
-# ==============================================
-# main：统一管理两个节点 + 统一 spin + 动作控制测试
-# ==============================================
+
+# ==============================================================================================
+# Local Configuration (For testing robot joint driver when running this script alone)
+# ==============================================================================================
+def get_ti5_t170c_config():
+    """Generate configuration for Ti5 T170C robot (ROS2 bridge)."""
+    config = ConfigDict()
+
+    config.camera = ConfigDict()
+    config.camera.head_camera_topic = "/camera/d435i/color/image_raw"
+    config.camera.left_hand_camera_topic = "/camera/d405_1/color/image_raw"
+    config.camera.right_hand_camera_topic = "/camera/d405_2/color/image_raw"
+
+    config.arms = ConfigDict()
+    config.arms.left_arm_joint_cmd_topic = "/left_arm/joint_cmd"
+    config.arms.right_arm_joint_cmd_topic = "/right_arm/joint_cmd"
+    config.arms.left_arm_joint_states_topic = "/left_arm/joint_states"
+    config.arms.right_arm_joint_states_topic = "/right_arm/joint_states"
+
+    config.arms.left_arm_joint_names = [
+        "L_SHOULDER_P_JOINT",
+        "L_SHOULDER_R_JOINT",
+        "L_SHOULDER_Y_JOINT",
+        "L_ELBOW_JOINT",
+        "L_WRIST_Y_JOINT",
+        "L_WRIST_R_JOINT",
+        "L_WRIST_P_JOINT",
+    ]
+    config.arms.right_arm_joint_names = [
+        "R_SHOULDER_P_JOINT",
+        "R_SHOULDER_R_JOINT",
+        "R_SHOULDER_Y_JOINT",
+        "R_ELBOW_JOINT",
+        "R_WRIST_Y_JOINT",
+        "R_WRIST_R_JOINT",
+        "R_WRIST_P_JOINT",
+    ]
+
+    config.hands = ConfigDict()
+    config.hands.left_hand_joint_cmd_topic = "/left_hand/angle_cmd"
+    config.hands.right_hand_joint_cmd_topic = "/right_hand/angle_cmd"
+    config.hands.left_hand_joint_states_topic = "/left_hand/angle_state"
+    config.hands.right_hand_joint_states_topic = "/right_hand/angle_state"
+
+    config.hands.hand_joint_names = [
+        "pinky", "ring", "middle", "index", "thumb", "thumb_rot"
+    ]
+
+    config.waist = ConfigDict()
+    config.waist.waist_joint_cmd_topic = "/waist_motor/joint_cmd"
+    config.waist.waist_joint_states_topic = "/waist_motor/joint_states"
+
+    config.waist.waist_joint_names = [
+        "WAIST_Y_JOINT", "WAIST_R_JOINT", "WAIST_P_JOINT"
+    ]
+
+    config.head = ConfigDict()
+    config.head.head_joint_cmd_topic = "/head_motor/joint_cmd"
+    config.head.head_joint_states_topic = "/head_motor/joint_states"
+
+    config.head.head_joint_names = [
+        "NECK_Y_JOINT", "NECK_P_JOINT", "NECK_R_JOINT"
+    ]
+
+    config.reset_robot_pos = \
+      [
+        -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
+      ] + \
+      [
+        1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567, 0.4101313352460489, -0.2251850174207321, 0.3232027944991513
+      ] + \
+      [
+        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
+      ] + \
+      [
+        650.0, 650.0, 650.0, 650.0, 650.0, 250.0
+      ]
+
+    config.zero_pos = \
+      [
+        -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
+      ] + \
+      [
+        1.4875488405961936, 1.5339806547275607, -1.4787018194549504, -0.32055631145539876, 0.1102380912144111, -0.05337579029191015, 0.20508064790415614
+      ] + \
+      [
+        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
+      ] + \
+      [
+        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
+      ]
+
+    return config
+
+
+# ==========================================================================================
+# main: Manage two nodes uniformly + unified spin + action control test
+# ==========================================================================================
 def main():
+    config = get_ti5_t170c_config()
     rclpy.init()
 
     from Ti5Camera import Ti5Camera
-    print("⏳ 启动 Ti5Camera + Ti5Robot...")
-    camera = Ti5Camera()
-    robot = Ti5Robot()
+
+    print("Starting Ti5Camera + Ti5Robot...")
+    camera = Ti5Camera(config)
+    robot = Ti5Robot(config)
 
     # ======================
-    # 统一自旋线程
+    # Unified Spin Thread
     # ======================
     running = True
     def spin_worker():
@@ -318,46 +434,59 @@ def main():
     spin_thread = threading.Thread(target=spin_worker, daemon=True)
     spin_thread.start()
 
-    print("⏳ 等待相机、机器人数据...")
+    print("Waiting for camera and robot data...")
     time.sleep(2.5)
 
     # ======================
-    # 读取相机
+    # Call Fetch Images Func
     # ======================
     cam_data = camera.get_latest_image()
     if not cam_data:
-        print("❌ 未读到相机数据")
+        print("Failed to read camera data")
         running = False
         return
 
     head_img, head_ts, left_img, left_ts, right_img, right_ts = cam_data
-    print("\n✅ 相机同步完成")
-    print(f"  头部时间戳: {head_ts:.6f}, Shape: {head_img.shape}")
+    print("\n Camera synchronization completed")
+    print(f"  Head timestamp: {head_ts:.6f}, Shape: {head_img.shape}")
 
     # ======================
-    # 机器人状态对齐
+    # Robot State Alignment
     # ======================
     robot_state = robot.get_arm_hand_states_nearest_func(head_ts)
-    print("\n✅ 机器人状态对齐完成")
-    print(f"  基准时间: {robot_state['ref_timestamp']:.6f}")
+    print("\n Robot state alignment completed")
+    print(f"  Reference timestamp: {robot_state['ref_timestamp']:.6f}")
 
     # ======================
-    # 动作控制测试
+    # Action Control Test
     # ======================
     print("\n==================================================")
-    print("🤖 测试：发送26维动作 → 右手握拳")
-    action = [-1.0072, 1.4473, 1.6156, -1.8399, -0.4101, -0.2185, -0.3232, 1.0072, 1.4473, -1.6156, -1.8399, 0.4101, -0.2252, 0.3232, -1000.0, -1000.0, -1000.0, -1000.0, -1000.0, -1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 0.6]
+    print("Test: Send 26D action → Right hand fist")
+    action = [
+        -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
+      ] + \
+      [
+        1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567, 0.4101313352460489, -0.2251850174207321, 0.3232027944991513
+      ] + \
+      [
+        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
+      ] + \
+      [
+        650.0, 650.0, 650.0, 650.0, 650.0, 250.0
+      ] 
     
     robot.send_robot_action(action)
-    print(f"✅ 动作已发送！")
+    print(f"Body Action sent!")
+    print("==================================================")
+
+    VLA_head_pos = [0.0, 0.0, 0.0]
+    robot.send_partial_action("head", VLA_head_pos)
+    print(f"Head Action sent!")
     print("==================================================")
 
     time.sleep(1.5)
 
-    # 退出
-    running = False
-    robot.stop()
-    print("\n🎉 全部测试成功！")
+    print("\nAll tests passed!")
 
 if __name__ == '__main__':
     main()

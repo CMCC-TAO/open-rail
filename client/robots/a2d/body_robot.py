@@ -1,5 +1,6 @@
 import time
 import cv2
+import logging
 import numpy as np
 import pandas as pd
 from a2d_sdk.robot import RobotDds as Robot
@@ -15,15 +16,11 @@ class RobotBody(RobotBase):
         Args:
             config (dict): Configuration dictionary containing robot and camera settings
         """
-        super().__init__()
-        self.cfg, self.ori_cfg = config['robots']['a2d'], config
-        if not hasattr(self.cfg, 'action_layout'):
-            self.logger.error("Parameter action_layout is required, please check the configuration.")
-        self.action_layout = dict(self.cfg.get('action_layout', {}))
-        print(f"Debug: {self.cfg}")
-        self.camera= Camera(list(self.cfg['camera']['names'].values()))
+        super().__init__(config)
+        self.logger = logging.getLogger(__name__) # required for correct logging output
+        self.camera= Camera(list(self.config['camera']['names'].values()))
         self.robot = Robot()
-        self.current_state = np.zeros(max([v['end'] for v in self.action_layout.values()]) if self.action_layout else 0)
+        self.current_state = np.zeros(self.action_dim)
         self.current_timestamp = 0
         self.gripper_count = 0
         self.gripper_cmd = [0.0, 0.0]
@@ -37,11 +34,15 @@ class RobotBody(RobotBase):
             action (array-like): Action array containing arm commands (0:14), gripper commands (14:16), and head commands (16:18)
         """
         action = np.asarray(action)
-        segments = {name: action[v['start']:v['end']] for name, v in self.action_layout.items()}
+        segments = {
+            name: action[v['start']:v['end']]
+            for name, v in self.action_layout.items()
+            if v['end'] <= action.size
+        }
         if 'arm' in segments:
             self.execute_action({'arm': segments['arm'].tolist()})
 
-        if 'gripper' in segments and self.gripper_count % self.cfg['gripper_freq'] == 0:
+        if 'gripper' in segments and self.gripper_count % self.config['gripper_freq'] == 0:
             self.gripper_count = 0
             arr = np.clip(segments['gripper'], 0, 1)
             gripper_optimized = True
@@ -50,11 +51,11 @@ class RobotBody(RobotBase):
                 # adjusted = arr * gamma / (arr * gamma + (1 - arr) ** gamma)
                 adjusted = arr ** gamma / (arr ** gamma + (1 - arr) ** gamma)
                 arr = np.clip(adjusted, 0, 1)
-            self.execute_action({self.cfg['hand_type']: arr.tolist()})
+            self.execute_action({self.config['hand_type']: arr.tolist()})
         self.gripper_count += 1
 
         if 'head' in segments:
-            if self.head_count % self.cfg.get('head_freq', 40) == 0:
+            if self.head_count % self.config.get('head_freq', 40) == 0:
                 self.head_count = 0
                 head_action = segments['head']
                 self.execute_action({'head': head_action.tolist()})
@@ -66,8 +67,8 @@ class RobotBody(RobotBase):
         # new_gripper_cmd = action[14:16]
         # if abs(new_gripper_cmd[0] - self.gripper_cmd[0]) > 0.75 or abs(new_gripper_cmd[1] - self.gripper_cmd[1]) > 0.75:
         #     self.gripper_count += 1
-        # if self.gripper_count > self.cfg['gripper_freq']:
-        #     self.execute_action({self.cfg['hand_type']: new_gripper_cmd.tolist()})
+        # if self.gripper_count > self.config['gripper_freq']:
+        #     self.execute_action({self.config['hand_type']: new_gripper_cmd.tolist()})
         #     self.gripper_cmd = new_gripper_cmd
         #     self.gripper_count = 0
     
@@ -87,60 +88,13 @@ class RobotBody(RobotBase):
             self.robot.move_head(data['head'])
         if 'waist' in data:
             self.robot.move_waist(data['waist'])
+        if 'body' in data:
+            self.robot.move_wbc_waist(data['body'])
         if 'wheel' in data:
             self.robot.move_wheel(data['wheel'][0], data['wheel'][1])
         if 'hand' in data:
             self.robot.move_hand(data['hand'])
     
-    def reset_robot(self, target_pose=None, mode='default'):
-        """Reset the robot to its default position.
-        """
-        if target_pose is None:
-            if mode == 'default':
-                target_pose = np.array(self.cfg['reset_robot_pos'])
-            elif mode == 'zero':
-                arm_dim = self.action_layout['arm']['end'] - self.action_layout['arm']['start'] if 'arm' in self.action_layout else 14
-                target_pose = np.array([0] * arm_dim + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0])
-            else:
-                print('[WARN] target_pose is None, can NOT execute reset_robot')
-                return
-        else:
-            target_pose = np.array(target_pose)
-        
-        segments = {name: target_pose[v['start']:v['end']] for name, v in self.action_layout.items()}
-        # action_layout has no head and waist, but we still want to reset them to default position
-        segments['head'] = target_pose[16:18]
-        segments['waist'] = target_pose[18:20]
-        
-        current_obs = self.retrieve_observation()
-        current_positions = current_obs['obs.state'][:len(segments.get('arm', []))]
-        target_positions = segments.get('arm', target_pose[:len(current_positions)])
-        # Calculate joint position differences
-        dis = np.abs(current_positions - target_positions)
-        mask = dis > np.deg2rad(0.01)  # Decide whether to use interpolation strategy
-        # If difference is small, move directly to target position
-        if not np.any(mask):
-            if 'arm' in segments:
-                self.execute_action({'arm': target_positions.tolist()})
-            time.sleep(0.01)
-            return
-        # Otherwise plan trajectory
-        trajs = self.ruckig_planning(current_positions, target_positions)
-        for i, traj in enumerate(trajs):
-            # print(f"Executing trajectory point {i}: {traj}")
-            print(f'\r{i}', end='')
-            self.execute_action({'arm': traj})
-            time.sleep(0.01)
-
-        if 'gripper' in self.cfg['hand_type'] and 'gripper' in segments:
-            self.execute_action({self.cfg['hand_type']: segments['gripper'].tolist()})
-        if 'hand' in segments:
-            self.execute_action({'hand': segments['hand'].tolist()})
-        if 'head' in segments:
-            self.execute_action({'head': segments['head'].tolist()})
-        if 'waist' in segments:
-            self.execute_action({'waist': segments['waist'].tolist()})
-
     def retrieve_observation(self):
         """Retrieve current observation data including camera images and joint states.
         
@@ -150,7 +104,7 @@ class RobotBody(RobotBase):
         """
         try:
             result = {}
-            cam_names, cam_ref = self.cfg['camera']['names'], self.cfg['camera']['ref']
+            cam_names, cam_ref = self.config['camera']['names'], self.config['camera']['ref']
             image, ref_timestamp = self.camera.get_latest_image(cam_names[cam_ref])
             if self.current_timestamp == ref_timestamp:
                 return None
@@ -170,14 +124,16 @@ class RobotBody(RobotBase):
                 # print(f"Debug:cam.{key}={key}")
 
             joint_states, gripper_start = [], 0
-            for proprio in self.cfg['proprio_names']:
+            for proprio in self.config['proprio_names']:
                 joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
                 currt_joint_states, timestamp = joint_states_nearest_fun(ref_timestamp)
                 if proprio == 'gripper':
                     gripper_start = len(joint_states)
                 joint_states.extend(currt_joint_states)
             result['obs.state'] = np.array(joint_states)
-            self.current_state = result['obs.state'].copy()
+            if self.current_state.size < result['obs.state'].size:
+                self.current_state = np.zeros(result['obs.state'].size)
+            self.current_state[:result['obs.state'].size] = result['obs.state']
             vmin, vmax = 35, 120
             self.current_state[gripper_start:gripper_start + 2] = (self.current_state[gripper_start:gripper_start + 2] - vmin) / (vmax - vmin) # norm
             # currt_joint_states = np.array(list(currt_joint_states)) * (vmax - vmin) + vmin # re-norm
@@ -208,7 +164,7 @@ class RobotBody(RobotBase):
         # process data of dexterous hand to gripper format
         processed_data = []
         for idx, ele in enumerate(data):
-            if 'hand' in self.cfg['hand_type']:
+            if 'hand' in self.config['hand_type']:
                 data_temp = np.zeros(20)
                 data_temp[:14] = ele[:14]
                 left_hand = ele[15:19].mean()
@@ -231,13 +187,13 @@ class RobotBody(RobotBase):
         for idx, traj in enumerate(trajs):
             if idx % accelerate_times == 0:
                 self.execute_action({'arm': traj[0:14].tolist()})
-                self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
+                self.execute_action({self.config['hand_type']: traj[14:16].tolist()})
                 time.sleep(0.05)
 
     def replay_trajectories(self, parquet_path, use_default: bool=True, accelerate:bool=True, accelerate_times: int=2, exclude_path=['place'], progress_fn=None):
         """replay trajectory based on teleoperation data"""
         try:
-            if 'hand' in self.cfg['hand_type']:
+            if 'hand' in self.config['hand_type']:
                 use_default = False
 
             if use_default:
@@ -257,14 +213,14 @@ class RobotBody(RobotBase):
                             if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
                                 traj[14] = 1.0
                                 traj[15] = 0.0
-                            self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
+                            self.execute_action({self.config['hand_type']: traj[14:16].tolist()})
                             time.sleep(0.05)
                     else:
                         self.execute_action({'arm': traj[0:14].tolist()})
                         if 'place_fruit' in parquet_path and idx < len(trajs)-30 and idx > 200:
                             traj[14] = 1.0
                             traj[15] = 0.0
-                        self.execute_action({self.cfg['hand_type']: traj[14:16].tolist()})
+                        self.execute_action({self.config['hand_type']: traj[14:16].tolist()})
                         time.sleep(0.05)
         except Exception as e:
             print(f"Replay {parquet_path} failed, error: {e}")

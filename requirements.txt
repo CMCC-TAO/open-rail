@@ -1,31 +1,41 @@
+# Minimal dependencies for web_client startup 
+# Usage:
+#   conda create -n <env_name> python=3.10 -y
+#   conda activate <env_name>
+#   pip install -r requirements.txt
+#   python run_web_client.py --conf default_conf.yaml
+
+
 fastapi>=0.110.0
 uvicorn[standard]>=0.46.0
 python-multipart>=0.0.9
-diffusers==0.32.2
-einops==0.8.2
-evaluate==0.4.6
-huggingface_hub==0.30.0
-ipython==8.12.3
+# diffusers==0.32.2
+# einops==0.8.2
+# evaluate==0.4.6
+# huggingface_hub==0.30.0
+# ipython==8.12.3
 # lerobot==0.4.4
-matplotlib==3.10.9
+# matplotlib==3.10.9
 ml_collections==1.1.0
-numba==0.61.0
+# numba==0.61.0
 numpy==1.26.4
-omegaconf==2.3.0
+# omegaconf==2.3.0
 opencv_python==4.11.0.86
-packaging>=20.9
+# packaging>=20.9
 pandas==2.2.3
-Pillow==12.2.0
+# Pillow==12.2.0
 pyarrow==18.1.0
 # PyQt5==5.15.11
 # PyQt5_sip==12.13.0
-pyqtgraph==0.14.0
+# pyqtgraph==0.14.0
 PyYAML==6.0.3
 rich==15.0.0
 # ruckig==0.17.3
 scipy==1.15.3
-seaborn==0.13.2
+# seaborn==0.13.2
 # setuptools==60.2.0
-tyro==1.0.13
+# tyro==1.0.13
 websockets==16.0
-zarr==2.18.3
+# zarr==2.18.3
+psutil>=5.9.0
+pyzmq>=26.0.0

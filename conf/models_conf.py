@@ -51,8 +51,7 @@ def get_rdt_config():
     """Generate configuration for RDT model.
     
     Returns:
-        ConfigDict: Configuration dictionary containing paths for RDT model,
-                   config file, vision encoder, and language embeddings.
+        ConfigDict: Configuration dictionary containing paths for RDT model, config file, vision encoder, and language embeddings.
     """
     config = ConfigDict()
     config.model_path = '/path/to/model'
@@ -65,8 +64,7 @@ def get_smolvla_config():
     """Generate configuration for RDT model.
     
     Returns:
-        ConfigDict: Configuration dictionary containing paths for RDT model,
-                   config file, vision encoder, and language embeddings.
+        ConfigDict: Configuration dictionary containing paths for RDT model, config file, vision encoder, and language embeddings.
     """
     config = ConfigDict()
     config.model_path = '/path/to/model'

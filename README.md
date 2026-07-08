@@ -196,7 +196,7 @@ In the action curves figure:
 For asynchronous inference, we designed multiple action chunk transition methods to smoothly move from the $n$-th action chunk to the $(n+1)$-th action chunk. You can set the following parameter to select different strategies:
 ``` python
 # Set this parameter in client_conf.py
-config.chunk_trans_mode = 'search_action'  # chunk transition mode, choices = ('search_action', 'poly', 'smooth_velocity')
+config.chunk_trans_mode = 'search_action'  # chunk transition mode, choices = ('search_action', 'smooth_velocity')
 ```
 
 #### 2.6.1 'search_action' mode

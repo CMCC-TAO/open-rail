@@ -3,17 +3,77 @@ function syncRecordingSwitchUI() {
   const recording = !!App.isRecording;
   const btnStartStop = $('btn-recording-startstop');
   if (!btnStartStop) return;
+  const btnPauseResume = $('btn-recording-pauseresume');
+  if (!btnPauseResume) return;
 
   btnStartStop.disabled = !running;
+  btnPauseResume.disabled = !running || !recording
   
   // Update button text/icon/style based on recording status
   if (recording) {
     btnStartStop.innerHTML = '<i class="fas fa-stop"></i> Stop';
-    btnStartStop.className = 'btn btn-xs btn-danger';
+    btnStartStop.className = 'btn btn-sm btn-danger';
   } else {
     btnStartStop.innerHTML = '<i class="fas fa-play"></i> Start';
-    btnStartStop.className = 'btn btn-xs btn-success';
+    btnStartStop.className = 'btn btn-sm btn-success';
   }
+  if (recording) {
+    btnPauseResume.innerHTML = '<i class="fas fa-play"></i> Resume';
+    btnPauseResume.className = 'btn btn-sm btn-success';
+  } else {
+    btnPauseResume.innerHTML = '<i class="fas fa-pause"></i> Pause';
+    btnPauseResume.className = 'btn btn-sm btn-danger';
+  }
+}
+
+function syncRecordingCheckboxesFromConfig(cfg = App.config) {
+  const episodeChk = $('chk-record-episode');
+  const evalLogChk = $('chk-record-eval-log');
+  const autoChk = $('chk-record-auto');
+  const expDataChk = $('chk-record-expdata');
+  const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : null;
+
+  if (episodeChk && recordCfg && typeof recordCfg.is_record_episode === 'boolean') {
+    episodeChk.checked = recordCfg.is_record_episode;
+  }
+  if (evalLogChk && recordCfg && typeof recordCfg.is_record_eval_log === 'boolean') {
+    evalLogChk.checked = recordCfg.is_record_eval_log;
+  }
+  if (autoChk && recordCfg && typeof recordCfg.auto === 'boolean') {
+    autoChk.checked = recordCfg.auto;
+  }
+  if (expDataChk && recordCfg && typeof recordCfg.is_record_expe_data === 'boolean') {
+    expDataChk.checked = recordCfg.is_record_expe_data;
+  }
+  if (evalLogChk && typeof setEvalLogEnabled === 'function') {
+    setEvalLogEnabled(!!evalLogChk.checked);
+  }
+}
+
+async function persistRecordingConfigChange(patch) {
+  if (!patch || typeof patch !== 'object' || !Object.keys(patch).length) return App.config;
+
+  const res = await apiFetch('/api/client/config/patch', {
+    method: 'POST',
+    body: JSON.stringify({ patch }),
+  });
+  App.config = res.config || App.config;
+  renderRecordingConfigTree(App.config);
+  syncRecordingCheckboxesFromConfig(App.config);
+
+  try {
+    const confRes = await apiFetch('/api/client/config/path');
+    const path = (confRes && typeof confRes === 'object' && typeof confRes.path === 'string')
+      ? confRes.path.trim()
+      : '';
+    if (path) {
+      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
+    }
+  } catch (e) {
+    console.error('Failed to save recording config:', e);
+  }
+
+  return App.config;
 }
 
 function renderRecordingConfigTree(cfg = App.config) {
@@ -22,13 +82,15 @@ function renderRecordingConfigTree(cfg = App.config) {
   root.innerHTML = '';
   const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : {};
   buildTree(recordCfg, 'record', root);
+  syncRecordingCheckboxesFromConfig(cfg);
   syncRecordingSwitchUI();
 }
 
 function getRecordingSaveItems() {
   const items = [];
   if ($('chk-record-episode')?.checked) items.push('Episode');
-  if ($('chk-record-expdata')?.checked) items.push('ExpData');
+  // if ($('chk-record-expdata')?.checked) items.push('ExpData');
+  if ($('chk-record-eval-log')?.checked) items.push('Evaluation');
   return items;
 }
 
@@ -61,7 +123,7 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
   }
 }
 
-function renderRecordingFileList(data) {
+async function renderRecordingFileList(data) {
   const listEl = $('recording-file-list');
   const taskSel = $('recording-task-select');
   const chunkSel = $('recording-chunk-select');
@@ -173,7 +235,7 @@ function renderRecordingFileList(data) {
       const frames = Number.isFinite(Number(item?.frames)) ? Number(item.frames) : 0;
       const duration = Number.isFinite(Number(item?.duration_sec)) ? Number(item.duration_sec) : 0;
       const activeCls = id === selectedEpisodeId ? ' active' : '';
-      return `<div class="recording-file-item${activeCls}" data-episode-id="${safeId}" title="${safeName}"><span class="recording-file-item-name">${safeName}</span><span class="recording-file-item-meta">${frames} | ${duration.toFixed(1)}s</span><span class="recording-file-item-actions"><button class="recording-file-item-delete" data-episode-id="${safeId}" title="Delete episode" aria-label="Delete episode"><svg class="recording-file-item-delete-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-1 6h2v9H8V9zm4 0h2v9h-2V9zm4 0h2v9h-2V9z"/></svg></button></span></div>`;
+      return `<div class="recording-file-item${activeCls}" data-episode-id="${safeId}" title="${safeName}"><span class="recording-file-item-name">${safeName}</span><span class="recording-file-item-meta">${frames}|${duration.toFixed(1)}s</span><span class="recording-file-item-actions"><button class="recording-file-item-delete" data-episode-id="${safeId}" title="Delete episode" aria-label="Delete episode"><svg class="recording-file-item-delete-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-1 6h2v9H8V9zm4 0h2v9h-2V9zm4 0h2v9h-2V9z"/></svg></button></span></div>`;
     })
     .join('');
 
@@ -398,7 +460,6 @@ function setupRecordingPanel() {
             App.recordingChunk = null;
             App.recordingChunksSnapshot = [];
           } else if (currentTask) {
-            // Fallback for older backend: select newest dir with task prefix.
             App.recordingTask = currentTask;
             App.recordingChunk = null;
             App.recordingChunksSnapshot = [];
@@ -435,38 +496,151 @@ function setupRecordingPanel() {
   syncRecordingFileListPolling();
 }
 
-// 更新开始录制函数
-function startRecording() {
-  if (!App.isRunning || App.isRecording) return;
-  
-  const episodeEnabled = $('#chk-record-episode').checked;
-  const expdataEnabled = $('#chk-record-expdata').checked;
-  
-  // 发送开始录制请求到后端
-  sendWsMessage({ type: 'start_recording', payload: { 
-    record_episode: episodeEnabled, 
-    record_expdata: expdataEnabled 
-  }});
-}
-
-// 更新停止录制函数
-function stopRecording() {
-  if (!App.isRunning || !App.isRecording) return;
-  
-  // 发送停止录制请求到后端
-  sendWsMessage({ type: 'stop_recording', payload: {} });
-}
-
-// 为单一按钮添加事件监听器
+// ── Evaluation Log initialization ──────────────────────────
 document.addEventListener('DOMContentLoaded', function() {
-  const startStopBtn = $('btn-recording-startstop');
-  if (startStopBtn) {
-    startStopBtn.addEventListener('click', function() {
-      if (App.isRecording) {
-        stopRecording();
-      } else {
-        startRecording();
+  // Record Config collapse/expand
+  const cfgCollapseBtn = $('btn-recording-config-collapse');
+  const wrap = $('recording-config-wrap');
+
+  if (cfgCollapseBtn) {
+    const icon = cfgCollapseBtn.querySelector('i');
+
+    if (wrap) {
+      wrap.classList.add('collapsed');
+    }
+
+    if (icon) {
+      icon.className = 'fas fa-chevron-down';
+    }
+
+    cfgCollapseBtn.addEventListener('click', () => {
+      if (!wrap) return;
+      wrap.classList.toggle('collapsed');
+      if (icon) {
+        icon.className = wrap.classList.contains('collapsed')
+          ? 'fas fa-chevron-down'
+          : 'fas fa-chevron-up';
       }
     });
   }
+
+  // Restore checkbox states from config and keep UI in sync
+  const episodeChk = $('chk-record-episode');
+  const evallogChk = $('chk-record-eval-log');
+  const autoChk = $('chk-record-auto');
+  const expDataChk = $('chk-record-expdata');
+
+  syncRecordingCheckboxesFromConfig(App.config);
+
+  if (episodeChk) {
+    episodeChk.addEventListener('change', async () => {
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+
+      const previousValue = !!App.config.record.is_record_episode;
+      App.config.record.is_record_episode = episodeChk.checked;
+
+      try {
+        await persistRecordingConfigChange({ 'record.is_record_episode': episodeChk.checked });
+      } catch (e) {
+        App.config.record.is_record_episode = previousValue;
+        episodeChk.checked = previousValue;
+        syncRecordingCheckboxesFromConfig(App.config);
+        console.error('Failed to update recording episode config:', e);
+      }
+    });
+  }
+
+  if (evallogChk) {
+    evallogChk.addEventListener('change', async () => {
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+
+      const previousValue = !!App.config.record.is_record_eval_log;
+      App.config.record.is_record_eval_log = evallogChk.checked;
+
+      try {
+        await persistRecordingConfigChange({ 'record.is_record_eval_log': evallogChk.checked });
+      } catch (e) {
+        App.config.record.is_record_eval_log = previousValue;
+        evallogChk.checked = previousValue;
+        syncRecordingCheckboxesFromConfig(App.config);
+        console.error('Failed to update evaluation log config:', e);
+      }
+    });
+  }
+
+  if (autoChk) {
+    autoChk.addEventListener('change', async () => {
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+
+      const previousValue = !!App.config.record.auto;
+      App.config.record.auto = autoChk.checked;
+
+      try {
+        await persistRecordingConfigChange({ 'record.auto': autoChk.checked });
+      } catch (e) {
+        App.config.record.auto = previousValue;
+        autoChk.checked = previousValue;
+        syncRecordingCheckboxesFromConfig(App.config);
+        console.error('Failed to update auto config:', e);
+      }
+    });
+  }
+
+  if (expDataChk) {
+    expDataChk.addEventListener('change', async () => {
+      if (!App.config || typeof App.config !== 'object') App.config = {};
+      if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+
+      const previousValue = !!App.config.record.is_record_expe_data;
+      App.config.record.is_record_expe_data = expDataChk.checked;
+
+      try {
+        await persistRecordingConfigChange({ 'record.is_record_expe_data': expDataChk.checked });
+      } catch (e) {
+        App.config.record.is_record_expe_data = previousValue;
+        expDataChk.checked = previousValue;
+        syncRecordingCheckboxesFromConfig(App.config);
+        console.error('Failed to update experiment data config:', e);
+      }
+    });
+  }
+
+  $('btn-log-clear')?.addEventListener('click', () => {
+    if (typeof ExecLog === 'undefined') return;
+    if (!confirm('Clear all execution log records?')) return;
+    ExecLog.records = [];
+    ExecLog._nextId = 1;
+    if (typeof saveExecLogToStorage === 'function') saveExecLogToStorage();
+    if (typeof renderExecLog === 'function') renderExecLog();
+    if (typeof _updateScoreRow === 'function') _updateScoreRow();
+  });
+
+  // Init: restore from localStorage
+  if (typeof loadExecLogFromStorage === 'function') loadExecLogFromStorage();
+  
+  // Set initial state without triggering auto-start
+  if (execlogChk) {
+    ExecLog.enabled = !!execlogChk.checked;
+    toggleExecLog(ExecLog.enabled);
+  }
+  
+  if (typeof renderExecLog === 'function') renderExecLog();
+  if (typeof syncExecLogRecButton === 'function') syncExecLogRecButton();
+
+  // Initialization complete - allow new records to be created after a short delay
+  setTimeout(() => {
+    ExecLog.isInitializing = false;
+  }, 500);
+
+  // On page unload, finalize any running record
+  window.addEventListener('beforeunload', () => {
+    if (typeof ExecLog === 'undefined') return;
+    const running = ExecLog.records.find(r => r.status === 'running');
+    if (!running) return;
+    _finalizeRunningRecord('interrupted');
+    saveExecLogToStorage();
+  });
 });

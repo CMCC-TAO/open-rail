@@ -48,7 +48,7 @@ class ModelVLA:
 
         time1 = time.time()
         ext_result = {}
-        predicted_action = np.random.rand(64, 26)
+        predicted_action = np.random.rand(64, 16)
         ext_result['prob_progress'] = np.random.rand(64,)
         print(time.time() - time1, 'action shape:', predicted_action.shape)
         return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp'], 'ext': ext_result}

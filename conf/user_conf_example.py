@@ -44,7 +44,6 @@ def get_user_config():
             'a2d': {
                 # 'hand_type': 'gripper',  # NOTE: unsupported the param
                 'gripper_freq': 40,   # Override gripper frequency
-                'reset_robot_pos': [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869, 1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873] + [0, 0] + [0.0, 0.4363] + [0.2967, 20.0] + [0.0, 0.0],
             }
         },
     }

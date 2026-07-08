@@ -3,31 +3,45 @@
 // ═══════════════════════════════════════════════════════
 
 // Keys to exclude from the config tree (handled separately or rendered via createLangLinkRow)
-const CONFIG_EXCLUDED_KEYS = new Set(['language', 'record']);
+const CONFIG_EXCLUDED_GROUP_KEYS = new Set(['language', 'record', 'controller']);
+
+// Sub-sub conf groups to exclude from Configuration panel (dot-path)
+const CONFIG_EXCLUDED_SUB_GROUP_KEYS = new Set([
+  'intra_chunk.action_layout',
+  'rdm.action_layout',
+  'visualize.camera',
+  'visualize.trajectory',
+]);
 
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
   intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples'],
-  inter_chunk: ['inter_chunk_mode', 'search_length', 'smooth_action', 'smooth_base', 'smooth_length', 'smooth_ratio'],
+  inter_chunk: ['inter_chunk_mode', 'search_length'],
 };
 
 // Select options for specific keys
 const CONFIG_SELECT_OPTIONS = {
-  inter_chunk_mode: ['search_action', 'poly', 'smooth_velocity', 'min_jerk', 'bspline'],
+  inter_chunk_mode: ['search_action', 'smooth_velocity', 'min_jerk'],
   intra_chunk_mode: ['raw', 'interpolation', 'fitting'],
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['a2d', 'mock', 'unitree_g1'],
+  type: ['a2d', 'mock', 'ti5_t170c', 'navi_wa2'],
   mode: ['async', 'sync'],
-  codec: ['mp4v', 'avc1']
+  codec: ['mp4v', 'avc1'],
+  eval_log_format: ['json', 'csv', 'both'],
+  speed: ['0.5', '0.6', '0.7', '0.8', '0.9', '1.0', '1.1', '1.2', '1.3', '1.4', '1.5', '1.75', '2.0', '2.25', '2.5', '2.75', '3.0'],
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
-  'fitting_num_samples', 'search_length', 'smooth_length', 'gripper_offset',
+  'fitting_num_samples', 'search_length', 'gripper_offset',
   'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
+
+const CONFIG_NUMBER_RANGES = {
+  adaptive_factor: { min: -1, max: 1, step: 0.01, manualMin: 0 },
+};
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.task_id',
@@ -43,24 +57,74 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'visualize.trajectory.source',
   'visualize.trajectory.selected_joints',
   'visualize.trajectory.window_span_sec',
+  'record.auto',
   'record.switch',
-  'record.save_dir',
-  'record.record_exp_data',
-  'record.info.data_path',
-  'record.info.total_chunks',
-  'record.info.total_episodes',
-  'record.info.total_frames',
-  'record.info.total_tasks',
-  'record.info.total_videos',
-  'record.info.video_path',
+  'record.is_record_episode',
+  'record.is_record_eval_log',
+  'record.is_record_expe_data',
   'controller.raw_fps',
   'controller.wait_time',
   'controller.period',
   'controller.speed',
+  'controller.gripper_offset',
+  'vision.preprocess.method',
+  'vision.preprocess.width',
+  'rdm.mode',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
 const CONFIG_READONLY_DOT_KEYS = new Set([
+  'visualize.max_size',
+  'visualize.ping_interval',
+  'visualize.ping_timeout',
+  'visualize.host',
+  'visualize.port',
+  'rdm.max_len',
+  'record.save_dir',
+  'record.save_raw',
+  'record.lerobot.action_shape',
+  'record.lerobot.chunks_size',
+  'record.lerobot.codebase_version',
+  'record.lerobot.data_path',
+  'record.lerobot.fps',
+  'record.lerobot.robot_type',
+  'record.lerobot.splits',
+  'record.lerobot.state_shape',
+  'record.lerobot.total_chunks',
+  'record.lerobot.total_episodes',
+  'record.lerobot.total_frames',
+  'record.lerobot.total_tasks',
+  'record.lerobot.total_videos',
+  'record.lerobot.video_path',
+  'record.lerobot.cam.head',
+  'record.lerobot.cam.head.encode',
+  'record.lerobot.cam.head.encode.codec',
+  'record.lerobot.cam.head.encode.has_audio',
+  'record.lerobot.cam.head.encode.is_depth_map',
+  'record.lerobot.cam.head.shape',
+  'record.lerobot.cam.head.shape.channel',
+  'record.lerobot.cam.head.shape.height',
+  'record.lerobot.cam.head.shape.width',
+  'record.lerobot.cam.hand_left',
+  'record.lerobot.cam.hand_left.encode',
+  'record.lerobot.cam.hand_left.encode.codec',
+  'record.lerobot.cam.hand_left.encode.has_audio',
+  'record.lerobot.cam.hand_left.encode.is_depth_map',
+  'record.lerobot.cam.hand_left.shape',
+  'record.lerobot.cam.hand_left.shape.channel',
+  'record.lerobot.cam.hand_left.shape.height',
+  'record.lerobot.cam.hand_left.shape.width',
+  'record.lerobot.cam.hand_right',
+  'record.lerobot.cam.hand_right.encode',
+  'record.lerobot.cam.hand_right.encode.codec',
+  'record.lerobot.cam.hand_right.encode.has_audio',
+  'record.lerobot.cam.hand_right.encode.is_depth_map',
+  'record.lerobot.cam.hand_right.shape',
+  'record.lerobot.cam.hand_right.shape.channel',
+  'record.lerobot.cam.hand_right.shape.height',
+  'record.lerobot.cam.hand_right.shape.width',
+  'vla_zmq.heartbeat_interval',
+  'vla_zmq.heartbeat_timeout',
 ]);
 
 // Default key list for the fixed "Main Parameters" area.
@@ -74,12 +138,26 @@ const DEFAULT_MAIN_PARAMETER_KEYS = {
   'controller.wait_time': 'Wait Time[ms]',
   'controller.period': 'Control Period[ms]',
   'controller.speed': 'Control Speed',
+  'controller.gripper_offset': 'Gripper Offset',
   'inter_chunk.inter_chunk_mode': 'Inter-Chunk Mode',
   'intra_chunk.intra_chunk_mode': 'Intra-Chunk Mode',
-  'vision.preprocess.mode': 'Preprocess Mode',
-  'vision.preprocess.width': 'Preprocess Width',
+  'vision.preprocess.method': 'Img Proc Method',
+  'vision.preprocess.width': 'Img Proc Width',
 };
 
+// 2. Define custom order for sub-groups
+// List the keys in the order you want them to appear.
+// Keys not listed here will appear at the end in their original order.
+const CUSTOM_GROUP_ORDER = [
+  'robots',
+  'inter_chunk',
+  'intra_chunk',
+  'vision',
+  'rdm',
+  'visualize',
+  'vla_zmq',
+  // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
+];
 let _cfgInputSyncing = false;
 
 function getConfigValueByDotKey(cfg, dotKey) {
@@ -182,7 +260,7 @@ function syncCfgInputsByDotKey(dotKey, value, sourceInput = null) {
       setCfgInputValue(input, dotKey, value);
       input.style.borderColor = '';
 
-      if (dotKey === 'robots.type' && input.tagName === 'SELECT') {
+      if ((dotKey === 'robots.type' || dotKey === 'inter_chunk.inter_chunk_mode') && input.tagName === 'SELECT') {
         input.dispatchEvent(new Event('change'));
       }
     });
@@ -200,8 +278,9 @@ function renderMainParameters(cfg) {
   params.forEach(({ key: dotKey, label }) => {
     const value = getConfigValueByDotKey(cfg, dotKey);
     if (value === undefined) return;
+    const options = dotKey === 'controller.speed' ? { speedPresets: true } : undefined;
     // Use the custom label instead of the dotKey for display
-    root.appendChild(createCfgRow(dotKey, label, value));
+    root.appendChild(createCfgRow(dotKey, label, value, options));
   });
 }
 
@@ -215,7 +294,7 @@ function getCfgMultiSelectOptions(dotKey) {
   }
 
   if (dotKey === 'visualize.trajectory.selected_joints') {
-    return TRAJ_JOINT_LABELS.map((name, idx) => ({ value: String(idx), label: `${name} (${idx})` }));
+    return getTrajJointLabels().map((name, idx) => ({ value: String(idx), label: `${name} (${idx})` }));
   }
 
   return null;
@@ -291,99 +370,23 @@ function renderConfigTree(cfg) {
   renderMainParameters(cfg);
   buildTree(cfg, '', root);
   restoreConfigTreeUiState(uiState);
+  document.dispatchEvent(new CustomEvent('app-config-updated'));
 }
 
-
-
-function buildTree_old(obj, prefix, parentEl) {
-  const basicEntries    = [];
-  const subGroupEntries = [];
-
-  for (const [key, val] of Object.entries(obj)) {
-    // Skip excluded keys at root level
-    if (!prefix && CONFIG_EXCLUDED_KEYS.has(key)) continue;
-
-    const dotKey = prefix ? `${prefix}.${key}` : key;
-    const isGroup = val !== null && typeof val === 'object' && !Array.isArray(val);
-
-    // Record -> info -> features: flatten legacy nested cam group into dotted keys
-    // (cam.hand_left / cam.hand_right / cam.head) so no standalone "cam" subgroup appears.
-    if (prefix === 'record.info.features' && key === 'cam' && isGroup) {
-      for (const [camKey, camVal] of Object.entries(val)) {
-        const mergedKey = `cam.${camKey}`;
-        const mergedDotKey = `${prefix}.${mergedKey}`;
-        const mergedIsGroup = camVal !== null && typeof camVal === 'object' && !Array.isArray(camVal);
-        if (mergedIsGroup) {
-          subGroupEntries.push([mergedKey, camVal]);
-        } else {
-          if (CONFIG_HIDDEN_DOT_KEYS.has(mergedDotKey)) continue;
-          parentEl.appendChild(createCfgRow(mergedDotKey, mergedKey, camVal));
-        }
-      }
-      continue;
-    }
-
-    if (isGroup) {
-      subGroupEntries.push([key, val]);
-    } else if (!prefix) {
-      basicEntries.push([key, val]);
-    } else {
-      if (CONFIG_HIDDEN_DOT_KEYS.has(dotKey)) continue;
-      parentEl.appendChild(createCfgRow(dotKey, key, val));
-    }
-  }
-
-  // BASIC group for root-level leaves — split into sub-groups
-  if (basicEntries.length > 0) {
-    // Assign each basic entry to its sub-group or "others"
-    const sgMap = {};
-    for (const sgName of Object.keys(BASIC_SUBGROUPS)) sgMap[sgName] = [];
-    sgMap['others'] = [];
-
-    for (const [k, v] of basicEntries) {
-      let placed = false;
-      for (const [sgName, keys] of Object.entries(BASIC_SUBGROUPS)) {
-        if (keys.includes(k)) { sgMap[sgName].push([k, v]); placed = true; break; }
-      }
-      if (!placed) sgMap['others'].push([k, v]);
-    }
-
-    // Build the outer BASIC group
-    const basicBody = document.createElement('div');
-    basicBody.className = 'cfg-group-body';
-
-    for (const [sgName, entries] of Object.entries(sgMap)) {
-      if (entries.length === 0) continue;
-      const rows = entries.map(([k, v]) => createCfgRow(k, k, v));
-      basicBody.appendChild(buildGroup(sgName.replace('_', '-'), rows));
-    }
-
-    parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
-  }
-
-  // Sub-groups
-  for (const [key, val] of subGroupEntries) {
-    const dotKey  = prefix ? `${prefix}.${key}` : key;
-    const body    = document.createElement('div');
-    body.className = 'cfg-group-body';
-    buildTree(val, dotKey, body);
-    parentEl.appendChild(buildGroupFromEl(key, body));
-  }
-}
 function buildTree(obj, prefix, parentEl) {
   const basicEntries    = [];
   const subGroupEntries = [];
 
   for (const [key, val] of Object.entries(obj)) {
     // Skip excluded keys at root level
-    if (!prefix && CONFIG_EXCLUDED_KEYS.has(key)) continue;
+    if (!prefix && CONFIG_EXCLUDED_GROUP_KEYS.has(key)) continue;
 
     const dotKey = prefix ? `${prefix}.${key}` : key;
     const isGroup = val !== null && typeof val === 'object' && !Array.isArray(val);
 
-    // Record -> info -> features: flatten legacy nested cam group into dotted keys
+    // Record -> lerobot -> features: flatten legacy nested cam group into dotted keys
     // (cam.hand_left / cam.hand_right / cam.head) so no standalone "cam" subgroup appears.
-    if (prefix === 'record.info.features' && key === 'cam' && isGroup) {
+    if (prefix === 'record.lerobot.features' && key === 'cam' && isGroup) {
       for (const [camKey, camVal] of Object.entries(val)) {
         const mergedKey = `cam.${camKey}`;
         const mergedDotKey = `${prefix}.${mergedKey}`;
@@ -399,6 +402,7 @@ function buildTree(obj, prefix, parentEl) {
     }
 
     if (isGroup) {
+      if (CONFIG_EXCLUDED_SUB_GROUP_KEYS.has(dotKey)) continue;
       subGroupEntries.push([key, val]);
     } else if (!prefix) {
       basicEntries.push([key, val]);
@@ -436,16 +440,7 @@ function buildTree(obj, prefix, parentEl) {
     parentEl.appendChild(buildGroupFromEl('BASIC', basicBody));
   }
 
-  // 2. Define custom order for sub-groups
-  // List the keys in the order you want them to appear.
-  // Keys not listed here will appear at the end in their original order.
-  const CUSTOM_GROUP_ORDER = [
-    'robots',
-    'visualize',
-    // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
-  ];
-
-  // 3. Sort subGroupEntries based on CUSTOM_GROUP_ORDER
+  // 2. Sort subGroupEntries based on CUSTOM_GROUP_ORDER
   subGroupEntries.sort((a, b) => {
     const keyA = a[0].toLowerCase();
     const keyB = b[0].toLowerCase();
@@ -473,6 +468,8 @@ function buildTree(obj, prefix, parentEl) {
     // ROBOTS group: custom rendering with type-driven sub-group visibility
     if (!prefix && key === 'robots') {
       _buildRobotsGroup(val, body);
+    } else if (!prefix && key === 'inter_chunk') {
+      _buildInterChunkGroup(val, body);
     } else {
       buildTree(val, dotKey, body);
     }
@@ -584,6 +581,89 @@ function _buildRobotsGroup(obj, parentEl) {
   }
 }
 
+function _buildInterChunkGroup(obj, parentEl) {
+  const MODE_KEY = 'inter_chunk_mode';
+  const currentMode = String(obj[MODE_KEY] ?? '');
+  const leaves = [];
+  const modeGroups = [];
+
+  for (const [k, v] of Object.entries(obj)) {
+    const isGroup = v !== null && typeof v === 'object' && !Array.isArray(v);
+    if (isGroup) modeGroups.push([k, v]);
+    else {
+      leaves.push([k, v]);
+    }
+  }
+
+  const modeEntry = leaves.find(([k]) => k === MODE_KEY);
+  const otherLeaves = leaves.filter(([k]) => k !== MODE_KEY);
+  const orderedLeaves = modeEntry ? [modeEntry, ...otherLeaves] : otherLeaves;
+  const knownModes = modeGroups.map(([k]) => k).filter(mode => mode !== 'sync');
+
+  let modeInput = null;
+  for (const [k, v] of orderedLeaves) {
+    const dotKey = `inter_chunk.${k}`;
+    const row = document.createElement('div');
+    row.className = 'cfg-row';
+    row.dataset.key = dotKey;
+
+    const keyEl = document.createElement('div');
+    keyEl.className = 'cfg-key';
+    keyEl.title = dotKey;
+    keyEl.textContent = k;
+
+    const valEl = document.createElement('div');
+    valEl.className = 'cfg-value';
+
+    let input;
+    if (k === MODE_KEY && knownModes.length > 0) {
+      input = document.createElement('select');
+      knownModes.forEach(opt => {
+        const o = document.createElement('option');
+        o.value = opt;
+        o.textContent = opt;
+        if (opt === currentMode) o.selected = true;
+        input.appendChild(o);
+      });
+      modeInput = input;
+    } else {
+      input = document.createElement('input');
+      input.type = 'text';
+      input.value = v === null ? '' : String(v);
+    }
+    input.className = 'input-text';
+    input.addEventListener('input', () => onCfgChange(dotKey, input, v));
+    input.addEventListener('change', () => onCfgChange(dotKey, input, v));
+    valEl.appendChild(input);
+    row.appendChild(keyEl);
+    row.appendChild(valEl);
+    parentEl.appendChild(row);
+  }
+
+  const modeGroupEls = {};
+  for (const [k, v] of modeGroups) {
+    const dotKey = `inter_chunk.${k}`;
+    const body = document.createElement('div');
+    body.className = 'cfg-group-body';
+    buildTree(v, dotKey, body);
+    const groupEl = buildGroupFromEl(k, body);
+    groupEl.dataset.interChunkMode = k;
+    groupEl.setAttribute('data-inter-chunk-mode', k);
+    groupEl.style.display = (k === currentMode) ? '' : 'none';
+    modeGroupEls[k] = groupEl;
+    parentEl.appendChild(groupEl);
+  }
+
+  if (modeInput) {
+    modeInput.addEventListener('change', () => {
+      const selected = modeInput.value;
+      for (const [k, el] of Object.entries(modeGroupEls)) {
+        el.style.display = (k === selected) ? '' : 'none';
+      }
+    });
+  }
+}
+
 function buildGroup(label, rowEls) {
   const group  = document.createElement('div');
   group.className = 'cfg-group';
@@ -633,7 +713,7 @@ function setConfigValueByDotKey(cfg, dotKey, value) {
   node[parts[parts.length - 1]] = value;
 }
 
-function createCfgRow(dotKey, label, value) {
+function createCfgRow(dotKey, label, value, options = {}) {
   const row = document.createElement('div');
   row.className = 'cfg-row';
   row.dataset.key = dotKey;
@@ -720,18 +800,11 @@ function createCfgRow(dotKey, label, value) {
         renderConfigTree(App.config);
         renderRecordingConfigTree(App.config);
 
-        const defaultCfgPath = `${CONF_DIR}/default_conf.yaml`;
-        const display = $('conf-path-display');
         try {
-          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: defaultCfgPath }) });
-          if (display) {
-            display.textContent = 'conf/default_conf.yaml';
-            display.title = defaultCfgPath;
-            display.dataset.fullPath = defaultCfgPath;
-          }
-          toast('dataset_path updated and saved to default_conf.yaml.', 'ok', 2200);
+          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
+          toast(`${dotKey} updated and saved to ${CONF_FILE}.`, 'ok', 2200);
         } catch (_) {
-          toast('dataset_path updated, but save to default_conf.yaml failed.', 'warn', 2600);
+          toast(`${dotKey} updated, but save to ${CONF_FILE} failed.`, 'warn', 2600);
         }
       } catch (_) {
         App.pendingPatch[dotKey] = selectedPath;
@@ -796,6 +869,14 @@ function createCfgRow(dotKey, label, value) {
   } else if (Array.isArray(value)) {
     input = document.createElement('input');
     input.type = 'text'; input.value = JSON.stringify(value); input.title = 'JSON array';
+  } else if (CONFIG_NUMBER_RANGES[bareKey]) {
+    const range = CONFIG_NUMBER_RANGES[bareKey];
+    input = document.createElement('input');
+    input.type = 'number';
+    input.min = String(range.min);
+    input.max = String(range.max);
+    input.step = String(range.step);
+    input.value = value === null ? '' : String(Number(value));
   } else if (CONFIG_INT_KEYS.has(bareKey)) {
     input = document.createElement('input');
     input.type = 'number'; input.step = '1'; input.value = value === null ? '' : String(Math.round(Number(value)));
@@ -805,9 +886,11 @@ function createCfgRow(dotKey, label, value) {
   }
 
   input.className = 'input-text';
-  if (CONFIG_READONLY_DOT_KEYS.has(dotKey)) {
+  const isActionLayout = /^robots\.[^.]+\.action_layout(?:\.|$)/.test(dotKey);
+  if (CONFIG_READONLY_DOT_KEYS.has(dotKey) || isActionLayout) {
+    row.classList.add('cfg-row-readonly');
     input.disabled = true;
-    input.title = `${dotKey} is managed by runtime actions and is read-only here.`;
+    input.title = `${dotKey} is read-only here.`;
   } else {
     input.addEventListener('input',  () => onCfgChange(dotKey, input, value));
     input.addEventListener('change', () => onCfgChange(dotKey, input, value));
@@ -851,6 +934,15 @@ function onCfgChange(dotKey, input, originalValue) {
   let parsed;
   if (typeof originalValue === 'boolean') {
     parsed = raw === 'true';
+  } else if (CONFIG_NUMBER_RANGES[bareKey]) {
+    parsed = Number(raw);
+    const range = CONFIG_NUMBER_RANGES[bareKey];
+    const manualMin = range.manualMin ?? range.min;
+    const isAutoSentinel = parsed === -1;
+    if (isNaN(parsed) || parsed < range.min || parsed > range.max || (!isAutoSentinel && parsed < manualMin)) {
+      input.style.borderColor = 'var(--danger)';
+      return;
+    }
   } else if (CONFIG_INT_KEYS.has(bareKey)) {
     parsed = parseInt(raw, 10);
     if (isNaN(parsed)) { input.style.borderColor = 'var(--danger)'; return; }
@@ -996,7 +1088,7 @@ function filterConfigTree(query) {
   $('config-tree').querySelectorAll('.cfg-group').forEach(g => {
     // Robot type sub-groups (data-robot-type) are controlled exclusively by the
     // type select in _buildRobotsGroup; never let the filter override their visibility.
-    if (g.dataset.robotType) return;
+    if (g.dataset.robotType || g.dataset.interChunkMode) return;
     if (!q) { g.style.display = ''; return; }
     const body = g.querySelector('.cfg-group-body');
     if (!body) return;
@@ -1010,12 +1102,12 @@ function filterConfigTree(query) {
 // ═══════════════════════════════════════════════════════
 
 // Conf directory path (absolute), fetched once from server
-let CONF_DIR = 'conf';
+let CONF_FILE = 'default_conf.yaml';
 
 async function initConfDir() {
   try {
-    const res = await apiFetch('/api/conf_dir');
-    if (res.path) CONF_DIR = res.path;
+    const res = await apiFetch('/api/client/config/path');
+    if (res.path) CONF_FILE = res.path;
   } catch (_) { /* fallback to 'conf' */ }
 }
 
@@ -1070,13 +1162,14 @@ function syncTrajWindowSpanUI() {
 
 function applyVisualConfig(cfg = App.config) {
   const root = (cfg && typeof cfg === 'object') ? cfg : {};
+  syncTrajLayoutFromConfig(root);
   // Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
   const visualCfg = (root.visualize && typeof root.visualize === 'object')? root.visualize : {};
 
   const camCfg = (visualCfg.camera && typeof visualCfg.camera === 'object') ? visualCfg.camera : {};
   const trajCfg = (visualCfg.trajectory && typeof visualCfg.trajectory === 'object') ? visualCfg.trajectory : {};
 
-  camState.updateInterval = _toInt(camCfg.update_interval_ms, camState.updateInterval || 33, 16);
+  camState.updateInterval = _toInt(camCfg.updata_period, camState.updateInterval || 33, 16);
   restartCameraUpdateTimer();
 
   const hasNamedCamOpen = ['open_head', 'open_wrist_left', 'open_wrist_right'].some(k => k in camCfg);
@@ -1091,7 +1184,7 @@ function applyVisualConfig(cfg = App.config) {
   if (camAllBtn) {
     const allOn = App.camOpen.every(v => v);
     camAllBtn.innerHTML = allOn ? '<i class="fas fa-pause"></i> Close All' : '<i class="fas fa-play"></i> Open All';
-    camAllBtn.className = allOn ? 'btn btn-xs btn-danger' : 'btn btn-xs btn-success';
+    camAllBtn.className = allOn ? 'btn btn-danger btn-xs' : 'btn btn-success btn-xs';
   }
 
   if (typeof trajCfg.play === 'boolean') {
@@ -1099,7 +1192,7 @@ function applyVisualConfig(cfg = App.config) {
   } else {
     App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
   }
-  App.traj.updateIntervalMs = _toInt(trajCfg.update_interval_ms, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
+  App.traj.updateIntervalMs = _toInt(trajCfg.updata_period, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
   const cfgWindowSpanSec = Number(trajCfg.window_span_sec ?? trajCfg.window_sec ?? trajCfg.window_seconds);
   App.traj.windowSpanSec = normalizeTrajWindowSpanSec(cfgWindowSpanSec, App.traj.windowSpanSec);
   syncTrajWindowSpanUI();
@@ -1119,36 +1212,44 @@ function applyVisualConfig(cfg = App.config) {
   }
 
   const selectedJointsRaw = trajCfg.selected_joints ?? trajCfg.default_selected_joints;
+  const hasSelectedJointsCfg = selectedJointsRaw !== undefined && selectedJointsRaw !== null;
   let jointTokens = [];
   if (Array.isArray(selectedJointsRaw)) {
     jointTokens = selectedJointsRaw;
   } else if (typeof selectedJointsRaw === 'string') {
     jointTokens = selectedJointsRaw.split(',').map(v => v.trim()).filter(Boolean);
   }
-  if (jointTokens.length > 0) {
+  if (hasSelectedJointsCfg && jointTokens.length === 0) {
+    App.traj.selectedJoints = new Set();
+  } else if (jointTokens.length > 0) {
+    const labels = getTrajJointLabels();
+    const labelToIndex = new Map(labels.map((name, idx) => [String(name).toLowerCase(), idx]));
+    const split = Math.ceil(getTrajJointCount() / 2);
     const joints = jointTokens
       .map(v => {
         if (typeof v === 'number') return v;
         const s = String(v).trim();
-        if (/^[LR]\d+$/i.test(s)) return parseInt(s.slice(1), 10) + (s[0].toUpperCase() === 'R' ? 7 : 0);
+        const labelIdx = labelToIndex.get(s.toLowerCase());
+        if (labelIdx !== undefined) return labelIdx;
+        if (/^[LR]\d+$/i.test(s)) return parseInt(s.slice(1), 10) + (s[0].toUpperCase() === 'R' ? split : 0);
         return parseInt(s, 10);
       })
-      .filter(v => Number.isFinite(v) && v >= 0 && v < TRAJ_JOINT_COUNT);
+      .filter(v => Number.isFinite(v) && v >= 0 && v < getTrajJointCount());
     if (joints.length > 0) App.traj.selectedJoints = new Set(joints);
   }
 
+  renderJointSelector();
   document.querySelectorAll('.joint-sel-chip').forEach(chip => {
     const idx = parseInt(chip.dataset.idx, 10);
     const active = App.traj.selectedJoints.has(idx);
     chip.classList.toggle('active', active);
-    _applyChipColor(chip, active, JOINT_COLORS[idx]);
+    _applyChipColor(chip, active, getTrajJointColor(idx));
   });
 
   const chkState = $('chk-traj-state');
   const chkActionFitted = $('chk-traj-action-fitted');
   const chkActionRaw = $('chk-traj-action-raw');
   const btnAllSource = $('btn-traj-all');
-  const btnPlay = $('btn-traj-pause');
   if (chkState) chkState.checked = App.traj.source.has('state');
   if (chkActionFitted) chkActionFitted.checked = App.traj.source.has('action_fitted');
   if (chkActionRaw) chkActionRaw.checked = App.traj.source.has('action_raw');
@@ -1156,11 +1257,12 @@ function applyVisualConfig(cfg = App.config) {
     const allSelected = App.traj.source.has('state') && App.traj.source.has('action_fitted') && App.traj.source.has('action_raw');
     btnAllSource.textContent = allSelected ? 'None' : 'All';
   }
+  const btnPlay = $('btn-traj-pause');
   if (btnPlay) {
     btnPlay.innerHTML = App.traj.paused
-      ? '<span class="btn-icon"><i class="fas fa-play"></i></span> Play'
-      : '<span class="btn-icon"><i class="fas fa-pause"></i></span> Pause';
-    btnPlay.className = 'btn btn-xs' + (App.traj.paused ? ' btn-active' : '');
+      ? '<i class="fas fa-play"></i> Play'
+      : '<i class="fas fa-pause"></i> Pause';
+    btnPlay.className = 'btn btn-xs btn-ctrl';
   }
 
   startTrajUpdateTimer();
@@ -1248,11 +1350,7 @@ async function persistVisualStateNow() {
     });
     App.config = res.config || App.config;
 
-    const display = $('conf-path-display');
-    const path = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-    if (path) {
-      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
-    }
+    await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
   } catch (_) {
     // no-op: visual state already effective in UI
   } finally {
@@ -1280,16 +1378,6 @@ async function loadConfigFromServer() {
     // Apply language-related UI state from config (task/sub-task/auto/threshold/win_size)
     // On initial startup from YAML config, default sub-task to first entry.
     applyLangConfigSelection(true);
-    // Set default path display on startup
-    const display = $('conf-path-display');
-    if (display && !display.dataset.fullPath) {
-      const defaultRel = 'conf/default_conf.yaml';
-      const defaultFull = CONF_DIR.replace(/\/conf$/, '') + '/' + defaultRel;
-      display.textContent = defaultRel;
-      display.title = defaultFull;
-      display.dataset.fullPath = defaultFull;
-    }
-    toast('Config loaded.', 'ok', 2000);
+    toast(`Config ${CONF_FILE} loaded.`, 'ok', 2000);
   } catch (e) { /* already toasted */ }
 }
-

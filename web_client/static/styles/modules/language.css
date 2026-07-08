@@ -55,7 +55,7 @@
 }
 
 .lang-threshold-wrap input {
-  flex: 0 0 60px;
+  flex: 0 0 66px;
   width: 60px !important;
   height: 18px;
   padding: 0 8px;
@@ -91,8 +91,8 @@
   white-space: nowrap;
 }
 .task-progress-track {
-  width: 120px;
-  height: 75%;
+  width: 108px;
+  height: 72%;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--bg2);
@@ -105,13 +105,18 @@
   transition: width .2s ease;
 }
 .task-progress-value {
-  min-width: 44px;
+  min-width: 48px;
   text-align: right;
   font-size: var(--font-size-2);
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
+.btn-load {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
 /* When trajectory is collapsed, language panel can use extra vertical space */
 .center-col.traj-collapsed .panel-lang .panel-body {
   overflow-y: auto;
@@ -123,9 +128,6 @@
   max-height: none;
 }
 
-.lang-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
-}
 .lang-cmd-layout {
   display: flex; 
   gap: 8px; 
@@ -139,16 +141,18 @@
   flex-direction: column; 
   gap: var(--lang-cmd-col-gap); 
   /* flex: 3;  */
-  min-width: 0; 
-  width: 15%; 
+  min-width: 81px; 
+  width: 16%; 
 }
 .lang-cmd-col-subtask    { 
   /* flex: 4;  */
-  width: 35%; 
+  min-width: 192px;
+  width: 52%; 
 }
 .lang-cmd-col-send       { 
   /* flex: 3;  */
-  width: 30%; 
+  min-width: 192px;
+  width: 32%; 
 }
 
 .lang-cmd-list {
@@ -196,6 +200,11 @@
   font-size: var(--font-size-3);
   font-weight: var(--font-weight-2);
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  box-sizing: border-box;
 }
 .lang-cmd-select option[data-applied="1"] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%23d93025' stroke-width='2.3' stroke-linecap='round' stroke-linejoin='round' d='M3 8.2l3.1 3.1L13 4.7'/%3E%3C/svg%3E");
@@ -230,7 +239,23 @@
 }
 
 /* Language Apply button: minimal-tech style matching config panel */
-#btn-lang-send {
+.lang-cmd-btn-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.lang-cmd-btn-row #btn-lang-send {
+  flex: 2;
+}
+.lang-cmd-btn-row #btn-lang-edit,
+.lang-cmd-btn-row #btn-lang-add,
+.lang-cmd-btn-row #btn-lang-del
+ {
+  flex: 1;
+}
+
+/* #btn-lang-send,
+.btn-lang-edit {
   position: relative;
   border-radius: 9px;
   border: 1px solid color-mix(in srgb, var(--border) 80%, #1a73e8 20%);
@@ -240,8 +265,9 @@
   letter-spacing: 0.2px;
   box-shadow: none;
   transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease, background .14s ease, color .14s ease;
-}
-#btn-lang-send::before {
+} */
+/* #btn-lang-send::before,
+.btn-lang-edit::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -249,8 +275,9 @@
   pointer-events: none;
   background: linear-gradient(180deg, color-mix(in srgb, #ffffff 14%, transparent) 0%, transparent 45%);
   opacity: .75;
-}
-#btn-lang-send:hover {
+} */
+/* #btn-lang-send:hover,
+.btn-lang-edit:hover {
   transform: translateY(-1px);
   border-color: color-mix(in srgb, var(--accent) 58%, var(--border) 42%);
   color: color-mix(in srgb, var(--text) 80%, #ffffff 20%);
@@ -258,10 +285,11 @@
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, #ffffff 22%, transparent),
     0 6px 14px color-mix(in srgb, var(--accent) 14%, transparent);
-}
-#btn-lang-send:active {
+} */
+/* #btn-lang-send:active,
+.btn-lang-edit:active {
   transform: translateY(0);
   box-shadow:
     inset 0 2px 4px color-mix(in srgb, #000000 14%, transparent),
     0 2px 7px color-mix(in srgb, #0a1626 20%, transparent);
-}
+} */

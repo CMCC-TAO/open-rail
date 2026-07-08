@@ -180,6 +180,8 @@ def parse_action_layout(action_layout):
     Args:
         action_layout (dict): A dictionary describing the action layout.
             Example: {'arm': {'start': 0, 'end': 7, 'policy': 'gradual'}, 'gripper': {'start': 7, 'end': 8, 'policy': 'stepwise'}}
+            Segments with policy 'manual' are excluded from the model action and
+            must appear after all gradual/stepwise segments.
 
     Returns:
         tuple[int, list[int], list[int]]: A tuple containing:
@@ -187,13 +189,23 @@ def parse_action_layout(action_layout):
             - gradual_indices (list[int]): Action indices for the 'gradual' policy.
             - stepwise_indices (list[int]): Action indices for the 'stepwise' policy.
     """
-    action_dim = max([v['end'] for v in action_layout.values()]) if action_layout else 0
+    action_dim = 0
     gradual_indices, stepwise_indices = [], []
-    for v in action_layout.values():
-        if v['policy'] == 'gradual':
+    seen_manual = False
+    for _, v in sorted(action_layout.items(), key=lambda item: item[1]['start']):
+        policy = v['policy']
+        if policy == 'manual':
+            seen_manual = True
+            continue
+        if seen_manual:
+            raise ValueError('manual policy segments must be trailing')
+        action_dim = max(action_dim, v['end'])
+        if policy == 'gradual':
             gradual_indices.extend(range(v['start'], v['end']))
-        elif v['policy'] == 'stepwise':
+        elif policy == 'stepwise':
             stepwise_indices.extend(range(v['start'], v['end']))
+        else:
+            raise ValueError(f'unknown action policy: {policy}')
     return action_dim, gradual_indices, stepwise_indices
 
 def command_prompt(info: dict):
@@ -238,21 +250,10 @@ def create_layout(info: dict, terminal_size=None):
         if len(data) >= 16:
             left_arm = [f'{x:.3f}' for x in data[:7]]
             right_arm = [f'{x:.3f}' for x in data[7:14]]
+            left_gripper = f'{data[14]:.3f}' if len(data) > 14 else '0.000'
+            right_gripper = f'{data[15]:.3f}' if len(data) > 15 else '0.000'
             
-            # Adaptive display: 6-DOF hand (unitree_g1) vs 1-DOF gripper (others)
-            if len(data) >= 26:
-                left_hand = [f'{x:.3f}' for x in data[14:20]]
-                right_hand = [f'{x:.3f}' for x in data[20:26]]
-                return (f"{label}\n"
-                       f" L-Arm: [{', '.join(left_arm)}]\n"
-                       f" L-Hand: [{', '.join(left_hand)}]\n"
-                       f" R-Arm: [{', '.join(right_arm)}]\n"
-                       f" R-Hand: [{', '.join(right_hand)}]")
-            else:
-                # 16-dim data (single DOF gripper)
-                left_gripper = f'{data[14]:.3f}'
-                right_gripper = f'{data[15]:.3f}'
-                return f"{label}\n L-Arm: [{', '.join(left_arm)}], L-Grip: [{left_gripper}]\n R-Arm: [{', '.join(right_arm)}], R-Grip: [{right_gripper}]"
+            return f"{label}\n L-Arm: [{', '.join(left_arm)}], L-Grip: [{left_gripper}]\n R-Arm: [{', '.join(right_arm)}], R-Grip: [{right_gripper}]"
         else:
             return f'{label}\n\tData not available or incomplete'
     
@@ -321,7 +322,8 @@ def create_layout(info: dict, terminal_size=None):
     col_layout2_info1 = (
         f"infer_count: {vla_client.realtime_data_manager.infer_count}\n"
         f"avg_infer_time: {vla_client.realtime_data_manager.avg_infer_time: .4f}s\n"
-        f"avg_traj_time: {vla_client.realtime_data_manager.avg_traj_time: .4f}s\n"
+        f"avg_intra_traj_time: {vla_client.realtime_data_manager.avg_intra_traj_time: .4f}s\n"
+        f"avg_inter_traj_time: {vla_client.realtime_data_manager.avg_inter_traj_time: .4f}s\n"
     )
     obs_act_info = {
         "preprocess": config.vision.preprocess,

@@ -3,30 +3,34 @@
   --config-body-padding-x: 12px;
   --config-btn-min-width: 82px;
 
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: max-content;
+  display: flex;
+  flex-direction: row;
   justify-content: space-between;
   align-items: center;
-
-  /* 使用面板“可视宽度 - 左右 padding”计算按钮间距，确保与同面板元素对齐 */
-  width: 100%;
-  column-gap: clamp(
-    8px,
-    calc((100% - (2 * var(--config-body-padding-x)) - (3 * var(--config-btn-min-width))) / 2),
-    22px
-  );
+  gap: 0px;
+  width: auto;
+  /* padding: 0 6px; */
 }
+
+.config-file-bar:last-of-type {
+  justify-content: flex-end;
+}
+
 .config-file-bar label.btn { position: relative; overflow: hidden; cursor: pointer; }
 
 /* Configuration buttons: tighten icon/text and horizontal padding */
 .config-file-bar .btn {
-  padding: 4px 8px;
+  padding: 2px 8px;
+  min-width: 72px; /* 设置按钮固定宽度 */
+}
+
+.config-file-bar:last-of-type .btn {
+  margin-left: 6px;
 }
 .config-file-bar .btn i.fas,
 .config-file-bar .btn i.far,
 .config-file-bar .btn i.fab {
-  margin-right: -2px;
+  margin-right: -2px; /* 调整图标边距 */
 }
 .config-path-display {
   font-size: var(--font-size-1); color: var(--text-muted); padding: 2px 6px;
@@ -39,9 +43,21 @@
   border-color: var(--border); background: var(--bg);
   color: var(--accent);
 }
+.config-file-section {
+  flex: 0 0 auto;
+  max-height: 120px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .main-params-section {
   flex: 0 0 auto;
-  max-height: 250px;
+  max-height: 200px;
   overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -83,8 +99,32 @@
 .cfg-key   { color: var(--text-muted); flex: 0 0 auto; min-width: 120px; font-size: var(--font-size-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cfg-value { flex: 1; }
 .cfg-value input, .cfg-value select { width: 100%; }
+.main-params-tree .cfg-value-with-preset {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+.main-params-tree .cfg-value-with-preset > input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.main-params-tree .cfg-value-with-preset > .cfg-speed-preset {
+  flex: 0 0 64px;
+  width: 64px;
+}
 .cfg-value select[multiple] { min-height: 70px; padding: 4px; }
 .cfg-value select[multiple] option { padding: 1px 2px; }
+
+.cfg-row-readonly .cfg-key,
+.cfg-row-readonly .cfg-value input,
+.cfg-row-readonly .cfg-value select {
+  opacity: var(--config-readonly-opacity);
+}
+
+.cfg-row-readonly .cfg-value input:disabled,
+.cfg-row-readonly .cfg-value select:disabled {
+  cursor: not-allowed;
+}
 
 .config-footer {
   display: flex; align-items: center; gap: 8px;
@@ -92,8 +132,3 @@
 }
 .pending-badge { color: var(--warn); font-size: var(--font-size-2); flex: 1; }
 .pending-badge.hidden { display: none; }
-
-/* ── ④ Collapse button: rightmost, vertically centered ── */
-.conf-collapse-btn {
-  align-self: center; flex-shrink: 0; margin-left: 0px; margin-right: -6px;
-}

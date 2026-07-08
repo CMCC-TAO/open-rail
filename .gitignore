@@ -1,8 +1,8 @@
 # C extensions
 *.so
 python3.10.INFO
-.codebuddy
-.marscode
+.codebuddy/
+.marscode/
 data/
 data/recording
 .conda/
@@ -138,3 +138,8 @@ user_conf_*.py
 .qoder/
 
 action_server/ExecutionUnit.action.txt
+specs/
+AGENTS.md
+a2d_description
+install
+log

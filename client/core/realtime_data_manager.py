@@ -1,14 +1,11 @@
 import copy
 import time
-import math
 import threading
 import numpy as np
 import logging
-import matplotlib.pyplot as plt
 from collections import deque
 from ml_collections import ConfigDict
-from concurrent.futures import ThreadPoolExecutor
-from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index, parse_action_layout
+from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index
 from client.core.inter_chunk_fuser import InterChunkFuser
 
 
@@ -28,8 +25,6 @@ class RealtimeDataManager():
         """
         self.logger = logging.getLogger(__name__)
         self.rdm_config = rdm_config
-        self.action_layout = dict(rdm_config.action_layout) if hasattr(rdm_config, 'action_layout') else {}
-        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.observe_buffer = deque(maxlen=rdm_config.max_len)
         self.observe_fps_window_size = max(2, int(getattr(rdm_config, 'observe_fps_window_size', 30)))
         self.observe_add_timestamps = deque(maxlen=self.observe_fps_window_size)
@@ -60,10 +55,14 @@ class RealtimeDataManager():
 
         # Timing markers for inference, trajectory fitting and control
         self.start_infer_marker = 0.0
-        self.start_traj_marker = 0.0
+        self.start_intra_traj_marker = 0.0
+        self.start_inter_traj_marker = 0.0
         self.start_ctrl_marker = 0.0
+        self.avg_comm_infer_time = 0.0
+        self.avg_intra_traj_time = 0.0
+        self.avg_inter_traj_time = 0.0
         self.avg_infer_time = 0.0
-        self.avg_traj_time = 0.0
+        self.avg_comm_time = 0.0 # communication latency between vla_client and vla_server
         self.infer_count = 0
 
         # Synchronous Running Flag
@@ -102,46 +101,59 @@ class RealtimeDataManager():
         self.start_infer_marker = time.perf_counter()
         # print(f"Start inference at {self.start_infer_marker:.4f} s")
         
-    def set_traj_time_marker(self):
-        """Set the local timestamp when start trajectory fitting. Used for calculating the trajectory fitting time.
+    def set_intra_traj_time_marker(self):
+        """Set the local timestamp when start intra chunk process. Used for calculating the trajectory fitting time.
         """
-        self.start_traj_marker = time.perf_counter()
-        # print(f"Start trajectory fitting at {self.start_traj_marker:.4f} s")
+        self.start_intra_traj_marker = time.perf_counter()
+        # print(f"Start intra chunk process at {self.start_intra_traj_marker:.4f} s")
         
+    def set_inter_traj_time_marker(self):
+        """Set the local timestamp when start inter chunk process. Used for calculating the inter chunk fusion time.
+        """
+        self.start_inter_traj_marker = time.perf_counter()
+        # print(f"Start inter chunk process at {self.start_inter_traj_marker:.4f} s")
     def set_control_time_marker(self):
         """Set the local timestamp when start control. Used for calculating the control time.
         """
         self.start_ctrl_marker = time.perf_counter()
     
-    def compute_avg_infer_time(self):
+    def compute_avg_comm_infer_time(self):
         """Compute the average inference time. The average inference time is used to set the offset of the action chunk.
         """
         # self.last_infer_time = self.currt_infer_time
-        currt_infer_time = self.start_traj_marker - self.start_infer_marker
-        self.avg_infer_time = (self.avg_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
-        self.logger.debug(f'avg infer time: {self.avg_infer_time:.4f}s')
-        # print(f"avg infer time: {self.avg_infer_time}, infer count: {self.infer_count}")
+        currt_comm_infer_time = self.start_intra_traj_marker - self.start_infer_marker
+        # self.avg_comm_infer_time = (self.avg_comm_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
+        self.avg_comm_infer_time = self.avg_comm_infer_time * 0.8 + currt_comm_infer_time * 0.2 if self.avg_comm_infer_time > 0 else currt_comm_infer_time
+        self.logger.debug(f'avg communication and inference time: {self.avg_comm_infer_time:.4f}s')
+        # print(f"avg infer time: {self.avg_comm_infer_time}, infer count: {self.infer_count}")
+    
+    def compute_avg_comm_time(self, avg_infer_time):
+        """Compute the average communication time between vla_client and vla_server.
 
-    def compute_avg_traj_time(self):
+        Args:
+            avg_infer_time (float): The average inference time return from vla_server
+        """
+        self.avg_infer_time = self.avg_infer_time * 0.8 + avg_infer_time * 0.2 if self.avg_infer_time > 0.0 else avg_infer_time
+        self.avg_comm_time = self.avg_comm_infer_time - avg_infer_time
+
+    def compute_avg_intra_traj_time(self):
+        """Compute the average intra chunk process time. The average trajectory fitting time is used to set the offset of the action chunk.
+        """
+        # self.last_traj_time = self.currt_traj_time
+        currt_intra_traj_time = self.start_inter_traj_marker - self.start_intra_traj_marker
+        # self.avg_intra_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_intra_traj_time) / self.infer_count if self.infer_count > 0 else currt_intra_traj_time
+        self.avg_intra_traj_time = self.avg_intra_traj_time * 0.8 + currt_intra_traj_time * 0.2 if self.avg_intra_traj_time > 0 else currt_intra_traj_time
+        self.logger.debug(f'avg intra traj time: {self.avg_intra_traj_time:.4f}s')
+        # self.logger.debug(f'avg traj time: {self.avg_intra_traj_time}')
+    def compute_avg_inter_traj_time(self):
         """Compute the average trajectory fitting time. The average trajectory fitting time is used to set the offset of the action chunk.
         """
         # self.last_traj_time = self.currt_traj_time
-        currt_traj_time = self.start_ctrl_marker - self.start_traj_marker
-        self.avg_traj_time = (self.avg_traj_time * (self.infer_count - 1) + currt_traj_time) / self.infer_count if self.infer_count > 0 else currt_traj_time
-        self.logger.debug(f'avg traj time: {self.avg_traj_time:.4f}s')
-        # self.logger.debug(f'avg traj time: {self.avg_traj_time}')
-
-    def _get_joint_indices(self, action_chunk):
-        if self.joint_indices:
-            return self.joint_indices
-        return list(range(action_chunk.shape[0]))
-
-    def _get_step_indices(self, action_chunk):
-        if self.step_indices:
-            return self.step_indices
-        joint_indices = set(self._get_joint_indices(action_chunk))
-        return [index for index in range(action_chunk.shape[0]) if index not in joint_indices]
-    
+        currt_inter_traj_time = self.start_ctrl_marker - self.start_inter_traj_marker
+        # self.avg_inter_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_inter_traj_time) / self.infer_count if self.infer_count > 0 else currt_inter_traj_time
+        self.avg_inter_traj_time = self.avg_intra_traj_time * 0.8 + currt_inter_traj_time * 0.2 if self.avg_inter_traj_time > 0 else currt_inter_traj_time
+        self.logger.debug(f'avg inter traj time: {self.avg_inter_traj_time:.4f}s')
+ 
     def add_observe_data(self, frame):
         """Add observe data to buffer. The observe data is a dictionary containing the robot state, camera images and timestamps.
 
@@ -181,8 +193,6 @@ class RealtimeDataManager():
                 timestamp_chunk[index] = timestamp_chunk[index] + timestamp_chunk[0]
             self.action_chunks = action_chunk
             self.timestamp_chunks = timestamp_chunk
-        
-        rounded = [round(x, 4) for x in self.timestamp_chunks]
 
     @run_time_decorator
     def fusionActionChunks(self, action_chunk, timestamp_chunk):
@@ -330,13 +340,32 @@ class RealtimeDataManager():
                 end_index = min(self.action_chunk_index + index_offset + num_samples, total_len)
                 return self.timestamps_fitted[start_index:end_index], self.action_chunk_fitted[:, start_index:end_index]
     
+    @staticmethod
+    def _apply_gripper_offset(action_chunk, step_indices, gripper_offset):
+        source = np.asarray(action_chunk)
+        if source.ndim != 2:
+            raise ValueError(f'action_chunk must be 2D, got shape {source.shape}')
+        shifted = source.copy()
+        offset = int(gripper_offset)
+        indices = [] if step_indices is None else list(step_indices)
+        chunk_length = shifted.shape[1]
+        if not indices or offset == 0 or abs(offset) >= chunk_length:
+            return shifted
+        if offset > 0:
+            shifted[indices, :-offset] = source[indices, offset:]
+        else:
+            shifted[indices, -offset:] = source[indices, :chunk_length + offset]
+        return shifted
+
     def update_action_chunk_fitted(self,
                                 action_chunk_smoothed,
                                 vel_chunk_smoothed,
                                 acc_chunk_smoothed,
                                 timestamps_smoothed,
                                 target_chunk_index,
-                                prob_progress=None):
+                                prob_progress=None,
+                                step_indices=None,
+                                gripper_offset=0):
         """Update action chunk with the new fitted action chunk.
 
         Args:
@@ -346,7 +375,12 @@ class RealtimeDataManager():
             timestamps_smoothed ()
             target_chunk_index
             prob_progress (np.array, optional): Array of prob_progress values aligned with action chunk. Defaults to None.
+            step_indices (list[int], optional): Stepwise action dimensions.
+            gripper_offset (int): Frames to shift stepwise commands forward/backward.
         """
+        action_chunk_smoothed = self._apply_gripper_offset(
+            action_chunk_smoothed, step_indices, gripper_offset
+        )
         with self.polynomial_thread_lock:
             self.action_chunk_index = target_chunk_index if self.action_chunk_index is not None else 0
             self.action_chunk_fitted = action_chunk_smoothed
@@ -384,8 +418,12 @@ class RealtimeDataManager():
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:
                 return None, None, None, None
+            if len(self.action_chunks) == 0:
+                return None, None, None, None
+            if self.action_chunk_fitted.shape[1] == 0:
+                return None, None, None, None
             if self.mode != 'control' and mode == 'control':
-                print(f"Switching to control mode, current action_chunk_index={self.action_chunk_index}, reset action_chunk_index to 0.")
+                # print(f"Switching to control mode, current action_chunk_index={self.action_chunk_index}, reset action_chunk_index to 0.")
                 self.action_chunk_index = 0
             self.mode = mode
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
@@ -472,6 +510,14 @@ class RealtimeDataManager():
             self.action_chunks = []
             self.timestamp_chunks = []
             self.infer_count = 0
+            self.start_infer_marker = 0.0
+            self.start_intra_traj_marker = 0.0
+            self.start_inter_traj_marker = 0.0
+            self.start_ctrl_marker = 0.0
+            self.avg_infer_time = 0.0
+            self.avg_comm_time = 0.0
+            self.avg_intra_traj_time = 0.0
+            self.avg_inter_traj_time = 0.0
 
         with self.observe_thread_lock:
             self.observe_buffer.clear()

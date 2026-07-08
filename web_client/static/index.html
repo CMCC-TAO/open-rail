@@ -28,36 +28,76 @@
         <span class="resource-pill" id="val-mem-usage"><span class="resource-label">MEM</span><span class="resource-value">--</span></span>
         <span class="resource-pill" id="val-bw-usage"><span class="resource-label">NET</span><span class="resource-value">--</span></span>
       </div>
-      <span id="ws-indicator" class="ws-dot disconnected" title="WebSocket"></span>
-      <span class="ws-label">WS</span>
+      <!-- Separator between system resource group and ws indicator -->
+      <div class="topbar-sep"></div>
+      <!-- Network indicator group with two-line layout -->
+      <div class="net-indicator-group">
+        <div>
+          <span id="ws-indicator" class="ws-dot disconnected" title="Visualize Server"></span>
+          <span class="ws-label">Visual Server</span>
+        </div>
+        <div id="zmq-indicator-container" class="zmq-indicator-container">
+          <span id="zmq-indicator" class="ws-dot disconnected" title="Model Server"></span>
+          <span class="ws-label">Model Server</span>
+          <!-- ZMQ Indicator Hover Panel -->
+          <div id="zmq-info-panel" class="hover-info-panel hidden">
+            <div class="hover-info-row">
+              <span class="info-label">Server Address:</span>
+              <span id="zmq-server-address" class="info-value">--</span>
+            </div>
+            <!-- <div class="hover-info-row">
+              <span class="info-label">Port:</span>
+              <span id="zmq-port" class="info-value">--</span>
+            </div> -->
+            <div class="hover-info-row">
+              <span class="info-label">Model Type:</span>
+              <span id="zmq-model-type" class="info-value">--</span>
+            </div>
+            <div class="hover-info-row">
+              <span class="info-label">Model Path:</span>
+              <span id="zmq-model-path" class="info-value">--</span>
+            </div>
+            <div class="hover-info-row">
+              <span class="info-label">Language Instruction:</span>
+              <span id="zmq-language-cmd" class="info-value">--</span>
+            </div>
+            <div class="hover-info-row">
+              <span class="info-label">Timestamp:</span>
+              <span id="zmq-timestamp" class="info-value">--</span>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </header>
 
   <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
   <main class="layout">
 
-    <!-- ╔══════════════ LEFT: CONFIG + DATA RECORDING + MANUAL CONTROL ══════════════╗ -->
+    <!-- ╔══════════════ LEFT: CONFIGURATION + RECORDING + ROBOT CONTROL ══════════════╗ -->
     <div class="left-col" id="left-col">
       <aside class="panel panel-config panel-expanded" id="panel-config">
         <div class="panel-header" id="panel-config-header">
           <span><i class="fas fa-cog"></i> Configuration</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs conf-collapse-btn" id="btn-config-collapse" title="Collapse / Expand"><i class="fas fa-chevron-up"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-config-collapse" title="Collapse / Expand"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body" id="config-body">
 
           <!-- Config file bar -->
-          <div class="config-file-bar">
-            <label class="btn btn-sm" id="btn-load-file" title="Load config file">
-              <i class="fas fa-folder-open"></i> Load
-              <input id="conf-file-input" type="file" accept=".yaml" style="display:none" />
-            </label>
-            <button class="btn btn-sm" id="btn-apply-config"><i class="fas fa-check"></i> Apply</button>
-            <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…"><i class="fas fa-save"></i> Save As…</button>
+          <div id="config-file-section" class="config-file-section">
+            <div class="config-file-bar">
+              <div class="section-title">Setup</div>
+              <select id="conf-file-select" class="input-text item-select" title="Select config file"></select>
+                <!-- <option value="">-- Select Config File --</option> -->
+            </div>
+            <div class="config-file-bar">
+              <button class="btn btn-sm" id="btn-apply-config"><i class="fas fa-check"></i> Apply</button>
+              <button class="btn btn-sm" id="btn-saveas-file" title="Save config as…"><i class="fas fa-save"></i> Save As</button>
+            </div>
           </div>
-          <!-- Current file path display -->
-          <div class="config-path-display" id="conf-path-display" title="Current config file"></div>
+          <!-- Current file path display (hidden, kept for compatibility) -->
 
           <!-- Main parameters (fixed area) -->
           <div id="main-params-section" class="main-params-section">
@@ -84,35 +124,78 @@
         <div class="panel-header" id="panel-recording-header">
           <span><i class="fas fa-database"></i> Data Recording</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs record-collapse-btn" id="btn-recording-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-recording-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="recording-body">
           <div class="recording-controls">
-            <button class="btn btn-xs btn-success" id="btn-recording-startstop"><i class="fas fa-play"></i> Start</button>
-            <div class="recording-options-inline">
-              <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" checked /> Episode</label>
-              <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpData</label>
-            </div>
+            <!-- <div class="recording-control-column"> -->
+              <button class="btn btn-sm btn-success" id="btn-recording-startstop"><i class="fas fa-play"></i> Start</button>
+              <button class="btn btn-sm btn-danger" id="btn-recording-pauseresume"><i class="fas fa-pause"></i> Pause</button>
+            <!-- </div> -->
+            <div class="recording-controls-sep"></div>
+            <!-- <div class="recording-control-column"> -->
+              <label class="recording-option-item"><input type="checkbox" id="chk-record-auto" />Auto</label>
+              <!-- <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" />LeRobot</label>
+              <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> Experiment</label> -->
+            <!-- </div> -->
           </div>
-          <div class="recording-config-wrap">
-            <div class="section-title">Record Config</div>
+          <div class="recording-controls">
+            <label class="recording-option-item"><input type="checkbox" id="chk-record-eval-log" />EvalLog</label>
+            <label class="recording-option-item"><input type="checkbox" id="chk-record-episode" />LeRobot</label>
+            <label class="recording-option-item"><input type="checkbox" id="chk-record-expdata" /> ExpeData</label>
+          </div>
+
+          <!-- Record Config -->
+          <div class="recording-config-wrap" id="recording-config-wrap">
+            <div class="recording-config-header">
+              <div class="section-title">Config</div>
+              <button class="btn btn-xxs btn-collapse" id="btn-recording-config-collapse" title="Collapse / expand"><i class="fas fa-chevron-up"></i></button>
+            </div>
             <div id="recording-config-tree" class="recording-config-tree"></div>
           </div>
+
           <div class="recording-file-wrap">
-            <div class="recording-file-filter">
+            <div class="recording-file-section">
+              <div class="recording-file-subsection">
               <span class="section-title">Tasks</span>
               <select id="recording-task-select" class="recording-task-select"></select>
             </div>
-            <div class="recording-file-title">
-              <span class="section-title">Episodes</span>
-              <label class="recording-chunk-filter">
-                <span class="recording-chunk-filter-label">Chunk</span>
-                <select id="recording-chunk-select" class="recording-chunk-select"></select>
-              </label>
+            </div>
+            <div class="recording-file-section">
+              <div class="recording-file-subsection">
+                <span class="section-title">Evaluation Results</span>
+              </div>
+              <div class="recording-file-row">
+                <span class="recording-file-label">Counts: <span id="eval-log-count" class="eval-count-badge">0</span></span>
+                <button class="btn btn-xs" id="btn-log-clear" title="Clear all current records and start a new session">New Session</button>
+              </div>
+              <div class="eval-log-table-wrap">
+                <table class="eval-log-table">
+                  <thead>
+                    <tr>
+                      <th class="col-id" title="Record ID">ID</th>
+                      <th class="col-task" title="Task Index and Sub-Task Index">Task</th>
+                      <th class="col-dur" title="Duration in seconds (hover a row for start time)">Dur[s]</th>
+                      <th class="col-score" title="Evaluation score (select to score)">Score</th>
+                      <th class="col-note" title="Notes for this record">Note</th>
+                      <th class="col-del"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="eval-log-tbody"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="recording-file-section">
+              <div class="recording-file-subsection">
+                <span class="section-title">LeRobot Episodes</span>
+              </div>
+              <div class="recording-file-row">
+                <span class="recording-file-label">Chunks: <select id="recording-chunk-select" class="recording-chunk-select"></select></span>
             </div>
             <div id="recording-file-list" class="recording-file-list"></div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -120,7 +203,7 @@
         <div class="panel-header" id="panel-manual-header">
           <span><i class="fas fa-gamepad"></i> Robot Control</span>
           <div class="panel-header-actions">
-            <button class="btn btn-xs manual-collapse-btn" id="btn-manual-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-manual-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body collapsed" id="manual-body">
@@ -129,85 +212,44 @@
               <div class="robot-ctrl-section-head">
                 <div class="section-title">Arm</div>
                 <div class="robot-ctrl-actions-right">
-                  <button class="btn btn-sm" id="btn-arm-reset">Reset</button>
-                  <button class="btn btn-sm" id="btn-arm">Set</button>
-                  <button class="btn btn-sm" id="btn-arm-save">Save</button>
+                  <button class="btn btn-sm" id="btn-arm"><i class="fas fa-paper-plane"></i>Send Cmd</button>
                 </div>
               </div>
-              <div class="robot-ctrl-row robot-arm-row">
-                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> L</label>
-                <textarea id="arm-left-joints" class="input-text robot-arm-input" rows="2" placeholder="[0.123, 1.234, 4.567, 0.345, 0.322, 0.456, 0.786]">[0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000]</textarea>
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-left" checked /> Left</label>
+                <div class="robot-preset-right">
+                  <select id="arm-left-preset" class="input-text item-select robot-preset-select" aria-label="Left arm preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="arm-left-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
+                </div>
               </div>
-              <div class="robot-ctrl-row robot-arm-row">
-                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> R</label>
-                <textarea id="arm-right-joints" class="input-text robot-arm-input" rows="2" placeholder="[0.123, 1.234, 4.567, 0.345, 0.322, 0.456, 0.786]">[0.000, 0.000, 0.000, 0.000, 0.000, 0.000, 0.000]</textarea>
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-arm-right" checked /> Right</label>
+                <div class="robot-preset-right">
+                  <select id="arm-right-preset" class="input-text item-select robot-preset-select" aria-label="Right arm preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="arm-right-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
+                </div>
               </div>
             </section>
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="section-title">Gripper / Hand</div>
-                <div class="robot-ctrl-checks-right">
-                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-left" checked /> Left</label>
-                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-right" checked /> Right</label>
-                </div>
-              </div>
-              <div class="robot-ctrl-row">
-                <input id="gripper-value" class="input-num" type="number" step="0.1" min="0" max="1" value="0" placeholder="value" />
-              </div>
-              <div class="robot-ctrl-row robot-ctrl-row-actions">
-                <button class="btn btn-sm" id="btn-gripper-open">Open</button>
-                <button class="btn btn-sm" id="btn-gripper-close">Close</button>
-                <button class="btn btn-sm" id="btn-gripper-send">Send</button>
-              </div>
-            </section>
-
-            <section class="robot-ctrl-section">
-              <div class="robot-ctrl-section-head">
-                <div class="section-title">Head</div>
+                <div class="section-title">Gripper/Hand</div>
                 <div class="robot-ctrl-actions-right">
-                  <button class="btn btn-sm" id="btn-head-reset">Reset</button>
-                  <button class="btn btn-sm" id="btn-head">Set</button>
-                  <button class="btn btn-sm" id="btn-head-save">Save</button>
+                  <button class="btn btn-sm" id="btn-gripper"><i class="fas fa-paper-plane"></i>Send Cmd</button>
                 </div>
               </div>
-              <div class="robot-ctrl-row robot-head-input-row">
-                <div class="robot-axis-field">
-                  <span class="robot-axis-tag">Y:</span>
-                  <input id="head-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
-                </div>
-                <div class="robot-axis-field">
-                  <span class="robot-axis-tag">P:</span>
-                  <input id="head-pitch" class="input-num" type="number" step="0.01" value="0.436" placeholder="pitch" />
-                </div>
-                <div class="robot-axis-field">
-                  <span class="robot-axis-tag">R:</span>
-                  <input id="head-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-left" checked /> Left</label>
+                <div class="robot-preset-right">
+                  <select id="gripper-left-preset" class="input-text item-select robot-preset-select" aria-label="Left gripper or hand preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="gripper-left-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
-            </section>
-
-            <section class="robot-ctrl-section">
-              <div class="robot-ctrl-section-head">
-                <div class="section-title">Waist</div>
-                <div class="robot-ctrl-actions-right">
-                  <button class="btn btn-sm" id="btn-waist-reset">Reset</button>
-                  <button class="btn btn-sm" id="btn-waist">Set</button>
-                  <button class="btn btn-sm" id="btn-waist-save">Save</button>
-                </div>
-              </div>
-              <div class="robot-ctrl-row robot-waist-input-row">
-                <div class="robot-axis-field">
-                  <span class="robot-axis-tag">Y:</span>
-                  <input id="waist-yaw" class="input-num" type="number" step="0.01" value="0" placeholder="yaw" />
-                </div>
-                <div class="robot-axis-field">
-                  <span class="robot-axis-tag">P:</span>
-                  <input id="waist-pitch" class="input-num" type="number" step="0.01" value="0.297" placeholder="pitch" />
-                </div>
-                <div class="robot-axis-field">
-                  <span class="robot-axis-tag">R:</span>
-                  <input id="waist-roll" class="input-num" type="number" step="0.01" value="0" placeholder="roll" />
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-gripper-right" checked /> Right</label>
+                <div class="robot-preset-right">
+                  <select id="gripper-right-preset" class="input-text item-select robot-preset-select" aria-label="Right gripper or hand preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="gripper-right-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
                 </div>
               </div>
             </section>
@@ -216,29 +258,52 @@
               <div class="robot-ctrl-section-head">
                 <div class="section-title">Body</div>
                 <div class="robot-ctrl-actions-right">
-                  <button class="btn btn-sm" id="btn-body-reset">Reset</button>
-                  <button class="btn btn-sm" id="btn-body">Set</button>
-                  <button class="btn btn-sm" id="btn-body-save">Save</button>
+                  <button class="btn btn-sm" id="btn-body"><i class="fas fa-paper-plane"></i>Send Cmd</button>
                 </div>
               </div>
-              <div class="robot-ctrl-row">
-                <div class="robot-ctrl-label">Height (mm)</div>
-                <input id="body-height" class="input-num" type="number" step="1" value="20" placeholder="height" />
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-head" checked /> Head</label>
+                <div class="robot-preset-right">
+                  <select id="head-preset" class="input-text item-select robot-preset-select" aria-label="Head preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="head-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
+                </div>
+              </div>
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-waist" checked /> Waist</label>
+                <div class="robot-preset-right">
+                  <select id="waist-preset" class="input-text item-select robot-preset-select" aria-label="Waist preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="waist-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
+                </div>
+              </div>
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-body" checked /> Body</label>
+                <div class="robot-preset-right">
+                  <select id="body-preset" class="input-text item-select robot-preset-select" aria-label="Body preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="body-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
+                </div>
               </div>
             </section>
 
             <section class="robot-ctrl-section">
               <div class="robot-ctrl-section-head">
-                <div class="section-title">Wheel / Leg</div>
-                <div class="robot-ctrl-checks-right">
-                  <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel-keyboard" /> Keyboard Control</label>
+                <div class="section-title">Wheel/Leg</div>
+                <div class="robot-ctrl-actions-right">
+                  <button class="btn btn-sm" id="btn-wheel"><i class="fas fa-paper-plane"></i>Send Cmd</button>
                 </div>
               </div>
-              <div class="robot-ctrl-row robot-ctrl-row-actions">
-                <button class="btn btn-sm" id="btn-wheel-forward"><i class="fas fa-arrow-up"></i> Forward</button>
-                <button class="btn btn-sm" id="btn-wheel-backward"><i class="fas fa-arrow-down"></i> Backward</button>
-                <button class="btn btn-sm" id="btn-wheel-left"><i class="fas fa-rotate-left"></i> Turn Left</button>
-                <button class="btn btn-sm" id="btn-wheel-right"><i class="fas fa-rotate-right"></i> Turn Right</button>
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-wheel" checked /> Wheel</label>
+                <div class="robot-preset-right">
+                  <select id="wheel-preset" class="input-text item-select robot-preset-select" aria-label="Wheel preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="wheel-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
+                </div>
+              </div>
+              <div class="robot-ctrl-row robot-preset-row">
+                <label class="robot-ctrl-check"><input type="checkbox" id="chk-leg" checked /> Leg</label>
+                <div class="robot-preset-right">
+                  <select id="leg-preset" class="input-text item-select robot-preset-select" aria-label="Leg preset"></select>
+                  <button class="btn btn-sm robot-preset-edit" id="leg-preset-edit" title="Edit preset" aria-label="Edit preset"><i class="fas fa-pen-to-square"></i></button>
+                </div>
               </div>
             </section>
 
@@ -258,9 +323,8 @@
           <span><i class="fas fa-chart-line"></i> Runtime Monitor</span>
           <!-- Spacer: push all button groups to the right -->
           <span class="monitor-spacer"></span>
-          <!-- Group ①: primary controls -->
+          <!-- Group ①: system controls -->
           <div class="monitor-ctrl-group">
-            <button class="btn btn-success btn-sm" id="btn-start"><i class="fas fa-play"></i> Start</button>
             <button class="btn btn-danger  btn-sm" id="btn-pause" disabled><i class="fas fa-pause"></i> Pause</button>
             <button class="btn btn-sm"             id="btn-reset" disabled><i class="fas fa-rotate-left"></i> Reset</button>
           </div>
@@ -270,10 +334,14 @@
           <div class="monitor-ctrl-group">
             <button class="btn btn-xs" id="btn-observe" title="Start observe and visualize"><span class="thread-btn-main">Observe</span><span class="thread-btn-sub">Start</span></button>
             <button class="btn btn-xs" id="btn-infer" title="Start inference" disabled><span class="thread-btn-main">Infer</span><span class="thread-btn-sub">Start</span></button>
-            <button class="btn btn-xs" id="btn-control" title="Start control" disabled><span class="thread-btn-main">Control</span><span class="thread-btn-sub">Start</span></button>
+            <button class="btn btn-xs" id="btn-control" title="Start/stop control (Ctrl+Space)" disabled><span class="thread-btn-main">Control</span><span class="thread-btn-sub">Start</span></button>
           </div>
           <!-- Separator -->
-          <!-- <span class="monitor-sep"></span> -->
+          <span class="monitor-sep"></span>
+          <!-- Group ③: primary control -->
+          <div class="monitor-ctrl-group">
+            <button class="btn btn-success btn-sm" id="btn-start"><i class="fas fa-play"></i> Start</button>
+          </div>
         </div>
         <div class="panel-body">
 
@@ -297,8 +365,16 @@
               <div class="stat-inline-value" id="val-infer-time">–</div>
             </div>
             <div class="stat-inline-item">
-              <div class="stat-inline-label">Avg Traj Time</div>
-              <div class="stat-inline-value" id="val-traj-time">–</div>
+              <div class="stat-inline-label">Intra Chunk Time</div>
+              <div class="stat-inline-value" id="val-intra-chunk-time">–</div>
+            </div>
+            <div class="stat-inline-item">
+              <div class="stat-inline-label">Inter Chunk Time</div>
+              <div class="stat-inline-value" id="val-inter-chunk-time">–</div>
+            </div>
+            <div class="stat-inline-item">
+              <div class="stat-inline-label">Avg Net Latency</div>
+              <div class="stat-inline-value" id="val-net-latency">–</div>
             </div>
           </div>
 
@@ -327,17 +403,17 @@
               <input id="inp-lang-win-size" class="input-text" type="number" min="1" step="1" disabled />
             </label>
             <div class="task-progress-wrap" id="task-progress-wrap" title="Task progress (current_prob_progress)">
-              <span class="task-progress-label">Task Progress</span>
+              <span class="task-progress-label">Progress</span>
               <div class="task-progress-track">
                 <div class="task-progress-fill" id="task-progress-fill"></div>
               </div>
               <span class="task-progress-value" id="task-progress-value">--</span>
             </div>
-            <label class="btn btn-xs" title="Load task language json file">
+            <!-- <label class="btn btn-xs btn-load" title="Load task language json file">
               <i class="fas fa-folder-open"></i> Load
               <input id="lang-file-input" type="file" accept=".json" style="display:none" />
-            </label>
-            <button class="btn btn-xs lang-collapse-btn" id="btn-lang-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
+            </label> -->
+            <button class="btn btn-xs btn-collapse" id="btn-lang-collapse" title="Collapse"><i class="fas fa-chevron-up"></i></button>
           </div>
         </div>
         <div class="panel-body" id="lang-body">
@@ -356,7 +432,12 @@
             <div class="lang-cmd-col lang-cmd-col-send">
               <div class="section-title">Instruction</div>
               <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
-              <button class="btn btn-sm" id="btn-lang-send"><i class="fas fa-check"></i> Apply</button>
+              <div class="lang-cmd-btn-row">
+                <button class="btn btn-sm" id="btn-lang-edit" title="Update the selected sub-task instruction"><i class="fas fa-rotate"></i> Upd</button>
+                <button class="btn btn-sm" id="btn-lang-add" title="Add a new sub-task to the current task"><i class="fas fa-plus"></i> Add</button>
+                <button class="btn btn-sm" id="btn-lang-del" title="Delete the selected sub-task from the current task"><i class="fas fa-xmark"></i> Del</button>
+                <button class="btn btn-sm" id="btn-lang-send" title="Send the instruction to the VLA server"><i class="fas fa-check"></i> Apply</button>
+              </div>
             </div>
           </div>
         </div>
@@ -378,8 +459,8 @@
                   <span id="traj-window-span-value" class="traj-window-value">10s</span>
                 </div>
                 <div class="traj-window-controls">
-                  <button class="btn btn-xs" id="btn-traj-pause"><span class="btn-icon"><i class="fas fa-play"></i></span> Play</button>
-                  <button class="btn btn-xs" id="btn-traj-clear"><i class="fas fa-trash-can"></i> Clear</button>
+                  <button class="btn btn-xs btn-ctrl" id="btn-traj-pause"><i class="fas fa-play"></i> Play</button>
+                  <button class="btn btn-xs btn-ctrl" id="btn-traj-clear"><i class="fas fa-trash-can"></i> Clear</button>
                 </div>
               </div>
             </div>
@@ -387,17 +468,17 @@
             <span class="traj-header-sep"></span>
             <!-- ② Source: independent group -->
             <div class="traj-src-group">
-              <span class="traj-src-label">Source</span>
+              <span class="traj-src-label">Sources</span>
               <div class="traj-src-rows">
                 <div class="traj-src-col traj-src-col-action">
                   <label class="traj-src-check" title="Toggle Action Fit source">
                     <input id="chk-traj-action-fitted" type="checkbox" />
-                    <span class="traj-src-btn-text">Action Fit</span>
+                    <span class="traj-src-btn-text">Act Fit</span>
                     <span class="traj-line-indicator traj-line-indicator-action-fitted" aria-hidden="true"></span>
                   </label>
                   <label class="traj-src-check" title="Toggle Action Raw source">
                     <input id="chk-traj-action-raw" type="checkbox" />
-                    <span class="traj-src-btn-text">Action Raw</span>
+                    <span class="traj-src-btn-text">Act Raw</span>
                     <span class="traj-line-indicator traj-line-indicator-action-raw" aria-hidden="true"></span>
                   </label>
                 </div>
@@ -430,7 +511,7 @@
             <!-- Divider -->
             <!-- <span class="traj-header-sep"></span> -->
             <!-- ④ Collapse: rightmost -->
-            <button class="btn btn-xs traj-collapse-btn" id="btn-traj-collapse" title="Collapse"><i class="fas fa-chevron-down"></i></button>
+            <button class="btn btn-xs btn-collapse" id="btn-traj-collapse" title="Collapse"><i class="fas fa-chevron-down"></i></button>
           </div>
         </div>
         <div class="traj-body" id="traj-body">
@@ -448,7 +529,7 @@
       <div class="panel-header">
         <span><i class="fas fa-camera"></i> Camera Viewer</span>
         <div class="panel-header-actions">
-          <button class="btn btn-xs btn-danger" id="btn-cam-all-toggle"><i class="fas fa-pause"></i> Close All</button>
+          <button class="btn btn-danger btn-xs" id="btn-cam-all-toggle"><i class="fas fa-pause"></i> Close All</button>
         </div>
       </div>
       <div class="panel-body" id="camera-body">
@@ -522,6 +603,18 @@
       <div class="modal-actions">
         <button class="btn btn-primary" id="btn-saveas-confirm">Save</button>
         <button class="btn" id="btn-saveas-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ MODAL: Edit Robot Preset ═══════════════════ -->
+  <div id="modal-preset-edit" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-title" id="preset-edit-title">Edit Preset</div>
+      <textarea id="preset-edit-value" class="input-text" rows="6" spellcheck="false"></textarea>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btn-preset-edit-confirm">Save</button>
+        <button class="btn" id="btn-preset-edit-cancel">Cancel</button>
       </div>
     </div>
   </div>

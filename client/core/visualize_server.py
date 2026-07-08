@@ -6,11 +6,9 @@ import logging
 import time
 import threading
 import os
-import cv2
 import numpy as np
 from collections import deque
-from typing import Dict, List, Set, Optional
-from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Set, Optional
 from ml_collections import ConfigDict
 
 # Limits threads used in OpenCV to avoid conflicts.
@@ -21,8 +19,7 @@ class VisualizeServer:
         # including script/uvicorn execution paths.
         self.logger = logging.getLogger(__name__)
         self.config = visualize_config
-        self.logger.info("Initializing server on %s:%d", self.config.server.host, self.config.server.port)
-        self.kill_port(self.config.server.port)
+        self.kill_port(self.config.port)
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = False
 
@@ -31,18 +28,18 @@ class VisualizeServer:
         self.latest_imgs_seq = 0
         self.sent_imgs_seq = -1
         self.data_lock = threading.Lock()
-        self.camera_send_interval = 1.0 / 30.0
-        self.chart_send_interval = 1.0 / 30.0
-        self._last_camera_send_ts = 0.0
-        self._last_chart_send_ts = 0.0
 
         # Data send queue (deque gives O(1) append/popleft; bounded by maxlen)
         self.data_send_queue = deque(maxlen=1000)
 
         # Server instance
         self.server = None
-        self._img_executor = None
-        self._create_img_executor()
+        # self._img_executor = None
+        # self._create_img_executor()
+        self.vis_global_step = 0
+        self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
+        self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
+        self.logger.info("Initializing server on %s:%d", self.config.host, self.config.port)
 
     def kill_port(self, port):
         os.system(f'kill -9 $(lsof -t -i:{port})')
@@ -57,22 +54,149 @@ class VisualizeServer:
             self.latest_imgs = imgs.copy()
             self.latest_imgs_seq += 1
 
-    def update_chart_data(self, data: List[Dict]):
-        """Update chart data.
+    # def update_chart_data(self, data: List[Dict]):
+    #     """Update chart data.
+
+    #     Args:
+    #         data (List[Dict]): Data list, each element is
+    #             {'tab': 'position|velocity|acceleration',
+    #              'type': 'origin|action|state',
+    #              'x': step, 'joints_y': values}.
+    #     """
+    #     with self.data_lock:
+    #         for dt in data:
+    #             timestamp = time.time()
+    #             dt_with_ts = {**dt, 'timestamp': timestamp}
+    #             self.data_send_queue.append(dt_with_ts)
+
+    #         # Bounded automatically by deque(maxlen=1000).
+
+    def update_chart_data(self, action_fitted=None, vel_fitted=None, acc_fitted=None, action_raw=None, current_state=None, observe_period=None, control_period=None):
+        """Visualize action and state data for debugging and monitoring.
 
         Args:
-            data (List[Dict]): Data list, each element is
-                {'tab': 'position|velocity|acceleration',
-                 'type': 'origin|action|state',
-                 'x': step, 'joints_y': values}.
+            action_fitted: Predicted action values for robot joints vel_fitted: Predicted velocity values (of action_fitted) for robot joints
+            acc_fitted: Predicted acceleration values (of action_fitted) for robot joints
+            action_raw: Raw action values before fitting
+            current_state: Current robot joint state
         """
+        timestamp = time.time()
+        self.vis_global_step += 1
         with self.data_lock:
-            for dt in data:
-                timestamp = time.time()
-                dt_with_ts = {**dt, 'timestamp': timestamp}
-                self.data_send_queue.append(dt_with_ts)
+            # dt_ctrl = self.config.controller.period / 1000.0
+            # Position data
+            if action_fitted is not None:
+                self.data_send_queue.append({
+                    'tab': 'position',
+                    'type': 'action_fitted',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': action_fitted.tolist()
+                })
+            if current_state is not None:
+                self.data_send_queue.append({
+                    'tab': 'position',
+                    'type': 'state',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': current_state.tolist()
+                })
+            if action_raw is not None:
+                self.data_send_queue.append({
+                    'tab': 'position',
+                    'type': 'action_raw',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': action_raw.tolist()
+                })
 
-            # Bounded automatically by deque(maxlen=1000).
+            # TODO: use real velocity/acceleration
+            # Velocity/acceleration for state (derived from state)
+            state_vel = None
+            state_acc = None
+            if current_state is not None:
+                if self.vis_prev_state is None or np.shape(self.vis_prev_state) != np.shape(current_state):
+                    state_vel = np.zeros_like(current_state)
+                    state_acc = np.zeros_like(current_state)
+                else:
+                    state_vel = (current_state - self.vis_prev_state) / control_period
+                    if self.vis_prev_state_vel is None or np.shape(self.vis_prev_state_vel) != np.shape(state_vel):
+                        state_acc = np.zeros_like(current_state)
+                    else:
+                        state_acc = (state_vel - self.vis_prev_state_vel) / control_period
+
+                self.data_send_queue.append({
+                    'tab': 'velocity',
+                    'type': 'state',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': state_vel.tolist()
+                })
+                self.data_send_queue.append({
+                    'tab': 'acceleration',
+                    'type': 'state',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': state_acc.tolist()
+                })
+
+            # Velocity/acceleration for action (direct input)
+            if vel_fitted is not None:
+                self.data_send_queue.append({
+                    'tab': 'velocity',
+                    'type': 'action_fitted',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': vel_fitted.tolist()
+                })
+            if acc_fitted is not None:
+                self.data_send_queue.append({
+                    'tab': 'acceleration',
+                    'type': 'action_fitted',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': acc_fitted.tolist()
+                })
+
+            # Origin (raw action) series
+            if action_raw is not None:
+                if self.vis_prev_origin is None or np.shape(self.vis_prev_origin) != np.shape(action_raw):
+                    origin_vel = np.zeros_like(action_raw)
+                    origin_acc = np.zeros_like(action_raw)
+                else:
+                    origin_vel = (action_raw - self.vis_prev_origin) / observe_period
+                    if self.vis_prev_origin_vel is None or np.shape(self.vis_prev_origin_vel) != np.shape(origin_vel):
+                        origin_acc = np.zeros_like(action_raw)
+                    else:
+                        origin_acc = (origin_vel - self.vis_prev_origin_vel) / observe_period
+
+                self.data_send_queue.append({
+                    'tab': 'velocity',
+                    'type': 'action_raw',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': origin_vel.tolist()
+                })
+                self.data_send_queue.append({
+                    'tab': 'acceleration',
+                    'type': 'action_raw',
+                    'x': self.vis_global_step,
+                    'timestamp': timestamp,
+                    'joints_y': origin_acc.tolist()
+                })
+                self.vis_prev_origin = action_raw
+                self.vis_prev_origin_vel = origin_vel
+
+
+            # Update previous values only for available inputs
+            if action_fitted is not None:
+                self.vis_prev_action = action_fitted
+            if vel_fitted is not None:
+                self.vis_prev_action_vel = vel_fitted
+            if current_state is not None:
+                self.vis_prev_state = current_state
+            if state_vel is not None:
+                self.vis_prev_state_vel = state_vel
 
     async def register_client(self, websocket):
         """Register a new WebSocket client."""
@@ -93,13 +217,13 @@ class VisualizeServer:
         self.clients.discard(websocket)
         self.logger.info("Client disconnected. Active connections: %d", len(self.clients))
 
-    @staticmethod
-    def _cfg_get(cfg, key, default=False):
-        if cfg is None:
-            return default
-        if isinstance(cfg, dict):
-            return bool(cfg.get(key, default))
-        return bool(getattr(cfg, key, default))
+    # @staticmethod
+    # def _cfg_get(cfg, key, default=False):
+    #     if cfg is None:
+    #         return default
+    #     if isinstance(cfg, dict):
+    #         return bool(cfg.get(key, default))
+    #     return bool(getattr(cfg, key, default))
 
     @staticmethod
     def _camera_id_from_key(camera_key: str):
@@ -113,11 +237,10 @@ class VisualizeServer:
         return None
 
     def _get_camera_open_map(self):
-        camera_cfg = getattr(self.config, 'camera', None)
         return {
-            0: self._cfg_get(camera_cfg, 'open_head', True),
-            1: self._cfg_get(camera_cfg, 'open_wrist_left', True),
-            2: self._cfg_get(camera_cfg, 'open_wrist_right', True),
+            0: getattr(self.config.camera, 'open_head', True),
+            1: getattr(self.config.camera, 'open_wrist_left', True),
+            2: getattr(self.config.camera, 'open_wrist_right', True)
         }
 
     async def send_camera_data(self):
@@ -125,9 +248,7 @@ class VisualizeServer:
         if not self.clients:
             return
 
-        now = time.time()
-        if now - self._last_camera_send_ts < self.camera_send_interval:
-            return
+        current_timestamp = time.time()
 
         disconnected_clients = set()
 
@@ -140,26 +261,21 @@ class VisualizeServer:
 
         camera_open = self._get_camera_open_map()
 
-        sent_camera_ids = set()
-
         for camera_key, img in imgs.items():
             try:
                 camera_id = self._camera_id_from_key(camera_key)
                 if camera_id is None:
-                    continue
-                if camera_id in sent_camera_ids:
+                    self.logger.warning(f"Unknown camera key: {camera_key}")
                     continue
                 if not camera_open.get(camera_id, True):
                     continue
 
                 frame_bytes = img.tobytes()
 
-                sent_camera_ids.add(camera_id)
-
                 header = {
                     'type': 'camera_data_binary',
                     'camera_id': camera_id,
-                    'timestamp': time.time(),
+                    'timestamp': current_timestamp,
                     'data_size': len(frame_bytes)
                 }
                 header_bytes = json.dumps(header).encode('utf-8')
@@ -179,7 +295,6 @@ class VisualizeServer:
             except Exception as e:
                 self.logger.warning("Failed to process camera data for key '%s': %s", camera_key, e)
 
-        self._last_camera_send_ts = now
         with self.data_lock:
             self.sent_imgs_seq = max(self.sent_imgs_seq, img_seq)
 
@@ -190,10 +305,6 @@ class VisualizeServer:
         """Send chart (joint trajectory) data to all clients."""
         if not self.clients or not self.data_send_queue:
             return
-        now = time.time()
-        if now - self._last_chart_send_ts < self.chart_send_interval:
-            return
-        self._last_chart_send_ts = now
 
         disconnected_clients = set()
 
@@ -271,7 +382,7 @@ class VisualizeServer:
             try:
                 await self.send_camera_data()
                 await self.send_chart_data()
-                await asyncio.sleep(0.02)
+                await asyncio.sleep(1/self.config.updata_fps)
             except Exception as e:
                 self.logger.error("Data sender loop error: %s", e)
                 await asyncio.sleep(1)
@@ -282,14 +393,14 @@ class VisualizeServer:
 
         async with websockets.serve(
             self.client_handler,
-            self.config.server.host,
-            self.config.server.port,
-            max_size=self.config.server.max_size,
-            ping_interval=self.config.server.ping_interval,
-            ping_timeout=self.config.server.ping_timeout
+            self.config.host,
+            self.config.port,
+            max_size=self.config.max_size,
+            ping_interval=self.config.ping_interval,
+            ping_timeout=self.config.ping_timeout
         ) as server:
             self.server = server
-            self.logger.info("Server started: ws://%s:%d", self.config.server.host, self.config.server.port)
+            self.logger.info("Server started: ws://%s:%d", self.config.host, self.config.port)
             
             data_sender_task = asyncio.create_task(self.data_sender())
             try:
@@ -317,9 +428,9 @@ class VisualizeServer:
     #         self.server.close()
     #         self.logger.info("Visualize Serverstopped.")
 
-    def _create_img_executor(self):
-        if getattr(self, '_img_executor', None) is None or getattr(self._img_executor, '_shutdown', False):
-            self._img_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vis_img_enc")
+    # def _create_img_executor(self):
+    #     if getattr(self, '_img_executor', None) is None or getattr(self._img_executor, '_shutdown', False):
+    #         self._img_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vis_img_enc")
 
     def _main_thread_fun(self):
         """Run the Visualize Server in a dedicated asyncio event loop (background thread)."""
@@ -332,7 +443,7 @@ class VisualizeServer:
         """Start the server in a background daemon thread (idempotent)."""
         if hasattr(self, 'main_thread') and self.main_thread and self.main_thread.is_alive():
             return
-        self._create_img_executor()
+        # self._create_img_executor()
         self.main_thread = threading.Thread(
             target=self._main_thread_fun,
             daemon=True

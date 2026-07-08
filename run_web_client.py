@@ -18,12 +18,16 @@ import os
 import sys
 import uvicorn
 from conf.logging_conf import setup_logging
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+# os.environ.setdefault('MKL_NUM_THREADS', '1')
+# os.environ.setdefault('OMP_NUM_THREADS', '1')
 
 
 def parse_args():
     p = argparse.ArgumentParser(description="VLA Web Client")
     p.add_argument('--host', default='0.0.0.0', help='Bind host')
     p.add_argument('--port', type=int, default=9000, help='Bind port')
+    p.add_argument('--conf', type=str, default='default_conf.yaml', help='Configuration file name used to load and save config parameters in /conf directory')
     p.add_argument('--reload', action='store_true', help='Enable hot reload (dev only)')
     return p.parse_args()
 
@@ -37,6 +41,7 @@ if __name__ == '__main__':
     exit_code = 0
     try:
         logger = setup_logging("client.log", "run_web_client")
+        os.environ['conf_file'] = args.conf
         uvicorn.run(
             "web_client.server:app",
             host=args.host,

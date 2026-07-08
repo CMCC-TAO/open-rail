@@ -10,76 +10,89 @@ def get_record_data_config() -> ConfigDict:
         ConfigDict: Configuration dictionary for data recording containing:
             - switch: Enable/disable data recording
             - save_dir: Relative directory under project root for saved data
-            - info: Metadata including dataset version, robot type, statistics
+            - lerobot: Metadata including dataset version, robot type, statistics
             - features: Data feature definitions for cameras, actions, states
     """
     config = ConfigDict(allow_dotted_keys=True)
 
-    # Base path and version info
+    # Record Common
     config.switch = False  # Enable/disable data recording
-    config.save_raw = True  # Save raw image without resizing or not.
+    config.auto = False  # Enable/disable data recording
     config.save_dir = "data/recording"  # Relative to project root
-    config.record_exp_data = False  # Enable/disable logging action, velocity, and acceleration data to files
-    config.info = ConfigDict(allow_dotted_keys=True)
-    config.info.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
-    config.info.robot_type = "unitree_g1"  # Type of robot used
+    
+
+    # Option
+    config.is_record_episode = False  # Runtime flag: whether episode recording is active
+    config.is_record_eval_log = False  # Runtime flag: whether eval log recording is active
+    config.is_record_expe_data = False  # Runtime flag: whether experiment data recording is active
+    config.save_raw = True  # Save raw image without resizing or not.
+
+    # Evaluation info
+    config.evaluation = ConfigDict(allow_dotted_keys=True)
+    # Evaluation
+    config.evaluation.log_format = "json"  # Evaluation log save format: json | csv | both
+    config.evaluation.scores = [0, 0.5, 1]  # Score options for evaluation log scoring buttons
+    # LeRobot metadata (metadata)
+    config.lerobot = ConfigDict(allow_dotted_keys=True)
+    config.lerobot.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
+    config.lerobot.robot_type = "a2d"  # Type of robot used
 
     # Data statistics (initialized to 0)
-    config.info.total_episodes = 0
-    config.info.total_frames = 0
-    config.info.total_tasks = 0
-    config.info.total_videos = 0
-    config.info.total_chunks = 1
-    config.info.chunks_size = 1000
-    config.info.fps = 30
-    config.info.state_shape = 20
-    config.info.action_shape = 22
+    config.lerobot.total_episodes = 0
+    config.lerobot.total_frames = 0
+    config.lerobot.total_tasks = 0
+    config.lerobot.total_videos = 0
+    config.lerobot.total_chunks = 1
+    config.lerobot.chunks_size = 1000
+    config.lerobot.fps = 30
+    config.lerobot.state_shape = 20
+    config.lerobot.action_shape = 22
 
     # Dataset splits
-    config.info.splits = {'valid': '0:100'}
+    config.lerobot.splits = {'valid': '0:100'}
 
     # Path templates
-    config.info.data_path = "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet"
-    config.info.video_path = "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
+    config.lerobot.data_path = "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet"
+    config.lerobot.video_path = "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
 
     # Image feature definitions
-    # config.info.features = ConfigDict(allow_dotted_keys=True)
+    # config.lerobot.features = ConfigDict(allow_dotted_keys=True)
 
     # Image config dict from cameras
-    config.info['cam.head'] = generate_image_feature_config()
-    config.info['cam.hand_left'] = generate_image_feature_config(width=848,height=480)
-    config.info['cam.hand_right'] = generate_image_feature_config(width=848,height=480)
+    config.lerobot['cam.head'] = generate_image_feature_config()
+    config.lerobot['cam.hand_left'] = generate_image_feature_config(width=848,height=480)
+    config.lerobot['cam.hand_right'] = generate_image_feature_config(width=848,height=480)
 
     # Other features
-    # config.info.features['observation.state'] = ConfigDict({
+    # config.lerobot.features['observation.state'] = ConfigDict({
     #     "dtype": "float32",
     #     "shape": [20]
     # })
-    # config.info.features['action'] = ConfigDict({
+    # config.lerobot.features['action'] = ConfigDict({
     #     "dtype": "float32",
     #     "shape": [22]
     # })
-    # config.info.features['episode_index'] = ConfigDict({
+    # config.lerobot.features['episode_index'] = ConfigDict({
     #     "dtype": "int64",
     #     "shape": [1],
     #     "names": None
     # })
-    # config.info.features['frame_index'] = ConfigDict({
+    # config.lerobot.features['frame_index'] = ConfigDict({
     #     "dtype": "int64",
     #     "shape": [1],
     #     "names": None
     # })
-    # config.info.features['index'] = ConfigDict({
+    # config.lerobot.features['index'] = ConfigDict({
     #     "dtype": "int64",
     #     "shape": [1],
     #     "names": None
     # })
-    # config.info.features['task_index'] = ConfigDict({
+    # config.lerobot.features['task_index'] = ConfigDict({
     #     "dtype": "int64",
     #     "shape": [1],
     #     "names": None
     # })
-    # config.info.features['timestamp'] = ConfigDict({
+    # config.lerobot.features['timestamp'] = ConfigDict({
     #     "dtype": "float32",
     #     "shape": [1],
     #     "names": None

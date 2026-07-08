@@ -76,8 +76,8 @@ function setAppliedOptionMarker(optionEl, isApplied) {
   else delete optionEl.dataset.applied;
 }
 
-function formatLangTaskOptionLabel(taskName) {
-  return taskName;
+function formatLangTaskOptionLabel(taskName, index) {
+  return `${index + 1}.${taskName}`;
 }
 
 function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
@@ -85,7 +85,7 @@ function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
   if (!Number.isFinite(width) || width <= 0) return 36;
   // Reserve width for index/prefix + right check icon area + select paddings.
   const reservedPx = 81;
-  const avgCharPx = 7.2;
+  const avgCharPx = 7.4;
   const estimated = Math.floor((width - reservedPx) / avgCharPx);
   return Math.max(14, estimated);
 }
@@ -133,10 +133,10 @@ function renderLangTaskSelect() {
   taskSel.innerHTML = '';
 
   const { taskId: appliedTaskId } = getAppliedLangSelection();
-  Object.keys(LangCmd.tasks).forEach(taskName => {
+  Object.keys(LangCmd.tasks).forEach((taskName, index) => {
     const opt = document.createElement('option');
     opt.value = taskName;
-    opt.textContent = formatLangTaskOptionLabel(taskName);
+    opt.textContent = formatLangTaskOptionLabel(taskName, index);
     setAppliedOptionMarker(opt, taskName === appliedTaskId);
     taskSel.appendChild(opt);
   });
@@ -197,11 +197,14 @@ function setupLangPanel() {
   const setAutoModeEditable = (enabled) => {
     if (thresholdInput) thresholdInput.disabled = !enabled;
     if (winSizeInput) winSizeInput.disabled = !enabled;
-  };
-
-  const getConfigSavePath = () => {
-    const display = $('conf-path-display');
-    return (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
+    if (taskSel) taskSel.disabled = enabled;
+    if (subtaskSel) subtaskSel.disabled = enabled;
+    const sendBtn = $('btn-lang-send');
+    if (sendBtn) sendBtn.disabled = enabled;
+    ['btn-lang-edit', 'btn-lang-add', 'btn-lang-del'].forEach(id => {
+      const btn = $(id);
+      if (btn) btn.disabled = enabled;
+    });
   };
 
   const persistLanguagePatch = async (patch) => {
@@ -227,11 +230,11 @@ function setupLangPanel() {
       Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
       if (!Object.keys(App.pendingPatch).length) clearPending();
 
-      const path = getConfigSavePath();
-      if (path) {
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
         await apiFetch('/api/client/config/save', {
           method: 'POST',
-          body: JSON.stringify({ path }),
+          body: JSON.stringify({ path: confRes.path }),
         });
       }
       return true;
@@ -412,6 +415,102 @@ function setupLangPanel() {
 }
 
 /** Load language command JSON from App.config.language.file_path (fallback to default endpoint). */
+/** Save LangCmd.tasks back to the configured language file. */
+async function saveLangFile() {
+  const path = App.config && App.config.language && App.config.language.file_path;
+  if (!path) { toast('No language file configured.', 'warn'); return; }
+  try {
+    await apiFetch('/api/client/language/save', {
+      method: 'POST',
+      body: JSON.stringify({ path, data: LangCmd.tasks }),
+    });
+  } catch (e) { /* toasted */ }
+}
+
+/** Edit the instruction at the selected sub-task index with the textarea content. */
+async function editLangSubtask() {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  const textEl = $('lang-cmd-text');
+  if (!taskSel || !subtaskSel || !textEl) return;
+  const taskName = taskSel.value;
+  const idx = Number(subtaskSel.value);
+  const lang = textEl.value.trim();
+  if (!taskName || !LangCmd.tasks[taskName]) { toast('Select a task first.', 'warn'); return; }
+  if (!Number.isFinite(idx) || idx < 0 || idx >= LangCmd.tasks[taskName].length) { toast('Select a sub-task first.', 'warn'); return; }
+  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
+
+  LangCmd.tasks[taskName][idx] = lang;
+  App.currentInstruction = lang;
+  await saveLangFile();
+  renderLangSubtaskSelect();
+  subtaskSel.value = String(idx);
+  App._langSwitching = true;
+  try {
+    await sendLanguageSet(lang);
+  } finally {
+    App._langSwitching = false;
+  }
+  toast('Sub-task instruction updated.', 'ok');
+}
+
+/** Add a new sub-task after the current list using the textarea content. */
+async function addLangSubtask() {
+  const taskSel = $('lang-task-select');
+  const textEl = $('lang-cmd-text');
+  if (!taskSel || !textEl) return;
+  const taskName = taskSel.value;
+  const lang = textEl.value.trim();
+  if (!taskName || !LangCmd.tasks[taskName]) { toast('Select a task first.', 'warn'); return; }
+  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
+
+  LangCmd.tasks[taskName].push(lang);
+  const newIdx = LangCmd.tasks[taskName].length - 1;
+  App.currentInstruction = lang;
+  await saveLangFile();
+  renderLangSubtaskSelect();
+  const subtaskSel = $('lang-subtask-select');
+  if (subtaskSel) subtaskSel.value = String(newIdx);
+  applyLangConfigSelection();
+  App._langSwitching = true;
+  try {
+    await sendLanguageSet(lang);
+  } finally {
+    App._langSwitching = false;
+  }
+  toast('Sub-task added.', 'ok');
+}
+
+/** Delete the selected sub-task from the current task. */
+async function deleteLangSubtask() {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  if (!taskSel || !subtaskSel) return;
+  const taskName = taskSel.value;
+  const idx = Number(subtaskSel.value);
+  if (!taskName || !LangCmd.tasks[taskName]) { toast('Select a task first.', 'warn'); return; }
+  if (!Number.isFinite(idx) || idx < 0 || idx >= LangCmd.tasks[taskName].length) { toast('Select a sub-task first.', 'warn'); return; }
+  if (!confirm('Delete this sub-task?')) return;
+
+  LangCmd.tasks[taskName].splice(idx, 1);
+  await saveLangFile();
+  renderLangSubtaskSelect();
+  const newIdx = Math.max(0, Math.min(idx, LangCmd.tasks[taskName].length - 1));
+  if (LangCmd.tasks[taskName].length > 0) {
+    subtaskSel.value = String(newIdx);
+    applyLangConfigSelection();
+    const textEl = $('lang-cmd-text');
+    const lang = textEl ? textEl.value.trim() : '';
+    if (lang) {
+      App._langSwitching = true;
+      try { await sendLanguageSet(lang); } finally { App._langSwitching = false; }
+    }
+  } else {
+    $('lang-cmd-text').value = '';
+  }
+  toast('Sub-task deleted.', 'ok');
+}
+
 async function loadDefaultLangFile() {
   try {
     const langPath = App.config && App.config.language && App.config.language.file_path;
@@ -482,6 +581,11 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
 
   // Sync Lang Panel Task select
   const taskSel = $('lang-task-select');
+  if (taskSel) taskSel.disabled = editable;
+  const subtaskSel = $('lang-subtask-select');
+  if (subtaskSel) subtaskSel.disabled = editable;
+  const sendBtn = $('btn-lang-send');
+  if (sendBtn) sendBtn.disabled = editable;
   if (taskSel && task && LangCmd.tasks[task]) {
     taskSel.value = task;
   } else if (taskSel && taskSel.options.length > 0 && !taskSel.value) {
@@ -492,7 +596,6 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   renderLangSubtaskSelect();
 
   // Sync Lang Panel Sub-task select
-  const subtaskSel = $('lang-subtask-select');
   const taskName = taskSel ? taskSel.value : null;
   const subtasks = getLangEntries(taskName);
   const safeIndex = subtasks.length > 0
@@ -520,46 +623,124 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
 }
 
 function setupLanguageEvents() {
-// Language Command panel — JSON file picker
-$('lang-file-input').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const path = file.path || file.name;
-  try {
-    const res = await apiFetch('/api/client/language/load', { method: 'POST', body: JSON.stringify({ path }) });
-    buildLangTasksFromData(res.data);
-    renderLangTaskSelect();
+function isLanguageShortcutTypingTarget(el) {
+  if (!el) return false;
+  const tag = (el.tagName || '').toLowerCase();
+  return tag === 'input' || tag === 'textarea' || el.isContentEditable;
+}
 
-    if (!App.config || typeof App.config !== 'object') App.config = {};
-    if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
-    App.config.language.file_path = path;
+function applyLangSubtaskShortcut(targetIndex) {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  const sendBtn = $('btn-lang-send');
+  const task = taskSel ? taskSel.value : null;
+  const subtasks = (task && LangCmd.tasks[task]) ? LangCmd.tasks[task] : [];
 
-    App.pendingPatch['language.file_path'] = path;
-    markPending();
+  if (!subtaskSel || !sendBtn || !subtasks.length) {
+    toast('No language instruction available.', 'warn');
+    return;
+  }
 
-    try {
-      const patchRes = await apiFetch('/api/client/config/patch', {
-        method: 'POST',
-        body: JSON.stringify({ patch: { 'language.file_path': path } }),
-      });
-      App.config = patchRes.config || App.config;
-      delete App.pendingPatch['language.file_path'];
-      if (!Object.keys(App.pendingPatch).length) clearPending();
+  const idx = Number(targetIndex);
+  if (!Number.isInteger(idx) || idx < 0 || idx >= subtasks.length) {
+    toast(`Language instruction ${idx + 1} is not available.`, 'warn');
+    return;
+  }
 
-      const display = $('conf-path-display');
-      const cfgPath = (display && display.dataset.fullPath) || (display && display.textContent.trim()) || '';
-      if (cfgPath) {
-        await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: cfgPath }) });
-      }
-    } catch (_) {
-      App.pendingPatch['language.file_path'] = path;
-      markPending();
+  subtaskSel.value = String(idx);
+  subtaskSel.selectedIndex = idx;
+  subtaskSel.dispatchEvent(new Event('change'));
+  sendBtn.click();
+}
+
+function setupLanguageShortcuts() {
+  let lKeyDown = false;
+
+  document.addEventListener('keydown', (e) => {
+    if (isLanguageShortcutTypingTarget(e.target)) return;
+
+    const key = String(e.key || '').toLowerCase();
+    if (key === 'l') {
+      lKeyDown = true;
+      return;
+    }
+    if (!lKeyDown || e.repeat) return;
+
+    const subtaskSel = $('lang-subtask-select');
+    const count = subtaskSel ? subtaskSel.options.length : 0;
+    if (!count) return;
+
+    if (/^[0-9]$/.test(key)) {
+      e.preventDefault();
+      const target = key === '0' ? 9 : Number(key) - 1;
+      applyLangSubtaskShortcut(target);
+      return;
     }
 
-    toast('Language file loaded.', 'ok', 2000);
-  } catch (_) { /* toasted */ }
-  e.target.value = '';
-});
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const current = Number.isInteger(subtaskSel.selectedIndex) && subtaskSel.selectedIndex >= 0
+        ? subtaskSel.selectedIndex
+        : 0;
+      const next = e.key === 'ArrowUp'
+        ? (current - 1 + count) % count
+        : (current + 1) % count;
+      applyLangSubtaskShortcut(next);
+    }
+  });
+
+  document.addEventListener('keyup', (e) => {
+    if (String(e.key || '').toLowerCase() === 'l') lKeyDown = false;
+  });
+
+  window.addEventListener('blur', () => {
+    lKeyDown = false;
+  });
+}
+
+setupLanguageShortcuts();
+// Language Command panel — JSON file picker
+// $('lang-file-input').addEventListener('change', async (e) => {
+//   const file = e.target.files[0];
+//   if (!file) return;
+//   const path = file.path || file.name;
+//   try {
+//     const res = await apiFetch('/api/client/language/load', { method: 'POST', body: JSON.stringify({ path }) });
+//     buildLangTasksFromData(res.data);
+//     renderLangTaskSelect();
+//
+//     if (!App.config || typeof App.config !== 'object') App.config = {};
+//     if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+//     App.config.language.file_path = path;
+//
+//     App.pendingPatch['language.file_path'] = path;
+//     markPending();
+//
+//     try {
+//       const patchRes = await apiFetch('/api/client/config/patch', {
+//         method: 'POST',
+//         body: JSON.stringify({ patch: { 'language.file_path': path } }),
+//       });
+//       App.config = patchRes.config || App.config;
+//       delete App.pendingPatch['language.file_path'];
+//       if (!Object.keys(App.pendingPatch).length) clearPending();
+//
+//       const confRes = await apiFetch('/api/client/config/path');
+//       if (confRes.path) {
+//         await apiFetch('/api/client/config/save', {
+//           method: 'POST',
+//           body: JSON.stringify({ path: confRes.path }),
+//         });
+//       }
+//     } catch (_) {
+//       App.pendingPatch['language.file_path'] = path;
+//       markPending();
+//     }
+//
+//     toast('Language file loaded.', 'ok', 2000);
+//   } catch (_) { /* toasted */ }
+//   e.target.value = '';
+// });
 
 // Language Command panel — send
 $('btn-lang-send').addEventListener('click', async () => {
@@ -600,32 +781,38 @@ $('btn-lang-send').addEventListener('click', async () => {
   $('btn-apply-config').click();
 
   // 3. Send language command to robot
-  await sendLanguageSet(lang);
+  try {
+    await sendLanguageSet(lang);
+  } finally {
+  }
   toast('Language command updated.', 'info');
+
 });
 $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
 
-// Language Command panel collapse
-$('btn-lang-collapse').addEventListener('click', () => {
-  const langBody = $('lang-body');
-  const trajBody = $('traj-body');
+$('btn-lang-edit').addEventListener('click', editLangSubtask);
+$('btn-lang-add').addEventListener('click', addLangSubtask);
+$('btn-lang-del').addEventListener('click', deleteLangSubtask);
 
-  // If trajectory is collapsed, this click should restore both panels to normal layout.
-  if (trajBody.classList.contains('collapsed')) {
-    trajBody.classList.remove('collapsed');
-    langBody.classList.remove('collapsed');
-    if (typeof updateCenterPanelLayoutState === 'function') {
-      updateCenterPanelLayoutState();
-    }
-    syncCenterPanelCollapseUi();
+// Language Command panel collapse
+$('btn-lang-collapse').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+
+  if (typeof handleCenterPanelCollapseToggle === 'function') {
+    handleCenterPanelCollapseToggle('lang');
     return;
   }
 
+  const langBody = $('lang-body');
+  if (!langBody) return;
   langBody.classList.toggle('collapsed');
   if (typeof updateCenterPanelLayoutState === 'function') {
     updateCenterPanelLayoutState();
   }
-  syncCenterPanelCollapseUi();
+  if (typeof syncCenterPanelCollapseUi === 'function') {
+    syncCenterPanelCollapseUi();
+  }
 });
 
 }

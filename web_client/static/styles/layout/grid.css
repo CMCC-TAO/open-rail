@@ -5,12 +5,15 @@
 :root {
   --layout-left-col-width: 17%;
   --layout-right-col-width: 20%;
-  --center-monitor-height: 17%;
-  --center-lang-height: 26%;
+  --center-monitor-height: 18%;
+  --center-lang-height: 25%;
   --center-traj-height: 52%;
   --center-collapsed-language-header-height: 38px;
   --center-collapsed-trajectory-header-height: 75px;
 }
+.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 164px; }
+.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 228px; }
+.center-col .panel-traj { flex: 0 0 var(--center-traj-height); min-height: 300px; }
 
 .layout {
   position: fixed;
@@ -53,24 +56,25 @@
   background: var(--bg);
 }
 
-.center-col .panel-monitor { flex: 0 0 var(--center-monitor-height); min-height: 156px; }
-.center-col .panel-lang { flex: 0 0 var(--center-lang-height); min-height: 240px; }
-.center-col .panel-traj { flex: 0 0 var(--center-traj-height); min-height: 0; }
 
 /* Language collapsed -> keep only header, Trajectory consumes remaining height */
 .center-col.lang-collapsed .panel-lang {
   flex: 0 0 var(--center-collapsed-language-header-height);
+  min-height: var(--center-collapsed-language-header-height);
 }
 .center-col.lang-collapsed .panel-traj {
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Trajectory collapsed -> keep only header, Language consumes remaining height */
 .center-col.traj-collapsed .panel-traj {
   flex: 0 0 var(--center-collapsed-trajectory-header-height);
+  min-height: var(--center-collapsed-trajectory-header-height);
 }
 .center-col.traj-collapsed .panel-lang {
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Left column collapsed — zero width, content clipped, stays in grid flow */
@@ -97,6 +101,10 @@
   line-height: 1;
   box-shadow: 2px 0 6px rgba(0,0,0,.08);
   writing-mode: initial;
+}
+.panel-reveal-btn i.fas, .panel-reveal-btn i.far, .panel-reveal-btn i.fab {
+  /* font-size: var(--font-size-3); */
+  margin-right: 0px;
 }
 .panel-reveal-btn:hover {
   background: var(--bg2);

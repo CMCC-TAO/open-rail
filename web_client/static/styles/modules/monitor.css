@@ -235,7 +235,7 @@
   font-size: var(--font-size-3); /* 减小标签字体大小 */
   font-weight: var(--font-weight-3); /* 减小标签字体粗细 */
   color: color-mix(in srgb, var(--text-muted) 70%, #b7ccdf 10%);
-  letter-spacing: 0.35px; /* 调整字母间距 */
+  letter-spacing: 0.15px; /* 调整字母间距 */
   text-transform: none;
   white-space: nowrap;
 }

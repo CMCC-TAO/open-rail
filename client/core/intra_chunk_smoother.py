@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.interpolate import CubicSpline, interp1d
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
@@ -20,12 +19,11 @@ class IntraChunkSmoother():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
-        self.action_layout = dict(config.action_layout) if hasattr(config, 'action_layout') else {}
+        self.action_layout = dict(getattr(config, 'action_layout', {}) or {})
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         # Create thread pools for parallel trajectory fitting
         self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers)
         self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers)
-        self.hand_fitting_executor = ThreadPoolExecutor(max_workers=getattr(config, 'max_hand_fitting_workers', 12))
         
         # Initialize trajectory data storage
         # self.traj = None
@@ -37,7 +35,7 @@ class IntraChunkSmoother():
         
         # self.frame = 0
 
-    def process(self, timestamps, action_chunk, time_step=3.75, task_progress=None):
+    def process(self, timestamps, action_chunk, time_step=3.75, task_progress=None, joint_indices=None, step_indices=None):
         """Perform trajectory fitting for robot actions.
         
         This method retrieves action chunks from the real-time data manager,
@@ -73,7 +71,8 @@ class IntraChunkSmoother():
                 action_chunk=action_chunk,
                 start_time=start_time,
                 end_time=end_time,
-                time_step=time_step
+                time_step=time_step,
+                step_indices=step_indices
             )
             task_progress_fitted = self._task_progress_interpolation(
                 timestamps=timestamps,
@@ -88,7 +87,9 @@ class IntraChunkSmoother():
                 action_chunk=action_chunk, 
                 start_time=start_time, 
                 end_time=end_time,
-                time_step=time_step
+                time_step=time_step,
+                joint_indices=joint_indices,
+                step_indices=step_indices
             )
             task_progress_fitted = self._task_progress_interpolation(
                 timestamps=timestamps,
@@ -103,7 +104,9 @@ class IntraChunkSmoother():
                 action_chunk=action_chunk, 
                 start_time=start_time, 
                 end_time=end_time,
-                time_step=time_step
+                time_step=time_step,
+                joint_indices=joint_indices,
+                step_indices=step_indices
             )
             task_progress_fitted = self._task_progress_interpolation(
                 timestamps=timestamps,
@@ -143,14 +146,17 @@ class IntraChunkSmoother():
         # Calculate fitted joint angles using the polynomial
         polynomial = np.poly1d(coefficients)
         joint_chunk_fitted = polynomial(x)
+        # joint_chunk_fitted = np.polyval(coefficients, x)
         
         # Calculate joint velocities using the derivative
         derivative_polynomial = np.poly1d(derivative_coefficients)
         velocity_chunk_fitted = derivative_polynomial(x)
+        # velocity_chunk_fitted = np.polyval(derivative_coefficients, x)
 
         # Calculate joint acceleration using the second derivative
         second_derivative_polynomial = np.poly1d(second_derivative_coefficients)
         acceleration_chunk_fitted = second_derivative_polynomial(x)
+        # acceleration_chunk_fitted = np.polyval(second_derivative_coefficients, x)
         # print(f"fitting degree: {deg}, time_step: {time_step}")
         return index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
@@ -202,51 +208,8 @@ class IntraChunkSmoother():
 
         return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted), np.zeros_like(gripper_chunk_fitted)  # Gripper velocity and acceleration are not considered
 
-    def _hand_traj_fitting(self, timestamps, hand_chunk, index, start_time, end_time, time_step=0.001):
-        """Fit a dexterous hand trajectory using mean filtering only (no threshold clamping).
-
-        Hand values (0-1000 range) are smoothed via sliding window mean without
-        the 0-1 threshold clamping used for grippers, preserving the full range.
-
-        Args:
-            timestamps (np.array): The timestamps of the hand trajectory in seconds.
-            hand_chunk (np.array): The hand finger trajectory to be fitted.
-            index (int): The index of the finger.
-            start_time (float): The start time of the fitted trajectory in seconds.
-            end_time (float): The end time of the fitted trajectory in seconds.
-            time_step (float, optional): The time step to compute the fitted trajectory.
-
-        Returns:
-            tuple(int, np.array, np.array, np.array): index, fitted, velocity, acceleration.
-        """
-        # Smooth using sliding window mean (no threshold clamping)
-        length = len(hand_chunk)
-        window_size_half = self.config.filter_window_size
-        for currt_index in range(length):
-            if currt_index < window_size_half:
-                window_min = 0
-                window_max = min(length, window_size_half * 2 + 1)
-            elif currt_index >= length - window_size_half:
-                window_min = max(0, length - window_size_half * 2 - 1)
-                window_max = length
-            else:
-                window_min = currt_index - window_size_half
-                window_max = currt_index + window_size_half + 1
-            hand_chunk[currt_index] = np.mean(hand_chunk[window_min:window_max])
-
-        # Linear interpolation to target timestamps
-        timestamp_fitted = np.arange(start_time, end_time, time_step)
-        hand_chunk_fitted = []
-        currt_index = 0
-        for timestamp in timestamp_fitted:
-            if timestamp > timestamps[currt_index]:
-                currt_index = min(length, currt_index + 1)
-            hand_chunk_fitted.append((hand_chunk[max(currt_index - 1, 0)] + hand_chunk[min(currt_index, length - 1)]) / 2.0)
-
-        return index, hand_chunk_fitted, np.zeros_like(hand_chunk_fitted), np.zeros_like(hand_chunk_fitted)
-
     @run_time_decorator
-    def _traj_fitting(self, timestamps, action_chunk, start_time, end_time, time_step):
+    def _traj_fitting(self, timestamps, action_chunk, start_time, end_time, time_step, joint_indices, step_indices):
         """Fit trajectories for both joints and grippers.
         
         Args:
@@ -265,19 +228,17 @@ class IntraChunkSmoother():
 
         futures = []
         for name, seg in self.action_layout.items():
+            if seg['policy'] == 'manual':
+                continue
             for index in range(seg['start'], seg['end']):
                 joint_chunk = np.array(action_chunk[index, :])
-                if seg['policy'] == 'gradual' or seg['policy'] == 'joint':
+                if seg['policy'] == 'gradual':
                     futures.append(self.joint_fitting_executor.submit(
                         self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
                     ))
-                elif seg['policy'] == 'stepwise' or seg['policy'] == 'gripper':
+                elif seg['policy'] == 'stepwise':
                     futures.append(self.gripper_fitting_executor.submit(
                         self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
-                    ))
-                elif seg['policy'] == 'hand':
-                    futures.append(self.hand_fitting_executor.submit(
-                        self._hand_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
                     ))
                 else:
                     raise ValueError(f"Unknown policy: {seg['policy']}")
@@ -329,7 +290,7 @@ class IntraChunkSmoother():
         return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
     
     @run_time_decorator
-    def _traj_interpolation(self, timestamps, action_chunk, start_time, end_time, time_step):
+    def _traj_interpolation(self, timestamps, action_chunk, start_time, end_time, time_step, step_indices):
         """Interpolate trajectories for both joints and grippers using CubicSpline.
         
         Args:
@@ -351,7 +312,7 @@ class IntraChunkSmoother():
         vel_fitted = np.zeros((n_joints, len(timestamps_fitted)))
         acc_fitted = np.zeros((n_joints, len(timestamps_fitted)))
         
-        step_index_set = set(self.step_indices)
+        step_index_set = set(step_indices)
         for j in range(n_joints):
             # Gripper and head dimensions use zero-order hold interpolation (step-like)
             if j in step_index_set:
