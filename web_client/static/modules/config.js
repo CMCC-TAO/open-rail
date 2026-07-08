@@ -857,8 +857,14 @@ function createCfgRow(dotKey, label, value, options = {}) {
         renderRecordingConfigTree(App.config);
 
         try {
-          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
-          toast(`${dotKey} updated and saved to ${CONF_FILE}.`, 'ok', 2200);
+          const confRes = await apiFetch('/api/client/config/path');
+          if (confRes.path) {
+            await apiFetch('/api/client/config/save', {
+              method: 'POST',
+              body: JSON.stringify({ path: confRes.path }),
+            });
+          }
+          toast(`${dotKey} updated and saved to ${confRes.path}.`, 'ok', 2200);
         } catch (_) {
           toast(`${dotKey} updated, but save to ${CONF_FILE} failed.`, 'warn', 2600);
         }
@@ -1404,7 +1410,13 @@ async function persistVisualStateNow() {
     });
     App.config = res.config || App.config;
 
-    await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   } catch (_) {
     // no-op: visual state already effective in UI
   } finally {

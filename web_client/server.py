@@ -1942,30 +1942,6 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
         _cleanup_guard.release()
 
 
-def _cleanup_with_timeout(force_release_robot: bool = False, timeout_s: float = 8.0):
-    """Run cleanup in a daemon thread and bound shutdown wait time.
-
-    This prevents Ctrl-C shutdown from hanging forever when low-level robot/DDS
-    release blocks unexpectedly.
-    """
-    cleanup_error: dict[str, Exception] = {}
-
-    def _run_cleanup():
-        try:
-            _cleanup(force_release_robot=force_release_robot)
-        except Exception as e:
-            cleanup_error["err"] = e
-
-    t = threading.Thread(target=_run_cleanup, name="web-client-cleanup", daemon=True)
-    t.start()
-    t.join(timeout=max(0.1, float(timeout_s)))
-
-    if t.is_alive():
-        logger.error("Cleanup timed out during shutdown; forcing process exit path.")
-    elif "err" in cleanup_error:
-        logger.error(f"Cleanup failed during shutdown: {cleanup_error['err']}")
-
-
 @app.get("/api/client/status")
 async def client_status():
     stats = await asyncio.to_thread(_collect_stats)
