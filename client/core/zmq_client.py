@@ -25,10 +25,8 @@ class ZMQClient():
         self.context = zmq.Context()
 
         self.client_addr = f'tcp://{config.ip}:{config.port}'  # Client connection address and port
-        self.dealer = self.context.socket(zmq.DEALER)
-        # self.dealer.setsockopt(zmq.SNDTIMEO, 5000)  # 5 second timeout
-        self.dealer.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
-        self.dealer.connect(self.client_addr)
+        self.dealer = self._create_dealer(hwm=1)
+        self.heartbeat_dealer = self._create_dealer(hwm=100)
         
         self.is_closed = False
         self.is_connected = False
@@ -45,48 +43,105 @@ class ZMQClient():
         # Start heartbeat thread
         self.start_heartbeat()
 
+    def _create_dealer(self, hwm=1):
+        """Create and connect a DEALER socket."""
+        dealer = self.context.socket(zmq.DEALER)
+        dealer.setsockopt(zmq.SNDHWM, hwm)
+        dealer.connect(self.client_addr)
+        return dealer
+
     def start_heartbeat(self):
         """Start the heartbeat thread to detect connection status."""
         self.heartbeat_thread = threading.Thread(target=self._heartbeat_worker, daemon=True)
         self.heartbeat_thread.start()
 
+    def send_heartbeat(self):
+        """Send heartbeat ping through dedicated heartbeat dealer."""
+        if self.is_closed:
+            return False
+
+        try:
+            data = pickle.dumps({'type': 'heartbeat', 'timestamp': time.time()})
+            meta = json.dumps({'action': 'ping'}).encode('utf8')
+            self.heartbeat_dealer.send_multipart([data, meta], flags=zmq.NOBLOCK)
+            return True
+        except zmq.ZMQError as e:
+            if self.is_closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM, zmq.EAGAIN):
+                return False
+            return False
+        except Exception as e:
+            self.logger.error(f"Error sending heartbeat: {e}")
+            return False
+
+    def receive_heartbeat(self, timeout_ms=500):
+        """Receive heartbeat response through dedicated heartbeat dealer."""
+        if self.is_closed:
+            return False
+
+        try:
+            if self.heartbeat_dealer.poll(timeout=timeout_ms) == 0:
+                return False
+
+            parts = self.heartbeat_dealer.recv_multipart()
+            if len(parts) < 2:
+                return False
+
+            data = pickle.loads(parts[0])
+            meta = json.loads(parts[1].decode('utf8'))
+
+            if isinstance(data, dict) and data.get('type') == 'heartbeat' and meta.get('action') == 'pong':
+                self.heartbeat_info = data
+                self.last_heartbeat_time = time.time()
+                self.is_connected = True
+                return True
+            return False
+        except zmq.ZMQError as e:
+            if self.is_closed or e.errno in (zmq.ENOTSOCK, zmq.ETERM):
+                return False
+            self.logger.error(f"Error receiving heartbeat: {e}")
+            return False
+        except Exception as e:
+            self.logger.error(f"Error receiving heartbeat: {e}")
+            return False
+
     def _heartbeat_worker(self):
         """Heartbeat worker function to periodically send heartbeat messages."""
         while not self.is_closed:
-            time.sleep(self.config.heartbeat_interval/1000)
-            
+            time.sleep(self.config.heartbeat_interval / 1000)
+
             if self.is_closed:
                 break
-                
-            # Send a heartbeat message to check connection
-            if not self.sendMessage({'type': 'heartbeat', 'timestamp': time.time()}, {'action': 'ping'}):
-                self.logger.warning(f"Failed to send heartbeat, connection may be lost, is_closed={self.is_closed}")
-                # print("Failed to send heartbeat, connection may be lost")
+
+            heartbeat_ok = False
+            with self._reconnect_lock:
+                if self.send_heartbeat():
+                    heartbeat_ok = self.receive_heartbeat(timeout_ms=1500)
+
+            if not heartbeat_ok:
+                self.logger.warning(f"Heartbeat failed, connection may be lost, is_closed={self.is_closed}")
                 self.is_connected = False
-                # Attempt to reconnect if connection is lost
                 self._attempt_reconnect()
-            else:
-                self.last_heartbeat_time = time.time()
-                self.is_connected = True
-                # print(f"Heartbeat keep alive, is_connected: {self.is_connected}, heartbeat_time: {self.last_heartbeat_time}")
 
     def _attempt_reconnect(self):
         """Attempt to reconnect to the server."""
-            
         with self._reconnect_lock:
-            # Close old socket
+            # Close old sockets
             try:
                 self.dealer.close(linger=0)
-            except:
+            except Exception:
                 pass
-                
-            self.dealer = self.context.socket(zmq.DEALER)
-            self.dealer.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
-            self.dealer.connect(self.client_addr)
-            
-            # Test connection by sending two message, the first message will return true anyway.
-            self.sendMessage({'type': 'test_connection', 'timestamp': time.time()}, {'action': 'test'})
-            if self.sendMessage({'type': 'test_connection', 'timestamp': time.time()}, {'action': 'test'}):
+
+            try:
+                self.heartbeat_dealer.close(linger=0)
+            except Exception:
+                pass
+
+            # Recreate sockets
+            self.dealer = self._create_dealer(hwm=1)
+            self.heartbeat_dealer = self._create_dealer(hwm=100)
+
+            # Test connection via dedicated heartbeat dealer
+            if self.send_heartbeat() and self.receive_heartbeat(timeout_ms=500):
                 self.logger.info("Reconnection successful")
                 self.is_connected = True
                 self.last_heartbeat_time = time.time()
@@ -95,20 +150,24 @@ class ZMQClient():
             
     def update_connection(self, new_ip=None, new_port=None):
         """Update connection parameters and reconnect to the server.
-        
+
         Args:
             new_ip (str, optional): New IP address to connect to
             new_port (int, optional): New port to connect to
         """
-        with self._reconnect_lock: 
-            
-            # Close old socket
+        with self._reconnect_lock:
+            # Close old sockets
             try:
                 self.dealer.close(linger=0)
-            except:
+            except Exception:
                 pass
-                
-            # Create a new socket and connect
+
+            try:
+                self.heartbeat_dealer.close(linger=0)
+            except Exception:
+                pass
+
+            # Create new sockets and connect
             try:
                 # Update the connection address
                 if new_ip is None:
@@ -118,20 +177,20 @@ class ZMQClient():
                 self.client_addr = f'tcp://{new_ip}:{new_port}'
                 self.logger.info(f"Updating connection to: {self.client_addr}")
                 print(f"Updating connection to: {self.client_addr}")
-                self.dealer = self.context.socket(zmq.DEALER)
-                self.dealer.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
-                self.dealer.connect(self.client_addr)
-                
-                # Test connection
-                if self.sendMessage({'type': 'test_connection', 'timestamp': time.time()}, {'action': 'test'}):
+
+                self.dealer = self._create_dealer(hwm=1)
+                self.heartbeat_dealer = self._create_dealer(hwm=100)
+
+                # Test connection with dedicated heartbeat dealer
+                if self.send_heartbeat() and self.receive_heartbeat(timeout_ms=500):
                     self.logger.info("Connection update successful")
                     self.is_connected = True
                     self.last_heartbeat_time = time.time()
                     return True
-                else:
-                    self.logger.error("Connection test failed after update")
-                    return False
-                    
+
+                self.logger.error("Connection test failed after update")
+                return False
+
             except Exception as e:
                 self.logger.error(f"Connection update failed: {e}")
                 return False
@@ -247,6 +306,10 @@ class ZMQClient():
             
             try:
                 self.dealer.close(linger=0)
+            except Exception:
+                pass
+            try:
+                self.heartbeat_dealer.close(linger=0)
             except Exception:
                 pass
             try:
