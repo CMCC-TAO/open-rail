@@ -139,4 +139,5 @@ AGENTS.md
 a2d_description
 install
 log
-conf/custom_conf.yaml
+conf/*.yaml
+!config/default_conf.yaml
