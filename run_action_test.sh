@@ -18,7 +18,7 @@ tmux new-session -d -s "$SESSION_NAME" -n "action_test"
 
 # 左上窗格：Action Server
 tmux send-keys -t "$SESSION_NAME" "cd $(dirname "$0")" Enter
-tmux send-keys -t "$SESSION_NAME" "conda activate gr00t && python3 action_server/action_dispatcher.py" Enter
+tmux send-keys -t "$SESSION_NAME" "conda activate gr00t && python3 action_server/action_dispatcher.py --robot_type unitree_g1" Enter
 
 # 等待一下让 server 启动显示日志
 sleep 1.5

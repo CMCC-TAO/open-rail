@@ -18,6 +18,7 @@ class RobotType(str, Enum):
     MOCK = 'mock'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
+    UNITREE_G1 = 'unitree_g1'
 
 def get_a2d_config():
     """Generate configuration for A2D robot.
@@ -223,6 +224,21 @@ def get_navi_wa2_config():
 
     return config
 
+def get_unitree_g1_config():
+    """Generate configuration for Unitree G1 robot.
+
+    Returns:
+        ConfigDict: Configuration dictionary for Unitree G1 robot.
+    """
+    config = ConfigDict()
+    config.reset_robot_pos = [0.0] * 26
+    config.action_layout = {
+        'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
+        'gripper': {'start': 14, 'end': 26, 'policy': 'stepwise'},
+    }
+    return config
+
+
 def get_robots_config():
     """Generate configuration for all supported robot types.
     
@@ -242,6 +258,7 @@ def get_robots_config():
     config.mock = get_mock_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()
+    config.unitree_g1 = get_unitree_g1_config()
     return config
 
 if __name__ == '__main__':

@@ -476,13 +476,13 @@ class VLAActionDispatcher(Node):
     # ================================================================
     MAX_TASK_DURATION = 120.0  # 单次任务最大执行时间（秒）
 
-    def __init__(self):
+    def __init__(self, robot_type: str = None):
         super().__init__('vla_action_server')
 
         self.get_logger().info('VLA Action Dispatcher starting...')
 
         # 创建共享上下文（config + robot_body 等长生命周期资源）
-        self._context = VLAContext()
+        self._context = VLAContext(robot_type=robot_type)
         self.get_logger().info('VLA context created (robot_body lazy, will init on first use)')
 
         # 任务处理器注册表: task_name -> AbstractTaskHandler
@@ -711,12 +711,19 @@ class VLAActionDispatcher(Node):
 # ==============================================
 
 def main(args=None):
+    # 先解析自定义参数（--robot_type 等），避免传入 ROS2
+    import argparse as _argparse
+    _parser = _argparse.ArgumentParser(description='VLA Action Dispatcher')
+    _parser.add_argument('--robot_type', type=str, default=None,
+                        help='Robot type, e.g. unitree_g1, a2d (default: a2d)')
+    _custom_args, _remaining = _parser.parse_known_args()
+
     # 显式传 args=[] 避免 sys.argv 干扰 ROS2 参数解析
-    rclpy.init(args=args if args is not None else [])
+    rclpy.init(args=_remaining if args is None else [])
 
     dispatcher = None
     try:
-        dispatcher = VLAActionDispatcher()
+        dispatcher = VLAActionDispatcher(robot_type=_custom_args.robot_type)
 
         # 预初始化 robot_body：在 spin 循环启动前完成所有 ROS2 节点的创建，
         # 避免 execute_callback 中懒加载新节点导致 wait set 重建时

@@ -17,7 +17,7 @@ class RobotBody(RobotBase):
     """
 
     def __init__(self, config, ros_context=None):
-        super().__init__()
+        super().__init__(config)
         self.cfg, self.ori_cfg = config["robots"]["unitree_g1"], config
 
         # Use externally passed context, or create independent context (isolates wait set)

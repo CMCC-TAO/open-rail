@@ -39,10 +39,15 @@ class VLAContext:
     彻底消除 "wait set index too big" 错误。
     """
 
-    def __init__(self):
+    def __init__(self, robot_type: str = None):
         from conf.client_conf import get_client_config
 
         self.config = get_client_config()
+
+        # 如果传入了 robot_type，覆盖默认配置
+        if robot_type is not None:
+            from conf.robots_conf import RobotType
+            self.config.robots.type = RobotType(robot_type)
 
         # 将机器人专属 action_layout 传播到 rdm / intra_chunk 子配置
         # （与 run_client.py / web_client 的初始化逻辑对齐）

@@ -273,7 +273,7 @@ def run_vla_inference(
         vla_client.is_running_action = False
 
         send_vla_feedback(goal_handle, 10, "正在启动 VLA 推理...")
-        vla_client.run()                    # 先启动观察/控制/WebSocket 线程
+        vla_client.start()                    # 先启动观察/控制/WebSocket 线程
         time.sleep(0.5)                     # 等待观测数据积累
         # 注意: 不要在这里调 inference_first()!
         # _inference_thread_fun 内部已经有 infer_count==0 的自调用首帧逻辑
