@@ -28,7 +28,7 @@ class ZMQServer():
         self.context = zmq.Context()
         # Create ROUTER socket for handling multiple clients
         self.router = self.context.socket(zmq.ROUTER)
-        self.router.setsockopt(zmq.SNDHWM, 1)  # Set send buffer to 1 message
+        self.router.setsockopt(zmq.SNDHWM, 100)  # Set send buffer to 1 message
         self.router.bind(self.server_addr)
         
         # Client tracking
