@@ -44,6 +44,21 @@ class VLAContext:
 
         self.config = get_client_config()
 
+        # ════════════════════════════════════════════════════════════
+        # 加载 default_conf.yaml 覆盖 Python 默认值
+        # （与 web_client/server.py:_lifespan 的初始化一致）
+        # ════════════════════════════════════════════════════════════
+        _yaml_path = os.path.join(_project_root, 'conf', 'default_conf.yaml')
+        if os.path.exists(_yaml_path):
+            try:
+                import yaml
+                with open(_yaml_path, 'r') as _f:
+                    _yaml_data = yaml.safe_load(_f)
+                if isinstance(_yaml_data, dict):
+                    self._apply_yaml_overrides(self.config, _yaml_data)
+            except Exception as e:
+                print(f'[VLAContext] Warning: failed to load default_conf.yaml: {e}')
+
         # 如果传入了 robot_type，覆盖默认配置
         if robot_type is not None:
             from conf.robots_conf import RobotType
@@ -53,6 +68,7 @@ class VLAContext:
         # （与 run_client.py / web_client 的初始化逻辑对齐）
         robot_cfg = getattr(self.config.robots, self.config.robots.type.value, None)
         if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
+            self.config.action_layout = robot_cfg.action_layout
             self.config.rdm.action_layout = robot_cfg.action_layout
             self.config.intra_chunk.action_layout = robot_cfg.action_layout
 
@@ -66,6 +82,46 @@ class VLAContext:
         self._print_init_running = True
         self._print_init_thread = threading.Thread(target=self._print_init_loop, daemon=True)
         self._print_init_thread.start()
+
+    # ────────────────────────────────────────────────────────────────
+    # YAML 配置覆盖（只修改已有键，不创建新键）
+    # ────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _apply_yaml_overrides(config, yaml_data: dict):
+        """将 yaml 数据以 flat-patch 方式覆盖到 config 的已有键上。"""
+        # 将 yaml 数据展平为点分键字典
+        flat = {}
+        def _flatten(d, prefix=''):
+            for k, v in d.items():
+                full = f'{prefix}.{k}' if prefix else k
+                if isinstance(v, dict):
+                    _flatten(v, full)
+                else:
+                    flat[full] = v
+        _flatten(yaml_data)
+
+        # 遍历 config 叶子节点，匹配则打补丁
+        def _walk(node, prefix=''):
+            from ml_collections import ConfigDict
+            keys = list(node.keys()) if isinstance(node, (dict, ConfigDict)) else []
+            for k in keys:
+                child = node[k]
+                path = f'{prefix}.{k}' if prefix else k
+                if isinstance(child, (dict, ConfigDict)):
+                    _walk(child, path)
+                elif path in flat:
+                    val = flat[path]
+                    # 处理 Enum 类型
+                    import enum as _enum
+                    if isinstance(child, _enum.Enum):
+                        enum_cls = child.__class__
+                        try:
+                            val = enum_cls(val)
+                        except Exception:
+                            pass
+                    node[k] = val
+        _walk(config)
 
     # ================================================================
     # robot_body 懒加载属性
