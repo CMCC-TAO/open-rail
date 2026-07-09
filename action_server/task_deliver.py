@@ -5,23 +5,23 @@
 
 任务接口:
   {
-    "task": "left arm deliver",   # 左手递物
-    "target": "none",
+    "task": "deliver",        # 左手递物
+    "target": "left arm",     # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "right arm deliver",  # 右手递物
-    "target": "none",
+    "task": "deliver",        # 右手递物
+    "target": "right arm",    # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "one arm deliver",    # 单手递物（自动判断哪只手有物体）
-    "target": "none",
+    "task": "deliver",        # 单手递物（自动判断哪只手有物体）
+    "target": "one arm",      # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "both arm deliver",   # 双手递物
-    "target": "none",
+    "task": "deliver",        # 双手递物
+    "target": "both arm",     # 抓取的目标
     "waypoint": "none"
   }
 """
@@ -68,11 +68,11 @@ TUG_MONITOR_INTERVAL = 0.05         # 监测周期（秒），~20Hz
 class DeliverHandler(AbstractTaskHandler):
     """递物任务处理器
 
-    由 dispatcher 路由到以下 4 个 task name 之一:
-      - "left arm deliver"
-      - "right arm deliver"
-      - "one arm deliver"
-      - "both arm deliver"
+    由 dispatcher 路由到以下 4 个 task:target 复合键之一:
+      - "deliver:left arm"
+      - "deliver:right arm"
+      - "deliver:one arm"
+      - "deliver:both arm"
     """
 
     @property
@@ -80,20 +80,20 @@ class DeliverHandler(AbstractTaskHandler):
         return "deliver"
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
-        task = params.get("task", "")
+        target = params.get("target", "")
 
-        if task == "left arm deliver":
+        if target == "left arm":
             return self._left_arm_deliver(goal_handle, context)
-        elif task == "right arm deliver":
+        elif target == "right arm":
             return self._right_arm_deliver(goal_handle, context)
-        elif task == "one arm deliver":
+        elif target == "one arm":
             return self._one_arm_deliver(goal_handle, context)
-        elif task == "both arm deliver":
+        elif target == "both arm":
             return self._both_arm_deliver(goal_handle, context)
         else:
-            self.send_feedback(goal_handle, 0, f"未知递物子任务: {task}")
+            self.send_feedback(goal_handle, 0, f"未知递物目标: {target}")
             return TaskResult(False, error_code=99,
-                              error_message=f'Unknown deliver sub-task: "{task}"')
+                              error_message=f'Unknown deliver target: "{target}"')
 
     # ================================================================
     # 工具方法

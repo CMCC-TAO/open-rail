@@ -5,23 +5,23 @@
 
 任务接口:
   {
-    "task": "left arm place",    # 左手放置
-    "target": "none",
+    "task": "place",              # 左手放置
+    "target": "left arm",         # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "right arm place",   # 右手放置
-    "target": "none",
+    "task": "place",              # 右手放置
+    "target": "right arm",        # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "one arm place",     # 单手放置（自动判断哪只手有物体）
-    "target": "none",
+    "task": "place",              # 单手放置（自动判断哪只手有物体）
+    "target": "one arm",          # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "both arm place",    # 双手放置
-    "target": "none",
+    "task": "place",              # 双手放置
+    "target": "both arm",         # 抓取的目标
     "waypoint": "none"
   }
 """
@@ -82,11 +82,11 @@ CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
 class PlaceHandler(AbstractTaskHandler):
     """放置任务处理器
 
-    由 dispatcher 路由到以下 4 个 task name 之一:
-      - "left arm place"
-      - "right arm place"
-      - "one arm place"
-      - "both arm place"
+    由 dispatcher 路由到以下 4 个 task:target 复合键之一:
+      - "place:left arm"
+      - "place:right arm"
+      - "place:one arm"
+      - "place:both arm"
     """
 
     @property
@@ -94,20 +94,20 @@ class PlaceHandler(AbstractTaskHandler):
         return "place"
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
-        task = params.get("task", "")
+        target = params.get("target", "")
 
-        if task == "left arm place":
+        if target == "left arm":
             return self._left_arm_place(goal_handle, context)
-        elif task == "right arm place":
+        elif target == "right arm":
             return self._right_arm_place(goal_handle, context)
-        elif task == "one arm place":
+        elif target == "one arm":
             return self._one_arm_place(goal_handle, context)
-        elif task == "both arm place":
+        elif target == "both arm":
             return self._both_arm_place(goal_handle, context)
         else:
-            self.send_feedback(goal_handle, 0, f"未知放置子任务: {task}")
+            self.send_feedback(goal_handle, 0, f"未知放置目标: {target}")
             return TaskResult(False, error_code=99,
-                              error_message=f'Unknown place sub-task: "{task}"')
+                              error_message=f'Unknown place target: "{target}"')
 
     # ================================================================
     # 工具方法

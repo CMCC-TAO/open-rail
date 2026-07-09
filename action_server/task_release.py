@@ -5,18 +5,18 @@
 
 任务接口:
   {
-    "task": "left hand release",    # 左手松手
-    "target": "none",
+    "task": "release",          # 左手松手
+    "target": "left hand",      # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "right hand release",   # 右手松手
-    "target": "none",
+    "task": "release",          # 右手松手
+    "target": "right hand",     # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "both hand release",    # 双手松手
-    "target": "none",
+    "task": "release",          # 双手松手
+    "target": "both hand",      # 抓取的目标
     "waypoint": "none"
   }
 """
@@ -45,10 +45,10 @@ HAND_RELEASE_STEP_INTERVAL = 0.04  # 每步间隔（秒）
 class ReleaseHandler(AbstractTaskHandler):
     """松手任务处理器
 
-    由 dispatcher 路由到以下 3 个 task name 之一:
-      - "left hand release"
-      - "right hand release"
-      - "both hand release"
+    由 dispatcher 路由到以下 3 个 task:target 复合键之一:
+      - "release:left hand"
+      - "release:right hand"
+      - "release:both hand"
     """
 
     @property
@@ -56,18 +56,18 @@ class ReleaseHandler(AbstractTaskHandler):
         return "release"
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
-        task = params.get("task", "")
+        target = params.get("target", "")
 
-        if task == "left hand release":
+        if target == "left hand":
             return self._left_hand_release(goal_handle, context)
-        elif task == "right hand release":
+        elif target == "right hand":
             return self._right_hand_release(goal_handle, context)
-        elif task == "both hand release":
+        elif target == "both hand":
             return self._both_hand_release(goal_handle, context)
         else:
-            self.send_feedback(goal_handle, 0, f"未知松手子任务: {task}")
+            self.send_feedback(goal_handle, 0, f"未知松手目标: {target}")
             return TaskResult(False, error_code=99,
-                              error_message=f'Unknown release sub-task: "{task}"')
+                              error_message=f'Unknown release target: "{target}"')
 
     # ================================================================
     # 工具方法

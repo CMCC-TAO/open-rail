@@ -32,7 +32,7 @@ _RIGHT_RESET_POSE = np.array([0, -0.3, 0, 1.3, 0, 0, 0])
 
 
 class FinishGraspHandler(AbstractTaskHandler):
-    """'finish grasp' 任务处理器
+    """'grasp' task + target='finish' 任务处理器
 
     流程:
         1. 获取当前手掌状态（保留抓取值）
@@ -43,7 +43,7 @@ class FinishGraspHandler(AbstractTaskHandler):
 
     @property
     def task_name(self) -> str:
-        return "finish grasp"
+        return "grasp"
 
     def _get_current_hands(self, robot_body) -> np.ndarray:
         """获取当前 12 维手掌状态（最新下发量），保持抓取物体不松手"""

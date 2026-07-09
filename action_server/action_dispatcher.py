@@ -531,7 +531,8 @@ class VLAActionDispatcher(Node):
         """注册内置任务处理器"""
         try:
             from action_server.task_init_grasp import InitGraspHandler
-            self.register_handler(InitGraspHandler())
+            self._handlers["grasp:init"] = InitGraspHandler()
+            self.get_logger().info('Registered handler for task="grasp:init"')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load init_grasp handler: {e}')
 
@@ -543,7 +544,8 @@ class VLAActionDispatcher(Node):
 
         try:
             from action_server.task_finish_grasp import FinishGraspHandler
-            self.register_handler(FinishGraspHandler())
+            self._handlers["grasp:finish"] = FinishGraspHandler()
+            self.get_logger().info('Registered handler for task="grasp:finish"')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load finish_grasp handler: {e}')
 
@@ -556,46 +558,43 @@ class VLAActionDispatcher(Node):
         try:
             from action_server.task_deliver import DeliverHandler
             handler = DeliverHandler()
-            for task_name in ["left arm deliver", "right arm deliver",
-                              "one arm deliver", "both arm deliver"]:
-                self._handlers[task_name] = handler
-            self.get_logger().info(f'Registered deliver handler for 4 task variants')
+            for target in ["left arm", "right arm", "one arm", "both arm"]:
+                self._handlers[f"deliver:{target}"] = handler
+            self.get_logger().info(f'Registered deliver handler for 4 target variants')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load deliver handler: {e}')
 
         try:
             from action_server.task_place import PlaceHandler
             handler = PlaceHandler()
-            for task_name in ["left arm place", "right arm place",
-                              "one arm place", "both arm place"]:
-                self._handlers[task_name] = handler
-            self.get_logger().info(f'Registered place handler for 4 task variants')
+            for target in ["left arm", "right arm", "one arm", "both arm"]:
+                self._handlers[f"place:{target}"] = handler
+            self.get_logger().info(f'Registered place handler for 4 target variants')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load place handler: {e}')
 
         try:
             from action_server.task_init_place import InitPlaceHandler
-            self.register_handler(InitPlaceHandler())
+            self._handlers["place:init"] = InitPlaceHandler()
+            self.get_logger().info('Registered handler for task="place:init"')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load init_place handler: {e}')
 
         try:
             from action_server.task_release import ReleaseHandler
             handler = ReleaseHandler()
-            for task_name in ["left hand release", "right hand release",
-                              "both hand release"]:
-                self._handlers[task_name] = handler
-            self.get_logger().info(f'Registered release handler for 3 task variants')
+            for target in ["left hand", "right hand", "both hand"]:
+                self._handlers[f"release:{target}"] = handler
+            self.get_logger().info(f'Registered release handler for 3 target variants')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load release handler: {e}')
 
         try:
             from action_server.task_reset import ResetHandler
             handler = ResetHandler()
-            for task_name in ["left arm reset", "right arm reset",
-                              "both arm reset"]:
-                self._handlers[task_name] = handler
-            self.get_logger().info(f'Registered reset handler for 3 task variants')
+            for target in ["left arm", "right arm", "both arm"]:
+                self._handlers[f"reset:{target}"] = handler
+            self.get_logger().info(f'Registered reset handler for 3 target variants')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load reset handler: {e}')
 
@@ -642,7 +641,10 @@ class VLAActionDispatcher(Node):
                                error_message='Missing "task" field in params')
 
         # ========== 2. 路由到 handler ==========
-        handler = self._handlers.get(task_name)
+        # 复合键优先: "task:target" → 回退到 "task"
+        target = params.get('target', '')
+        compound_key = f"{task_name}:{target}" if target else task_name
+        handler = self._handlers.get(compound_key) or self._handlers.get(task_name)
         if handler is None:
             known = list(self._handlers.keys())
             return self._abort(goal_handle, error_code=3,

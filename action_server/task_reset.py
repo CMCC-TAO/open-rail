@@ -5,18 +5,18 @@
 
 任务接口:
   {
-    "task": "left arm reset",
-    "target": "none",
+    "task": "reset",           # 左手复位
+    "target": "left arm",      # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "right arm reset",
-    "target": "none",
+    "task": "reset",           # 右手复位
+    "target": "right arm",     # 抓取的目标
     "waypoint": "none"
   }
   {
-    "task": "both arm reset",
-    "target": "none",
+    "task": "reset",           # 双手复位
+    "target": "both arm",      # 抓取的目标
     "waypoint": "none"
   }
 """
@@ -51,10 +51,10 @@ CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
 class ResetHandler(AbstractTaskHandler):
     """复位任务处理器
 
-    由 dispatcher 路由到以下 3 个 task name 之一:
-      - "left arm reset"
-      - "right arm reset"
-      - "both arm reset"
+    由 dispatcher 路由到以下 3 个 task:target 复合键之一:
+      - "reset:left arm"
+      - "reset:right arm"
+      - "reset:both arm"
     """
 
     @property
@@ -62,18 +62,18 @@ class ResetHandler(AbstractTaskHandler):
         return "reset"
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
-        task = params.get("task", "")
+        target = params.get("target", "")
 
-        if task == "left arm reset":
+        if target == "left arm":
             return self._left_arm_reset(goal_handle, context)
-        elif task == "right arm reset":
+        elif target == "right arm":
             return self._right_arm_reset(goal_handle, context)
-        elif task == "both arm reset":
+        elif target == "both arm":
             return self._both_arm_reset(goal_handle, context)
         else:
-            self.send_feedback(goal_handle, 0, f"未知复位子任务: {task}")
+            self.send_feedback(goal_handle, 0, f"未知复位目标: {target}")
             return TaskResult(False, error_code=99,
-                              error_message=f'Unknown reset sub-task: "{task}"')
+                              error_message=f'Unknown reset target: "{target}"')
 
     # ================================================================
     # 工具方法

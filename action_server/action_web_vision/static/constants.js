@@ -30,6 +30,10 @@ const WS_PORT = location.port ? `:${location.port}` : '';
 const WS_URL = `${WS_SCHEME}://${WS_HOSTNAME}${WS_PORT}/ws`;
 const RECONNECT = 3000;
 
+// WebSocket connection timeout (ms)
+const WS_CONNECT_TIMEOUT_MS = 5000;
+const CAM_WS_CONNECT_TIMEOUT_MS = 5000;
+
 // VisualizeServer (action curves) — port 8765
 const CAM_WS_URL = `${WS_SCHEME}://${WS_HOSTNAME}:8765`;
 const CAM_WS_RECONNECT = 3000;
@@ -90,11 +94,13 @@ const App = {
   ws: null,
   wsAlive: false,
   reconnectTimer: null,
+  wsConnectTimeoutTimer: null,
 
   // VisualizeServer WebSocket (port 8765)
   camWs: null,
   camWsAlive: false,
   camWsReconnectTimer: null,
+  camWsConnectTimeoutTimer: null,
 
   // Camera state
   camOpen: [true, true, true],

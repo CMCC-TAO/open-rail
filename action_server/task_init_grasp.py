@@ -39,7 +39,7 @@ _SAFE_RIGHT_ARM = np.array([1.5, -0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
 
 
 class InitGraspHandler(AbstractTaskHandler):
-    """'init grasp' 任务处理器
+    """'grasp' task + target='init' 任务处理器
 
     流程:
         1. 建立 RobotBody 连接
@@ -50,7 +50,7 @@ class InitGraspHandler(AbstractTaskHandler):
 
     @property
     def task_name(self) -> str:
-        return "init grasp"
+        return "grasp"
 
     def execute(self, goal_handle, params: dict, context: Any) -> TaskResult:
         robot_body = context.robot_body

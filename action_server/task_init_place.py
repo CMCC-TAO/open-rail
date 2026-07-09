@@ -33,7 +33,7 @@ _SAFE_RIGHT_ARM = np.array([1.5, -0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
 
 
 class InitPlaceHandler(AbstractTaskHandler):
-    """'init place' 任务处理器
+    """'place' task + target='init' 任务处理器
 
     流程:
         1. 获取当前手掌状态（保持物体不松手）
@@ -51,7 +51,7 @@ class InitPlaceHandler(AbstractTaskHandler):
 
     @property
     def task_name(self) -> str:
-        return "init place"
+        return "place"
 
     def _get_current_hands(self, robot_body) -> np.ndarray:
         """获取当前 12 维手掌状态（最新下发量），保持抓取物体不松手"""

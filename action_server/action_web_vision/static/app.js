@@ -12,7 +12,15 @@ function connectWS() {
   if (App.ws && App.ws.readyState <= 1) return;
   App.ws = new WebSocket(WS_URL);
 
+  clearTimeout(App.wsConnectTimeoutTimer);
+  App.wsConnectTimeoutTimer = setTimeout(() => {
+    if (App.ws && App.ws.readyState === WebSocket.CONNECTING) {
+      try { App.ws.close(); } catch (_) {}
+    }
+  }, WS_CONNECT_TIMEOUT_MS);
+
   App.ws.onopen = () => {
+    clearTimeout(App.wsConnectTimeoutTimer);
     App.wsAlive = true;
     updateWSIndicator(true);
     clearTimeout(App.reconnectTimer);
@@ -32,6 +40,7 @@ function connectWS() {
   };
 
   App.ws.onclose = () => {
+    clearTimeout(App.wsConnectTimeoutTimer);
     App.wsAlive = false;
     updateWSIndicator(false);
     clearInterval(App.ws._pingTimer);
@@ -112,6 +121,14 @@ function startCameraRenderLoop() {
   setInterval(renderCameraFrames, 33); // ~30 FPS
 }
 
+// ── Camera aspect ratio ──
+function updateCameraAspectRatio(idx, width, height) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+  const preview = $(`cam-preview-${idx}`);
+  if (!preview) return;
+  preview.style.aspectRatio = `${width} / ${height}`;
+}
+
 function updateCameraDisplay(idx, imageBytes) {
   const imgEl = $(`cam-img-${idx}`);
   const phEl = $(`cam-placeholder-${idx}`);
@@ -120,12 +137,13 @@ function updateCameraDisplay(idx, imageBytes) {
   const blobUrl = URL.createObjectURL(blob);
   const tmp = new Image();
   tmp.onload = () => {
+    updateCameraAspectRatio(idx, tmp.naturalWidth, tmp.naturalHeight);
     if (imgEl.src && imgEl.src.startsWith('blob:')) URL.revokeObjectURL(imgEl.src);
     imgEl.src = blobUrl;
     imgEl.classList.add('loaded');
     if (phEl) phEl.style.display = 'none';
     const statusEl = $(`cam-status-${idx}`);
-    if (statusEl) { statusEl.textContent = 'ON'; statusEl.classList.add('active'); }
+    if (statusEl) { statusEl.textContent = 'ON'; statusEl.classList.add('active'); statusEl.classList.remove('error'); }
   };
   tmp.onerror = () => URL.revokeObjectURL(blobUrl);
   tmp.src = blobUrl;
@@ -139,7 +157,15 @@ function connectCamWS() {
   App.camWs = new WebSocket(CAM_WS_URL);
   App.camWs.binaryType = 'arraybuffer';
 
+  clearTimeout(App.camWsConnectTimeoutTimer);
+  App.camWsConnectTimeoutTimer = setTimeout(() => {
+    if (App.camWs && App.camWs.readyState === WebSocket.CONNECTING) {
+      try { App.camWs.close(); } catch (_) {}
+    }
+  }, CAM_WS_CONNECT_TIMEOUT_MS);
+
   App.camWs.onopen = () => {
+    clearTimeout(App.camWsConnectTimeoutTimer);
     App.camWsAlive = true;
     clearTimeout(App.camWsReconnectTimer);
     updateCamWSIndicator(true);
@@ -153,6 +179,7 @@ function connectCamWS() {
   };
 
   App.camWs.onclose = () => {
+    clearTimeout(App.camWsConnectTimeoutTimer);
     App.camWsAlive = false;
     updateCamWSIndicator(false);
     App.camWsReconnectTimer = setTimeout(connectCamWS, CAM_WS_RECONNECT);
@@ -687,11 +714,11 @@ function toggleCamera(idx) {
   const btnEl = $(`btn-cam-${idx}`);
   if (App.camOpen[idx]) {
     if (preview) preview.classList.remove('closed');
-    if (statusEl) { statusEl.textContent = 'ON'; statusEl.classList.add('active'); }
+    if (statusEl) { statusEl.textContent = 'ON'; statusEl.classList.add('active'); statusEl.classList.remove('error'); }
     if (btnEl) btnEl.textContent = 'Close';
   } else {
     if (preview) preview.classList.add('closed');
-    if (statusEl) { statusEl.textContent = 'OFF'; statusEl.classList.remove('active'); }
+    if (statusEl) { statusEl.textContent = 'OFF'; statusEl.classList.remove('active', 'error'); }
     if (btnEl) btnEl.textContent = 'Open';
   }
 }
