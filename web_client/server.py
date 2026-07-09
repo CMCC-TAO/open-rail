@@ -137,6 +137,7 @@ class ClientState:
         self.running = False
         self.starting = False
         self.stopping = False
+        self.paused = False
         self.lock = threading.Lock()
         self.ws_clients: set[WebSocket] = set()
         self.ws_lock = threading.Lock()
@@ -588,7 +589,7 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
 # ─────────────────────────────────────────────────────────────────────────────
 #  WebSocket broadcast
 # ─────────────────────────────────────────────────────────────────────────────
-async def _broadcast(message: dict):
+async def _broadcast_to_web(message: dict):
     """Send JSON to all connected WebSocket clients."""
     if not client_state.ws_clients:
         return
@@ -615,16 +616,9 @@ async def _stats_push_loop():
         try:
             stats = await asyncio.to_thread(_collect_stats)
             # print("Debug: pushing stats to WS clients.")
-            await _broadcast({"type": "stats", "data": stats})
+            await _broadcast_to_web({"type": "stats", "data": stats})
         except Exception as e:
             logger.debug(f"stats push error: {e}")
-
-
-def _is_vla_client_paused(vla_client) -> bool:
-    """Return explicit pause state triggered by /api/client/pause."""
-    with client_state.lock:
-        return bool(client_state.running and (client_state.paused_thread_state is not None))
-
 
 def _collect_stats() -> dict:
     """Gather runtime stats from the running vla_client."""
@@ -1449,7 +1443,7 @@ async def _start_client():
             client_state.robot = None
             client_state.paused_thread_state = None
             client_state.starting = False
-        await _broadcast({"type": "error", "data": {"message": f"Failed to initialize client: {e}", "trace": err}})
+        await _broadcast_to_web({"type": "error", "data": {"message": f"Failed to initialize client: {e}", "trace": err}})
         return
 
     with client_state.lock:
@@ -1471,7 +1465,7 @@ async def _start_client():
         try:
             vla_client.start()
             asyncio.run_coroutine_threadsafe(
-                _broadcast({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
+                _broadcast_to_web({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
                 loop
             )
 
@@ -1483,7 +1477,7 @@ async def _start_client():
             logger.error(f"Client thread error:\n{err}")
             client_state.running = False
             asyncio.run_coroutine_threadsafe(
-                _broadcast({"type": "error", "data": {"message": str(e), "trace": err}}),
+                _broadcast_to_web({"type": "error", "data": {"message": str(e), "trace": err}}),
                 loop
             )
         finally:
@@ -1533,9 +1527,8 @@ def _thread_state(vla_client) -> dict:
     return state
 
 
-def _status_payload(vla_client, message: str, running: bool = True) -> dict:
+def _status_payload(vla_client, message: str, running: bool = True, paused: bool = True) -> dict:
     state = _thread_state(vla_client)
-    paused = _is_vla_client_paused(vla_client)
     return {
         "running": running,
         "paused": paused,
@@ -1644,7 +1637,7 @@ async def _bg_pause_and_broadcast(vla_client):
         paused_state = await asyncio.to_thread(_pause_vla_client, vla_client)
         with client_state.lock:
             client_state.paused_thread_state = paused_state
-        await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True)})
+        await _broadcast_to_web({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True)})
     except Exception as e:
         logger.warning(f"_bg_pause_and_broadcast failed: {e}")
 
@@ -1656,7 +1649,7 @@ async def _bg_resume_and_broadcast(vla_client):
         await asyncio.to_thread(_resume_vla_client, vla_client, restore_state)
         with client_state.lock:
             client_state.paused_thread_state = None
-        await _broadcast({"type": "status", "data": _status_payload(vla_client, "Client resumed.", running=True)})
+        await _broadcast_to_web({"type": "status", "data": _status_payload(vla_client, "Client resumed.", running=True)})
     except Exception as e:
         logger.warning(f"_bg_resume_and_broadcast failed: {e}")
 
@@ -1675,7 +1668,7 @@ async def _bg_toggle_observe_and_broadcast():
                                     inference_running=False,
                                     control_running=False,
                                     )
-            await _broadcast({"type": "status", "data": result})
+            await _broadcast_to_web({"type": "status", "data": result})
             raise HTTPException(400, "Client is none.")
         
         with client_state.lock:
@@ -1695,7 +1688,7 @@ async def _bg_toggle_observe_and_broadcast():
             message = "Observe started."
 
         payload = _status_payload(vla_client, message, running=True)
-        await _broadcast({"type": "status", "data": payload})
+        await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
         logger.warning(f"_bg_toggle_observe_and_broadcast failed: {e}")
 
@@ -1714,7 +1707,7 @@ async def _bg_toggle_infer_and_broadcast(vla_client):
             message = "Inference started."
 
         payload = _status_payload(vla_client, message, running=True)
-        await _broadcast({"type": "status", "data": payload})
+        await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
         logger.warning(f"_bg_toggle_infer_and_broadcast failed: {e}")
 
@@ -1732,7 +1725,7 @@ async def _bg_toggle_control_and_broadcast(vla_client):
             message = "Control started."
 
         payload = _status_payload(vla_client, message, running=True)
-        await _broadcast({"type": "status", "data": payload})
+        await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
         logger.warning(f"_bg_toggle_control_and_broadcast failed: {e}")
 
@@ -1805,14 +1798,14 @@ async def stop_client():
         raise HTTPException(400, "Client is not running.")
 
     asyncio.create_task(_stop_cleanup_background())
-    await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopping."}})
+    await _broadcast_to_web({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopping."}})
     return {"status": "ok"}
 
 async def _stop_cleanup_background():
     try:
         await asyncio.to_thread(_join_worker_thread, 5.0)
         await asyncio.to_thread(_cleanup)
-        await _broadcast({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped."}})
+        await _broadcast_to_web({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped."}})
     finally:
         with client_state.lock:
             client_state.stopping = False
@@ -2009,12 +2002,16 @@ async def client_control_reset():
     vla_client, robot = _require_runtime('reset')
     try:
         with client_state.lock:
-            client_state.paused_thread_state = _pause_vla_client(vla_client)
+            # state = _thread_state(vla_client)
+            # if state.get("observe_running", False) and state.get("inference_running", False) and state.get("control_running", False):
+            print(f"DEBUG: client state running: {client_state.running}")
+            if client_state.running:
+                client_state.paused_thread_state = _pause_vla_client(vla_client)
         robot.reset_robot(mode='default')
         vla_client.realtime_data_manager.clear()
         vla_client.reset()
         # _resume_vla_client(vla_client, paused_state)
-        await _broadcast({"type": "status", "data": {"running": client_state.running, "paused": True, "message": "Robot reset complete, client paused."}})
+        await _broadcast_to_web({"type": "status", "data": {"running": client_state.running, "paused": True, "message": "Robot reset complete, client paused."}})
         return {"status": "ok", "command": 'reset'}
     except HTTPException:
         raise
