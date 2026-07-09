@@ -1529,14 +1529,13 @@ def _thread_state(vla_client) -> dict:
 
 def _status_payload(vla_client, message: str, running: bool = True, paused: bool = True) -> dict:
     state = _thread_state(vla_client)
-    return {
+    status = {
         "running": running,
         "paused": paused,
-        "observe_running": state["observe_running"],
-        "inference_running": state["inference_running"],
-        "control_running": state["control_running"],
         "message": message,
     }
+    status.update(state)
+    return status
 
 def _status_abnormal(message: str,
                     running: bool = False,
@@ -1637,7 +1636,8 @@ async def _bg_pause_and_broadcast(vla_client):
         paused_state = await asyncio.to_thread(_pause_vla_client, vla_client)
         with client_state.lock:
             client_state.paused_thread_state = paused_state
-        await _broadcast_to_web({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True)})
+            client_state.paused = True
+        await _broadcast_to_web({"type": "status", "data": _status_payload(vla_client, "Client paused.", running=True, paused=True)})
     except Exception as e:
         logger.warning(f"_bg_pause_and_broadcast failed: {e}")
 
@@ -1646,10 +1646,11 @@ async def _bg_resume_and_broadcast(vla_client):
     try:
         with client_state.lock:
             restore_state = client_state.paused_thread_state
+            client_state.paused_thread_state = None
         await asyncio.to_thread(_resume_vla_client, vla_client, restore_state)
         with client_state.lock:
-            client_state.paused_thread_state = None
-        await _broadcast_to_web({"type": "status", "data": _status_payload(vla_client, "Client resumed.", running=True)})
+            client_state.paused = False
+        await _broadcast_to_web({"type": "status", "data": _status_payload(vla_client, "Client resumed.", running=True, paused=False)})
     except Exception as e:
         logger.warning(f"_bg_resume_and_broadcast failed: {e}")
 
@@ -1674,6 +1675,7 @@ async def _bg_toggle_observe_and_broadcast():
         with client_state.lock:
             client_state.running = True
             client_state.paused_thread_state = None
+            client_state.paused = False
         # Stop
         if bool(getattr(vla_client, "is_observe_thread_running", False)):
             await asyncio.to_thread(_stop_control,   vla_client)
@@ -1687,7 +1689,7 @@ async def _bg_toggle_observe_and_broadcast():
             await asyncio.to_thread(_start_observe, vla_client)
             message = "Observe started."
 
-        payload = _status_payload(vla_client, message, running=True)
+        payload = _status_payload(vla_client, message, running=True, paused=False)
         await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
         logger.warning(f"_bg_toggle_observe_and_broadcast failed: {e}")
@@ -1697,6 +1699,7 @@ async def _bg_toggle_infer_and_broadcast(vla_client):
     try:
         with client_state.lock:
             client_state.paused_thread_state = None
+            client_state.paused = False
 
         if bool(getattr(vla_client, "is_inference_thread_running", False)):
             await asyncio.to_thread(_stop_control, vla_client)
@@ -1706,7 +1709,7 @@ async def _bg_toggle_infer_and_broadcast(vla_client):
             await asyncio.to_thread(_start_inference, vla_client)
             message = "Inference started."
 
-        payload = _status_payload(vla_client, message, running=True)
+        payload = _status_payload(vla_client, message, running=True, paused=False)
         await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
         logger.warning(f"_bg_toggle_infer_and_broadcast failed: {e}")
@@ -1716,6 +1719,7 @@ async def _bg_toggle_control_and_broadcast(vla_client):
     try:
         with client_state.lock:
             client_state.paused_thread_state = None
+            client_state.paused = False
 
         if bool(getattr(vla_client, "is_control_thread_running", False)):
             await asyncio.to_thread(_stop_control, vla_client)
@@ -1724,7 +1728,7 @@ async def _bg_toggle_control_and_broadcast(vla_client):
             await asyncio.to_thread(_start_control, vla_client)
             message = "Control started."
 
-        payload = _status_payload(vla_client, message, running=True)
+        payload = _status_payload(vla_client, message, running=True, paused=False)
         await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
         logger.warning(f"_bg_toggle_control_and_broadcast failed: {e}")
@@ -2004,14 +2008,15 @@ async def client_control_reset():
         with client_state.lock:
             # state = _thread_state(vla_client)
             # if state.get("observe_running", False) and state.get("inference_running", False) and state.get("control_running", False):
-            print(f"DEBUG: client state running: {client_state.running}")
-            if client_state.running:
+            # print(f"DEBUG: client state running: {client_state.running}")
+            if not client_state.paused:
                 client_state.paused_thread_state = _pause_vla_client(vla_client)
+                client_state.paused = True
         robot.reset_robot(mode='default')
         vla_client.realtime_data_manager.clear()
         vla_client.reset()
         # _resume_vla_client(vla_client, paused_state)
-        await _broadcast_to_web({"type": "status", "data": {"running": client_state.running, "paused": True, "message": "Robot reset complete, client paused."}})
+        await _broadcast_to_web({"type": "status", "data": {"running": client_state.running, "paused": client_state.paused, "message": "Robot reset complete, client paused."}})
         return {"status": "ok", "command": 'reset'}
     except HTTPException:
         raise
