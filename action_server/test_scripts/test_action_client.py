@@ -160,15 +160,6 @@ AVAILABLE_TASKS = {
         },
     },
     "15": {
-        "name": "init place",
-        "desc": "初始化放置 — reset_robot 经安全中间姿态过渡到默认抓取姿态",
-        "params": {
-            "task": "place",
-            "target": "init",
-            "waypoint": "none",
-        },
-    },
-    "16": {
         "name": "left hand release",
         "desc": "左手松手 — 左手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -177,7 +168,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "17": {
+    "16": {
         "name": "right hand release",
         "desc": "右手松手 — 右手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -186,7 +177,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "18": {
+    "17": {
         "name": "both hand release",
         "desc": "双手松手 — 双手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -195,7 +186,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "19": {
+    "18": {
         "name": "left arm reset",
         "desc": "左手复位 — 3s 线性插值到左复位姿态 [0,0.3,0,1.3,0,0,0]，手掌不变",
         "params": {
@@ -204,7 +195,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "20": {
+    "19": {
         "name": "right arm reset",
         "desc": "右手复位 — 3s 线性插值到右复位姿态 [0,-0.3,0,1.3,0,0,0]，手掌不变",
         "params": {
@@ -213,7 +204,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "21": {
+    "20": {
         "name": "both arm reset",
         "desc": "双手复位 — 3s 线性插值双臂同时到复位姿态，手掌不变",
         "params": {
@@ -222,7 +213,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "23": {
+    "21": {
         "name": "init zero",
         "desc": "直接初始化 — 一步到位过渡到默认准备姿态（终点=init grasp，跳过中间安全姿态）",
         "params": {

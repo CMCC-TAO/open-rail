@@ -45,15 +45,13 @@ ERR_DELIVER_ONE_HAND_BOTH_EMPTY = 24
 ERR_DELIVER_BOTH_HAND_NOT_BOTH = 25
 ERR_DELIVER_ONE_HAND_STILL_HOLDING = 26
 
-# task_init_place 专用 (31)
-ERR_INIT_PLACE_FAILED = 31
-# task_place 专用 (32-37)
-ERR_PLACE_TIMEOUT = 32
-ERR_PLACE_LEFT_EMPTY = 33
-ERR_PLACE_RIGHT_EMPTY = 34
-ERR_PLACE_ONE_HAND_BOTH_EMPTY = 35
-ERR_PLACE_BOTH_HAND_NOT_BOTH = 36
-ERR_PLACE_ONE_HAND_STILL_HOLDING = 37
+# task_place 专用 (31-36)
+ERR_PLACE_TIMEOUT = 31
+ERR_PLACE_LEFT_EMPTY = 32
+ERR_PLACE_RIGHT_EMPTY = 33
+ERR_PLACE_ONE_HAND_BOTH_EMPTY = 34
+ERR_PLACE_BOTH_HAND_NOT_BOTH = 35
+ERR_PLACE_ONE_HAND_STILL_HOLDING = 36
 
 # task_reset 专用 (41)
 ERR_RESET_NO_STATE = 41
@@ -92,9 +90,6 @@ ERR_MSG = {
     ERR_DELIVER_ONE_HAND_BOTH_EMPTY: "Both hands are empty but one arm deliver requested",
     ERR_DELIVER_BOTH_HAND_NOT_BOTH: "Not both hands have objects but both arm deliver requested",
     ERR_DELIVER_ONE_HAND_STILL_HOLDING: "One hand still holding object after both arm deliver",
-
-    # task_init_place 专用
-    ERR_INIT_PLACE_FAILED: "Init place failed",
 
     # task_place 专用
     ERR_PLACE_TIMEOUT: "Place task timed out",

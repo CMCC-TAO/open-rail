@@ -574,13 +574,6 @@ class VLAActionDispatcher(Node):
             self.get_logger().warn(f'Failed to load place handler: {e}')
 
         try:
-            from action_server.task_init_place import InitPlaceHandler
-            self._handlers["place:init"] = InitPlaceHandler()
-            self.get_logger().info('Registered handler for task="place:init"')
-        except ImportError as e:
-            self.get_logger().warn(f'Failed to load init_place handler: {e}')
-
-        try:
             from action_server.task_release import ReleaseHandler
             handler = ReleaseHandler()
             for target in ["left hand", "right hand", "both hand"]:
