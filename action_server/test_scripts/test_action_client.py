@@ -222,6 +222,15 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
+    "22": {
+        "name": "grasp all one water",
+        "desc": "全流程抓取（带重试）— init_grasp + grasp(最多3次) + finish_grasp，target=one water",
+        "params": {
+            "task": "grasp_all",
+            "target": "one water",
+            "waypoint": "all",
+        },
+    },
 }
 
 
@@ -238,41 +247,41 @@ TASK_GROUPS = [
             ("4", "grasp two water"),
             ("5", "grasp two Coca-Cola"),
             ("6", "finish grasp"),
+            ("7", "grasp all one water"),
         ],
     },
     {
         "title": "deliver",
         "items": [
-            ("7", "left arm deliver"),
-            ("8", "right arm deliver"),
-            ("9", "one arm deliver"),
-            ("10", "both arm deliver"),
+            ("8", "left arm deliver"),
+            ("9", "right arm deliver"),
+            ("10", "one arm deliver"),
+            ("11", "both arm deliver"),
         ],
     },
     {
         "title": "place",
         "items": [
-            ("11", "left arm place"),
-            ("12", "right arm place"),
-            ("13", "one arm place"),
-            ("14", "both arm place"),
-            ("15", "init place"),
+            ("12", "left arm place"),
+            ("13", "right arm place"),
+            ("14", "one arm place"),
+            ("15", "both arm place"),
         ],
     },
     {
         "title": "release",
         "items": [
-            ("16", "left hand release"),
-            ("17", "right hand release"),
-            ("18", "both hand release"),
+            ("17", "left hand release"),
+            ("18", "right hand release"),
+            ("19", "both hand release"),
         ],
     },
     {
         "title": "reset",
         "items": [
-            ("19", "left arm reset"),
-            ("20", "right arm reset"),
-            ("21", "both arm reset"),
+            ("20", "left arm reset"),
+            ("21", "right arm reset"),
+            ("22", "both arm reset"),
             ("23", "init zero"),
         ],
     },

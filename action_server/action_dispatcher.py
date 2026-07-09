@@ -556,6 +556,12 @@ class VLAActionDispatcher(Node):
             self.get_logger().warn(f'Failed to load grasp handler: {e}')
 
         try:
+            from action_server.task_grasp_all import GraspAllHandler
+            self.register_handler(GraspAllHandler())
+        except ImportError as e:
+            self.get_logger().warn(f'Failed to load grasp_all handler: {e}')
+
+        try:
             from action_server.task_deliver import DeliverHandler
             handler = DeliverHandler()
             for target in ["left arm", "right arm", "one arm", "both arm"]:

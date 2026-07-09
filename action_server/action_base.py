@@ -37,6 +37,9 @@ ERR_UNKNOWN_TARGET = 17
 # task_finish_grasp 专用 (18)
 ERR_FINISH_GRASP_FAILED = 18
 
+# task_grasp_all 专用 (19)
+ERR_GRASP_ALL_RETRIES_EXHAUSTED = 19
+
 # task_deliver 专用 (21-26)
 ERR_DELIVER_TIMEOUT = 21
 ERR_DELIVER_LEFT_EMPTY = 22
@@ -73,6 +76,9 @@ ERR_MSG = {
     
     # task_finish_grasp 专用
     ERR_FINISH_GRASP_FAILED: "Finish grasp failed",
+
+    # task_grasp_all 专用
+    ERR_GRASP_ALL_RETRIES_EXHAUSTED: "All 3 grasp attempts exhausted",
 
     # task_grasp 专用
     ERR_GRASP_TIMEOUT: "Grasp task timed out",
