@@ -549,6 +549,7 @@ async function wireEvents() {
   $('btn-saveas-cancel').addEventListener('click', () => $('modal-saveas').classList.add('hidden'));
 
   $('conf-search').addEventListener('input', e => filterConfigTree(e.target.value));
+  setupMainParamsResize();
 
   $('btn-apply-config').addEventListener('click', async () => {
     const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };

@@ -30,7 +30,7 @@ const CONFIG_SELECT_OPTIONS = {
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1'],
   eval_log_format: ['json', 'csv', 'both'],
-  speed: ['0.5', '0.6', '0.7', '0.8', '0.9', '1.0', '1.1', '1.2', '1.3', '1.4', '1.5', '1.75', '2.0', '2.25', '2.5', '2.75', '3.0'],
+  speed: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0],
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
@@ -281,6 +281,62 @@ function renderMainParameters(cfg) {
     const options = dotKey === 'controller.speed' ? { speedPresets: true } : undefined;
     // Use the custom label instead of the dotKey for display
     root.appendChild(createCfgRow(dotKey, label, value, options));
+  });
+}
+
+function setupMainParamsResize() {
+  const mainSection = $('main-params-section');
+  const resizer = $('main-params-resizer');
+  if (!mainSection || !resizer) return;
+
+  const parsePx = (raw, fallback) => {
+    const num = Number.parseFloat(raw);
+    return Number.isFinite(num) ? num : fallback;
+  };
+
+  const getHeightLimits = () => {
+    const style = getComputedStyle(mainSection);
+    const min = parsePx(style.minHeight, 120);
+    const max = Math.max(parsePx(style.maxHeight, 360), min);
+    return { min, max };
+  };
+
+  let dragging = false;
+  let dragStartY = 0;
+  let dragStartHeight = 0;
+
+  const applyHeight = (height) => {
+    const { min, max } = getHeightLimits();
+    const clamped = Math.min(max, Math.max(min, height));
+    mainSection.style.height = `${clamped}px`;
+  };
+
+  const onMouseMove = (e) => {
+    if (!dragging) return;
+    const nextHeight = dragStartHeight + (e.clientY - dragStartY);
+    applyHeight(nextHeight);
+  };
+
+  const stopDragging = () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.classList.remove('main-params-resizing');
+    window.removeEventListener('mousemove', onMouseMove);
+    window.removeEventListener('mouseup', stopDragging);
+  };
+
+  resizer.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+
+    dragging = true;
+    dragStartY = e.clientY;
+    dragStartHeight = mainSection.getBoundingClientRect().height;
+    applyHeight(dragStartHeight);
+
+    document.body.classList.add('main-params-resizing');
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', stopDragging);
   });
 }
 
@@ -801,8 +857,14 @@ function createCfgRow(dotKey, label, value, options = {}) {
         renderRecordingConfigTree(App.config);
 
         try {
-          await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
-          toast(`${dotKey} updated and saved to ${CONF_FILE}.`, 'ok', 2200);
+          const confRes = await apiFetch('/api/client/config/path');
+          if (confRes.path) {
+            await apiFetch('/api/client/config/save', {
+              method: 'POST',
+              body: JSON.stringify({ path: confRes.path }),
+            });
+          }
+          toast(`${dotKey} updated and saved to ${confRes.path}.`, 'ok', 2200);
         } catch (_) {
           toast(`${dotKey} updated, but save to ${CONF_FILE} failed.`, 'warn', 2600);
         }
@@ -1350,7 +1412,13 @@ async function persistVisualStateNow() {
     });
     App.config = res.config || App.config;
 
-    await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: CONF_FILE }) });
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   } catch (_) {
     // no-op: visual state already effective in UI
   } finally {

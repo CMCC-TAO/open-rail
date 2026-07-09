@@ -63,11 +63,11 @@ async function persistRecordingConfigChange(patch) {
 
   try {
     const confRes = await apiFetch('/api/client/config/path');
-    const path = (confRes && typeof confRes === 'object' && typeof confRes.path === 'string')
-      ? confRes.path.trim()
-      : '';
-    if (path) {
-      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path }) });
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
     }
   } catch (e) {
     console.error('Failed to save recording config:', e);
