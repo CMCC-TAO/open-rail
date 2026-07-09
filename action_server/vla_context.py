@@ -39,10 +39,11 @@ class VLAContext:
     彻底消除 "wait set index too big" 错误。
     """
 
-    def __init__(self, robot_type: str = None):
+    def __init__(self, robot_type: str = None, sim_mode: bool = False):
         from conf.client_conf import get_client_config
 
         self.config = get_client_config()
+        self._sim_mode = sim_mode
 
         # ════════════════════════════════════════════════════════════
         # 加载 default_conf.yaml 覆盖 Python 默认值
@@ -145,6 +146,12 @@ class VLAContext:
                 self._robot_context.init(args=[])
 
             self._robot_body = RobotBody(self.config, ros_context=self._robot_context)
+
+            # 仿真模式：禁用相对限幅和绝对限幅，允许大幅轨迹规划
+            if self._sim_mode:
+                self._robot_body.robot.enable_relative_clamp = False
+                self._robot_body.robot.enable_absolute_clamp = False
+                print('[VLAContext] SIM MODE: Relative & absolute limits disabled')
         return self._robot_body
 
     @robot_body.setter
