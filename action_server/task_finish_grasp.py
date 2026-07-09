@@ -15,20 +15,9 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+from action_server.task_init_grasp import _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM
+from action_server.task_reset import _LEFT_RESET_POSE, _RIGHT_RESET_POSE
 from action_server.action_base import AbstractTaskHandler, TaskResult, ERR_SUCCESS, ERR_FINISH_GRASP_FAILED, ERR_MSG
-
-
-# ==============================================
-# 安全中间姿态（与 task_init_grasp.py 一致）
-# ==============================================
-_SAFE_LEFT_ARM = np.array([1.5,   0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
-_SAFE_RIGHT_ARM = np.array([1.5, -0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
-
-# ==============================================
-# 垂直复位姿态（与 task_reset.py 一致）
-# ==============================================
-_LEFT_RESET_POSE = np.array([0, 0.3, 0, 1.3, 0, 0, 0])
-_RIGHT_RESET_POSE = np.array([0, -0.3, 0, 1.3, 0, 0, 0])
 
 
 class FinishGraspHandler(AbstractTaskHandler):
@@ -90,7 +79,8 @@ class FinishGraspHandler(AbstractTaskHandler):
                 *_SAFE_RIGHT_ARM,
                 *hands,
             ])
-            robot_body.reset_robot(target_pose=safe_pose)
+            robot_body.reset_robot(target_pose=safe_pose,
+                                   max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
             # ===== 步骤 4: 过渡到垂直复位姿态（手掌不变）=====
             self.send_feedback(goal_handle, 60, "正在过渡到垂直复位姿态...")
@@ -99,7 +89,8 @@ class FinishGraspHandler(AbstractTaskHandler):
                 *_RIGHT_RESET_POSE,
                 *hands,
             ])
-            robot_body.reset_robot(target_pose=reset_pose)
+            robot_body.reset_robot(target_pose=reset_pose,
+                                   max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
             # ===== 步骤 5: 完成 =====
             self.send_feedback(goal_handle, 100, "抓取完成复位，机器人已就绪")

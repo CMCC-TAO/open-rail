@@ -34,8 +34,10 @@ def _get_init_grasp_pose(context):
 # ==============================================
 # 安全中间姿态
 # ==============================================
-_SAFE_LEFT_ARM = np.array([1.5,   0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
-_SAFE_RIGHT_ARM = np.array([1.5, -0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
+# _SAFE_LEFT_ARM = np.array([1.5,   0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
+# _SAFE_RIGHT_ARM = np.array([1.5, -0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
+_SAFE_LEFT_ARM = np.array([1.2,   0.3, 0.0, -0.4, 0.0, -0.5,  0.0])
+_SAFE_RIGHT_ARM = np.array([1.2, -0.3, 0.0, -0.4, 0.0, -0.5,  0.0])
 
 
 class InitGraspHandler(AbstractTaskHandler):
@@ -81,11 +83,13 @@ class InitGraspHandler(AbstractTaskHandler):
                 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0,
                 1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0,
             ])
-            robot_body.reset_robot(target_pose=safe_pose)
+            robot_body.reset_robot(target_pose=safe_pose,
+                                   max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
             # ===== 步骤 3: 过渡到准备抓取姿态 =====
             self.send_feedback(goal_handle, 50, "正在过渡到准备抓取姿态...")
-            robot_body.reset_robot(target_pose=init_grasp_pose)
+            robot_body.reset_robot(target_pose=init_grasp_pose,
+                                   max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
             # ===== 步骤 4: 完成 =====
             context._initialized = True

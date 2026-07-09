@@ -22,11 +22,10 @@ if _project_root not in sys.path:
 from action_server.task_init_grasp import _get_init_grasp_pose, _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM
 from action_server.task_grasp import (
     _get_language_instruction,
-    _reset_arms_to_default,
     _apply_smooth_start_blend,
     TARGET_HAND_MAP,
 )
-from action_server.task_finish_grasp import _LEFT_RESET_POSE, _RIGHT_RESET_POSE
+from action_server.task_reset import _LEFT_RESET_POSE, _RIGHT_RESET_POSE
 from action_server.action_base import (
     AbstractTaskHandler, TaskResult, run_vla_inference, send_vla_feedback,
     ERR_SUCCESS, ERR_MSG, ERR_INIT_GRASP_FAILED, ERR_GRASP_TIMEOUT,
@@ -91,11 +90,13 @@ def _do_init_grasp(goal_handle, context, send_feedback_fn) -> bool:
             1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0,
             1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0,
         ])
-        robot_body.reset_robot(target_pose=safe_pose)
+        robot_body.reset_robot(target_pose=safe_pose,
+                               max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
         # 过渡到准备抓取姿态
         send_feedback_fn(goal_handle, 15, "正在过渡到准备抓取姿态...")
-        robot_body.reset_robot(target_pose=init_grasp_pose)
+        robot_body.reset_robot(target_pose=init_grasp_pose,
+                               max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
         return True
     except Exception as e:
@@ -119,7 +120,8 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
     if attempt > 1:
         send_feedback_fn(goal_handle, 20, f"第 {attempt} 次重试：复位到默认位置...")
         init_grasp_pose = _get_init_grasp_pose(context)
-        robot_body.reset_robot(target_pose=init_grasp_pose)
+        robot_body.reset_robot(target_pose=init_grasp_pose,
+                               max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
         time.sleep(0.5)
 
     send_feedback_fn(goal_handle, 25, f"第 {attempt} 次抓取尝试...")
@@ -150,14 +152,12 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
             stable_count_threshold=999,
         )
 
-        # 推理完成后，将双臂回归默认位置（手掌不变）
-        # 复用 task_grasp.py 中的 _reset_arms_to_default
-        _reset_arms_to_default(robot_body, context, duration=2.0)
+        # 推理完成后读取抓取状态
+        # _do_finish_grasp 会处理手臂复位，此处无需重复复位
+        grasp_state = context.grasp_detector.grasp_state  # [left, right]
 
         if result.success:
-            # VLA 推理成功，验证实际抓取状态
             hand_type = TARGET_HAND_MAP.get(target.strip(), "one hand")
-            grasp_state = context.grasp_detector.grasp_state  # [left, right]
 
             if hand_type == "one hand":
                 if not (grasp_state[0] or grasp_state[1]):
@@ -208,12 +208,14 @@ def _do_finish_grasp(goal_handle, context, send_feedback_fn) -> bool:
         # 过渡到安全中间姿态（抬臂，手掌不变）
         send_feedback_fn(goal_handle, 90, "正在过渡到安全中间姿态...")
         safe_pose = np.array([*_SAFE_LEFT_ARM, *_SAFE_RIGHT_ARM, *hands])
-        robot_body.reset_robot(target_pose=safe_pose)
+        robot_body.reset_robot(target_pose=safe_pose,
+                               max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
         # 过渡到垂直复位姿态（手掌不变）
         send_feedback_fn(goal_handle, 95, "正在过渡到垂直复位姿态...")
         reset_pose = np.array([*_LEFT_RESET_POSE, *_RIGHT_RESET_POSE, *hands])
-        robot_body.reset_robot(target_pose=reset_pose)
+        robot_body.reset_robot(target_pose=reset_pose,
+                               max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
         return True
     except Exception as e:

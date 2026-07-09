@@ -119,7 +119,8 @@ class RobotBody(RobotBase):
     # ==================================================================
     # Reset robot (using ruckig trajectory planning)
     # ==================================================================
-    def reset_robot(self, target_pose=None, mode="default"):
+    def reset_robot(self, target_pose=None, mode="default",
+                   max_velocity=None, max_acceleration=None, max_jerk=None):
         if target_pose is None:
             if mode == "default":
                 target_pose = np.array(self.cfg["reset_robot_pos"])
@@ -130,6 +131,11 @@ class RobotBody(RobotBase):
                 return
         target_pose = np.array(target_pose)
 
+        # Use default low speed if not specified
+        mv = max_velocity if max_velocity is not None else 0.5
+        ma = max_acceleration if max_acceleration is not None else 0.3
+        mj = max_jerk if max_jerk is not None else 1.0
+
         # Get current action (trajectory start from latest cmd, smoother than measured state)
         current_state = self._get_reset_current_action()
 
@@ -138,10 +144,10 @@ class RobotBody(RobotBase):
             target_positions = target_pose[:14]
             dis = np.abs(current_positions - target_positions)
             if np.any(dis > np.deg2rad(0.01)):
-                # Plan arm trajectory at low speed to ensure smooth transition
+                # Plan arm trajectory
                 trajs = self.ruckig_planning(
                     current_positions, target_positions,
-                    max_velocity=0.5, max_acceleration=0.3, max_jerk=1.0,
+                    max_velocity=mv, max_acceleration=ma, max_jerk=mj,
                 )
                 n_points = len(trajs)
                 # Get current hand state for linear interpolation
@@ -158,7 +164,7 @@ class RobotBody(RobotBase):
                     tmp[14:20] = left_hand_current + t * (left_hand_target - left_hand_current)
                     tmp[20:26] = right_hand_current + t * (right_hand_target - right_hand_current)
                     self.robot.send_robot_action(tmp)
-                    time.sleep(0.02)  # 50Hz 下发，进一步降低速度
+                    time.sleep(0.01)  # 100Hz 下发
             else:
                 self.robot.send_robot_action(target_pose)
         else:
@@ -175,14 +181,117 @@ class RobotBody(RobotBase):
                 tmp[14:20] = target_pose[14:20] * t
                 tmp[20:26] = target_pose[20:26] * t
                 self.robot.send_robot_action(tmp)
-                time.sleep(0.02)
+                time.sleep(0.01)  # 100Hz 下发
 
-        # Set initial hand state
+        # 设置手部状态
         self.robot.current_left_hand_state = target_pose[14:20]
         self.robot.current_right_hand_state = target_pose[20:26]
 
-        time.sleep(1.0)
         print("Unitree G1 reset done")
+
+    # ==================================================================
+    # Move arms (ruckig trajectory, single-arm or dual-arm support)
+    # ==================================================================
+    def move_arms(self, left_target=None, right_target=None,
+                  max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0,
+                  progress_callback=None):
+        """使用 ruckig 轨迹规划将单臂或双臂移动到目标位姿，手掌保持当前值不变
+
+        与固定时长线性插值的区别:
+          - 使用 ruckig 生成平滑轨迹，而非均匀线性插值
+          - 轨迹点数由距离和速度限幅决定（近则少，远则多），实现"位置到达即停"
+
+        Args:
+            left_target:  左臂目标位姿 (7,) 或 None（不动）
+            right_target: 右臂目标位姿 (7,) 或 None（不动）
+            max_velocity: 最大速度 rad/s
+            max_acceleration: 最大加速度 rad/s²
+            max_jerk: 最大加加速度 rad/s³
+            progress_callback: 可选进度回调 fn(progress_0to100_int)
+
+        Returns:
+            np.ndarray: 最后一帧 26 维动作（含目标手臂位姿 + 原始手掌值），失败返回 None
+        """
+        current_state = self._get_reset_current_action()
+        if current_state is None:
+            return None
+
+        target = current_state.copy()
+        left_active = left_target is not None
+        right_active = right_target is not None
+
+        if left_active:
+            target[0:7] = np.array(left_target)
+        if right_active:
+            target[7:14] = np.array(right_target)
+
+        # 双臂都不动，直接返回
+        if not left_active and not right_active:
+            return target
+
+        # 确定要规划的关节子集和 DOF
+        if left_active and right_active:
+            plan_start, plan_end, dof = 0, 14, 14
+        elif left_active:
+            plan_start, plan_end, dof = 0, 7, 7
+        else:  # right_active only
+            plan_start, plan_end, dof = 7, 14, 7
+
+        current_pos = current_state[plan_start:plan_end]
+        target_pos = target[plan_start:plan_end]
+
+        # 如果已经在目标附近，直接发送一次并返回
+        dis = np.abs(current_pos - target_pos)
+        if np.all(dis <= np.deg2rad(0.01)):
+            self.robot.send_robot_action(target)
+            self.robot.current_left_hand_state = target[14:20]
+            self.robot.current_right_hand_state = target[20:26]
+            return target
+
+        # ruckig 轨迹规划
+        trajs = self.ruckig_planning(
+            current_pos, target_pos, dof=dof,
+            max_velocity=max_velocity, max_acceleration=max_acceleration, max_jerk=max_jerk,
+        )
+
+        n_points = len(trajs)
+        left_hand_current = current_state[14:20]
+        right_hand_current = current_state[20:26]
+        left_hand_target = target[14:20]
+        right_hand_target = target[20:26]
+        last_reported_pct = -1
+
+        for i, traj in enumerate(trajs):
+            t = (i + 1) / n_points  # 进度 0→1
+            tmp = target.copy()
+
+            # 将轨迹填入对应的手臂位置
+            if left_active and right_active:
+                tmp[:14] = traj
+            elif left_active:
+                tmp[0:7] = traj
+            else:
+                tmp[7:14] = traj
+
+            # 手掌线性插值：从当前值平滑过渡到目标值
+            tmp[14:20] = left_hand_current + t * (left_hand_target - left_hand_current)
+            tmp[20:26] = right_hand_current + t * (right_hand_target - right_hand_current)
+
+            self.robot.send_robot_action(tmp)
+
+            # 进度回调（约每 10% 触发一次，避免过于频繁）
+            if progress_callback:
+                pct = int(100 * (i + 1) / n_points)
+                if pct // 10 != last_reported_pct // 10 or i == n_points - 1:
+                    last_reported_pct = pct
+                    progress_callback(pct)
+
+            time.sleep(0.01)  # 100Hz
+
+        self.robot.current_left_hand_state = target[14:20]
+        self.robot.current_right_hand_state = target[20:26]
+
+        return target
 
     def _get_reset_current_state(self) -> np.ndarray | None:
         """Get current 26-dim state from measured joint_state — for model input

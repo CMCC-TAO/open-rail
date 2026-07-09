@@ -494,6 +494,9 @@ function refreshHandChart() {
   if (!ht.chart) return;
   const src = t.source;
   const datasets = [];
+  let yMin = Number.POSITIVE_INFINITY;
+  let yMax = Number.NEGATIVE_INFINITY;
+
   const sorted = [...ht.selectedJoints].sort((a, b) => a - b);
   if (sorted.length === 0 || src.size === 0) {
     ht.chart.data.datasets = [];
@@ -505,34 +508,69 @@ function refreshHandChart() {
     const localIdx = jointIdx - 14;
     const color = HAND_JOINT_COLORS[localIdx] || 'rgb(100,100,100)';
     const label = jointIdx < 20 ? `LH${jointIdx - 14}` : `RH${jointIdx - 20}`;
+    const alpha = color.replace('rgb(', 'rgba(').replace(')', ', 0.08)');
 
     if (src.has('state')) {
       const data = getJointSeriesData('state', jointIdx);
       datasets.push({
         label: label + ' (S)', data,
-        borderColor: color, borderWidth: 1.5, borderDash: [1, 3],
-        pointRadius: 0, tension: 0.1, fill: false,
+        borderColor: color, backgroundColor: alpha,
+        borderWidth: 1.5, borderDash: [1, 3],
+        pointRadius: 0, pointHoverRadius: 3, tension: 0.1, fill: false,
       });
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
     if (src.has('action_fitted')) {
       const data = getJointSeriesData('action_fitted', jointIdx);
       datasets.push({
         label: label + ' (AF)', data,
-        borderColor: color, borderWidth: 2, borderDash: [],
-        pointRadius: 0, tension: 0.1, fill: false,
+        borderColor: color, backgroundColor: alpha,
+        borderWidth: 2, borderDash: [],
+        pointRadius: 0, pointHoverRadius: 3, tension: 0.1, fill: false,
       });
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
     if (src.has('action_raw')) {
       const data = getJointSeriesData('action_raw', jointIdx);
       datasets.push({
         label: label + ' (AR)', data,
-        borderColor: color, borderWidth: 1, borderDash: [4, 3],
-        pointRadius: 0, tension: 0.1, fill: false,
+        borderColor: color, backgroundColor: alpha,
+        borderWidth: 1, borderDash: [4, 3],
+        pointRadius: 0, pointHoverRadius: 3, tension: 0.1, fill: false,
       });
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
   }
 
   ht.chart.data.datasets = datasets;
+
+  // Dynamic Y range with 10% padding
+  if (yMin !== Number.POSITIVE_INFINITY && yMax !== Number.NEGATIVE_INFINITY) {
+    const pad = (yMax - yMin) * 0.1 || 0.1;
+    ht.chart.options.scales.y.min = yMin - pad;
+    ht.chart.options.scales.y.max = yMax + pad;
+  } else {
+    ht.chart.options.scales.y.min = undefined;
+    ht.chart.options.scales.y.max = undefined;
+  }
 
   const { xLeft, xRight } = t;
   if (Number.isFinite(xLeft) && Number.isFinite(xRight) && xRight > xLeft) {
@@ -627,6 +665,9 @@ function refreshUnifiedChart() {
   if (!t.chart) return;
   const src = t.source;
   const datasets = [];
+  let yMin = Number.POSITIVE_INFINITY;
+  let yMax = Number.NEGATIVE_INFINITY;
+
   const sorted = [...t.selectedJoints].sort((a, b) => a - b);
   if (sorted.length === 0 || src.size === 0) {
     t.chart.data.datasets = [];
@@ -637,34 +678,69 @@ function refreshUnifiedChart() {
   for (const jointIdx of sorted) {
     const color = JOINT_COLORS[jointIdx] || 'rgb(100,100,100)';
     const label = jointIdx < 7 ? `L${jointIdx}` : `R${jointIdx - 7}`;
+    const alpha = color.replace('rgb(', 'rgba(').replace(')', ', 0.08)');
 
     if (src.has('state')) {
       const data = getJointSeriesData('state', jointIdx);
       datasets.push({
         label: label + ' (S)', data,
-        borderColor: color, borderWidth: 1.5, borderDash: [1, 3],
-        pointRadius: 0, tension: 0.1, fill: false,
+        borderColor: color, backgroundColor: alpha,
+        borderWidth: 1.5, borderDash: [1, 3],
+        pointRadius: 0, pointHoverRadius: 3, tension: 0.1, fill: false,
       });
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
     if (src.has('action_fitted')) {
       const data = getJointSeriesData('action_fitted', jointIdx);
       datasets.push({
         label: label + ' (AF)', data,
-        borderColor: color, borderWidth: 2, borderDash: [],
-        pointRadius: 0, tension: 0.1, fill: false,
+        borderColor: color, backgroundColor: alpha,
+        borderWidth: 2, borderDash: [],
+        pointRadius: 0, pointHoverRadius: 3, tension: 0.1, fill: false,
       });
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
     if (src.has('action_raw')) {
       const data = getJointSeriesData('action_raw', jointIdx);
       datasets.push({
         label: label + ' (AR)', data,
-        borderColor: color, borderWidth: 1, borderDash: [4, 3],
-        pointRadius: 0, tension: 0.1, fill: false,
+        borderColor: color, backgroundColor: alpha,
+        borderWidth: 1, borderDash: [4, 3],
+        pointRadius: 0, pointHoverRadius: 3, tension: 0.1, fill: false,
       });
+      for (let i = 0, len = data.length; i < len; i += 1) {
+        const y = data[i].y;
+        if (Number.isFinite(y)) {
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+      }
     }
   }
 
   t.chart.data.datasets = datasets;
+
+  // Dynamic Y range with 10% padding
+  if (yMin !== Number.POSITIVE_INFINITY && yMax !== Number.NEGATIVE_INFINITY) {
+    const pad = (yMax - yMin) * 0.1 || 0.1;
+    t.chart.options.scales.y.min = yMin - pad;
+    t.chart.options.scales.y.max = yMax + pad;
+  } else {
+    t.chart.options.scales.y.min = undefined;
+    t.chart.options.scales.y.max = undefined;
+  }
 
   const { xLeft, xRight } = t;
   if (Number.isFinite(xLeft) && Number.isFinite(xRight) && xRight > xLeft) {

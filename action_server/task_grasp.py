@@ -324,9 +324,6 @@ class GraspHandler(AbstractTaskHandler):
                 stable_count_threshold=999,
             )
 
-            # ===== 无论推理成功还是失败，先将双臂回归默认位置（手掌不变）=====
-            _reset_arms_to_default(robot_body, context, duration=2.0)
-
             # ===== 步骤 4: 分析结果，结合手势判断具体错误 =====
             if not result.success:
                 # 超时 → 映射为抓取超时错误码

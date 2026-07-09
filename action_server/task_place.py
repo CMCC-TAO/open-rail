@@ -35,6 +35,8 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
+from action_server.task_init_grasp import _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM, _get_init_grasp_pose
+from action_server.task_reset import _LEFT_RESET_POSE, _RIGHT_RESET_POSE
 from action_server.action_base import (
     AbstractTaskHandler, TaskResult, send_vla_feedback,
     ERR_PLACE_TIMEOUT, ERR_PLACE_LEFT_EMPTY, ERR_PLACE_RIGHT_EMPTY,
@@ -56,27 +58,11 @@ RIGHT_PLACE_POSE = np.array([-0.1726, -0.1, 0.0, 1.045, 0.0, -1.393, 0.0])
 LEFT_RETRACT_POSE  = np.array([0.5,  0.1, 0.0, 0.0, 0.0, -0.8, 0.0])
 RIGHT_RETRACT_POSE = np.array([0.5, -0.1, 0.0, 0.0, 0.0, -0.8, 0.0])
 
-# ==============================================
-# 安全中间姿态（与 task_init_grasp.py 一致）
-# ==============================================
-_SAFE_LEFT_ARM = np.array([1.5,   0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
-_SAFE_RIGHT_ARM = np.array([1.5, -0.5, 0.0, -0.8, 0.0, -0.8,  0.0])
-
-# ==============================================
-# 垂直复位姿态（与 task_reset.py 一致）
-# ==============================================
-_LEFT_RESET_POSE = np.array([0, 0.3, 0, 1.3, 0, 0, 0])
-_RIGHT_RESET_POSE = np.array([0, -0.3, 0, 1.3, 0, 0, 0])
 
 # ==============================================
 # 时间常量
 # ==============================================
-ARM_INTERPOLATION_TIME = 3.0   # 手臂线性插值时长（秒）
-ARM_RETRACT_TIME = 3.0          # 放置后手臂回缩时长（秒）
-ARM_SAFE_TIME = 5.0             # 手臂安全姿态过渡时长（秒）
-ARM_RESET_TIME = 5.0            # 手臂垂直复位时长（秒）
 HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
-CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
 
 
 class PlaceHandler(AbstractTaskHandler):
@@ -113,112 +99,6 @@ class PlaceHandler(AbstractTaskHandler):
     # 工具方法
     # ================================================================
 
-    def _get_current_full_state(self, robot_body) -> np.ndarray | None:
-        """获取当前 26 维完整状态（优先从 action 缓存读取，用于轨迹规划起点）
-
-        优先级:
-          1. Action 缓存 — /joint_action + /left_hand/set_angle + /right_hand/set_angle
-             （最新下发量，轨迹规划起点更平滑）
-          2. robot_body.current_state（VLA 观察线程缓存，可能过期）
-          3. retrieve_observation() 回退（需要相机数据）
-        """
-        # 优先级 1: 从 action 订阅缓存读取（最新下发量，消除执行滞后）
-        try:
-            robot = robot_body.robot
-            la = robot.latest_left_arm_action
-            ra = robot.latest_right_arm_action
-            lh = robot.latest_left_hand_action
-            rh = robot.latest_right_hand_action
-            if all(x is not None for x in (la, ra, lh, rh)):
-                la_msg, _ = la
-                ra_msg, _ = ra
-                lh_msg, _ = lh
-                rh_msg, _ = rh
-                if (la_msg and ra_msg and lh_msg and rh_msg
-                        and la_msg.position and ra_msg.position
-                        and lh_msg.position and rh_msg.position):
-                    state = np.array(
-                        list(la_msg.position)
-                        + list(ra_msg.position)
-                        + list(lh_msg.position)
-                        + list(rh_msg.position),
-                        dtype=float,
-                    )
-                    robot_body.current_state = state.copy()
-                    return state
-        except Exception:
-            pass
-
-        # 优先级 2: 使用 VLA 缓存的状态
-        try:
-            cs = getattr(robot_body, 'current_state', None)
-            if cs is not None:
-                return cs.copy()
-        except Exception:
-            pass
-
-        # 优先级 3: 回退 retrieve_observation（需要相机数据）
-        for _ in range(20):
-            obs = robot_body.retrieve_observation()
-            if obs is not None and "obs.state" in obs:
-                state = obs["obs.state"]
-                return state
-            time.sleep(0.05)
-        return None
-
-    def _linear_interpolate_arms(
-        self, robot_body,
-        left_target: np.ndarray | None,
-        right_target: np.ndarray | None,
-        duration: float,
-        goal_handle,
-        start_progress: int,
-        end_progress: int,
-    ) -> np.ndarray | None:
-        """线性插值手臂到目标位姿，手掌保持当前值不变
-
-        注：delta 相对限幅保持开启，插值每步变化很小
-            （~0.01 rad，远小于 0.15~0.50 的限幅阈值），
-            不会触发裁剪，但能防止意外跳变。
-
-        Args:
-            left_target:  左臂 7 维目标位姿，None 表示不动
-            right_target: 右臂 7 维目标位姿，None 表示不动
-            duration:     插值总时长（秒）
-
-        Returns:
-            初始 26 维状态（含手掌值），失败返回 None
-        """
-        current_state = self._get_current_full_state(robot_body)
-        if current_state is None:
-            return None
-
-        num_steps = max(1, int(duration / CONTROL_INTERVAL))
-        actual_interval = duration / num_steps
-
-        robot = robot_body.robot
-
-        for step in range(num_steps):
-            t = (step + 1) / num_steps  # 0 → 1
-
-            action = current_state.copy()
-            if left_target is not None:
-                action[0:7] = current_state[0:7] + t * (left_target - current_state[0:7])
-            if right_target is not None:
-                action[7:14] = current_state[7:14] + t * (right_target - current_state[7:14])
-            # 手掌保持 current_state 中的值不变
-
-            robot.send_robot_action(action)
-
-            # 进度反馈
-            pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
-            send_vla_feedback(goal_handle, pct,
-                              f"手臂过渡中... {t * 100:.0f}%")
-
-            time.sleep(actual_interval)
-
-        return action  # 返回最后一帧动作（含目标手臂位姿 + 原始手掌值）
-
     def _open_hand_and_hold(
         self, robot_body, hand_side: str,
         goal_handle, hold_duration: float,
@@ -233,7 +113,7 @@ class PlaceHandler(AbstractTaskHandler):
         if base_state is not None:
             action = base_state.copy()
         else:
-            current_state = self._get_current_full_state(robot_body)
+            current_state = robot_body._get_reset_current_action()
             if current_state is None:
                 print('[WARN] _open_hand_and_hold: 无法获取当前机器人状态，跳过松手')
                 return
@@ -260,73 +140,70 @@ class PlaceHandler(AbstractTaskHandler):
 
         完整序列:
           1. 5s 线性插值 → 左安全中间姿态
-          2. 3s 线性插值 → 左放置位姿
-          3. 左手手掌全开，维持 1s
-          4. 3s 线性插值 → 左回缩位姿
-          5. 3s 线性插值 → 左安全中间姿态
-          6. 5s 线性插值 → 左垂直复位姿态
+          2. 3s 线性插值 → 左初始抓取姿态（手掌不变）
+          3. 3s 线性插值 → 左放置位姿
+          4. 左手手掌全开，维持 1s
+          5. 3s 线性插值 → 左回缩位姿
+          6. 3s 线性插值 → 左安全中间姿态
+          7. 5s 线性插值 → 左垂直复位姿态
         """
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "左手放置开始")
 
         # 1. 5s 线性插值 → 安全中间姿态
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        current_state = robot_body.move_arms(
             left_target=_SAFE_LEFT_ARM,
             right_target=None,
-            duration=ARM_SAFE_TIME,
-            goal_handle=goal_handle,
-            start_progress=3, end_progress=15,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
                               error_message="Failed to get current robot state for left arm place")
+        send_vla_feedback(goal_handle, 15, "已到安全中间姿态")
 
-        # 2. 3s 线性插值 → 放置位姿
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        # 2. 3s 线性插值 → 初始抓取姿态（手掌不变）
+        init_grasp_pose = _get_init_grasp_pose(context)
+        current_state = robot_body.move_arms(
+            left_target=init_grasp_pose[0:7],
+            right_target=None,
+        )
+        if current_state is None:
+            return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
+                              error_message="Failed to get current robot state for left arm place")
+        send_vla_feedback(goal_handle, 30, "已到初始抓取姿态")
+
+        # 3. 3s 线性插值 → 放置位姿
+        current_state = robot_body.move_arms(
             left_target=LEFT_PLACE_POSE,
             right_target=None,
-            duration=ARM_INTERPOLATION_TIME,
-            goal_handle=goal_handle,
-            start_progress=18, end_progress=50,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
                               error_message="Failed to get current robot state for left arm place")
+        send_vla_feedback(goal_handle, 50, "已到放置位姿")
 
-        # 3. 打开左手，保持
+        # 4. 打开左手，保持
         self._open_hand_and_hold(robot_body, 'left', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
-        # 4. 手臂回缩到安全位置
-        self._linear_interpolate_arms(
-            robot_body,
+        # 5. 手臂回缩到安全位置
+        robot_body.move_arms(
             left_target=LEFT_RETRACT_POSE,
             right_target=None,
-            duration=ARM_RETRACT_TIME,
-            goal_handle=goal_handle,
-            start_progress=55, end_progress=70,
         )
+        send_vla_feedback(goal_handle, 70, "已回缩到安全位置")
 
-        # 5. 过渡到安全中间姿态
-        self._linear_interpolate_arms(
-            robot_body,
+        # 6. 过渡到安全中间姿态
+        robot_body.move_arms(
             left_target=_SAFE_LEFT_ARM,
             right_target=None,
-            duration=ARM_SAFE_TIME,
-            goal_handle=goal_handle,
-            start_progress=72, end_progress=85,
         )
+        send_vla_feedback(goal_handle, 85, "已到安全中间姿态")
 
-        # 6. 过渡到垂直复位姿态
-        self._linear_interpolate_arms(
-            robot_body,
+        # 7. 过渡到垂直复位姿态
+        robot_body.move_arms(
             left_target=_LEFT_RESET_POSE,
             right_target=None,
-            duration=ARM_RESET_TIME,
-            goal_handle=goal_handle,
-            start_progress=88, end_progress=99,
         )
+        send_vla_feedback(goal_handle, 99, "已到垂直复位姿态")
 
         send_vla_feedback(goal_handle, 100, "左手放置完成")
         return TaskResult(True)
@@ -336,73 +213,70 @@ class PlaceHandler(AbstractTaskHandler):
 
         完整序列:
           1. 5s 线性插值 → 右安全中间姿态
-          2. 3s 线性插值 → 右放置位姿
-          3. 右手手掌全开，维持 1s
-          4. 3s 线性插值 → 右回缩位姿
-          5. 3s 线性插值 → 右安全中间姿态
-          6. 5s 线性插值 → 右垂直复位姿态
+          2. 3s 线性插值 → 右初始抓取姿态（手掌不变）
+          3. 3s 线性插值 → 右放置位姿
+          4. 右手手掌全开，维持 1s
+          5. 3s 线性插值 → 右回缩位姿
+          6. 3s 线性插值 → 右安全中间姿态
+          7. 5s 线性插值 → 右垂直复位姿态
         """
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "右手放置开始")
 
         # 1. 5s 线性插值 → 安全中间姿态
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        current_state = robot_body.move_arms(
             left_target=None,
             right_target=_SAFE_RIGHT_ARM,
-            duration=ARM_SAFE_TIME,
-            goal_handle=goal_handle,
-            start_progress=3, end_progress=15,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
                               error_message="Failed to get current robot state for right arm place")
+        send_vla_feedback(goal_handle, 15, "已到安全中间姿态")
 
-        # 2. 3s 线性插值 → 放置位姿
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        # 2. 3s 线性插值 → 初始抓取姿态（手掌不变）
+        init_grasp_pose = _get_init_grasp_pose(context)
+        current_state = robot_body.move_arms(
+            left_target=None,
+            right_target=init_grasp_pose[7:14],
+        )
+        if current_state is None:
+            return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
+                              error_message="Failed to get current robot state for right arm place")
+        send_vla_feedback(goal_handle, 30, "已到初始抓取姿态")
+
+        # 3. 3s 线性插值 → 放置位姿
+        current_state = robot_body.move_arms(
             left_target=None,
             right_target=RIGHT_PLACE_POSE,
-            duration=ARM_INTERPOLATION_TIME,
-            goal_handle=goal_handle,
-            start_progress=18, end_progress=50,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
                               error_message="Failed to get current robot state for right arm place")
+        send_vla_feedback(goal_handle, 50, "已到放置位姿")
 
-        # 3. 打开右手，保持
+        # 4. 打开右手，保持
         self._open_hand_and_hold(robot_body, 'right', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
-        # 4. 手臂回缩到安全位置
-        self._linear_interpolate_arms(
-            robot_body,
+        # 5. 手臂回缩到安全位置
+        robot_body.move_arms(
             left_target=None,
             right_target=RIGHT_RETRACT_POSE,
-            duration=ARM_RETRACT_TIME,
-            goal_handle=goal_handle,
-            start_progress=55, end_progress=70,
         )
+        send_vla_feedback(goal_handle, 70, "已回缩到安全位置")
 
-        # 5. 过渡到安全中间姿态
-        self._linear_interpolate_arms(
-            robot_body,
+        # 6. 过渡到安全中间姿态
+        robot_body.move_arms(
             left_target=None,
             right_target=_SAFE_RIGHT_ARM,
-            duration=ARM_SAFE_TIME,
-            goal_handle=goal_handle,
-            start_progress=72, end_progress=85,
         )
+        send_vla_feedback(goal_handle, 85, "已到安全中间姿态")
 
-        # 6. 过渡到垂直复位姿态
-        self._linear_interpolate_arms(
-            robot_body,
+        # 7. 过渡到垂直复位姿态
+        robot_body.move_arms(
             left_target=None,
             right_target=_RIGHT_RESET_POSE,
-            duration=ARM_RESET_TIME,
-            goal_handle=goal_handle,
-            start_progress=88, end_progress=99,
         )
+        send_vla_feedback(goal_handle, 99, "已到垂直复位姿态")
 
         send_vla_feedback(goal_handle, 100, "右手放置完成")
         return TaskResult(True)
@@ -426,12 +300,13 @@ class PlaceHandler(AbstractTaskHandler):
 
         完整序列:
           1. 5s 线性插值 → 双臂安全中间姿态
-          2. 3s 线性插值 → 双臂放置位姿
-          3. 同时打开双手，维持 1s
-          4. 等待 0.5s 检测是否所有物体已放下
-          5. 3s 线性插值 → 双臂回缩位姿
-          6. 3s 线性插值 → 双臂安全中间姿态
-          7. 5s 线性插值 → 双臂垂直复位姿态
+          2. 3s 线性插值 → 双臂初始抓取姿态（手掌不变）
+          3. 3s 线性插值 → 双臂放置位姿
+          4. 同时打开双手，维持 1s
+          5. 等待 0.5s 检测是否所有物体已放下
+          6. 3s 线性插值 → 双臂回缩位姿
+          7. 3s 线性插值 → 双臂安全中间姿态
+          8. 5s 线性插值 → 双臂垂直复位姿态
         """
         grasp_state = context.grasp_detector.grasp_state  # [left_grasped, right_grasped]
 
@@ -444,35 +319,40 @@ class PlaceHandler(AbstractTaskHandler):
         send_vla_feedback(goal_handle, 5, "双手放置开始")
 
         # 1. 5s 线性插值 → 双臂安全中间姿态
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        current_state = robot_body.move_arms(
             left_target=_SAFE_LEFT_ARM,
             right_target=_SAFE_RIGHT_ARM,
-            duration=ARM_SAFE_TIME,
-            goal_handle=goal_handle,
-            start_progress=3, end_progress=15,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
                               error_message="Failed to get current robot state for both arm place")
+        send_vla_feedback(goal_handle, 15, "已到安全中间姿态")
 
-        # 2. 3s 线性插值，双臂同时到放置位姿
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        # 2. 3s 线性插值 → 双臂初始抓取姿态（手掌不变）
+        init_grasp_pose = _get_init_grasp_pose(context)
+        current_state = robot_body.move_arms(
+            left_target=init_grasp_pose[0:7],
+            right_target=init_grasp_pose[7:14],
+        )
+        if current_state is None:
+            return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
+                              error_message="Failed to get current robot state for both arm place")
+        send_vla_feedback(goal_handle, 30, "已到初始抓取姿态")
+
+        # 3. 3s 线性插值，双臂同时到放置位姿
+        current_state = robot_body.move_arms(
             left_target=LEFT_PLACE_POSE,
             right_target=RIGHT_PLACE_POSE,
-            duration=ARM_INTERPOLATION_TIME,
-            goal_handle=goal_handle,
-            start_progress=18, end_progress=45,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_PLACE_TIMEOUT,
                               error_message="Failed to get current robot state for both arm place")
+        send_vla_feedback(goal_handle, 45, "已到放置位姿")
 
-        # 3. 同时打开双手，保持 1s
+        # 4. 同时打开双手，保持 1s
         self._open_hand_and_hold(robot_body, 'both', goal_handle, HAND_OPEN_HOLD_TIME, base_state=current_state)
 
-        # 4. 等待 0.5s 让 grasp_detector 更新
+        # 5. 等待 0.5s 让 grasp_detector 更新
         time.sleep(0.5)
         final_grasp_state = context.grasp_detector.grasp_state
         if final_grasp_state[0] or final_grasp_state[1]:
@@ -480,35 +360,26 @@ class PlaceHandler(AbstractTaskHandler):
             return TaskResult(False, error_code=ERR_PLACE_ONE_HAND_STILL_HOLDING,
                               error_message="One hand still holding object after both arm place")
 
-        # 5. 双臂回缩
-        self._linear_interpolate_arms(
-            robot_body,
+        # 6. 双臂回缩
+        robot_body.move_arms(
             left_target=LEFT_RETRACT_POSE,
             right_target=RIGHT_RETRACT_POSE,
-            duration=ARM_RETRACT_TIME,
-            goal_handle=goal_handle,
-            start_progress=55, end_progress=70,
         )
+        send_vla_feedback(goal_handle, 70, "已回缩到安全位置")
 
-        # 6. 双臂过渡到安全中间姿态
-        self._linear_interpolate_arms(
-            robot_body,
+        # 7. 双臂过渡到安全中间姿态
+        robot_body.move_arms(
             left_target=_SAFE_LEFT_ARM,
             right_target=_SAFE_RIGHT_ARM,
-            duration=ARM_SAFE_TIME,
-            goal_handle=goal_handle,
-            start_progress=72, end_progress=85,
         )
+        send_vla_feedback(goal_handle, 85, "已到安全中间姿态")
 
-        # 7. 双臂过渡到垂直复位姿态
-        self._linear_interpolate_arms(
-            robot_body,
+        # 8. 双臂过渡到垂直复位姿态
+        robot_body.move_arms(
             left_target=_LEFT_RESET_POSE,
             right_target=_RIGHT_RESET_POSE,
-            duration=ARM_RESET_TIME,
-            goal_handle=goal_handle,
-            start_progress=88, end_progress=99,
         )
+        send_vla_feedback(goal_handle, 99, "已到垂直复位姿态")
 
         send_vla_feedback(goal_handle, 100, "双手放置完成")
         return TaskResult(True)

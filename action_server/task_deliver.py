@@ -52,9 +52,7 @@ RIGHT_DELIVER_POSE = np.array([-1.0, -0.1, 0.0, 0.5, 0.0, 0.0, 0.0])
 # ==============================================
 # 时间常量
 # ==============================================
-ARM_INTERPOLATION_TIME = 3.0   # 手臂线性插值时长（秒）
 HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
-CONTROL_INTERVAL = 0.02         # 控制周期 ~50Hz
 
 # ==============================================
 # 拖拽检测参数
@@ -98,112 +96,6 @@ class DeliverHandler(AbstractTaskHandler):
     # ================================================================
     # 工具方法
     # ================================================================
-
-    def _get_current_full_state(self, robot_body) -> np.ndarray | None:
-        """获取当前 26 维完整状态（优先从 action 缓存读取，用于轨迹规划起点）
-
-        优先级:
-          1. Action 缓存 — /joint_action + /left_hand/set_angle + /right_hand/set_angle
-             （最新下发量，轨迹规划起点更平滑）
-          2. robot_body.current_state（VLA 观察线程缓存，可能过期）
-          3. retrieve_observation() 回退（需要相机数据）
-        """
-        # 优先级 1: 从 action 订阅缓存读取（最新下发量，消除执行滞后）
-        try:
-            robot = robot_body.robot
-            la = robot.latest_left_arm_action
-            ra = robot.latest_right_arm_action
-            lh = robot.latest_left_hand_action
-            rh = robot.latest_right_hand_action
-            if all(x is not None for x in (la, ra, lh, rh)):
-                la_msg, _ = la
-                ra_msg, _ = ra
-                lh_msg, _ = lh
-                rh_msg, _ = rh
-                if (la_msg and ra_msg and lh_msg and rh_msg
-                        and la_msg.position and ra_msg.position
-                        and lh_msg.position and rh_msg.position):
-                    state = np.array(
-                        list(la_msg.position)
-                        + list(ra_msg.position)
-                        + list(lh_msg.position)
-                        + list(rh_msg.position),
-                        dtype=float,
-                    )
-                    robot_body.current_state = state.copy()
-                    return state
-        except Exception:
-            pass
-
-        # 优先级 2: 使用 VLA 缓存的状态
-        try:
-            cs = getattr(robot_body, 'current_state', None)
-            if cs is not None:
-                return cs.copy()
-        except Exception:
-            pass
-
-        # 优先级 3: 回退 retrieve_observation（需要相机数据）
-        for _ in range(20):
-            obs = robot_body.retrieve_observation()
-            if obs is not None and "obs.state" in obs:
-                state = obs["obs.state"]
-                return state
-            time.sleep(0.05)
-        return None
-
-    def _linear_interpolate_arms(
-        self, robot_body,
-        left_target: np.ndarray | None,
-        right_target: np.ndarray | None,
-        duration: float,
-        goal_handle,
-        start_progress: int,
-        end_progress: int,
-    ) -> np.ndarray | None:
-        """线性插值手臂到目标位姿，手掌保持当前值不变
-
-        注：delta 相对限幅保持开启，插值每步变化很小
-            （~0.01 rad，远小于 0.15~0.50 的限幅阈值），
-            不会触发裁剪，但能防止意外跳变。
-
-        Args:
-            left_target:  左臂 7 维目标位姿，None 表示不动
-            right_target: 右臂 7 维目标位姿，None 表示不动
-            duration:     插值总时长（秒）
-
-        Returns:
-            初始 26 维状态（含手掌值），失败返回 None
-        """
-        current_state = self._get_current_full_state(robot_body)
-        if current_state is None:
-            return None
-
-        num_steps = max(1, int(duration / CONTROL_INTERVAL))
-        actual_interval = duration / num_steps
-
-        robot = robot_body.robot
-
-        for step in range(num_steps):
-            t = (step + 1) / num_steps  # 0 → 1
-
-            action = current_state.copy()
-            if left_target is not None:
-                action[0:7] = current_state[0:7] + t * (left_target - current_state[0:7])
-            if right_target is not None:
-                action[7:14] = current_state[7:14] + t * (right_target - current_state[7:14])
-            # 手掌保持 current_state 中的值不变
-
-            robot.send_robot_action(action)
-
-            # 进度反馈
-            pct = start_progress + int((end_progress - start_progress) * (step + 1) / num_steps)
-            send_vla_feedback(goal_handle, pct,
-                              f"手臂过渡中... {t * 100:.0f}%")
-
-            time.sleep(actual_interval)
-
-        return action  # 返回最后一帧动作（含目标手臂位姿 + 原始手掌值）
 
     def _hold_and_wait_for_tug(
         self, robot_body, hand_side: str,
@@ -324,7 +216,7 @@ class DeliverHandler(AbstractTaskHandler):
         if base_state is not None:
             action = base_state.copy()
         else:
-            current_state = self._get_current_full_state(robot_body)
+            current_state = robot_body._get_reset_current_action()
             if current_state is None:
                 print('[WARN] _open_hand_and_hold: 无法获取当前机器人状态，跳过松手')
                 return
@@ -354,17 +246,14 @@ class DeliverHandler(AbstractTaskHandler):
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "左手递物开始")
 
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        current_state = robot_body.move_arms(
             left_target=LEFT_DELIVER_POSE,
             right_target=None,
-            duration=ARM_INTERPOLATION_TIME,
-            goal_handle=goal_handle,
-            start_progress=10, end_progress=90,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_DELIVER_TIMEOUT,
                               error_message="Failed to get current robot state for left arm deliver")
+        send_vla_feedback(goal_handle, 90, "已到递物位姿")
 
         self._hold_and_wait_for_tug(robot_body, 'left', goal_handle, current_state)
 
@@ -379,17 +268,14 @@ class DeliverHandler(AbstractTaskHandler):
         robot_body = context.robot_body
         send_vla_feedback(goal_handle, 5, "右手递物开始")
 
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        current_state = robot_body.move_arms(
             left_target=None,
             right_target=RIGHT_DELIVER_POSE,
-            duration=ARM_INTERPOLATION_TIME,
-            goal_handle=goal_handle,
-            start_progress=10, end_progress=90,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_DELIVER_TIMEOUT,
                               error_message="Failed to get current robot state for right arm deliver")
+        send_vla_feedback(goal_handle, 90, "已到递物位姿")
 
         self._hold_and_wait_for_tug(robot_body, 'right', goal_handle, current_state)
 
@@ -423,17 +309,14 @@ class DeliverHandler(AbstractTaskHandler):
         send_vla_feedback(goal_handle, 5, "双手递物开始")
 
         # 1. 3s 线性插值，双臂同时到递物位姿
-        current_state = self._linear_interpolate_arms(
-            robot_body,
+        current_state = robot_body.move_arms(
             left_target=LEFT_DELIVER_POSE,
             right_target=RIGHT_DELIVER_POSE,
-            duration=ARM_INTERPOLATION_TIME,
-            goal_handle=goal_handle,
-            start_progress=10, end_progress=85,
         )
         if current_state is None:
             return TaskResult(False, error_code=ERR_DELIVER_TIMEOUT,
                               error_message="Failed to get current robot state for both arm deliver")
+        send_vla_feedback(goal_handle, 85, "已到递物位姿")
 
         # 2. 保持位姿，等待拖拽检测，检测到后松手
         self._hold_and_wait_for_tug(robot_body, 'both', goal_handle, current_state)
