@@ -225,1068 +225,6 @@ class LeRobotDatasetParser:
             "removed_paths": removed_paths,
         }
 
-
-class DataRecordManager:
-    """
-    A class to manage writing robotic observation and action data to disk in a structured format.
-
-    This class handles the synchronization, storage, and serialization of high-frequency robot sensor data,
-    including images, states, actions, and associated metadata. It supports multiprocessing for efficient I/O
-    operations and writes data into Parquet files along with corresponding video recordings.
-    """
-
-    def __init__(self, record_config: ConfigDict, task: Optional[str] = None) -> None:
-        """
-        Initializes the DataRecordManager instance with the given configuration.
-
-        Sets up directories, loads or initializes metadata, prepares video writers, and starts
-        the writer process for asynchronous disk writing.
-
-        Args:
-            record_config (dict): Configuration dictionary.
-                                For more information, see ./conf/save_conf.py
-        """
-        # Define logger
-        self.logger = logging.getLogger(__name__)
-        self.config = record_config
-        # print(f"Debug: record_config: {self.config}")
-        self._init_shared_data()
-        self.task_language_dict = {}
-
-        # save_dir = self.config.get("save_dir", "data/recording")
-        # meta_required_file_exists = self._check_meta_path_and_dir(save_dir=save_dir, task=task)
-        # if meta_required_file_exists:
-        #     self._update_config_from_meta_file()
-        # else:
-        #     lerobot_cfg = self._get_lerobot_config()
-        #     lerobot_cfg["total_episodes"] = 0
-        #     lerobot_cfg["total_frames"] = 0
-        #     lerobot_cfg["total_videos"] = 0
-        self._parse_config_info(self.config["lerobot"])
-
-        # Shared Queue
-        self.record_queue = Queue()
-
-        # Action recording queues
-        self.action_lock = threading.Lock()
-        self.action_frame_queue = deque(maxlen=10)
-
-        self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
-        self.record_action_executor = ThreadPoolExecutor(max_workers=4)
-
-        # Writer process initialization
-        self.writer_process = None
-        self._closed = False
-
-        # Session id used to drop stale async tasks across stop/start cycles.
-        self._session_lock = threading.Lock()
-        self._recording_session_id = 0
-
-    def _init_shared_data(self):
-        """
-        Initializes shared data variables for multiprocessing.
-
-        This method sets up the necessary shared variables and data structures that will be used
-        across multiple processes for synchronization and data sharing.
-        """
-        self.manager = Manager()
-        self.shared_data = self.manager.Namespace()
-        # Shared state and counters
-        # self.shared_data.start_write_time = self.manager.Value('b', False)
-        # self.shared_data.stop = self.manager.Value('b', False)
-        # self.shared_data.close = self.manager.Value('b', False)
-        # self.shared_data.init_write = self.manager.Value('b', True)
-        self.shared_data.total_frames = self.manager.Value('i', 0)
-        self.shared_data.total_videos = self.manager.Value('i', 0)
-        self.shared_data.episode_chunk = self.manager.Value('i', 0)
-        self.shared_data.episode_index = self.manager.Value('i', 0)
-        self.shared_data.running = self.manager.Value('b', False)
-        # self.shared_data.episode_parquet_list = self.manager.list()
-        self.shared_data.save_video_path_list = self.manager.list()
-        # Task and language information storage
-        # self.shared_data.episode_task_list = self.manager.list()
-        # self.shared_data.task_language_dict = self.manager.dict()
-    
-    def _sanitize_task_name(self, task: Optional[str]) -> str:
-        task_name = str(task).strip() if task is not None else ""
-        if not task_name:
-            task_name = "default"
-        for ch in ('/', '\\', ' ', ':'):
-            task_name = task_name.replace(ch, '_')
-        return task_name
-
-    def _build_full_save_path(self, save_dir: str, task: Optional[str]) -> str:
-        self.project_root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        rel_save_dir = str(save_dir or "data/recording").strip().lstrip('/').lstrip('\\')
-        date_str = datetime.now().strftime("%Y%m%d")
-        task_name = self._sanitize_task_name(task)
-        self.current_task = task_name
-        return os.path.join(self.project_root_path, rel_save_dir, task_name + '_' + date_str)
-
-    def _check_meta_path_and_dir(self, save_dir: str, task: Optional[str]) -> bool:
-        self.save_dir = str(save_dir or "data/recording")
-        self.config["save_dir"] = self.save_dir
-
-        self.save_path = self._build_full_save_path(self.save_dir, task)
-        self.meta_dir = os.path.join(self.save_path, 'meta')
-        # self.logger.info(f"_check_meta_path_and_dir: save_dir={self.save_dir!r}, save_path={self.save_path!r}, meta_dir={self.meta_dir!r}")
-
-        if not os.path.exists(self.meta_dir):
-            os.makedirs(self.meta_dir, exist_ok=True)
-            self.logger.info(f"{self.meta_dir} not exists, create it")
-            return False
-        return self._check_required_meta_files()
-
-    def set_task(self, task: Optional[str]) -> None:
-        """Update save path by task/date before a new recording starts."""
-        if self.shared_data.running.value:
-            self.logger.warning("set_task ignored because recording is running")
-            return
-
-        # if self.current_task == task_name and os.path.exists(os.path.join(self.project_root_path, self.save_dir, candidate_dir)):
-        #     self.logger.info(f"set_task with the same task name {task_name} and existing directory, reuse it.")
-        #     return
-        save_dir = self.config.get("save_dir", "data/recording")
-        meta_required_file_exists = self._check_meta_path_and_dir(save_dir=save_dir, task=task)
-        if meta_required_file_exists:
-            self._update_config_from_meta_file()
-        else:
-            lerobot_cfg = self.config["lerobot"]
-            lerobot_cfg["total_episodes"] = 0
-            lerobot_cfg["total_frames"] = 0
-            lerobot_cfg["total_videos"] = 0
-            lerobot_cfg['chunks_size'] = 1000
-            self._sync_shared_data_from_config()
-    
-    def _check_required_meta_files(self, required_files: List[str] = ['info.json', 'episodes.jsonl', 'tasks.jsonl']) -> bool:
-        # Check for required files
-        missing_files = []
-
-        for filename in required_files:
-            file_path = os.path.join(self.meta_dir, filename)
-            if not os.path.exists(file_path):
-                missing_files.append(filename)
-
-        # Raise error if any required file is missing
-        if missing_files:
-            self.logger.warning(f"{self.meta_dir} is missing the following required files: {', '.join(missing_files)}")
-            # assert False, "Missing required meta files."
-            return False
-        else:
-            return True
-
-    def _update_config_from_meta_file(self):
-        """
-        Checks whether the directory `self.meta_dir` exists.
-
-        If it exists and contains required files (info.json, episodes.jsonl, tasks.jsonl),
-        updates the configuration using these files. Otherwise, raises an error due to missing files.
-
-        Raises:
-            AssertionError: If any of the required files are missing in the existing directory.
-        """
-        
-
-        # Load info.json and update dataset info
-        info_file_path = os.path.join(self.meta_dir, 'info.json')
-        self._update_dataset_info_from_meta_file(info_file_path)
-        self._sync_shared_data_from_config()
-
-        # Load tasks.jsonl and update task languages
-        task_file_path = os.path.join(self.meta_dir, 'tasks.jsonl')
-        self._update_task_languages_from_meta_file(task_file_path)
-
-    def _sync_shared_data_from_config(self) -> None:
-        """Sync record lerobot values to shared_data."""
-        lerobot_cfg = self.config["lerobot"]
-        self.shared_data.total_frames.value = int(lerobot_cfg['total_frames'])
-        self.shared_data.total_videos.value = int(lerobot_cfg['total_videos'])
-        self.shared_data.episode_index.value = int(lerobot_cfg['total_episodes'])
-        self.shared_data.episode_chunk.value = int(lerobot_cfg['total_episodes']) // int(lerobot_cfg['chunks_size'])
-
-    def _update_dataset_info_from_meta_file(self, file_path: str) -> None:
-        """
-        Updates the dataset info using the provided JSON file.
-        """
-        # Open the specified JSON file and load its contents
-        with open(file_path, 'r') as file:
-            data = json.loads(file.read())
-        
-        # Update the dataset info in the config using the loaded JSON data
-        try:
-            lerobot_cfg = self.config["lerobot"]
-            lerobot_cfg['chunks_size'] = data['chunks_size']
-            lerobot_cfg['codebase_version'] = data['codebase_version']
-            lerobot_cfg['data_path'] = data['data_path']
-            lerobot_cfg['video_path'] = data['video_path']
-            lerobot_cfg['total_videos'] = data['total_videos']
-            lerobot_cfg['total_frames'] = data['total_frames']
-            lerobot_cfg['total_tasks'] = data['total_tasks']
-            lerobot_cfg['total_episodes'] = data['total_episodes']
-            lerobot_cfg['total_chunks'] = data['total_chunks']
-            lerobot_cfg['fps'] = int(data['fps'])
-            lerobot_cfg['robot_type'] = data['robot_type']
-            lerobot_cfg['splits'] = data['splits']
-            lerobot_cfg['state_shape'] = data['features']['observation.state']['shape'][0]
-            lerobot_cfg['action_shape'] = data['features']['action']['shape'][0]
-            lerobot_cfg['cam.head']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
-            lerobot_cfg['cam.head']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
-            lerobot_cfg['cam.head']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
-            lerobot_cfg['cam.head']['shape']['height'] = data['features']['cam.head']['info']['video.height']
-            lerobot_cfg['cam.head']['shape']['width'] = data['features']['cam.head']['info']['video.width']
-            lerobot_cfg['cam.head']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
-            lerobot_cfg['cam.hand_left']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
-            lerobot_cfg['cam.hand_left']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
-            lerobot_cfg['cam.hand_left']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
-            lerobot_cfg['cam.hand_left']['shape']['height'] = data['features']['cam.head']['info']['video.height']
-            lerobot_cfg['cam.hand_left']['shape']['width'] = data['features']['cam.head']['info']['video.width']
-            lerobot_cfg['cam.hand_left']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
-            lerobot_cfg['cam.hand_right']['encode']['codec'] = data['features']['cam.head']['info']['video.codec']
-            lerobot_cfg['cam.hand_right']['encode']['has_audio'] = data['features']['cam.head']['info']['has_audio']
-            lerobot_cfg['cam.hand_right']['encode']['is_depth_map'] = data['features']['cam.head']['info']['video.is_depth_map']
-            lerobot_cfg['cam.hand_right']['shape']['height'] = data['features']['cam.head']['info']['video.height']
-            lerobot_cfg['cam.hand_right']['shape']['width'] = data['features']['cam.head']['info']['video.width']
-            lerobot_cfg['cam.hand_right']['shape']['channel'] = data['features']['cam.head']['info']['video.channels']
-        except Exception as e:
-            print(f"Error: exception: {e}")
-        # self._normalize_record_features_cam()
-        # print(f"Debug: after update config.info={self.config.info}")
-
-        # Print a success message indicating that the meta files have updated the config
-        self.logger.info("update dataset info from meta info file success.")
-    
-    def _update_task_languages_from_meta_file(self, file_path: str) -> None:
-        """
-        Updates the task-language mapping using the provided JSONL file.
-        """
-        with open(file_path, 'r') as file:
-            for line in file:
-                data = json.loads(line)
-                task_index = data['task_index']
-                task_name = data['tasks'] 
-                if task_name not in self.task_language_dict:
-                    self.task_language_dict[task_name] = task_index
-        self.logger.info(f"Update task languages from meta task file success, task_language_dict={self.task_language_dict}.")
-    
-    def _parse_config_info(self, info_config: ConfigDict) -> None:
-        self.camera_name_list = []
-        self.camera_shape_dict = {}
-        for camera_name in info_config.keys():
-            if str(camera_name).startswith("cam."):
-                self.camera_name_list.append(camera_name)
-                shape_dict = info_config[camera_name]["shape"]
-                self.camera_shape_dict[camera_name] = (shape_dict["height"], shape_dict["width"], shape_dict["channel"])
-                # print(f"Debug: camera_name: {camera_name}, shape: {shape_list}")
-
-        self.action_shape = info_config['action_shape']
-        self.state_shape = info_config['state_shape']
-        # {'action': (22,), 'cam.hand_left': (480, 848, 3), 'cam.hand_right': (480, 848, 3), 'cam.head': (720, 1280, 3), 'episode_index': (1,), 'frame_index': (1,), 'index': (1,), 'observation.state': (20,), 'task_index': (1,), 'timestamp': (1,)}
-        # print(f"Debug: camera_shape_dict={self.camera_shape_dict}")
-
-    def update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
-        """Update camera shape settings for current recording session and metadata.
-
-        Args:
-            shape_dict: Mapping from camera name (e.g. ``cam.head``) to HWC shape.
-        """
-        if not isinstance(shape_dict, dict) or not shape_dict:
-            self.logger.warning("update_camera_shape_dict called with empty shape_dict, skip update.")
-            return
-
-        updated = {}
-        for camera_name, shape_value in shape_dict.items():
-            if not str(camera_name).startswith("cam."):
-                continue
-
-            if shape_value is None or len(shape_value) < 2:
-                self.logger.warning(f"Invalid shape for {camera_name}: {shape_value}, skip update.")
-                continue
-
-            height = int(shape_value[0])
-            width = int(shape_value[1])
-            channel = int(shape_value[2]) if len(shape_value) >= 3 else 3
-            if height <= 0 or width <= 0 or channel <= 0:
-                self.logger.warning(f"Invalid shape value for {camera_name}: {shape_value}, skip update.")
-                continue
-
-            normalized_shape = (height, width, channel)
-            self.camera_shape_dict[camera_name] = normalized_shape
-            if camera_name not in self.camera_name_list:
-                self.camera_name_list.append(camera_name)
-
-            lerobot_cfg = self.config["lerobot"]
-            camera_info = lerobot_cfg.get(camera_name, ConfigDict(allow_dotted_keys=False))
-            # print(f"Debug: camera={camera_name}, feature={camera_feature}")
-            camera_info["shape"]["height"] = height
-            camera_info["shape"]["width"] = width
-            camera_info["shape"]["channel"] = channel
-
-            lerobot_cfg[camera_name] = camera_info
-            updated[camera_name] = normalized_shape
-
-        if updated:
-            self.logger.info(f"Updated camera_shape_dict with runtime observation shapes: {updated}")
-        else:
-            self.logger.warning("No valid camera shape found in shape_dict, keep original config.")
-    def _get_recording_session_id(self) -> int:
-        with self._session_lock:
-            return self._recording_session_id
-
-    def _bump_recording_session_id(self) -> int:
-        with self._session_lock:
-            self._recording_session_id += 1
-            return self._recording_session_id
-
-    def add_observation_async(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float):
-        """
-        Asynchronously writes observation data into the dataset.
-
-        Args:
-            observations (dict):A dictionary containing observation with the following keys:
-                - 'cam.*': np.ndarray,
-                - 'obs.state': np.ndarray
-            language (str): The language instruction associated with the observation.
-            time_now (int | float): The current timestamp.
-        """
-        session_id = self._get_recording_session_id()
-        self.record_obs_executor.submit(self._add_observation_fun, observation, language_instruction, timestamp, session_id)
-
-    def add_action_async(self, action: np.ndarray, timestamp: int | float) -> None:
-        """
-        Asynchronously writes action data into the dataset.
-
-        Args:
-            action (np.ndarray): A dictionary containing action data from the environment.
-        """
-        session_id = self._get_recording_session_id()
-        self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
-    
-    def start_recording(self):
-        """
-        Starts the recording process by launching the writer process.
-
-        This method should be called before adding any observations or actions to ensure that
-        the writer process is running and ready to handle incoming data.
-        """
-        try:
-            session_id = self._bump_recording_session_id()
-            self.shared_data.running.value = True
-            self._clear_queues()
-            self.writer_process = Process(target=self._write_process_fun, daemon=True)
-            self.writer_process.start()
-            self.logger.info(f"Writer process started successfully. session_id={session_id}")
-        except Exception as e:
-            self.logger.error(f"Failed to start writer_process: {e}")
-
-    def stop_recording(self):
-        """
-        Stops recording and waits for all queued data to be written before exiting.
-
-        Behavior:
-        - Set ``running=False`` to stop accepting new records.
-        - Let writer process continue draining ``record_queue``.
-        - Wait for writer process to exit naturally after flushing video/parquet.
-        """
-        if self.shared_data.running.value:
-            self.shared_data.running.value = False
-            self.logger.info("Signaled writer process to stop after draining queue.")
-
-        # Invalidate future async tasks from next cycle; current queue will still be drained.
-        self._bump_recording_session_id()
-
-        if self.writer_process is not None and self.writer_process.is_alive():
-            self.logger.info("Waiting writer process to flush queued data...")
-            self.writer_process.join()
-        elif self.writer_process is None:
-            self.logger.debug("stop_recording called but writer process is not initialized.")
-
-        self.writer_process = None
-        self._clear_queues()
-    def _add_observation_fun(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float, session_id: int) -> None:
-        """
-        Process and store observation data including camera images, robot state, and time frame.
-
-        Args:
-            observation (Dict[str, np.ndarray]): Dictionary containing observation data with the following keys:
-                - 'cam.head': np.ndarray
-                - 'cam.hand_left': np.ndarray
-                - 'cam.hand_right': np.ndarray
-                - 'loc_timestamp': int
-                - 'obs.state': np.ndarray
-            language_instruction (str): Natural language instruction associated with the observation.
-            timestamp (int): Timestamp of the current observation.
-
-        Raises:
-            AssertionError: If the provided timestamp is not greater than the last recorded timestamp.
-        """
-        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
-            return
-
-        # When action_frame_queue is empty, discard the observation frame
-        action = None
-        with self.action_lock:
-            if not self.action_frame_queue:
-                self.logger.warning("Action frame queue is empty, discarding observation frame.")
-                return
-            else:
-                action, _ = self.action_frame_queue.pop()
-        
-        observation['language_instruction'] = language_instruction
-        # check state shape 
-        if observation['obs.state'].shape[0] < self.state_shape:
-            # self.logger.warning(f"obs shape {observation['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
-            # assert state['obs.state'].shape[0] <= self.state_shape, \
-            # f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
-            observation['obs.state'] = np.concatenate([
-                observation['obs.state'],
-                np.zeros(self.state_shape - observation['obs.state'].shape[0], dtype=observation['obs.state'].dtype)
-            ], axis=0)
-
-        self.record_queue.put((observation, action))
-
-    def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int) -> None:
-        """
-        Process and store the action data along with its timestamp.
-
-        Args:
-            action (np.ndarray): The action data to be stored, typically representing joint torques or target positions.
-            timestamp (int): The timestamp associated with this action.
-
-        Raises:
-            AssertionError: If the provided timestamp is not strictly increasing compared to the last recorded one.
-        """
-        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
-            return
-
-        # check action shape 
-        if action.shape[0] < self.action_shape:
-            # self.logger.warning(f"Action shape {action.shape[0]} is not correct, config shape is {self.action_shape} , add 0 to the action")
-            # self.logger.warning(f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}")
-            action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)
-        self.action_frame_queue.append((action, timestamp))
-
-    def _write_process_fun(self):
-        """
-        Main loop for the writer process responsible for writing data to disk.
-
-        Continuously pulls data from the shared queue and writes it to video files and Parquet file buffer.
-        The loop runs until `self.shared_data.stop` is set to True. Each iteration processes one observation-action pair:
-            - Appends new language instructions to the episode task list
-            - Assigns a unique task index based on instruction text
-            - Writes camera images to corresponding video files
-            - Constructs a record dictionary and appends it to the shared Parquet buffer
-
-        Frame index is incremented with each successful write.
-
-        Raises:
-            KeyboardInterrupt: If user interrupts execution via keyboard (e.g., Ctrl+C)
-            Exception: Any other exception during writing will terminate the thread
-        """
-        self.logger.info("Starting write process loop...")
-
-        try:
-            episode_chunk = self.shared_data.episode_chunk.value
-            episode_index = self.shared_data.episode_index.value
-            total_frames = self.shared_data.total_frames.value
-            total_videos = self.shared_data.total_videos.value
-            self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}")
-            self.video_writers = self._create_video_writer(
-                episode_chunk=episode_chunk,
-                episode_index=episode_index
-            )
-            self.parquet_schema, self.parquet_writer = self._create_parquet_writer(
-                episode_chunk=episode_chunk,
-                episode_index=episode_index
-            )
-            self.parquet_frame_list = list()
-            self.parquet_lock = threading.Lock()
-            # copy task dict
-            # self.shared_data.last_task_language_dict = self.copy_shared_data_dict(self.shared_data.task_language_dict)
-            frame_index = 0
-            episode_task_list = []
-            step_task_index = 0
-            # Use a thread to write parquet file
-            write_loop_done = threading.Event()
-            write_parquet_thread = threading.Thread(target=self._write_parquet_fun, args=(write_loop_done,), daemon=True)
-            try:
-                write_parquet_thread.start()
-            except Exception as e:
-                self.logger.error("Write parquet thread can't start.")
-                return
-            while self.shared_data.running.value or (not self.record_queue.empty()):
-                # Get state and action data from queue
-                try:
-                    step_state, step_action = self.record_queue.get(timeout=0.1)
-                except Empty:
-                    if self.shared_data.running.value:
-                        self.logger.info("Record queue empty, waiting for data...")
-                    continue
-                step_language = step_state['language_instruction']
-                
-                # Track new language instructions per episode
-                if step_language not in episode_task_list:
-                    episode_task_list.append(step_language)
-                
-                # Assign task index based on unique language instruction
-                if step_language not in self.task_language_dict.keys():
-                    step_task_index = len(self.task_language_dict.keys())
-                    self.task_language_dict[step_language] = step_task_index
-                else:
-                    step_task_index = self.task_language_dict[step_language]
-                
-                # Write image frames to video files
-                for camera_name in self.camera_name_list:
-                    expected_shape = self.camera_shape_dict[camera_name]
-                    raw_frame = step_state.get(camera_name)
-                    # self.logger.info(f"step_state: {step_state.keys()}")
-                    # TODO: use three threads in the future
-                    frame = self._prepare_video_frame(raw_frame, self.config.save_raw, expected_shape)
-                    # self.logger.info(f"expected_shape: {expected_shape}")
-                    if frame is None:
-                        self.logger.warning(f"{camera_name} frame invalid, skip this frame")
-                        continue
-
-                    writer = self.video_writers.get(camera_name, None)
-                    if writer is None or (not writer.isOpened()):
-                        self.logger.error(f"Video writer is not opened for {camera_name}, skip write")
-                        continue
-
-                    writer.write(frame)
-                    self.logger.debug(f"{camera_name} writes a frame with expected_shape {frame.shape}.")
-                # Construct record dictionary for Parquet file
-                parquet_frame = {
-                    'observation.state': step_state['obs.state'].tolist(),
-                    'action': step_action.tolist(),
-                    'episode_index': episode_index,
-                    'frame_index': frame_index,
-                    'index': total_frames+frame_index,
-                    'task_index': 0,  # Placeholder for task index, can be updated based on actual task mapping
-                    'timestamp': 1/30 * frame_index,  # Fixed frame rate assumption
-                }
-                with self.parquet_lock:
-                    self.parquet_frame_list.append(parquet_frame)
-                
-                # Update counters
-                frame_index += 1
-                if frame_index % 30 == 0:
-                    self.logger.info(
-                        f"write-loop progress: episode={episode_index}, "
-                        f"frame_index={frame_index}, cached_records={len(self.parquet_frame_list)}"
-                    )
-                # print('Write successful ——————————————————')
-
-                # self.logger.info('write process stopped!!! ')
-            self.shared_data.episode_index.value = episode_index + 1
-            self.shared_data.total_frames.value = total_frames + frame_index
-            self.shared_data.total_videos.value = total_videos + len(self.camera_name_list)
-            self._write_meta_files(total_frames=self.shared_data.total_frames.value,
-                                total_episodes=self.shared_data.episode_index.value,
-                                episode_length=frame_index,
-                                total_videos=self.shared_data.total_videos.value,
-                                episode_task_list=episode_task_list)
-            # stop recording for current episode: flush video/parquet after all queue data drained
-            write_loop_done.set()
-            write_parquet_thread.join()
-            self._release_video_writers()
-            self._release_parquet_writer()
-            # self._clear_queues()
-            # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
-        
-        except KeyboardInterrupt:
-            self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
-            # self.release_writers()
-        
-        except Exception as e:
-            self.logger.error(f"Writing thread exited with exception: {e.__traceback__}")
-            # self.release_writers()
-        
-        finally:
-            self.logger.info("Writing thread exited.")
-            # self.release_writers()
-
-    # def end_write(self):
-    #     """
-    #     - Deletes any partially written video files
-    #     - Deletes the Parquet file if it exists
-    #     """
-    #     for path in self.shared_data.save_video_path_list:
-    #         print(f"path {path}")
-    #         if os.path.exists(path):
-    #             print(f"Deleting file {path}")
-    #             os.remove(path)
-    #     if os.path.exists(self.parquet_file_path):
-    #         os.remove(self.parquet_file_path)
-    
-    # def copy_shared_data_dict(self,input_dict):
-    #     """
-        
-    #     """
-    #     output_dict = self.manager.dict()
-    #     for key, value in input_dict.items():
-    #         output_dict[key] = value
-    #     return output_dict
-
-    def close(self):
-        """Release all dataset writer resources safely and idempotently."""
-        self.logger.info("Closing DataRecordManager...")
-
-        try:
-            self.stop_recording()
-        except Exception:
-            self.logger.debug("stop_recording failed during close", exc_info=True)
-
-        self.logger.info("Closing DataRecordManager, recording stopped.")
-        try:
-            if getattr(self, "record_obs_executor", None) is not None:
-                self.record_obs_executor.shutdown(wait=True, cancel_futures=True)
-        except Exception:
-            self.logger.debug("record_obs_executor shutdown failed", exc_info=True)
-        self.logger.info("Closing DataRecordManager, observation executor shutdown.")
-
-        try:
-            if getattr(self, "record_action_executor", None) is not None:
-                self.record_action_executor.shutdown(wait=True, cancel_futures=True)
-        except Exception:
-            self.logger.debug("record_action_executor shutdown failed", exc_info=True)
-        self.logger.info("Closing DataRecordManager, action executor shutdown.")
-
-        try:
-            if getattr(self, "record_queue", None) is not None:
-                self.record_queue.close()
-                self.record_queue.cancel_join_thread()
-        except Exception:
-            self.logger.debug("record_queue close/join failed", exc_info=True)
-        self.logger.info("Closing DataRecordManager, record queue closed.")
-        try:
-            if getattr(self, "manager", None) is not None:
-                self.manager.shutdown()
-        except Exception:
-            self.logger.debug("manager shutdown failed", exc_info=True)
-
-        self.logger.info("DataRecordManager closed successfully.")
-        
-    
-    # def save_writed_data(self):
-    #     """
-    #     Gracefully shuts down the writer and finalizes data writing.
-
-    #     This method signals the writer thread to stop by setting the 'stop' flag,
-    #     releases all video writers, increments the episode counter, updates the total
-    #     number of frames, and triggers the finalization process (`end_write`) to save
-    #     all buffered data to disk.
-
-    #     Should be called when ending data collection to ensure all data is flushed
-    #     and resources are properly released.
-    #     """
-    #     print(f"save_writed_data called, writer alive? {self.writer_process.is_alive()}")
-    #     # stop record
-    #     # self.shared_data.stop.value = True
-
-    #     time.sleep(1)
-    #     # self.writer_process.join(timeout=1)
-    #     ## The relevant variables increase
-    #     # self.logger.info(f"LAST writer_process IS alive: {self.writer_process.is_alive()}")
-    #     # self.episode_length = len(self.shared_data.episode_parquet_list) 
-    #     # self.total_frames += len(self.shared_data.episode_parquet_list)
-    #     # Write to parquet file
-    #     # self.write_parquet_file()
-    #     # Write meta files
-    #     # self.write_meta_files()
-    #     # clean record data
-    #     # self.clean_record_data()
-    #     self.logger.info("Abandon the current recording data and start a new one.")
-    #     # self.clean_record_data()
-    #     # self.shared_data.counter.value += 1
-        
-    #     # self.shared_data.save_video_path_list = self.manager.list()
-
-    # def abandon_record_data(self):
-    #     """
-    #     Abandon the current recording data and start a new one.
-    #     """
-    #     self.shared_data.stop.value = True
-    #     time.sleep(1)
-    #     # self.writer_process.join(timeout=1)
-    #     # print("Abandon the current recording data and start a new one.")
-    #     # clean record data
-    #     self.logger.info("Abandon the current recording data and start a new one.")
-    #     self.clean_record_data()
-
-    #     # modify task language equals last task language
-    #     # print(f'last task language: {self.shared_data.last_task_language_dict}')
-    #     self.shared_data.task_language_dict = self.copy_shared_data_dict(self.shared_data.last_task_language_dict)
-    #     # # new parquet file
-    #     # self.parquet_file_path = os.path.join(
-    #     #     self.save_path,
-    #     #     self.config.info.data_path.format(episode_chunk=self.episode_chunk, episode_index=self.shared_data.counter.value)
-    #     # )
-    #     # self.parquet_writer = pq.ParquetWriter(self.parquet_file_path, self.schema)
-    #     # Writer process initialization
-    #     self.shared_data.init_write.value = True
-    #     self.shared_data.stop.value = False
-        
-
-    # def clean_record_data(self):
-    #     """ 
-    #     Clean up the record data.
-    #     """
-    #     del self.shared_data.save_video_path_list[:]
-    #     # del self.shared_data.episode_parquet_list[:]
-    #             # clean episode task list
-    #     # del self.shared_data.episode_task_list[:]
-    #     # self.obs_time.clear()
-    #     # self.action_list.clear()
-    #     # self.action_time.clear()
-    #     ## clean queues (record_queue + action_frame_queue)
-    #     self._clear_queues()
-    #     self.logger.info("cleaning data finished")
-
-    # def clear_record_queue(self):
-    #     """
-    #     clear record queue
-    #     """
-    #     while not self.record_queue.empty():
-    #         try:
-    #             self.record_queue.get_nowait()
-    #         except Empty:
-    #             break
-    #     self.logger.info("record_queue is clear.")
-
-    def _clear_queues(self):
-        """
-        Safely clear both the multiprocessing `record_queue` and the `action_frame_queue`.
-
-        - Drains `record_queue` using non-blocking `get_nowait()`.
-        - Clears `action_frame_queue` under `action_lock`.
-        """
-        # Drain multiprocessing queue
-        try:
-            while not self.record_queue.empty():
-                try:
-                    self.record_queue.get_nowait()
-                except Empty:
-                    break
-        except Exception:
-            # Fallback: keep calling get_nowait until it fails
-            try:
-                while True:
-                    self.record_queue.get_nowait()
-            except Exception:
-                pass
-
-        # Clear in-process deque with lock
-        with self.action_lock:
-            try:
-                self.action_frame_queue.clear()
-            except Exception:
-                # Fallback: pop until empty
-                while self.action_frame_queue:
-                    try:
-                        self.action_frame_queue.pop()
-                    except IndexError:
-                        break
-
-        self.logger.info("All queues cleared.")
-
-    def _prepare_video_frame(self, frame: Any, save_raw: bool=True, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
-        """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
-        # print(f"frame ndim={frame.ndim}, dtype={frame.dtype}, shape={frame.shape}, expected_shape={expected_shape}")
-        if not isinstance(frame, np.ndarray):
-            self.logger.warning(f"Frame is not np.ndarray, skip process and return None.")
-            return None
-
-        if frame.ndim != 3:
-            self.logger.warning(f"Frame ndim is not equal 3, skip process and return None.")
-            return None
-
-        # Convert RGB frames to BGR for OpenCV VideoWriter compatibility
-        # if frame.shape[2] == 3:
-        #     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-        exp_h, exp_w = expected_shape[0], expected_shape[1]
-        if not save_raw and (frame.shape[0] != exp_h or frame.shape[1] != exp_w):
-            frame = cv2.resize(frame, (exp_w, exp_h), interpolation=cv2.INTER_LINEAR)
-        
-        return np.ascontiguousarray(frame)
-
-    def _create_video_writer(self, episode_chunk: int = 0, episode_index: int = 0) -> Dict[str, Any]:
-        """
-        Generates video writers for each camera stream.
-
-        Creates OpenCV VideoWriter objects for each camera specified in the configuration.
-
-        Returns:
-            dict: A dictionary mapping camera names to their respective VideoWriter objects.
-        """
-        # Video writing setup
-        save_video_path = os.path.join(self.save_path, 'videos', f'chunk-{episode_chunk:03d}')
-        filename = f"{'episode'}_{episode_index:06d}.{'mp4'}"
-        video_write_dict = {}
-        # self.camera_shape_dict = {}
-        fps = float(self.config["lerobot"].get('fps', 30))
-
-        for camera_name in self.camera_name_list:
-            shape_list = self.camera_shape_dict[camera_name]
-            height, width = int(shape_list[0]), int(shape_list[1])
-            os.makedirs(os.path.join(save_video_path, camera_name), exist_ok=True)
-            video_path = os.path.join(save_video_path, camera_name, filename)
-            self.shared_data.save_video_path_list.append(video_path)
-
-            writer = None
-            for codec in ('mp4v', 'avc1', 'XVID', 'MJPG'):
-                # print(f"Debug: Trying to save video with codec: {codec}")
-                fourcc = cv2.VideoWriter_fourcc(*codec)
-                candidate = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
-                if candidate is not None and candidate.isOpened():
-                    writer = candidate
-                    break
-                if candidate is not None:
-                    candidate.release()
-            if writer is None:
-                raise RuntimeError(f"Failed to open VideoWriter for {camera_name}: {video_path}")
-
-            video_write_dict[camera_name] = writer
-        self.logger.info(f"create video writer: {save_video_path}")
-        return video_write_dict
-    
-    def _create_parquet_writer(self, episode_chunk: int = 0, episode_index: int = 0):
-        """
-        Initializes the schema for the Parquet file.
-
-        Defines the structure of the Parquet table including observation, action, timestamps, and metadata.
-        """
-        parquet_schema = pa.schema([
-        ('observation.state', pa.list_(pa.float32())),  # NumPy array -> list[float]
-        ('action', pa.list_(pa.float32())),              # NumPy array -> list[float]
-        ('episode_index', pa.int32()),
-        ('frame_index', pa.int32()),
-        ('index', pa.int32()),
-        ('task_index', pa.int32()),
-        ('timestamp', pa.float64())])
-
-        parquet_file_path = os.path.join(
-            self.save_path,
-            self.config["lerobot"]['data_path'].format(episode_chunk=episode_chunk, episode_index=episode_index)
-        )
-        os.makedirs(os.path.dirname(parquet_file_path), exist_ok=True)
-        parquet_writer = pq.ParquetWriter(parquet_file_path, parquet_schema)
-        # return parquet_schema, parquet_file_path, parquet_writer
-        return parquet_schema, parquet_writer
-
-    def _release_video_writers(self):
-        """Release all opened video writers safely."""
-        video_writers = getattr(self, 'video_writers', None)
-        if not video_writers:
-            return
-        for writer in video_writers.values():
-            try:
-                writer.release()
-            except Exception:
-                self.logger.debug("Video writer release() failed", exc_info=True)
-        self.video_writers = {}
-        self.logger.info("All video writers released.")
-    
-    def _release_parquet_writer(self):
-        """Release opened parquet writer safely."""
-        parquet_writer = getattr(self, 'parquet_writer', None)
-        if parquet_writer:
-            parquet_writer.close()
-            self.parquet_writer = None
-            self.logger.info(f"Successfully wrote Parquet file.")
-    # def write_parquet_file(self):
-    #     """Writes the Parquet file containing the collected data."""
-    #     try:
-    #         records = list(self.shared_data.episode_parquet_list)
-    #         if not records:
-    #             self.logger.warning("No episode records to write, parquet will be empty.")
-    #             return
-    #         df = pd.DataFrame(records)
-    #         table = pa.Table.from_pandas(df, schema=self.schema)
-    #         self.parquet_writer.write_table(table)
-    #     finally:
-    #         self.parquet_writer.close()
-    #         self.logger.info(f"Successfully wrote Parquet file to: {self.parquet_file_path}")
-
-    def _write_parquet_fun(self, write_loop_done: threading.Event):
-        """Writes parquet batches until writer loop is done and in-memory buffer is empty."""
-        while True:
-            # Write a batch of records to Parquet file every 1 second
-            time.sleep(1.0)
-            with self.parquet_lock:
-                if self.parquet_frame_list:
-                    df = pd.DataFrame(self.parquet_frame_list)
-                    table = pa.Table.from_pandas(df, schema=self.parquet_schema)
-                    self.parquet_writer.write_table(table)
-                    self.logger.info(f"Wrote {len(self.parquet_frame_list)} records to Parquet file.")
-                    self.parquet_frame_list.clear()
-                if write_loop_done.is_set() and (not self.parquet_frame_list):
-                    break
-
-        # Final flush before closing
-        with self.parquet_lock:
-            if self.parquet_frame_list:
-                df = pd.DataFrame(self.parquet_frame_list)
-                table = pa.Table.from_pandas(df, schema=self.parquet_schema)
-                self.parquet_writer.write_table(table)
-                self.logger.info(f"Wrote remaining {len(self.parquet_frame_list)} records to Parquet file before closing.")
-                self.parquet_frame_list.clear()
-                self.parquet_frame_list = None  # Help GC
-        self.parquet_writer.close()
-        self.parquet_writer = None
-        self.logger.info("Successfully wrote Parquet file.")
-            
-
-    def _write_meta_files(self, total_episodes: int, total_frames: int, episode_length: int, total_videos: int, episode_task_list: list[str]):
-        """
-        Writes metadata files including info.json, episodes.jsonl, and tasks.jsonl.
-
-        These files contain global dataset statistics, per-episode information, and task mappings respectively.
-        """
-        try:
-            os.makedirs(self.meta_dir, exist_ok=True)
-
-            # Write info.json file (always overwrite to keep metadata in sync)
-            info_file_path = os.path.join(self.meta_dir, 'info.json')
-            lerobot_cfg = self.config["lerobot"]
-            lerobot_cfg["total_episodes"] = total_episodes
-            lerobot_cfg["total_frames"] = total_frames
-            lerobot_cfg["total_videos"] = total_videos
-            lerobot_cfg["splits"] = {"test": f"0:{total_episodes-1}"}
-            # Define complete metadata dictionary structure
-            meta_info_dict = {
-                'chunks_size': lerobot_cfg['chunks_size'],
-                'codebase_version': lerobot_cfg['codebase_version'],
-                'data_path': lerobot_cfg['data_path'],
-                'features': {
-                    'action': {'dtype': 'float32', 'shape': [lerobot_cfg['action_shape']]},
-                    'cam.hand_left': {
-                        'dtype': 'video',
-                        'info': {
-                            'has_audio': lerobot_cfg['cam.hand_left']['encode']['has_audio'],
-                            'video.channels': lerobot_cfg['cam.hand_left']['shape']['channel'],
-                            'video.codec': lerobot_cfg['cam.hand_left']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.height': lerobot_cfg['cam.hand_left']['shape']['height'],
-                            'video.is_depth_map': lerobot_cfg['cam.hand_left']['encode']['is_depth_map'],
-                            'video.pix_fmt': 'yuv420p',
-                            'video.width': lerobot_cfg['cam.hand_left']['shape']['width'],
-                        },
-                        'names': ['height', 'width', 'channel'],
-                        'shape': [
-                            lerobot_cfg['cam.hand_left']['shape']['height'],
-                            lerobot_cfg['cam.hand_left']['shape']['width'],
-                            lerobot_cfg['cam.hand_left']['shape']['channel']
-                            ],
-                        'video_info': {
-                            'has_audio': lerobot_cfg['cam.hand_left']['encode']['has_audio'],
-                            'video.codec': lerobot_cfg['cam.hand_left']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.is_depth_map': lerobot_cfg['cam.hand_left']['encode']['is_depth_map'],
-                            'video.pix_fmt': 'yuv420p'
-                        }
-                    },
-                    'cam.hand_right': {
-                        'dtype': 'video',
-                        'info': {
-                            'has_audio': lerobot_cfg['cam.hand_right']['encode']['has_audio'],
-                            'video.channels': lerobot_cfg['cam.hand_right']['shape']['channel'],
-                            'video.codec': lerobot_cfg['cam.hand_right']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.height': lerobot_cfg['cam.hand_right']['shape']['height'],
-                            'video.is_depth_map': lerobot_cfg['cam.hand_right']['encode']['is_depth_map'],
-                            'video.pix_fmt': 'yuv420p',
-                            'video.width': lerobot_cfg['cam.hand_right']['shape']['width'],
-                        },
-                        'names': ['height', 'width', 'channel'],
-                        'shape': [
-                            lerobot_cfg['cam.hand_right']['shape']['height'],
-                            lerobot_cfg['cam.hand_right']['shape']['width'],
-                            lerobot_cfg['cam.hand_right']['shape']['channel']
-                            ],
-                        'video_info': {
-                            'has_audio': lerobot_cfg['cam.hand_right']['encode']['has_audio'],
-                            'video.codec': lerobot_cfg['cam.hand_right']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.is_depth_map': lerobot_cfg['cam.hand_right']['encode']['is_depth_map'],
-                            'video.pix_fmt': 'yuv420p'
-                        }
-                    },
-                    'cam.head': {
-                        'dtype': 'video',
-                        'info': {
-                            'has_audio': lerobot_cfg['cam.head']['encode']['has_audio'],
-                            'video.channels': lerobot_cfg['cam.head']['shape']['channel'],
-                            'video.codec': lerobot_cfg['cam.head']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.height': lerobot_cfg['cam.head']['shape']['height'],
-                            'video.is_depth_map': lerobot_cfg['cam.head']['encode']['is_depth_map'],
-                            'video.pix_fmt': 'yuv420p',
-                            'video.width': lerobot_cfg['cam.head']['shape']['width'],
-                        },
-                        'names': ['height', 'width', 'channel'],
-                        'shape': [
-                            lerobot_cfg['cam.head']['shape']['height'],
-                            lerobot_cfg['cam.head']['shape']['width'],
-                            lerobot_cfg['cam.head']['shape']['channel']
-                            ],
-                        'video_info': {
-                            'has_audio': lerobot_cfg['cam.head']['encode']['has_audio'],
-                            'video.codec': lerobot_cfg['cam.head']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.is_depth_map': lerobot_cfg['cam.head']['encode']['is_depth_map'],
-                            'video.pix_fmt': 'yuv420p'
-                        }
-                    },
-                    'episode_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
-                    'frame_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
-                    'index': {'dtype': 'int64', 'names': None, 'shape': [1]},
-                    'observation.state': {'dtype': 'float32', 'shape': [lerobot_cfg['state_shape']]},
-                    'task_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
-                    'timestamp': {'dtype': 'float32', 'names': None, 'shape': [1]}
-                },
-                'fps': float(lerobot_cfg['fps']),
-                'robot_type': lerobot_cfg['robot_type'],
-                'splits': {'train': f'0:{total_episodes-1}'},
-                'total_chunks': 1,
-                'total_episodes': total_episodes,
-                'total_frames': total_frames,
-                'total_tasks': len(self.task_language_dict.keys()), # TODO: assign total tasks
-                'total_videos': total_videos,
-                'video_path': lerobot_cfg['video_path']
-            }
-            # print(f"Debug: info_file: {meta_info_dict}")
-            with open(info_file_path, 'w', encoding='utf-8') as f:
-                json.dump(meta_info_dict, f, indent=2, ensure_ascii=False, default=str)
-
-            self.logger.info(f"info.json has been written to: {info_file_path}")
-
-            # Write episodes.jsonl file
-            episodes_file_path = os.path.join(self.meta_dir, 'episodes.jsonl')
-            episodes_content = {
-                "episode_index": total_episodes - 1,
-                "tasks": episode_task_list,
-                "length": episode_length
-            }
-            with open(episodes_file_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(episodes_content, ensure_ascii=False) + '\n')
-
-            self.logger.info(f"episodes.jsonl has been written to: {episodes_file_path}")
-
-            # Write tasks.jsonl file
-            tasks_file_path = os.path.join(self.meta_dir, 'tasks.jsonl')
-            with open(tasks_file_path, 'w', encoding='utf-8') as f:
-                for task_language in self.task_language_dict.keys():
-                    tasks_content = {
-                        "task_index": self.task_language_dict[task_language],
-                        "tasks": task_language
-                    }
-                    f.write(json.dumps(tasks_content, ensure_ascii=False) + '\n')
-            self.logger.info(f"tasks.jsonl has been written to: {tasks_file_path}")
-
-        except Exception as e:
-            tb = traceback.format_exc()
-            self.logger.error(f"Exception in write_meta_files: {e}\n{tb}")
-
 class LeRobotDatasetRecorder:
     """
     A class to manage writing robotic observation and action data to disk in a structured format.
@@ -1315,17 +253,7 @@ class LeRobotDatasetRecorder:
         self._parse_config(lerobot_config)
         self.record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
 
-    
-    def _sanitize_task_name(self, task: Optional[str]) -> str:
-        task_name = str(task).strip() if task is not None else ""
-        if not task_name:
-            task_name = "default"
-        for ch in ('/', '\\', ' ', ':'):
-            task_name = task_name.replace(ch, '_')
-        return task_name
-
-
-    def _check_meta_path_and_dir(self, save_path: str, task: Optional[str] = None) -> bool:
+    def _check_meta_path_and_dir(self, save_path: str) -> bool:
         self.meta_dir = os.path.join(save_path, 'meta')
         # self.logger.info(f"_check_meta_path_and_dir: save_dir={self.save_dir!r}, save_path={self.save_path!r}, meta_dir={self.meta_dir!r}")
 
@@ -1351,8 +279,8 @@ class LeRobotDatasetRecorder:
             return False
         else:
             return True
-    def set_task(self, save_path: str, task: Optional[str]) -> None:
-        meta_required_file_exists = self._check_meta_path_and_dir(save_path=save_path, task=task)
+    def set_task(self, save_path: str) -> None:
+        meta_required_file_exists = self._check_meta_path_and_dir(save_path=save_path)
         if meta_required_file_exists:
             self._update_config_from_meta_file()
         else:
@@ -1360,7 +288,7 @@ class LeRobotDatasetRecorder:
             self.config["total_frames"] = 0
             self.config["total_videos"] = 0
             self.config['chunks_size'] = 1000
-            # self._sync_shared_data_from_config() # Do this in DataRecordManager
+        return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
     
 
     def _update_config_from_meta_file(self):
@@ -1378,7 +306,6 @@ class LeRobotDatasetRecorder:
         # Load info.json and update dataset info
         info_file_path = os.path.join(self.meta_dir, 'info.json')
         self._update_dataset_info_from_meta_file(info_file_path)
-        # self._sync_shared_data_from_config() # Do this in DataRecordManager
 
         # Load tasks.jsonl and update task languages
         task_file_path = os.path.join(self.meta_dir, 'tasks.jsonl')
@@ -1536,9 +463,6 @@ class LeRobotDatasetRecorder:
             return
     
     def end_record(self):
-        # self.shared_data.episode_index.value = episode_index + 1
-        # self.shared_data.total_frames.value = total_frames + frame_index
-        # self.shared_data.total_videos.value = total_videos + len(self.camera_name_list)
         self.episode_index = self.episode_index + 1
         self.total_frames = self.total_frames + self.frame_index
         self.total_videos = self.total_videos + len(self.camera_name_list)
@@ -1552,6 +476,7 @@ class LeRobotDatasetRecorder:
         self.write_parquet_thread.join()
         self._release_video_writers()
         self._release_parquet_writer()
+        return self.episode_index, self.total_frames, self.total_videos
             # self._clear_queues()
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
 
@@ -1674,7 +599,7 @@ class LeRobotDatasetRecorder:
         filename = f"{'episode'}_{episode_index:06d}.{'mp4'}"
         video_write_dict = {}
         # self.camera_shape_dict = {}
-        fps = float(self.config["lerobot"].get('fps', 30))
+        fps = float(self.config.get('fps', 30))
 
         for camera_name in self.camera_name_list:
             shape_list = self.camera_shape_dict[camera_name]
@@ -1717,7 +642,7 @@ class LeRobotDatasetRecorder:
 
         parquet_file_path = os.path.join(
             self.save_path,
-            self.config["lerobot"]['data_path'].format(episode_chunk=episode_chunk, episode_index=episode_index)
+            self.config['data_path'].format(episode_chunk=episode_chunk, episode_index=episode_index)
         )
         os.makedirs(os.path.dirname(parquet_file_path), exist_ok=True)
         parquet_writer = pq.ParquetWriter(parquet_file_path, parquet_schema)
@@ -1781,116 +706,114 @@ class LeRobotDatasetRecorder:
         These files contain global dataset statistics, per-episode information, and task mappings respectively.
         """
         try:
-            os.makedirs(self.meta_dir, exist_ok=True)
-
+            # os.makedirs(self.meta_dir, exist_ok=True)
             # Write info.json file (always overwrite to keep metadata in sync)
             info_file_path = os.path.join(self.meta_dir, 'info.json')
-            lerobot_cfg = self.config["lerobot"]
-            lerobot_cfg["total_episodes"] = total_episodes
-            lerobot_cfg["total_frames"] = total_frames
-            lerobot_cfg["total_videos"] = total_videos
-            lerobot_cfg["splits"] = {"test": f"0:{total_episodes-1}"}
+            self.config["total_episodes"] = total_episodes
+            self.config["total_frames"] = total_frames
+            self.config["total_videos"] = total_videos
+            self.config["splits"] = {"test": f"0:{total_episodes-1}"}
             # Define complete metadata dictionary structure
             meta_info_dict = {
-                'chunks_size': lerobot_cfg['chunks_size'],
-                'codebase_version': lerobot_cfg['codebase_version'],
-                'data_path': lerobot_cfg['data_path'],
+                'chunks_size': self.config['chunks_size'],
+                'codebase_version': self.config['codebase_version'],
+                'data_path': self.config['data_path'],
                 'features': {
-                    'action': {'dtype': 'float32', 'shape': [lerobot_cfg['action_shape']]},
+                    'action': {'dtype': 'float32', 'shape': [self.config['action_shape']]},
                     'cam.hand_left': {
                         'dtype': 'video',
                         'info': {
-                            'has_audio': lerobot_cfg['cam.hand_left']['encode']['has_audio'],
-                            'video.channels': lerobot_cfg['cam.hand_left']['shape']['channel'],
-                            'video.codec': lerobot_cfg['cam.hand_left']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.height': lerobot_cfg['cam.hand_left']['shape']['height'],
-                            'video.is_depth_map': lerobot_cfg['cam.hand_left']['encode']['is_depth_map'],
+                            'has_audio': self.config['cam.hand_left']['encode']['has_audio'],
+                            'video.channels': self.config['cam.hand_left']['shape']['channel'],
+                            'video.codec': self.config['cam.hand_left']['encode']['codec'],
+                            'video.fps': float(self.config['fps']),
+                            'video.height': self.config['cam.hand_left']['shape']['height'],
+                            'video.is_depth_map': self.config['cam.hand_left']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p',
-                            'video.width': lerobot_cfg['cam.hand_left']['shape']['width'],
+                            'video.width': self.config['cam.hand_left']['shape']['width'],
                         },
                         'names': ['height', 'width', 'channel'],
                         'shape': [
-                            lerobot_cfg['cam.hand_left']['shape']['height'],
-                            lerobot_cfg['cam.hand_left']['shape']['width'],
-                            lerobot_cfg['cam.hand_left']['shape']['channel']
+                            self.config['cam.hand_left']['shape']['height'],
+                            self.config['cam.hand_left']['shape']['width'],
+                            self.config['cam.hand_left']['shape']['channel']
                             ],
                         'video_info': {
-                            'has_audio': lerobot_cfg['cam.hand_left']['encode']['has_audio'],
-                            'video.codec': lerobot_cfg['cam.hand_left']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.is_depth_map': lerobot_cfg['cam.hand_left']['encode']['is_depth_map'],
+                            'has_audio': self.config['cam.hand_left']['encode']['has_audio'],
+                            'video.codec': self.config['cam.hand_left']['encode']['codec'],
+                            'video.fps': float(self.config['fps']),
+                            'video.is_depth_map': self.config['cam.hand_left']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p'
                         }
                     },
                     'cam.hand_right': {
                         'dtype': 'video',
                         'info': {
-                            'has_audio': lerobot_cfg['cam.hand_right']['encode']['has_audio'],
-                            'video.channels': lerobot_cfg['cam.hand_right']['shape']['channel'],
-                            'video.codec': lerobot_cfg['cam.hand_right']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.height': lerobot_cfg['cam.hand_right']['shape']['height'],
-                            'video.is_depth_map': lerobot_cfg['cam.hand_right']['encode']['is_depth_map'],
+                            'has_audio': self.config['cam.hand_right']['encode']['has_audio'],
+                            'video.channels': self.config['cam.hand_right']['shape']['channel'],
+                            'video.codec': self.config['cam.hand_right']['encode']['codec'],
+                            'video.fps': float(self.config['fps']),
+                            'video.height': self.config['cam.hand_right']['shape']['height'],
+                            'video.is_depth_map': self.config['cam.hand_right']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p',
-                            'video.width': lerobot_cfg['cam.hand_right']['shape']['width'],
+                            'video.width': self.config['cam.hand_right']['shape']['width'],
                         },
                         'names': ['height', 'width', 'channel'],
                         'shape': [
-                            lerobot_cfg['cam.hand_right']['shape']['height'],
-                            lerobot_cfg['cam.hand_right']['shape']['width'],
-                            lerobot_cfg['cam.hand_right']['shape']['channel']
+                            self.config['cam.hand_right']['shape']['height'],
+                            self.config['cam.hand_right']['shape']['width'],
+                            self.config['cam.hand_right']['shape']['channel']
                             ],
                         'video_info': {
-                            'has_audio': lerobot_cfg['cam.hand_right']['encode']['has_audio'],
-                            'video.codec': lerobot_cfg['cam.hand_right']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.is_depth_map': lerobot_cfg['cam.hand_right']['encode']['is_depth_map'],
+                            'has_audio': self.config['cam.hand_right']['encode']['has_audio'],
+                            'video.codec': self.config['cam.hand_right']['encode']['codec'],
+                            'video.fps': float(self.config['fps']),
+                            'video.is_depth_map': self.config['cam.hand_right']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p'
                         }
                     },
                     'cam.head': {
                         'dtype': 'video',
                         'info': {
-                            'has_audio': lerobot_cfg['cam.head']['encode']['has_audio'],
-                            'video.channels': lerobot_cfg['cam.head']['shape']['channel'],
-                            'video.codec': lerobot_cfg['cam.head']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.height': lerobot_cfg['cam.head']['shape']['height'],
-                            'video.is_depth_map': lerobot_cfg['cam.head']['encode']['is_depth_map'],
+                            'has_audio': self.config['cam.head']['encode']['has_audio'],
+                            'video.channels': self.config['cam.head']['shape']['channel'],
+                            'video.codec': self.config['cam.head']['encode']['codec'],
+                            'video.fps': float(self.config['fps']),
+                            'video.height': self.config['cam.head']['shape']['height'],
+                            'video.is_depth_map': self.config['cam.head']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p',
-                            'video.width': lerobot_cfg['cam.head']['shape']['width'],
+                            'video.width': self.config['cam.head']['shape']['width'],
                         },
                         'names': ['height', 'width', 'channel'],
                         'shape': [
-                            lerobot_cfg['cam.head']['shape']['height'],
-                            lerobot_cfg['cam.head']['shape']['width'],
-                            lerobot_cfg['cam.head']['shape']['channel']
+                            self.config['cam.head']['shape']['height'],
+                            self.config['cam.head']['shape']['width'],
+                            self.config['cam.head']['shape']['channel']
                             ],
                         'video_info': {
-                            'has_audio': lerobot_cfg['cam.head']['encode']['has_audio'],
-                            'video.codec': lerobot_cfg['cam.head']['encode']['codec'],
-                            'video.fps': float(lerobot_cfg['fps']),
-                            'video.is_depth_map': lerobot_cfg['cam.head']['encode']['is_depth_map'],
+                            'has_audio': self.config['cam.head']['encode']['has_audio'],
+                            'video.codec': self.config['cam.head']['encode']['codec'],
+                            'video.fps': float(self.config['fps']),
+                            'video.is_depth_map': self.config['cam.head']['encode']['is_depth_map'],
                             'video.pix_fmt': 'yuv420p'
                         }
                     },
                     'episode_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
                     'frame_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
                     'index': {'dtype': 'int64', 'names': None, 'shape': [1]},
-                    'observation.state': {'dtype': 'float32', 'shape': [lerobot_cfg['state_shape']]},
+                    'observation.state': {'dtype': 'float32', 'shape': [self.config['state_shape']]},
                     'task_index': {'dtype': 'int64', 'names': None, 'shape': [1]},
                     'timestamp': {'dtype': 'float32', 'names': None, 'shape': [1]}
                 },
-                'fps': float(lerobot_cfg['fps']),
-                'robot_type': lerobot_cfg['robot_type'],
+                'fps': float(self.config['fps']),
+                'robot_type': self.config['robot_type'],
                 'splits': {'train': f'0:{total_episodes-1}'},
                 'total_chunks': 1,
                 'total_episodes': total_episodes,
                 'total_frames': total_frames,
                 'total_tasks': len(self.task_language_dict.keys()), # TODO: assign total tasks
                 'total_videos': total_videos,
-                'video_path': lerobot_cfg['video_path']
+                'video_path': self.config['video_path']
             }
             # print(f"Debug: info_file: {meta_info_dict}")
             with open(info_file_path, 'w', encoding='utf-8') as f:
@@ -1924,6 +847,406 @@ class LeRobotDatasetRecorder:
         except Exception as e:
             tb = traceback.format_exc()
             self.logger.error(f"Exception in write_meta_files: {e}\n{tb}")
+
+class DataRecordManager:
+    """
+    A class to manage writing robotic observation and action data to disk in a structured format.
+
+    This class handles the synchronization, storage, and serialization of high-frequency robot sensor data,
+    including images, states, actions, and associated metadata. It supports multiprocessing for efficient I/O
+    operations and writes data into Parquet files along with corresponding video recordings.
+    """
+
+    def __init__(self, record_config: ConfigDict) -> None:
+        """
+        Initializes the DataRecordManager instance with the given configuration.
+
+        Sets up directories, loads or initializes metadata, prepares video writers, and starts
+        the writer process for asynchronous disk writing.
+
+        Args:
+            record_config (dict): Configuration dictionary.
+                                For more information, see ./conf/save_conf.py
+        """
+        # Define logger
+        self.logger = logging.getLogger(__name__)
+        self.config = record_config
+        self.current_task = None
+        # print(f"Debug: record_config: {self.config}")
+        self._init_shared_data()
+        self.lerobot_recorder = LeRobotDatasetRecorder(lerobot_config=self.config.lerobot)
+        # self.task_language_dict = {}
+        # self._parse_config_info(self.config["lerobot"])
+
+        # Shared Queue
+        self.record_queue = Queue()
+
+        # Action recording queues
+        self.action_lock = threading.Lock()
+        self.action_frame_queue = deque(maxlen=10)
+
+        self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
+        self.record_action_executor = ThreadPoolExecutor(max_workers=4)
+
+        # Writer process initialization
+        self.writer_process = None
+        self._closed = False
+
+        # Session id used to drop stale async tasks across stop/start cycles.
+        self._session_lock = threading.Lock()
+        self._recording_session_id = 0
+
+    def _init_shared_data(self):
+        """
+        Initializes shared data variables for multiprocessing.
+
+        This method sets up the necessary shared variables and data structures that will be used
+        across multiple processes for synchronization and data sharing.
+        """
+        self.manager = Manager()
+        self.shared_data = self.manager.Namespace()
+        # Shared state and counters
+        # self.shared_data.start_write_time = self.manager.Value('b', False)
+        # self.shared_data.stop = self.manager.Value('b', False)
+        # self.shared_data.close = self.manager.Value('b', False)
+        # self.shared_data.init_write = self.manager.Value('b', True)
+        self.shared_data.total_frames = self.manager.Value('i', 0)
+        self.shared_data.total_videos = self.manager.Value('i', 0)
+        self.shared_data.episode_chunk = self.manager.Value('i', 0)
+        self.shared_data.episode_index = self.manager.Value('i', 0)
+        self.shared_data.running = self.manager.Value('b', False)
+        # self.shared_data.episode_parquet_list = self.manager.list()
+        self.shared_data.save_video_path_list = self.manager.list()
+        # Task and language information storage
+        # self.shared_data.episode_task_list = self.manager.list()
+        # self.shared_data.task_language_dict = self.manager.dict()
+    
+    def _sanitize_task_name(self, task: Optional[str]) -> str:
+        task_name = str(task).strip() if task is not None else ""
+        if not task_name:
+            task_name = "default"
+        for ch in ('/', '\\', ' ', ':'):
+            task_name = task_name.replace(ch, '_')
+        return task_name
+
+    def _build_full_save_path(self, save_dir: str, task: Optional[str]) -> str:
+        self.project_root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        rel_save_dir = str(save_dir or "data/recording").strip().lstrip('/').lstrip('\\')
+        date_str = datetime.now().strftime("%Y%m%d")
+        task_name = self._sanitize_task_name(task)
+        self.current_task = task_name
+        return os.path.join(self.project_root_path, rel_save_dir, task_name + '_' + date_str)
+
+    def set_task(self, task: str) -> None:
+        """Update save path by task/date before a new recording starts."""
+        # avoid reload data from file
+        if self.current_task == task:
+            self.logger.warning(f"{self.current_task} is already set, return.")
+            return
+        if self.shared_data.running.value:
+            self.logger.warning("set_task ignored because recording is running")
+            return
+
+        self.current_task = task
+        # if self.current_task == task_name and os.path.exists(os.path.join(self.project_root_path, self.save_dir, candidate_dir)):
+        #     self.logger.info(f"set_task with the same task name {task_name} and existing directory, reuse it.")
+        #     return
+        self.save_dir = self.config.get("save_dir", "data/recording")     # relative path
+        self.save_path = self._build_full_save_path(self.save_dir, task)  # full path
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path, exist_ok=True)
+            self.logger.info(f"{self.save_path} not exists, create it")
+        total_frames, total_videos, total_episodes, chunks_size = self.lerobot_recorder.set_task(save_path=self.save_path)
+        self._sync_shared_data(total_frames=total_frames,
+                            total_videos=total_videos,
+                            total_episodes=total_episodes,
+                            chunks_size=chunks_size)
+    
+    def _sync_shared_data(self, total_frames: int = 0, total_videos: int = 0, total_episodes: int = 0, chunks_size: int = 1000) -> None:
+        """Sync record lerobot values to shared_data."""
+        self.shared_data.total_frames.value = total_frames
+        self.shared_data.total_videos.value = total_videos
+        self.shared_data.episode_index.value = total_episodes
+        self.shared_data.episode_chunk.value = total_episodes // chunks_size
+
+    def update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
+        """Update camera shape settings for current recording session and metadata.
+
+        Args:
+            shape_dict: Mapping from camera name (e.g. ``cam.head``) to HWC shape.
+        """
+        self.lerobot_recorder.update_camera_shape_dict(shape_dict)
+
+    def _get_recording_session_id(self) -> int:
+        with self._session_lock:
+            return self._recording_session_id
+
+    def _bump_recording_session_id(self) -> int:
+        with self._session_lock:
+            self._recording_session_id += 1
+            return self._recording_session_id
+
+    def add_observation_async(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float):
+        """
+        Asynchronously writes observation data into the dataset.
+
+        Args:
+            observations (dict):A dictionary containing observation with the following keys:
+                - 'cam.*': np.ndarray,
+                - 'obs.state': np.ndarray
+            language (str): The language instruction associated with the observation.
+            time_now (int | float): The current timestamp.
+        """
+        session_id = self._get_recording_session_id()
+        self.record_obs_executor.submit(self._add_observation_fun, observation, language_instruction, timestamp, session_id)
+
+    def add_action_async(self, action: np.ndarray, timestamp: int | float) -> None:
+        """
+        Asynchronously writes action data into the dataset.
+
+        Args:
+            action (np.ndarray): A dictionary containing action data from the environment.
+        """
+        session_id = self._get_recording_session_id()
+        self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
+    
+    def start_recording(self):
+        """
+        Starts the recording process by launching the writer process.
+
+        This method should be called before adding any observations or actions to ensure that
+        the writer process is running and ready to handle incoming data.
+        """
+        try:
+            session_id = self._bump_recording_session_id()
+            self.shared_data.running.value = True
+            self._clear_queues()
+            self.writer_process = Process(target=self._write_process_fun, daemon=True)
+            self.writer_process.start()
+            self.logger.info(f"Writer process started successfully. session_id={session_id}")
+        except Exception as e:
+            self.logger.error(f"Failed to start writer_process: {e}")
+
+    def stop_recording(self):
+        """
+        Stops recording and waits for all queued data to be written before exiting.
+
+        Behavior:
+        - Set ``running=False`` to stop accepting new records.
+        - Let writer process continue draining ``record_queue``.
+        - Wait for writer process to exit naturally after flushing video/parquet.
+        """
+        if self.shared_data.running.value:
+            self.shared_data.running.value = False
+            self.logger.info("Signaled writer process to stop after draining queue.")
+
+        # Invalidate future async tasks from next cycle; current queue will still be drained.
+        self._bump_recording_session_id()
+
+        if self.writer_process is not None and self.writer_process.is_alive():
+            self.logger.info("Waiting writer process to flush queued data...")
+            self.writer_process.join()
+        elif self.writer_process is None:
+            self.logger.debug("stop_recording called but writer process is not initialized.")
+
+        self.writer_process = None
+        self._clear_queues()
+    def _add_observation_fun(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float, session_id: int) -> None:
+        """
+        Process and store observation data including camera images, robot state, and time frame.
+
+        Args:
+            observation (Dict[str, np.ndarray]): Dictionary containing observation data with the following keys:
+                - 'cam.head': np.ndarray
+                - 'cam.hand_left': np.ndarray
+                - 'cam.hand_right': np.ndarray
+                - 'loc_timestamp': int
+                - 'obs.state': np.ndarray
+            language_instruction (str): Natural language instruction associated with the observation.
+            timestamp (int): Timestamp of the current observation.
+
+        Raises:
+            AssertionError: If the provided timestamp is not greater than the last recorded timestamp.
+        """
+        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
+            return
+
+        # When action_frame_queue is empty, discard the observation frame
+        action = None
+        with self.action_lock:
+            if not self.action_frame_queue:
+                self.logger.warning("Action frame queue is empty, discarding observation frame.")
+                return
+            else:
+                action, _ = self.action_frame_queue.pop()
+        
+        observation['language_instruction'] = language_instruction
+        # check state shape 
+        if observation['obs.state'].shape[0] < self.state_shape:
+            # self.logger.warning(f"obs shape {observation['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
+            # assert state['obs.state'].shape[0] <= self.state_shape, \
+            # f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
+            observation['obs.state'] = np.concatenate([
+                observation['obs.state'],
+                np.zeros(self.state_shape - observation['obs.state'].shape[0], dtype=observation['obs.state'].dtype)
+            ], axis=0)
+
+        self.record_queue.put((observation, action))
+
+    def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int) -> None:
+        """
+        Process and store the action data along with its timestamp.
+
+        Args:
+            action (np.ndarray): The action data to be stored, typically representing joint torques or target positions.
+            timestamp (int): The timestamp associated with this action.
+
+        Raises:
+            AssertionError: If the provided timestamp is not strictly increasing compared to the last recorded one.
+        """
+        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
+            return
+
+        # check action shape 
+        if action.shape[0] < self.action_shape:
+            # self.logger.warning(f"Action shape {action.shape[0]} is not correct, config shape is {self.action_shape} , add 0 to the action")
+            # self.logger.warning(f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}")
+            action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)
+        self.action_frame_queue.append((action, timestamp))
+
+    def _write_process_fun(self):
+        """
+        Main loop for the writer process responsible for writing data to disk.
+
+        Continuously pulls data from the shared queue and writes it to video files and Parquet file buffer.
+        The loop runs until `self.shared_data.stop` is set to True. Each iteration processes one observation-action pair:
+            - Appends new language instructions to the episode task list
+            - Assigns a unique task index based on instruction text
+            - Writes camera images to corresponding video files
+            - Constructs a record dictionary and appends it to the shared Parquet buffer
+
+        Frame index is incremented with each successful write.
+
+        Raises:
+            KeyboardInterrupt: If user interrupts execution via keyboard (e.g., Ctrl+C)
+            Exception: Any other exception during writing will terminate the thread
+        """
+        self.logger.info("Starting recording process loop...")
+
+        try:
+            # prepare recording for all recorders
+            self.lerobot_recorder.begin_recording(episode_chunk = self.shared_data.episode_chunk.value,
+                                                episode_index = self.shared_data.episode_index.value,
+                                                total_frames = self.shared_data.total_frames.value,
+                                                total_videos = self.shared_data.total_videos.value)
+            # recording in the loop for all recorders
+            while self.shared_data.running.value or (not self.record_queue.empty()):
+                # Get state and action data from queue
+                try:
+                    step_state, step_action = self.record_queue.get(timeout=0.1)
+                except Empty:
+                    if self.shared_data.running.value:
+                        self.logger.info("Record queue empty, waiting for data...")
+                    continue
+                self.lerobot_recorder.add_frame_async(step_state=step_state,
+                                                    step_action=step_action)
+                # print('Write successful ——————————————————')
+
+                # self.logger.info('write process stopped!!! ')
+            # finish recording for all recorders
+            episode_index, total_frames, total_videos = self.lerobot_recorder.end_record()
+            self._sync_shared_data(total_frames=total_frames,
+                                total_videos=total_videos,
+                                total_episodes=episode_index,
+                                chunks_size=self.config['chunks_size']) # chunks_size doesn't change
+        
+        except KeyboardInterrupt:
+            self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
+            # self.release_writers()
+        
+        except Exception as e:
+            self.logger.error(f"Writing thread exited with exception: {e.__traceback__}")
+            # self.release_writers()
+        
+        finally:
+            self.logger.info("Writing thread exited.")
+            # self.release_writers()
+
+    def close(self):
+        """Release all dataset writer resources safely and idempotently."""
+        self.logger.info("Closing DataRecordManager...")
+
+        try:
+            self.stop_recording()
+        except Exception:
+            self.logger.debug("stop_recording failed during close", exc_info=True)
+
+        self.logger.info("Closing DataRecordManager, recording stopped.")
+        try:
+            if getattr(self, "record_obs_executor", None) is not None:
+                self.record_obs_executor.shutdown(wait=True, cancel_futures=True)
+        except Exception:
+            self.logger.debug("record_obs_executor shutdown failed", exc_info=True)
+        self.logger.info("Closing DataRecordManager, observation executor shutdown.")
+
+        try:
+            if getattr(self, "record_action_executor", None) is not None:
+                self.record_action_executor.shutdown(wait=True, cancel_futures=True)
+        except Exception:
+            self.logger.debug("record_action_executor shutdown failed", exc_info=True)
+        self.logger.info("Closing DataRecordManager, action executor shutdown.")
+
+        try:
+            if getattr(self, "record_queue", None) is not None:
+                self.record_queue.close()
+                self.record_queue.cancel_join_thread()
+        except Exception:
+            self.logger.debug("record_queue close/join failed", exc_info=True)
+        self.logger.info("Closing DataRecordManager, record queue closed.")
+        try:
+            if getattr(self, "manager", None) is not None:
+                self.manager.shutdown()
+        except Exception:
+            self.logger.debug("manager shutdown failed", exc_info=True)
+
+        self.logger.info("DataRecordManager closed successfully.")
+        
+    def _clear_queues(self):
+        """
+        Safely clear both the multiprocessing `record_queue` and the `action_frame_queue`.
+
+        - Drains `record_queue` using non-blocking `get_nowait()`.
+        - Clears `action_frame_queue` under `action_lock`.
+        """
+        # Drain multiprocessing queue
+        try:
+            while not self.record_queue.empty():
+                try:
+                    self.record_queue.get_nowait()
+                except Empty:
+                    break
+        except Exception:
+            # Fallback: keep calling get_nowait until it fails
+            try:
+                while True:
+                    self.record_queue.get_nowait()
+            except Exception:
+                pass
+
+        # Clear in-process deque with lock
+        with self.action_lock:
+            try:
+                self.action_frame_queue.clear()
+            except Exception:
+                # Fallback: pop until empty
+                while self.action_frame_queue:
+                    try:
+                        self.action_frame_queue.pop()
+                    except IndexError:
+                        break
+
+        self.logger.info("All queues cleared.")
+
 # Mock observation data generator
 def generate_mock_observation():
     """
