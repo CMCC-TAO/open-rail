@@ -79,6 +79,22 @@ class VLAContext:
         self._initialized = False  # 是否已执行过 init_grasp（跳过复位）
         self.grasp_detector = None  # 抓取状态检测器（由 dispatcher 注入）
 
+        # ════════════════════════════════════════════════════════════
+        # 创建共享 ZMQ 客户端（dispatcher 启动时即建立连接，
+        # 避免每个 task 首次推理因连接未就绪而超时）
+        # ════════════════════════════════════════════════════════════
+        _start = time.time()
+        from client.core.zmq_client import ZMQClient
+        self._shared_zmq = ZMQClient(self.config.vla_zmq)
+        print(f'[VLAContext] Shared ZMQ client created, waiting for connection...')
+        while time.time() - _start < 3.0:
+            if getattr(self._shared_zmq, 'is_connected', False):
+                print(f'[VLAContext] ZMQ connected in {time.time()-_start:.1f}s')
+                break
+            time.sleep(0.05)
+        else:
+            print(f'[VLAContext] WARNING: ZMQ not connected within 3s, continuing anyway')
+
         # ── 定时打印初始化标志（约 2s 间隔，便于调试）──
         self._print_init_running = True
         self._print_init_thread = threading.Thread(target=self._print_init_loop, daemon=True)
@@ -199,17 +215,14 @@ class VLAContext:
         from client.core.task_language_manager import TaskLanguageManager
         from client.core.vla_client import VLAClientAsync
 
-        vla_zmq = ZMQClient(self.config.vla_zmq)
+        # 使用共享的 ZMQ 客户端（避免 task 内首次 inference 超时）
+        vla_zmq = self._shared_zmq
+        self.config.language.auto_mode = False
+
         rdm = RealtimeDataManager(self.config.rdm)
         inter_chunk_fuser = InterChunkFuser(config=self.config.inter_chunk)
         intra_chunk_smoother = IntraChunkSmoother(config=self.config.intra_chunk)
         task_language_manager = TaskLanguageManager(config=self.config.language)
-
-        # Action Server 模式下，语言指令由 task handler 显式设置
-        # （如 GraspHandler 中的 TARGET_LANGUAGE_MAP），
-        # 必须关闭 auto_mode 防止推理线程的 advance_subtask()
-        # 将语言指令自动切回 config 中的默认任务列表。
-        self.config.language.auto_mode = False
 
         vla_client = VLAClientAsync(
             config=self.config,
@@ -229,9 +242,11 @@ class VLAContext:
             'task_language_manager': task_language_manager,
         }
 
-    @staticmethod
-    def destroy_vla_components(components: dict) -> None:
-        """销毁 per-task VLA 组件
+    def destroy_vla_components(self, components: dict) -> None:
+        """销毁 per-task VLA 组件（不关闭共享 ZMQ 连接）
+
+        手动执行 vla_client.close() 的全部清理逻辑，但跳过 ZMQ 关闭，
+        因为 ZMQ 连接由 VLAContext 统一管理。
 
         Args:
             components: create_vla_components() 返回的字典
@@ -243,7 +258,31 @@ class VLAContext:
         try:
             vla_client.is_running_action = False
             time.sleep(0.1)
-            vla_client.close()
+
+            # 手动执行 vla_client.close() 的所有清理步骤，跳过 ZMQ
+            vla_client.is_observe_thread_running = False
+            vla_client.is_inference_thread_running = False
+            vla_client.is_control_thread_running = False
+            vla_client.is_running = False
+
+            if vla_client.observe_thread.is_alive():
+                vla_client.observe_thread.join(timeout=1.0)
+            if vla_client.inference_thread.is_alive():
+                vla_client.inference_thread.join(timeout=1.0)
+            if vla_client.control_thread_timer.is_alive():
+                vla_client.control_thread_timer.stop(timeout=1.0)
+            if vla_client.visualize_thread_timer.is_alive():
+                vla_client.visualize_thread_timer.stop(timeout=1.0)
+
+            if hasattr(vla_client, 'data_record_manager') and vla_client.data_record_manager is not None:
+                vla_client.data_record_manager.close()
+
+            # 不关闭 vla_zmq（共享连接，由 VLAContext 管理）
+            vla_client.visualize_server.stop_server()
+
+            if hasattr(vla_client, '_img_executor') and vla_client._img_executor is not None:
+                vla_client._img_executor.shutdown(wait=False)
+
         except Exception:
             pass
 
@@ -260,6 +299,16 @@ class VLAContext:
     def close(self) -> None:
         """清理所有共享资源（dispatcher 关闭时调用）"""
         self._print_init_running = False
+
+        # 关闭共享 ZMQ 客户端
+        if hasattr(self, '_shared_zmq') and self._shared_zmq is not None:
+            try:
+                self._shared_zmq.close()
+                print(f'[VLAContext] Shared ZMQ client closed')
+            except Exception:
+                pass
+            self._shared_zmq = None
+
         if self._robot_body is None:
             return
 
