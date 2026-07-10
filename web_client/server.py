@@ -2074,7 +2074,8 @@ async def client_record_start(req: RecordStartRequest):
         if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
             try:
                 from client.core.data_record_manager import DataRecordManager
-                vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record, task=task_id)
+                vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record)
+                vla_client.data_record_manager.set_task(task_id)
             except Exception as e:
                 raise HTTPException(500, f'Failed to initialize recorder: {e}')
         else:

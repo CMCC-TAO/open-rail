@@ -86,10 +86,7 @@ class VLAClientAsync():
         self._request_id = 0
 
         # Initialize the dataset writer with the provided recording configuration
-        self.data_record_manager = DataRecordManager(
-            record_config=self.config.record,
-            task=getattr(self.config.language, 'task_id', None)
-        )
+        self.data_record_manager = DataRecordManager(record_config=self.config.record)
 
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
