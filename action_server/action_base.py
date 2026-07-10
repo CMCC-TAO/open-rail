@@ -270,12 +270,12 @@ def run_vla_inference(
 
     # ========== 步骤 2: 启动推理 ==========
     try:
-        vla_client.language = language_instruction
+        vla_client.task_language_manager.currt_language_instruction = language_instruction
         vla_client.is_running_action = False
 
         send_vla_feedback(goal_handle, 10, "正在启动 VLA 推理...")
         vla_client.start()                    # 先启动观察/控制/WebSocket 线程
-        time.sleep(0.5)                     # 等待观测数据积累
+        # time.sleep(3.5)                     # 等待观测数据积累
         # 注意: 不要在这里调 inference_first()!
         # _inference_thread_fun 内部已经有 infer_count==0 的自调用首帧逻辑
         # 如果这里再调一次，会与推理线程 (Thread-43) 竞争同一个 ZMQ socket

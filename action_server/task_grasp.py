@@ -127,10 +127,14 @@ def _apply_smooth_start_blend(vla_client, robot_body, blend_duration=3.0):
 
     对于控制精度低的机械臂，state（传感器读数）与 action（下发指令）偏差很大且存在延迟/噪声。
     使用最近下发的 action 作为起点，可以避免因 state-action 差异导致的启动抖动。
-    
+
     本函数在首帧推理中把 action_chunk 前 N 步从当前 action 线性插值到模型原始轨迹，消除突变。
 
     通过临时替换 _process_action_chunk 实例方法实现，不影响类的其他实例。
+
+    注意：current_action 在 _patched_inference_first 内部（推理实际执行时）才捕获，
+    而非在此函数调用时。这确保无论 reset_robot 在之前还是之后被调用，
+    current_action 都能正确反映机器人当前的真实位置。
 
     Args:
         vla_client: VLAClientAsync 实例
@@ -143,45 +147,33 @@ def _apply_smooth_start_blend(vla_client, robot_body, blend_duration=3.0):
 
     print(f'[SmoothStart] === Enter _apply_smooth_start_blend ===')
 
-    # 捕获当前正在执行的 action（而非 sensor state）
-    # 原因：对于控制精度低的机器人，state 有延迟和噪声，而 action 是实时下发的控制目标
-    # 使用 action 作为起点可以避免因 state-action 偏差导致的启动抖动
-    current_action = None
-    try:
-        # 优先从 robot_body 获取最近下发的 action（reset 阶段刚执行完，有缓存）
-        # _get_reset_current_action() 的优先级：
-        #   1. Action cache — /joint_action + /left_hand/set_angle + /right_hand/set_angle
-        #      （最近一次通过 send_robot_action 下发到机器人的指令）
-        #   2. VLA cached state
-        #   3. retrieve_observation() fallback
-        act = robot_body._get_reset_current_action()
-        if act is not None:
-            current_action = np.asarray(act, dtype=np.float64)
-            print(f'[SmoothStart] Current action captured from robot_body._get_reset_current_action(), '
-                  f'dim={len(current_action)}, first 4 values: {current_action[:4].round(4).tolist()}')
-        else:
-            # Fallback: try realtime_data_manager (VLA 已开始但不一定有缓存)
-            rdm = vla_client.realtime_data_manager
-            currt_act, _, _ = rdm.get_current_state()
-            if currt_act is not None:
-                current_action = np.asarray(currt_act, dtype=np.float64)
-                print(f'[SmoothStart] Current action captured from RDM, dim={len(current_action)}, '
-                      f'first 4 values: {current_action[:4].round(4).tolist()}')
-            else:
-                print(f'[SmoothStart] WARN: both robot_body and RDM returned None for current action')
-    except Exception as e:
-        print(f'[SmoothStart] WARN: failed to capture current action: {e}')
-
-    if current_action is None:
-        print('[SmoothStart] SKIP: no current action available, smooth start disabled')
-        return
-
     observe_period = vla_client.observe_period
     original_infer_first = vla_client._inference_first
     print(f'[SmoothStart] observe_period={observe_period:.4f}s')
 
     def _patched_inference_first(self):
         """带平滑启动的 _inference_first 包装。"""
+        # ===== 在推理实际执行时才捕获 current_action =====
+        # 注意：不能在外层捕获！外层调用时 reset_robot() 可能还没有执行。
+        # 在 _patched_inference_first 内部捕获可以确保 reset 已经完成，
+        # robot 已经到达目标位置，current_action 能正确反映实际位置。
+        current_action = None
+        try:
+            act = robot_body._get_reset_current_action()
+            if act is not None:
+                current_action = np.asarray(act, dtype=np.float64)
+                print(f'[SmoothStart] Current action (infer-time) dim={len(current_action)}, '
+                      f'first 4: {current_action[:4].round(4).tolist()}')
+            else:
+                print(f'[SmoothStart] WARN: robot_body._get_reset_current_action() returned None')
+        except Exception as e:
+            print(f'[SmoothStart] WARN: failed to capture current action: {e}')
+
+        if current_action is None:
+            print('[SmoothStart] SKIP: no current action, running without blend')
+            original_infer_first()
+            return
+
         print(f'[SmoothStart] >>> _patched_inference_first called (infer_count={self.realtime_data_manager.infer_count})')
 
         # 保存原始的 _process_action_chunk（bound method）
@@ -224,8 +216,6 @@ def _apply_smooth_start_blend(vla_client, robot_body, blend_duration=3.0):
             return action_chunk, ts, loc_ts
 
         # 临时替换实例方法（作为普通函数，不用 MethodType）
-        # 这样 self._process_action_chunk(action_data) 调用时，
-        # action_data 直接传给 action_raw 参数，不会多绑一个 self
         self._process_action_chunk = _blended_process
 
         try:

@@ -283,6 +283,27 @@ class VLAContext:
             if hasattr(vla_client, '_img_executor') and vla_client._img_executor is not None:
                 vla_client._img_executor.shutdown(wait=False)
 
+            # 清空共享 ZMQ 上的残留响应
+            # 上一个 task 销毁时，可能在 ZMQ dealer socket 上留有未消费的
+            # inference 响应，如果不清理，下一个 task 的 _inference_first()
+            # 会收到 stale response 导致超时重试，造成首帧推理延迟 ~2.5s
+            zmq_client = components.get('vla_zmq')
+            if zmq_client is not None:
+                _dealer = getattr(zmq_client, 'dealer', None)
+                if _dealer is not None:
+                    _drained = 0
+                    import zmq as _zmq
+                    for _ in range(100):
+                        try:
+                            if _dealer.poll(timeout=1) == 0:
+                                break
+                            _dealer.recv_multipart(flags=_zmq.NOBLOCK)
+                            _drained += 1
+                        except (_zmq.ZMQError, Exception):
+                            break
+                    if _drained > 0:
+                        print(f'[VLAContext] Drained {_drained} stale ZMQ message(s)')
+
         except Exception:
             pass
 
