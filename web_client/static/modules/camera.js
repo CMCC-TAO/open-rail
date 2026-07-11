@@ -151,7 +151,6 @@ function setupCameraPanel() {
     $(`btn-cam-${i}`).addEventListener('click', () => {
       toggleCamera(i);
       updateAllToggleBtn();
-      // schedulePersistVisualState();
     });
   }
 
@@ -174,7 +173,6 @@ function setupCameraPanel() {
       else if (!allOn && !App.camOpen[i]) toggleCamera(i);
     }
     updateAllToggleBtn();
-    // schedulePersistVisualState();
   });
 
   restartCameraUpdateTimer();

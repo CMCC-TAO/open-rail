@@ -93,8 +93,6 @@ function normalizeTrajWindowSpanSec(rawSpanSec, fallback = TRAJ_WINDOW_SPAN_SEC)
   return Math.min(span, TRAJ_WINDOW_SPAN_SEC_MAX);
 }
 
-let _visualPersistTimer = null;
-
 const App = {
   ws: null,
   wsAlive: false,
