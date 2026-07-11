@@ -1017,39 +1017,6 @@ class VisualCameraConfigRequest(BaseModel):
     open_wrist_left: Optional[bool] = None
     open_wrist_right: Optional[bool] = None
 
-
-@app.post("/api/client/visualize/config")
-async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
-    """Update in-memory visualize.camera config (effective immediately)."""
-    payload = req.dict(exclude_none=True)
-    if not payload:
-        return {"status": "ok", "applied": False}
-    print(f"DEBUG: payload={payload}")
-
-    if client_state.config is None:
-        client_state.config = get_client_config()
-
-    with client_state.lock:
-        visual_root = getattr(client_state.config, "visualize", None)
-        if visual_root is None:
-            visual_root = getattr(client_state.config, "visual", None)
-        cam_cfg = getattr(visual_root, "camera", None) if visual_root is not None else None
-        if cam_cfg is None:
-            return {"status": "ok", "applied": False}
-
-        for k, v in payload.items():
-            if hasattr(cam_cfg, k):
-                setattr(cam_cfg, k, bool(v))
-
-        camera_cfg = {
-            "open_head": bool(getattr(cam_cfg, "open_head", True)),
-            "open_wrist_left": bool(getattr(cam_cfg, "open_wrist_left", True)),
-            "open_wrist_right": bool(getattr(cam_cfg, "open_wrist_right", True)),
-        }
-
-    return {"status": "ok", "applied": True, "camera_cfg": camera_cfg}
-
-
 @app.post("/api/client/config/patch")
 async def patch_config(req: ConfigPatchRequest):
     """Apply a partial update to in-memory config. Effective immediately when possible."""
