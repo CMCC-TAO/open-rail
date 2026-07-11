@@ -1238,7 +1238,7 @@ async function applyVisualConfig(cfg = App.config) {
     : (Array.isArray(camCfg.default_open) ? camCfg.default_open : App.camOpen);
   const nextCamOpen = [0, 1, 2].map(i => !!camOpenCfg[i]);
   for (let i = 0; i < 3; i++) {
-    if (App.camOpen[i] !== nextCamOpen[i]) toggleCamera(i);
+    if (App.camOpen[i] !== nextCamOpen[i]) toggleCamera(i, updataConfig=false);
   }
   const camAllBtn = $('btn-cam-all-toggle');
   if (camAllBtn) {

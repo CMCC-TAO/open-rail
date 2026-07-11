@@ -137,7 +137,7 @@ const App = {
     actionEnd: 0,
     actionName: 'arm',
     jointLabels: [],
-    jointSelectionInitialized: false,
+    // jointSelectionInitialized: false,
     // Which joints to display  Set<number>
     selectedJoints: new Set(),
     // Data buffer: { state: [...], action_fitted: [...], action_raw: [...] }
