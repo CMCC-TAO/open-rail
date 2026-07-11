@@ -5,7 +5,6 @@ import cv2
 import time
 import logging
 import threading
-import traceback
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -280,6 +279,7 @@ class LeRobotDatasetRecorder:
         else:
             return True
     def set_task(self, save_path: str) -> None:
+        self.save_path = save_path
         meta_required_file_exists = self._check_meta_path_and_dir(save_path=save_path)
         if meta_required_file_exists:
             self._update_config_from_meta_file()
@@ -434,11 +434,12 @@ class LeRobotDatasetRecorder:
         else:
             self.logger.warning("No valid camera shape found in shape_dict, keep original config.")
 
-    def begin_recording(self, episode_chunk: int = 0, episode_index: int = 0, total_frames: int = 0, total_videos: int = 0):
+    def begin_recording(self, episode_chunk: int = 0, episode_index: int = 0, total_frames: int = 0, total_videos: int = 0, save_raw: bool =True):
         self.episode_chunk = episode_chunk
         self.episode_index = episode_index
         self.total_frames = total_frames
         self.total_videos = total_videos
+        self.save_raw = save_raw
         self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}")
         self.video_writers = self._create_video_writer(
             episode_chunk=episode_chunk,
@@ -454,36 +455,42 @@ class LeRobotDatasetRecorder:
         self.episode_task_list = []
         self.step_task_index = 0
         # Use a thread to write parquet file
+        self.record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
         self.write_loop_done = threading.Event()
         self.write_parquet_thread = threading.Thread(target=self._write_parquet_fun, args=(self.write_loop_done,), daemon=True)
         try:
             self.write_parquet_thread.start()
         except Exception as e:
-            self.logger.error("Write parquet thread can't start.")
+            self.logger.exception(f"Write parquet thread can't start: {e}")
             return
     
     def end_record(self):
-        self.episode_index = self.episode_index + 1
-        self.total_frames = self.total_frames + self.frame_index
-        self.total_videos = self.total_videos + len(self.camera_name_list)
-        self._write_meta_files(total_frames=self.total_frames,
-                            total_episodes=self.episode_index,
-                            episode_length=self.frame_index,
-                            total_videos=self.total_videos,
-                            episode_task_list=self.episode_task_list)
-        # stop recording for current episode: flush video/parquet after all queue data drained
-        self.write_loop_done.set()
-        self.write_parquet_thread.join()
-        self._release_video_writers()
-        self._release_parquet_writer()
+        try:
+            self.record_executor.shutdown(wait=True) 
+            self.episode_index = self.episode_index + 1
+            self.total_frames = self.total_frames + self.frame_index
+            self.total_videos = self.total_videos + len(self.camera_name_list)
+            self._write_meta_files(total_frames=self.total_frames,
+                                total_episodes=self.episode_index,
+                                episode_length=self.frame_index,
+                                total_videos=self.total_videos,
+                                episode_task_list=self.episode_task_list)
+            # stop recording for current episode: flush video/parquet after all queue data drained
+            self.write_loop_done.set()
+            self.write_parquet_thread.join()
+            self._release_video_writers()
+            self._release_parquet_writer()
+        except Exception as e:
+            self.logger.exception(f"Finished recording failed: {e}")
+        self.logger.info("Finish recording.")
         return self.episode_index, self.total_frames, self.total_videos
             # self._clear_queues()
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
 
-    def add_frame_async(self, step_state: dict, step_action: dict):
+    def add_frame_async(self, step_state: dict, step_action: np.ndarray):
         self.record_executor.submit(self._write_frame_fun, step_state, step_action)
 
-    def _write_frame_fun(self, step_state: dict, step_action: dict):
+    def _write_frame_fun(self, step_state: dict, step_action: np.ndarray):
         """
         Main function for the write data frame responsible for writing data to disk.
 
@@ -502,6 +509,18 @@ class LeRobotDatasetRecorder:
         """
 
         try:
+            # check action shape 
+            if step_action.shape[0] < self.action_shape:
+                step_action = np.concatenate([step_action, np.zeros(self.action_shape-step_action.shape[0])], axis=0)
+            # check action shape 
+            if step_state['obs.state'].shape[0] < self.state_shape:
+                # self.logger.warning(f"obs shape {observation['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
+                # assert state['obs.state'].shape[0] <= self.state_shape, \
+                # f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
+                step_state['obs.state'] = np.concatenate([
+                    step_state['obs.state'],
+                    np.zeros(self.state_shape - step_state['obs.state'].shape[0], dtype=step_state['obs.state'].dtype)
+                ], axis=0)
             step_language = step_state['language_instruction']
             
             # Track new language instructions per episode
@@ -521,7 +540,7 @@ class LeRobotDatasetRecorder:
                 raw_frame = step_state.get(camera_name)
                 # self.logger.info(f"step_state: {step_state.keys()}")
                 # TODO: use three threads in the future
-                frame = self._prepare_video_frame(raw_frame, self.config.save_raw, expected_shape)
+                frame = self._prepare_video_frame(raw_frame, self.save_raw, expected_shape)
                 # self.logger.info(f"expected_shape: {expected_shape}")
                 if frame is None:
                     self.logger.warning(f"{camera_name} frame invalid, skip this frame")
@@ -533,7 +552,8 @@ class LeRobotDatasetRecorder:
                     continue
 
                 writer.write(frame)
-                self.logger.debug(f"{camera_name} writes a frame with expected_shape {frame.shape}.")
+                if self.frame_index % 30 == 0:
+                    self.logger.debug(f"{camera_name} writes a frame with expected_shape {frame.shape}.")
             # Construct record dictionary for Parquet file
             parquet_frame = {
                 'observation.state': step_state['obs.state'].tolist(),
@@ -548,21 +568,21 @@ class LeRobotDatasetRecorder:
                 self.parquet_frame_list.append(parquet_frame)
             
             # Update counters
-            self.frame_index += 1
             if self.frame_index % 30 == 0:
                 self.logger.info(
                     f"write-loop progress: episode={self.episode_index}, "
                     f"frame_index={self.frame_index}, cached_records={len(self.parquet_frame_list)}"
                 )
+            self.frame_index += 1
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
             # self.release_writers()
         
         except Exception as e:
-            self.logger.error(f"Writing frame exited with exception: {e.__traceback__}")
+            self.logger.exception(f"Writing frame exited with exception: {e}")
             # self.release_writers()
-        finally:
-            self.logger.info("Writing frame exited.")
+        # finally:
+            # self.logger.info("Writing frame exited.")
             # self.release_writers()
     def _prepare_video_frame(self, frame: Any, save_raw: bool=True, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
         """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
@@ -595,18 +615,20 @@ class LeRobotDatasetRecorder:
             dict: A dictionary mapping camera names to their respective VideoWriter objects.
         """
         # Video writing setup
+        # print(f"DEBUG: Mark 1")
         save_video_path = os.path.join(self.save_path, 'videos', f'chunk-{episode_chunk:03d}')
         filename = f"{'episode'}_{episode_index:06d}.{'mp4'}"
         video_write_dict = {}
         # self.camera_shape_dict = {}
         fps = float(self.config.get('fps', 30))
 
+        # print(f"DEBUG: Mark 2")
         for camera_name in self.camera_name_list:
             shape_list = self.camera_shape_dict[camera_name]
             height, width = int(shape_list[0]), int(shape_list[1])
             os.makedirs(os.path.join(save_video_path, camera_name), exist_ok=True)
             video_path = os.path.join(save_video_path, camera_name, filename)
-            self.shared_data.save_video_path_list.append(video_path)
+            # self.shared_data.save_video_path_list.append(video_path)
 
             writer = None
             for codec in ('mp4v', 'avc1', 'XVID', 'MJPG'):
@@ -647,6 +669,7 @@ class LeRobotDatasetRecorder:
         os.makedirs(os.path.dirname(parquet_file_path), exist_ok=True)
         parquet_writer = pq.ParquetWriter(parquet_file_path, parquet_schema)
         # return parquet_schema, parquet_file_path, parquet_writer
+        self.logger.info(f"create parquet writer: {parquet_file_path}")
         return parquet_schema, parquet_writer
 
     def _release_video_writers(self):
@@ -845,8 +868,7 @@ class LeRobotDatasetRecorder:
             self.logger.info(f"tasks.jsonl has been written to: {tasks_file_path}")
 
         except Exception as e:
-            tb = traceback.format_exc()
-            self.logger.error(f"Exception in write_meta_files: {e}\n{tb}")
+            self.logger.exception(f"Exception in write_meta_files: {e}")
 
 class DataRecordManager:
     """
@@ -916,7 +938,7 @@ class DataRecordManager:
         self.shared_data.episode_index = self.manager.Value('i', 0)
         self.shared_data.running = self.manager.Value('b', False)
         # self.shared_data.episode_parquet_list = self.manager.list()
-        self.shared_data.save_video_path_list = self.manager.list()
+        # self.shared_data.save_video_path_list = self.manager.list()
         # Task and language information storage
         # self.shared_data.episode_task_list = self.manager.list()
         # self.shared_data.task_language_dict = self.manager.dict()
@@ -968,6 +990,7 @@ class DataRecordManager:
         self.shared_data.total_videos.value = total_videos
         self.shared_data.episode_index.value = total_episodes
         self.shared_data.episode_chunk.value = total_episodes // chunks_size
+        self.logger.info(f"total_frames={self.shared_data.total_frames.value}, total_videos={self.shared_data.total_videos.value}, total_episodes={self.shared_data.episode_index.value}")
 
     def update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
         """Update camera shape settings for current recording session and metadata.
@@ -1082,14 +1105,6 @@ class DataRecordManager:
         
         observation['language_instruction'] = language_instruction
         # check state shape 
-        if observation['obs.state'].shape[0] < self.state_shape:
-            # self.logger.warning(f"obs shape {observation['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
-            # assert state['obs.state'].shape[0] <= self.state_shape, \
-            # f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
-            observation['obs.state'] = np.concatenate([
-                observation['obs.state'],
-                np.zeros(self.state_shape - observation['obs.state'].shape[0], dtype=observation['obs.state'].dtype)
-            ], axis=0)
 
         self.record_queue.put((observation, action))
 
@@ -1108,10 +1123,8 @@ class DataRecordManager:
             return
 
         # check action shape 
-        if action.shape[0] < self.action_shape:
-            # self.logger.warning(f"Action shape {action.shape[0]} is not correct, config shape is {self.action_shape} , add 0 to the action")
-            # self.logger.warning(f"Action shape {action.shape[0]} is bigger than config shape {self.action_shape}")
-            action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)
+        # if action.shape[0] < self.action_shape:
+        #     action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)
         self.action_frame_queue.append((action, timestamp))
 
     def _write_process_fun(self):
@@ -1138,19 +1151,22 @@ class DataRecordManager:
             self.lerobot_recorder.begin_recording(episode_chunk = self.shared_data.episode_chunk.value,
                                                 episode_index = self.shared_data.episode_index.value,
                                                 total_frames = self.shared_data.total_frames.value,
-                                                total_videos = self.shared_data.total_videos.value)
+                                                total_videos = self.shared_data.total_videos.value,
+                                                save_raw=self.config.save_raw)
+            # print(f"DEBUG: Mark1")    
             # recording in the loop for all recorders
             while self.shared_data.running.value or (not self.record_queue.empty()):
                 # Get state and action data from queue
                 try:
                     step_state, step_action = self.record_queue.get(timeout=0.1)
+                    self.lerobot_recorder.add_frame_async(step_state=step_state,
+                                                        step_action=step_action)
                 except Empty:
                     if self.shared_data.running.value:
                         self.logger.info("Record queue empty, waiting for data...")
                     continue
-                self.lerobot_recorder.add_frame_async(step_state=step_state,
-                                                    step_action=step_action)
                 # print('Write successful ——————————————————')
+            # print(f"DEBUG: Mark2")    
 
                 # self.logger.info('write process stopped!!! ')
             # finish recording for all recorders
@@ -1158,14 +1174,14 @@ class DataRecordManager:
             self._sync_shared_data(total_frames=total_frames,
                                 total_videos=total_videos,
                                 total_episodes=episode_index,
-                                chunks_size=self.config['chunks_size']) # chunks_size doesn't change
+                                chunks_size=self.config.lerobot['chunks_size']) # chunks_size doesn't change
         
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
             # self.release_writers()
         
         except Exception as e:
-            self.logger.error(f"Writing thread exited with exception: {e.__traceback__}")
+            self.logger.exception(f"Writing thread exited with exception: {e}")
             # self.release_writers()
         
         finally:
