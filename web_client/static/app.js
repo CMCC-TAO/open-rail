@@ -371,12 +371,6 @@ function setRunningUI(running, paused = false) {
     $('status-badge').textContent = badgeText;
     $('status-badge').className   = `status-badge ${badgeClass}`;
 
-    // Persist visual state only when transitioning from running -> stopped.
-    // Avoid startup/status-sync overwriting config before user interaction.
-    if (!running && wasRunning) {
-      schedulePersistVisualState(0);
-    }
-
     if (!running) {
       App.isRecording = false;
     }
@@ -560,7 +554,8 @@ async function wireEvents() {
 
     try {
       const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
-      App.config = res.config || {}; App.pendingPatch = {};
+      App.config = res.config || {};
+      App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
       renderRecordingConfigTree(App.config);

@@ -65,6 +65,11 @@ function handleCamWSMessage(msg) {
 
 // Camera metadata: index → display name
 const CAM_NAMES = ['Head', 'Wrist-Left', 'Wrist-Right'];
+const CAMERA_KEY_MAP = {
+  0: 'visualize.camera.open_head',
+  1: 'visualize.camera.open_wrist_left',
+  2: 'visualize.camera.open_wrist_right',
+};
 
 // Per-camera runtime state (mirrors visual/ latestCameraData pattern)
 const camState = {
@@ -146,7 +151,7 @@ function setupCameraPanel() {
     $(`btn-cam-${i}`).addEventListener('click', () => {
       toggleCamera(i);
       updateAllToggleBtn();
-      schedulePersistVisualState();
+      // schedulePersistVisualState();
     });
   }
 
@@ -169,7 +174,7 @@ function setupCameraPanel() {
       else if (!allOn && !App.camOpen[i]) toggleCamera(i);
     }
     updateAllToggleBtn();
-    schedulePersistVisualState();
+    // schedulePersistVisualState();
   });
 
   restartCameraUpdateTimer();
@@ -230,7 +235,16 @@ function _applyCameraClosedState(idx) {
   // cam-row (title + button) always visible
 }
 
-function toggleCamera(idx) {
+function getCameraStatePatch(idx) {
+  const key = CAMERA_KEY_MAP[idx];
+   if (key === undefined) {
+    return {};
+  }
+  return {
+    [key]: !!App.camOpen[idx]
+  };
+}
+async function toggleCamera(idx) {
   App.camOpen[idx] = !App.camOpen[idx];
   const preview  = $(`cam-preview-${idx}`);
   const statusEl = $(`cam-status-${idx}`);
@@ -238,6 +252,20 @@ function toggleCamera(idx) {
   const imgEl    = $(`cam-img-${idx}`);
   const phEl     = $(`cam-placeholder-${idx}`);
 
+  const patch = getCameraStatePatch(idx);
+  const patchRes = await apiFetch('/api/client/config/patch', {
+    method: 'POST',
+    body: JSON.stringify({ patch }),
+  });
+  App.config = patchRes.config || App.config;
+
+  const confRes = await apiFetch('/api/client/config/path');
+  if (confRes.path) {
+    await apiFetch('/api/client/config/save', {
+      method: 'POST',
+      body: JSON.stringify({ path: confRes.path }),
+    });
+  }
   if (App.camOpen[idx]) {
     // Open: remove dim overlay, resume receiving frames
     preview.classList.remove('closed');

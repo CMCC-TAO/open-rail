@@ -1024,6 +1024,7 @@ async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
     payload = req.dict(exclude_none=True)
     if not payload:
         return {"status": "ok", "applied": False}
+    print(f"DEBUG: payload={payload}")
 
     if client_state.config is None:
         client_state.config = get_client_config()

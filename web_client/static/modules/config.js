@@ -1400,9 +1400,6 @@ async function persistVisualStateNow() {
     return;
   }
 
-  if (_visualPersistInFlight) return;
-
-  _visualPersistInFlight = true;
   try {
     const res = await apiFetch('/api/client/config/patch', {
       method: 'POST',
@@ -1420,7 +1417,6 @@ async function persistVisualStateNow() {
   } catch (_) {
     // no-op: visual state already effective in UI
   } finally {
-    _visualPersistInFlight = false;
   }
 }
 
