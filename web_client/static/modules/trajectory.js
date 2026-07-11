@@ -256,7 +256,6 @@ function renderJointSelector() {
         _applyChipColor(chip, true, color);
       }
       refreshUnifiedChart();
-      schedulePersistVisualState();
     });
     if (i < split) {
       rowL.insertBefore(chip, btnAll);   // insert before All
@@ -612,7 +611,6 @@ function setupTrajPanel() {
     App.traj.dirty = true;
     syncSrcButtons();
     refreshUnifiedChart();
-    schedulePersistVisualState();
   }
   srcChecks.state?.addEventListener('change', e => setSource('state', !!e.target.checked));
   srcChecks.action_fitted?.addEventListener('change', e => setSource('action_fitted', !!e.target.checked));
@@ -628,7 +626,6 @@ function setupTrajPanel() {
       App.traj.dirty = true;
       syncSrcButtons();
       refreshUnifiedChart();
-      schedulePersistVisualState();
     });
   }
   syncSrcButtons();
@@ -641,7 +638,6 @@ function setupTrajPanel() {
     if (App.traj.source.size > 0) recomputeTrajXWindow();
     App.traj.dirty = true;
     refreshUnifiedChart();
-    schedulePersistVisualState();
   };
   if (windowSlider) {
     windowSlider.addEventListener('input', e => applyWindowSpan(e.target.value));
@@ -666,7 +662,6 @@ function setupTrajPanel() {
       App.traj.dirty = true;
       refreshUnifiedChart();
     }
-    schedulePersistVisualState();
   });
   // syncTrajPlayButton();
 
@@ -702,7 +697,6 @@ function setupTrajPanel() {
     }
     t.dirty = true;
     refreshUnifiedChart();
-    schedulePersistVisualState();
   });
 
   $('btn-joints-none').addEventListener('click', () => {
@@ -713,7 +707,6 @@ function setupTrajPanel() {
     });
     t.selectedJoints.clear();
     refreshUnifiedChart();
-    schedulePersistVisualState();
   });
 
   startTrajUpdateTimer();

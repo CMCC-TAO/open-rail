@@ -94,7 +94,6 @@ function normalizeTrajWindowSpanSec(rawSpanSec, fallback = TRAJ_WINDOW_SPAN_SEC)
 }
 
 let _visualPersistTimer = null;
-let _visualPersistInFlight = false;
 
 const App = {
   ws: null,
