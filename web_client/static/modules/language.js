@@ -478,6 +478,7 @@ async function loadDefaultLangFile() {
   try {
     const langPath = App.config && App.config.language && App.config.language.file_path;
     let res;
+    // TODO: load default language file
     if (langPath) {
       res = await apiFetch('/api/client/language/load', { method: 'POST', body: JSON.stringify({ path: langPath }) });
     } else {
