@@ -1220,7 +1220,7 @@ function syncTrajWindowSpanUI() {
   if (value) value.textContent = `${uiValue}s`;
 }
 
-function applyVisualConfig(cfg = App.config) {
+async function applyVisualConfig(cfg = App.config) {
   const root = (cfg && typeof cfg === 'object') ? cfg : {};
   syncTrajLayoutFromConfig(root);
   // Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
@@ -1250,25 +1250,24 @@ function applyVisualConfig(cfg = App.config) {
   if (typeof trajCfg.play === 'boolean') {
     App.traj.paused = !trajCfg.play;
   } else {
-    App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
+    App.traj.paused = false;
   }
   App.traj.updateIntervalMs = _toInt(trajCfg.updata_period, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
   const cfgWindowSpanSec = Number(trajCfg.window_span_sec ?? trajCfg.window_sec ?? trajCfg.window_seconds);
   App.traj.windowSpanSec = normalizeTrajWindowSpanSec(cfgWindowSpanSec, App.traj.windowSpanSec);
   syncTrajWindowSpanUI();
 
-  const sourceCfgRaw = Array.isArray(trajCfg.source)
-    ? trajCfg.source
-    : (Array.isArray(trajCfg.default_source) ? trajCfg.default_source : null);
+  const sourceCfgRaw = Array.isArray(trajCfg.source)? trajCfg.source : null;
   if (Array.isArray(sourceCfgRaw)) {
     const source = new Set();
     sourceCfgRaw.forEach(k => {
       const key = String(k).trim().toLowerCase();
       if (key === 'state') source.add('state');
-      else if (key === 'action' || key === 'actionfitted' || key === 'action_fitted') source.add('action_fitted');
-      else if (key === 'origin' || key === 'actionraw' || key === 'action_raw') source.add('action_raw');
+      else if (key === 'actionfitted' || key === 'action_fitted') source.add('action_fitted');
+      else if (key === 'actionraw' || key === 'action_raw') source.add('action_raw');
     });
     App.traj.source = source;
+    // syncSrcButtons(updateConfig=false)
   }
 
   const selectedJointsRaw = trajCfg.selected_joints ?? trajCfg.default_selected_joints;
@@ -1352,6 +1351,7 @@ function applyVisualConfig(cfg = App.config) {
 
 async function loadConfigFromServer() {
   try {
+    // TODO: confirm is needed or not
     const res = await apiFetch('/api/client/config');
     App.config = res.config || {};
     App.pendingPatch = {};

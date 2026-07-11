@@ -583,7 +583,7 @@ function handleCenterPanelCollapseToggle(target) {
 }
 
 /* ── Wire trajectory controls ── */
-function setupTrajPanel() {
+async function setupTrajPanel() {
   // Source checkboxes: toggle independently; all can be deselected
   const srcChecks = {
     state: $('chk-traj-state'),
@@ -592,7 +592,7 @@ function setupTrajPanel() {
   };
   const btnAllSource = $('btn-traj-all');
 
-  function syncSrcButtons() {
+  async function syncSrcButtons(updateConfig = true) {
     Object.entries(srcChecks).forEach(([k, chk]) => {
       if (!chk) return;
       chk.checked = App.traj.source.has(k);
@@ -602,8 +602,48 @@ function setupTrajPanel() {
       const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
       btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
+    if (updateConfig) {
+      const patch = getTrajSourceStatePatch();
+      const patchRes = await apiFetch('/api/client/config/patch', {
+        method: 'POST',
+        body: JSON.stringify({ patch }),
+      });
+      App.config = patchRes.config || App.config;
+
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          body: JSON.stringify({ path: confRes.path }),
+        });
+      }
+    }
   }
-  function setSource(src, enabled) {
+  function getTrajSourceStatePatch() {
+    return {
+      'visualize.trajectory.source': [...App.traj.source].map(s => {
+        if (s === 'action_fitted') return 'ActionFitted';
+        if (s === 'action_raw') return 'ActionRaw';
+        return 'State';
+      }),
+    };
+  }
+  function getTrajPlayStatePatch() {
+    return {
+      'visualize.trajectory.play': !App.traj.paused,
+    };
+  }
+  function getTrajJointsStatePatch() {
+    return {
+      'visualize.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
+    };
+  }
+  function getTrajWindowSpanStatePatch() {
+    return {
+      'visualize.trajectory.window_span_sec': normalizeTrajWindowSpanSec(App.traj.windowSpanSec, TRAJ_WINDOW_SPAN_SEC),
+    };
+  }
+  async function setSource(src, enabled) {
     const s = App.traj.source;
     if (enabled) s.add(src);
     else s.delete(src);
@@ -628,7 +668,7 @@ function setupTrajPanel() {
       refreshUnifiedChart();
     });
   }
-  syncSrcButtons();
+  // syncSrcButtons(updateConfig=false);
 
   const windowSlider = $('traj-window-span-slider');
   const applyWindowSpan = (raw) => {

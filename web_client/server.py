@@ -90,7 +90,7 @@ async def _lifespan(_: FastAPI):
             logger.warning(f"Failed to apply yaml conf: {e}")
     # print(f"Debug: config_file = {client_state.conf_file}")
     # print(f"Initial client.record config: {client_state.config.record}")
-    # print(f"Final client config: {client_state.config.visualize}")
+    # print(f"Visualize trajectory config: {client_state.config.visualize.trajectory}")
 
     # Use a dedicated thread pool for the asyncio event loop so that
     # asyncio.to_thread() tasks are never queued behind business threads
@@ -991,6 +991,8 @@ async def get_config():
     if client_state.config is None:
         cfg = get_client_config()
         client_state.config = cfg
+        # print(f"Debug: return default config")
+    # print(f"DEBUG: visualize trajectory: {client_state.config.visualize.trajectory}")
     cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     return {"status": "ok", "config": cfg_dict}
 
