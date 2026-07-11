@@ -242,27 +242,28 @@ function getCameraStatePatch(idx) {
     [key]: !!App.camOpen[idx]
   };
 }
-async function toggleCamera(idx) {
+async function toggleCamera(idx, updateConfig=true) {
   App.camOpen[idx] = !App.camOpen[idx];
   const preview  = $(`cam-preview-${idx}`);
   const statusEl = $(`cam-status-${idx}`);
   const btnEl    = $(`btn-cam-${idx}`);
   const imgEl    = $(`cam-img-${idx}`);
   const phEl     = $(`cam-placeholder-${idx}`);
-
-  const patch = getCameraStatePatch(idx);
-  const patchRes = await apiFetch('/api/client/config/patch', {
-    method: 'POST',
-    body: JSON.stringify({ patch }),
-  });
-  App.config = patchRes.config || App.config;
-
-  const confRes = await apiFetch('/api/client/config/path');
-  if (confRes.path) {
-    await apiFetch('/api/client/config/save', {
+  if (updateConfig) {
+    const patch = getCameraStatePatch(idx);
+    const patchRes = await apiFetch('/api/client/config/patch', {
       method: 'POST',
-      body: JSON.stringify({ path: confRes.path }),
+      body: JSON.stringify({ patch }),
     });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   }
   if (App.camOpen[idx]) {
     // Open: remove dim overlay, resume receiving frames

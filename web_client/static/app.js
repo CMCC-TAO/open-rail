@@ -737,6 +737,12 @@ function startStatusPoll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initConfDir().then(async () => {
+    await loadConfigFromServer();
+    await loadDefaultLangFile();
+    applyLangConfigSelection(true);
+    wireEvents();
+  });
   setupCameraPanel();
   setupTrajPanel();
   setupLangPanel();
@@ -746,10 +752,4 @@ document.addEventListener('DOMContentLoaded', () => {
   buildJointSelector();                  // build from the active robot action_layout
   connectWS();
   startStatusPoll();
-  initConfDir().then(async () => {
-    await loadConfigFromServer();
-    await loadDefaultLangFile();
-    applyLangConfigSelection(true);
-    wireEvents();
-  });
 });
