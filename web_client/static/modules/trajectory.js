@@ -272,7 +272,7 @@ async function renderJointSelector() {
           body: JSON.stringify({ path: confRes.path }),
         });
       }
-      console.log('selectedJoints:', t.selectedJoints);
+      // console.log('selectedJoints:', t.selectedJoints);
     });
     if (i < split) {
       rowL.insertBefore(chip, btnAll);   // insert before All
@@ -688,19 +688,33 @@ async function setupTrajPanel() {
   // syncSrcButtons(updateConfig=false);
 
   const windowSlider = $('traj-window-span-slider');
-  const applyWindowSpan = (raw) => {
+  const applyWindowSpan = async (raw) => {
     const next = normalizeTrajWindowSpanSec(Number(raw), App.traj.windowSpanSec);
     App.traj.windowSpanSec = next;
     syncTrajWindowSpanUI();
     if (App.traj.source.size > 0) recomputeTrajXWindow();
     App.traj.dirty = true;
     refreshUnifiedChart();
+    const patch = getTrajWindowSpanStatePatch();
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   };
   if (windowSlider) {
     windowSlider.addEventListener('input', e => applyWindowSpan(e.target.value));
     windowSlider.addEventListener('change', e => applyWindowSpan(e.target.value));
   }
-  syncTrajWindowSpanUI();
+  // syncTrajWindowSpanUI();
 
   // Play/Pause
   function syncTrajPlayButton() {
@@ -712,12 +726,26 @@ async function setupTrajPanel() {
     btn.className = 'btn btn-xs btn-ctrl';
   }
 
-  $('btn-traj-pause').addEventListener('click', () => {
+  $('btn-traj-pause').addEventListener('click', async () => {
     App.traj.paused = !App.traj.paused;
     syncTrajPlayButton();
     if (!App.traj.paused) {
       App.traj.dirty = true;
       refreshUnifiedChart();
+    }
+    const patch = getTrajPlayStatePatch();
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
     }
   });
   // syncTrajPlayButton();
@@ -743,7 +771,7 @@ async function setupTrajPanel() {
   syncCenterPanelCollapseUi();
 
   // Select all / none
-  $('btn-joints-all').addEventListener('click', () => {
+  $('btn-joints-all').addEventListener('click', async () => {
     const t = App.traj;
     for (let i = 0; i < getTrajJointCount(); i++) {
       if (!t.selectedJoints.has(i)) {
@@ -754,9 +782,23 @@ async function setupTrajPanel() {
     }
     t.dirty = true;
     refreshUnifiedChart();
+    const patch = getTrajJointsStatePatch();
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   });
 
-  $('btn-joints-none').addEventListener('click', () => {
+  $('btn-joints-none').addEventListener('click', async () => {
     const t = App.traj;
     [...t.selectedJoints].forEach(i => {
       const chip = document.querySelector(`.joint-sel-chip[data-idx="${i}"]`);
@@ -764,6 +806,20 @@ async function setupTrajPanel() {
     });
     t.selectedJoints.clear();
     refreshUnifiedChart();
+    const patch = getTrajJointsStatePatch();
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   });
 
   startTrajUpdateTimer();
