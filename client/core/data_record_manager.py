@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import glob
 import cv2
 import time
 import logging
@@ -909,136 +910,147 @@ class EvaluationResultRecorder:
     def __init__(self, evaluation_config: ConfigDict) -> None:
         self.logger = logging.getLogger(__name__)
         self.config = evaluation_config
-
-        self._lock = threading.Lock()
-
-        self._records: List[Dict[str, Any]] = []
-        self._next_id = 1
-        self._session_ts: Optional[str] = None
-        self._save_path: Optional[str] = None
-        self._last_save_dir: Optional[str] = None
-        self._closed = False
-
-        self._vla_client_ref = None
-        self._stats_thread: Optional[threading.Thread] = None
-        self._stats_thread_running = False
-        self._stats_interval = 0.2
-
-        self._write_thread: Optional[threading.Thread] = None
-        self._write_stop_event = threading.Event()
-        self._dirty = False
-
-        # self.set_task(task)
-        self.load_from_disk()
+        self._session_id = None 
+        self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
 
     def set_task(self, save_path: str) -> None:
-        self.save_path = save_path
+        # self._save_path = save_path
+        self._check_dir_create_session(save_path=save_path)
+    def new_session(self):
+        self._session_id = None
+    def _check_dir_create_session(self, save_path: str):
+        self._eval_dir = os.path.join(save_path, 'eval')
+        # Check if eval folder exists, create if not
+        if not os.path.exists(self._eval_dir):
+            os.makedirs(self._eval_dir, exist_ok=True)
+        # Create new session if session_id is None
+        if self._session_id is None:
+            self._session_id = datetime.now().strftime("%H%M%S")
+            # self._eval_meta = {
+            #     'model_type': None,
+            #     'model_path': None,
+            #     'task_id': None,
+            #     'task_name': None
+            # }
+            self._eval_records: List[Dict[str, Any]] = []
 
-    def load_from_disk(self) -> None:
-        """Load the latest eval_log file for the current task from disk."""
-        import glob as glob_mod
+            # eval_log_filename = f"eval_log_{self._session_id:03d}.json"
+            # eval_log_path = os.path.join(eval_dir, eval_log_filename)
+            
+            # Create empty JSON file
+            # with open(eval_log_path, 'w', encoding='utf-8') as f:
+            #     json.dump([], f)  # Create empty JSON array
+        # If eval folder exists, enumerate existing eval_log files and find the biggest ID
+        # return os.path.join(evallog_dir, f"eval_log.{self._session_ts}")
+    def begin_recording(self):
+        self._eval_record_start_time = time.time()
+        self._eval_json_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.json") 
+        self._eval_csv_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.csv") 
+    # def load_from_disk(self) -> None:
+    #     """Load the latest eval_log file for the current task from disk."""
+    #     import glob as glob_mod
 
-        save_dir = str(self.config.get("save_dir", "data/recording") or "data/recording")
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        rel_save_dir = save_dir.lstrip('/').lstrip('\\')
-        task_name = self._current_task or "default"
+    #     save_dir = str(self.config.get("save_dir", "data/recording") or "data/recording")
+    #     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    #     rel_save_dir = save_dir.lstrip('/').lstrip('\\')
+    #     task_name = self._current_task or "default"
 
-        date_str = datetime.now().strftime("%Y%m%d")
-        search_pattern = os.path.join(project_root, rel_save_dir, f"{task_name}_{date_str}", "evallog", "eval_log.*")
-        candidates = glob_mod.glob(search_pattern)
-        if not candidates:
-            return
+    #     date_str = datetime.now().strftime("%Y%m%d")
+    #     search_pattern = os.path.join(project_root, rel_save_dir, f"{task_name}_{date_str}", "evallog", "eval_log.*")
+    #     candidates = glob_mod.glob(search_pattern)
+    #     if not candidates:
+    #         return
 
-        groups: Dict[str, Dict[str, Optional[str]]] = {}
-        for c in candidates:
-            p = Path(c)
-            match = re.search(r'eval_log\.([\d\-:]+)', p.name)
-            if not match:
-                continue
-            ts_str = match.group(1)
-            if ts_str not in groups:
-                groups[ts_str] = {'json': None, 'csv': None}
-            if p.suffix == '.json':
-                groups[ts_str]['json'] = str(p)
-            elif p.suffix == '.csv':
-                groups[ts_str]['csv'] = str(p)
+    #     groups: Dict[str, Dict[str, Optional[str]]] = {}
+    #     for c in candidates:
+    #         p = Path(c)
+    #         match = re.search(r'eval_log\.([\d\-:]+)', p.name)
+    #         if not match:
+    #             continue
+    #         ts_str = match.group(1)
+    #         if ts_str not in groups:
+    #             groups[ts_str] = {'json': None, 'csv': None}
+    #         if p.suffix == '.json':
+    #             groups[ts_str]['json'] = str(p)
+    #         elif p.suffix == '.csv':
+    #             groups[ts_str]['csv'] = str(p)
 
-        if not groups:
-            return
+    #     if not groups:
+    #         return
 
-        latest_ts = max(groups.keys())
-        latest_group = groups[latest_ts]
+    #     latest_ts = max(groups.keys())
+    #     latest_group = groups[latest_ts]
 
-        target_file = latest_group.get('json') or latest_group.get('csv')
-        if not target_file:
-            return
+    #     target_file = latest_group.get('json') or latest_group.get('csv')
+    #     if not target_file:
+    #         return
 
-        disk_records = self._read_disk_file(target_file)
-        if not disk_records:
-            return
+    #     disk_records = self._read_disk_file(target_file)
+    #     if not disk_records:
+    #         return
 
-        internal_records = []
-        max_id = 0
-        for dr in disk_records:
-            rec = self._deserialize_record(dr)
-            if rec is not None:
-                max_id = max(max_id, rec['id'])
-                internal_records.append(rec)
+    #     internal_records = []
+    #     max_id = 0
+    #     for dr in disk_records:
+    #         rec = self._deserialize_record(dr)
+    #         if rec is not None:
+    #             max_id = max(max_id, rec['id'])
+    #             internal_records.append(rec)
 
-        if not internal_records:
-            return
+    #     if not internal_records:
+    #         return
 
-        target_file_path = Path(target_file)
-        if not target_file_path.exists():
-            return
+    #     target_file_path = Path(target_file)
+    #     if not target_file_path.exists():
+    #         return
 
-        with self._lock:
-            self._records = internal_records
-            self._next_id = max_id + 1
-            self._session_ts = latest_ts
-            self._save_path = str(target_file_path.with_suffix(''))
-            self._dirty = True
+    #     with self._lock:
+    #         self._records = internal_records
+    #         self._next_id = max_id + 1
+    #         self._session_ts = latest_ts
+    #         self._save_path = str(target_file_path.with_suffix(''))
+    #         self._dirty = True
 
-        # self.logger.info(f"EvalLogRecorder: loaded {len(internal_records)} records from {target_file}")
+    #     # self.logger.info(f"EvalLogRecorder: loaded {len(internal_records)} records from {target_file}")
 
-    def _read_disk_file(self, file_path: str) -> List[Dict[str, Any]]:
-        """Read eval_log records from a JSON or CSV file on disk."""
-        try:
-            if file_path.endswith('.json'):
-                data = json.loads(Path(file_path).read_text(encoding='utf-8'))
-                if isinstance(data, list):
-                    return data
-            elif file_path.endswith('.csv'):
-                with open(file_path, 'r', encoding='utf-8-sig', newline='') as fh:
-                    reader = csv.DictReader(fh)
-                    rows = []
-                    for r in reader:
-                        rows.append({
-                            'id': r.get('ID', ''),
-                            'task_idx': r.get('TaskIdx', ''),
-                            'task_name': r.get('Task', ''),
-                            'sub_task_idx': r.get('Sub#', ''),
-                            'instruction': r.get('Instruction', ''),
-                            'episode_id': r.get('EpisodeID', ''),
-                            'start_time': r.get('StartTime', ''),
-                            'end_time': r.get('EndTime', ''),
-                            'duration_s': r.get('Duration(s)', ''),
-                            'paused_s': r.get('Paused(s)', ''),
-                            'status': r.get('Status', ''),
-                            'score': r.get('Score', ''),
-                            'note': r.get('Note', ''),
-                            'obv_fps': r.get('ObvFPS', ''),
-                            'infer_count': r.get('InferCount', ''),
-                            'img_proc_time': r.get('ImgProcTime(ms)', ''),
-                            'avg_infer_time_ms': r.get('AvgInferTime(ms)', ''),
-                            'avg_intra_traj_time_ms': r.get('AvgIntraTrajTime(ms)', ''),
-                            'avg_inter_traj_time_ms': r.get('AvgInterTrajTime(ms)', ''),
-                            'avg_comm_time_ms': r.get('AvgCommTime(ms)', ''),
-                        })
-                    return rows
-        except Exception as e:
-            self.logger.debug(f"EvalLogRecorder: failed to read {file_path}: {e}")
-        return []
+    # def _read_disk_file(self, file_path: str) -> List[Dict[str, Any]]:
+    #     """Read eval_log records from a JSON or CSV file on disk."""
+    #     try:
+    #         if file_path.endswith('.json'):
+    #             data = json.loads(Path(file_path).read_text(encoding='utf-8'))
+    #             if isinstance(data, list):
+    #                 return data
+    #         elif file_path.endswith('.csv'):
+    #             with open(file_path, 'r', encoding='utf-8-sig', newline='') as fh:
+    #                 reader = csv.DictReader(fh)
+    #                 rows = []
+    #                 for r in reader:
+    #                     rows.append({
+    #                         'id': r.get('ID', ''),
+    #                         'task_idx': r.get('TaskIdx', ''),
+    #                         'task_name': r.get('Task', ''),
+    #                         'sub_task_idx': r.get('Sub#', ''),
+    #                         'instruction': r.get('Instruction', ''),
+    #                         'episode_id': r.get('EpisodeID', ''),
+    #                         'start_time': r.get('StartTime', ''),
+    #                         'end_time': r.get('EndTime', ''),
+    #                         'duration_s': r.get('Duration(s)', ''),
+    #                         'paused_s': r.get('Paused(s)', ''),
+    #                         'status': r.get('Status', ''),
+    #                         'score': r.get('Score', ''),
+    #                         'note': r.get('Note', ''),
+    #                         'obv_fps': r.get('ObvFPS', ''),
+    #                         'infer_count': r.get('InferCount', ''),
+    #                         'img_proc_time': r.get('ImgProcTime(ms)', ''),
+    #                         'avg_infer_time_ms': r.get('AvgInferTime(ms)', ''),
+    #                         'avg_intra_traj_time_ms': r.get('AvgIntraTrajTime(ms)', ''),
+    #                         'avg_inter_traj_time_ms': r.get('AvgInterTrajTime(ms)', ''),
+    #                         'avg_comm_time_ms': r.get('AvgCommTime(ms)', ''),
+    #                     })
+    #                 return rows
+    #     except Exception as e:
+    #         self.logger.debug(f"EvalLogRecorder: failed to read {file_path}: {e}")
+    #     return []
 
     def _deserialize_record(self, dr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Convert a disk-format record back to internal memory format."""
@@ -1098,20 +1110,6 @@ class EvaluationResultRecorder:
             self.logger.debug(f"EvalLogRecorder: failed to deserialize record: {e}")
             return None
 
-    def _build_save_path(self) -> Optional[str]:
-        save_dir = str(self.config.get("save_dir", "data/recording") or "data/recording")
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        rel_save_dir = save_dir.lstrip('/').lstrip('\\')
-        date_str = datetime.now().strftime("%Y%m%d")
-        task_name = self._current_task or "default"
-        task_dir = f"{task_name}_{date_str}"
-        evallog_dir = os.path.join(project_root, rel_save_dir, task_dir, "evallog")
-        os.makedirs(evallog_dir, exist_ok=True)
-
-        if not self._session_ts:
-            self._session_ts = datetime.now().strftime("%Y-%m-%d--%H:%M:%S")
-
-        return os.path.join(evallog_dir, f"eval_log.{self._session_ts}")
 
     def start(self, vla_client, task_name: str, sub_task_idx: int,
               instruction: str, episode_id: Optional[str] = None,
@@ -1286,132 +1284,21 @@ class EvaluationResultRecorder:
             self._save_path = None
             self._dirty = True
 
-    def get_records(self) -> List[Dict[str, Any]]:
-        """Return a shallow copy of all records (for WS push / API response).
-
-        For running records, a live ``duration_s`` is computed using the current
-        time so the frontend can display it without client-side setInterval.
-        """
-        now = time.time()
-        with self._lock:
-            result = []
-            for r in self._records:
-                rec = dict(r)
-                if rec.get('status') == 'running':
-                    paused_s = float(rec.get('paused_s', 0.0))
-                    paused_at = rec.get('paused_at')
-                    if paused_at is not None:
-                        paused_s += now - float(paused_at)
-                    start = rec.get('start_time')
-                    if start is not None:
-                        rec['duration_s'] = round(max(0.0, now - float(start) - paused_s), 1)
-                result.append(rec)
-            return result
-
-    def switch_task(self, task_name: str) -> List[Dict[str, Any]]:
-        """Switch to a different task and reload records from disk."""
-        sanitized = self._sanitize_task_name(task_name)
-        with self._lock:
-            if self._find_running_unlocked() is not None:
-                self._finalize_running_unlocked('switched')
-            if sanitized and sanitized != self._current_task:
-                self._current_task = sanitized
-                self._records = []
-                self._next_id = 1
-            self._session_ts = None
-            self._save_path = None
-            self._last_save_dir = str(self.config.get("save_dir", "data/recording") or "data/recording")
-        self.load_from_disk()
-        return self.get_records()
-
-    def set_episode_id(self, episode_id: Optional[str]) -> None:
-        """Associate the currently running eval record with an episode id."""
-        with self._lock:
-            running = self._find_running_unlocked()
-            if running is not None:
-                running['episode_id'] = episode_id
-                self._dirty = True
-
-    def _start_stats_thread(self) -> None:
-        if self._stats_thread is not None and self._stats_thread.is_alive():
-            return
-        self._stats_thread_running = True
-        self._stats_thread = threading.Thread(target=self._stats_loop, daemon=True)
-        self._stats_thread.start()
-
-    def _stop_stats_thread(self) -> None:
-        self._stats_thread_running = False
-        if self._stats_thread is not None:
-            self._stats_thread.join(timeout=2.0)
-            self._stats_thread = None
-
-    def _stats_loop(self) -> None:
-        """Collect stats every 200ms and update the running record."""
-        while self._stats_thread_running:
-            try:
-                vla_client = self._vla_client_ref
-                if vla_client is None:
-                    break
-                with self._lock:
-                    running = self._find_running_unlocked()
-                    if running is None or running.get('status') != 'running' or running.get('paused_at') is not None:
-                        pass
-                    else:
-                        self._capture_stats_into(running)
-                        self._dirty = True
-            except Exception as e:
-                self.logger.debug(f"Stats collection error: {e}")
-            time.sleep(self._stats_interval)
-
-    def _start_write_thread(self) -> None:
-        if self._write_thread is not None and self._write_thread.is_alive():
-            return
-        self._write_stop_event.clear()
-        self._write_thread = threading.Thread(target=self._write_loop, daemon=True)
-        self._write_thread.start()
-
-    def _stop_write_thread(self) -> None:
-        self._write_stop_event.set()
-        if self._write_thread is not None:
-            self._write_thread.join(timeout=3.0)
-            self._write_thread = None
-
-    def _write_loop(self) -> None:
-        """Background write thread: flush to disk every 2s if dirty."""
-        while not self._write_stop_event.is_set():
-            if self._write_stop_event.wait(2.0):
-                break
-            if self._dirty:
-                self._flush_to_disk()
-
     def _flush_to_disk(self) -> None:
         """Write records to JSON + CSV files."""
-        with self._lock:
-            if not self._records:
-                return
-            if not self._save_path:
-                self._save_path = self._build_save_path()
-            if not self._save_path:
-                return
-            records_copy = [dict(r) for r in self._records]
-            self._dirty = False
-
-        fmt = str(self.config.get("eval_log_format", "json") or "json").lower()
-
         try:
-            if fmt in ('json', 'both'):
-                json_path = f"{self._save_path}.json"
-                serializable = [self._record_to_serializable(r) for r in records_copy]
-                with open(json_path, 'w', encoding='utf-8') as f:
-                    json.dump(serializable, f, ensure_ascii=False, indent=2)
+            # serializable = [self._record_to_serializable(r) for r in records_copy]
+            # save to json
+            with open(self._eval_json_file, 'w', encoding='utf-8') as f:
+                json.dump(self._eval_records, f, ensure_ascii=False, indent=2)
 
-            if fmt in ('csv', 'both'):
-                csv_path = f"{self._save_path}.csv"
-                with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
-                    writer = csv.writer(f, lineterminator='\n')
-                    writer.writerow(self.CSV_HEADERS)
-                    for r in records_copy:
-                        writer.writerow(self._record_to_csv_row(r))
+            # if fmt in ('csv', 'both'):
+            #     csv_path = f"{self._save_path}.csv"
+            #     with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            #         writer = csv.writer(f, lineterminator='\n')
+            #         writer.writerow(self.CSV_HEADERS)
+            #         for r in records_copy:
+            #             writer.writerow(self._record_to_csv_row(r))
 
             # self.logger.debug(f"EvalLogRecorder: flushed {len(records_copy)} records to {self._save_path}")
         except Exception as e:
