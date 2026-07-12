@@ -17,6 +17,7 @@ from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Process, Manager,Queue
 from typing import Any, Dict, List, Optional, Union
+from client.utils.util import run_time_decorator
 class LeRobotDatasetParser:
     """Parse LeRobot dataset episodes from one task recording directory."""
 
@@ -490,6 +491,8 @@ class LeRobotDatasetRecorder:
     def add_frame_async(self, step_state: dict, step_action: np.ndarray):
         self.record_executor.submit(self._write_frame_fun, step_state, step_action)
 
+    # @run_time_decorator
+    # First frame takas 20ms and the others tasks 5ms
     def _write_frame_fun(self, step_state: dict, step_action: np.ndarray):
         """
         Main function for the write data frame responsible for writing data to disk.
@@ -962,9 +965,9 @@ class DataRecordManager:
     def set_task(self, task: str) -> None:
         """Update save path by task/date before a new recording starts."""
         # avoid reload data from file
-        if self.current_task == task:
-            self.logger.warning(f"{self.current_task} is already set, return.")
-            return
+        # if self.current_task == task:
+        #     self.logger.warning(f"{self.current_task} is already set, return.")
+        #     return
         if self.shared_data.running.value:
             self.logger.warning("set_task ignored because recording is running")
             return
@@ -978,11 +981,15 @@ class DataRecordManager:
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path, exist_ok=True)
             self.logger.info(f"{self.save_path} not exists, create it")
-        total_frames, total_videos, total_episodes, chunks_size = self.lerobot_recorder.set_task(save_path=self.save_path)
-        self._sync_shared_data(total_frames=total_frames,
-                            total_videos=total_videos,
-                            total_episodes=total_episodes,
-                            chunks_size=chunks_size)
+        
+        if self.config.get('is_record_episode', False):
+            total_frames, total_videos, total_episodes, chunks_size = self.lerobot_recorder.set_task(save_path=self.save_path)
+            self._sync_shared_data(total_frames=total_frames,
+                                total_videos=total_videos,
+                                total_episodes=total_episodes,
+                                chunks_size=chunks_size)
+        else:
+            self.logger.info("Recording lerobot episode is disabled, skip recording.")
     
     def _sync_shared_data(self, total_frames: int = 0, total_videos: int = 0, total_episodes: int = 0, chunks_size: int = 1000) -> None:
         """Sync record lerobot values to shared_data."""
@@ -1148,19 +1155,21 @@ class DataRecordManager:
 
         try:
             # prepare recording for all recorders
-            self.lerobot_recorder.begin_recording(episode_chunk = self.shared_data.episode_chunk.value,
-                                                episode_index = self.shared_data.episode_index.value,
-                                                total_frames = self.shared_data.total_frames.value,
-                                                total_videos = self.shared_data.total_videos.value,
-                                                save_raw=self.config.save_raw)
+            if self.config.get('is_record_episode', False):
+                self.lerobot_recorder.begin_recording(episode_chunk = self.shared_data.episode_chunk.value,
+                                                    episode_index = self.shared_data.episode_index.value,
+                                                    total_frames = self.shared_data.total_frames.value,
+                                                    total_videos = self.shared_data.total_videos.value,
+                                                    save_raw=self.config.save_raw)
             # print(f"DEBUG: Mark1")    
             # recording in the loop for all recorders
             while self.shared_data.running.value or (not self.record_queue.empty()):
                 # Get state and action data from queue
                 try:
                     step_state, step_action = self.record_queue.get(timeout=0.1)
-                    self.lerobot_recorder.add_frame_async(step_state=step_state,
-                                                        step_action=step_action)
+                    if self.config.get('is_record_episode', False):
+                        self.lerobot_recorder.add_frame_async(step_state=step_state,
+                                                            step_action=step_action)
                 except Empty:
                     if self.shared_data.running.value:
                         self.logger.info("Record queue empty, waiting for data...")
@@ -1170,11 +1179,12 @@ class DataRecordManager:
 
                 # self.logger.info('write process stopped!!! ')
             # finish recording for all recorders
-            episode_index, total_frames, total_videos = self.lerobot_recorder.end_record()
-            self._sync_shared_data(total_frames=total_frames,
-                                total_videos=total_videos,
-                                total_episodes=episode_index,
-                                chunks_size=self.config.lerobot['chunks_size']) # chunks_size doesn't change
+            if self.config.get('is_record_episode', False):
+                episode_index, total_frames, total_videos = self.lerobot_recorder.end_record()
+                self._sync_shared_data(total_frames=total_frames,
+                                    total_videos=total_videos,
+                                    total_episodes=episode_index,
+                                    chunks_size=self.config.lerobot['chunks_size']) # chunks_size doesn't change
         
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
