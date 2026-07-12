@@ -1189,7 +1189,6 @@ class DataRecordManager:
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
             # self.release_writers()
-        
         except Exception as e:
             self.logger.exception(f"Writing thread exited with exception: {e}")
             # self.release_writers()
