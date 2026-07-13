@@ -658,17 +658,19 @@ def _collect_stats() -> dict:
         return base
 
     try:
-        base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", False))
-        base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", False))
-        base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", False))
-        base["img_proc_time"] = float(getattr(vla_client, "image_process_time", 0.0))
-        base["current_prob_progress"] = float(getattr(vla_client, "current_prob_progress", 0.0))
-        base["infer_count"]     = int(vla_client.realtime_data_manager.infer_count)
-        base["avg_infer_time"]  = float(vla_client.realtime_data_manager.avg_infer_time)
-        base["avg_comm_time"]  = float(vla_client.realtime_data_manager.avg_comm_time)
-        base["avg_intra_traj_time"]   = float(vla_client.realtime_data_manager.avg_intra_traj_time)
-        base["avg_inter_traj_time"]   = float(vla_client.realtime_data_manager.avg_inter_traj_time)
-        base["obv_fps"]         = float(vla_client.realtime_data_manager.get_observe_fps())
+        # base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", False))
+        # base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", False))
+        # base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", False))
+        base.update(vla_client.thread_status)
+        # base["img_proc_time"] = float(getattr(vla_client, "image_process_time", 0.0))
+        # base["current_prob_progress"] = float(getattr(vla_client, "current_prob_progress", 0.0))
+        # base["infer_count"]     = int(vla_client.realtime_data_manager.infer_count)
+        # base["avg_infer_time"]  = float(vla_client.realtime_data_manager.avg_infer_time)
+        # base["avg_comm_time"]  = float(vla_client.realtime_data_manager.avg_comm_time)
+        # base["avg_intra_traj_time"]   = float(vla_client.realtime_data_manager.avg_intra_traj_time)
+        # base["avg_inter_traj_time"]   = float(vla_client.realtime_data_manager.avg_inter_traj_time)
+        # base["obv_fps"]         = float(vla_client.realtime_data_manager.get_observe_fps())
+        base.update(vla_client.runtime_status)
         base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
         # 添加 ZMQ 客户端连接状态
         if hasattr(vla_client, 'vla_zmq') and vla_client.vla_zmq is not None:

@@ -378,7 +378,16 @@ class RealtimeDataManager():
             self.polynomial_cond.notify_all()
             
         self.logger.debug("All data cleared for fresh inference")
-
+    @property
+    def runtime_status(self):
+        return {
+            "infer_count": self.infer_count,
+            "avg_infer_time": self.avg_infer_time,
+            "avg_comm_time": self.avg_comm_time,
+            "avg_intra_traj_time": self.avg_intra_traj_time,
+            "avg_inter_traj_time": self.avg_inter_traj_time,
+            "obv_fps": self.get_observe_fps()
+        }
     def wait_for_next(self, mode: str = 'sync', wait_time: float = 0.01) -> bool:
         """Wait for next action/frame according to mode.
 

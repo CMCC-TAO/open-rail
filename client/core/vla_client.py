@@ -242,6 +242,23 @@ class VLAClientAsync():
         self.logger.info('Inference client closed.')
     def reset(self):
         self.image_process_time = 0.0
+    
+    @property
+    def thread_status(self):
+        return {
+        "observe_running": self.is_observe_thread_running,
+        "inference_running": self.is_inference_thread_running,
+        "control_running": self.is_control_thread_running
+        }
+
+    @property
+    def runtime_status(self):
+        status = {
+            "img_proc_time": self.image_process_time,
+            "current_prob_progress": self.current_prob_progress
+        }
+        status.update(self.realtime_data_manager.runtime_status)
+        return status
     #################### VLA Client Inline functions ####################
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
