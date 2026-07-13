@@ -6,6 +6,7 @@ import logging
 import threading
 import queue
 import time
+from datetime import datetime
 from ml_collections import ConfigDict
 
 
@@ -72,7 +73,10 @@ class ZMQServer():
             self._heartbeat_info['model_path'] = model_path
         if lang_cmd is not None:
             self._heartbeat_info['lang_cmd'] = lang_cmd
-        self._heartbeat_info['timestamp'] = time.time()
+        self._heartbeat_info['timestamp'] = self._timestamp(time.time())
+    def _timestamp(self, time_stamp) -> str:
+        dt = datetime.fromtimestamp(time_stamp)
+        return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
     def _start_heartbeat_monitor(self):
         """Start heartbeat monitoring thread"""
         self._monitor_thread = threading.Thread(target=self._heartbeat_monitor, daemon=True)
