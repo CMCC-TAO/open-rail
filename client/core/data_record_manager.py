@@ -926,6 +926,7 @@ class EvaluationResultRecorder:
         # Create new session if session_id is None
         if self._session_id is None:
             self._session_id = datetime.now().strftime("%H%M%S")
+            self._record_id = 0
             # self._eval_meta = {
             #     'model_type': None,
             #     'model_path': None,
@@ -943,114 +944,225 @@ class EvaluationResultRecorder:
         # If eval folder exists, enumerate existing eval_log files and find the biggest ID
         # return os.path.join(evallog_dir, f"eval_log.{self._session_ts}")
     def begin_recording(self):
-        self._eval_record_start_time = time.time()
         self._eval_json_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.json") 
         self._eval_csv_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.csv") 
-    # def load_from_disk(self) -> None:
-    #     """Load the latest eval_log file for the current task from disk."""
-    #     import glob as glob_mod
+        self._create_new_record()
 
-    #     save_dir = str(self.config.get("save_dir", "data/recording") or "data/recording")
-    #     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    #     rel_save_dir = save_dir.lstrip('/').lstrip('\\')
-    #     task_name = self._current_task or "default"
+    def _create_new_record(self):
+        self._eval_record_start_time = time.time()
+        self._current_record = {
+            'id': self._record_id,
+            'mode': None,
+            'wait_time': None,
+            'control_period': None,
+            'control_speed': None,
+            'inter_chunk_mode': None,
+            'intra_chunk_mode': None,
+            'model_type': None,
+            'model_path': None,
+            'task_name': None,
+            'task_id': None,
+            'sub_task_id': None,
+            'instruction': None,
+            'episode_id': None,
+            'start_time': None,
+            'end_time': None,
+            'duration': None,
+            # 'paused_s': 0.0,
+            # 'paused_at': None,
+            # 'status': 'running',
+            'score': None,
+            'note': '',
+            'obv_fps': [],
+            'infer_count': [],
+            'img_proc_time': [],
+            'avg_infer_time': [],
+            'avg_intra_traj_time': [],
+            'avg_inter_traj_time': [],
+            'avg_comm_time': [],
+        }
+    def end_recording(self):
+        self._finalize_current_record()
+        self._flush_to_disk()
+    
+    def add_frame_async(self, step_runtime: dict, step_config: dict):
+        self.record_executor.submit(self._write_frame_fun, step_runtime, step_config)
 
-    #     date_str = datetime.now().strftime("%Y%m%d")
-    #     search_pattern = os.path.join(project_root, rel_save_dir, f"{task_name}_{date_str}", "evallog", "eval_log.*")
-    #     candidates = glob_mod.glob(search_pattern)
-    #     if not candidates:
-    #         return
+    # @run_time_decorator
+    # First frame takas 20ms and the others tasks 5ms
+    def _write_frame_fun(self, step_runtime: dict, step_config: dict):
+        """
+        Main function for the write data frame responsible for writing data to disk.
 
-    #     groups: Dict[str, Dict[str, Optional[str]]] = {}
-    #     for c in candidates:
-    #         p = Path(c)
-    #         match = re.search(r'eval_log\.([\d\-:]+)', p.name)
-    #         if not match:
-    #             continue
-    #         ts_str = match.group(1)
-    #         if ts_str not in groups:
-    #             groups[ts_str] = {'json': None, 'csv': None}
-    #         if p.suffix == '.json':
-    #             groups[ts_str]['json'] = str(p)
-    #         elif p.suffix == '.csv':
-    #             groups[ts_str]['csv'] = str(p)
+        Continuously pulls data from the shared queue and writes it to video files and Parquet file buffer.
+        The loop runs until `self.shared_data.stop` is set to True. Each iteration processes one observation-action pair:
+            - Appends new language instructions to the episode task list
+            - Assigns a unique task index based on instruction text
+            - Writes camera images to corresponding video files
+            - Constructs a record dictionary and appends it to the shared Parquet buffer
 
-    #     if not groups:
-    #         return
+        Frame index is incremented with each successful write.
 
-    #     latest_ts = max(groups.keys())
-    #     latest_group = groups[latest_ts]
+        Raises:
+            KeyboardInterrupt: If user interrupts execution via keyboard (e.g., Ctrl+C)
+            Exception: Any other exception during writing will terminate the thread
+        """
 
-    #     target_file = latest_group.get('json') or latest_group.get('csv')
-    #     if not target_file:
-    #         return
+        try:
+            # record info for first frame of a sub-task
+            if self._current_record['sub_task_id'] is None:
+                # assign value explicitly
+                self._init_current_record(step_runtime=step_runtime, step_config=step_config)
+                self._eval_records.append(self._current_record)
+            # record info for the other frames of a sub-task
+            elif self._current_record['sub_task_id'] == step_runtime.get('sub_task_id', None):
+                self._updata_current_record(step_runtime=step_runtime)
+            # New sub-task, save the current record and start a new record
+            else:
+                # save the current record
+                self._finalize_current_record()
+                self._flush_to_disk()
+                # start a new record
+                self._create_new_record()
+                self._init_current_record(step_runtime=step_runtime, step_config=step_config)
+                self._eval_records.append(self._current_record)
+                pass
+        except KeyboardInterrupt:
+            self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
+        except Exception as e:
+            self.logger.exception(f"Writing frame exited with exception: {e}")
+            # self.release_writers()
+        # finally:
+            # self.logger.info("Writing frame exited.")
+            # self.release_writers()
+    def _init_current_record(self, step_runtime: dict, step_config: dict):
+        self._current_record['mode'] = step_config.get('mode', None)
+        self._current_record['wait_time'] = step_config.get('wait_time', None)
+        self._current_record['control_period'] = step_config.get('control_period', None)
+        self._current_record['control_speed'] = step_config.get('control_speed', None)
+        self._current_record['inter_chunk_mode'] = step_config.get('inter_chunk_mode', None)
+        self._current_record['intra_chunk_mode'] = step_config.get('intra_chunk_mode', None)
+        self._current_record['model_type'] = step_runtime.get('model_type', None)
+        self._current_record['model_path'] = step_runtime.get('model_path', None)
+        self._current_record['task_name'] = step_runtime.get('task_name', None)
+        self._current_record['task_id'] = step_runtime.get('task_id', None)
+        self._current_record['sub_task_id'] = step_runtime.get('sub_task_id', None)
+        self._current_record['instruction'] = step_runtime.get('instruction', None)
+        self._current_record['episode_id'] = step_runtime.get('episode_id', None)
+        self._updata_current_record(step_runtime=step_runtime)
+    
+    def _updata_current_record(self, step_runtime: dict):
+        self._current_record['obv_fps'].append(step_runtime.get('obv_fps', None))
+        self._current_record['infer_count'].append(step_runtime.get('infer_count', None))
+        self._current_record['img_proc_time'].append(step_runtime.get('img_proc_time', None))
+        self._current_record['avg_infer_time'].append(step_runtime.get('avg_infer_time', None))
+        self._current_record['avg_intra_traj_time'].append(step_runtime.get('avg_intra_traj_time', None))
+        self._current_record['avg_inter_traj_time'].append(step_runtime.get('avg_inter_traj_time', None))
+        self._current_record['avg_comm_time'].append(step_runtime.get('avg_comm_time', None))
 
-    #     disk_records = self._read_disk_file(target_file)
-    #     if not disk_records:
-    #         return
+    def _finalize_current_record(self) -> None:
+        self._eval_record_stop_time = time.time()
+        self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
+        self._current_record['stop_time'] = self._timestamp(self._eval_record_stop_time)
+        self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 3)
+    
+    def _timestamp(self, time_stamp) -> str:
+        dt = datetime.fromtimestamp(time_stamp)
+        return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
+    def pause(self) -> None:
+        """Pause the timer for the currently running record."""
+        with self._lock:
+            running = self._find_running_unlocked()
+            if running is None or running.get('paused_at') is not None:
+                return
+            if running.get('status') != 'running':
+                return
+            running['paused_at'] = time.time()
+            self._dirty = True
 
-    #     internal_records = []
-    #     max_id = 0
-    #     for dr in disk_records:
-    #         rec = self._deserialize_record(dr)
-    #         if rec is not None:
-    #             max_id = max(max_id, rec['id'])
-    #             internal_records.append(rec)
+    def resume(self) -> None:
+        """Resume the timer for the currently paused record."""
+        with self._lock:
+            running = self._find_running_unlocked()
+            if running is None or running.get('paused_at') is None:
+                return
+            paused_at = float(running.pop('paused_at'))
+            running['paused_s'] = round(float(running.get('paused_s', 0.0)) + (time.time() - paused_at), 1)
+            self._dirty = True
 
-    #     if not internal_records:
-    #         return
+    def set_score(self, record_id: int, score: Optional[float]) -> None:
+        with self._lock:
+            rec = next((r for r in self._records if r['id'] == record_id), None)
+            if rec is None:
+                return
+            rec['score'] = score
+            if score is not None and rec.get('status') not in ('running', 'pending'):
+                rec['status'] = 'scored'
+            if score is None and rec.get('status') == 'scored':
+                rec['status'] = 'switched'
+            self._dirty = True
 
-    #     target_file_path = Path(target_file)
-    #     if not target_file_path.exists():
-    #         return
+    def set_note(self, record_id: int, note: str) -> None:
+        with self._lock:
+            rec = next((r for r in self._records if r['id'] == record_id), None)
+            if rec is None:
+                return
+            rec['note'] = note
 
-    #     with self._lock:
-    #         self._records = internal_records
-    #         self._next_id = max_id + 1
-    #         self._session_ts = latest_ts
-    #         self._save_path = str(target_file_path.with_suffix(''))
-    #         self._dirty = True
+    def delete_record(self, record_id: int) -> None:
+        with self._lock:
+            self._records = [r for r in self._records if r['id'] != record_id]
 
-    #     # self.logger.info(f"EvalLogRecorder: loaded {len(internal_records)} records from {target_file}")
+    def _flush_to_disk(self) -> None:
+        """Write records to JSON + CSV files."""
+        try:
+            # serializable = [self._serialize_record(r) for r in records_copy]
+            # save to json
+            with open(self._eval_json_file, 'w', encoding='utf-8') as f:
+                json.dump(self._eval_records, f, ensure_ascii=False, indent=2)
 
-    # def _read_disk_file(self, file_path: str) -> List[Dict[str, Any]]:
-    #     """Read eval_log records from a JSON or CSV file on disk."""
-    #     try:
-    #         if file_path.endswith('.json'):
-    #             data = json.loads(Path(file_path).read_text(encoding='utf-8'))
-    #             if isinstance(data, list):
-    #                 return data
-    #         elif file_path.endswith('.csv'):
-    #             with open(file_path, 'r', encoding='utf-8-sig', newline='') as fh:
-    #                 reader = csv.DictReader(fh)
-    #                 rows = []
-    #                 for r in reader:
-    #                     rows.append({
-    #                         'id': r.get('ID', ''),
-    #                         'task_idx': r.get('TaskIdx', ''),
-    #                         'task_name': r.get('Task', ''),
-    #                         'sub_task_idx': r.get('Sub#', ''),
-    #                         'instruction': r.get('Instruction', ''),
-    #                         'episode_id': r.get('EpisodeID', ''),
-    #                         'start_time': r.get('StartTime', ''),
-    #                         'end_time': r.get('EndTime', ''),
-    #                         'duration_s': r.get('Duration(s)', ''),
-    #                         'paused_s': r.get('Paused(s)', ''),
-    #                         'status': r.get('Status', ''),
-    #                         'score': r.get('Score', ''),
-    #                         'note': r.get('Note', ''),
-    #                         'obv_fps': r.get('ObvFPS', ''),
-    #                         'infer_count': r.get('InferCount', ''),
-    #                         'img_proc_time': r.get('ImgProcTime(ms)', ''),
-    #                         'avg_infer_time_ms': r.get('AvgInferTime(ms)', ''),
-    #                         'avg_intra_traj_time_ms': r.get('AvgIntraTrajTime(ms)', ''),
-    #                         'avg_inter_traj_time_ms': r.get('AvgInterTrajTime(ms)', ''),
-    #                         'avg_comm_time_ms': r.get('AvgCommTime(ms)', ''),
-    #                     })
-    #                 return rows
-    #     except Exception as e:
-    #         self.logger.debug(f"EvalLogRecorder: failed to read {file_path}: {e}")
-    #     return []
+            # if fmt in ('csv', 'both'):
+            #     csv_path = f"{self._save_path}.csv"
+            #     with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
+            #         writer = csv.writer(f, lineterminator='\n')
+            #         writer.writerow(self.CSV_HEADERS)
+            #         for r in records_copy:
+            #             writer.writerow(self._record_to_csv_row(r))
+
+            # self.logger.debug(f"EvalLogRecorder: flushed {len(records_copy)} records to {self._save_path}")
+        except Exception as e:
+            self.logger.exception(f"EvaluationResultRecorder: flush failed: {e}")
+
+    def _serialize_record(self, r: Dict[str, Any]) -> Dict[str, Any]:
+        """Convert internal record to JSON-serializable dict."""
+        def fmt_time(ts):
+            if ts is None:
+                return None
+            return datetime.fromtimestamp(float(ts)).strftime('%Y-%m-%d %H:%M:%S')
+
+        return {
+            'id': r.get('id', ''),
+            'task_idx': r.get('task_idx', 0) + 1,
+            'task_name': r.get('task_name', ''),
+            'sub_task_idx': r.get('sub_task_idx', 0) + 1,
+            'instruction': r.get('instruction', ''),
+            'episode_id': r.get('episode_id'),
+            'start_time': fmt_time(r.get('start_time')),
+            'end_time': fmt_time(r.get('end_time')),
+            'duration_s': r.get('duration_s'),
+            'paused_s': r.get('paused_s', 0),
+            'status': r.get('status', ''),
+            'score': r.get('score'),
+            'note': r.get('note', ''),
+            'obv_fps': r.get('obv_fps'),
+            'infer_count': r.get('infer_count'),
+            'img_proc_time': r.get('img_proc_time'),
+            'avg_infer_time_ms': round(float(r['avg_infer_time']) * 1000, 1) if r.get('avg_infer_time') is not None else None,
+            'avg_traj_time_ms': None,
+            'avg_intra_traj_time_ms': round(float(r['avg_intra_traj_time']) * 1000, 1) if r.get('avg_intra_traj_time') is not None else None,
+            'avg_inter_traj_time_ms': round(float(r['avg_inter_traj_time']) * 1000, 1) if r.get('avg_inter_traj_time') is not None else None,
+            'avg_comm_time_ms': round(float(r['avg_comm_time']) * 1000, 1) if r.get('avg_comm_time') is not None else None,
+        }
 
     def _deserialize_record(self, dr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Convert a disk-format record back to internal memory format."""
@@ -1111,232 +1223,9 @@ class EvaluationResultRecorder:
             return None
 
 
-    def start(self, vla_client, task_name: str, sub_task_idx: int,
-              instruction: str, episode_id: Optional[str] = None,
-              task_idx: int = 0, start_time: Optional[float] = None) -> int:
-        """Start a new eval record. Finalizes any running record as 'switched'."""
-        with self._lock:
-            running = self._find_running_unlocked()
-            if (running is not None
-                    and running.get('task_name') == (task_name or '')
-                    and running.get('sub_task_idx') == sub_task_idx
-                    and running.get('instruction') == (instruction or '')):
-                return self._get_session_id()
-        session_id = self._bump_session_id()
-        need_reload = False
-        with self._lock:
-            self._finalize_running_unlocked('switched')
-            sanitized = self._sanitize_task_name(task_name)
-            if sanitized and sanitized != self._current_task:
-                self._current_task = sanitized
-                self._records = []
-                self._next_id = 1
-                self._session_ts = None
-                self._save_path = None
-                need_reload = True
-            current_save_dir = str(self.config.get("save_dir", "data/recording") or "data/recording")
-            if current_save_dir != self._last_save_dir:
-                self._last_save_dir = current_save_dir
-                self._session_ts = None
-                self._save_path = None
-                need_reload = True
-
-        if need_reload:
-            self.load_from_disk()
-
-        with self._lock:
-            now = time.time() if start_time is None else float(start_time)
-            record = {
-                'id': self._next_id,
-                'task_name': task_name or '',
-                'task_idx': task_idx,
-                'sub_task_idx': sub_task_idx,
-                'instruction': instruction or '',
-                'episode_id': episode_id,
-                'start_time': now,
-                'end_time': None,
-                'duration_s': None,
-                'paused_s': 0.0,
-                'paused_at': None,
-                'status': 'running',
-                'score': None,
-                'note': '',
-                'obv_fps': None,
-                'infer_count': None,
-                'img_proc_time': None,
-                'avg_infer_time': None,
-                'avg_intra_traj_time': None,
-                'avg_inter_traj_time': None,
-                'avg_comm_time': None,
-            }
-            self._records.insert(0, dict(record))
-            self._next_id += 1
-            self._dirty = True
-
-        self._vla_client_ref = vla_client
-        self._start_stats_thread()
-        self._start_write_thread()
-        # self.logger.info(f"EvalLogRecorder: started record id={record['id']}, task={task_name}, session_id={session_id}")
-        return session_id
-
-    def finalize(self, status: str = 'interrupted', score: Optional[float] = None, end_time: Optional[float] = None) -> None:
-        """Finalize the current running record with given status and optional score."""
-        with self._lock:
-            self._finalize_running_unlocked(status, score, end_time=end_time)
-            self._dirty = True
-        self._flush_to_disk()
-
-    def _finalize_running_unlocked(self, status: str, score: Optional[float] = None, end_time: Optional[float] = None) -> None:
-        running = self._find_running_unlocked()
-        if running is None:
-            return
-
-        now = time.time() if end_time is None else float(end_time)
-        if running.get('status') == 'pending':
-            running['end_time'] = None
-            running['duration_s'] = 0.0
-            running['paused_at'] = None
-        else:
-            running['end_time'] = now
-            paused_s = float(running.get('paused_s', 0.0))
-            paused_at = running.get('paused_at')
-            if paused_at is not None:
-                paused_s += now - float(paused_at)
-            start = float(running.get('start_time', now))
-            running['duration_s'] = round(max(0.0, now - start - paused_s), 1)
-            running['paused_s'] = round(paused_s, 1)
-            running['paused_at'] = None
-
-        running['status'] = status
-        if score is not None:
-            running['score'] = score
-
-        self._capture_stats_into(running)
-
-    def _capture_stats_into(self, record: Dict[str, Any]) -> None:
-        """Capture latest runtime stats from vla_client into the record."""
-        vla_client = self._vla_client_ref
-        if vla_client is None:
-            return
-        try:
-            rdm = vla_client.realtime_data_manager
-            record['obv_fps'] = round(float(rdm.get_observe_fps()), 1)
-            record['infer_count'] = int(rdm.infer_count)
-            record['img_proc_time'] = round(float(getattr(vla_client, 'image_process_time', 0.0)), 1)
-            record['avg_infer_time'] = round(float(rdm.avg_infer_time), 4)
-            record['avg_intra_traj_time'] = round(float(rdm.avg_intra_traj_time), 4)
-            record['avg_inter_traj_time'] = round(float(rdm.avg_inter_traj_time), 4)
-            record['avg_comm_time'] = round(float(rdm.avg_comm_time), 4)
-        except Exception as e:
-            self.logger.debug(f"Failed to capture stats: {e}")
-
-    def pause(self) -> None:
-        """Pause the timer for the currently running record."""
-        with self._lock:
-            running = self._find_running_unlocked()
-            if running is None or running.get('paused_at') is not None:
-                return
-            if running.get('status') != 'running':
-                return
-            running['paused_at'] = time.time()
-            self._dirty = True
-
-    def resume(self) -> None:
-        """Resume the timer for the currently paused record."""
-        with self._lock:
-            running = self._find_running_unlocked()
-            if running is None or running.get('paused_at') is None:
-                return
-            paused_at = float(running.pop('paused_at'))
-            running['paused_s'] = round(float(running.get('paused_s', 0.0)) + (time.time() - paused_at), 1)
-            self._dirty = True
-
-    def set_score(self, record_id: int, score: Optional[float]) -> None:
-        with self._lock:
-            rec = next((r for r in self._records if r['id'] == record_id), None)
-            if rec is None:
-                return
-            rec['score'] = score
-            if score is not None and rec.get('status') not in ('running', 'pending'):
-                rec['status'] = 'scored'
-            if score is None and rec.get('status') == 'scored':
-                rec['status'] = 'switched'
-            self._dirty = True
-
-    def set_note(self, record_id: int, note: str) -> None:
-        with self._lock:
-            rec = next((r for r in self._records if r['id'] == record_id), None)
-            if rec is None:
-                return
-            rec['note'] = note
-            self._dirty = True
-
-    def delete_record(self, record_id: int) -> None:
-        with self._lock:
-            self._records = [r for r in self._records if r['id'] != record_id]
-            self._dirty = True
-
-    def clear_records(self) -> None:
-        with self._lock:
-            self._records = []
-            self._next_id = 1
-            self._session_ts = None
-            self._save_path = None
-            self._dirty = True
-
-    def _flush_to_disk(self) -> None:
-        """Write records to JSON + CSV files."""
-        try:
-            # serializable = [self._record_to_serializable(r) for r in records_copy]
-            # save to json
-            with open(self._eval_json_file, 'w', encoding='utf-8') as f:
-                json.dump(self._eval_records, f, ensure_ascii=False, indent=2)
-
-            # if fmt in ('csv', 'both'):
-            #     csv_path = f"{self._save_path}.csv"
-            #     with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
-            #         writer = csv.writer(f, lineterminator='\n')
-            #         writer.writerow(self.CSV_HEADERS)
-            #         for r in records_copy:
-            #             writer.writerow(self._record_to_csv_row(r))
-
-            # self.logger.debug(f"EvalLogRecorder: flushed {len(records_copy)} records to {self._save_path}")
-        except Exception as e:
-            self.logger.error(f"EvalLogRecorder: flush failed: {e}")
-
-    def _record_to_serializable(self, r: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert internal record to JSON-serializable dict."""
-        def fmt_time(ts):
-            if ts is None:
-                return None
-            return datetime.fromtimestamp(float(ts)).strftime('%Y-%m-%d %H:%M:%S')
-
-        return {
-            'id': r.get('id', ''),
-            'task_idx': r.get('task_idx', 0) + 1,
-            'task_name': r.get('task_name', ''),
-            'sub_task_idx': r.get('sub_task_idx', 0) + 1,
-            'instruction': r.get('instruction', ''),
-            'episode_id': r.get('episode_id'),
-            'start_time': fmt_time(r.get('start_time')),
-            'end_time': fmt_time(r.get('end_time')),
-            'duration_s': r.get('duration_s'),
-            'paused_s': r.get('paused_s', 0),
-            'status': r.get('status', ''),
-            'score': r.get('score'),
-            'note': r.get('note', ''),
-            'obv_fps': r.get('obv_fps'),
-            'infer_count': r.get('infer_count'),
-            'img_proc_time': r.get('img_proc_time'),
-            'avg_infer_time_ms': round(float(r['avg_infer_time']) * 1000, 1) if r.get('avg_infer_time') is not None else None,
-            'avg_traj_time_ms': None,
-            'avg_intra_traj_time_ms': round(float(r['avg_intra_traj_time']) * 1000, 1) if r.get('avg_intra_traj_time') is not None else None,
-            'avg_inter_traj_time_ms': round(float(r['avg_inter_traj_time']) * 1000, 1) if r.get('avg_inter_traj_time') is not None else None,
-            'avg_comm_time_ms': round(float(r['avg_comm_time']) * 1000, 1) if r.get('avg_comm_time') is not None else None,
-        }
 
     def _record_to_csv_row(self, r: Dict[str, Any]) -> list:
-        s = self._record_to_serializable(r)
+        s = self._serialize_record(r)
         return [
             s.get('id', ''),
             s.get('task_idx', ''),
