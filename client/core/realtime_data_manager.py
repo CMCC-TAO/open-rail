@@ -159,11 +159,6 @@ class RealtimeDataManager():
                 if duration > 1e-6:
                     self.observe_fps = (len(self.observe_add_timestamps) - 1) / duration
 
-    def get_observe_fps(self):
-        """Get observation FPS estimated from recent add_observe_data calls."""
-        with self.observe_thread_lock:
-            return float(self.observe_fps)
-
     def update_action_chunk_raw(self, action_chunk, timestamp_chunk):
         """Update the raw action chunk and timestamp chunk predicted by the VLA model.
 
@@ -386,7 +381,7 @@ class RealtimeDataManager():
             "avg_comm_time": self.avg_comm_time,
             "avg_intra_traj_time": self.avg_intra_traj_time,
             "avg_inter_traj_time": self.avg_inter_traj_time,
-            "obv_fps": self.get_observe_fps()
+            "obv_fps": self.observe_fps
         }
     def wait_for_next(self, mode: str = 'sync', wait_time: float = 0.01) -> bool:
         """Wait for next action/frame according to mode.
