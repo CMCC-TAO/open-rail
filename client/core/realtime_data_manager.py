@@ -1,4 +1,3 @@
-import copy
 import time
 import threading
 import numpy as np
@@ -6,7 +5,6 @@ import logging
 from collections import deque
 from ml_collections import ConfigDict
 from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index
-from client.core.inter_chunk_fuser import InterChunkFuser
 
 
 class RealtimeDataManager():
@@ -25,9 +23,8 @@ class RealtimeDataManager():
         """
         self.logger = logging.getLogger(__name__)
         self.rdm_config = rdm_config
-        self.observe_buffer = deque(maxlen=rdm_config.max_len)
-        self.observe_fps_window_size = max(2, int(getattr(rdm_config, 'observe_fps_window_size', 30)))
-        self.observe_add_timestamps = deque(maxlen=self.observe_fps_window_size)
+        self.observe_buffer = deque(maxlen=max(10, rdm_config.max_len))
+        self.observe_add_timestamps = deque(maxlen=max(2, rdm_config.observe_fps_window_size))
         self.observe_fps = 0.0
         self.action_chunks = []
         self.timestamp_chunks = []
@@ -46,12 +43,6 @@ class RealtimeDataManager():
         self.timestamps_fitted = None
         self.action_chunk_index = None
         self.prob_progress = None
-        self.old_buffer = None
-
-        # For visualization purposes
-        self.action_chunk_last = None
-        self.timestamp_last = None
-        self.isDraw = False
 
         # Timing markers for inference, trajectory fitting and control
         self.start_infer_marker = 0.0
@@ -66,11 +57,7 @@ class RealtimeDataManager():
         self.infer_count = 0
 
         # Synchronous Running Flag
-        self.sync_running = False
         self.mode = 'control'
-
-        # Inter-chunk transition / fusion helper
-        self.inter_chunk_fusion = InterChunkFuser(config=self.rdm_config)
 
     def add_infer_count(self):
         """Add one to infer count for each inference step.
@@ -194,53 +181,6 @@ class RealtimeDataManager():
             self.action_chunks = action_chunk
             self.timestamp_chunks = timestamp_chunk
 
-    @run_time_decorator
-    def fusionActionChunks(self, action_chunk, timestamp_chunk):
-        """Fuse new action chunk with existing action chunks.
-        
-        This method is deprecated and should not be used in new code.
-        Use 'update_action_chunk_raw' instead.
-        
-        Args:
-            action_chunk (list): New action chunk to fuse.
-            timestamp_chunk (list): Corresponding timestamp chunk.
-        """
-        candidate_index = 0
-        for index in range(len(timestamp_chunk)):
-            if timestamp_chunk[index] > self.timestamp_chunks[0]:
-                candidate_index = index
-                break
-        assign_index = get_closest_index(self.timestamp_chunks, timestamp_chunk[candidate_index])
-        
-        # Perform fusion
-        target_chunk_len = len(self.timestamp_chunks)
-        currt_chunk_len = len(action_chunk)
-        for index in range(currt_chunk_len - candidate_index):
-            if assign_index + index < target_chunk_len:
-                self.action_chunks[assign_index + index] = (self.action_chunks[assign_index + index] + action_chunk[candidate_index + index]) / 2.0
-                self.timestamp_chunks[assign_index + index] = (self.timestamp_chunks[assign_index + index] + timestamp_chunk[candidate_index + index]) / 2.0
-            else:
-                self.action_chunks.append(action_chunk[candidate_index + index])
-                self.timestamp_chunks.append(timestamp_chunk[candidate_index + index])
-        
-    def popActionData(self, num_samples=32):
-        """Pop action data from the action chunks buffer.
-        
-        This method is deprecated and should not be used in new code.
-        Use 'update_action_chunk_raw' instead.
-        
-        Args:
-            num_samples (int): Number of samples (unused parameter).
-            
-        Returns:
-            tuple: (action, timestamp) or (None, None) if buffer is empty.
-        """
-        with self.action_thread_lock:
-            if self.action_chunks:
-                return self.action_chunks.pop(0), self.timestamp_chunks.pop(0)
-            else:
-                return None, None
-    
     def pop_action_chunk(self, time_offset = 0.0):
         """Returns the action chunk and timestamp chunk with the given time offset and number of samples for trajectory fitting.
 
@@ -275,71 +215,6 @@ class RealtimeDataManager():
         action_chunks_np = np.array(action_chunk_2_joint_chunk(self.action_chunks[start_index:end_index]))
         return timestamp_chunks_np, action_chunks_np
 
-    def getCurrentTime(self):
-        """Get the current time based on the fitted timestamps.
-        
-        This method is deprecated and should not be used in new code.
-        
-        Returns:
-            float: Current time or 0.0 if action_chunk_index is None.
-        """
-        with self.polynomial_thread_lock:
-            if self.action_chunk_index is None:
-                return 0.0
-            else:
-                return self.timestamps_fitted[self.action_chunk_index]
-                
-    def getCurrentActionIndex(self):
-        """Get the current action index.
-        
-        Returns:
-            int: Current index or 0 if action_chunk_index is None.
-        """
-        with self.polynomial_thread_lock:
-            if self.action_chunk_index is None:
-                return 0
-            else:
-                return self.action_chunk_index
-                
-    def getFutureTime(self, index_offset=0):
-        """Get the future time based on the fitted timestamps with an index offset.
-        
-        This method is deprecated and should not be used in new code.
-        
-        Args:
-            index_offset (int): Index offset from current position.
-            
-        Returns:
-            float: Future time or 0.0 if action_chunk_index is None.
-        """
-        with self.polynomial_thread_lock:
-            if self.action_chunk_index is None:
-                return 0.0
-            else:
-                length = len(self.timestamps_fitted)
-                return self.timestamps_fitted[min(length - 1, self.action_chunk_index + index_offset)]
-                
-    def getFittedActionChunk(self, index_offset=0, num_samples=20):
-        """Get fitted action chunk with specified offset and number of samples.
-        
-        This method is deprecated and should not be used in new code.
-        
-        Args:
-            index_offset (int): Index offset from current position.
-            num_samples (int): Number of samples to return.
-            
-        Returns:
-            tuple: (timestamps, action_chunk) or (None, None) if invalid.
-        """
-        with self.polynomial_thread_lock:
-            if self.action_chunk_index is None or num_samples <= 0:
-                return None, None
-            else:
-                total_len = len(self.timestamps_fitted)
-                start_index = min(self.action_chunk_index + index_offset, total_len-1) 
-                end_index = min(self.action_chunk_index + index_offset + num_samples, total_len)
-                return self.timestamps_fitted[start_index:end_index], self.action_chunk_fitted[:, start_index:end_index]
-    
     @staticmethod
     def _apply_gripper_offset(action_chunk, step_indices, gripper_offset):
         source = np.asarray(action_chunk)
@@ -453,17 +328,6 @@ class RealtimeDataManager():
             index = min(self.action_chunk_index, len(self.prob_progress) - 1)
             return self.prob_progress[index]
     
-    def getActionChunk(self):
-        """Get a copy of the current action chunks.
-        
-        This method is deprecated and should not be used in new code.
-        
-        Returns:
-            list: Copy of action chunks.
-        """
-        with self.action_thread_lock:
-            return copy.copy(self.action_chunks)
-    
     def pop_observe_data(self, num_samples = 1):
         """Pop the latest observe data from the buffer.
 
@@ -478,27 +342,6 @@ class RealtimeDataManager():
             if len(self.observe_buffer) >= num_samples:
                 data = self.observe_buffer.pop() if num_samples == 1 else [self.observe_buffer.pop() for _ in range(num_samples)]
         return data
-    
-    def read_observe_data(self):
-        """Read the latest observe data from the buffer.
-        """
-        with self.observe_thread_lock:
-            if len(self.observe_buffer) > 0:
-                data = self.observe_buffer[-1]
-                return data
-            else:
-                return None
-    
-    def pop_observe_data_left(self):
-        """Pop the left most observe data from the buffer.
-
-        Returns:
-            dict: The observe data frame. None if the buffer is empty.
-        """
-        if self.observe_buffer:
-            return self.observe_buffer.popleft()
-        else:
-            return None
     
     def clear(self):
         """Clear all action-related data to ensure fresh action retrieval.
