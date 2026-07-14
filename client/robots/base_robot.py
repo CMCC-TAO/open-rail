@@ -96,7 +96,10 @@ class RobotBase():
         layout = self.action_layout.get(action)
         if layout is None:
             return None
-        current_obs = self.retrieve_observation() # update current_state
+        current_obs=None
+        while current_obs==None:
+            current_obs = self.retrieve_observation() # update current_state
+            time.sleep(0.01)
         if current_obs is None:
             return None
         if self.current_state is None:
