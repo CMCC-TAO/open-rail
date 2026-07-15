@@ -19,7 +19,6 @@ import subprocess
 import sys
 import threading
 import time
-import traceback
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -651,7 +650,9 @@ def _collect_stats() -> dict:
     }
     with client_state.lock:
         vla_client = client_state.vla_client
-        base["paused"] = bool(client_state.running and (client_state.paused_thread_state is not None))
+        # base["running"] = client_state.running,
+        # base["paused"] = bool(client_state.running and (client_state.paused_thread_state is not None))
+        base["paused"] = client_state.paused
     base.update(_collect_resource_stats())
 
     if vla_client is None:
@@ -1396,8 +1397,8 @@ async def _start_client():
         await asyncio.to_thread(_ensure_config_robot_bound)
         vla_client = client_state.vla_client
     except Exception as e:
-        err = traceback.format_exc()
-        logger.error(f"Client init error:\n{err}")
+        # err = traceback.format_exc()
+        logger.exception(f"Client init error: {e}")
         with client_state.lock:
             client_state.running = False
             client_state.vla_client = None
@@ -1434,11 +1435,11 @@ async def _start_client():
                 time.sleep(1.0)
 
         except Exception as e:
-            err = traceback.format_exc()
-            logger.error(f"Client thread error:\n{err}")
+            # err = traceback.format_exc()
+            logger.exception(f"Client thread error: {e}")
             client_state.running = False
             asyncio.run_coroutine_threadsafe(
-                _broadcast_to_web({"type": "error", "data": {"message": str(e), "trace": err}}),
+                _broadcast_to_web({"type": "error", "data": {"message": str(e)}}),
                 loop
             )
         finally:
@@ -1607,13 +1608,12 @@ async def _bg_resume_and_broadcast(vla_client):
     try:
         with client_state.lock:
             restore_state = client_state.paused_thread_state
-            client_state.paused_thread_state = None
         await asyncio.to_thread(_resume_vla_client, vla_client, restore_state)
         with client_state.lock:
             client_state.paused = False
         await _broadcast_to_web({"type": "status", "data": _status_payload(vla_client, "Client resumed.", running=True, paused=False)})
     except Exception as e:
-        logger.warning(f"_bg_resume_and_broadcast failed: {e}")
+        logger.exception(f"Resume failed: {e}")
 
 
 async def _bg_toggle_observe_and_broadcast():
@@ -1623,6 +1623,7 @@ async def _bg_toggle_observe_and_broadcast():
         if vla_client == None:
             with client_state.lock:
                 client_state.running = False
+                client_state.paused = False
             result = _status_abnormal(message='VLA Client instance is None.',
                                     running=False,
                                     paused=False,
@@ -1635,7 +1636,6 @@ async def _bg_toggle_observe_and_broadcast():
         
         with client_state.lock:
             client_state.running = True
-            client_state.paused_thread_state = None
             client_state.paused = False
         # Stop
         if bool(getattr(vla_client, "is_observe_thread_running", False)):
@@ -1645,6 +1645,7 @@ async def _bg_toggle_observe_and_broadcast():
             message = "Observe stopped."
         # Start
         else:
+            # TODO: check needed or not
             await asyncio.to_thread(_ensure_config_robot_bound)
             vla_client = client_state.vla_client
             await asyncio.to_thread(_start_observe, vla_client)
@@ -1653,13 +1654,13 @@ async def _bg_toggle_observe_and_broadcast():
         payload = _status_payload(vla_client, message, running=True, paused=False)
         await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
-        logger.warning(f"_bg_toggle_observe_and_broadcast failed: {e}")
+        logger.exception(f"Toggle observe failed: {e}")
 
 
 async def _bg_toggle_infer_and_broadcast(vla_client):
     try:
         with client_state.lock:
-            client_state.paused_thread_state = None
+            client_state.running = True
             client_state.paused = False
 
         if bool(getattr(vla_client, "is_inference_thread_running", False)):
@@ -1673,13 +1674,13 @@ async def _bg_toggle_infer_and_broadcast(vla_client):
         payload = _status_payload(vla_client, message, running=True, paused=False)
         await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
-        logger.warning(f"_bg_toggle_infer_and_broadcast failed: {e}")
+        logger.exception(f"Toggle infer failed: {e}")
 
 
 async def _bg_toggle_control_and_broadcast(vla_client):
     try:
         with client_state.lock:
-            client_state.paused_thread_state = None
+            client_state.running = True
             client_state.paused = False
 
         if bool(getattr(vla_client, "is_control_thread_running", False)):
@@ -1692,7 +1693,7 @@ async def _bg_toggle_control_and_broadcast(vla_client):
         payload = _status_payload(vla_client, message, running=True, paused=False)
         await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
-        logger.warning(f"_bg_toggle_control_and_broadcast failed: {e}")
+        logger.exception(f"Toggle control failed: {e}")
 
 
 @app.post("/api/client/pause")
@@ -1755,7 +1756,7 @@ async def stop_client():
     with client_state.lock:
         is_active = client_state.running or (client_state.vla_client is not None) or getattr(client_state, "starting", False)
         client_state.running = False
-        client_state.paused_thread_state = None
+        client_state.paused = False
         client_state.stopping = bool(is_active)
 
     if not is_active:
@@ -1803,14 +1804,14 @@ def _shutdown_stop_if_running():
         vla_client = client_state.vla_client
         running = bool(client_state.running and vla_client is not None)
         client_state.running = False
-        client_state.paused_thread_state = None
+        client_state.paused = False
 
-    if running and vla_client is not None:
+    if running:
         logger.info("Client is running during shutdown; execute stop sequence first.")
         try:
             _pause_vla_client(vla_client)
-        except Exception:
-            logger.debug("Failed to pause client during shutdown stop sequence.", exc_info=True)
+        except Exception as e:
+            logger.exception(f"Failed to pause client during shutdown stop sequence: {e}")
 
     _join_worker_thread(timeout_s=5.0)
 
@@ -1845,6 +1846,7 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
             # client_state.vla_client = None
             # client_state.robot = None
             client_state.running = False
+            client_state.paused = False
             client_state.paused_thread_state = None
             client_state.stopping = False
 
