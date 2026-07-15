@@ -86,10 +86,7 @@ class VLAClientAsync():
         self._request_id = 0
 
         # Initialize the dataset writer with the provided recording configuration
-        self.data_record_manager = DataRecordManager(
-            record_config=self.config.record,
-            task=getattr(self.config.language, 'task_id', None)
-        )
+        self.data_record_manager = DataRecordManager(record_config=self.config.record)
 
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
@@ -320,7 +317,7 @@ class VLAClientAsync():
             # with self.show_thread_lock:
                 # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
-            if self.config.record.switch and self.is_control_thread_running and self.is_running:
+            if self.config.record.switch:
                 self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
             
             # with self.show_thread_lock:

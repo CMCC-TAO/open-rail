@@ -90,7 +90,7 @@ async def _lifespan(_: FastAPI):
             logger.warning(f"Failed to apply yaml conf: {e}")
     # print(f"Debug: config_file = {client_state.conf_file}")
     # print(f"Initial client.record config: {client_state.config.record}")
-    # print(f"Final client config: {client_state.config.visualize}")
+    # print(f"Visualize trajectory config: {client_state.config.visualize.trajectory}")
 
     # Use a dedicated thread pool for the asyncio event loop so that
     # asyncio.to_thread() tasks are never queued behind business threads
@@ -1006,6 +1006,8 @@ async def get_config():
     if client_state.config is None:
         cfg = get_client_config()
         client_state.config = cfg
+        # print(f"Debug: return default config")
+    # print(f"DEBUG: visualize trajectory: {client_state.config.visualize.trajectory}")
     cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     return {"status": "ok", "config": cfg_dict}
 
@@ -1031,38 +1033,6 @@ class VisualCameraConfigRequest(BaseModel):
     open_head: Optional[bool] = None
     open_wrist_left: Optional[bool] = None
     open_wrist_right: Optional[bool] = None
-
-
-@app.post("/api/client/visualize/config")
-async def set_visual_camera_cfg(req: VisualCameraConfigRequest):
-    """Update in-memory visualize.camera config (effective immediately)."""
-    payload = req.dict(exclude_none=True)
-    if not payload:
-        return {"status": "ok", "applied": False}
-
-    if client_state.config is None:
-        client_state.config = get_client_config()
-
-    with client_state.lock:
-        visual_root = getattr(client_state.config, "visualize", None)
-        if visual_root is None:
-            visual_root = getattr(client_state.config, "visual", None)
-        cam_cfg = getattr(visual_root, "camera", None) if visual_root is not None else None
-        if cam_cfg is None:
-            return {"status": "ok", "applied": False}
-
-        for k, v in payload.items():
-            if hasattr(cam_cfg, k):
-                setattr(cam_cfg, k, bool(v))
-
-        camera_cfg = {
-            "open_head": bool(getattr(cam_cfg, "open_head", True)),
-            "open_wrist_left": bool(getattr(cam_cfg, "open_wrist_left", True)),
-            "open_wrist_right": bool(getattr(cam_cfg, "open_wrist_right", True)),
-        }
-
-    return {"status": "ok", "applied": True, "camera_cfg": camera_cfg}
-
 
 @app.post("/api/client/config/patch")
 async def patch_config(req: ConfigPatchRequest):
@@ -2165,7 +2135,8 @@ async def client_record_start(req: RecordStartRequest):
         if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
             try:
                 from client.core.data_record_manager import DataRecordManager
-                vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record, task=task_id)
+                vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record)
+                vla_client.data_record_manager.set_task(task_id)
             except Exception as e:
                 raise HTTPException(500, f'Failed to initialize recorder: {e}')
         else:

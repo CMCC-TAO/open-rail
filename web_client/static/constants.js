@@ -93,9 +93,6 @@ function normalizeTrajWindowSpanSec(rawSpanSec, fallback = TRAJ_WINDOW_SPAN_SEC)
   return Math.min(span, TRAJ_WINDOW_SPAN_SEC_MAX);
 }
 
-let _visualPersistTimer = null;
-let _visualPersistInFlight = false;
-
 const App = {
   ws: null,
   wsAlive: false,
@@ -140,7 +137,7 @@ const App = {
     actionEnd: 0,
     actionName: 'arm',
     jointLabels: [],
-    jointSelectionInitialized: false,
+    // jointSelectionInitialized: false,
     // Which joints to display  Set<number>
     selectedJoints: new Set(),
     // Data buffer: { state: [...], action_fitted: [...], action_raw: [...] }

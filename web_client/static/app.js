@@ -262,22 +262,6 @@ async function renderSubTask(subTaskId = null) {
  *   Running (active) |  Stop      |  Pause       |  ✓
  *   Running (paused) |  Stop      |  Resume      |  ✓
  */
-async function syncRuntimeCameraConfig() {
-  if (!App.isRunning) return;
-  try {
-    await apiFetch('/api/client/visualize/config', {
-      method: 'POST',
-      body: JSON.stringify({
-        open_head: !!App.camOpen[0],
-        open_wrist_left: !!App.camOpen[1],
-        open_wrist_right: !!App.camOpen[2],
-      }),
-    });
-  } catch (_) {
-    // no-op
-  }
-}
-
 function setThreadControlUI() {
   const btnObserve = $('btn-observe');
   const btnInfer = $('btn-infer');
@@ -351,7 +335,6 @@ function setRunningUI(running, paused = false) {
     // Camera Visual: connect dedicated WS server when running
     if (running) {
       connectCamWS();
-      // syncRuntimeCameraConfig();
     } else {
       disconnectCamWS();
     }
@@ -370,12 +353,6 @@ function setRunningUI(running, paused = false) {
     }
     $('status-badge').textContent = badgeText;
     $('status-badge').className   = `status-badge ${badgeClass}`;
-
-    // Persist visual state only when transitioning from running -> stopped.
-    // Avoid startup/status-sync overwriting config before user interaction.
-    if (!running && wasRunning) {
-      schedulePersistVisualState(0);
-    }
 
     if (!running) {
       App.isRecording = false;
@@ -552,15 +529,15 @@ async function wireEvents() {
   setupMainParamsResize();
 
   $('btn-apply-config').addEventListener('click', async () => {
-    const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };
-    if (!Object.keys(patchToApply).length) { toast('No pending changes.', 'warn', 2000); return; }
+    if (!Object.keys(App.pendingPatch).length) { toast('No pending changes.', 'warn', 2000); return; }
 
     const uiState = captureConfigTreeUiState();
     const restoreConfigTreeState = () => restoreConfigTreeUiState(uiState);
 
     try {
-      const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
-      App.config = res.config || {}; App.pendingPatch = {};
+      const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
+      App.config = res.config || {};
+      App.pendingPatch = {};
       clearPending();
       renderConfigTree(App.config);
       renderRecordingConfigTree(App.config);
@@ -634,10 +611,10 @@ async function wireEvents() {
       }
 
       // Apply config patch BEFORE starting
-      const patchToApply = { ...App.pendingPatch, ...getVisualStatePatch() };
-      if (Object.keys(patchToApply).length) {
+      // const patchToApply = { ...App.pendingPatch };
+      if (Object.keys(App.pendingPatch).length) {
         try {
-          const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: patchToApply }) });
+          const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
           App.config = res.config || App.config;
           applyVisualConfig(App.config);
           App.pendingPatch = {};
@@ -691,8 +668,6 @@ async function wireEvents() {
       const res = await apiFetch('/api/client/observe/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       applyThreadState(res?.data);
       connectCamWS();
-      // syncRuntimeCameraConfig();
-      // setThreadControlUI();
     } catch (e) {
       if (e && e.name === 'AbortError') {
         // manual abort from repeated click; keep silent.
@@ -762,6 +737,12 @@ function startStatusPoll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initConfDir().then(async () => {
+    await loadConfigFromServer();
+    await loadDefaultLangFile();
+    applyLangConfigSelection(true);
+    wireEvents();
+  });
   setupCameraPanel();
   setupTrajPanel();
   setupLangPanel();
@@ -771,10 +752,4 @@ document.addEventListener('DOMContentLoaded', () => {
   buildJointSelector();                  // build from the active robot action_layout
   connectWS();
   startStatusPoll();
-  initConfDir().then(async () => {
-    await loadConfigFromServer();
-    await loadDefaultLangFile();
-    applyLangConfigSelection(true);
-    wireEvents();
-  });
 });

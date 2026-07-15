@@ -1222,7 +1222,7 @@ function syncTrajWindowSpanUI() {
   if (value) value.textContent = `${uiValue}s`;
 }
 
-function applyVisualConfig(cfg = App.config) {
+async function applyVisualConfig(cfg = App.config) {
   const root = (cfg && typeof cfg === 'object') ? cfg : {};
   syncTrajLayoutFromConfig(root);
   // Prefer new key `visualize`, keep backward compatibility with legacy `visual`.
@@ -1240,7 +1240,7 @@ function applyVisualConfig(cfg = App.config) {
     : (Array.isArray(camCfg.default_open) ? camCfg.default_open : App.camOpen);
   const nextCamOpen = [0, 1, 2].map(i => !!camOpenCfg[i]);
   for (let i = 0; i < 3; i++) {
-    if (App.camOpen[i] !== nextCamOpen[i]) toggleCamera(i);
+    if (App.camOpen[i] !== nextCamOpen[i]) toggleCamera(i, updataConfig=false);
   }
   const camAllBtn = $('btn-cam-all-toggle');
   if (camAllBtn) {
@@ -1252,25 +1252,24 @@ function applyVisualConfig(cfg = App.config) {
   if (typeof trajCfg.play === 'boolean') {
     App.traj.paused = !trajCfg.play;
   } else {
-    App.traj.paused = _toBool(trajCfg.default_paused, App.traj.paused);
+    App.traj.paused = false;
   }
   App.traj.updateIntervalMs = _toInt(trajCfg.updata_period, App.traj.updateIntervalMs || DEFAULT_TRAJ_UPDATE_MS, 16);
   const cfgWindowSpanSec = Number(trajCfg.window_span_sec ?? trajCfg.window_sec ?? trajCfg.window_seconds);
   App.traj.windowSpanSec = normalizeTrajWindowSpanSec(cfgWindowSpanSec, App.traj.windowSpanSec);
   syncTrajWindowSpanUI();
 
-  const sourceCfgRaw = Array.isArray(trajCfg.source)
-    ? trajCfg.source
-    : (Array.isArray(trajCfg.default_source) ? trajCfg.default_source : null);
+  const sourceCfgRaw = Array.isArray(trajCfg.source)? trajCfg.source : null;
   if (Array.isArray(sourceCfgRaw)) {
     const source = new Set();
     sourceCfgRaw.forEach(k => {
       const key = String(k).trim().toLowerCase();
       if (key === 'state') source.add('state');
-      else if (key === 'action' || key === 'actionfitted' || key === 'action_fitted') source.add('action_fitted');
-      else if (key === 'origin' || key === 'actionraw' || key === 'action_raw') source.add('action_raw');
+      else if (key === 'actionfitted' || key === 'action_fitted') source.add('action_fitted');
+      else if (key === 'actionraw' || key === 'action_raw') source.add('action_raw');
     });
     App.traj.source = source;
+    // syncSrcButtons(updateConfig=false)
   }
 
   const selectedJointsRaw = trajCfg.selected_joints ?? trajCfg.default_selected_joints;
@@ -1333,109 +1332,28 @@ function applyVisualConfig(cfg = App.config) {
 
   if (App.isRunning) {
     connectCamWS();
-    // syncRuntimeCameraConfig();
   }
 }
 
-function getVisualStatePatch() {
-  return {
-    'visualize.camera.open_head': !!App.camOpen[0],
-    'visualize.camera.open_wrist_left': !!App.camOpen[1],
-    'visualize.camera.open_wrist_right': !!App.camOpen[2],
-    'visualize.trajectory.play': !App.traj.paused,
-    'visualize.trajectory.source': [...App.traj.source].map(s => {
-      if (s === 'action_fitted') return 'ActionFitted';
-      if (s === 'action_raw') return 'ActionRaw';
-      return 'State';
-    }),
-    'visualize.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
-    'visualize.trajectory.window_span_sec': normalizeTrajWindowSpanSec(App.traj.windowSpanSec, TRAJ_WINDOW_SPAN_SEC),
-  };
-}
-
-function syncVisualStateToLocalConfig(patch) {
-  if (!App.config || typeof App.config !== 'object') App.config = {};
-  if (!App.config.visualize || typeof App.config.visualize !== 'object') App.config.visualize = {};
-  if (!App.config.visualize.camera || typeof App.config.visualize.camera !== 'object') App.config.visualize.camera = {};
-  if (!App.config.visualize.trajectory || typeof App.config.visualize.trajectory !== 'object') App.config.visualize.trajectory = {};
-
-  App.config.visualize.camera.open_head = patch['visualize.camera.open_head'];
-  App.config.visualize.camera.open_wrist_left = patch['visualize.camera.open_wrist_left'];
-  App.config.visualize.camera.open_wrist_right = patch['visualize.camera.open_wrist_right'];
-  App.config.visualize.trajectory.play = patch['visualize.trajectory.play'];
-  delete App.config.visualize.trajectory.default_paused;
-  App.config.visualize.trajectory.source = patch['visualize.trajectory.source'];
-  App.config.visualize.trajectory.selected_joints = patch['visualize.trajectory.selected_joints'];
-  App.config.visualize.trajectory.window_span_sec = patch['visualize.trajectory.window_span_sec'];
-}
-
-function syncVisualStateToConfigInputs(patch) {
-  Object.entries(patch).forEach(([dotKey, value]) => {
-    syncCfgInputsByDotKey(dotKey, value, null);
-  });
-}
-
-async function persistVisualStateNow() {
-  const patch = getVisualStatePatch();
-  syncVisualStateToLocalConfig(patch);
-  syncVisualStateToConfigInputs(patch);
-
-  // Visual panel changes are auto-applied; never show "unsaved changes" for them.
-  Object.keys(App.pendingPatch)
-    .filter(k => k.startsWith('visualize.camera.') || k.startsWith('visualize.trajectory.'))
-    .forEach(k => delete App.pendingPatch[k]);
-  if (!Object.keys(App.pendingPatch).length) clearPending();
-
-  if (App.isRunning) {
-    try {
-      await apiFetch('/api/client/visualize/config', {
-        method: 'POST',
-        body: JSON.stringify({
-          open_head: patch['visualize.camera.open_head'],
-          open_wrist_left: patch['visualize.camera.open_wrist_left'],
-          open_wrist_right: patch['visualize.camera.open_wrist_right'],
-        }),
-      });
-    } catch (_) {
-      // no-op: keep local UI effective
-    }
-    return;
-  }
-
-  if (_visualPersistInFlight) return;
-
-  _visualPersistInFlight = true;
-  try {
-    const res = await apiFetch('/api/client/config/patch', {
-      method: 'POST',
-      body: JSON.stringify({ patch }),
-    });
-    App.config = res.config || App.config;
-
-    const confRes = await apiFetch('/api/client/config/path');
-    if (confRes.path) {
-      await apiFetch('/api/client/config/save', {
-        method: 'POST',
-        body: JSON.stringify({ path: confRes.path }),
-      });
-    }
-  } catch (_) {
-    // no-op: visual state already effective in UI
-  } finally {
-    _visualPersistInFlight = false;
-  }
-}
-
-function schedulePersistVisualState(delay = 120) {
-  if (_visualPersistTimer) clearTimeout(_visualPersistTimer);
-  _visualPersistTimer = setTimeout(() => {
-    _visualPersistTimer = null;
-    persistVisualStateNow();
-  }, delay);
-}
+// function getVisualStatePatch() {
+//   return {
+//     'visualize.camera.open_head': !!App.camOpen[0],
+//     'visualize.camera.open_wrist_left': !!App.camOpen[1],
+//     'visualize.camera.open_wrist_right': !!App.camOpen[2],
+//     'visualize.trajectory.play': !App.traj.paused,
+//     'visualize.trajectory.source': [...App.traj.source].map(s => {
+//       if (s === 'action_fitted') return 'ActionFitted';
+//       if (s === 'action_raw') return 'ActionRaw';
+//       return 'State';
+//     }),
+//     'visualize.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
+//     'visualize.trajectory.window_span_sec': normalizeTrajWindowSpanSec(App.traj.windowSpanSec, TRAJ_WINDOW_SPAN_SEC),
+//   };
+// }
 
 async function loadConfigFromServer() {
   try {
+    // TODO: confirm is needed or not
     const res = await apiFetch('/api/client/config');
     App.config = res.config || {};
     App.pendingPatch = {};

@@ -622,18 +622,18 @@ document.addEventListener('DOMContentLoaded', function() {
   if (typeof loadExecLogFromStorage === 'function') loadExecLogFromStorage();
   
   // Set initial state without triggering auto-start
-  if (execlogChk) {
-    ExecLog.enabled = !!execlogChk.checked;
-    toggleExecLog(ExecLog.enabled);
-  }
+  // if (execlogChk) {
+  //   ExecLog.enabled = !!execlogChk.checked;
+  //   toggleExecLog(ExecLog.enabled);
+  // }
   
   if (typeof renderExecLog === 'function') renderExecLog();
   if (typeof syncExecLogRecButton === 'function') syncExecLogRecButton();
 
   // Initialization complete - allow new records to be created after a short delay
-  setTimeout(() => {
-    ExecLog.isInitializing = false;
-  }, 500);
+  // setTimeout(() => {
+  //   ExecLog.isInitializing = false;
+  // }, 500);
 
   // On page unload, finalize any running record
   window.addEventListener('beforeunload', () => {

@@ -214,7 +214,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "propagate": False,
             },
             "client.core.data_record_manager": {
-                "handlers": ["console", "file"],
+                "handlers": ["file"],
                 "level": "DEBUG",
                 "propagate": False,
             },

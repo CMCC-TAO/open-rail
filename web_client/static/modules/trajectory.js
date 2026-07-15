@@ -107,9 +107,9 @@ function _makeTrajJointLabels(count) {
   return Array.from({ length: n }, (_, i) => `J${i}`);
 }
 
-function _defaultSelectedJoints(count) {
-  return new Set(Array.from({ length: Math.min(4, Math.max(0, count)) }, (_, i) => i));
-}
+// function _defaultSelectedJoints(count) {
+//   return new Set(Array.from({ length: Math.min(4, Math.max(0, count)) }, (_, i) => i));
+// }
 
 function syncTrajLayoutFromConfig(cfg = App.config, fallbackCount = TRAJ_JOINT_COUNT) {
   const t = App.traj;
@@ -123,9 +123,9 @@ function syncTrajLayoutFromConfig(cfg = App.config, fallbackCount = TRAJ_JOINT_C
   t.numJoints = count;
   t.jointLabels = _makeTrajJointLabels(count);
 
-  const kept = new Set([...t.selectedJoints].filter(i => Number.isInteger(i) && i >= 0 && i < count));
-  t.selectedJoints = t.jointSelectionInitialized ? kept : _defaultSelectedJoints(count);
-  t.jointSelectionInitialized = true;
+  // const kept = new Set([...t.selectedJoints].filter(i => Number.isInteger(i) && i >= 0 && i < count));
+  // t.selectedJoints = t.jointSelectionInitialized ? kept : _defaultSelectedJoints(count);
+  // t.jointSelectionInitialized = true;
 
   if (changed) renderJointSelector();
   return changed;
@@ -222,7 +222,7 @@ function buildJointSelector(numJoints) {
   syncTrajLayoutFromConfig(App.config, numJoints || TRAJ_JOINT_COUNT);
 }
 
-function renderJointSelector() {
+async function renderJointSelector() {
   const t = App.traj;
   const count = getTrajJointCount();
   const labels = getTrajJointLabels();
@@ -245,7 +245,7 @@ function renderJointSelector() {
     chip.textContent = labels[i] ?? `J${i}`;
     chip.dataset.idx = i;
     _applyChipColor(chip, t.selectedJoints.has(i), color);
-    chip.addEventListener('click', () => {
+    chip.addEventListener('click', async () => {
       if (t.selectedJoints.has(i)) {
         t.selectedJoints.delete(i);
         chip.classList.remove('active');
@@ -256,7 +256,23 @@ function renderJointSelector() {
         _applyChipColor(chip, true, color);
       }
       refreshUnifiedChart();
-      schedulePersistVisualState();
+      const patch = {
+        'visualize.trajectory.selected_joints': [...t.selectedJoints].sort((a, b) => a - b),
+      };
+      const patchRes = await apiFetch('/api/client/config/patch', {
+        method: 'POST',
+        body: JSON.stringify({ patch }),
+      });
+      App.config = patchRes.config || App.config;
+
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          body: JSON.stringify({ path: confRes.path }),
+        });
+      }
+      // console.log('selectedJoints:', t.selectedJoints);
     });
     if (i < split) {
       rowL.insertBefore(chip, btnAll);   // insert before All
@@ -584,7 +600,7 @@ function handleCenterPanelCollapseToggle(target) {
 }
 
 /* ── Wire trajectory controls ── */
-function setupTrajPanel() {
+async function setupTrajPanel() {
   // Source checkboxes: toggle independently; all can be deselected
   const srcChecks = {
     state: $('chk-traj-state'),
@@ -593,7 +609,7 @@ function setupTrajPanel() {
   };
   const btnAllSource = $('btn-traj-all');
 
-  function syncSrcButtons() {
+  async function syncSrcButtons(updateConfig = true) {
     Object.entries(srcChecks).forEach(([k, chk]) => {
       if (!chk) return;
       chk.checked = App.traj.source.has(k);
@@ -603,8 +619,48 @@ function setupTrajPanel() {
       const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
       btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
+    if (updateConfig) {
+      const patch = getTrajSourceStatePatch();
+      const patchRes = await apiFetch('/api/client/config/patch', {
+        method: 'POST',
+        body: JSON.stringify({ patch }),
+      });
+      App.config = patchRes.config || App.config;
+
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          body: JSON.stringify({ path: confRes.path }),
+        });
+      }
+    }
   }
-  function setSource(src, enabled) {
+  function getTrajSourceStatePatch() {
+    return {
+      'visualize.trajectory.source': [...App.traj.source].map(s => {
+        if (s === 'action_fitted') return 'ActionFitted';
+        if (s === 'action_raw') return 'ActionRaw';
+        return 'State';
+      }),
+    };
+  }
+  function getTrajPlayStatePatch() {
+    return {
+      'visualize.trajectory.play': !App.traj.paused,
+    };
+  }
+  function getTrajJointsStatePatch() {
+    return {
+      'visualize.trajectory.selected_joints': [...App.traj.selectedJoints].sort((a, b) => a - b),
+    };
+  }
+  function getTrajWindowSpanStatePatch() {
+    return {
+      'visualize.trajectory.window_span_sec': normalizeTrajWindowSpanSec(App.traj.windowSpanSec, TRAJ_WINDOW_SPAN_SEC),
+    };
+  }
+  async function setSource(src, enabled) {
     const s = App.traj.source;
     if (enabled) s.add(src);
     else s.delete(src);
@@ -612,7 +668,6 @@ function setupTrajPanel() {
     App.traj.dirty = true;
     syncSrcButtons();
     refreshUnifiedChart();
-    schedulePersistVisualState();
   }
   srcChecks.state?.addEventListener('change', e => setSource('state', !!e.target.checked));
   srcChecks.action_fitted?.addEventListener('change', e => setSource('action_fitted', !!e.target.checked));
@@ -628,26 +683,38 @@ function setupTrajPanel() {
       App.traj.dirty = true;
       syncSrcButtons();
       refreshUnifiedChart();
-      schedulePersistVisualState();
     });
   }
-  syncSrcButtons();
+  // syncSrcButtons(updateConfig=false);
 
   const windowSlider = $('traj-window-span-slider');
-  const applyWindowSpan = (raw) => {
+  const applyWindowSpan = async (raw) => {
     const next = normalizeTrajWindowSpanSec(Number(raw), App.traj.windowSpanSec);
     App.traj.windowSpanSec = next;
     syncTrajWindowSpanUI();
     if (App.traj.source.size > 0) recomputeTrajXWindow();
     App.traj.dirty = true;
     refreshUnifiedChart();
-    schedulePersistVisualState();
+    const patch = getTrajWindowSpanStatePatch();
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   };
   if (windowSlider) {
     windowSlider.addEventListener('input', e => applyWindowSpan(e.target.value));
     windowSlider.addEventListener('change', e => applyWindowSpan(e.target.value));
   }
-  syncTrajWindowSpanUI();
+  // syncTrajWindowSpanUI();
 
   // Play/Pause
   function syncTrajPlayButton() {
@@ -659,14 +726,27 @@ function setupTrajPanel() {
     btn.className = 'btn btn-xs btn-ctrl';
   }
 
-  $('btn-traj-pause').addEventListener('click', () => {
+  $('btn-traj-pause').addEventListener('click', async () => {
     App.traj.paused = !App.traj.paused;
     syncTrajPlayButton();
     if (!App.traj.paused) {
       App.traj.dirty = true;
       refreshUnifiedChart();
     }
-    schedulePersistVisualState();
+    const patch = getTrajPlayStatePatch();
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   });
   // syncTrajPlayButton();
 
@@ -691,7 +771,7 @@ function setupTrajPanel() {
   syncCenterPanelCollapseUi();
 
   // Select all / none
-  $('btn-joints-all').addEventListener('click', () => {
+  $('btn-joints-all').addEventListener('click', async () => {
     const t = App.traj;
     for (let i = 0; i < getTrajJointCount(); i++) {
       if (!t.selectedJoints.has(i)) {
@@ -702,10 +782,23 @@ function setupTrajPanel() {
     }
     t.dirty = true;
     refreshUnifiedChart();
-    schedulePersistVisualState();
+    const patch = getTrajJointsStatePatch();
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   });
 
-  $('btn-joints-none').addEventListener('click', () => {
+  $('btn-joints-none').addEventListener('click', async () => {
     const t = App.traj;
     [...t.selectedJoints].forEach(i => {
       const chip = document.querySelector(`.joint-sel-chip[data-idx="${i}"]`);
@@ -713,7 +806,20 @@ function setupTrajPanel() {
     });
     t.selectedJoints.clear();
     refreshUnifiedChart();
-    schedulePersistVisualState();
+    const patch = getTrajJointsStatePatch();
+    const patchRes = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = patchRes.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
   });
 
   startTrajUpdateTimer();
