@@ -22,9 +22,12 @@ class TaskLanguageManager:
         self._check_config()
 
         self.task_language_map: Dict[str, List[str]] = self._load_task_language_map(self.config.file_path)
-        self.currt_language_instruction: str = self._get_current_language_instruction()
+        self.currt_language_instruction: str = ''
+        self.currt_language_instruction, _ = self._retrieve_language_instruction(task_id=self.config.task_id,
+                                                                                sub_task_id=self.config.sub_task_id)
         self.task_progress_queue: Deque[float] = deque()
-        self.ready_for_advance: bool = True
+        self.ready_for_try: bool = True
+        self.ready_for_confirm: bool = False
         self.sub_task_id_tmp: int = int(self.config.sub_task_id)
         self.logger.info(f"Task language manager inited. tasks={self.task_language_map}, currt_language_instruction={self.currt_language_instruction}")
 
@@ -76,8 +79,10 @@ class TaskLanguageManager:
         self.sub_task_id_tmp = 0
         self.config.sub_task_id = 0
         self.task_progress_queue.clear()
-        self.ready_for_advance=True
-        self.currt_language_instruction: str = self._get_current_language_instruction()
+        self.ready_for_try = True
+        self.ready_for_confirm = False
+        self.currt_language_instruction, _ = self._retrieve_language_instruction(task_id=self.config.task_id,
+                                                                                sub_task_id=self.config.sub_task_id)
     def _resolve_task_file_path(self, file_path: str) -> str:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return file_path if os.path.isabs(file_path) else os.path.join(root_dir, "conf", file_path)
@@ -121,59 +126,58 @@ class TaskLanguageManager:
             self.logger.warning(f"Failed to load task language map and return empty dict.")
             return {}
 
-    def _get_current_language_instruction(self) -> str:
+    def _retrieve_language_instruction(self, task_id: int, sub_task_id: int) -> str:
         """Sync current language text from config.task_id/sub_task_id."""
         # Check if task_language_map is empty first
         if not self.task_language_map:
             self.logger.warning("Task language map is empty, returning empty string.")
-            self.config.sub_task_id = 0
             return ""
 
-        task_id = self.config.task_id
-        sub_task_id = int(self.config.sub_task_id)
         task_cmds = self.task_language_map.get(task_id, [])
 
         # If no commands found for the current task_id but task_language_map is not empty,
         # use the first available task_id
         if not task_cmds:
             fallback_task_id = next(iter(self.task_language_map.keys()))
-            self.logger.warning(f"No commands found for task_id '{task_id}', falling back to '{fallback_task_id}'.")
-            self.config.task_id = fallback_task_id
             task_cmds = self.task_language_map.get(fallback_task_id, [])
+            self.logger.warning(f"No commands found for task_id '{task_id}', falling back to '{fallback_task_id}'.")
+            task_id = fallback_task_id
 
         # Ensure sub_task_id is within valid range
         sub_task_id = max(0, min(sub_task_id, len(task_cmds) - 1))
-        self.config.sub_task_id = sub_task_id
-        self.logger.debug(f"Synchronized language instruction for task_id='{self.config.task_id}', sub_task_id={self.config.sub_task_id}.")
-        return task_cmds[sub_task_id]
+        self.logger.debug(f"Retrieve language instruction for task_id='{task_id}', sub_task_id={sub_task_id}.")
+        return task_cmds[sub_task_id], sub_task_id
 
-    def advance_subtask(self) -> None:
-        """Advance sub task id cyclically under current task and return language."""
+    def try_advance_subtask(self) -> None:
+        """Try to advance sub task id cyclically under current task and update language."""
         # Check if ready for advance based on task progress
-        if self.ready_for_advance:
+        if self.ready_for_try:
             avg_task_progress = self._average_task_progress(win_size=self.config.task_progress_win_size)
             # self.logger.debug(f"Avg task progress: {avg_task_progress:.2f}")
             if avg_task_progress >= self.config.task_progress_threshold:
-                self.ready_for_advance = False  # Reset advance flag until next threshold is reached
+                self.ready_for_try = False  # Reset advance flag until next threshold is reached
+                self.ready_for_confirm = True
                 self.logger.info(f"Task progress threshold reached: {avg_task_progress:.2f} > {self.config.task_progress_threshold:.2f}, advance to next subtask.")
 
-                self.config.sub_task_id += 1
-                self.currt_language_instruction = self._get_current_language_instruction()
-                self.sub_task_id_tmp = self.config.sub_task_id
+                self.sub_task_id_tmp = self.config.sub_task_id + 1
+                # self.config.sub_task_id += 1
+                self.currt_language_instruction, self.sub_task_id_tmp = self._retrieve_language_instruction(task_id=self.config.task_id,
+                                                                                    sub_task_id=self.sub_task_id_tmp)
         # return self.currt_language_instruction
 
     def reload(self) -> None:
         """Reload task file and re-sync language from current config."""
         self.task_language_map = self._load_task_language_map(self.config.file_path)
-        self.currt_language_instruction = self._get_current_language_instruction()
+        self.currt_language_instruction, _ = self._retrieve_language_instruction(task_id=self.config.task_id,
+                                                                                sub_task_id=self.config.sub_task_id)
 
     def add_task_progress(self, progress: float) -> None:
         """Add a new task progress value to the queue."""
         self.task_progress_queue.append(progress)
 
-    def reset_task_progress(self, language_instruction: str, task_progress_next: np.array) -> None:
-        """After advanced to next sub-task, clear task progress queue and wait for advancing again."""
-        if self.ready_for_advance == False and language_instruction == self.currt_language_instruction:
+    def confirm_advance_subtask(self, language_instruction: str, task_progress_next: np.array) -> None:
+        """After try to advance to next sub-task, clear task progress queue and wait for advancing again."""
+        if self.ready_for_confirm == True and language_instruction == self.currt_language_instruction:
             # Compute task progress for the next sub-task based on the provided task_progress_next array
             length = min(len(task_progress_next), self.config.task_progress_win_size)
             avg_task_progress_next = np.mean(task_progress_next[:length]) if length > 0 else 0.0
@@ -182,7 +186,14 @@ class TaskLanguageManager:
                 self.logger.info(f"Resetting task progress for next subtask. Initial avg progress: {avg_task_progress_next:.2f}")
                 self.config.sub_task_id = self.sub_task_id_tmp  # Sign the sub_task_id to the new one
                 self.task_progress_queue.clear()
-                self.ready_for_advance = True
+                self.ready_for_try = True
+                self.ready_for_confirm = False
+            else:
+                self.logger.info(f"Task progress is not ready to advance to next subtask: {avg_task_progress_next:.2f}")
+                self.currt_language_instruction, _ = self._retrieve_language_instruction(task_id=self.config.task_id,
+                                                                                sub_task_id=self.config.sub_task_id)
+                self.ready_for_try = True
+                self.ready_for_confirm = False
 
     def _average_task_progress(self, win_size: int) -> float:
         """Return average of the latest win_size task progress values, or 0.0 if not enough data."""

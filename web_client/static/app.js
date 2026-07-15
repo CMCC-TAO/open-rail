@@ -21,7 +21,7 @@ function renderStats(data) {
   $('val-net-latency').textContent   = data.avg_comm_time != null
     ? (data.avg_comm_time * 1000).toFixed(1) + ' ms' : '–';
 
-  updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
+  updateTaskProgress(data?.current_prob_progress, data?.sub_task_id);
 
   const cpuVal = Number(data.cpu_usage);
   const gpuVal = Number(data.gpu_usage);
@@ -52,9 +52,9 @@ function renderStats(data) {
   // Update ZMQ info panel with data from the server
   updateZmqInfoPanel(data);
   // Update ZMQ indicator based on zmq_connected status from server
-  if (typeof data.zmq_connected !== 'undefined') {
-    updateZMQIndicator(!!data.zmq_connected);
-  }
+  // if (typeof data.zmq_connected !== 'undefined') {
+  updateZMQIndicator(!!data.zmq_connected);
+  // }
 
 }
 
@@ -119,7 +119,7 @@ function updateTaskProgress(rawProgress, subTaskId = null) {
   fillEl.style.width = `${(clamped * 100).toFixed(1)}%`;
   valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
   renderSubTask(subTaskId);
-  handleAutoModeCompletion(clamped, subTaskId);
+  // handleAutoModeCompletion(clamped, subTaskId);
 }
 
 async function handleAutoModeCompletion(progress, subTaskId = null) {

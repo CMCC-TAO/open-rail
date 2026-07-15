@@ -349,7 +349,7 @@ class VLAClientAsync():
             if self.config.language.auto_mode == True:
                 # Automatically switch language instruction based on prob_progress changes
                 self.task_language_manager.add_task_progress(progress=prob_progress)
-                self.task_language_manager.advance_subtask()
+                self.task_language_manager.try_advance_subtask()
         current_state = getattr(self.robot, 'current_state', None)
         self.visualize_server.update_chart_data(
             action_fitted=action_fitted,
@@ -568,7 +568,7 @@ class VLAClientAsync():
             self.realtime_data_manager.compute_avg_inter_traj_time()
             self.realtime_data_manager.compute_avg_comm_time(avg_infer_time=avg_infer_time)
             if self.config.language.auto_mode == True:
-                self.task_language_manager.reset_task_progress(
+                self.task_language_manager.confirm_advance_subtask(
                     language_instruction=currt_language_instruction,
                     task_progress_next=task_progress_fitted
                 )
