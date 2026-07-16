@@ -92,6 +92,14 @@ class TaskLanguageManager:
         if self.config.auto_mode and self.is_task_finished:
             # new task
             self.is_task_finished = False
+    @property
+    def status(self):
+        return {
+            "language": self.currt_language_instruction,
+            "sub_task_id": self.config.sub_task_id,
+            "task_id": self.config.task_id,
+            "task_finished": self.is_task_finished
+        }
     def _resolve_task_file_path(self, file_path: str) -> str:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return file_path if os.path.isabs(file_path) else os.path.join(root_dir, "conf", file_path)

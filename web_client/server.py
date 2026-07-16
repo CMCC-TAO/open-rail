@@ -661,7 +661,7 @@ def _collect_stats() -> dict:
     try:
         base.update(vla_client.thread_status)
         base.update(vla_client.runtime_status)
-        base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
+        base.update(vla_client.language_status)
         # add zmq heartbeat status info
         if hasattr(vla_client, 'vla_zmq') and vla_client.vla_zmq is not None:
             base["zmq_connected"] = bool(getattr(vla_client.vla_zmq, "is_connected", False))
@@ -683,13 +683,14 @@ def _collect_stats() -> dict:
         # base["current_action"]  = [round(float(x), 4) for x in current_action]
         # base["info_obs"]        = {k: str(v) for k, v in info_obs.items()}
         # base["info_act"]        = {k: str(v) for k, v in info_act.items()}
-        try:
-            # base["current_prob_progress"] = float(info_act.get("current_prob_progress", 0.0))
-            base["sub_task_id"] = int(vla_client.config.language.sub_task_id) if hasattr(vla_client.config.language, 'sub_task_id') else None
-            # print(f"Debug: sub_task_id: {vla_client.config.language.sub_task_id}")
-        except Exception as e:
-            # base["current_prob_progress"] = 0.0
-            logger.error("Failed to get sub task id from language config: {e}")
+        # try:
+        #     # base["current_prob_progress"] = float(info_act.get("current_prob_progress", 0.0))
+        #     base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
+        #     base["sub_task_id"] = int(vla_client.config.language.sub_task_id) if hasattr(vla_client.config.language, 'sub_task_id') else None
+        #     # print(f"Debug: sub_task_id: {vla_client.config.language.sub_task_id}")
+        # except Exception as e:
+        #     # base["current_prob_progress"] = 0.0
+        #     logger.error("Failed to get sub task id from language config: {e}")
         # base["debug_info"]      = str(vla_client.debug_info)
         # base["config_snapshot"] = {
         #     "fps":              cfg.observer.fps,

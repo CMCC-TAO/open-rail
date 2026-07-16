@@ -261,6 +261,10 @@ class VLAClientAsync():
         }
         status.update(self.realtime_data_manager.runtime_status)
         return status
+
+    @property
+    def language_status(self):
+        return self.task_language_manager.status
     #################### VLA Client Inline functions ####################
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
