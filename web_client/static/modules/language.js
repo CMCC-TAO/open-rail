@@ -496,13 +496,7 @@ async function deleteLangSubtask() {
   const newIdx = Math.max(0, Math.min(idx, LangCmd.tasks[taskName].length - 1));
   if (LangCmd.tasks[taskName].length > 0) {
     subtaskSel.value = String(newIdx);
-    // renderLangSubtaskSelect();
-    const textEl = $('lang-cmd-text');
-    const lang = textEl ? textEl.value.trim() : '';
-    if (lang) {
-      App._langSwitching = true;
-      try { await sendLanguageSet(lang); } finally { App._langSwitching = false; }
-    }
+    $('lang-cmd-text').value = LangCmd.tasks[taskName][newIdx];
   } else {
     $('lang-cmd-text').value = '';
   }
