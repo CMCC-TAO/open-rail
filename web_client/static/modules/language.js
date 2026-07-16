@@ -238,7 +238,6 @@ function setupLangPanel() {
   if (taskSel) {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
-      // App.langAuto.lastProgress = null;
 
       // Default select first sub-task after task switch.
       const taskName = taskSel.value;
@@ -281,7 +280,6 @@ function setupLangPanel() {
 
   if (autoChk) {
     autoChk.addEventListener('change', async () => {
-      // App.langAuto.lastProgress = null;
       const enabled = !!autoChk.checked;
       setAutoModeEditable(enabled);
 

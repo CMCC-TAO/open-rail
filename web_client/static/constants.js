@@ -119,11 +119,6 @@ const App = {
   // Camera open/close state — default all closed
   camOpen: [false, false, false],
 
-  // Language auto mode state
-  langAuto: {
-    lastProgress: null,
-  },
-
   // ── Trajectory chart state ──
   traj: {
     // Set<'state'|'action_fitted'|'action_raw'> — which sources to display (can be combined)

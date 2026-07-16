@@ -21,7 +21,7 @@ function renderStats(data) {
   $('val-net-latency').textContent   = data.avg_comm_time != null
     ? (data.avg_comm_time * 1000).toFixed(1) + ' ms' : '–';
 
-  updateTaskProgress(data?.current_prob_progress, data?.sub_task_id);
+  updateTaskProgress(data?.current_prob_progress, data?.sub_task_id, data?.task_finished);
 
   const cpuVal = Number(data.cpu_usage);
   const gpuVal = Number(data.gpu_usage);
@@ -102,7 +102,7 @@ function renderKV(containerId, obj) {
 }
 
 
-function updateTaskProgress(rawProgress, subTaskId = null) {
+async function updateTaskProgress(rawProgress, subTaskId = null, taskFinished = false) {
   const fillEl = $('task-progress-fill');
   const valueEl = $('task-progress-value');
   if (!fillEl || !valueEl) return;
@@ -111,7 +111,6 @@ function updateTaskProgress(rawProgress, subTaskId = null) {
   if (!Number.isFinite(parsed)) {
     fillEl.style.width = '0%';
     valueEl.textContent = '--';
-    // App.langAuto.lastProgress = null;
     return;
   }
 
@@ -119,51 +118,50 @@ function updateTaskProgress(rawProgress, subTaskId = null) {
   fillEl.style.width = `${(clamped * 100).toFixed(1)}%`;
   valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
   renderSubTask(subTaskId);
-  // handleAutoModeCompletion(clamped, subTaskId);
+  handleTaskCompletion(taskFinished);
 }
 
-async function handleAutoModeCompletion(progress, subTaskId = null) {
+async function handleTaskCompletion(taskFinished = false) {
   const autoChk = $('chk-lang-auto-mode');
   if (!autoChk || !autoChk.checked) return;
   if (!App.isRunning || App.isPaused) return;
+  if (!taskFinished) return;
 
-  if (!App.langAuto || typeof App.langAuto !== 'object') App.langAuto = {};
-  if (App.langAuto.completionInFlight) return;
 
-  const taskSel = $('lang-task-select');
-  const taskName = taskSel ? taskSel.value : null;
-  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  if (!Array.isArray(subtasks) || subtasks.length === 0) return;
+  // const taskSel = $('lang-task-select');
+  // const taskName = taskSel ? taskSel.value : null;
+  // const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  // if (!Array.isArray(subtasks) || subtasks.length === 0) return;
 
-  const latestSubTaskId = Number(subTaskId);
-  if (!Number.isFinite(latestSubTaskId)) return;
+  // const latestSubTaskId = Number(subTaskId);
+  // if (!Number.isFinite(latestSubTaskId)) return;
 
-  const lastSubTaskId = subtasks.length - 1;
-  const thresholdRaw = App.config && App.config.language ? App.config.language.task_progress_threshold : 0.9;
-  const threshold = Number.isFinite(Number(thresholdRaw)) ? Number(thresholdRaw) : 0.9;
+  // const lastSubTaskId = subtasks.length - 1;
+  // const thresholdRaw = App.config && App.config.language ? App.config.language.task_progress_threshold : 0.9;
+  // const threshold = Number.isFinite(Number(thresholdRaw)) ? Number(thresholdRaw) : 0.9;
 
-  if (latestSubTaskId !== lastSubTaskId || progress < threshold) return;
+  // if (latestSubTaskId !== lastSubTaskId || progress < threshold) return;
 
-  App.langAuto.completionInFlight = true;
+  // App.langAuto.completionInFlight = true;
   try {
-    const patch = { 'language.sub_task_id': 0 };
-    const patchRes = await apiFetch('/api/client/config/patch', {
-      method: 'POST',
-      body: JSON.stringify({ patch }),
-    });
-    App.config = patchRes.config || App.config;
+  //   const patch = { 'language.sub_task_id': 0 };
+  //   const patchRes = await apiFetch('/api/client/config/patch', {
+  //     method: 'POST',
+  //     body: JSON.stringify({ patch }),
+  //   });
+  //   App.config = patchRes.config || App.config;
 
-    const confRes = await apiFetch('/api/client/config/path');
-    if (confRes.path) {
-      await apiFetch('/api/client/config/save', {
-        method: 'POST',
-        body: JSON.stringify({ path: confRes.path }),
-      });
-    }
+  //   const confRes = await apiFetch('/api/client/config/path');
+  //   if (confRes.path) {
+  //     await apiFetch('/api/client/config/save', {
+  //       method: 'POST',
+  //       body: JSON.stringify({ path: confRes.path }),
+  //     });
+  //   }
 
-    if (typeof applyLangConfigSelection === 'function') {
-      applyLangConfigSelection(true);
-    }
+  //   if (typeof applyLangConfigSelection === 'function') {
+  //     applyLangConfigSelection(true);
+  //   }
 
     await apiFetch('/api/client/pause', {
       method: 'POST',
@@ -171,11 +169,11 @@ async function handleAutoModeCompletion(progress, subTaskId = null) {
       suppressAbortToast: true,
     });
 
-    toast('Auto Mode reached last sub-task, reset to 0 and paused.', 'info', 2600);
+    toast('Task finished, reset and paused.', 'info', 2600);
   } catch (_) {
     // no-op: apiFetch already handles toasts
   } finally {
-    App.langAuto.completionInFlight = false;
+    // App.langAuto.completionInFlight = false;
   }
 }
 
@@ -214,6 +212,10 @@ async function renderSubTask(subTaskId = null) {
   let curIdx = parseInt(subtaskSel.value, 10);
   if (!Number.isFinite(curIdx) || curIdx < 0) curIdx = 0;
 
+  if (targetIdx === curIdx) {
+    // console.log('renderSubTask no-op: target subTaskId equals current', { targetIdx, curIdx });
+    return;
+  }
   if (targetIdx < 0 || targetIdx >= subtasks.length) {
     console.warn('renderSubTask aborted: subTaskId out of range', { subTaskId: targetIdx, length: subtasks.length });
     return;
@@ -231,20 +233,16 @@ async function renderSubTask(subTaskId = null) {
     refreshLangAppliedMarkers(markerTaskId, targetIdx);
   }
 
-  if (targetIdx === curIdx) {
-    // console.log('renderSubTask no-op: target subTaskId equals current', { targetIdx, curIdx });
-    return;
-  }
 
   // console.log('renderSubTask switching subtask', { from: curIdx, to: targetIdx, taskName, subtaskText: subtasks[targetIdx] });
   subtaskSel.value = String(targetIdx);
   subtaskSel.dispatchEvent(new Event('change'));
 
-  const lang = subtasks[targetIdx];
-  if (typeof lang === 'string' && lang.trim()) {
-    textEl.value = lang;
-    await sendLanguageSet(lang);
-  }
+  // const lang = subtasks[targetIdx];
+  // if (typeof lang === 'string' && lang.trim()) {
+  //   textEl.value = lang;
+  //   await sendLanguageSet(lang);
+  // }
 }
 
 // ═══════════════════════════════════════════════════════
