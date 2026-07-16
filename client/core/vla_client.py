@@ -121,6 +121,8 @@ class VLAClientAsync():
         self.is_control_thread_running = True
         if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
+        # start new task in task_language manager for auto mode
+        self.task_language_manager.new_task()
 
     def stop_control(self):
         self.is_control_thread_running = False
