@@ -98,7 +98,7 @@ const App = {
   wsAlive: false,
   reconnectTimer: null,
   wsConnectTimeoutTimer: null,
-  isRunning: null,   // null = uninitialised; set on first stats push
+  isRunning: null,   // null = uninitialized; set on first stats push
   isPaused: false,   // true when client is paused (inference/commands paused but resources alive)
   isObserveRunning: false,
   isInferenceRunning: false,
@@ -114,7 +114,6 @@ const App = {
 
   config: {},
   pendingPatch: {},
-  langPresets: [],
 
   // Camera open/close state — default all closed
   camOpen: [false, false, false],
