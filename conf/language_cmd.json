@@ -6,7 +6,7 @@
     "[PRIMARY_ARM=RIGHT] tap the second-row left button on the right machine for Latte.",
     "[PRIMARY_ARM=RIGHT] pick coffee and hold it in hand.",
     "[PRIMARY_ARM=RIGHT] Place the Latte onto the left placement spot of the gray mat area on the table."
-    ],
+  ],
   "pour_tea": [
     "[POUR_BLACK_TEA] [RIGHT_ARM] With the right arm, pick up the black-tea pot and pour into the cup.",
     "[POUR_GREEN_TEA] [LEFT_ARM] Using the left arm, lift the green-tea pot and pour into the cup.",
@@ -32,6 +32,7 @@
     "[PRIMARY_ARM=RIGHT]Take tea leaves",
     "[PRIMARY_ARM=RIGHT]Add water",
     "[PRIMARY_ARM=LEFT] Put the kettle",
-    "[PRIMARY_ARM=LEFT] Divide tea"
+    "[PRIMARY_ARM=LEFT] Divide tea",
+    "[PRIMARY_ARM=LEFT] Divide tea 224"
   ]
 }
