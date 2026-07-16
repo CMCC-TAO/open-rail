@@ -138,16 +138,6 @@ function renderLangSubtaskSelect() {
   syncLangIndexOptions(taskName);
 }
 
-// Keep old renderLangPresets as compatibility alias (called on config load)
-function renderLangPresets(presets) {
-  App.langPresets = presets || [];
-  // config.language (flat array) → put into LangCmd only if no JSON loaded yet
-  if (Object.keys(LangCmd.tasks).length === 0) {
-    buildLangTasksFromData(presets);
-    renderLangTaskSelect();
-  }
-}
-
 async function persistLanguagePatch (patch) {
   if (!App.config || typeof App.config !== 'object') App.config = {};
   if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
@@ -445,13 +435,11 @@ async function editLangSubtask() {
   await saveLangFile();
   renderLangSubtaskSelect();
   subtaskSel.value = String(idx);
-  App._langSwitching = true;
   try {
     if (idx == App.config.language.sub_task_id) {
       await sendLanguageSet(lang);
     } 
   } finally {
-    App._langSwitching = false;
   }
   toast('Sub-task instruction updated.', 'ok');
 }
