@@ -192,7 +192,7 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .lang-cmd-select option {
-  padding: 5px 34px 5px 8px;
+  padding: 5px 24px 5px 8px;
   cursor: pointer;
   background-repeat: no-repeat;
   background-position: right 8px center;

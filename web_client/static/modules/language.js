@@ -54,10 +54,15 @@ function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
   return Math.max(14, estimated);
 }
 
-function formatLangSubtaskOptionLabel(taskName, text, index, maxChars = 36) {
-  const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
-  return `${index + 1}.${clipped}`;
+function formatLangSubtaskOptionLabel(text, index) {
+  // const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
+  return `${index + 1}.${text}`;
 }
+
+// function formatLangSubtaskOptionLabelOld(taskName, text, index, maxChars = 36) {
+//   const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
+//   return `${index + 1}.${clipped}`;
+// }
 
 function refreshLangAppliedMarkers(taskId, subTaskId) {
   const taskSel = $('lang-task-select');
@@ -123,13 +128,14 @@ function renderLangSubtaskSelect() {
   subtaskSel.innerHTML = '';
   const taskName = taskSel ? taskSel.value : null;
   const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  const maxChars = getLangSubtaskMaxCharsByWidth(subtaskSel);
+  // const maxChars = getLangSubtaskMaxCharsByWidth(subtaskSel);
 
   const { taskId: appliedTaskId, subTaskId: appliedSubTaskId } = getAppliedLangSelection();
   subtasks.forEach((text, i) => {
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i, maxChars);
+    // opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i, maxChars);
+    opt.textContent = formatLangSubtaskOptionLabel(text, i);
     setAppliedOptionMarker(opt, taskName === appliedTaskId && i === appliedSubTaskId);
     opt.title = text;
     subtaskSel.appendChild(opt);
@@ -142,15 +148,6 @@ async function persistLanguagePatch (patch) {
   if (!App.config || typeof App.config !== 'object') App.config = {};
   if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
 
-  // Object.entries(patch).forEach(([dotKey, value]) => {
-  //   App.pendingPatch[dotKey] = value;
-  //   if (dotKey.startsWith('language.')) {
-  //     const key = dotKey.slice('language.'.length);
-  //     App.config.language[key] = value;
-  //   }
-  // });
-  // markPending();
-
   try {
     const res = await apiFetch('/api/client/config/patch', {
       method: 'POST',
@@ -158,9 +155,6 @@ async function persistLanguagePatch (patch) {
     });
     App.config = res.config || App.config;
     applyLangConfigSelection();
-
-    // Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
-    // if (!Object.keys(App.pendingPatch).length) clearPending();
 
     const confRes = await apiFetch('/api/client/config/path');
     if (confRes.path) {
@@ -171,10 +165,6 @@ async function persistLanguagePatch (patch) {
     }
     return true;
   } catch (_) {
-    // Object.entries(patch).forEach(([dotKey, value]) => {
-    //   App.pendingPatch[dotKey] = value;
-    // });
-    // markPending();
     return false;
   }
 };
