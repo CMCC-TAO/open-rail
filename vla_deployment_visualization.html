@@ -3,299 +3,105 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>vla_infer 部署框架全景图 | Unitree G1 倒水部署</title>
+<title>vla_infer 部署框架全景图 — VLA 推理部署全链路</title>
 <style>
   :root {
-    --bg: #0f172a;
-    --surface: #1e293b;
-    --surface2: #334155;
-    --border: #475569;
-    --text: #f1f5f9;
-    --text-dim: #94a3b8;
-    --blue: #3b82f6;
-    --blue-bg: rgba(59,130,246,0.15);
-    --green: #22c55e;
-    --green-bg: rgba(34,197,94,0.15);
-    --orange: #f59e0b;
-    --orange-bg: rgba(245,158,11,0.15);
-    --red: #ef4444;
-    --red-bg: rgba(239,68,68,0.12);
-    --purple: #a855f7;
-    --purple-bg: rgba(168,85,247,0.15);
-    --pink: #ec4899;
-    --pink-bg: rgba(236,72,153,0.12);
-    --yellow: #eab308;
-    --yellow-bg: rgba(234,179,8,0.12);
+    --bg: #0f172a; --surface: #1e293b; --surface2: #334155; --border: #475569;
+    --text: #f1f5f9; --text-dim: #94a3b8;
+    --blue: #3b82f6; --blue-bg: rgba(59,130,246,0.15);
+    --green: #22c55e; --green-bg: rgba(34,197,94,0.15);
+    --orange: #f59e0b; --orange-bg: rgba(245,158,11,0.15);
+    --red: #ef4444; --red-bg: rgba(239,68,68,0.12);
+    --purple: #a855f7; --purple-bg: rgba(168,85,247,0.15);
+    --pink: #ec4899; --pink-bg: rgba(236,72,153,0.12);
+    --yellow: #eab308; --yellow-bg: rgba(234,179,8,0.12);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.6;
-    padding: 2rem 1rem;
-  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 2rem 1rem; }
   .container { max-width: 1150px; margin: 0 auto; }
-
   .header { text-align: center; margin-bottom: 2.5rem; }
-  .header h1 {
-    font-size: 2rem; font-weight: 700;
-    background: linear-gradient(135deg, var(--blue), var(--green));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
+  .header h1 { font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, var(--blue), var(--green)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
   .header .subtitle { color: var(--text-dim); font-size: 0.95rem; margin-top: 0.3rem; }
-  .header .story-line {
-    background: var(--surface2); border-radius: 12px; padding: 1rem 1.5rem;
-    margin: 1.2rem auto 0; max-width: 800px; text-align: left;
-    border: 1px dashed var(--orange);
-  }
-  .header .story-line .label {
-    font-size: 0.75rem; color: var(--orange); font-weight: 600;
-    letter-spacing: 2px; margin-bottom: 0.3rem;
-  }
+  .header .story-line { background: var(--surface2); border-radius: 12px; padding: 1rem 1.5rem; margin: 1.2rem auto 0; max-width: 800px; text-align: left; border: 1px dashed var(--orange); }
+  .header .story-line .label { font-size: 0.75rem; color: var(--orange); font-weight: 600; letter-spacing: 2px; margin-bottom: 0.3rem; }
   .header .story-line .content { font-size: 0.9rem; color: var(--text); line-height: 1.7; }
   .header .story-line .content em { color: var(--orange); font-style: normal; font-weight: 600; }
-
-  .src-badge {
-    display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px;
-    font-size: 0.58rem; font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace;
-    margin-left: 0.2rem; letter-spacing: 0.3px;
-  }
+  .src-badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.58rem; font-weight: 600; font-family: 'SF Mono', 'Fira Code', monospace; margin-left: 0.2rem; letter-spacing: 0.3px; }
   .src-config { background: rgba(234,179,8,0.2); color: var(--yellow); }
   .src-code { background: rgba(59,130,246,0.2); color: var(--blue); }
   .src-calc { background: rgba(168,85,247,0.2); color: var(--purple); }
   .src-doc { background: rgba(34,197,94,0.2); color: var(--green); }
-
-  .legend {
-    display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;
-    margin-top: 1rem;
-  }
+  .legend { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-top: 1rem; }
   .legend-item { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; }
   .legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
-  .legend-dot.arch { background: var(--blue); }
-  .legend-dot.data { background: var(--green); }
-  .legend-dot.config { background: var(--yellow); }
-  .legend-dot.algorithm { background: var(--purple); }
-  .legend-dot.risk { background: var(--red); }
-
-  .section-label {
-    text-align: center; margin: 1rem 0 0.6rem;
-    font-size: 0.78rem; color: var(--text-dim); letter-spacing: 2px;
-  }
-  .section-label span {
-    background: var(--surface); padding: 0.25rem 1rem; border-radius: 20px;
-    border: 1px solid var(--border);
-  }
-
-  .story-bubble {
-    background: rgba(245,158,11,0.08); border-left: 3px solid var(--orange);
-    border-radius: 6px; padding: 0.6rem 0.8rem;
-    margin: 0.6rem 0; font-size: 0.85rem; line-height: 1.6;
-  }
-  .story-bubble .s-label {
-    font-size: 0.65rem; color: var(--orange); font-weight: 600;
-    text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.1rem;
-  }
-
-  .module {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 12px; padding: 1.2rem 1.5rem;
-    position: relative; margin-bottom: 1rem;
-    transition: all 0.2s;
-  }
-  .module:hover {
-    border-color: var(--text-dim); transform: translateY(-1px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-  }
-  .module .tag {
-    position: absolute; top: 0; right: 0;
-    padding: 0.2rem 0.8rem; font-size: 0.7rem; font-weight: 600;
-    border-radius: 0 12px 0 8px; letter-spacing: 0.5px;
-  }
-  .module .tag.blue { background: var(--blue); color: #fff; }
-  .module .tag.green { background: var(--green); color: #000; }
-  .module .tag.orange { background: var(--orange); color: #000; }
-  .module .tag.red { background: var(--red); color: #fff; }
-  .module .tag.purple { background: var(--purple); color: #fff; }
-  .module .tag.pink { background: var(--pink); color: #fff; }
-  .module.blue-bg { border-left: 4px solid var(--blue); }
-  .module.green-bg { border-left: 4px solid var(--green); }
-  .module.orange-bg { border-left: 4px solid var(--orange); }
-  .module.red-bg { border-left: 4px solid var(--red); }
-  .module.purple-bg { border-left: 4px solid var(--purple); }
-  .module.pink-bg { border-left: 4px solid var(--pink); }
-
-  .module-title {
-    font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem;
-    display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;
-  }
-  .module-title .badge {
-    font-size: 0.62rem; padding: 0.12rem 0.45rem; border-radius: 4px; font-weight: 600;
-  }
-  .badge.server { background: var(--blue-bg); color: var(--blue); }
-  .badge.client { background: var(--green-bg); color: var(--green); }
-  .badge.code-ref {
-    background: var(--surface2); color: var(--text-dim);
-    font-family: 'SF Mono', 'Fira Code', monospace;
-  }
-
+  .legend-dot.arch { background: var(--blue); } .legend-dot.data { background: var(--green); } .legend-dot.config { background: var(--yellow); } .legend-dot.algorithm { background: var(--purple); } .legend-dot.risk { background: var(--red); }
+  .section-label { text-align: center; margin: 1rem 0 0.6rem; font-size: 0.78rem; color: var(--text-dim); letter-spacing: 2px; }
+  .section-label span { background: var(--surface); padding: 0.25rem 1rem; border-radius: 20px; border: 1px solid var(--border); }
+  .story-bubble { background: rgba(245,158,11,0.08); border-left: 3px solid var(--orange); border-radius: 6px; padding: 0.6rem 0.8rem; margin: 0.6rem 0; font-size: 0.85rem; line-height: 1.6; }
+  .story-bubble .s-label { font-size: 0.65rem; color: var(--orange); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.1rem; }
+  .module { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem 1.5rem; position: relative; margin-bottom: 1rem; transition: all 0.2s; }
+  .module:hover { border-color: var(--text-dim); transform: translateY(-1px); box-shadow: 0 8px 25px rgba(0,0,0,0.3); }
+  .module .tag { position: absolute; top: 0; right: 0; padding: 0.2rem 0.8rem; font-size: 0.7rem; font-weight: 600; border-radius: 0 12px 0 8px; letter-spacing: 0.5px; }
+  .module .tag.blue { background: var(--blue); color: #fff; } .module .tag.green { background: var(--green); color: #000; } .module .tag.orange { background: var(--orange); color: #000; } .module .tag.red { background: var(--red); color: #fff; } .module .tag.purple { background: var(--purple); color: #fff; } .module .tag.pink { background: var(--pink); color: #fff; }
+  .module.blue-bg { border-left: 4px solid var(--blue); } .module.green-bg { border-left: 4px solid var(--green); } .module.orange-bg { border-left: 4px solid var(--orange); } .module.red-bg { border-left: 4px solid var(--red); } .module.purple-bg { border-left: 4px solid var(--purple); } .module.pink-bg { border-left: 4px solid var(--pink); }
+  .module-title { font-size: 1.05rem; font-weight: 600; margin-bottom: 0.3rem; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .module-title .badge { font-size: 0.62rem; padding: 0.12rem 0.45rem; border-radius: 4px; font-weight: 600; }
+  .badge.server { background: var(--blue-bg); color: var(--blue); } .badge.client { background: var(--green-bg); color: var(--green); } .badge.code-ref { background: var(--surface2); color: var(--text-dim); font-family: 'SF Mono', 'Fira Code', monospace; }
   .module-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 0.5rem; }
-
-  .glossary-term {
-    display: inline; border-bottom: 1px dashed var(--yellow);
-    color: var(--yellow); cursor: help; position: relative;
-  }
-  .glossary-term .tooltip {
-    visibility: hidden; opacity: 0;
-    position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 8px; padding: 0.6rem 0.8rem;
-    width: 260px; font-size: 0.78rem; font-weight: 400;
-    color: var(--text); line-height: 1.5; z-index: 99999;
-    transition: opacity 0.2s; pointer-events: none;
-    text-align: left;
-  }
+  .glossary-term { display: inline; border-bottom: 1px dashed var(--yellow); color: var(--yellow); cursor: help; position: relative; }
+  .glossary-term .tooltip { visibility: hidden; opacity: 0; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.8rem; width: 260px; font-size: 0.78rem; font-weight: 400; color: var(--text); line-height: 1.5; z-index: 99999; transition: opacity 0.2s; pointer-events: none; text-align: left; }
   .glossary-term:hover .tooltip { visibility: visible; opacity: 1; }
-
-  .tensor-row {
-    display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem;
-  }
-  .tensor {
-    background: var(--surface2); padding: 0.25rem 0.6rem; border-radius: 6px;
-    font-size: 0.72rem; font-family: 'SF Mono', 'Fira Code', monospace;
-    display: inline-flex; align-items: center; gap: 0.25rem;
-    line-height: 1.6;
-  }
-  .tensor .label { color: var(--text-dim); }
-  .tensor .shape { color: var(--yellow); font-weight: 500; }
-  .tensor .dim-detail {
-    font-size: 0.55rem; color: var(--text-dim); margin-left: 0.2rem;
-    font-style: normal; font-weight: 400;
-  }
-  .tensor .arrow { color: var(--text-dim); margin: 0 0.15rem; }
-
-  .formula-box {
-    background: var(--surface2); border-radius: 8px; padding: 0.8rem 1rem;
-    margin: 0.6rem 0;
-    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 0.85rem; line-height: 1.7;
-  }
-  .formula-box .highlight { color: var(--orange); font-weight: 600; }
-  .formula-box .hl-blue { color: var(--blue); }
-  .formula-box .hl-green { color: var(--green); }
-  .formula-box .hl-red { color: var(--red); }
-
-  .nav-grid {
-    display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; margin-top: 0.8rem;
-  }
-  .nav-grid a {
-    text-decoration: none; color: #cde3ff; font-size: 0.72rem;
-    border: 1px solid var(--border); border-radius: 6px;
-    background: rgba(18,31,51,0.9); padding: 0.3rem 0.6rem;
-  }
+  .tensor-row { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+  .tensor { background: var(--surface2); padding: 0.25rem 0.6rem; border-radius: 6px; font-size: 0.72rem; font-family: 'SF Mono', 'Fira Code', monospace; display: inline-flex; align-items: center; gap: 0.25rem; line-height: 1.6; }
+  .tensor .label { color: var(--text-dim); } .tensor .shape { color: var(--yellow); font-weight: 500; } .tensor .dim-detail { font-size: 0.55rem; color: var(--text-dim); margin-left: 0.2rem; font-style: normal; font-weight: 400; } .tensor .arrow { color: var(--text-dim); margin: 0 0.15rem; }
+  .formula-box { background: var(--surface2); border-radius: 8px; padding: 0.8rem 1rem; margin: 0.6rem 0; font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.85rem; line-height: 1.7; }
+  .formula-box .highlight { color: var(--orange); font-weight: 600; } .formula-box .hl-blue { color: var(--blue); } .formula-box .hl-green { color: var(--green); } .formula-box .hl-red { color: var(--red); }
+  .nav-grid { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; margin-top: 0.8rem; }
+  .nav-grid a { text-decoration: none; color: #cde3ff; font-size: 0.72rem; border: 1px solid var(--border); border-radius: 6px; background: rgba(18,31,51,0.9); padding: 0.3rem 0.6rem; }
   .nav-grid a:hover { border-color: var(--green); color: #e5fff8; }
-
   table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
   th, td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
   th { text-align: left; color: #d7e7ff; font-weight: 600; }
   tr:last-child td { border-bottom: none; }
-
-  .tip {
-    margin-top: 0.6rem; font-size: 0.78rem; color: var(--text-dim);
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: 8px; padding: 0.5rem 0.7rem;
-  }
+  .tip { margin-top: 0.6rem; font-size: 0.78rem; color: var(--text-dim); background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 0.5rem 0.7rem; }
   .tip strong { color: var(--text); }
-
   .card-grid { display: grid; grid-template-columns: repeat(2, minmax(280px, 1fr)); gap: 0.8rem; }
-
-  .summary {
-    margin-top: 1.5rem; background: var(--surface); border-radius: 12px;
-    border: 1px solid var(--border); overflow: hidden;
-  }
-  .summary-title {
-    padding: 0.8rem 1.2rem; font-weight: 600; font-size: 1rem;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface2);
-  }
+  .summary { margin-top: 1.5rem; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  .summary-title { padding: 0.8rem 1.2rem; font-weight: 600; font-size: 1rem; border-bottom: 1px solid var(--border); background: var(--surface2); }
   .summary table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
-  .summary th {
-    text-align: left; padding: 0.5rem 1rem;
-    color: var(--text-dim); font-weight: 500;
-    border-bottom: 1px solid var(--border);
-  }
+  .summary th { text-align: left; padding: 0.5rem 1rem; color: var(--text-dim); font-weight: 500; border-bottom: 1px solid var(--border); }
   .summary td { padding: 0.4rem 1rem; border-bottom: 1px solid var(--border); }
   .summary tr:last-child td { border-bottom: none; }
   .summary tr:hover { background: var(--surface2); }
   .summary code { background: var(--surface2); padding: 0.1rem 0.3rem; border-radius: 3px; font-size: 0.72rem; }
-
-  .glossary-section {
-    margin-top: 2rem; background: var(--surface); border-radius: 12px;
-    border: 1px solid var(--border); overflow: hidden;
-  }
-  .glossary-section .gl-title {
-    padding: 0.8rem 1.2rem; font-weight: 600; font-size: 1rem;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface2);
-  }
-  .glossary-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 0.6rem; padding: 1rem 1.2rem;
-  }
-  .glossary-item {
-    background: var(--surface2); border-radius: 8px; padding: 0.6rem 0.8rem;
-  }
-  .glossary-item .term {
-    font-weight: 600; font-size: 0.85rem;
-    margin-bottom: 0.2rem;
-  }
-  .glossary-item .def {
-    font-size: 0.75rem; color: var(--text-dim); line-height: 1.5;
-  }
-  .glossary-item .def code {
-    background: var(--surface); padding: 0.05rem 0.3rem; border-radius: 3px;
-    font-size: 0.72rem;
-  }
-
-  .code-block {
-    font-family: 'SF Mono', 'Fira Code', monospace;
-    font-size: 0.72rem;
-    background: var(--surface2);
-    color: #d5e7ff;
-    border-radius: 8px;
-    padding: 0.6rem;
-    overflow-x: auto;
-    border: 1px solid var(--border);
-    line-height: 1.6;
-  }
-
-  @media (max-width: 768px) {
-    body { padding: 1rem 0.5rem; }
-    .header h1 { font-size: 1.4rem; }
-    .module { padding: 0.8rem; }
-    .card-grid { grid-template-columns: 1fr; }
-    .glossary-grid { grid-template-columns: 1fr; padding: 0.8rem; }
-  }
+  .glossary-section { margin-top: 2rem; background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+  .glossary-section .gl-title { padding: 0.8rem 1.2rem; font-weight: 600; font-size: 1rem; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .glossary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.6rem; padding: 1rem 1.2rem; }
+  .glossary-item { background: var(--surface2); border-radius: 8px; padding: 0.6rem 0.8rem; }
+  .glossary-item .term { font-weight: 600; font-size: 0.85rem; margin-bottom: 0.2rem; }
+  .glossary-item .def { font-size: 0.75rem; color: var(--text-dim); line-height: 1.5; }
+  .glossary-item .def code { background: var(--surface); padding: 0.05rem 0.3rem; border-radius: 3px; font-size: 0.72rem; }
+  .code-block { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.72rem; background: var(--surface2); color: #d5e7ff; border-radius: 8px; padding: 0.6rem; overflow-x: auto; border: 1px solid var(--border); line-height: 1.6; }
+  @media (max-width: 768px) { body { padding: 1rem 0.5rem; } .header h1 { font-size: 1.4rem; } .module { padding: 0.8rem; } .card-grid { grid-template-columns: 1fr; } .glossary-grid { grid-template-columns: 1fr; padding: 0.8rem; } }
 </style>
 </head>
 <body>
 <div class="container">
 
   <div class="header">
-    <h1>vla_infer 部署 v.s. TAO 训练：Unitree G1 倒水任务全链路</h1>
-    <p class="subtitle">同一个"教 G1 倒水"故事，TAO 训练模型 → vla_infer 部署执行，数据形状从头追踪到尾</p>
+    <h1>vla_infer 部署框架全景图 — VLA 推理部署全链路</h1>
+    <p class="subtitle">从模型加载到机器人执行，数据形状从头追踪到尾；支持 11 种模型 × 5 种机器人</p>
 
     <div class="story-line">
-      <div class="label">贯穿全文的故事（接 TAO 训练文档）</div>
+      <div class="label">贯穿全文的故事</div>
       <div class="content">
-        在 TAO 中，你已经用 <em>3 路摄像头（头部+左腕+右腕）</em> 录好的倒水演示视频，
-        训练好了能输出 <em>26 维动作（14 臂电机 + 12 手指）</em> 的模型。<br><br>
-        现在轮到 <strong>vla_infer 上场</strong>：<br>
-        把训练好的模型加载到 Server 端，在 Client 端连接真实的 G1 机器人，
-        实时采集 <em>3 路 640×640 图像 + 26 维关节状态</em>，
-        发送给 Server 做推理，得到 <em>64 帧连续的倒水动作轨迹</em>，
-        经过平滑拟合后通过 ROS2 话题驱动 G1 的 <em>14 个臂关节 + 12 个手指</em> 完成倒水。
+        vla_infer 是一个 <strong>VLA（Vision-Language-Action）推理部署框架</strong>。
+        它将训练好的 VLA 模型（GR00T / TAO / ACT / RDT / SmolVLA / Pi0 等）加载到 Server 端，
+        在 Client 端连接真实机器人，实时采集 <em>多路摄像头图像 + 关节状态</em>，
+        发送给 Server 做推理，得到 <em>连续的动作轨迹 chunk</em>，
+        经过平滑拟合后驱动机器人完成操作。<br><br>
+        目前支持 <em>5 种机器人</em>（a2d / mock / navi_wa2 / unitree_g1 / ti5_t170c）
+        和 <em>3 种部署入口</em>（run_client / run_web_client / action_server）。
       </div>
     </div>
 
@@ -315,11 +121,11 @@
       <a href="#b3">B3 通信</a>
       <a href="#b4">B4 Server推理</a>
       <a href="#b5">B5 Client控制</a>
-      <a href="#b6">B6 G1驱动</a>
+      <a href="#b6">B6 机器人驱动</a>
       <a href="#b7">B7 轨迹/滤波</a>
       <a href="#b8">B8 可视化</a>
+      <a href="#b9">B9 任务调度</a>
       <a href="#data-flow">端到端数据流</a>
-      <a href="#tao-link">TAO→vla_infer</a>
       <a href="#glossary">术语</a>
       <a href="#param-tuning">调优</a>
       <a href="#troubleshoot">排障</a>
@@ -328,7 +134,7 @@
   </div>
 
 <!-- ==================== 模块总览 ==================== -->
-<div class="module" style="margin-bottom:1.5rem;background:var(--surface);border-color:var(--purple);border-left:4px solid var(--purple);">
+<div class="module" style="margin-bottom:1.5rem;background:var(--surface);border-color:var(--purple);border-left:4px solid var(--purple);" id="overview">
   <div class="module-title" style="font-size:1rem;margin-bottom:0.5rem;">
     vla_infer 工程模块总览 — HTML 各块对应源码头
   </div>
@@ -340,56 +146,68 @@
       <pre style="font-family:'SF Mono','Fira Code',monospace;font-size:0.7rem;color:var(--text-dim);line-height:1.75;margin:0;overflow-x:auto;white-space:pre;">
 <span style="color:var(--text);font-weight:600;">vla_infer/</span>
 ├── <span style="color:var(--blue);font-weight:600;">run_server.py</span>            <span style="color:var(--text-dim);">B1 Server入口</span>
-├── <span style="color:var(--green);font-weight:600;">run_client.py</span>            <span style="color:var(--text-dim);">B1 Client入口</span>
-├── <span style="color:var(--orange);font-weight:600;">action_server/</span>           <span style="color:var(--text-dim);">B9 任务调度(9种task)</span>
-│   ├── action_dispatcher.py  <span style="color:var(--text-dim);">ROS2 ActionServer</span>
-│   ├── action_base.py        <span style="color:var(--text-dim);">基类+错误码</span>
-│   ├── vla_context.py        <span style="color:var(--text-dim);">共享上下文</span>
+├── <span style="color:var(--green);font-weight:600;">run_client.py</span>            <span style="color:var(--text-dim);">B1 Client入口(CLI)</span>
+├── <span style="color:var(--green);font-weight:600;">run_web_client.py</span>        <span style="color:var(--text-dim);">B1 Client入口(Web)</span>
+├── <span style="color:var(--orange);font-weight:600;">action_server/</span>           <span style="color:var(--text-dim);">B9 任务调度</span>
+│   ├── action_dispatcher.py  <span style="color:var(--text-dim);">ROS2 ActionServer(9种handler)</span>
+│   ├── action_base.py        <span style="color:var(--text-dim);">基类+TaskResult错误码</span>
+│   ├── vla_context.py        <span style="color:var(--text-dim);">共享上下文(lazy robot_body)</span>
+│   ├── GraspDetector         内联于 dispatcher(thumb_bend差值)</span>
+│   ├── ObsDataBridge         内联于 dispatcher(WS 9001)</span>
 │   ├── task_init_grasp.py    <span style="color:var(--text-dim);">初始化抓取</span>
 │   ├── task_grasp.py         <span style="color:var(--text-dim);">单手抓取</span>
 │   ├── task_grasp_all.py     <span style="color:var(--text-dim);">双手抓取</span>
 │   ├── task_finish_grasp.py  <span style="color:var(--text-dim);">完成抓取</span>
-│   ├── task_deliver.py       <span style="color:var(--text-dim);">递送(4种目标)</span>
-│   ├── task_place.py         <span style="color:var(--text-dim);">放置(4种目标)</span>
-│   ├── task_release.py       <span style="color:var(--text-dim);">释放(3种目标)</span>
-│   ├── task_reset.py         <span style="color:var(--text-dim);">复位(3种目标)</span>
-│   └── task_init_zero.py     <span style="color:var(--text-dim);">零位初始化</span>
+│   ├── task_deliver.py       <span style="color:var(--text-dim);">递送(4种目标变体)</span>
+│   ├── task_place.py         <span style="color:var(--text-dim);">放置(4种目标变体)</span>
+│   ├── task_release.py       <span style="color:var(--text-dim);">释放(3种目标变体)</span>
+│   ├── task_reset.py         <span style="color:var(--text-dim);">复位(3种目标变体)</span>
+│   ├── task_init_zero.py     <span style="color:var(--text-dim);">零位初始化</span>
+│   ├── test_scripts/         <span style="color:var(--text-dim);">test_action_client.py</span>
+│   └── action_web_vision/    <span style="color:var(--text-dim);">B8 Web可视化 FastAPI(port 9000)</span>
 ├── <span style="color:var(--yellow);font-weight:600;">conf/</span>                    <span style="color:var(--text-dim);">B2 配置中心</span>
-│   ├── client_conf.py        <span style="color:var(--text-dim);">RDM/Controller/Observer</span>
-│   ├── models_conf.py        <span style="color:var(--text-dim);">10种模型类型</span>
-│   ├── robots_conf.py        <span style="color:var(--text-dim);">机器人action_layout</span>
-│   ├── server_conf.py        <span style="color:var(--text-dim);">Server线程配置</span>
-│   ├── default_conf.yaml     <span style="color:var(--text-dim);">持久化默认参数</span>
-│   └── zmq_conf.py           <span style="color:var(--text-dim);">ZMQ地址端口</span>
-├── <span style="color:var(--green);font-weight:600;">server/</span>                  <span style="color:var(--text-dim);">B3/B4</span>
+│   ├── client_conf.py        <span style="color:var(--text-dim);">Client默认参数(obs/ctrl/intra/inter/language)</span>
+│   ├── models_conf.py        <span style="color:var(--text-dim);">11种模型类型枚举</span>
+│   ├── robots_conf.py        <span style="color:var(--text-dim);">5种机器人配置+action_layout</span>
+│   ├── server_conf.py        <span style="color:var(--text-dim);">Server线程配置(max_infer/decode_workers)</span>
+│   ├── default_conf.yaml     <span style="color:var(--text-dim);">持久化默认参数(运行时实际值)</span>
+│   ├── zmq_conf.py           <span style="color:var(--text-dim);">ZMQ地址端口+超时</span>
+│   └── logging_conf.py       <span style="color:var(--text-dim);">日志配置</span>
+├── <span style="color:var(--blue);font-weight:600;">server/</span>                  <span style="color:var(--text-dim);">B3/B4</span>
 │   ├── core/
-│   │   ├── zmq_server.py     <span style="color:var(--text-dim);">B3 ZMQ ROUTER</span>
-│   │   └── vla_server.py     <span style="color:var(--text-dim);">B4 并行解码+推理</span>
+│   │   ├── zmq_server.py     <span style="color:var(--text-dim);">B3 ZMQ ROUTER + 心跳</span>
+│   │   ├── vla_server.py     <span style="color:var(--text-dim);">B4 并行解码+模型推理</span>
+│   │   └── vis_server.py     <span style="color:var(--text-dim);">B8 Server端可视化</span>
 │   └── models/
-│       ├── gr00t/            <span style="color:var(--text-dim);">n1/n1_5/n1_6 三种变体</span>
-│       ├── openpi/           <span style="color:var(--text-dim);">pi0/pi05</span>
-│       ├── act/              <span style="color:var(--text-dim);">ACT模型</span>
-│       ├── tao/              <span style="color:var(--text-dim);">Tao模型</span>
+│       ├── gr00t/            <span style="color:var(--text-dim);">n1 / n1_5 / n1_6 三种变体</span>
+│       ├── openpi/           <span style="color:var(--text-dim);">pi0 / pi05</span>
+│       ├── act/              <span style="color:var(--text-dim);">ACT (detr + diffusion)</span>
+│       ├── tao/              <span style="color:var(--text-dim);">TAO模型</span>
 │       ├── rdt/              <span style="color:var(--text-dim);">RDT模型</span>
 │       ├── smolvla/          <span style="color:var(--text-dim);">轻量VLA</span>
-│       ├── go1/              <span style="color:var(--text-dim);">四足Go1</span>
+│       ├── go1/              <span style="color:var(--text-dim);">四足机器人Go1</span>
 │       └── mock/             <span style="color:var(--text-dim);">测试模拟</span>
-├── <span style="color:var(--blue);font-weight:600;">client/</span>                  <span style="color:var(--text-dim);">B5/B6/B7</span>
+├── <span style="color:var(--green);font-weight:600;">client/</span>                  <span style="color:var(--text-dim);">B5/B6/B7</span>
 │   ├── core/
-│   │   ├── vla_client.py     <span style="color:var(--text-dim);">B5 4线程主循环</span>
-│   │   ├── inter_chunk_fuser.py     <span style="color:var(--text-dim);">B7 chunk间过渡</span>
-│   │   ├── intra_chunk_smoother.py  <span style="color:var(--text-dim);">B7 chunk内拟合</span>
-│   │   ├── realtime_data_manager.py <span style="color:var(--text-dim);">B7 数据管理</span>
+│   │   ├── vla_client.py     <span style="color:var(--text-dim);">B5 4线程主循环(obs/infer/ctrl/vis)</span>
+│   │   ├── inter_chunk_fuser.py     <span style="color:var(--text-dim);">B7 chunk间过渡(4种策略)</span>
+│   │   ├── intra_chunk_smoother.py  <span style="color:var(--text-dim);">B7 chunk内拟合(3种模式)</span>
+│   │   ├── realtime_data_manager.py <span style="color:var(--text-dim);">B5 RDM共享数据</span>
 │   │   ├── task_language_manager.py <span style="color:var(--text-dim);">B5 语言自动切换</span>
-│   │   ├── visualize_server.py      <span style="color:var(--text-dim);">B8 WebSocket可视化</span>
-│   │   └── data_record_manager.py <span style="color:var(--text-dim);">B5 LeRobot数据录制</span>
-│   └── robots/unitree_g1/
-│       ├── body_robot.py     <span style="color:var(--text-dim);">B6 观测拼装+独立ROS</span>
-│       ├── UnitreeG1Camera.py    <span style="color:var(--text-dim);">B6 3路相机(800+848+848)</span>
-│       └── UnitreeG1Robot.py     <span style="color:var(--text-dim);">B6 26维→限幅→4话题</span>
-├── <span style="color:var(--pink);font-weight:600;">visual/</span>                  <span style="color:var(--text-dim);">B8 可视化(旧)</span>
-├── <span style="color:var(--pink);font-weight:600;">web_client/</span>              <span style="color:var(--text-dim);">B8 可视化(新)</span>
-└── <span style="color:var(--pink);font-weight:600;">extra/dispatch/</span>         <span style="color:var(--text-dim);">B5 多机协同(client+conf+zmq)</span></pre>
+│   │   ├── visualize_server.py      <span style="color:var(--text-dim);">B8 WebSocket(port 8765)</span>
+│   │   ├── data_record_manager.py   <span style="color:var(--text-dim);">B5 LeRobot格式录制</span>
+│   │   └── zmq_client.py     <span style="color:var(--text-dim);">B3 ZMQ DEALER</span>
+│   └── robots/
+│       ├── base_robot.py     <span style="color:var(--text-dim);">RobotBase抽象基类</span>
+│       ├── a2d/              <span style="color:var(--text-dim);">A2D双轮差速(22维action)</span>
+│       ├── mock/             <span style="color:var(--text-dim);">Mock模拟(16维action)</span>
+│       ├── navi_wa2/         <span style="color:var(--text-dim);">Navi WA2(28维action)</span>
+│       ├── unitree_g1/       <span style="color:var(--text-dim);">G1人形(3路cam+26维action)</span>
+│       └── ti5_t170c/        <span style="color:var(--text-dim);">Ti5双臂(14arm+12hand)</span>
+├── <span style="color:var(--pink);font-weight:600;">web_client/</span>              <span style="color:var(--text-dim);">B8 全功能Web仪表盘(FastAPI)</span>
+├── <span style="color:var(--pink);font-weight:600;">visual/</span>                  <span style="color:var(--text-dim);">B8 可视化前端(Chart.js)</span>
+├── <span style="color:var(--pink);font-weight:600;">scripts/</span>                 <span style="color:var(--text-dim);">辅助脚本(eval/vis/clean)</span>
+└── <span style="color:var(--pink);font-weight:600;">extra/dispatch/</span>         <span style="color:var(--text-dim);">B5 多机协同</span></pre>
     </div>
 
     <div style="flex:1.5;min-width:260px;background:var(--bg);border-radius:8px;padding:0.7rem 0.9rem;">
@@ -400,48 +218,50 @@
           <th style="padding:0.1rem 0.3rem;text-align:left;">功能</th>
           <th style="padding:0.1rem 0.3rem;text-align:left;">关键文件</th>
         </tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">B1</span></td><td style="padding:0.08rem 0.3rem">入口编排</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">run_server/run_client.py</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">B1</span></td><td style="padding:0.08rem 0.3rem">入口编排(3种)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">run_server / run_client / run_web_client</td></tr>
         <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--yellow);">B2</span></td><td style="padding:0.08rem 0.3rem">参数中心</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">conf/*.py + default_conf.yaml</td></tr>
         <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">B3</span></td><td style="padding:0.08rem 0.3rem">ZMQ异步通信</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">zmq_server.py + zmq_client.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">B4</span></td><td style="padding:0.08rem 0.3rem">模型推理(8种)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">vla_server.py + models/*/</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--blue);">B4</span></td><td style="padding:0.08rem 0.3rem">模型推理(11种)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">vla_server.py + models/*/</td></tr>
         <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--green);">B5</span></td><td style="padding:0.08rem 0.3rem">实时控制(4线程)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">vla_client.py + zmq_client.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">B6</span></td><td style="padding:0.08rem 0.3rem">G1驱动(限幅+防抖)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">body_robot.py + UnitreeG1*.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--purple);">B7</span></td><td style="padding:0.08rem 0.3rem">Intra+Inter轨迹</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">intra_chunk_smoother.py + inter_chunk_fuser.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--pink);">B8</span></td><td style="padding:0.08rem 0.3rem">可视化运维</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">visual/ + web_client/ + visualize_server.py</td></tr>
-        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">B9</span></td><td style="padding:0.08rem 0.3rem">任务调度</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_server/ (ROS2 ActionServer)</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">B6</span></td><td style="padding:0.08rem 0.3rem">机器人驱动(5种)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">robots/*/body_robot.py</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--purple);">B7</span></td><td style="padding:0.08rem 0.3rem">Intra+Inter轨迹</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">intra_chunk_smoother + inter_chunk_fuser</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--pink);">B8</span></td><td style="padding:0.08rem 0.3rem">可视化运维(3套)</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">visual/ + web_client/ + action_web_vision/</td></tr>
+        <tr><td style="padding:0.08rem 0.3rem"><span style="color:var(--orange);">B9</span></td><td style="padding:0.08rem 0.3rem">任务调度</td><td style="padding:0.08rem 0.3rem;font-family:monospace;">action_server/(ROS2 ActionServer)</td></tr>
       </table>
       <div style="margin-top:0.4rem;font-size:0.7rem;color:var(--text-dim);padding:0.3rem 0.4rem;background:var(--surface2);border-radius:4px;">
-        <strong>与 TAO 的关系：</strong>TAO 训练出的模型权重 + 配置 -> vla_infer 加载使用。<br>
-        同一份 <strong>26 维 action</strong>、同一台 <strong>G1 机器人</strong>，训练->部署无缝衔接。
+        <strong>三种入口模式：</strong><br>
+        1. <strong>CLI 模式</strong>：python run_client.py（交互式命令行）<br>
+        2. <strong>Web 模式</strong>：python run_web_client.py（FastAPI 仪表盘，port 9000）<br>
+        3. <strong>Action 模式</strong>：python action_server/action_dispatcher.py（ROS2 ActionServer）
       </div>
     </div>
   </div>
 </div>
 
 <!-- ==================== 3分钟速读 ==================== -->
-<div class="section-label"><span>3 分钟速读（部署版）</span></div>
+<div class="section-label" id="quick-read"><span>3 分钟速读</span></div>
 
 <div class="module" style="border-left:4px solid var(--orange);">
   <div class="story-bubble">
     <div class="s-label">速读前提</div>
-    你在 TAO 中训练好了倒水模型。现在部署到 G1 机器人上：
-    <em>采集图像(640) -> ZMQ发送 -> Server推理(640->224) -> 返回64帧动作 -> 拟合平滑 -> ROS2执行</em>
+    VLA 模型训练完毕。现在部署到机器人上：
+    <em>采集图像(640) -> ZMQ发送 -> Server推理(640->224) -> 返回动作chunk -> 拟合平滑 -> 电机执行</em>
   </div>
 
   <div style="display:flex;gap:0.6rem;margin-top:0.5rem;flex-wrap:wrap;">
     <div style="flex:1;min-width:160px;background:var(--surface2);border-radius:8px;padding:0.5rem;">
       <div style="font-size:0.75rem;font-weight:600;color:var(--blue);">先认清尺寸口径</div>
       <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.2rem;">
-        客户端 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[640,640]</span></span> 部署主口径<br>
+        客户端 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[480,640]</span></span> 部署口径<br>
         模型内 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[224,224]</span></span> transform映射<br>
-        看到画质问题先判断是哪一级。
+        中间 Server 统一到 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[640,640]</span></span> 传输口径
       </div>
     </div>
     <div style="flex:1;min-width:160px;background:var(--surface2);border-radius:8px;padding:0.5rem;">
       <div style="font-size:0.75rem;font-weight:600;color:var(--green);">先跑通最小链路</div>
       <div style="font-size:0.7rem;color:var(--text-dim);margin-top:0.2rem;">
         先起 Server，再起 Client；<br>
-        确认 <strong>3路RGB</strong> 持续更新、<strong>obs.state=26</strong>、<br>
+        确认 <strong>3路RGB</strong> 持续更新、<strong>obs.state</strong> 维度正确、<br>
         pred_action 形状 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[64,26]</span></span> 稳定。
       </div>
     </div>
@@ -462,12 +282,12 @@
       <tr><td style="padding:0.3rem 0.5rem;">推理慢</td><td style="padding:0.3rem 0.5rem;">B4 Server推理层</td><td style="padding:0.3rem 0.5rem;">B2参数(fps/sleep_time)</td></tr>
       <tr><td style="padding:0.3rem 0.5rem;">动作抖</td><td style="padding:0.3rem 0.5rem;">B7轨迹/滤波</td><td style="padding:0.3rem 0.5rem;">B5控制周期</td></tr>
       <tr><td style="padding:0.3rem 0.5rem;">手部错拍</td><td style="padding:0.3rem 0.5rem;">B6手部防抖+offset</td><td style="padding:0.3rem 0.5rem;">B7 inter-chunk策略</td></tr>
-      <tr><td style="padding:0.3rem 0.5rem;">TAO模型不适配</td><td style="padding:0.3rem 0.5rem;">TAO->vla_infer串联表</td><td style="padding:0.3rem 0.5rem;">B2模型路径/type配置</td></tr>
+      <tr><td style="padding:0.3rem 0.5rem;">模型不适配</td><td style="padding:0.3rem 0.5rem;">B2模型路径/type配置</td><td style="padding:0.3rem 0.5rem;">B4模型选择</td></tr>
     </table>
   </div>
 </div>
 
-<div class="section-label"><span>B1 入口层：启动脚本如何串起全链路</span></div>
+<div class="section-label" id="b1"><span>B1 入口层：启动脚本如何串起全链路</span></div>
 
 <div class="card-grid">
   <div class="module blue-bg" style="margin-bottom:0;">
@@ -478,43 +298,41 @@
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">倒水任务中的角色</div>
-      Server 端就像 <em>倒水专家的头脑</em>（TAO/GR00T/ACT 等模型均可）。
-      它不需要知道机器人在哪，只需要：
-      收到 <em>3 张照片 + 26 维关节状态</em> -> 在脑子里推演 -> 返回 <em>未来 64 步的动作规划</em>。
+      <div class="s-label">角色</div>
+      Server 端是 <em>推理大脑</em>（GR00T / TAO / ACT / RDT / Pi0 等 11 种模型均可）。
+      它不需要知道机器人在哪，只需要：收到 <em>N 张图像 + M 维关节状态</em> -> 推演 -> 返回 <em>未来动作规划 chunk</em>。
     </div>
 
     <div class="module-desc">
-      读取 B2 配置 -> 加载 TAO 训练好的 GR00T N1.5 模型 -> 启动 ZMQ 服务端 -> 进入推理循环。
+      读取 B2 配置 -> 加载 VLA 模型 -> 启动 ZMQ 服务端 -> 进入推理循环。
     </div>
 
     <div class="code-block" style="font-size:0.72rem;">
 <span style="color:var(--text-dim);"># 启动链路：</span>
 parse_args() -> get_vla_server_config() -> override_config_with_args()
   -> get_model() <span style="color:var(--text-dim);"># 加载模型(mock/act/gr00t_n1/n1_5/n1_6/rdt/smolvla/go1/pi0/pi05/tao)</span>
-  -> ZMQServer() + VLAServer.run() <span style="color:var(--text-dim);"># ZMQ ROUTER + 推理循环</span></div>
+  -> ZMQServer() + VLAServer.run() <span style="color:var(--text-dim);"># ZMQ ROUTER + 推理循环 + Rich Live面板</span></div>
 
     <div class="tensor-row">
       <span class="tensor"><span class="label">关键参数</span></span>
-      <span class="tensor"><span style="color:var(--blue);">--model_type</span> gr00t_n1_5 | tao | act | pi0 ...</span>
+      <span class="tensor"><span style="color:var(--blue);">--model_type</span> gr00t_n1_5 | tao | act | pi0 | pi05 ...</span>
       <span class="tensor"><span style="color:var(--blue);">--model_path</span> /path/to/model</span>
       <span class="tensor"><span style="color:var(--blue);">--embodiment_tag</span> unitree_g1 | a2d_gripper</span>
       <span class="tensor"><span style="color:var(--blue);">--debug</span> 禁用 Rich 面板</span>
-      <span class="tensor"><span style="color:var(--blue);">ZMQ 端口</span> 5566 (配置于 conf/zmq_conf.py)</span>
+      <span class="tensor"><span style="color:var(--blue);">ZMQ 端口</span> 5566 (default_conf.yaml)</span>
     </div>
   </div>
 
   <div class="module green-bg" style="margin-bottom:0;">
     <span class="tag green">B1</span>
     <div class="module-title">
-      Client · run_client.py
+      Client · run_client.py (CLI)
       <span class="badge code-ref">vla_infer/run_client.py</span>
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">倒水任务中的角色</div>
-      Client 端就是 <em>G1 机器人的身体和感官</em>。它负责：
-      <em>3 个摄像头看东西 + 26 个关节传感器感受姿态</em> -> 打包发给 Server -> 接收动作指令 -> 驱动 14 个臂关节 + 12 个手指。
+      <div class="s-label">角色</div>
+      Client 端是 <em>机器人的身体和感官</em>。负责：采集摄像头图像 + 关节状态 -> 打包发送给 Server -> 接收动作指令 -> 驱动电机。
     </div>
 
     <div class="module-desc">
@@ -525,104 +343,90 @@ parse_args() -> get_vla_server_config() -> override_config_with_args()
 <span style="color:var(--text-dim);"># 启动链路：</span>
 parse_args() -> get_client_config() -> load_user_config() -> override_config_with_args()
   -> get_robot() + ZMQClient() + RDM + InterChunkFuser + IntraChunkSmoother
-  -> VLAClientAsync.run() <span style="color:var(--text-dim);"># 启动 4 线程（observe/infer/control/visualize）+ 图片编码线程池</span></div>
+  -> VLAClientAsync.run() <span style="color:var(--text-dim);"># 启动 4 线程(observe/infer/control/visualize)</span></div>
 
     <div class="tensor-row">
       <span class="tensor"><span class="label">关键参数</span></span>
-      <span class="tensor"><span style="color:var(--green);">--robots_type</span> unitree_g1 | a2d | a2d_gripper | ti5 | navi_wa2 | mock</span>
+      <span class="tensor"><span style="color:var(--green);">--robots_type</span> a2d | mock | navi_wa2</span>
       <span class="tensor"><span style="color:var(--green);">--intra_chunk_mode</span> raw | interpolation | fitting</span>
       <span class="tensor"><span style="color:var(--green);">--inter_chunk_mode</span> search_action | smooth_velocity | min_jerk | sync</span>
-      <span class="tensor"><span style="color:var(--green);">--extra_dispatch_mode</span> 0(关闭) | 1(启用) | 2(mock)</span>
       <span class="tensor"><span style="color:var(--green);">--user_conf</span> user_conf.py</span>
       <span class="tensor"><span style="color:var(--green);">--record</span> 录制 LeRobot 数据集</span>
       <span class="tensor"><span style="color:var(--green);">--fps</span> 观测线程频率(默认30)</span>
+      <span class="tensor"><span style="color:var(--green);">--extra_dispatch_mode</span> 多机协同</span>
     </div>
+  </div>
+
+  <div class="module green-bg" style="margin-bottom:0;">
+    <span class="tag green">B1</span>
+    <div class="module-title">
+      Web Client · run_web_client.py
+      <span class="badge code-ref">vla_infer/run_web_client.py</span>
+    </div>
+
+    <div class="module-desc">
+      FastAPI Web 仪表盘（包装 run_client.py 逻辑），提供 REST API + WebSocket 实时推送。
+      访问 <code>http://localhost:9000</code> 即可在浏览器中控制整个部署流程。
+    </div>
+
+    <div class="code-block" style="font-size:0.72rem;">
+<span style="color:var(--text-dim);"># 启动：</span>
+python run_web_client.py --host 0.0.0.0 --port 9000 --conf default_conf.yaml
+
+<span style="color:var(--text-dim);"># 端口布局：</span>
+<span style="color:var(--text-dim);">9000 — Web Server (REST + WS</span>
+<span style="color:var(--text-dim);">8765 — visual/ WebSocket 数据流 (VLAClientAsync)</span>
+<span style="color:var(--text-dim);">8080 — visual/ HTTP 静态文件</span></div>
   </div>
 </div>
 
 <!-- ==================== B2 配置层 ==================== -->
-<div class="section-label"><span>B2 配置层：参数从哪里来、怎么影响部署行为</span></div>
+<div class="section-label" id="b2"><span>B2 配置层：参数从哪里来、怎么影响部署行为</span></div>
 
 <div class="module" style="border-left:4px solid var(--yellow);">
   <div class="story-bubble">
-    <div class="s-label">倒水任务中的角色</div>
-    就像 TAO 训练时有各种配置参数（action_horizon=64, max_action_dim=32），
-    vla_infer 部署也有自己的参数。<strong>这些参数决定了机器人倒水的速度、平滑度和成功率</strong>。
+    <div class="s-label">配置体系</div>
+    vla_infer 的配置采用 <strong>三级覆盖</strong> 机制：<br>
+    <strong>conf/*.py</strong>（Python 硬编码默认值）← <strong>default_conf.yaml</strong>（持久化 YAML 覆盖）← <strong>CLI 参数 / user_conf</strong>（运行时覆盖）。<br>
+    实际加载顺序（以 vla_context.py 为例）：先 get_client_config()，然后 apply_yaml_overrides()，最后 apply_user_config()。
   </div>
 
   <table>
-    <tr><th>配置文件</th><th>关键配置项</th><th>部署影响</th><th>与 TAO 的关系</th></tr>
+    <tr><th>配置文件</th><th>关键配置项</th><th>部署影响</th><th>默认值(conf)</th></tr>
     <tr>
-      <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">vision.preprocess.method=resize</span></span></td>
-      <td>图像统一调整到 <span class="shape">[480,640]</span>（keep_ratio保持宽高比）</td>
-      <td>部署口径，模型内后续缩到 224</td>
+      <td><code>client_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">vision.preprocess.method=resize</span></td>
+      <td>图像统一 resize 到 <span class="shape">[480,640]</span>（keep_ratio保持宽高比）</td><td>resize / 480,640 / true</td>
     </tr>
-    <tr>
-      <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">controller.period=<span class="shape">3.75ms</span></span></td>
-      <td>控制周期：3.75ms = 266Hz</td>
-      <td>-</td>
-    </tr>
-    <tr>
-      <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">controller.wait_time=<span class="shape">200ms</span></span></td>
-      <td>两次推理间的等待，越长动作越迟滞</td>
-      <td>-</td>
-    </tr>
-    <tr>
-      <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">intra_chunk.intra_chunk_mode=<span class="shape">fitting</span></span></td>
-      <td>chunk 内处理：raw/interpolation/fitting</td>
-      <td>-</td>
-    </tr>
-    <tr>
-      <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">inter_chunk.inter_chunk_mode=<span class="shape">min_jerk</span></span></td>
-      <td>chunk 间过渡策略</td>
-      <td>-</td>
-    </tr>
-    <tr>
-      <td><code>conf/models_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">type / model_path / embodiment_tag</span></td>
-      <td>选择哪个模型 + 哪个机器人体态</td>
-      <td>直接指向 TAO 输出的 checkpoint</td>
-    </tr>
-    <tr>
-      <td><code>conf/robots_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">unitree_g1.action_layout</span></td>
-      <td>26维动作切片：arm[0:14] hand[14:26]</td>
-      <td>与 TAO 的 embodiment 完全一致</td>
-    </tr>
-    <tr>
-      <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">intra_chunk.fitting_deg=<span class="shape">4</span></span></td>
-      <td>多项式拟合阶数</td>
-      <td>-</td>
-    </tr>
-    <tr>
-      <td><code>conf/client_conf.py</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">language.auto_mode=<span class="shape">False</span></span></td>
-      <td>手动触发语言指令切换（需上层逻辑调用）</td>
-      <td>需要在 TAO 中训练 prob_progress 输出</td>
-    </tr>
-    <tr>
-      <td><code>conf/default_conf.yaml</code></td>
-      <td><span class="tensor" style="font-size:0.65rem;">所有参数持久化</span></td>
-      <td>运行时实际加载的值</td>
-      <td>可替代 conf/*.py 的默认值</td>
-    </tr>
+    <tr><td><code>client_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">controller.period=<span class="shape">3.75ms</span></span></td>
+      <td>控制周期：3.75ms = 266Hz</td><td>3.75</td></tr>
+    <tr><td><code>client_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">controller.wait_time=<span class="shape">200ms</span></span></td>
+      <td>两次推理间的等待间隔</td><td>200</td></tr>
+    <tr><td><code>client_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">controller.gripper_offset=<span class="shape">5</span></span></td>
+      <td>手部动作前向偏移量</td><td>5</td></tr>
+    <tr><td><code>client_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">intra_chunk.intra_chunk_mode=<span class="shape">fitting</span></span></td>
+      <td>chunk 内处理模式：raw/interpolation/fitting</td><td>fitting</td></tr>
+    <tr><td><code>client_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">inter_chunk.inter_chunk_mode=<span class="shape">min_jerk</span></span></td>
+      <td>chunk 间过渡策略</td><td>min_jerk</td></tr>
+    <tr><td><code>models_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">type / model_path / embodiment_tag</span></td>
+      <td>选择哪个模型 + 哪个机器人体态</td><td>gr00t_n1_5</td></tr>
+    <tr><td><code>robots_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">unitree_g1.action_layout</span></td>
+      <td>26维动作切片：arm[0:14] hand[14:26]</td><td>arm.start=0 hand.start=14</td></tr>
+    <tr><td><code>client_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">intra_chunk.fitting_deg=<span class="shape">4</span></span></td>
+      <td>多项式拟合阶数</td><td>4</td></tr>
+    <tr><td><code>client_conf.py</code></td><td><span class="tensor" style="font-size:0.65rem;">language.auto_mode=<span class="shape">False</span></span></td>
+      <td>是否根据 prob_progress 自动切换语言指令</td><td>false</td></tr>
+    <tr><td><code>default_conf.yaml</code></td><td><span class="tensor" style="font-size:0.65rem;">所有参数持久化</span></td>
+      <td>运行时实际加载的实际值，覆盖 conf/*.py</td><td>（YAML文件）</td></tr>
   </table>
 
   <div class="tip">
-    <strong>关键原则：</strong>vla_infer 的 robots_conf 必须与 TAO 训练的 embodiment 配置严格一致。
-    如果 TAO 训练时左臂维度是 7、切片范围是 [0:7)，那部署也必须一模一样。
-    否则会出现"模型输出对但机器人乱动"的问题。
+    <strong>关键原则：</strong>vla_infer 的 robots_conf.action_layout 必须与模型训练的 embodiment 配置严格一致。
+    如果训练时左臂维度是 7、切片范围是 [0:7)，那部署也必须一模一样。
   </div>
 </div>
 
 <!-- ==================== B3 通信层 ==================== -->
-<div class="section-label"><span>B3 通信层：Client-Server 的 ZMQ 请求应答</span></div>
+<div class="section-label" id="b3"><span>B3 通信层：Client-Server 的 ZMQ 请求应答</span></div>
 
 <div class="module" style="border-left:4px solid var(--green);">
   <span class="tag green">B3</span>
@@ -632,82 +436,77 @@ parse_args() -> get_client_config() -> load_user_config() -> override_config_wit
   </div>
 
   <div class="story-bubble">
-    <div class="s-label">倒水任务中的通信流</div>
-    Client（G1 身体）和 Server（倒水专家大脑）之间通过 <strong>ZMQ DEALER/ROUTER</strong> 模式异步通信：<br>
-    Client 收集好 <em>3 张图像 + 26 维关节状态</em> → pickle序列化 + json元数据 → ZMQ 异步发送 →
-    Server ROUTER 收到 → 并行解码 + 推理 → ZMQ 回复 → Client DEALER 收到 <em>64 步倒水动作</em>。<br>
-    与 REQ/REP 不同，DEALER/ROUTER 支持并行请求、非阻塞发送和双向元数据传输。
+    <div class="s-label">通信流</div>
+    Client 和 Server 之间通过 <strong>ZMQ DEALER/ROUTER</strong> 模式异步通信：<br>
+    Client 收集好 <em>N 张图像 + M 维关节状态</em> → pickle序列化 + json元数据 → DEALER 异步发送 →
+    Server ROUTER 收到 → 并行解码 + 推理 → ZMQ 回复 → Client DEALER 收到 <em>动作 chunk</em>。<br>
+    支持 request_id 去重（stale response 自动丢弃）、HWM=1、心跳保活（heartbeat_interval=1s, timeout=30s）。
   </div>
 
   <div class="tensor-row">
-    <span class="tensor"><span class="label">请求包</span> <span class="shape">pickle(obs+state+language) + json(meta)</span></span>
-    <span class="tensor"><span class="label">响应包</span> <span class="shape">pickle(pred_action+ext) + json(meta)</span></span>
+    <span class="tensor"><span class="label">请求包</span> <span class="shape">pickle(obs+state+language) + json(meta.request_id)</span></span>
+    <span class="tensor"><span class="label">响应包</span> <span class="shape">pickle(pred_action+ext) + json(meta.avg_infer_time)</span></span>
     <span class="tensor"><span class="label">通信协议</span> ZMQ.DEALER(Client) / ROUTER(Server)</span>
   </div>
 
   <table>
     <tr><th>步骤</th><th>谁</th><th>做什么</th><th>数据形状</th></tr>
-    <tr>
-      <td>1</td><td>Client Robot</td>
-      <td>采集观测 → 预处理（统一尺寸[480,640]）→ 编码JPEG</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">3张[JPEG编码]</span> + <span class="shape">state[26]</span></span></td>
-    </tr>
-    <tr>
-      <td>2</td><td>Client ZMQ</td>
+    <tr><td>1</td><td>Client Robot</td>
+      <td>采集观测 → 预处理（resize [480,640]）→ JPEG编码</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">N张[JPEG]</span> + <span class="shape">state[M]</span></span></td></tr>
+    <tr><td>2</td><td>Client ZMQ</td>
       <td>DEALER 非阻塞发送 <span class="src-badge src-code">sendMessage(data, meta)</span></td>
-      <td>序列化 pickle + JSON multipart</td>
-    </tr>
-    <tr>
-      <td>3</td><td>Server</td>
+      <td>序列化 pickle + JSON multipart</td></tr>
+    <tr><td>3</td><td>Server</td>
       <td>ROUTER 收包 → 并行解码 → <span class="src-badge src-code">pad_and_resize(640)</span> → <span class="src-badge src-code">model.infer()</span></td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">3×[640,640,3]→[224,224]</span> + <span class="shape">state[26]</span></span></td>
-    </tr>
-    <tr>
-      <td>4</td><td>Server</td>
-      <td>返回推理结果（包含动作 + 扩展字段）</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">pred_action[64,26]</span> + <span class="shape">ext(prob_progress等)</span></span></td>
-    </tr>
-    <tr>
-      <td>5</td><td>Client</td>
-      <td>IntraChunk拟合 + InterChunk过渡 → 控制机器人</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">拟合后[266Hz,26]</span></span></td>
-    </tr>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">N×[640,640]→[224,224]</span> + <span class="shape">state[M]</span></span></td></tr>
+    <tr><td>4</td><td>Server</td>
+      <td>异步回调 <span class="src-badge src-code">inference_callback</span> 返回结果</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">pred_action[64,dim]</span> + <span class="shape">ext(prob_progress等)</span></span></td></tr>
+    <tr><td>5</td><td>Client</td>
+      <td>收到后 IntraChunk拟合 + InterChunk过渡 → 控制机器人</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">拟合后[266Hz, dim]</span></span></td></tr>
   </table>
 
   <div class="tip">
-    <strong>🔑 关键约束：</strong>ZMQ 通信量为图像编码+pickle耗时；HWM=1 保证不会堆积旧消息，
-    新推理结果到来时旧消息自动丢弃。Server 通过 ThreadPoolExecutor 并行解码多路图像（<code>max_decode_workers</code>），
-    通过异步回调 <code>inference_callback</code> 回复结果。
+    <strong>关键约束：</strong>ZMQ 通信量为图像编码+pickle耗时；HWM=1 保证不会堆积旧消息。
+    Server 通过 ThreadPoolExecutor 并行解码多路图像（<code>max_decode_workers</code>），
+    推理也通过 <code>max_infer_workers</code> 线程池执行。Client 端通过 request_id 匹配请求-响应，
+    stale response 自动丢弃。
   </div>
 </div>
 
 <!-- ==================== B4 Server 推理层 ==================== -->
-<div class="section-label"><span>B4 Server 推理层：模型输入输出与两级尺寸映射</span></div>
+<div class="section-label" id="b4"><span>B4 Server 推理层：模型输入输出与三级尺寸映射</span></div>
 
 <div class="card-grid">
   <div class="module" style="margin-bottom:0;">
     <span class="tag blue">B4</span>
     <div class="module-title">
-      GR00T N1.5 输入封装
-      <span class="badge code-ref">models/gr00t_n1_5.py::infer()</span>
+      Server 推理流程
+      <span class="badge code-ref">server/core/vla_server.py</span>
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">倒水任务中的角色</div>
-      当 Server 收到 G1 发来的观测数据后，<span class="glossary-term">GR00T N1.5<span class="tooltip">NVIDIA 发布的 VLA 基础模型，基于 SigLIP+Qwen3 架构</span></span>
-      等模型通过 <span class="src-badge src-code">infer()</span> 方法将原始 obs 打包成模型需要的输入格式。
-      <strong>Server 当前支持 11 种模型类型：</strong>mock, act, gr00t_n1, gr00t_n1_5, gr00t_n1_6, rdt, smolvla, go1, pi0, pi05, tao。
-    </div>
-
-    <div class="module-desc">
-      核心输入：<strong>3 路视频</strong>（头顶 + 左腕 + 右腕）、<strong>语言指令</strong>、<strong>26 维关节状态</strong>
+      <div class="s-label">Server 收到数据后做什么</div>
+      当 Server 收到 Client 发来的观测数据后，<code>inference()</code> 方法做 4 件事：<br>
+      1. <strong>并行解码</strong>：ThreadPoolExecutor 并行解码所有 cam.* 图像<br>
+      2. <strong>pad_and_resize(640,640)</strong>：统一到传输口径<br>
+      3. <strong>模型推理</strong>：executor.submit(model.infer, data)，异步 callback 返回<br>
+      4. <strong>回调回复</strong>：inference_callback 通过 ZMQ sendMessage 返回结果<br><br>
+      <strong>Server 当前支持 11 种模型类型：</strong><br>
+      mock, act, gr00t_n1, gr00t_n1_5, gr00t_n1_6, rdt, smolvla, go1, pi0, pi05, tao
     </div>
 
     <div class="tensor-row">
-      <span class="tensor"><span class="label">video</span> <span class="shape">[1,T,3,224,224]</span> <span class="dim-detail">{T=历史帧数, 3=RGB, 224=模型内尺寸}</span></span>
-      <span class="tensor"><span class="label">state</span> <span class="shape">[1,26]</span> <span class="dim-detail">{14臂+12手}</span></span>
-      <span class="tensor"><span class="label">language</span> <span class="shape">token_ids</span> <span class="dim-detail">{文本编码}</span></span>
-      <span class="tensor"><span class="label">输出</span> <span class="shape">[1,64,26] + ext</span> <span class="dim-detail">{64=action_horizon, ext=prob_progress等}</span></span>
+      <span class="tensor"><span class="label">video</span> <span class="shape">[1,T,3,224,224]</span></span>
+      <span class="tensor"><span class="label">state</span> <span class="shape">[1,dim]</span></span>
+      <span class="tensor"><span class="label">language</span> <span class="shape">token_ids</span></span>
+      <span class="tensor"><span class="label">输出</span> <span class="shape">[1,64,dim] + ext</span></span>
+    </div>
+
+    <div class="tip">
+      模型具体尺寸（T=历史帧数，dim=动作维度）取决于 conf/models_conf.py 和模型训练配置。
     </div>
   </div>
 
@@ -715,36 +514,33 @@ parse_args() -> get_client_config() -> load_user_config() -> override_config_wit
     <span class="tag blue">B4</span>
     <div class="module-title">
       Client 480 → Server 640 → 模型 224 三级映射
-      <span class="badge code-ref">client/misc.py + server/vla_server.py + model transform</span>
+      <span class="badge code-ref">client/utils/misc.py + server/core/vla_server.py</span>
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">最容易混淆的概念——现在是三级映射</div>
-      Client 配置的 <span class="tensor" style="font-size:0.65rem;"><span class="shape">vision.preprocess=[480,640]</span></span> 是<strong>客户端预处理口径</strong>，
-      Server 收到后做 <span class="tensor" style="font-size:0.65rem;"><span class="shape">pad_and_resize(640,640)</span></span> 是<strong>统一传输口径</strong>，
+      <div class="s-label">最容易混淆的概念——三级映射</div>
+      Client 配置的 <span class="tensor" style="font-size:0.65rem;"><span class="shape">vision.preprocess=[480,640]</span></span> 是<strong>客户端预处理口径</strong>，<br>
+      Server 收到后做 <span class="tensor" style="font-size:0.65rem;"><span class="shape">pad_and_resize(640,640)</span></span> 是<strong>统一传输口径</strong>，<br>
       模型内部的 <span class="tensor" style="font-size:0.65rem;"><span class="shape">VideoResize(224,224)</span></span> 是<strong>模型感知尺寸</strong>。
-      三级尺寸各自独立，理解这一点能避免大量排障困扰！
     </div>
 
     <div class="code-block" style="font-size:0.72rem;">
 <span style="color:var(--text-dim);"># 三级映射链路：</span>
-Client conf: vision.preprocess.height=480, width=640  <span style="color:var(--text-dim);">← 客户端预处理（resize保持宽高比）</span>
+Client conf: vision.preprocess.height=480, width=640  <span style="color:var(--text-dim);">← resize保持宽高比</span>
   -> JPEG编码 -> ZMQ发送
-  -> Server 解码 -> VLAServer._pad_and_resize(target=640,640)  <span style="color:var(--text-dim);">← 统一到640传输口径</span>
+  -> Server 解码 -> VLAServer._pad_and_resize(target=640,640)  <span style="color:var(--text-dim);">← INTER_AREA缩放到640</span>
   -> GR00T transform: VideoResize(224,224)  <span style="color:var(--text-dim);">← 模型内部固定逻辑</span>
-  -> 最终输入 <span class="shape">[1,3,224,224]</span>
-    </div>
+  -> 最终输入 <span class="shape">[1,3,224,224]</span></div>
 
     <div class="tip">
-      <strong>⚠️ 常见误解：</strong>有人以为改 Client 的 preprocess_size 就能改变模型输入尺寸，
-      实际上模型内部一定会缩到 224。如果要改模型输入分辨率，需要修改 TAO 训练时的 data_config，
-      然后重新训练模型 —— 这不属于部署范畴。Server 的 pad_and_resize(640) 是固定逻辑。
+      <strong>常见误解：</strong>改 Client preprocess_size 不会改变模型输入尺寸。
+      模型内部一定会缩到 224。Server 的 pad_and_resize(640) 是固定逻辑。
     </div>
   </div>
 </div>
 
 <!-- ==================== B5 Client 实时控制 ==================== -->
-<div class="section-label"><span>B5 Client 实时控制层：四线程协同</span></div>
+<div class="section-label" id="b5"><span>B5 Client 实时控制层：四线程协同</span></div>
 
 <div class="module" style="border-left:4px solid var(--green);">
   <span class="tag green">B5</span>
@@ -754,175 +550,124 @@ Client conf: vision.preprocess.height=480, width=640  <span style="color:var(--t
   </div>
 
     <div class="story-bubble">
-      <div class="s-label">倒水任务中的四线程协作 + 新组件</div>
-      G1 机器人要流畅地完成倒水，需要 4 个工人同时工作：<br>
-    <strong>观测工</strong>不断看（3 路摄像头采集）→ <strong>推理工</strong>发请求等回复（内联做轨迹拟合+过渡）→ <strong>控制工</strong>按 266Hz 逐帧驱动电机 → <strong>可视化工</strong>推送数据到 Web 面板。<br>
+      <div class="s-label">四线程协作</div>
+      需要 4 个工人同时工作：<br>
+    <strong>观测工</strong>不断看（N 路摄像头采集）→ <strong>推理工</strong>发请求等回复（内联做轨迹拟合+过渡）→ <strong>控制工</strong>按固定频率逐帧驱动电机 → <strong>可视化工</strong>推送数据到 Web 面板。<br>
     它们共享一块黑板（<span class="glossary-term">RDM<span class="tooltip">Realtime Data Manager，四线程间共享数据的中心存储</span></span>），
     观测工写数据，推理工读数据和写动作（内联拟合+过渡），控制工读结果写执行，可视化工推送监控数据。<br>
-    此外还有 <strong>TaskLanguageManager</strong>（根据 prob_progress 自动切换语言指令）和
-    <strong>LeRobotDatasetWriter</strong>（录制训练数据）两个辅助组件。
+    推理线程使用 <code>MultiThreadTimer</code>（控制/可视化线程），图片编码使用 <code>ThreadPoolExecutor(4)</code>。
   </div>
 
   <table>
-    <tr><th>线程</th><th>函数</th><th>周期</th><th>倒水任务中的职责</th><th>关键数据</th></tr>
-    <tr>
-      <td><span style="color:var(--blue);font-weight:600;">observe</span></td>
-      <td><span class="src-badge src-code">_observe_thread_fun</span></td>
-      <td>~30Hz</td>
-      <td>采集 3 路摄像头画面（800+848+848）→ resize到[480,640] → JPEG编码 → 写入 RDM</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">3×JPEG编码</span> + <span class="shape">state[26]</span></span></td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--green);font-weight:600;">inference</span></td>
-      <td><span class="src-badge src-code">_inference_first/step</span></td>
-      <td>按触发（wait_time=200ms）</td>
+    <tr><th>线程</th><th>函数</th><th>周期</th><th>职责</th><th>关键数据</th></tr>
+    <tr><td><span style="color:var(--blue);font-weight:600;">observe</span></td>
+      <td><span class="src-badge src-code">_observe_thread_fun</span></td><td>~30Hz</td>
+      <td>采集 N 路摄像头画面 → resize到[480,640] → JPEG编码 → 写入 RDM</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">N×JPEG编码</span> + <span class="shape">state[M]</span></span></td></tr>
+    <tr><td><span style="color:var(--green);font-weight:600;">inference</span></td>
+      <td><span class="src-badge src-code">_inference_first/step</span></td><td>按触发（wait_time=200ms）</td>
       <td>从 RDM 取最新观测 → ZMQ DEALER 发送 → 取回 action chunk</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">pred_action[64,26]</span></span></td>
-    </tr>
-    <tr style="background:var(--surface2);">
-      <td><span style="color:var(--text-dim);font-weight:600;">trajectory</span></td>
-      <td><span class="src-badge src-code">推理线程内联执行</span></td>
-      <td>推理完成后触发</td>
-      <td>IntraChunk: 多项式拟合[64步→266Hz]；InterChunk: 与上一chunk平滑衔接<br><em>推理线程内联执行，非独立线程</em></td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">拟合后[266Hz,26]</span></span></td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--red);font-weight:600;">control</span></td>
-      <td><span class="src-badge src-code">_control_thread_fun</span></td>
-      <td>固定 266Hz（3.75ms Timer）</td>
-      <td>按 266Hz 从 RDM 取当前动作 → 解析 action_layout → 限幅 → ROS2 话题下发</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">ROS2话题[14臂+12手]</span></span></td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--pink);font-weight:600;">visualize</span></td>
-      <td><span class="src-badge src-code">_visualize_thread_fun</span></td>
-      <td>266Hz Timer</td>
-      <td>推送动作/状态数据到 VisualizeServer WebSocket</td>
-      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">动作曲线+状态数据</span></span></td>
-    </tr>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">pred_action[64,dim]</span></span></td></tr>
+    <tr style="background:var(--surface2);"><td><span style="color:var(--text-dim);font-weight:600;">trajectory</span></td>
+      <td><span class="src-badge src-code">推理线程内联</span></td><td>推理完成后触发</td>
+      <td>IntraChunk拟合 + InterChunk过渡 <em>（推理线程内联执行，非独立线程）</em></td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">拟合后[266Hz,dim]</span></span></td></tr>
+    <tr><td><span style="color:var(--red);font-weight:600;">control</span></td>
+      <td><span class="src-badge src-code">_control_thread_fun</span></td><td>266Hz（3.75ms Timer）</td>
+      <td>按 266Hz 从 RDM 取当前动作 → action_layout解析 → 限幅 → ROS2 话题下发</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">ROS2话题[分片]</span></span></td></tr>
+    <tr><td><span style="color:var(--pink);font-weight:600;">visualize</span></td>
+      <td><span class="src-badge src-code">_visualize_thread_fun</span></td><td>266Hz Timer</td>
+      <td>推送动作/状态数据到 VisualizeServer WebSocket（8765）</td>
+      <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">动作曲线+状态数据</span></span></td></tr>
   </table>
 
   <table>
     <tr><th colspan="3" style="color:var(--orange);">推理-控制流水线时序（wait_time=200ms）</th></tr>
     <tr><th>T+0ms</th><td>observe 采集第 1 帧</td><td>inference 等待</td></tr>
-    <tr><th>T+33ms</th><td>observe 采集第 2 帧</td><td>inference 触发 _inference_first（ZMQ → Server）</td></tr>
+    <tr><th>T+33ms</th><td>observe 采集第 2 帧</td><td>inference 触发 _inference_first（ZMQ→Server）</td></tr>
     <tr><th>T+83ms</th><td>observe 持续采集</td><td>收到 action chunk → IntraChunk拟合 → InterChunk过渡 → 写入 RDM</td></tr>
     <tr><th>T+100ms~</th><td colspan="2">control 按 266Hz 逐帧执行，wait_time 过后触发下一轮 inference</td></tr>
   </table>
 
   <div class="tip">
-    <strong>🔑 关键区分：</strong>任何抖动问题，先定位是哪个环节的瓶颈：
-    <em>infer 延迟高</em> → 看 B4 Server；<em>轨迹跳变</em> → 看 B7 IntraChunk 拟合参数；
-    <em>chunk切换顿挫</em> → 看 B7 InterChunk 策略；<em>执行跟不上</em> → 看 B6 限幅和话题频率。
+    <strong>关键区分：</strong>任何抖动问题，先定位是哪个环节的瓶颈：
+    <em>infer 延迟高</em> → 看 B4 Server；<em>轨迹跳变</em> → 看 B7 IntraChunk；
+    <em>chunk切换顿挫</em> → 看 B7 InterChunk；<em>执行跟不上</em> → 看 B6 限幅和话题频率。
   </div>
 
 </div>
 
-<!-- ==================== B6 G1 驱动映射 ==================== -->
-<div class="section-label"><span>B6 Unitree G1 驱动层：26维→限幅→ROS2话题，arm+hand双段layout</span></div>
+<!-- ==================== B6 机器人驱动 ==================== -->
+<div class="section-label" id="b6"><span>B6 机器人驱动层：以 Unitree G1（26维）为例</span></div>
 
 <div class="card-grid">
   <div class="module" style="margin-bottom:0;">
     <span class="tag orange">B6</span>
     <div class="module-title">
-      26 维动作切片
-      <span class="badge code-ref">robots_conf.py → UnitreeG1Robot.py</span>
+      G1 26 维动作切片
+      <span class="badge code-ref">robots_conf.py + client/robots/unitree_g1/</span>
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">倒水任务的 26 维分解（配置层 vs 驱动层）</div>
-      G1 倒水时全身的动作被编码成一个 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[26]</span></span> 维度的向量。
+      <div class="s-label">26 维分解（配置层 vs 驱动层）</div>
+      G1 全身的动作被编码成一个 <span class="tensor" style="font-size:0.65rem;"><span class="shape">[26]</span></span> 维度的向量。
       <strong>配置层（robots_conf.py）</strong>分为 2 段：<span class="shape">arm[0:14]</span> + <span class="shape">hand[14:26]</span>；
       实际 <strong>驱动层（UnitreeG1Robot.py）</strong>在内部切成 4 段发送给 ROS2 话题。
-      手部带防抖机制，差值小于 <span class="shape">50</span> 时不重复发送以防电机过热。
+      手部带防抖机制，差值小于 50 时不重复发送以防电机过热。
     </div>
 
     <table>
       <tr><th>配置层切片</th><th>驱动层切片</th><th>自由度</th><th>控制对象</th><th>ROS2 话题</th><th>限幅保护</th></tr>
-      <tr>
-        <td rowspan="2"><span class="tensor" style="font-size:0.65rem;"><span class="shape">arm[0:14]</span></span></td>
-        <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[0:7]</span></span></td>
-        <td>7</td>
-        <td>左臂（肩3+肘2+腕2）</td>
-        <td><code>/left_arm/joint_pos</code> (Jointpos)</td>
-        <td><span class="src-badge src-calc">相对delta+绝对限幅</span></td>
-      </tr>
-      <tr>
-        <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[7:14]</span></span></td>
-        <td>7</td>
-        <td>右臂（肩3+肘2+腕2）</td>
-        <td><code>/right_arm/joint_pos</code> (Jointpos)</td>
-        <td><span class="src-badge src-calc">相对delta+绝对限幅</span></td>
-      </tr>
-      <tr>
-        <td rowspan="2"><span class="tensor" style="font-size:0.65rem;"><span class="shape">hand[14:26]</span></span></td>
-        <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[14:20]</span></span></td>
-        <td>6</td>
-        <td>左手手指（little~thumb)）</td>
-        <td><code>/left_hand_cmd</code> (JointState,带防抖≥50)</td>
-        <td>差分防抖</td>
-      </tr>
-      <tr>
-        <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[20:26]</span></span></td>
-        <td>6</td>
-        <td>右手手指（little~thumb)）</td>
-        <td><code>/right_hand_cmd</code> (JointState,带防抖≥50)</td>
-        <td>差分防抖</td>
-      </tr>
+      <tr><td rowspan="2"><span class="tensor" style="font-size:0.65rem;"><span class="shape">arm[0:14]</span></span></td>
+        <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[0:7]</span></span></td><td>7</td>
+        <td>左臂（肩3+肘2+腕2）</td><td><code>/left_arm/joint_pos</code></td>
+        <td><span class="src-badge src-calc">相对delta+绝对限幅</span></td></tr>
+      <tr><td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[7:14]</span></span></td><td>7</td>
+        <td>右臂（肩3+肘2+腕2）</td><td><code>/right_arm/joint_pos</code></td>
+        <td><span class="src-badge src-calc">相对delta+绝对限幅</span></td></tr>
+      <tr><td rowspan="2"><span class="tensor" style="font-size:0.65rem;"><span class="shape">hand[14:26]</span></span></td>
+        <td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[14:20]</span></span></td><td>6</td>
+        <td>左手手指（little~thumb_rot）</td><td><code>/left_hand_cmd</code> (JointState)</td>
+        <td>差分防抖≥50</td></tr>
+      <tr><td><span class="tensor" style="font-size:0.65rem;"><span class="shape">action[20:26]</span></span></td><td>6</td>
+        <td>右手手指（little~thumb_rot）</td><td><code>/right_hand_cmd</code> (JointState)</td>
+        <td>差分防抖≥50</td></tr>
     </table>
+
+    <div class="code-block" style="font-size:0.65rem;">
+<span style="color:var(--text-dim);"># 限幅配置（default_conf.yaml）：</span>
+left_arm_delta:  [0.15,0.15,0.15,0.15,0.50,0.25,0.20]
+right_arm_delta: [0.20,0.15,0.15,0.15,0.50,0.25,0.20]
+hand_diff_threshold: 50
+    </div>
   </div>
 
   <div class="module" style="margin-bottom:0;">
     <span class="tag orange">B6</span>
     <div class="module-title">
-      ROS2 控制话题映射
-      <span class="badge code-ref">UnitreeG1Robot.py::send_robot_action()</span>
+      5 种机器人支持
+      <span class="badge code-ref">client/robots/{type}/body_robot.py</span>
     </div>
 
-    <div class="story-bubble">
-      <div class="s-label">从数组到物理动作</div>
-      26 维数组不能直接驱动电机。需要把 <span class="shape">action[0:7]</span> 发给左臂的话题，
-      <span class="shape">action[7:14]</span> 发给右臂的话题，<span class="shape">action[14:20]</span> 发给左手的话题……
-      就像把乐谱的 26 条音轨分发给 26 个乐手各自演奏。
-    </div>
-
-    <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 26维 → 4个ROS2话题  + 安全限幅</span>
-<span style="color:var(--text-dim);"># 出处：client/robots/unitree_g1/UnitreeG1Robot.py::send_robot_action()</span>
-
-<span style="color:var(--text-dim);"># Step 1: 限幅——相对delta限位 + 绝对安全限位兜底</span>
-<span style="color:var(--text-dim);"># 左臂delta: [0.15,0.15,0.15,0.15,0.50,0.25,0.20]</span>
-<span style="color:var(--text-dim);"># 右臂delta: [0.20,0.15,0.15,0.15,0.50,0.25,0.20]</span>
-action = _clamp_arm_actions(action, current_arm_state)
-
-<span style="color:var(--text-dim);"># Step 2: 切片 + ROS2 发布</span>
-left_arm_msg.joint    = action[0:7]     <span style="color:var(--text-dim);">→ /left_arm/joint_pos (Jointpos)</span>
-right_arm_msg.joint   = action[7:14]    <span style="color:var(--text-dim);">→ /right_arm/joint_pos (Jointpos)</span>
-left_hand_msg.position = action[14:20]  <span style="color:var(--text-dim);">→ /left_hand_cmd (JointState, diff≥50才发)</span>
-right_hand_msg.position= action[20:26]  <span style="color:var(--text-dim);">→ /right_hand_cmd (JointState, diff≥50才发)</span>
-    </div>
-
-    <div class="tensor-row">
-      <span class="tensor"><span class="label">左臂话题</span> <span class="shape">/left_arm/joint_pos</span> <span class="dim-detail">{Jointpos 7维}</span></span>
-      <span class="tensor"><span class="label">右臂话题</span> <span class="shape">/right_arm/joint_pos</span> <span class="dim-detail">{Jointpos 7维}</span></span>
-      <span class="tensor"><span class="label">左手话题</span> <span class="shape">/left_hand_cmd</span> <span class="dim-detail">{JointState 6维}</span></span>
-      <span class="tensor"><span class="label">右手话题</span> <span class="shape">/right_hand_cmd</span> <span class="dim-detail">{JointState 6维}</span></span>
-    </div>
+    <table>
+      <tr><th>机器人</th><th>Action维度</th><th>摄像头路数</th><th>驱动方式</th><th>get_robot 入口</th></tr>
+      <tr><td><strong>a2d</strong></td><td>22（14arm+2gripper+2head+2waist+2wheel）</td><td>3</td><td>ROS2话题</td><td>run_client.py 直接支持</td></tr>
+      <tr><td><strong>mock</strong></td><td>16（14arm+2gripper）</td><td>3</td><td>本地回放数据</td><td>run_client.py 直接支持</td></tr>
+      <tr><td><strong>navi_wa2</strong></td><td>28（16arm+12hand）</td><td>3</td><td>ROS2话题</td><td>run_client.py 直接支持</td></tr>
+      <tr><td><strong>unitree_g1</strong></td><td>26（14arm+12hand）</td><td>3（head 800×640 + wrists 480×848）</td><td>ROS2话题，独立 rclpy.Context</td><td>VLAContext 懒加载</td></tr>
+      <tr><td><strong>ti5_t170c</strong></td><td>26（14arm+12hand）</td><td>3（D435i + 2×D405）</td><td>ROS2话题</td><td>VLAContext 懒加载</td></tr>
+    </table>
 
     <div class="tip">
-      <strong>⚠️ 安全限幅双层保护：</strong><br>
-      <strong>相对限幅：</strong>单步 action 与当前 state 的偏差不能超过 delta 值。
-      例如左肩 pitch delta=0.15，超出则被 clamp。<br>
-      <strong>绝对限幅：</strong>关节位置的绝对硬限位，即使相对限幅失效也能兜底。<br>
-      <strong>手部防抖：</strong>手部新指令与已发送指令的绝对差之和 &gt; 50 时才发送，
-      防止手指频繁微调导致电机过热。<br>
-      <strong>控制/推理比：</strong>RATIO=9（30Hz/267Hz），delta 按比例缩放。
+      <strong>unitree_g1 特殊：</strong>使用独立 rclpy.Context 避免 wait set 冲突。
+      VLAContext(VLAContext.py) 在 action_dispatcher 中共享，ZMQ 客户端也由 VLAContext 统一管理。
     </div>
   </div>
 </div>
 
 <!-- ==================== B7 轨迹/滤波 ==================== -->
-<div class="section-label"><span>B7 轨迹/滤波层：IntraChunk 拟合 + InterChunk 过渡双阶段</span></div>
+<div class="section-label" id="b7"><span>B7 轨迹/滤波层：IntraChunk 拟合 + InterChunk 过渡双阶段</span></div>
 
 <div class="card-grid">
   <div class="module" style="margin-bottom:0;">
@@ -933,36 +678,33 @@ right_hand_msg.position= action[20:26]  <span style="color:var(--text-dim);">→
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">倒水动作的"描线"过程</div>
-      Server 返回的 64 步动作像一副"画了关键点"的简笔画（<span class="shape">64帧, ≈3秒</span>），
-      需要<strong>IntraChunkSmoother</strong>把它变成连续平滑的线条（<span class="shape">266Hz</span>），
-      机器人才能流畅地执行。关节和手部分别用不同的拟合策略。
-      支持 3 种模式：<span class="src-badge src-calc">raw</span>（原样输出）、<span class="src-badge src-calc">interpolation</span>（线性插值）、<span class="src-badge src-calc">fitting</span>（多项式拟合）。
+      <div class="s-label">从稀疏到密集</div>
+      Server 返回的 [64,dim] 步动作像简笔画的关键点（<span class="shape">≈64帧</span>），
+      需要 <strong>IntraChunkSmoother</strong> 变成连续平滑的线条（<span class="shape">266Hz</span>）。
+      支持 3 种模式：<span class="src-badge src-calc">raw</span>（原样输出）、<span class="src-badge src-calc">interpolation</span>（线性插值）、<span class="src-badge src-calc">fitting</span>（多项式拟合，默认）。
+      关节和手部分别用不同的拟合策略，使用 ThreadPoolExecutor 并行拟合（max_joint_fitting_workers=14, max_hand_fitting_workers=12）。
     </div>
 
     <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 关节拟合：多项式插值（intra_chunk_smoother.py::process）</span>
+<span style="color:var(--text-dim);"># 关节拟合（process方法）</span>
 coeff = polyfit(timestamps, joint_chunk, deg=config.fitting_deg)  <span style="color:var(--text-dim);"># deg=4</span>
 q = poly1d(coeff)(x)      <span style="color:var(--text-dim);"># 位置</span>
-v = polyder(coeff)(x)      <span style="color:var(--text-dim);"># 速度（一阶导）</span>
-a = polyder(polyder(coeff))(x)  <span style="color:var(--text-dim);"># 加速度（二阶导）</span>
+v = polyder(coeff)(x)      <span style="color:var(--text-dim);"># 速度</span>
+a = polyder(polyder(coeff))(x)  <span style="color:var(--text-dim);"># 加速度</span>
 
-<span style="color:var(--text-dim);"># 手部拟合：均值窗口 + 阈值离散化（intra_chunk_smoother.py::_gripper_traj_fitting）</span>
+<span style="color:var(--text-dim);"># 手部拟合（_gripper_traj_fitting，实际对应 hand/step 两种策略）</span>
 mean = np.mean(gripper_chunk[window_min:window_max])
-if mean &gt; max_threshold: gripper = 1.0  <span style="color:var(--text-dim);"># 张开/闭合</span>
+if mean &gt; max_threshold: gripper = 1.0
 elif mean &lt; min_threshold: gripper = 0.0
     </div>
 
     <div class="tensor-row">
-      <span class="tensor"><span class="label">输入</span> <span class="shape">[64,26]</span> <span class="dim-detail">{64=chunk步数}</span></span>
-      <span class="tensor"><span class="label arrow">→</span> <span class="shape">fitting_time_step=3.75ms</span> <span class="dim-detail">{266Hz}</span></span>
-      <span class="tensor"><span class="label">输出</span> <span class="shape">[~800, 26]</span> <span class="dim-detail">{~3秒×266Hz}</span></span>
+      <span class="tensor"><span class="label">输入</span> <span class="shape">[64,dim]</span> <span class="arrow">→</span> <span class="shape">fitting_time_step=3.75ms</span> <span class="arrow">→</span> <span class="label">输出</span> <span class="shape">[~800, dim]</span></span>
     </div>
 
     <div class="tip">
-      <strong>🔑 调参：</strong><code>fitting_time_step</code> 越小轨迹越密（2.5ms → 400Hz），
-      <code>fitting_deg</code> 越大曲线越贴合原始数据，但高了可能边界震荡。<br>
-      使用 ThreadPoolExecutor 并行拟合关节（<code>max_joint_fitting_workers=14</code>）和手部（<code>max_gripper_fitting_workers=2</code>）。
+      <strong>调参：</code>fitting_deg 越大曲线越贴合原始数据，但高了可能边界震荡。
+      使用 action_layout 中的 joint_indices 和 step_indices 区分关节与手部/步进拟合策略。
     </div>
   </div>
 
@@ -974,115 +716,79 @@ elif mean &lt; min_threshold: gripper = 0.0
     </div>
 
     <div class="story-bubble">
-      <div class="s-label">两段动作之间的"无缝换挡"</div>
+      <div class="s-label">两段动作之间的无缝换挡</div>
       模型每推理一次产生一段 <span class="shape">64 步</span> 的动作（chunk）。
-      当新 chunk 到来时，<strong>InterChunkFuser</strong>负责<strong>平滑地</strong>从旧 chunk 的末尾过渡到新 chunk 的开头，
-      否则就会出现"机器人一下卡顿然后跳变"——就像开车换挡顿挫。<br>
-      支持 4 种策略：<span class="src-badge src-calc">search_action</span> <span class="src-badge src-calc">smooth_velocity</span> <span class="src-badge src-calc">min_jerk</span> <span class="src-badge src-calc">sync</span>。
+      当新 chunk 到来时，<strong>InterChunkFuser</strong> 负责<strong>平滑地</strong>从旧 chunk 的末尾过渡到新 chunk 的开头。
+      支持 4 种策略。
     </div>
 
     <table>
-      <tr><th>策略</th><th>原理</th><th>倒水任务中的表现</th><th>适用场景</th></tr>
-      <tr>
-        <td><span class="src-badge src-calc">min_jerk</span></td>
-        <td>五次多项式最小加加速度</td>
-        <td>倒水动作最自然，手部不抖</td>
-        <td><strong>🚰 默认推荐</strong></td>
-      </tr>
-      <tr>
-        <td><span class="src-badge src-calc">search_action</span></td>
-        <td>在新 chunk 中搜索最佳切入索引</td>
-        <td>适合快速响应，但可能微跳</td>
-        <td>快速抓取/避障</td>
-      </tr>
-      <tr>
-        <td><span class="src-badge src-calc">smooth_velocity</span></td>
-        <td>PD 控制器平滑速度（kp·e - kd·v）</td>
-        <td>非常稳定，但会略微滞后</td>
-        <td>高精度操作（如倒水到指定水量）</td>
-      </tr>
-      <tr>
-        <td><span class="src-badge src-calc">sync</span></td>
-        <td>同步模式，阻塞等待推理完成</td>
-        <td>严格对齐无跳变</td>
-        <td>调试/测试</td>
-      </tr>
+      <tr><th>策略</th><th>原理</th><th>表现</th><th>适用场景</th></tr>
+      <tr><td><span class="src-badge src-calc">min_jerk</span></td><td>五次多项式最小加加速度</td><td>动作最自然，手部不抖</td><td><strong>默认推荐</strong></td></tr>
+      <tr><td><span class="src-badge src-calc">search_action</span></td><td>在新 chunk 中搜索最佳切入索引</td><td>适合快速响应，可能微跳</td><td>快速抓取/避障</td></tr>
+      <tr><td><span class="src-badge src-calc">smooth_velocity</span></td><td>PD 控制器平滑速度（kp·e - kd·v）</td><td>非常稳定，但略滞后</td><td>高精度操作</td></tr>
+      <tr><td><span class="src-badge src-calc">sync</span></td><td>同步模式，阻塞等待推理完成</td><td>严格对齐无跳变</td><td>调试/测试</td></tr>
     </table>
 
     <div class="tip">
-      <strong>💡 切换策略的方法：</strong><code>action_dispatcher</code> 通过客户端 test_action_client.py 传参，或修改 conf/client_conf.py。<br>
-      对比实验时只改这一个参数，其他固定，用 20-30 秒稳定段判断效果。
+      <strong>切换策略：</strong>通过 CLI 参数 <code>--inter_chunk_mode</code> 或修改 <code>conf/client_conf.py</code>。
     </div>
   </div>
 </div>
 
 <!-- ==================== B8 可视化运维 ==================== -->
-<div class="section-label"><span>B8 可视化与运维层：三套可视化系统 + 日志监控</span></div>
+<div class="section-label" id="b8"><span>B8 可视化与运维层：三套可视化系统 + 资源监控</span></div>
 
 <div class="module" style="border-left:4px solid var(--pink);">
   <span class="tag pink">B8</span>
   <div class="module-title">
     可视化运维（三套系统）
-    <span class="badge code-ref">visual/ + web_client/ + visualize_server.py</span>
+    <span class="badge code-ref">visual/ + web_client/ + action_web_vision/ + visualize_server.py</span>
   </div>
 
   <div class="story-bubble">
-    <div class="s-label">倒水任务的"监控室"</div>
-    vla_infer 提供 <strong>三套可视化方案</strong> 让你实时监控 G1 倒水过程：<br>
-    <strong>Client 内置 VisualizeServer</strong>：VLAClientAsync 启动时自动创建 WebSocket 服务 (port 8765)，`_visualize_thread_fun` 按 266Hz 推送动作/状态数据到 Web 前端<br>
-    <strong>web_client/</strong>：全功能 FastAPI 仪表盘 (port 9000)，支持机器人控制、录制管理、配置编辑，通过 REST API + WebSocket 与后端通信<br>
-    <strong>action_web_vision/</strong>：简化的动作测试可视化 (port 9000)，通过 ObsDataBridge (port 9001) 接收实时相机帧<br>
-    三者共享同一数据源（RDM），但提供服务的方式和范围不同。
+    <div class="s-label">监控室三套方案</div>
+    vla_infer 提供 <strong>三套可视化方案</strong>：<br>
+    <strong>① Client 内置 VisualizeServer</strong>：VLAClientAsync 启动时自动创建 WebSocket 服务 (port 8765)，
+    `_visualize_thread_fun` 推送动作/状态/图像数据；支持 3 路 camera 二进制流 + joint_data JSON 图表数据<br>
+    <strong>② action_web_vision</strong>：纯转发 FastAPI 仪表盘 (port 9000)，通过 ObsDataBridge (port 9001) 接收实时帧，
+    不创建独立 RobotBody（避免 DDS 域冲突）。支持 GraspDetector 抓取状态显示 + ARM/Hand 关节轨迹 + 资源监控（CPU/GPU/MEM/BW）<br>
+    <strong>③ web_client/</strong>：全功能 FastAPI 仪表盘 (port 9000)，包含机器人控制、录制管理、配置编辑<br>
+    三者共享同一数据源（RDM 或 ObsDataBridge），但服务方式和范围不同。
   </div>
 
   <table>
-    <tr><th>监控环节</th><th>入口</th><th>倒水任务中观察什么</th><th>异常信号</th></tr>
-    <tr>
-      <td><span style="color:var(--pink);font-weight:600;">VisualizeServer(内置)</span></td>
+    <tr><th>监控环节</th><th>入口</th><th>观察什么</th><th>异常信号</th></tr>
+    <tr><td><span style="color:var(--pink);font-weight:600;">VisualizeServer(内置)</span></td>
       <td><span class="src-badge src-code">client/core/visualize_server.py</span></td>
-      <td>通过 WebSocket 推送 3 路图像 + 动作曲线 + 状态数据到 Web 前端</td>
-      <td>WebSocket 断连 / 数据推送延迟</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--green);font-weight:600;">Web 可视化(旧)</span></td>
-      <td><span class="src-badge src-code">visual/index.html</span></td>
-      <td>3 路图像是否持续更新、26 维动作曲线是否连续</td>
-      <td>图像卡住 / 曲线有断崖状跳变</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--green);font-weight:600;">Web 可视化(新)</span></td>
+      <td>WebSocket 推送 3 路图像 + 动作曲线(position/velocity/acceleration) + 状态数据</td><td>WS 断连 / 数据推送延迟</td></tr>
+    <tr><td><span style="color:var(--green);font-weight:600;">action_web_vision</span></td>
+      <td><span class="src-badge src-code">action_server/action_web_vision/server.py</span></td>
+      <td>3 路相机实时流 + ARM/Hand 轨迹 + 抓取状态 + CPU/GPU/MEM 资源监控</td>
+      <td>图像卡住 / 曲线断崖</td></tr>
+    <tr><td><span style="color:var(--green);font-weight:600;">web_client(全功能)</span></td>
       <td><span class="src-badge src-code">web_client/server.py</span></td>
-      <td>模块化面板：图像/轨迹/控制/记录</td>
-      <td>模块无响应</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--blue);font-weight:600;">Server 日志</span></td>
-      <td><span class="src-badge src-code">run_server.py</span></td>
-      <td>Avg infer time、infer_count、并行解码时间</td>
-      <td>推理耗时突增 / 多次 timeout</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--orange);font-weight:600;">Client 日志</span></td>
-      <td><span class="src-badge src-code">action_dispatcher.py</span></td>
-      <td>观测可用率、ZMQ连接状态、推理周期稳定性、task_progress</td>
-      <td>ZMQ断连 / task_progress 不变化 / Heartbeat failed</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--purple);font-weight:600;">ROS2 话题</span></td>
+      <td>机器人控制/录制管理/配置编辑/实时监控</td><td>模块无响应</td></tr>
+    <tr><td><span style="color:var(--blue);font-weight:600;">Server 日志</span></td>
+      <td><span class="src-badge src-code">run_server.py (Rich Live / debug)</span></td>
+      <td>Avg infer time、infer_count、并行解码时间</td><td>推理耗时突增 / timeout</td></tr>
+    <tr><td><span style="color:var(--orange);font-weight:600;">Client 日志</span></td>
+      <td><span class="src-badge src-code">run_client.py debug + logging</span></td>
+      <td>观测可用率、ZMQ 状态、推理周期、task_progress</td>
+      <td>ZMQ断连 / Heartbeat failed</td></tr>
+    <tr><td><span style="color:var(--purple);font-weight:600;">ROS2 话题</span></td>
       <td><span class="src-badge src-code">ros2 topic echo</span></td>
-      <td>/joint_state 连续输出、手部话题频率、限幅是否激活</td>
-      <td>话题中断 / 手部指令被防抖频繁抑制</td>
-    </tr>
+      <td>关节状态连续输出、手部话题频率、限幅是否激活</td>
+      <td>话题中断 / 防抖频繁抑制</td></tr>
   </table>
 
   <div class="tip">
-    <strong>🔑 部署闭环验证：</strong>在 Web 可视化看到 "图像流 → 推理 → 动作曲线 → 实际 G1 动作"
-    一一对应的闭环，才算部署成功。任何一个环节断开，需要回看对应 B 块的细节。
+    <strong>部署闭环验证：</strong>在可视化面板看到 "图像流 → 推理 → 动作曲线 → 实际机器人动作" 一一对应的闭环，才算部署成功。
   </div>
 </div>
 
-<!-- ==================== B9 任务调度层 ==================== -->
-<div class="section-label"><span>B9 任务调度层：ROS2 ActionServer 分派框架（9种task handler）</span></div>
+<!-- ==================== B9 任务调度 ==================== -->
+<div class="section-label" id="b9"><span>B9 任务调度层：ROS2 ActionServer 分派框架</span></div>
 
 <div class="module" style="border-left:4px solid var(--orange);">
   <span class="tag orange">B9</span>
@@ -1092,11 +798,12 @@ elif mean &lt; min_threshold: gripper = 0.0
   </div>
 
     <div class="story-bubble">
-    <div class="s-label">倒水任务的"指挥官"</div>
-    当需要执行复杂的多步骤任务（如抓取→递送→放置→复位）时，
-    action_server 就像一个指挥官，把复合任务拆解成一系列原子操作
-    （init_grasp → grasp → grasp_all → finish_grasp → deliver → place → release → reset），
-    每个原子操作由对应 handler 通过 VLA 推理完成。
+    <div class="s-label">指挥官</div>
+    当需要执行复杂的多步骤任务时，action_server 就像一个指挥官，把复合任务拆解成一系列原子操作，
+    每个原子操作由对应 handler 通过 VLA 推理完成。使用 <strong>复合键路由</strong>：
+    <code>"task:target"</code> 优先匹配，回退到 <code>"task"</code>。<br><br>
+    内置组件：<strong>GraspDetector</strong>（实时监控 set_angle/get_angle 的 thumb_bend 差值判断抓取）、
+    <strong>ObsDataBridge</strong>（推送观测到 WS 9001）、<strong>VLAContext</strong>（共享 ZMQ + RobotBody）。
   </div>
 
   <div class="card-grid" style="margin-top:0.5rem;">
@@ -1104,291 +811,123 @@ elif mean &lt; min_threshold: gripper = 0.0
       <div style="font-weight:600;font-size:0.78rem;color:var(--orange);margin-bottom:0.3rem;">核心组件</div>
       <div style="font-size:0.7rem;color:var(--text-dim);line-height:1.7;">
         <strong>action_dispatcher.py</strong>: ROS2 ActionServer，接收 ExecutionUnit action<br>
-        <strong>vla_context.py</strong>: VLA 上下文管理（共享 ZMQClient + RobotBody）<br>
-        <strong>action_base.py</strong>: 抽象 handler 基类 + TaskResult 错误码
+        <strong>vla_context.py</strong>: 共享 ZMQClient + RobotBody（懒加载）+ 任务进度<br>
+        <strong>action_base.py</strong>: 抽象 handler 基类 + TaskResult 错误码<br>
+        <strong>GraspDetector</strong>: 实时监控 set/get 角度的 thumb_bend 差值 ≥200° 持续 0.5s 判定抓取<br>
+        <strong>ObsDataBridge</strong>: WS 9001 推送观测给 action_web_vision
       </div>
     </div>
     <div style="background:var(--surface2);border-radius:8px;padding:0.6rem;">
-      <div style="font-weight:600;font-size:0.78rem;color:var(--orange);margin-bottom:0.3rem;">任务 Handler（9个）</div>
+      <div style="font-weight:600;font-size:0.78rem;color:var(--orange);margin-bottom:0.3rem;">任务 Handler 注册表</div>
       <div style="font-size:0.7rem;color:var(--text-dim);line-height:1.7;">
-        <strong>task_init_grasp.py</strong>: 初始抓取姿态（靠近物体）<br>
-        <strong>task_grasp.py</strong>: 单手抓取（含 GraspDetector 检测）<br>
-        <strong>task_grasp_all.py</strong>: 双手抓取<br>
-        <strong>task_finish_grasp.py</strong>: 完成抓取（收指）<br>
-        <strong>task_deliver.py</strong>: 递送物体（4种目标位置）<br>
-        <strong>task_place.py</strong>: 放置物体（4种目标位置）<br>
-        <strong>task_release.py</strong>: 释放物体（3种目标位置）<br>
-        <strong>task_reset.py</strong>: 机器人复位（3种模式）<br>
-        <strong>task_init_zero.py</strong>: 零位初始化
+        <strong>grasp:init</strong> → task_init_grasp.py<br>
+        <strong>grasp</strong> → task_grasp.py（单手抓取）<br>
+        <strong>grasp:finish</strong> → task_finish_grasp.py<br>
+        <strong>grasp_all</strong> → task_grasp_all.py（双手）<br>
+        <strong>grasp:all</strong> → 同上<br>
+        <strong>deliver:left/right/one/both arm</strong> → task_deliver.py（4种目标变体）<br>
+        <strong>place:left/right/one/both arm</strong> → task_place.py（4种目标变体）<br>
+        <strong>release:left/right/both hand</strong> → task_release.py（3种目标变体）<br>
+        <strong>reset:left/right/both arm</strong> → task_reset.py（3种目标变体）<br>
+        <strong>init_zero</strong> → task_init_zero.py
       </div>
     </div>
   </div>
 
   <table style="margin-top:0.5rem;">
-    <tr><th>组件</th><th>功能</th><th>关键文件</th></tr>
-    <tr>
-      <td>GraspDetector</td>
-      <td>实时监控手部 set_angle/get_angle 差值判断抓取状态，thumb_bend 差 &gt; 200° 持续 0.5s 判定为抓取</td>
-      <td><span class="src-badge src-code">action_dispatcher.py</span></td>
-    </tr>
-    <tr>
-      <td>ObsDataBridge</td>
-      <td>在 dispatcher 进程中持续读取 robot_body 观测数据，通过内部 WS(9001) 推送给 action_web_vision</td>
-      <td><span class="src-badge src-code">action_dispatcher.py</span></td>
-    </tr>
-    <tr>
-      <td>VLAContext</td>
-      <td>管理 VLA 推理上下文（共享 ZMQClient + RobotBody），支持暂停/恢复</td>
-      <td><span class="src-badge src-code">vla_context.py</span></td>
-    </tr>
+    <tr><th>特性</th><th>说明</th></tr>
+    <tr><td>机器人支持</td><td>unitree_g1（真机） / a2d（仿真）</td></tr>
+    <tr><td>启动脚本</td><td><code>bash run_action_real.sh</code>（真机） / <code>bash run_action_sim.sh</code>（仿真）</td></tr>
+    <tr><td>Web 可视化</td><td><code>action_web_vision/server.py</code> → <code>http://localhost:9000</code></td></tr>
+    <tr><td>VLA 组件工厂</td><td><code>VLAContext.create_vla_components()</code> 创建 per-task 组件，<code>destroy_vla_components()</code> 清理 + ZMQ stale 消息排空</td></tr>
+    <tr><td>仿真模式</td><td><code>--sim</code> 禁用相对/绝对限幅</td></tr>
   </table>
 
   <div class="tip">
-    <strong>⚠️ 依赖说明：</strong>action_server 依赖 ROS2 action 协议（message_center/ExecutionUnit.action），
+    <strong>依赖：</strong>action_server 依赖 ROS2 action 协议（message_center/ExecutionUnit.action），
     需要先编译对应的 ROS2 消息包。task handler 通过 VLAContext 间接调用 VLAClientAsync 进行推理。
+    VLAContext 使用共享 ZMQ 客户端（避免 per-task 首次推理超时）和独立 robot_body（避免 DDS wait set 冲突）。
   </div>
 </div>
 
 <!-- ==================== 端到端数据流追踪 ==================== -->
-<div class="section-label"><span>端到端数据流追踪表：倒水任务中每个环节的数据形状</span></div>
+<div class="section-label" id="data-flow"><span>端到端数据流追踪表：每个环节的数据形状</span></div>
 
 <div class="summary">
-  <div class="summary-title">从 G1 传感器到 ROS2 执行 —— 每个步骤的数据形状追踪</div>
+  <div class="summary-title">从传感器到执行 —— 每个步骤的数据形状追踪（以 Unitree G1 26维为例）</div>
   <table>
     <tr><th>环节</th><th>谁处理</th><th>输入尺寸</th><th>输出尺寸</th><th>说明</th></tr>
-    <tr>
-      <td>① 传感器采集</td>
-      <td>UnitreeG1Camera.py</td>
+    <tr><td>① 传感器采集</td>
+      <td>UnitreeG1Camera.py / body_robot.py</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">原始传感器流</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[800/848,640/848,3]</span> + <span class="shape">state[26]</span></span></td>
-      <td>head=800×640, hand=480×848(左右)；state 从 /joint_state 拼装 14臂+12手；原始 JPEG bytes 在 ROS CompressedImage.msg.data 中</td>
-    </tr>
-    <tr>
-      <td>② 客户端预处理</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[h,w,3]</span> + <span class="shape">state[26]</span></span></td>
+      <td>head=800×640, hand=480×848；state 从 /joint_state 拼装 14臂+12手</td></tr>
+    <tr><td>② 客户端预处理</td>
       <td>misc.py (resize/crop_and_resize)</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[h,w,3]</span></span></td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[480,640,3]</span></span></td>
-      <td>resize 保持宽高比到 vision.preprocess</td>
-    </tr>
-    <tr>
-      <td>③ 图像编码 + ZMQ</td>
+      <td>resize 保持宽高比到 vision.preprocess</td></tr>
+    <tr><td>③ 图像编码 + ZMQ</td>
       <td>_observe_thread_fun + ZMQClient</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[480,640,3] RGB</span></span></td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">pickle(data) + json(meta)</span></span></td>
-      <td>ThreadPoolExecutor 并行 JPEG 编码；DEALER 非阻塞发送</td>
-    </tr>
-    <tr>
-      <td>④ ZMQ 传输</td>
-      <td>ZMQClient (DEALER) ↔ ZMQServer (ROUTER)</td>
+      <td>ThreadPoolExecutor 并行 JPEG 编码；DEALER 非阻塞发送</td></tr>
+    <tr><td>④ ZMQ 传输</td>
+      <td>ZMQClient(DEALER) ↔ ZMQServer(ROUTER)</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">pickle+json 序列化</span></span></td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">反序列化 obs+state+language</span></span></td>
-      <td>异步 DEALER/ROUTER，HWM=1</td>
-    </tr>
-    <tr>
-      <td>⑤ Server 并行解码</td>
+      <td>异步 DEALER/ROUTER，HWM=1，request_id 去重</td></tr>
+    <tr><td>⑤ Server 并行解码</td>
       <td>vla_server.py (image_decode_executor)</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">编码后字节流</span></span></td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[640,640,3] RGB</span></span></td>
-      <td>ThreadPoolExecutor 并行解码 + pad_and_resize(640)</td>
-    </tr>
-    <tr>
-      <td>⑥ 模型 transform</td>
+      <td>ThreadPoolExecutor 并行解码 + pad_and_resize(640)</td></tr>
+    <tr><td>⑥ 模型 transform</td>
       <td>model.data_config.transform()</td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[640,640,3]</span></span></td>
       <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">3×[224,224,3]</span></span></td>
-      <td>VideoResize 缩放到模型训练尺寸</td>
-    </tr>
-    <tr>
-      <td>⑦ 模型推理</td>
+      <td>VideoResize 缩放到模型训练尺寸</td></tr>
+    <tr><td>⑦ 模型推理</td>
       <td>ModelVLA.infer()（11种类型）</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[1,3,224,224]×3</span> + <span class="shape">state[1,26]</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[1,64,26] + ext</span></span></td>
-      <td>异步回调 inference_callback；ext 包含 prob_progress 等</td>
-    </tr>
-    <tr>
-      <td>⑧ IntraChunk 拟合</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[1,T,3,224,224]×N</span> + <span class="shape">state[1,dim]</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[1,64,dim] + ext</span></span></td>
+      <td>异步回调 inference_callback；ext 包含 prob_progress 等</td></tr>
+    <tr><td>⑧ IntraChunk 拟合</td>
       <td>intra_chunk_smoother.py</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[64,26]</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[~800,26] + vel + acc</span></span></td>
-      <td>多项式拟合（关节）+ 均值窗口离散化（手部），3.75ms步长</td>
-    </tr>
-    <tr>
-      <td>⑨ InterChunk 过渡</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[64,dim]</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[~800,dim] + vel + acc</span></span></td>
+      <td>多项式拟合（关节）+ 均值窗离散化（手部），3.75ms步长</td></tr>
+    <tr><td>⑨ InterChunk 过渡</td>
       <td>inter_chunk_fuser.py</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">新旧chunk各[~800,26]</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">过渡后[~800,26]</span></span></td>
-      <td>min_jerk/search_action/smooth_velocity/sync</td>
-    </tr>
-    <tr>
-      <td>⑩ 限幅保护</td>
-      <td>UnitreeG1Robot.py::_clamp_arm_actions</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[26] 动作向量</span></span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">限幅后的[26]</span></span></td>
-      <td>相对delta限位 + 绝对安全限位兜底</td>
-    </tr>
-    <tr>
-      <td>⑪ ROS2 下发</td>
-      <td>UnitreeG1Robot.py</td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[26]</span> × 控制周期</span></td>
-      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">4 个 ROS2 话题</span></span></td>
-      <td>26维拆为 7+7+6+6 分别发布（Jointpos+JointState）</td>
-    </tr>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">新旧chunk各[~800,dim]</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">过渡后[~800,dim]</span></span></td>
+      <td>min_jerk / search_action / smooth_velocity / sync</td></tr>
+    <tr><td>⑩ 限幅保护</td>
+      <td>UnitreeG1Robot.py / base_robot.py</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[dim] 动作向量</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">限幅后的[dim]</span></span></td>
+      <td>相对delta限位 + 绝对安全限位兜底</td></tr>
+    <tr><td>⑪ ROS2 下发</td>
+      <td>UnitreeG1Robot.py / base_robot.py</td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">[dim] × 控制周期</span></span></td>
+      <td><span class="tensor" style="font-size:0.6rem;"><span class="shape">N 个 ROS2 话题</span></span></td>
+      <td>按 action_layout 切片分别发布</td></tr>
   </table>
-</div>
-
-<!-- ==================== TAO ↔ vla_infer 串联关系 ==================== -->
-<div class="section-label"><span>TAO ↔ vla_infer 串联：训练配置如何决定部署行为</span></div>
-
-<div class="summary">
-  <div class="summary-title">同一套倒水任务配置，从 TAO 训练到 vla_infer 部署的全映射</div>
-  <table>
-    <tr><th>配置项</th><th>TAO 训练时</th><th>vla_infer 部署时</th><th>必须一致？</th><th>不一致的后果</th></tr>
-    <tr>
-      <td><span class="src-badge src-config">action_dim</span></td>
-      <td><span class="shape">26</span>（14臂+12手）</td>
-      <td><span class="shape">26</span>（robots_conf.layout）</td>
-      <td><span class="decision-badge decision-yes">必须一致</span></td>
-      <td>维度不匹配 → 模型输出无法切片 → 机器人乱动或报错</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">action_horizon</span></td>
-      <td><span class="shape">64</span></td>
-      <td><span class="shape">64</span>（模型输出固定）</td>
-      <td><span class="decision-badge decision-yes">必须一致</span></td>
-      <td>训练用 64 部署用 32 → 模型输出形状不对</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">embodiment</span></td>
-      <td>Unitree G1 配置</td>
-      <td><code>robots_conf.unitree_g1</code></td>
-      <td><span class="decision-badge decision-yes">必须一致</span></td>
-      <td>关节编号/范围不同 → 左臂动作为右臂执行</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">image_size</span></td>
-      <td><span class="shape">224×224</span>（VideoResize）</td>
-      <td><span class="shape">640→224</span>（三级映射）</td>
-      <td><span class="decision-badge decision-yes">模型内一致</span></td>
-      <td>部署侧 640 只是预处理，模型内部仍是 224</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">model_type</span></td>
-      <td>GR00T / TAO / ACT 等</td>
-      <td><code>--model_type gr00t_n1_5</code></td>
-      <td><span class="decision-badge decision-yes">必须一致</span></td>
-      <td>模型类型不对 → 权重加载失败</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">language_instruction</span></td>
-      <td>"pour water into cup"</td>
-      <td>推理时传入相同指令</td>
-      <td><span class="decision-badge" style="background:var(--orange-bg);color:var(--orange);padding:0.1rem 0.4rem;border-radius:4px;font-size:0.6rem;">语义一致即可</span></td>
-      <td>指令差异大 → 模型输出不符合预期动作</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">chunk_overlap</span></td>
-      <td>不适用</td>
-      <td><span class="src-badge src-calc">inter_chunk_mode</span></td>
-      <td><span class="decision-badge" style="background:var(--orange-bg);color:var(--orange);padding:0.1rem 0.4rem;border-radius:4px;font-size:0.6rem;">部署特有</span></td>
-      <td>纯部署侧参数，训练不涉及</td>
-    </tr>
-  </table>
-
-  <div class="tip" style="margin:0.8rem 1.2rem 1.2rem;">
-    <strong>🔑 核心原则：</strong>所有与模型结构相关的配置（action_dim、embodiment、model_type）
-    <strong>TAO→vla_infer 必须一字不差</strong>。纯部署的配置（inter_chunk_mode、fitting_time_step）
-    不影响模型输出，只影响控制效果，可以自由调优。
-  </div>
-
-  <div class="tip" style="margin:0.6rem 1.2rem 1rem;">
-    <strong>📌 端口占用量汇总：</strong><br>
-    <strong>9000</strong> — Web Client / Action Web Vision (FastAPI)<br>
-    <strong>9001</strong> — ObsDataBridge 内部 WebSocket (action_dispatcher → web_vision)<br>
-    <strong>8765</strong> — VisualizeServer WebSocket 数据流 (VLAClientAsync)<br>
-
-    <strong>5566</strong> — ZMQ 默认端口 (Client↔Server通信)
-  </div>
 </div>
 
 <div class="module" style="border-left:4px solid var(--orange);margin-top:1rem;">
   <div class="story-bubble">
-    <div class="s-label">从训练到部署的完整故事链</div>
-    TAO 中用 <em>3 路 224×224 图像 + 26 维关节 + "pour water" 指令</em> 训练 GR00T N1.5 模型
-    → 导出 checkpoint
-    → vla_infer 加载同一模型，部署到真实 G1 机器人上
-    → 时序对齐 <em>3 路 640 图像（内部再缩到 224）</em> + 读取 <em>26 维 state</em>
-    → ZMQ 发送 → 模型推理 → 返回 <em>[64,26] action chunk</em>
-    → 轨迹拟合 + 平滑过渡 → ROS2 话题发布 → G1 电机执行倒水
-  </div>
-</div>
-
-<!-- ==================== 参数调优矩阵 ==================== -->
-<div class="section-label"><span>参数调优矩阵：倒水任务中怎么调、调什么</span></div>
-
-<div class="summary">
-  <div class="summary-title">🎛️ 参数调优矩阵（推荐区间 + 现象导向）</div>
-  <table>
-    <tr><th>参数</th><th>默认值</th><th>建议区间</th><th>调大效果</th><th>调小效果</th><th>关联 B 块</th></tr>
-    <tr>
-      <td><span class="src-badge src-config">observer.fps</span></td>
-      <td>30</td><td>10~30</td>
-      <td>观测更密，负载更高</td><td>负载低，动作可能迟钝</td>
-      <td>B5</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">sleep_time</span></td>
-      <td>0.002</td><td>0.001~0.01</td>
-      <td>推理更稳定</td><td>吞吐高但更易抖</td>
-      <td>B5</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">fitting_time_step</span></td>
-      <td>3.75ms</td><td>2.5~8.0</td>
-      <td>轨迹稀疏，控制钝</td><td>轨迹细腻，开销大</td>
-      <td>B7</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">fitting_deg</span></td>
-      <td>4</td><td>3~5</td>
-      <td>更贴合数据</td><td>更平滑</td>
-      <td>B7 *</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">inter_chunk_mode</span></td>
-      <td>min_jerk</td><td>4种策略</td>
-      <td colspan="2">不同任务偏好不同，需对比实验</td>
-      <td>B7</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">search_length</span></td>
-      <td>100</td><td>20~160</td>
-      <td>更平滑</td><td>更快响应</td>
-      <td>B7</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">gripper_offset</span></td>
-      <td>5</td><td>0~20</td>
-      <td>手部提前补偿</td><td>更贴近原始输出</td>
-      <td>B6</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge src-config">preprocess_size</span></td>
-      <td>[480,640]</td><td>固定 480×640</td>
-      <td colspan="2">部署主链路固定，模型内自动到 224</td>
-      <td>B2/B4</td>
-    </tr>
-  </table>
-  <div class="tip" style="margin:0.6rem 1.2rem 1rem;">
-    <strong>💡 调参顺序建议：</strong>先固定 <b>inter_chunk_mode=min_jerk</b>，再调 <b>fitting_time_step</b>，
-    最后微调 <b>search_length/gripper_offset</b>。每次只动 1 个参数，观察 20~30 秒稳定段再下结论。
-  </div>
-  <div style="margin:0.4rem 1.2rem 1rem;font-size:0.72rem;color:var(--text-dim);border-top:1px solid var(--border);padding-top:0.4rem;">
-    * fitting_deg 配置默认值=4，代码内函数默认参数=3（intra_chunk_smoother.py）；实际以配置传入值为准。
+    <div class="s-label">端口占用量汇总</div>
+    <strong>9000</strong> — Web Client / Action Web Vision (FastAPI)<br>
+    <strong>9001</strong> — ObsDataBridge 内部 WebSocket (action_dispatcher → web_vision)<br>
+    <strong>8765</strong> — VisualizeServer WebSocket 数据流 (VLAClientAsync)<br>
+    <strong>8080</strong> — visual/ HTTP 静态文件服务 (web_client 启动)<br>
+    <strong>5566</strong> — ZMQ 默认端口 (Client↔Server 通信)
   </div>
 </div>
 
 <!-- ==================== 公式专区 ==================== -->
-<div class="section-label"><span>算法与公式专区：每个公式的代码落点</span></div>
+<div class="section-label"><span>算法与公式专区</span></div>
 
 <div class="card-grid">
   <div class="module" style="margin-bottom:0;">
@@ -1401,11 +940,10 @@ elif mean &lt; min_threshold: gripper = 0.0
       q(t) = <span class="highlight">Σ</span> aₖ·tᵏ,  v(t) = dq/dt,  a(t) = d²q/dt²
     </div>
     <div class="code-block" style="font-size:0.7rem;">
-<span style="color:var(--text-dim);"># 用 deg=4 多项式拟合 64 步关节位置</span>
 coeff = polyfit(timestamps, joint_chunk, deg=4)
 q = poly1d(coeff)(x)
-v = polyder(coeff)(x)          <span style="color:var(--text-dim);"># → 速度</span>
-a = polyder(polyder(coeff))(x)  <span style="color:var(--text-dim);"># → 加速度</span>
+v = polyder(coeff)(x)
+a = polyder(polyder(coeff))(x)
     </div>
   </div>
 
@@ -1413,15 +951,10 @@ a = polyder(polyder(coeff))(x)  <span style="color:var(--text-dim);"># → 加�
     <span class="tag purple">公式</span>
     <div class="module-title">
       ② 手部均值窗 + 阈值离散化
-      <span class="badge code-ref">intra_chunk_smoother.py::_gripper_traj_fitting</span>
+      <span class="badge code-ref">intra_chunk_smoother.py</span>
     </div>
     <div class="formula-box">
       ḡ(i) = mean(g[i-k : i+k]),  if ḡ &gt; max_th → 1,  if ḡ &lt; min_th → 0
-    </div>
-    <div class="code-block" style="font-size:0.7rem;">
-mean = np.mean(gripper_chunk[window_min:window_max])
-if mean &gt; max_threshold: gripper = <span class="hl-green">1.0</span>  <span style="color:var(--text-dim);"># 张开</span>
-elif mean &lt; min_threshold: gripper = <span class="hl-red">0.0</span>  <span style="color:var(--text-dim);"># 闭合</span>
     </div>
   </div>
 
@@ -1434,272 +967,193 @@ elif mean &lt; min_threshold: gripper = <span class="hl-red">0.0</span>  <span s
     <div class="formula-box">
       acc = kp·(target-pos) - kd·vel,  vel = clip(vel+acc·dt),  pos += vel·dt
     </div>
-    <div class="code-block" style="font-size:0.7rem;">
-for each step:
-  error = target - pos
-  acc = kp*error - kd*vel
-  acc = clip(acc, -max_acc, max_acc)
-  vel = clip(vel + acc*dt, -max_vel, max_vel)
-  pos = pos + vel*dt
-    </div>
   </div>
 
   <div class="module" style="margin-bottom:0;">
     <span class="tag purple">公式</span>
     <div class="module-title">
-      ④ Min-Jerk / Search
+      ④ Min-Jerk / Search Action
       <span class="badge code-ref">inter_chunk_fuser.py</span>
     </div>
     <div class="formula-box">
-      min J = <span class="highlight">∫</span> (d³x/dt³)² dt  <span style="color:var(--text-dim);">（Min-Jerk）</span><br>
+      min J = <span class="highlight">∫</span> (d³x/dt³)² dt  <span style="color:var(--text-dim);">（Min-Jerk）</span>
     </div>
     <div class="module-desc" style="font-size:0.75rem;">
       Min-Jerk 用五次基函数使加加速度最小（<strong>默认推荐</strong>）。
-      Search-Action 在候选窗口中搜索与当前速度方向一致性最高的切入索引，适合快速响应场景。
+      Search-Action 在候选窗口中搜索与当前速度方向一致性最高的切入索引。
     </div>
-  </div>
-</div>
-
-<!-- ==================== 排障表 ==================== -->
-<div class="section-label"><span>排障对照表：倒水部署中最常见的 5 类问题</span></div>
-
-<div class="module" style="border-left:4px solid var(--red);">
-  <span class="tag red">排障</span>
-  <div class="module-title">
-    🧯 部署阶段排障速查
-  </div>
-  <table>
-    <tr><th style="width:18%;">症状</th><th style="width:25%;">高概率原因</th><th style="width:32%;">先看哪里</th><th>处理建议</th></tr>
-    <tr>
-      <td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">动作抖动/突变</span></td>
-      <td>inter_chunk_mode 不适配或平滑参数过激</td>
-      <td><span class="src-badge src-code">inter_chunk_fuser.py</span></td>
-      <td>先对比 min_jerk 与 smooth_velocity，再调 search_length/fitting_time_step</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">响应慢</span></td>
-      <td>infer 时间过长或模型资源不足</td>
-      <td><span class="src-badge src-code">run_server.py</span> live/debug 输出</td>
-      <td>观察 Avg infer time，必要时降频或换轻量模型</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">图像断流</span></td>
-      <td>相机话题不稳定或时间戳对齐失败</td>
-      <td><span class="src-badge src-code">UnitreeG1Camera.py</span></td>
-      <td>检查三路 topic 是否持续，验证 head/left/right 数据完整</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">手部指令无效</span></td>
-      <td>阈值/防抖导致未触发发送</td>
-      <td><span class="src-badge src-code">UnitreeG1Robot.py</span></td>
-      <td>检查 left_diff/right_diff 阈值与输入尺度</td>
-    </tr>
-    <tr>
-      <td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">640/224 概念混淆</span></td>
-      <td>把客户端输入尺寸和模型内部尺寸混为一谈</td>
-      <td><span style="color:var(--yellow);font-weight:600;">端到端数据流表</span></td>
-      <td>统一口径：部署输入看 640，模型感知看 224</td>
-    </tr>
-  </table>
-  <div class="tip">
-    <strong>🔑 排障第一原则：</strong>先确认是 <em>推理问题</em>（delay/timeout）还是 <em>控制问题</em>（抖动/断流）。
-    前者看 B4 Server，后者看 B6/B7。不要混在一起排查。
   </div>
 </div>
 
 <!-- ==================== Glossary ==================== -->
-<div class="section-label"><span>Glossary 术语速查</span></div>
+<div class="section-label" id="glossary"><span>Glossary 术语速查</span></div>
 
 <div class="glossary-section">
-  <div class="gl-title">📖 vla_infer 部署核心术语</div>
+  <div class="gl-title">vla_infer 部署核心术语</div>
   <div class="glossary-grid">
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">ZMQ<span class="tooltip">ZeroMQ，轻量级高性能消息队列库，用于 Client-Server 通信</span></span></div>
-      <div class="def">Client-Server 间的通信框架，使用 DEALER/ROUTER 模式异步请求-应答（支持 multipart 消息 + 并行请求）</div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">RDM<span class="tooltip">Realtime Data Manager，四线程间共享数据的中心存储</span></span></div>
-      <div class="def">实时数据管理器，observe/infer/control/visualize 四线程通过它共享观测、动作、轨迹等数据</div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">Action Chunk<span class="tooltip">模型一次推理输出的一整段连续动作序列</span></span></div>
-      <div class="def">模型一次推理输出的连续动作序列，形状 <code>[64, 26]</code></div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">Inter-chunk<span class="tooltip">不同 action chunk 之间的过渡/拼接策略</span></span></div>
-      <div class="def">不同 chunk 间的过渡策略，解决"两段动作如何平滑衔接"的问题</div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">Min-Jerk<span class="tooltip">最小加加速度轨迹规划，使运动最自然平滑</span></span></div>
-      <div class="def">最小加加速度轨迹，使 chunk 间过渡最自然平滑，<strong>默认推荐</strong></div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">GR00T N1.5<span class="tooltip">NVIDIA 发布的通用机器人 VLA 基础模型</span></span></div>
-      <div class="def">NVIDIA 通用机器人基础模型，vla_infer 默认加载的推理模型</div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">DEALER/ROUTER<span class="tooltip">ZMQ 异步通信模式，Client 用 DEALER，Server 用 ROUTER</span></span></div>
-      <div class="def">相对于 REQ/REP 同步模式，DEALER/ROUTER 支持并行请求、非阻塞发送和 multipart 消息（pickle data + JSON meta）</div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">IntraChunk<span class="tooltip">chunk 内部的轨迹拟合/平滑</span></span></div>
-      <div class="def">对单个 action chunk [64,26] 做多项式拟合（关节）或均值窗口离散化（手部），输出 [~800,26] @ 266Hz</div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">VisualizeServer<span class="tooltip">Client 内置的 WebSocket 可视化服务</span></span></div>
-      <div class="def">VLAClientAsync 启动时自动创建，`_visualize_thread_fun` 按 266Hz 推送动作/状态到 Web 前端</div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">TaskLanguageManager<span class="tooltip">根据 prob_progress 自动切换语言指令</span></span></div>
-      <div class="def">读取 `language_cmd.json` 中的多语言指令集，根据推理输出的 prob_progress 值自动选择当前阶段指令</div>
-    </div>
-    <div class="glossary-item">
-      <div class="term"><span class="glossary-term">LeRobotDatasetWriter<span class="tooltip">HuggingFace LeRobot 格式数据录制</span></span></div>
-      <div class="def">将部署运行的观测/动作数据录制为标准 LeRobot 格式，可用于后续训练或回放分析</div>
-    </div>
+    <div class="glossary-item"><div class="term">ZMQ</div><div class="def">ZeroMQ 消息队列，Client-Server 通信框架，使用 DEALER/ROUTER 模式异步请求-应答</div></div>
+    <div class="glossary-item"><div class="term">RDM</div><div class="def">Realtime Data Manager，四线程间共享数据的中心存储（observe/infer/control/visualize）</div></div>
+    <div class="glossary-item"><div class="term">Action Chunk</div><div class="def">模型一次推理输出的一整段连续动作序列，形状 <code>[64, dim]</code></div></div>
+    <div class="glossary-item"><div class="term">Inter-chunk</div><div class="def">不同 action chunk 间的过渡/拼接策略</div></div>
+    <div class="glossary-item"><div class="term">Min-Jerk</div><div class="def">最小加加速度轨迹规划，使 chunk 间过渡最自然平滑，默认推荐</div></div>
+    <div class="glossary-item"><div class="term">DEALER/ROUTER</div><div class="def">ZMQ 异步通信模式，支持并行请求、非阻塞发送和 multipart 消息</div></div>
+    <div class="glossary-item"><div class="term">IntraChunk</div><div class="def">对单个 action chunk 做多项式拟合（关节）或均值窗离散化（手部）</div></div>
+    <div class="glossary-item"><div class="term">VisualizeServer</div><div class="def">Client 内置 WebSocket 可视化服务 (port 8765)，推送图像+动作/状态曲线</div></div>
+    <div class="glossary-item"><div class="term">TaskLanguageManager</div><div class="def">读取 language_cmd.json 语言指令集，根据 prob_progress 自动切换阶段指令</div></div>
+    <div class="glossary-item"><div class="term">LeRobotDatasetWriter</div><div class="def">录制 LeRobot 格式数据（DataRecordManager），可用于后续训练或回放</div></div>
+    <div class="glossary-item"><div class="term">GraspDetector</div><div class="def">实时监控 set_angle/get_angle 的 thumb_bend 差值判断抓取状态</div></div>
+    <div class="glossary-item"><div class="term">ObsDataBridge</div><div class="def">在 dispatcher 进程中推送观测数据到 WS 9001，供 action_web_vision 消费</div></div>
+    <div class="glossary-item"><div class="term">VLAContext</div><div class="def">共享组件容器管理 ZMQ + RobotBody 生命周期，使用懒加载和独立 rclpy.Context</div></div>
   </div>
 </div>
 
-<!-- ==================== 联调工作流 ==================== -->
-<div class="section-label"><span>联调工作流：从零开始部署倒水任务的 6 个阶段</span></div>
+<!-- ==================== 参数调优矩阵 ==================== -->
+<div class="section-label" id="param-tuning"><span>参数调优矩阵</span></div>
 
-<div class="module" style="border-left:4px solid var(--blue);">
-  <span class="tag blue">联调</span>
-  <div class="story-bubble">
-    <div class="s-label">实操路线图</div>
-    第一次部署 G1 倒水任务时，不要一口气全跑通。
-    按以下 6 个阶段<strong>逐层冒烟</strong>，每个阶段确认通过后再进入下一阶段。
-  </div>
-
+<div class="summary">
+  <div class="summary-title">参数调优矩阵（推荐区间 + 现象导向）</div>
   <table>
-    <tr><th>阶段</th><th>目标</th><th>验证方法</th><th>预期结果</th></tr>
-    <tr>
-      <td><span style="color:var(--text-dim);font-weight:600;">0. 环境</span></td>
-      <td>确认依赖就绪</td>
-      <td>先跑 Server 单进程</td>
-      <td>模型加载成功，无报错</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--blue);font-weight:600;">1. 数据链路</span></td>
-      <td>观测采集正常</td>
-      <td><span class="src-badge src-code">retrieve_observation()</span></td>
-      <td>3 路 RGB 不空，obs.state=26</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--green);font-weight:600;">2. 推理链路</span></td>
-      <td>Client→Server 响应</td>
-      <td>ZMQ send/recv</td>
-      <td>pred_action <code>[64,26]</code> 稳定</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--orange);font-weight:600;">3. 控制链路</span></td>
-      <td>ROS2 下发正常</td>
-      <td>降速测试手臂+手掌</td>
-      <td>话题持续发布，动作连续</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--purple);font-weight:600;">4. 策略对比</span></td>
-      <td>找最优平滑策略</td>
-      <td>min_jerk / smooth_velocity 对比</td>
-      <td>确定当前任务的最佳策略</td>
-    </tr>
-    <tr>
-      <td><span style="color:var(--red);font-weight:600;">5. 参数冻结</span></td>
-      <td>固化生产参数</td>
-      <td>写入 user_conf</td>
-      <td>后续任务仅小范围微调</td>
-    </tr>
+    <tr><th>参数</th><th>默认值</th><th>建议区间</th><th>调大效果</th><th>调小效果</th><th>关联 B 块</th></tr>
+    <tr><td><span class="src-badge src-config">observer.fps</span></td><td>30</td><td>10~30</td><td>观测更密，负载更高</td><td>负载低，动作可能迟钝</td><td>B5</td></tr>
+    <tr><td><span class="src-badge src-config">controller.wait_time</span></td><td>200ms</td><td>100~500</td><td>推理更稳定</td><td>吞吐高但更易抖</td><td>B5</td></tr>
+    <tr><td><span class="src-badge src-config">controller.period</span></td><td>3.75ms</td><td>2.5~8.0</td><td>轨迹稀疏，控制钝</td><td>轨迹细腻，开销大</td><td>B7</td></tr>
+    <tr><td><span class="src-badge src-config">intra_chunk.fitting_deg</span></td><td>4</td><td>3~5</td><td>更贴合数据</td><td>更平滑</td><td>B7</td></tr>
+    <tr><td><span class="src-badge src-config">inter_chunk.inter_chunk_mode</span></td><td>min_jerk</td><td>4种策略</td><td colspan="2">不同任务偏好不同，需对比实验</td><td>B7</td></tr>
+    <tr><td><span class="src-badge src-config">inter_chunk.search_length</span></td><td>100</td><td>20~160</td><td>更平滑</td><td>更快响应</td><td>B7</td></tr>
+    <tr><td><span class="src-badge src-config">controller.gripper_offset</span></td><td>5</td><td>0~20</td><td>手部提前补偿</td><td>更贴近原始输出</td><td>B6</td></tr>
+    <tr><td><span class="src-badge src-config">vision.preprocess_size</span></td><td>[480,640]</td><td>固定</td><td colspan="2">部署主链路固定，模型内自动到 224</td><td>B2/B4</td></tr>
   </table>
+  <div class="tip" style="margin:0.6rem 1.2rem 1rem;">
+    <strong>调参顺序建议：</strong>先固定 <b>inter_chunk_mode=min_jerk</b>，再调 <b>controller.period</b>，
+    最后微调 <b>search_length/gripper_offset</b>。每次只动 1 个参数。
+  </div>
+</div>
 
+<!-- ==================== 排障表 ==================== -->
+<div class="section-label" id="troubleshoot"><span>排障对照表</span></div>
+
+<div class="module" style="border-left:4px solid var(--red);">
+  <span class="tag red">排障</span>
+  <div class="module-title">
+    部署阶段排障速查
+  </div>
+  <table>
+    <tr><th style="width:18%;">症状</th><th style="width:25%;">高概率原因</th><th style="width:32%;">先看哪里</th><th>处理建议</th></tr>
+    <tr><td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">动作抖动/突变</span></td>
+      <td>inter_chunk_mode 不适配或平滑参数过激</td>
+      <td><span class="src-badge src-code">inter_chunk_fuser.py</span></td>
+      <td>先对比 min_jerk 与 smooth_velocity，再调 search_length/fitting_time_step</td></tr>
+    <tr><td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">响应慢</span></td>
+      <td>infer 时间过长或模型资源不足</td>
+      <td><span class="src-badge src-code">run_server.py</span> live/debug 输出</td>
+      <td>观察 Avg infer time，必要时降频或换轻量模型</td></tr>
+    <tr><td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">图像断流</span></td>
+      <td>相机话题不稳定或时间戳对齐失败</td>
+      <td><span class="src-badge src-code">body_robot.py</span></td>
+      <td>检查三路 topic 是否持续，验证 head/left/right 数据完整</td></tr>
+    <tr><td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">手部指令无效</span></td>
+      <td>防抖阈值过高导致触发抑制</td>
+      <td><span class="src-badge src-code">UnitreeG1Robot.py</span></td>
+      <td>检查 diff 阈值与输入尺度，必要时降低阈值或调整 gripper_offset</td></tr>
+    <tr><td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">640/224 混淆</span></td>
+      <td>把客户端输入尺寸和模型内部尺寸混为一谈</td>
+      <td><span>端到端数据流表</span></td>
+      <td>统一口径：部署输入看 640，模型感知看 224</td></tr>
+    <tr><td><span class="src-badge" style="background:var(--red-bg);color:var(--red);">ZMQ 首帧超时</span></td>
+      <td>ZMQ 连接未就绪或 stale response</td>
+      <td><span class="src-badge src-code">vla_context.py</span></td>
+      <td>VLAContext 预创建共享 ZMQ 客户端 + destroy 时排空 stale 消息</td></tr>
+  </table>
   <div class="tip">
-    <strong>📋 联调检查清单：</strong>
-    3 路图像连续 ✓ | state 维度稳定 26 ✓ | 推理往返稳定 ✓ |
-    动作无跳变 ✓ | 手部执行正确 ✓
+    <strong>排障第一原则：</strong>先确认是 <em>推理问题</em>（delay/timeout）还是 <em>控制问题</em>（抖动/断流）。
+    前者看 B4 Server，后者看 B6/B7。
   </div>
 </div>
 
 <!-- ==================== 命令速查 ==================== -->
-<div class="section-label"><span>命令速查 + 最小启动 + 一键脚本</span></div>
+<div class="section-label" id="commands"><span>命令速查 + 最小启动 + 一键脚本</span></div>
 
 <div class="card-grid">
   <div class="module" style="margin-bottom:0;">
     <span class="tag blue">启动</span>
     <div class="module-title">
-      ① 分布式启动（笔记本 + ARM 各一终端）
+      ① Server 启动
     </div>
     <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 终端 1 — 笔记本（GPU 推理服务器）</span>
+<span style="color:var(--text-dim);"># GPU 服务器（推理）</span>
 python run_server.py --model_type tao --model_path /path/to/model --embodiment_tag unitree_g1
 
-<span style="color:var(--text-dim);"># 终端 2 — ARM 设备（机器人驱动 + Action Server）</span>
-<span style="color:var(--text-dim);"># 先启动 G1 驱动：</span>
-source /opt/ros/humble/setup.bash
-cd /home/unitree/tiantaotao_ws/g1driver &amp;&amp; source install/setup.bash
-export LD_LIBRARY_PATH=.../unitree_g1_drivers/lib/x86_64:.../unitree_sdk2/thirdparty/lib/x86_64:$LD_LIBRARY_PATH
-ros2 launch unitree_g1_drivers arm_controller.launch.py
-
-<span style="color:var(--text-dim);"># 终端 3 — ARM 设备（Action Dispatcher）</span>
-conda activate action_server
-python action_server/action_dispatcher.py --robot_type unitree_g1
+<span style="color:var(--text-dim);"># 或者 GR00T N1.5</span>
+python run_server.py --model_type gr00t_n1_5 --model_path /path/to/n1_5 --embodiment_tag unitree_g1
     </div>
   </div>
 
   <div class="module" style="margin-bottom:0;">
-    <span class="tag blue">快速</span>
+    <span class="tag green">启动</span>
     <div class="module-title">
-      ② 一键启动（tmux 三窗格）
+      ② Client 启动（CLI 模式）
     </div>
     <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 实物模式：action_dispatcher + test_client + web_vision</span>
+<span style="color:var(--text-dim);"># ARM 设备（机器人驱动）</span>
+<span style="color:var(--text-dim);"># 方式A: run_client.py（CLI交互）</span>
+python run_client.py --robots_type a2d
+
+<span style="color:var(--text-dim);"># 方式B: run_web_client.py（Web仪表盘）</span>
+python run_web_client.py --host 0.0.0.0 --port 9000
+    </div>
+  </div>
+
+  <div class="module" style="margin-bottom:0;">
+    <span class="tag orange">启动</span>
+    <div class="module-title">
+      ③ Action Server 启动（任务调度模式）
+    </div>
+    <div class="code-block" style="font-size:0.72rem;">
+<span style="color:var(--text-dim);"># 真机模式（tmux 三窗格）</span>
 bash run_action_real.sh
 
-<span style="color:var(--text-dim);"># 仿真模式（无真机，纯测试链路）</span>
+<span style="color:var(--text-dim);"># 仿真模式（无真机，纯测试）</span>
 bash run_action_sim.sh
+
+<span style="color:var(--text-dim);"># 手动启动方式：</span>
+<span style="color:var(--text-dim);"># 1. 先启动 G1 驱动</span>
+ros2 launch unitree_g1_drivers arm_controller.launch.py
+
+<span style="color:var(--text-dim);"># 2. 再启动 Action Dispatcher</span>
+python action_server/action_dispatcher.py --robot_type unitree_g1
+
+<span style="color:var(--text-dim);"># 3. 再启动测试客户端</span>
+python action_server/test_scripts/test_action_client.py
+
+<span style="color:var(--text-dim);"># 4. 打开 Web 可视化</span>
+python action_server/action_web_vision/server.py
+# 浏览器打开 http://localhost:9000
     </div>
   </div>
 
   <div class="module" style="margin-bottom:0;">
-    <span class="tag orange">检查</span>
+    <span class="tag purple">检查</span>
     <div class="module-title">
-      ③ ROS2 连通性检查
+      ④ ROS2 / ZMQ 连通性检查
     </div>
     <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 检查ROS2话题是否正常发布</span>
+<span style="color:var(--text-dim);"># 检查ROS2话题</span>
 ros2 topic list | grep -E "head|left|right|joint|hand"
 
 <span style="color:var(--text-dim);"># 查看关节状态</span>
 ros2 topic echo /joint_state --once
-<span style="color:var(--text-dim);"># 查看手部指令</span>
 ros2 topic echo /left_hand_cmd --once
-    </div>
-  </div>
-
-  <div class="module" style="margin-bottom:0;">
-    <span class="tag purple">测试</span>
-    <div class="module-title">
-      ④ 测试客户端（发送任务指令）
-    </div>
-    <div class="code-block" style="font-size:0.72rem;">
-<span style="color:var(--text-dim);"># 交互式测试客户端</span>
-python action_server/test_scripts/test_action_client.py
-
-<span style="color:var(--text-dim);"># 调参只需修改 conf/client_conf.py 中的配置并重启 dispatcher</span>
-<span style="color:var(--text-dim);"># 例如切换 inter_chunk_mode：</span>
-<span style="color:var(--text-dim);">#   conf/client_conf.py → inter_chunk_mode = 'smooth_velocity'</span>
     </div>
   </div>
 </div>
 
 <div class="module" style="border-left:4px solid var(--green);margin-top:1rem;">
   <div style="font-size:0.7rem;color:var(--text-dim);text-align:center;padding:0.5rem;">
-    <span style="font-weight:600;">vla_infer 部署框架全景图 · Unitree G1 倒水部署</span><br>
-    本文档与 <span style="color:var(--orange);font-weight:600;">TAO 训练流水线全景图</span> 配套使用。
-    先看 TAO 如何训练倒水模型，再看 vla_infer 如何部署到真机，形成完整闭环。
+    <span style="font-weight:600;">vla_infer 部署框架全景图</span><br>
+    本文档与 vla_pipeline_visualization.html 配套使用，完整覆盖从模型训练到仿真部署的全链路理解。
   </div>
 </div>
 
 </div>
 </body>
 </html>
-
-
