@@ -127,42 +127,7 @@ async function handleTaskCompletion(taskFinished = false) {
   if (!App.isRunning || App.isPaused) return;
   if (!taskFinished) return;
 
-
-  // const taskSel = $('lang-task-select');
-  // const taskName = taskSel ? taskSel.value : null;
-  // const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  // if (!Array.isArray(subtasks) || subtasks.length === 0) return;
-
-  // const latestSubTaskId = Number(subTaskId);
-  // if (!Number.isFinite(latestSubTaskId)) return;
-
-  // const lastSubTaskId = subtasks.length - 1;
-  // const thresholdRaw = App.config && App.config.language ? App.config.language.task_progress_threshold : 0.9;
-  // const threshold = Number.isFinite(Number(thresholdRaw)) ? Number(thresholdRaw) : 0.9;
-
-  // if (latestSubTaskId !== lastSubTaskId || progress < threshold) return;
-
-  // App.langAuto.completionInFlight = true;
   try {
-  //   const patch = { 'language.sub_task_id': 0 };
-  //   const patchRes = await apiFetch('/api/client/config/patch', {
-  //     method: 'POST',
-  //     body: JSON.stringify({ patch }),
-  //   });
-  //   App.config = patchRes.config || App.config;
-
-  //   const confRes = await apiFetch('/api/client/config/path');
-  //   if (confRes.path) {
-  //     await apiFetch('/api/client/config/save', {
-  //       method: 'POST',
-  //       body: JSON.stringify({ path: confRes.path }),
-  //     });
-  //   }
-
-  //   if (typeof applyLangConfigSelection === 'function') {
-  //     applyLangConfigSelection(true);
-  //   }
-
     await apiFetch('/api/client/pause', {
       method: 'POST',
       timeoutMs: 3000,
@@ -173,7 +138,6 @@ async function handleTaskCompletion(taskFinished = false) {
   } catch (_) {
     // no-op: apiFetch already handles toasts
   } finally {
-    // App.langAuto.completionInFlight = false;
   }
 }
 
