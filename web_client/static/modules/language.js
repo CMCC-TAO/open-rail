@@ -148,6 +148,46 @@ function renderLangPresets(presets) {
   }
 }
 
+async function persistLanguagePatch (patch) {
+  if (!App.config || typeof App.config !== 'object') App.config = {};
+  if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+
+  // Object.entries(patch).forEach(([dotKey, value]) => {
+  //   App.pendingPatch[dotKey] = value;
+  //   if (dotKey.startsWith('language.')) {
+  //     const key = dotKey.slice('language.'.length);
+  //     App.config.language[key] = value;
+  //   }
+  // });
+  // markPending();
+
+  try {
+    const res = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = res.config || App.config;
+    applyLangConfigSelection();
+
+    // Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
+    // if (!Object.keys(App.pendingPatch).length) clearPending();
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
+    return true;
+  } catch (_) {
+    // Object.entries(patch).forEach(([dotKey, value]) => {
+    //   App.pendingPatch[dotKey] = value;
+    // });
+    // markPending();
+    return false;
+  }
+};
 function setupLangPanel() {
   const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
@@ -170,45 +210,45 @@ function setupLangPanel() {
     });
   };
 
-  const persistLanguagePatch = async (patch) => {
-    if (!App.config || typeof App.config !== 'object') App.config = {};
-    if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+  // const persistLanguagePatch = async (patch) => {
+  //   if (!App.config || typeof App.config !== 'object') App.config = {};
+  //   if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
 
-    Object.entries(patch).forEach(([dotKey, value]) => {
-      App.pendingPatch[dotKey] = value;
-      if (dotKey.startsWith('language.')) {
-        const key = dotKey.slice('language.'.length);
-        App.config.language[key] = value;
-      }
-    });
-    markPending();
+  //   Object.entries(patch).forEach(([dotKey, value]) => {
+  //     App.pendingPatch[dotKey] = value;
+  //     if (dotKey.startsWith('language.')) {
+  //       const key = dotKey.slice('language.'.length);
+  //       App.config.language[key] = value;
+  //     }
+  //   });
+  //   markPending();
 
-    try {
-      const res = await apiFetch('/api/client/config/patch', {
-        method: 'POST',
-        body: JSON.stringify({ patch }),
-      });
-      App.config = res.config || App.config;
+  //   try {
+  //     const res = await apiFetch('/api/client/config/patch', {
+  //       method: 'POST',
+  //       body: JSON.stringify({ patch }),
+  //     });
+  //     App.config = res.config || App.config;
 
-      Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
-      if (!Object.keys(App.pendingPatch).length) clearPending();
+  //     Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
+  //     if (!Object.keys(App.pendingPatch).length) clearPending();
 
-      const confRes = await apiFetch('/api/client/config/path');
-      if (confRes.path) {
-        await apiFetch('/api/client/config/save', {
-          method: 'POST',
-          body: JSON.stringify({ path: confRes.path }),
-        });
-      }
-      return true;
-    } catch (_) {
-      Object.entries(patch).forEach(([dotKey, value]) => {
-        App.pendingPatch[dotKey] = value;
-      });
-      markPending();
-      return false;
-    }
-  };
+  //     const confRes = await apiFetch('/api/client/config/path');
+  //     if (confRes.path) {
+  //       await apiFetch('/api/client/config/save', {
+  //         method: 'POST',
+  //         body: JSON.stringify({ path: confRes.path }),
+  //       });
+  //     }
+  //     return true;
+  //   } catch (_) {
+  //     Object.entries(patch).forEach(([dotKey, value]) => {
+  //       App.pendingPatch[dotKey] = value;
+  //     });
+  //     markPending();
+  //     return false;
+  //   }
+  // };
 
   const commitThreshold = async () => {
     if (!thresholdInput || thresholdInput.disabled) return;
@@ -402,13 +442,14 @@ async function editLangSubtask() {
   if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
 
   LangCmd.tasks[taskName][idx] = lang;
-  App.currentInstruction = lang;
   await saveLangFile();
   renderLangSubtaskSelect();
   subtaskSel.value = String(idx);
   App._langSwitching = true;
   try {
-    await sendLanguageSet(lang);
+    if (idx == App.config.language.sub_task_id) {
+      await sendLanguageSet(lang);
+    } 
   } finally {
     App._langSwitching = false;
   }
@@ -427,17 +468,13 @@ async function addLangSubtask() {
 
   LangCmd.tasks[taskName].push(lang);
   const newIdx = LangCmd.tasks[taskName].length - 1;
-  App.currentInstruction = lang;
   await saveLangFile();
-  renderLangSubtaskSelect();
-  const subtaskSel = $('lang-subtask-select');
-  if (subtaskSel) subtaskSel.value = String(newIdx);
+  // renderLangSubtaskSelect();
   applyLangConfigSelection();
-  App._langSwitching = true;
-  try {
-    await sendLanguageSet(lang);
-  } finally {
-    App._langSwitching = false;
+  const subtaskSel = $('lang-subtask-select');
+  if (subtaskSel) {
+    subtaskSel.value = String(newIdx);
+    subtaskSel.dispatchEvent(new Event('change'));
   }
   toast('Sub-task added.', 'ok');
 }
@@ -450,6 +487,7 @@ async function deleteLangSubtask() {
   const taskName = taskSel.value;
   const idx = Number(subtaskSel.value);
   if (!taskName || !LangCmd.tasks[taskName]) { toast('Select a task first.', 'warn'); return; }
+  if (LangCmd.tasks[taskName].length == 1) { toast('Sub-task at least one.', 'warn'); return; }
   if (!Number.isFinite(idx) || idx < 0 || idx >= LangCmd.tasks[taskName].length) { toast('Select a sub-task first.', 'warn'); return; }
   if (!confirm('Delete this sub-task?')) return;
 
@@ -569,12 +607,7 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
       subtaskSel.value = String(safeIndex);
       const appliedTask = App.config && App.config.language ? App.config.language.task_id : null;
       const appliedIdx = App.config && App.config.language ? App.config.language.sub_task_id : null;
-      const useCurrentInstruction = (
-        App.currentInstruction &&
-        appliedTask === taskName &&
-        appliedIdx === safeIndex
-      );
-      $('lang-cmd-text').value = useCurrentInstruction ? App.currentInstruction : (subtasks[safeIndex] ?? '');
+      $('lang-cmd-text').value = subtasks[safeIndex] ?? '';
     } else {
       subtaskSel.value = '';
       $('lang-cmd-text').value = '';
@@ -717,8 +750,11 @@ $('btn-lang-send').addEventListener('click', async () => {
   const subtaskSel = $('lang-subtask-select');
   const autoChk = $('chk-lang-auto-mode');
   const task = taskSel ? taskSel.value : null;
-  const subtasks = (task && LangCmd.tasks[task]) ? LangCmd.tasks[task] : [];
+  if (task == null) { toast('Select a valid task.', 'warn'); return; }
+  let lang = $('lang-cmd-text').value.trim();
+  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
 
+  const subtasks = LangCmd.tasks[task] ? LangCmd.tasks[task] : [];
   let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
   if (!Number.isFinite(idx) || idx < 0) idx = 0;
 
@@ -729,33 +765,25 @@ $('btn-lang-send').addEventListener('click', async () => {
       subtaskSel.value = '0';
       subtaskSel.dispatchEvent(new Event('change'));
     }
+    if (subtasks[0] !== undefined) {
+      lang = String(subtasks[0]).trim();
+      $('lang-cmd-text').value = lang;
+    }
   }
-
-  let lang = $('lang-cmd-text').value.trim();
-  if (autoChk && autoChk.checked && subtasks[0] !== undefined) {
-    lang = String(subtasks[0]).trim();
-    $('lang-cmd-text').value = lang;
-  }
-
-  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
-
-  // 1. Write current Task / SubTask selection into pendingPatch
+  // 1. persistLanguagePatch
   if (task != null) {
-    App.pendingPatch['language.task_id'] = task;
-    App.pendingPatch['language.sub_task_id'] = idx;
-    markPending();
+    await persistLanguagePatch({
+      'language.task_id': task,
+      'language.sub_task_id': idx
+    });
   }
 
-  // 2. Trigger Config Apply (patch + save) — reuse the same handler
-  $('btn-apply-config').click();
-
-  // 3. Send language command to robot
+  // 2. Send language command to robot
   try {
     await sendLanguageSet(lang);
   } finally {
   }
   toast('Language command updated.', 'info');
-
 });
 $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
 
