@@ -23,11 +23,13 @@ class TaskLanguageManager:
 
         self.task_language_map: Dict[str, List[str]] = self._load_task_language_map(self.config.file_path)
         self.currt_language_instruction: str = ''
-        self.currt_language_instruction, _ = self._retrieve_language_instruction(task_id=self.config.task_id,
+        self.currt_task_steps: int = 0
+        self.currt_language_instruction, self.currt_task_steps = self._retrieve_language_instruction(task_id=self.config.task_id,
                                                                                 sub_task_id=self.config.sub_task_id)
         self.task_progress_queue: Deque[float] = deque()
         self.ready_for_try: bool = True
         self.ready_for_confirm: bool = False
+        self.is_task_finished: bool = False
         self.sub_task_id_tmp: int = int(self.config.sub_task_id)
         self.logger.info(f"Task language manager inited. tasks={self.task_language_map}, currt_language_instruction={self.currt_language_instruction}")
 
@@ -81,8 +83,15 @@ class TaskLanguageManager:
         self.task_progress_queue.clear()
         self.ready_for_try = True
         self.ready_for_confirm = False
-        self.currt_language_instruction, _ = self._retrieve_language_instruction(task_id=self.config.task_id,
+        self.is_task_finished = False
+        self.currt_language_instruction, self.currt_task_steps = self._retrieve_language_instruction(task_id=self.config.task_id,
                                                                                 sub_task_id=self.config.sub_task_id)
+    
+    def new_task(self):
+        # print(f"DEBUG: audo_mode = {self.config.auto_mode}, task_finished = {self.is_task_finished}")
+        if self.config.auto_mode and self.is_task_finished:
+            # new task
+            self.is_task_finished = False
     def _resolve_task_file_path(self, file_path: str) -> str:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return file_path if os.path.isabs(file_path) else os.path.join(root_dir, "conf", file_path)
@@ -144,9 +153,10 @@ class TaskLanguageManager:
             task_id = fallback_task_id
 
         # Ensure sub_task_id is within valid range
-        sub_task_id = max(0, min(sub_task_id, len(task_cmds) - 1))
+        task_steps = len(task_cmds)
+        sub_task_id = 0 if sub_task_id >= task_steps else sub_task_id
         self.logger.debug(f"Retrieve language instruction for task_id='{task_id}', sub_task_id={sub_task_id}.")
-        return task_cmds[sub_task_id], sub_task_id
+        return task_cmds[sub_task_id], task_steps
 
     def try_advance_subtask(self) -> None:
         """Try to advance sub task id cyclically under current task and update language."""
@@ -161,14 +171,14 @@ class TaskLanguageManager:
 
                 self.sub_task_id_tmp = self.config.sub_task_id + 1
                 # self.config.sub_task_id += 1
-                self.currt_language_instruction, self.sub_task_id_tmp = self._retrieve_language_instruction(task_id=self.config.task_id,
+                self.currt_language_instruction, self.currt_task_steps = self._retrieve_language_instruction(task_id=self.config.task_id,
                                                                                     sub_task_id=self.sub_task_id_tmp)
         # return self.currt_language_instruction
 
     def reload(self) -> None:
         """Reload task file and re-sync language from current config."""
         self.task_language_map = self._load_task_language_map(self.config.file_path)
-        self.currt_language_instruction, _ = self._retrieve_language_instruction(task_id=self.config.task_id,
+        self.currt_language_instruction, self.currt_task_steps = self._retrieve_language_instruction(task_id=self.config.task_id,
                                                                                 sub_task_id=self.config.sub_task_id)
 
     def add_task_progress(self, progress: float) -> None:
@@ -183,17 +193,24 @@ class TaskLanguageManager:
             avg_task_progress_next = np.mean(task_progress_next[:length]) if length > 0 else 0.0
             if avg_task_progress_next < self.config.task_progress_threshold / 10.0:
                 # Only reset if the next sub-task progress is very low, indicating a new sub-task has started
-                self.logger.info(f"Resetting task progress for next subtask. Initial avg progress: {avg_task_progress_next:.2f}")
-                self.config.sub_task_id = self.sub_task_id_tmp  # Sign the sub_task_id to the new one
+                self.logger.info(f"Task progress is ready to advance to next subtask: {avg_task_progress_next:.2f}")
+                # check task is finished
+                if self.sub_task_id_tmp >= self.currt_task_steps:
+                    self.config.sub_task_id = 0
+                    self.is_task_finished = True
+                    # print(F"DEBUG: TASK FINISHED.")
+                else:
+                    self.config.sub_task_id = self.sub_task_id_tmp  # Sign the sub_task_id to the new one
                 self.task_progress_queue.clear()
-                self.ready_for_try = True
-                self.ready_for_confirm = False
             else:
                 self.logger.info(f"Task progress is not ready to advance to next subtask: {avg_task_progress_next:.2f}")
-                self.currt_language_instruction, _ = self._retrieve_language_instruction(task_id=self.config.task_id,
+                self.currt_language_instruction, self.currt_task_steps = self._retrieve_language_instruction(task_id=self.config.task_id,
                                                                                 sub_task_id=self.config.sub_task_id)
-                self.ready_for_try = True
-                self.ready_for_confirm = False
+            self.ready_for_try = True
+            self.ready_for_confirm = False
+        
+        # if self.is_task_finished:
+        #     self.is_task_finished = False
 
     def _average_task_progress(self, win_size: int) -> float:
         """Return average of the latest win_size task progress values, or 0.0 if not enough data."""

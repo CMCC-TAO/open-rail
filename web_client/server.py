@@ -1405,7 +1405,7 @@ async def _start_client():
             client_state.robot = None
             client_state.paused_thread_state = None
             client_state.starting = False
-        await _broadcast_to_web({"type": "error", "data": {"message": f"Failed to initialize client: {e}", "trace": err}})
+        await _broadcast_to_web({"type": "error", "data": {"message": f"Failed to initialize client: {e}"}})
         return
 
     with client_state.lock:
@@ -1518,8 +1518,6 @@ def _status_abnormal(message: str,
 def _start_observe(vla_client):
     if hasattr(vla_client, "start_observe"):
         vla_client.start_observe()
-    elif hasattr(vla_client, "start_observe_thread"):
-        vla_client.start_observe_thread()
 
     if hasattr(vla_client, "start_visualize"):
         vla_client.start_visualize()
@@ -1528,36 +1526,26 @@ def _start_observe(vla_client):
 def _stop_observe(vla_client):
     if hasattr(vla_client, "stop_observe"):
         vla_client.stop_observe()
-    elif hasattr(vla_client, "is_observe_thread_running"):
-        vla_client.is_observe_thread_running = False
 
 
 def _start_inference(vla_client):
     if hasattr(vla_client, "start_inference"):
         vla_client.start_inference()
-    elif hasattr(vla_client, "start_inference_thread"):
-        vla_client.start_inference_thread()
 
 
 def _stop_inference(vla_client):
     if hasattr(vla_client, "stop_inference"):
         vla_client.stop_inference()
-    elif hasattr(vla_client, "is_inference_thread_running"):
-        vla_client.is_inference_thread_running = False
 
 
 def _start_control(vla_client):
     if hasattr(vla_client, "start_control"):
         vla_client.start_control()
-    elif hasattr(vla_client, "start_control_thread"):
-        vla_client.start_control_thread()
 
 
 def _stop_control(vla_client):
     if hasattr(vla_client, "stop_control"):
         vla_client.stop_control()
-    elif hasattr(vla_client, "is_control_thread_running"):
-        vla_client.is_control_thread_running = False
 
 
 def _pause_vla_client(vla_client) -> dict:
@@ -1574,23 +1562,15 @@ def _pause_vla_client(vla_client) -> dict:
 
 
 def _resume_vla_client(vla_client, state: Optional[dict] = None):
-    # if state is None:
-    #     state = {
-    #         "observe_running": True,
-    #         "inference_running": True,
-    #         "control_running": True,
-    #     }
-    # print(f"_resume_vla_client with state: {state}")
-    if hasattr(vla_client, "is_observe_thread_running") and hasattr(vla_client, "is_inference_thread_running") and hasattr(vla_client, "is_control_thread_running"):
-        if state.get("observe_running", False):
-            _start_observe(vla_client)
+    if state.get("observe_running", False):
+        _start_observe(vla_client)
 
-        if state.get("inference_running", False):
-            _start_inference(vla_client)
+    if state.get("inference_running", False):
+        _start_inference(vla_client)
 
-        if state.get("control_running", False):
-            _start_control(vla_client)
-        return
+    if state.get("control_running", False):
+        _start_control(vla_client)
+    return
 
 # Background helpers to avoid blocking the asyncio thread
 async def _bg_pause_and_broadcast(vla_client):
