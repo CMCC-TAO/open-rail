@@ -469,8 +469,7 @@ async function addLangSubtask() {
   LangCmd.tasks[taskName].push(lang);
   const newIdx = LangCmd.tasks[taskName].length - 1;
   await saveLangFile();
-  // renderLangSubtaskSelect();
-  applyLangConfigSelection();
+  renderLangSubtaskSelect();
   const subtaskSel = $('lang-subtask-select');
   if (subtaskSel) {
     subtaskSel.value = String(newIdx);
@@ -497,7 +496,7 @@ async function deleteLangSubtask() {
   const newIdx = Math.max(0, Math.min(idx, LangCmd.tasks[taskName].length - 1));
   if (LangCmd.tasks[taskName].length > 0) {
     subtaskSel.value = String(newIdx);
-    applyLangConfigSelection();
+    // renderLangSubtaskSelect();
     const textEl = $('lang-cmd-text');
     const lang = textEl ? textEl.value.trim() : '';
     if (lang) {
