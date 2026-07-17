@@ -44,15 +44,15 @@ function formatLangTaskOptionLabel(taskName, index) {
   return `${index + 1}.${taskName}`;
 }
 
-function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
-  const width = subtaskSelectEl && subtaskSelectEl.clientWidth ? subtaskSelectEl.clientWidth : 0;
-  if (!Number.isFinite(width) || width <= 0) return 36;
-  // Reserve width for index/prefix + right check icon area + select paddings.
-  const reservedPx = 81;
-  const avgCharPx = 7.4;
-  const estimated = Math.floor((width - reservedPx) / avgCharPx);
-  return Math.max(14, estimated);
-}
+// function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
+//   const width = subtaskSelectEl && subtaskSelectEl.clientWidth ? subtaskSelectEl.clientWidth : 0;
+//   if (!Number.isFinite(width) || width <= 0) return 36;
+//   // Reserve width for index/prefix + right check icon area + select paddings.
+//   const reservedPx = 81;
+//   const avgCharPx = 7.4;
+//   const estimated = Math.floor((width - reservedPx) / avgCharPx);
+//   return Math.max(14, estimated);
+// }
 
 function formatLangSubtaskOptionLabel(text, index) {
   // const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
