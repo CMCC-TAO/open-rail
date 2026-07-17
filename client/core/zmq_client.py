@@ -283,14 +283,19 @@ class ZMQClient():
             self.is_connected = False
             return False
 
-    def get_heartbeat_info(self):
+    @property
+    def status(self):
         """Get current connection status.
         
         Returns:
             dict: Connection status information including connectivity and last heartbeat time.
         """
         # print(f"Debug: heartbeat_info: {self.heartbeat_info}")
-        return self.heartbeat_info.copy()
+        status = {
+            "zmq_connected": self.is_connected
+        }
+        status.update(self.heartbeat_info)
+        return status
 
     def close(self):
         """Close the ZMQ client and clean up resources."""
