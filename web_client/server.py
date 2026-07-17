@@ -663,50 +663,10 @@ def _collect_stats() -> dict:
         base.update(vla_client.runtime_status)
         base.update(vla_client.language_status)
         base.update(vla_client.server_status)
-        # # add zmq heartbeat status info
-        # if hasattr(vla_client, 'vla_zmq') and vla_client.vla_zmq is not None:
-        #     base["zmq_connected"] = bool(getattr(vla_client.vla_zmq, "is_connected", False))
-        #     # Update server_ip, server_port, model_type, model_path, lang_cmd
-        #     base.update(vla_client.vla_zmq.get_heartbeat_info())
         
-        # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
-        # acquired = vla_client.show_thread_lock.acquire(timeout=0.05)
-        # try:
-        #     # current_state  = list(vla_client.info_current_state)
-        #     # current_action = list(vla_client.info_current_action)
-        #     # info_obs = dict(vla_client.info_obs)
-        #     # info_act = dict(vla_client.info_act)
-        # finally:
-        #     pass
-            # if acquired:
-            #     vla_client.show_thread_lock.release()
-        # base["current_state"]   = [round(float(x), 4) for x in current_state]
-        # base["current_action"]  = [round(float(x), 4) for x in current_action]
-        # base["info_obs"]        = {k: str(v) for k, v in info_obs.items()}
-        # base["info_act"]        = {k: str(v) for k, v in info_act.items()}
-        # try:
-        #     # base["current_prob_progress"] = float(info_act.get("current_prob_progress", 0.0))
-        #     base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
-        #     base["sub_task_id"] = int(vla_client.config.language.sub_task_id) if hasattr(vla_client.config.language, 'sub_task_id') else None
-        #     # print(f"Debug: sub_task_id: {vla_client.config.language.sub_task_id}")
-        # except Exception as e:
-        #     # base["current_prob_progress"] = 0.0
-        #     logger.error("Failed to get sub task id from language config: {e}")
-        # base["debug_info"]      = str(vla_client.debug_info)
-        # base["config_snapshot"] = {
-        #     "fps":              cfg.observer.fps,
-        #     "wait_time":        cfg.controller.wait_time,
-        #     "inter_chunk_mode": cfg.inter_chunk.inter_chunk_mode,
-        #     "intra_chunk_mode": cfg.intra_chunk.intra_chunk_mode,
-        #     "gripper_offset":   cfg.controller.gripper_offset,
-        #     "preprocess":       cfg.preprocess,
-        #     "robots_type":      cfg.robots.type.value if hasattr(cfg.robots.type, 'value') else str(cfg.robots.type),
-        #     "record":           cfg.record.switch,
-        #     "task_progress_threshold": cfg.task_progress_threshold,
-        # }
     except Exception as e:
         # base["debug_info"] = f"stats error: {e}"
-        logger.error(f"Failed to collect stats: {e}")
+        logger.exception(f"Failed to collect stats: {e}")
     return base
 
 
