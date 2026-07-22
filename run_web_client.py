@@ -34,6 +34,27 @@ def parse_args():
 def kill_port(port):
     os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
 
+def _ensure_dds_env(conf_name: str) -> None:
+    """Bind Cyclone DDS to the robot subnet before any DomainParticipant is created."""
+    peer_ip = None
+    try:
+        from pathlib import Path
+
+        import yaml
+
+        from ti5_t170c_sdk._network import ensure_cyclonedds_uri, parse_host_from_uri
+
+        conf_path = Path(__file__).resolve().parent / "conf" / conf_name
+        if conf_path.is_file():
+            data = yaml.safe_load(conf_path.read_text(encoding="utf-8")) or {}
+            robots = data.get("robots") or {}
+            ti5 = robots.get("ti5_t170c") or {}
+            camera = ti5.get("camera") or {}
+            peer_ip = parse_host_from_uri(camera.get("forwarder_uri"))
+    except Exception:
+        peer_ip = None
+    ensure_cyclonedds_uri(peer_ip=peer_ip)
+
 if __name__ == '__main__':
     args = parse_args()
     kill_port(port=args.port)
@@ -42,13 +63,27 @@ if __name__ == '__main__':
     try:
         logger = setup_logging("client.log", "run_web_client")
         os.environ['conf_file'] = args.conf
-        uvicorn.run(
-            "web_client.server:app",
-            host=args.host,
-            port=args.port,
-            reload=args.reload,
-            log_level="info",
-        )
+        _ensure_dds_env(args.conf)
+        # Pass the app object directly to avoid uvicorn spawning a child import process,
+        # which can leave CycloneDDS participants in a broken state on this host.
+        if args.reload:
+            uvicorn.run(
+                "web_client.server:app",
+                host=args.host,
+                port=args.port,
+                reload=True,
+                log_level="info",
+            )
+        else:
+            from web_client.server import app
+
+            uvicorn.run(
+                app,
+                host=args.host,
+                port=args.port,
+                reload=False,
+                log_level="info",
+            )
     except KeyboardInterrupt:
         exit_code = 0
     except Exception as e:

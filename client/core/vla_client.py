@@ -1,4 +1,5 @@
 import cv2
+import math
 import time
 import logging
 import threading
@@ -578,6 +579,8 @@ class VLAClientAsync():
         # encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
         # img_encoded = cv2.imencode(ext, img_processed, encode_params)[1]
         # image is encoded in BGR space, default for OpenCV
+        if 'depth.' not in key and getattr(img_processed, 'ndim', 0) == 3 and img_processed.shape[2] == 3:
+            img_processed = img_processed[:, :, ::-1]
         encode_result, img_encoded = cv2.imencode(ext, img_processed)
         if not encode_result:
             self.logger.warning(f"Image encoding failed for {key}.")

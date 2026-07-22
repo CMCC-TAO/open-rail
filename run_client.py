@@ -66,6 +66,9 @@ def get_robot(config: ConfigDict):
     elif robot_type == RobotType.NAVI_WA2:
         from client.robots.navi_wa2.body_robot import RobotBody
         return RobotBody(robot_config)
+    elif robot_type == RobotType.TI5_T170C:
+        from client.robots.ti5_t170c.body_robot import RobotBody
+        return RobotBody(robot_config)
     else:
         raise ValueError(f'Invalid Robot Type: {robot_type}')
 

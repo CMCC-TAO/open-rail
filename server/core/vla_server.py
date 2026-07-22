@@ -112,7 +112,11 @@ class VLAServer:
         """
         decoded_img = cv2.imdecode(encoded_img, cv2.IMREAD_ANYDEPTH if 'depth.' in key else cv2.IMREAD_COLOR)
         padded_img = self._pad_and_resize(decoded_img)
-        return key, padded_img[:, :, ::-1] # RGB to BGR
+        if padded_img.ndim == 3:
+            padded_img = padded_img[:, :, ::-1]
+        else:
+            padded_img = padded_img[:, :, np.newaxis]
+        return key, padded_img[:, :, ::-1]
     
     def _process_image(self, frame):
         # futures = [self.image_decode_executor.submit(self._image_decode_thread_func, key, value) for key, value in frame if 'cam.' in key]

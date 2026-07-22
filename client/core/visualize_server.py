@@ -226,8 +226,16 @@ class VisualizeServer:
     #     return bool(getattr(cfg, key, default))
 
     @staticmethod
+    def _is_depth_camera_key(camera_key: str) -> bool:
+        """Depth obs keys (cam.depth.head) must not go to the RGB camera panel."""
+        k = str(camera_key).lower()
+        return 'depth' in k
+
+    @staticmethod
     def _camera_id_from_key(camera_key: str):
         k = str(camera_key).lower()
+        if VisualizeServer._is_depth_camera_key(k):
+            return None
         if 'hand_left' in k or 'left_wrist' in k or 'wrist_left' in k:
             return 1
         if 'hand_right' in k or 'right_wrist' in k or 'wrist_right' in k:
@@ -260,12 +268,17 @@ class VisualizeServer:
             img_seq = self.latest_imgs_seq
 
         camera_open = self._get_camera_open_map()
+        sent_camera_ids: set[int] = set()
 
         for camera_key, img in imgs.items():
             try:
+                if self._is_depth_camera_key(camera_key):
+                    continue
                 camera_id = self._camera_id_from_key(camera_key)
                 if camera_id is None:
                     self.logger.warning(f"Unknown camera key: {camera_key}")
+                    continue
+                if camera_id in sent_camera_ids:
                     continue
                 if not camera_open.get(camera_id, True):
                     continue
@@ -281,6 +294,7 @@ class VisualizeServer:
                 header_bytes = json.dumps(header).encode('utf-8')
                 header_length = len(header_bytes)
                 message = header_length.to_bytes(4, byteorder='big') + header_bytes + frame_bytes
+                sent_camera_ids.add(camera_id)
 
                 for client in self.clients.copy():
                     try:
