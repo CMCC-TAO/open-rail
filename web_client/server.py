@@ -1972,9 +1972,9 @@ async def client_language_set(req: LanguageSetRequest):
 async def client_record_start(req: RecordStartRequest):
     vla_client, _ = _require_runtime('start_recording')
     try:
-        save_items = req.save_items if isinstance(req.save_items, list) else []
+        # save_items = req.save_items if isinstance(req.save_items, list) else []
         client_state.config.record.switch = True
-        client_state.config.record.record_exp_data = ('ExpData' in save_items)
+        # client_state.config.record.record_exp_data = ('ExpData' in save_items)
         task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
         if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
             try:
@@ -2002,7 +2002,7 @@ async def client_record_start(req: RecordStartRequest):
                 current_recording_dir = Path(save_path).name
         except Exception:
             current_recording_dir = ''
-        print(F"DEBUG: record started.")
+        # print(F"DEBUG: record started.")
         return {
             'status': 'ok',
             'command': 'start_recording',
