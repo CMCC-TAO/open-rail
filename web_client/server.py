@@ -1571,9 +1571,59 @@ def _stop_inference(vla_client):
         vla_client.is_inference_thread_running = False
 
 
-def _start_control(vla_client):
+def _build_blend_config(vla_client) -> dict | None:
+    """Build smooth start blend config from current robot state.
+
+    Tries robot._get_reset_current_action() first, falls back to RDM
+    get_current_state(). Returns None if both fail — caller handles it.
+    """
+    try:
+        import numpy as np
+        cur_act = None
+        # Priority 1: robot's commanded action cache (smooth vs measured state)
+        _robot = client_state.robot
+        if _robot is not None:
+            getter = getattr(_robot, '_get_reset_current_action', None)
+            if getter is not None:
+                cur_act = getter()
+                if cur_act is not None:
+                    logger.info(f"[BLEND] Priority1 OK: robot._get_reset_current_action() -> shape={np.shape(cur_act)}, mean={np.mean(cur_act):.4f}")
+                else:
+                    logger.info(f"[BLEND] Priority1 FAILED: _get_reset_current_action() returned None")
+                # Check which priority within _get_reset_current_action succeeded
+                if cur_act is not None:
+                    # Check action cache (Priority 1 inside robot)
+                    if hasattr(_robot, 'robot'):
+                        rob = _robot.robot
+                        la = getattr(rob, 'latest_left_arm_action', None)
+                        ra = getattr(rob, 'latest_right_arm_action', None)
+                        logger.info(f"[BLEND]   Action cache: left_arm={la is not None}, right_arm={ra is not None}")
+        else:
+            logger.info(f"[BLEND] Priority1 SKIPPED: client_state.robot is None")
+
+        # Priority 2: RDM (inference buffer) — has tracking lag but better than nothing
+        if cur_act is None and hasattr(vla_client, 'realtime_data_manager'):
+            rdm = vla_client.realtime_data_manager
+            if hasattr(rdm, 'get_current_state'):
+                cur = rdm.get_current_state()
+                if cur is not None and cur[0] is not None:
+                    cur_act = cur[0]  # (action, vel, acc) tuple
+                    logger.info(f"[BLEND] Priority2 OK: RDM.get_current_state() -> shape={np.shape(cur_act)}, mean={np.mean(cur_act):.4f}")
+                else:
+                    logger.info(f"[BLEND] Priority2 FAILED: RDM.get_current_state() returned None")
+        if cur_act is not None:
+            logger.info(f"[BLEND] Blend config created, duration=3.0s")
+            return {'start_action': np.asarray(cur_act, dtype=np.float64), 'duration': 3.0}
+        else:
+            logger.info(f"[BLEND] No blend config (both priorities failed)")
+    except Exception as e:
+        logger.info(f"[BLEND] Exception: {e}")
+    return None
+
+
+def _start_control(vla_client, blend_config=None):
     if hasattr(vla_client, "start_control"):
-        vla_client.start_control()
+        vla_client.start_control(blend_config=blend_config)
     elif hasattr(vla_client, "start_control_thread"):
         vla_client.start_control_thread()
 
@@ -1614,9 +1664,8 @@ def _resume_vla_client(vla_client, state: Optional[dict] = None):
             _start_inference(vla_client)
 
         if state.get("control_running", False):
-            _start_control(vla_client)
+            _start_control(vla_client, _build_blend_config(vla_client))
         return
-
 # Background helpers to avoid blocking the asyncio thread
 async def _bg_pause_and_broadcast(vla_client):
     try:
@@ -1633,10 +1682,6 @@ async def _bg_resume_and_broadcast(vla_client):
     try:
         with client_state.lock:
             restore_state = client_state.paused_thread_state
-        # For grasp tasks, apply smooth start blend before resuming inference
-        _task_id = str(getattr(getattr(client_state.config, 'language', None), 'task_id', ''))
-        if _task_id == 'grasp':
-            await asyncio.to_thread(_apply_smooth_start_blend_web, vla_client, client_state.robot)
         await asyncio.to_thread(_resume_vla_client, vla_client, restore_state)
         with client_state.lock:
             client_state.paused = False
@@ -1715,7 +1760,9 @@ async def _bg_toggle_control_and_broadcast(vla_client):
             await asyncio.to_thread(_stop_control, vla_client)
             message = "Control stopped."
         else:
-            await asyncio.to_thread(_start_control, vla_client)
+            # Apply smooth start blend before starting control (unconditionally)
+            blend_config = _build_blend_config(vla_client)
+            await asyncio.to_thread(_start_control, vla_client, blend_config)
             message = "Control started."
 
         payload = _status_payload(vla_client, message, running=True, paused=False)
@@ -1935,77 +1982,6 @@ async def client_status():
     # print(f"Debug: {stats}")
     return {"status": "ok", "data": stats}
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Smooth start blend for grasp tasks (web client)
-# ─────────────────────────────────────────────────────────────────────────────
-def _apply_smooth_start_blend_web(vla_client, robot_body, blend_duration=3.0):
-    """Apply one-shot smooth start blend for the next inference cycle.
-
-    Monkey-patches _process_action_chunk to linearly blend the first N steps
-    of the next action_chunk from current action → model trajectory, then
-    auto-restores the original method.
-
-    Mirrors action_server/task_grasp.py:_apply_smooth_start_blend, adapted
-    for the web client where inference is already running continuously.
-    """
-    import numpy as np
-    import time as _time
-
-    # Capture current action (latest commanded, not measured state)
-    current_action = None
-    try:
-        act = robot_body._get_reset_current_action() if hasattr(robot_body, '_get_reset_current_action') else None
-        if act is not None:
-            current_action = np.asarray(act, dtype=np.float64)
-            logger.info(f'[SmoothStart-Web] Current action captured, dim={len(current_action)}')
-        else:
-            rdm = getattr(vla_client, 'realtime_data_manager', None)
-            if rdm is not None:
-                currt_act, _, _ = rdm.get_current_state()
-                if currt_act is not None:
-                    current_action = np.asarray(currt_act, dtype=np.float64)
-                    logger.info(f'[SmoothStart-Web] Current action from RDM, dim={len(current_action)}')
-    except Exception as e:
-        logger.warning(f'[SmoothStart-Web] Failed to capture current action: {e}')
-
-    if current_action is None:
-        logger.warning('[SmoothStart-Web] No current action available, smooth start disabled')
-        return
-
-    observe_period = getattr(vla_client, 'observe_period', 0.1)
-    logger.info(f'[SmoothStart-Web] observe_period={observe_period:.4f}s')
-
-    # Save original _process_action_chunk bound method
-    original_process = vla_client._process_action_chunk
-    blended = [False]  # mutable flag to track one-shot
-
-    def _blended_process(action_raw):
-        """One-shot: blend first N steps, then delegate to original."""
-        if blended[0]:
-            return original_process(action_raw)
-
-        blended[0] = True
-        t0 = _time.perf_counter()
-        action_chunk, ts, loc_ts = original_process(action_raw)
-
-        if action_chunk is not None and len(action_chunk) > 1:
-            total = len(action_chunk)
-            num_blend = min(int(blend_duration / observe_period), total - 1)
-            if num_blend >= 1:
-                for i in range(num_blend + 1):
-                    alpha = i / num_blend
-                    act = np.array(action_chunk[i], dtype=np.float64)
-                    dim = min(len(act), len(current_action))
-                    act[:dim] = (1 - alpha) * current_action[:dim] + alpha * act[:dim]
-                    action_chunk[i] = act
-                logger.info(f'[SmoothStart-Web] Blended first {num_blend+1}/{total} steps '
-                            f'({blend_duration}s, elapsed={_time.perf_counter()-t0:.3f}s)')
-
-        return action_chunk, ts, loc_ts
-
-    vla_client._process_action_chunk = _blended_process
-    logger.info(f'[SmoothStart-Web] Smooth start blend armed for next inference')
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: runtime controls

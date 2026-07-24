@@ -22,12 +22,11 @@ if _project_root not in sys.path:
 from action_server.task_init_grasp import _get_init_grasp_pose, _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM
 from action_server.task_grasp import (
     _get_language_instruction,
-    _apply_smooth_start_blend,
     TARGET_HAND_MAP,
 )
 from action_server.task_reset import _LEFT_RESET_POSE, _RIGHT_RESET_POSE
 from action_server.action_base import (
-    AbstractTaskHandler, TaskResult, run_vla_inference, send_vla_feedback,
+    AbstractTaskHandler, TaskResult, run_vla_control_only, send_vla_feedback,
     ERR_SUCCESS, ERR_MSG, ERR_INIT_GRASP_FAILED, ERR_GRASP_TIMEOUT,
     ERR_MISSING_TARGET, ERR_UNKNOWN_TARGET,
     ERR_ONE_HAND_FAILED, ERR_TWO_HAND_LEFT_FAILED, ERR_TWO_HAND_RIGHT_FAILED,
@@ -136,20 +135,25 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
         task_language_manager.currt_language_instruction = instruction
         task_language_manager.config.sub_task_id = 0
 
-        # 应用平滑启动
-        _apply_smooth_start_blend(vla_client, robot_body, blend_duration=3.0)
+        # 构建平滑过渡配置：从当前 action 过渡到模型轨迹
+        blend_config = None
+        try:
+            cur_act = robot_body._get_reset_current_action()
+            if cur_act is not None:
+                blend_config = {'start_action': np.asarray(cur_act, dtype=np.float64), 'duration': 3.0}
+        except Exception:
+            pass
 
-        # 执行推理
+        # 执行推理（只启动 control）
         context._active_vla_client = vla_client
-        result = run_vla_inference(
+        result = run_vla_control_only(
             goal_handle=goal_handle,
             vla_client=vla_client,
             language_instruction=instruction,
-            robot_body=robot_body,
-            reset_robot=False,  # init_grasp 已完成复位
             max_duration=30.0,
             thre_progress=1.5,
             stable_count_threshold=999,
+            blend_config=blend_config,
         )
 
         # 推理完成后读取抓取状态

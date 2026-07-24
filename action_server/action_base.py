@@ -214,104 +214,6 @@ _DEFAULT_STABILITY_RATIO = 0.05       # 变异系数阈值
 _DEFAULT_FEEDBACK_INTERVAL = 1.0 / 3.0  # 3Hz
 
 
-def run_vla_inference(
-    goal_handle,
-    vla_client,
-    language_instruction: str,
-    robot_body=None,
-    reset_robot: bool = True,
-    max_duration: float = _DEFAULT_MAX_DURATION,
-    thre_progress: float = _DEFAULT_THRE_PROGRESS,
-    stable_count_threshold: int = _DEFAULT_STABLE_COUNT,
-    stability_ratio_thresh: float = _DEFAULT_STABILITY_RATIO,
-    feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
-    fixed_duration: float = 0,
-) -> TaskResult:
-    """运行 VLA 推理全流程（复位 → 启动推理 → 监控进度 → 完成/超时）
-
-    步骤:
-        1. [可选] 复位机器人到安全姿态
-        2. 设置语言指令 → inference_first() → run()
-        3. 监控进度：
-           - fixed_duration > 0: 固定时长模式，运行指定秒数后完成
-           - fixed_duration = 0: prob_progress 稳定性检测模式
-        4. 停止 VLA 客户端线程
-
-    Args:
-        goal_handle:          ROS2 Action goal_handle
-        vla_client:           VLAClientAsync 实例
-        language_instruction: 语言指令文本
-        robot_body:           RobotBody 实例（reset_robot=True 时必填）
-        reset_robot:          是否在启动前复位机器人
-        max_duration:         最大执行时间（秒）
-        thre_progress:        进度阈值，超过后开始稳定性检测
-        stable_count_threshold: 连续稳定次数阈值
-        stability_ratio_thresh:  变异系数阈值
-        feedback_interval:     feedback 发送间隔
-        fixed_duration:        固定执行时长（秒），>0 时启用，不依赖 prob_progress
-
-    Returns:
-        TaskResult: success=True 完成 / False 失败+原因
-    """
-    import time
-
-    # ========== 步骤 1: 复位机器人（可选） ==========
-    if reset_robot:
-        if robot_body is None:
-            return TaskResult(False, error_code=ERR_ROBOT_RESET_FAILED,
-                              error_message='reset_robot=True but robot_body is None')
-        send_vla_feedback(goal_handle, 5, "正在复位机器人到安全姿态...")
-        try:
-            robot_body.reset_robot(mode='default')
-            time.sleep(1.0)
-        except Exception as e:
-            return TaskResult(False, error_code=ERR_ROBOT_RESET_FAILED,
-                              error_message=f'Robot reset failed: {str(e)}')
-
-    # ========== 步骤 2: 启动推理 ==========
-    try:
-        vla_client.task_language_manager.currt_language_instruction = language_instruction
-        vla_client.is_running_action = False
-
-        send_vla_feedback(goal_handle, 10, "正在启动 VLA 推理...")
-        vla_client.start()                    # 先启动观察/控制/WebSocket 线程
-        # time.sleep(3.5)                     # 等待观测数据积累
-        # 注意: 不要在这里调 inference_first()!
-        # _inference_thread_fun 内部已经有 infer_count==0 的自调用首帧逻辑
-        # 如果这里再调一次，会与推理线程 (Thread-43) 竞争同一个 ZMQ socket
-        # 导致响应被错抢 → 推理线程永久阻塞 → prob_progress 卡死
-        vla_client.is_running_action = True # 允许推理线程持续推理
-    except Exception as e:
-        return TaskResult(False, error_code=ERR_INFERENCE_START_FAILED,
-                          error_message=f'Failed to start inference: {str(e)}')
-
-    # ========== 步骤 3 + 4: 监控进度 + 稳定性检测 ==========
-    if fixed_duration > 0:
-        # 固定时长模式：运行指定秒数后完成
-        result = _monitor_fixed_duration(
-            goal_handle=goal_handle,
-            vla_client=vla_client,
-            fixed_duration=fixed_duration,
-            feedback_interval=feedback_interval,
-        )
-    else:
-        # prob_progress 稳定性检测模式
-        result = _monitor_vla_progress(
-            goal_handle=goal_handle,
-            vla_client=vla_client,
-            max_duration=max_duration,
-            thre_progress=thre_progress,
-            stable_count_threshold=stable_count_threshold,
-            stability_ratio_thresh=stability_ratio_thresh,
-            feedback_interval=feedback_interval,
-        )
-
-    # ========== 步骤 5: 停止 VLA 客户端线程 ==========
-    _stop_vla_client(vla_client)
-
-    return result
-
-
 def _monitor_vla_progress(
     goal_handle,
     vla_client,
@@ -467,16 +369,6 @@ def _monitor_fixed_duration(
                           error_message=f'Monitoring error: {str(e)}')
 
 
-def _stop_vla_client(vla_client) -> None:
-    """安全停止 VLA 客户端线程（仅信号，不销毁组件）"""
-    import time
-    try:
-        vla_client.is_running_action = False
-        time.sleep(0.1)
-    except Exception:
-        pass
-
-
 def run_vla_control_only(
     goal_handle,
     vla_client,
@@ -487,11 +379,11 @@ def run_vla_control_only(
     stability_ratio_thresh: float = _DEFAULT_STABILITY_RATIO,
     feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
     fixed_duration: float = 0,
+    blend_config=None,
 ) -> TaskResult:
     """在 obs+infer 已运行的情况下，只启动 control 并监控 VLA 推理进度
 
     init_grasp → grasp 分离流程专用。
-    与 run_vla_inference 的区别:
       - 不 reset_robot（已在 init_grasp 中完成）
       - 不 start_observe / start_inference（已在 init_grasp 中启动）
       - 只 start_control，监控完成后 stop_control
@@ -537,7 +429,7 @@ def run_vla_control_only(
         vla_client.is_running_action = True
 
         # 只启动 control 线程
-        vla_client.start_control()
+        vla_client.start_control(blend_config=blend_config)
         start_time = time.time()
 
         # 监控进度

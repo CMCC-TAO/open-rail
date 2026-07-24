@@ -123,130 +123,13 @@ def _reset_arms_to_default(robot_body, context, duration=2.0):
     print('[GraspHandler] 双臂回归默认位置完成')
 
 
-def _apply_smooth_start_blend(vla_client, robot_body, blend_duration=3.0):
-    """Monkey-patch vla_client 首帧推理，添加从当前 action → 模型轨迹的平滑过渡。
-
-    对于控制精度低的机械臂，state（传感器读数）与 action（下发指令）偏差很大且存在延迟/噪声。
-    使用最近下发的 action 作为起点，可以避免因 state-action 差异导致的启动抖动。
-
-    本函数在首帧推理中把 action_chunk 前 N 步从当前 action 线性插值到模型原始轨迹，消除突变。
-
-    通过临时替换 _process_action_chunk 实例方法实现，不影响类的其他实例。
-
-    注意：current_action 在 _patched_inference_first 内部（推理实际执行时）才捕获，
-    而非在此函数调用时。这确保无论 reset_robot 在之前还是之后被调用，
-    current_action 都能正确反映机器人当前的真实位置。
-
-    Args:
-        vla_client: VLAClientAsync 实例
-        robot_body: RobotBody 实例
-        blend_duration: 过渡时长（秒），默认 3.0
-    """
-    import types
-    import numpy as np
-    import time
-
-    print(f'[SmoothStart] === Enter _apply_smooth_start_blend ===')
-
-    observe_period = vla_client.observe_period
-    original_infer_first = vla_client._inference_first
-    print(f'[SmoothStart] observe_period={observe_period:.4f}s')
-
-    def _patched_inference_first(self):
-        """带平滑启动的 _inference_first 包装。"""
-        # ===== 在推理实际执行时才捕获 current_action =====
-        # 注意：不能在外层捕获！外层调用时 reset_robot() 可能还没有执行。
-        # 在 _patched_inference_first 内部捕获可以确保 reset 已经完成，
-        # robot 已经到达目标位置，current_action 能正确反映实际位置。
-        current_action = None
-        try:
-            act = robot_body._get_reset_current_action()
-            if act is not None:
-                current_action = np.asarray(act, dtype=np.float64)
-                print(f'[SmoothStart] Current action (infer-time) dim={len(current_action)}, '
-                      f'first 4: {current_action[:4].round(4).tolist()}')
-            else:
-                print(f'[SmoothStart] WARN: robot_body._get_reset_current_action() returned None')
-        except Exception as e:
-            print(f'[SmoothStart] WARN: failed to capture current action: {e}')
-
-        if current_action is None:
-            print('[SmoothStart] SKIP: no current action, running without blend')
-            original_infer_first()
-            return
-
-        print(f'[SmoothStart] >>> _patched_inference_first called (infer_count={self.realtime_data_manager.infer_count})')
-
-        # 保存原始的 _process_action_chunk（bound method）
-        original_process = self._process_action_chunk
-
-        def _blended_process(action_raw):
-            """在 _process_action_chunk 返回值上叠加线性插值 blend。
-
-            注意：这里直接赋值为实例属性（不用 MethodType），
-            所以 action_raw 是原始的 action_data 参数，不会多一个 self。
-            """
-            t0 = time.perf_counter()
-            action_chunk, ts, loc_ts = original_process(action_raw)
-
-            if action_chunk is not None and len(action_chunk) > 1:
-                total = len(action_chunk)
-                num_blend = min(int(blend_duration / observe_period), total - 1)
-
-                print(f'[SmoothStart]   _blended_process: total={total}, num_blend={num_blend}, '
-                      f'action_chunk[0] first 4 before: '
-                      f'{np.array(action_chunk[0], dtype=np.float64)[:4].round(4).tolist()}')
-
-                if num_blend >= 1:
-                    for i in range(num_blend + 1):
-                        alpha = i / num_blend
-                        act = np.array(action_chunk[i], dtype=np.float64)
-                        dim = min(len(act), len(current_action))
-                        act[:dim] = (1 - alpha) * current_action[:dim] + alpha * act[:dim]
-                        action_chunk[i] = act
-
-                    print(f'[SmoothStart]   AFTER blend: action_chunk[0] first 4 = '
-                          f'{np.array(action_chunk[0], dtype=np.float64)[:4].round(4).tolist()}')
-                    print(f'[SmoothStart]   Blended first {num_blend+1}/{total} steps '
-                          f'(duration={blend_duration}s, elapsed={time.perf_counter()-t0:.3f}s)')
-                else:
-                    print(f'[SmoothStart]   num_blend={num_blend} < 1, skip blend')
-            else:
-                print(f'[SmoothStart]   SKIP blend: action_chunk={type(action_chunk).__name__}, len={len(action_chunk) if action_chunk else 0}')
-
-            return action_chunk, ts, loc_ts
-
-        # 临时替换实例方法（作为普通函数，不用 MethodType）
-        self._process_action_chunk = _blended_process
-
-        try:
-            original_infer_first()
-            print(f'[SmoothStart] <<< original _inference_first completed OK')
-        except Exception as e:
-            import traceback
-            print(f'[SmoothStart] ERROR in original _inference_first: {e}')
-            traceback.print_exc()
-        finally:
-            # 删除实例属性，恢复原始类方法
-            try:
-                del self._process_action_chunk
-                print(f'[SmoothStart]   _process_action_chunk restored')
-            except AttributeError:
-                print(f'[SmoothStart]   _process_action_chunk restore skipped (no instance attr)')
-
-    vla_client._inference_first = types.MethodType(_patched_inference_first, vla_client)
-    print(f'[SmoothStart] === Patch applied successfully ===')
-    print(f'[SmoothStart]    blend_duration={blend_duration}s, observe_period={observe_period:.4f}s, '
-          f'expected blend steps={int(blend_duration/observe_period)}')
-
-
 class GraspHandler(AbstractTaskHandler):
     """'grasp' 任务处理器 — 抓取大类
 
     流程:
         1. 根据 params.target 查找对应的语言指令
         2. 创建 VLA 推理组件（vla_client 等）
-        3. 调用 run_vla_inference() 执行推理
+        3. 调用 run_vla_control_only() 执行推理
         4. 清理 per-task 组件
     """
 
@@ -256,6 +139,7 @@ class GraspHandler(AbstractTaskHandler):
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
         import time
+        import numpy as np
         import threading as _thr
         _tname = _thr.current_thread().name
         _t0 = time.time()
@@ -303,6 +187,16 @@ class GraspHandler(AbstractTaskHandler):
         try:
             # ===== 步骤 3: 执行 VLA 推理（只启动 control） =====
             context._active_vla_client = vla_client
+
+            # 构建平滑过渡配置：从当前 action 过渡到模型轨迹
+            blend_config = None
+            try:
+                cur_act = robot_body._get_reset_current_action()
+                if cur_act is not None:
+                    blend_config = {'start_action': np.asarray(cur_act, dtype=np.float64), 'duration': 3.0}
+            except Exception:
+                pass
+
             result = run_vla_control_only(
                 goal_handle=goal_handle,
                 vla_client=vla_client,
@@ -310,6 +204,7 @@ class GraspHandler(AbstractTaskHandler):
                 max_duration=30.0,
                 thre_progress=1.5,
                 stable_count_threshold=999,
+                blend_config=blend_config,
             )
 
             # ===== 步骤 4: 分析结果 =====

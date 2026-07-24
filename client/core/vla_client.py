@@ -122,9 +122,20 @@ class VLAClientAsync():
     def stop_inference(self):
         self.is_inference_thread_running = False
 
-    def start_control(self):
+    def start_control(self, blend_config=None):
+        """Start the control thread.
+
+        Args:
+            blend_config: dict or None. If set, e.g. {'start_action': np.array, 'duration': 3.0},
+                the control thread blends from start_action to get_action_fitted() output
+                over duration seconds using linear interpolation.
+        """
         self.is_running = True
         self.is_control_thread_running = True
+        if blend_config is not None:
+            self._blend_start_action = np.asarray(blend_config['start_action'], dtype=np.float64)
+            self._blend_duration = float(blend_config.get('duration', 3.0))
+            self._blend_start_time = time.perf_counter()
         if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
 
@@ -167,18 +178,21 @@ class VLAClientAsync():
         if self.index_advance_timer.is_alive():
             self.index_advance_timer.stop(timeout=1.0)
 
-    def start(self):
+    def start(self, blend_config=None):
         """Start the VLA client and all associated threads.
 
         This method initializes and starts the observation, control, and inference
         threads for real-time robot operation. It uses thread locks to ensure
         thread-safe startup and begins the main control loop.
+
+        Args:
+            blend_config: dict or None, passed through to start_control().
         """
         self.is_running = True
 
         self.start_observe()
         self.start_inference()
-        self.start_control()
+        self.start_control(blend_config=blend_config)
         self.start_visualize()
 
         self.logger.info('VLA client started.')
@@ -317,6 +331,15 @@ class VLAClientAsync():
             return
 
         action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
+
+        # ── Smooth start blend: interpolate from start_action to model trajectory ──
+        if hasattr(self, '_blend_start_action') and self._blend_start_action is not None:
+            elapsed = time.perf_counter() - self._blend_start_time
+            if elapsed < self._blend_duration:
+                alpha = min(elapsed / self._blend_duration, 1.0)
+                action_fitted = (1.0 - alpha) * self._blend_start_action + alpha * np.asarray(action_fitted, dtype=np.float64)
+            else:
+                self._blend_start_action = None  # blend complete, clear
 
         if action_fitted is not None:
             try:
