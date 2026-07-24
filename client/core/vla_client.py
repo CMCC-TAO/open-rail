@@ -74,7 +74,13 @@ class VLAClientAsync():
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
-        self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
+        # Index-advance timer: when control is not running, advance action_chunk_index at 267Hz
+        # so the fuser read position progresses over time (same effect as the web_client control thread).
+        self.index_advance_timer = MultiThreadTimer(self.config.controller.period, self._index_advance_fun)
+        # Visualize thread: display only. Reads current data and pushes to the frontend,
+        # does NOT advance action_chunk_index. Uses updata_fps (30Hz) instead of
+        # controller.period (267Hz) to avoid over-dense chart data causing stair-step jitter.
+        self.visualize_thread_timer = MultiThreadTimer(1000.0 / self.config.visualize.updata_fps, self._visualize_thread_fun)
         
         self.show_thread_lock = threading.Lock()
 
@@ -127,7 +133,6 @@ class VLAClientAsync():
     
     def set_control_period(self, period) -> None:
         self.control_thread_timer.set_interval(period)
-        self.visualize_thread_timer.set_interval(period)
     
     def set_observe_period(self, speed) -> None:
         self.observe_period = 1.0 / speed / self.config.controller.raw_fps
@@ -153,10 +158,14 @@ class VLAClientAsync():
         self.visualize_server.start_server()
         if not self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.start()
+        if not self.index_advance_timer.is_alive():
+            self.index_advance_timer.start()
     def stop_visualize(self):
         self.visualize_server.stop_server()
         if self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.stop(timeout=1.0)
+        if self.index_advance_timer.is_alive():
+            self.index_advance_timer.stop(timeout=1.0)
 
     def start(self):
         """Start the VLA client and all associated threads.
@@ -229,6 +238,8 @@ class VLAClientAsync():
             self.control_thread_timer.stop(timeout=1.0)
         if self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.stop(timeout=1.0)
+        if hasattr(self, 'index_advance_timer') and self.index_advance_timer.is_alive():
+            self.index_advance_timer.stop(timeout=1.0)
         
         if hasattr(self, 'data_record_manager') and self.data_record_manager is not None:
             self.data_record_manager.close()
@@ -333,7 +344,41 @@ class VLAClientAsync():
                 # Automatically switch language instruction based on prob_progress changes
                 self.task_language_manager.add_task_progress(progress=prob_progress)
                 self.task_language_manager.advance_subtask()
-        current_state = getattr(self.robot, 'current_state', None)
+
+    def _index_advance_fun(self):
+        """When control thread is NOT running, advance action_chunk_index at 267Hz.
+        This simulates what the control thread would do, so the fuser reads a
+        progressively changing position instead of being stuck at the blend start.
+        This is how web_client works — its control thread always advances the index.
+        """
+        if self.is_control_thread_running:
+            return
+        self.realtime_data_manager.advance_index()
+
+    def _visualize_thread_fun(self):
+        """Pure display thread — reads current data without advancing action_chunk_index.
+        Always runs at 30Hz regardless of control state, fully decoupled from control.
+        """
+        now = time.perf_counter()
+        if hasattr(self, '_last_viz_time'):
+            dt = now - self._last_viz_time
+            # self.logger.warning("[VIZ_FREQ] visualize_thread dt=%.2fms, fps=%.2fHz", dt*1000, 1.0/dt)
+        self._last_viz_time = now
+        current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
+        action_fitted, vel_fitted, acc_fitted = None, None, None
+        action_raw = None
+        if self.is_inference_thread_running:
+            with self.realtime_data_manager.polynomial_thread_lock:
+                rdm = self.realtime_data_manager
+                if rdm.action_chunk_fitted is not None and rdm.action_chunk_index is not None:
+                    idx = rdm.action_chunk_index
+                    action_fitted = rdm.action_chunk_fitted[:, idx].copy()
+                    vel_fitted = rdm.vel_chunk_fitted[:, idx].copy() if rdm.vel_chunk_fitted is not None else None
+                    acc_fitted = rdm.acc_chunk_fitted[:, idx].copy() if rdm.acc_chunk_fitted is not None else None
+                if rdm.action_chunks and len(rdm.action_chunks) > 0 and rdm.action_chunk_fitted is not None and rdm.action_chunk_index is not None:
+                    raw_idx = int(rdm.action_chunk_index / (rdm.action_chunk_fitted.shape[1] / len(rdm.action_chunks)))
+                    raw_idx = min(raw_idx, len(rdm.action_chunks) - 1)
+                    action_raw = rdm.action_chunks[raw_idx]
         self.visualize_server.update_chart_data(
             action_fitted=action_fitted,
             vel_fitted=vel_fitted,
@@ -344,20 +389,6 @@ class VLAClientAsync():
             control_period=self.config.controller.period / 1000
             )
 
-    def _visualize_thread_fun(self):
-        # Send state data to visualization server for live plotting when control thread is not running
-        if not self.is_control_thread_running:
-            current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
-            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
-            self.visualize_server.update_chart_data(
-                action_fitted=action_fitted,
-                vel_fitted=vel_fitted,
-                acc_fitted=acc_fitted,
-                action_raw=action_raw,
-                current_state=current_state,
-                observe_period=self.observe_period / 1000,
-                control_period=self.config.controller.period / 1000
-                )
     @run_time_decorator
     def _inference_first(self):
         """First inference step, which initializes the control pipeline.
@@ -508,13 +539,14 @@ class VLAClientAsync():
                 self.logger.warning("Return None when pop action chunk from realtime_data_manager.")
                 return
             prob_progress = self._parse_prob_progress(action_data)
+            step_indices = self.robot.get_step_indices()
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
                 timestamps,
                 action_chunk,
                 time_step=self.config.controller.period,
                 task_progress=prob_progress,
                 joint_indices=self.robot.get_joint_indices(),
-                step_indices=self.robot.get_step_indices())
+                step_indices=step_indices)
 
             self.realtime_data_manager.set_inter_traj_time_marker()
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
@@ -526,11 +558,16 @@ class VLAClientAsync():
                 next_acc_chunk=acc_chunk_fitted,
                 next_timestamps=timestamps_fitted,
                 target_chunk_index=target_chunk_index,
-                currt_action=currt_action if self.is_control_thread_running else None,
-                currt_vel=currt_vel if self.is_control_thread_running else None,
-                currt_acc=currt_acc if self.is_control_thread_running else None,
-                joint_indices=self.robot.get_joint_indices() if self.is_control_thread_running else None,
-                step_indices=self.robot.get_step_indices() if self.is_control_thread_running else None,
+                # Always perform min-jerk blend as long as an executable chunk exists
+                # (currt_action is not None). Do NOT gate on is_control_thread_running —
+                # otherwise, after control stops (monitoring/visualization phase),
+                # new chunks are passed through raw, causing curve jumps at chunk
+                # boundaries (a key reason why the web looks smooth while action does not).
+                currt_action=currt_action,
+                currt_vel=currt_vel,
+                currt_acc=currt_acc,
+                joint_indices=self.robot.get_joint_indices(),
+                step_indices=step_indices,
             )
             # Record control timestamp
             self.realtime_data_manager.set_control_time_marker()

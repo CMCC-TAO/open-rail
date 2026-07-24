@@ -206,6 +206,9 @@ ws_lock = asyncio.Lock()
 _bridge_ws = None  # websockets.WebSocketClientProtocol
 _bridge_connected = False
 
+# 推理状态跟踪：从 ObsDataBridge 的 joint_data 消息中解析
+_inference_running = False
+
 
 async def _connect_bridge():
     """连接到 ObsDataBridge (ws://127.0.0.1:9001)"""
@@ -229,8 +232,24 @@ async def _connect_bridge():
 
 
 async def _bridge_reader():
-    """从 ObsDataBridge 读取数据并转发给所有浏览器客户端"""
-    global _bridge_ws, _bridge_connected
+    """从 ObsDataBridge 读取数据并转发给所有浏览器客户端
+    
+    相机帧过滤策略（与 web_client 行为保持一致）：
+        - inference 未运行时：实时转发所有数据，图像 30Hz 刷新
+        - inference 运行时：每个推理步只放行一批相机帧（head/left/right 三帧），
+          其余丢弃，图像按推理频率刷新（如推理 1Hz → 图像 1Hz）
+    
+    消息顺序（每个~33ms 周期）：
+        cam_head → cam_left → cam_right → [grasp_state] → joint_state
+    
+    状态机：
+        infer_count 步进 → _need_release = True（等待放行下一批）
+        文本消息到达     → _need_release = False（通知本批结束）
+    """
+    global _bridge_ws, _bridge_connected, _inference_running
+    _last_infer_count = 0          # 上次看到的 infer_count
+    _need_release = False          # True = 等待放行相机帧
+    _opened_this_iter = False      # 当前迭代是否刚打开闸门
 
     while True:
         if _bridge_ws is None or not _bridge_connected:
@@ -248,6 +267,36 @@ async def _bridge_reader():
 
         if not ws_clients:
             continue
+
+        # ── 更新推理状态（从 joint_data 消息中解析） ──
+        if isinstance(message, str):
+            try:
+                parsed = json.loads(message)
+                if (parsed.get("type") == "joint_data"
+                        and isinstance(parsed.get("data"), dict)):
+                    data = parsed["data"]
+                    if "inference_running" in data:
+                        _inference_running = bool(data["inference_running"])
+                    if "infer_count" in data:
+                        new_count = int(data["infer_count"])
+                        if new_count != _last_infer_count:
+                            _last_infer_count = new_count
+                            if _inference_running:
+                                _need_release = True
+                                _opened_this_iter = True
+            except (json.JSONDecodeError, KeyError, ValueError):
+                pass
+            # 文本消息到达 → 关闭批次（除非本消息刚打开了闸门）
+            if _inference_running:
+                if not _opened_this_iter:
+                    _need_release = False
+                _opened_this_iter = False
+
+        # ── 相机帧过滤：inference 运行时每步只放行一批 ──
+        if isinstance(message, bytes) and _inference_running:
+            if not _need_release:
+                continue  # 不在放行窗口内，丢弃
+            # 放行本帧，同 batch 的 head/left/right 全部自然通过
 
         # 转发给所有浏览器客户端
         dead = set()

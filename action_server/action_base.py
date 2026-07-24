@@ -468,13 +468,109 @@ def _monitor_fixed_duration(
 
 
 def _stop_vla_client(vla_client) -> None:
-    """安全停止 VLA 客户端线程"""
+    """安全停止 VLA 客户端线程（仅信号，不销毁组件）"""
     import time
     try:
         vla_client.is_running_action = False
         time.sleep(0.1)
     except Exception:
         pass
+
+
+def run_vla_control_only(
+    goal_handle,
+    vla_client,
+    language_instruction: str,
+    max_duration: float = _DEFAULT_MAX_DURATION,
+    thre_progress: float = _DEFAULT_THRE_PROGRESS,
+    stable_count_threshold: int = _DEFAULT_STABLE_COUNT,
+    stability_ratio_thresh: float = _DEFAULT_STABILITY_RATIO,
+    feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
+    fixed_duration: float = 0,
+) -> TaskResult:
+    """在 obs+infer 已运行的情况下，只启动 control 并监控 VLA 推理进度
+
+    init_grasp → grasp 分离流程专用。
+    与 run_vla_inference 的区别:
+      - 不 reset_robot（已在 init_grasp 中完成）
+      - 不 start_observe / start_inference（已在 init_grasp 中启动）
+      - 只 start_control，监控完成后 stop_control
+      - 不销毁 VLA 组件（由 finish_grasp 统一清理）
+
+    Args:
+        goal_handle:          ROS2 Action goal_handle
+        vla_client:           VLAClientAsync 实例
+        language_instruction: 语言指令文本
+        max_duration:         最大执行时间（秒）
+        thre_progress:        进度阈值
+        stable_count_threshold: 连续稳定计数阈值
+        stability_ratio_thresh: 变异系数阈值
+        feedback_interval:     feedback 发送间隔
+        fixed_duration:        固定执行时长（秒）
+
+    Returns:
+        TaskResult
+    """
+    import time
+
+    try:
+        # ============================================================
+        # 清空上一轮残留数据，防止 monitor 读到旧 prob_progress 误判
+        # ============================================================
+        # 1. 重置任务语言管理器（清空 progress queue、sub_task_id）
+        vla_client.task_language_manager.reset()
+        # 2. 设置新的语言指令（必须在 RDM clear 之前，确保新 obs 带新指令）
+        vla_client.task_language_manager.currt_language_instruction = language_instruction
+
+        # 3. 清空 RDM：旧 obs + 旧 prob_progress + 旧 action_chunks
+        #    infer_count = 0 使下次推理走 _inference_first()（重新初始化）
+        #    清空 observe_buffer 后，新 obs 会使用刚设置的新语言指令
+        vla_client.realtime_data_manager.clear()
+
+        # 4. 重置上一轮残留的 prob_progress，防 monitor 立即读到 >80%
+        with vla_client.show_thread_lock:
+            vla_client.current_prob_progress = 0.0
+
+        # # 5. 等待新 obs 积累（约 5 帧，50Hz ≈ 100ms，20Hz ≈ 250ms）
+        # time.sleep(0.25)
+
+        vla_client.is_running_action = True
+
+        # 只启动 control 线程
+        vla_client.start_control()
+        start_time = time.time()
+
+        # 监控进度
+        if fixed_duration > 0:
+            result = _monitor_fixed_duration(
+                goal_handle=goal_handle,
+                vla_client=vla_client,
+                fixed_duration=fixed_duration,
+                feedback_interval=feedback_interval,
+            )
+        else:
+            result = _monitor_vla_progress(
+                goal_handle=goal_handle,
+                vla_client=vla_client,
+                max_duration=max_duration,
+                thre_progress=thre_progress,
+                stable_count_threshold=stable_count_threshold,
+                stability_ratio_thresh=stability_ratio_thresh,
+                feedback_interval=feedback_interval,
+            )
+
+        elapsed = time.time() - start_time
+        print(f'[run_vla_control_only] completed: success={result.success}, elapsed={elapsed:.1f}s')
+        return result
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return TaskResult(False, error_code=ERR_TASK_TIMEOUT,
+                          error_message=f'Control monitoring error: {str(e)}')
+    finally:
+        vla_client.is_running_action = False
+        vla_client.stop_control()
 
 
 def send_vla_feedback(goal_handle, progress: int, message: str,

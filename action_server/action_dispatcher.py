@@ -449,6 +449,8 @@ class ObsDataBridge:
                                 "joints_y": state_list,
                                 "timestamp": now,
                                 "task_progress": self._ctx.current_task_progress,
+                                "inference_running": self._ctx.is_inference_running,
+                                "infer_count": self._ctx.infer_count,
                             },
                         })
                         self._enqueue(msg)

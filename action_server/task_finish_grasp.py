@@ -92,8 +92,10 @@ class FinishGraspHandler(AbstractTaskHandler):
             robot_body.reset_robot(target_pose=reset_pose,
                                    max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
-            # ===== 步骤 5: 完成 =====
-            self.send_feedback(goal_handle, 100, "抓取完成复位，机器人已就绪")
+            # ===== 步骤 5: 清理 VLA 组件并完成 =====
+            self.send_feedback(goal_handle, 90, "正在清理 VLA 推理资源...")
+            context.clear_vla_components()
+            self.send_feedback(goal_handle, 100, "抓取完成复位，VLA 资源已清理，机器人已就绪")
             return TaskResult(True, error_code=ERR_SUCCESS, error_message=ERR_MSG[ERR_SUCCESS])
 
         except Exception as e:

@@ -12,8 +12,9 @@ if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
 from action_server.action_base import (
-    AbstractTaskHandler, TaskResult, run_vla_inference,
+    AbstractTaskHandler, TaskResult, run_vla_control_only,
     ERR_MISSING_TARGET, ERR_UNKNOWN_TARGET,
+    ERR_INFERENCE_START_FAILED,
     ERR_GRASP_TIMEOUT, ERR_ONE_HAND_FAILED,
     ERR_TWO_HAND_LEFT_FAILED, ERR_TWO_HAND_RIGHT_FAILED,
     ERR_TWO_HAND_BOTH_FAILED,
@@ -281,75 +282,66 @@ class GraspHandler(AbstractTaskHandler):
                            f"抓取目标: {target}, 语言指令: {instruction}")
         print(f'[DEBUG GraspHandler] target={target} instruction="{instruction}" → creating VLA components...')
 
-        # ===== 步骤 2: 创建 VLA 组件 =====
-        components = context.create_vla_components()
+        # ===== 步骤 2: 获取持久化 VLA 组件（由 init_grasp 创建） =====
+        components = context.vla_components
+        if components is None:
+            self.send_feedback(goal_handle, 0, "VLA 组件未就绪，请先执行 init_grasp")
+            print(f'[DEBUG GraspHandler] EXIT early: no persistent VLA components (run init_grasp first)')
+            return TaskResult(False, error_code=ERR_INFERENCE_START_FAILED,
+                              error_message='VLA components not ready. Run init_grasp first.')
         vla_client = components["vla_client"]
         task_language_manager = components["task_language_manager"]
         robot_body = context.robot_body
 
-        # Override language instruction in task_language_manager
-        # （因为 create_vla_components() 中 auto_mode=False，但初始化时已经从 config.language.task_id="pour_tea"
-        # 读取了默认指令，需要手动覆盖为当前任务的指令）
+        # Override language instruction
         print(f'[DEBUG GraspHandler] Overriding language instruction: "{instruction}"')
         task_language_manager.currt_language_instruction = instruction
-        task_language_manager.config.sub_task_id = 0  # Reset sub_task_id to avoid confusion
+        task_language_manager.config.sub_task_id = 0
 
-        # Apply smooth start: blend from current state to model trajectory (first N steps)
-        # 消除启动时因模型输出与实际 state 差异大导致的抖动和图像模糊
-        _apply_smooth_start_blend(vla_client, robot_body, blend_duration=3.0)
-
-        print(f'[DEBUG GraspHandler] VLA components created, starting inference...')
+        print(f'[DEBUG GraspHandler] Using persistent VLA components, starting control only...')
 
         try:
-            # ===== 步骤 3: 执行 VLA 推理 =====
-            context._active_vla_client = vla_client  # 供 ObsDataBridge 读取进度
-            result = run_vla_inference(
+            # ===== 步骤 3: 执行 VLA 推理（只启动 control） =====
+            context._active_vla_client = vla_client
+            result = run_vla_control_only(
                 goal_handle=goal_handle,
                 vla_client=vla_client,
                 language_instruction=instruction,
-                robot_body=robot_body,
-                reset_robot=not context._initialized,
                 max_duration=30.0,
-                thre_progress=1.5,  # 禁止 prob_progress 稳定性检测，靠 >80% 直接完成或 30s 超时
+                thre_progress=1.5,
                 stable_count_threshold=999,
             )
 
-            # ===== 步骤 4: 分析结果，结合手势判断具体错误 =====
+            # ===== 步骤 4: 分析结果 =====
             if not result.success:
-                # 超时 → 映射为抓取超时错误码
                 if result.error_code == 6:
                     return TaskResult(False, error_code=ERR_GRASP_TIMEOUT,
                                       error_message="Grasp task timed out")
-                # 其他错误（复位失败、推理未启动、取消等）→ 原样透传
                 return result
 
-            # VLA 推理成功 (prob_progress > 80%)，验证实际抓握状态
+            # VLA 推理成功，验证实际抓握状态
             hand_type = TARGET_HAND_MAP.get(target.strip(), "one hand")
-            grasp_state = context.grasp_detector.grasp_state  # [left, right]
+            grasp_state = context.grasp_detector.grasp_state
 
             if hand_type == "one hand":
-                if not (grasp_state[0] or grasp_state[1]):  # 任一手抓到即成功
+                if not (grasp_state[0] or grasp_state[1]):
                     return TaskResult(False, error_code=ERR_ONE_HAND_FAILED,
                                       error_message="One-hand grasp failed")
-                return result  # 抓握成功
+                return result
 
-            # two hand
             if grasp_state[0] and grasp_state[1]:
-                return result  # 双手抓握成功
+                return result
             if not grasp_state[0] and not grasp_state[1]:
                 return TaskResult(False, error_code=ERR_TWO_HAND_BOTH_FAILED,
                                   error_message="Both hands grasp failed")
             if not grasp_state[0]:
                 return TaskResult(False, error_code=ERR_TWO_HAND_LEFT_FAILED,
                                   error_message="Left hand grasp failed")
-            # not grasp_state[1]
             return TaskResult(False, error_code=ERR_TWO_HAND_RIGHT_FAILED,
                               error_message="Right hand grasp failed")
 
         finally:
-            # ===== 步骤 5: 清理 per-task 组件 =====
+            # ===== 步骤 5: 清理（仅清除 active 引用，不销毁组件） =====
             context._active_vla_client = None
             _elapsed = time.time() - _t0
-            print(f'[DEBUG GraspHandler] EXIT after {_elapsed:.1f}s, running destroy_vla_components...')
-            context.destroy_vla_components(components)
-            print(f'[DEBUG GraspHandler] destroy_vla_components done')
+            print(f'[DEBUG GraspHandler] EXIT after {_elapsed:.1f}s (components preserved for reuse)')

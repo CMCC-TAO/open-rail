@@ -8,7 +8,6 @@ from ml_collections import ConfigDict
 from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index
 from client.core.inter_chunk_fuser import InterChunkFuser
 
-
 class RealtimeDataManager():
     """Real-time data manager for handling observation data and action chunks in VLA inference system.
     
@@ -64,6 +63,7 @@ class RealtimeDataManager():
         self.avg_infer_time = 0.0
         self.avg_comm_time = 0.0 # communication latency between vla_client and vla_server
         self.infer_count = 0
+        self.observe_marker = 0.0
 
         # Synchronous Running Flag
         self.sync_running = False
@@ -151,7 +151,7 @@ class RealtimeDataManager():
         # self.last_traj_time = self.currt_traj_time
         currt_inter_traj_time = self.start_ctrl_marker - self.start_inter_traj_marker
         # self.avg_inter_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_inter_traj_time) / self.infer_count if self.infer_count > 0 else currt_inter_traj_time
-        self.avg_inter_traj_time = self.avg_intra_traj_time * 0.8 + currt_inter_traj_time * 0.2 if self.avg_inter_traj_time > 0 else currt_inter_traj_time
+        self.avg_inter_traj_time = self.avg_inter_traj_time * 0.8 + currt_inter_traj_time * 0.2 if self.avg_inter_traj_time > 0 else currt_inter_traj_time
         self.logger.debug(f'avg inter traj time: {self.avg_inter_traj_time:.4f}s')
  
     def add_observe_data(self, frame):
@@ -393,13 +393,21 @@ class RealtimeDataManager():
 
     def get_start_chunk_index(self, next_timestamps):
         start_chunk_index = 0
-        time_offset = self.start_ctrl_marker - self.observe_marker
-        self.logger.debug(f'total inference time: {time_offset:.3f}s')
+        now = time.perf_counter()
+        # Use current time `now` instead of `self.start_ctrl_marker`.
+        # `start_ctrl_marker` is set by `set_control_time_marker` AFTER this round of
+        # `get_start_chunk_index`, so reading it yields the previous round's value.
+        # Subtracting `observe_marker` from that stale value always gives a negative
+        # `time_offset`, causing `start_chunk_index` to stay at 0 and the fuser to
+        # always blend from the chunk beginning.
+        # `now - observe_marker` = the actual end-to-end latency from observation to now.
+        time_offset = now - self.observe_marker
         
         for index in range(len(next_timestamps)):
             if next_timestamps[index] > time_offset:
                 start_chunk_index = index
                 break
+        
         return start_chunk_index
 
     def get_current_state(self):
@@ -409,6 +417,21 @@ class RealtimeDataManager():
             currt_vel = self.vel_chunk_fitted[:, self.action_chunk_index].copy() if self.vel_chunk_fitted is not None else None
             currt_acc = self.acc_chunk_fitted[:, self.action_chunk_index].copy() if self.acc_chunk_fitted is not None else None
         return currt_act, currt_vel, currt_acc
+
+    def advance_index(self):
+        """Advance action_chunk_index by 1 step (same as control thread does).
+        Used when no control thread is running, so fuser reads move forward
+        instead of being stuck at the blend start position.
+        """
+        with self.polynomial_thread_lock:
+            if self.action_chunk_index is None or self.action_chunk_fitted is None:
+                return
+            self.action_chunk_index = min(
+                self.action_chunk_index + 1,
+                self.action_chunk_fitted.shape[1] - 1,
+            )
+            self.polynomial_cond.notify_all()
+
     def get_action_fitted(self, mode='control'):
         """Get the current action (fitted and raw) indexed by action_chunk_index.
 

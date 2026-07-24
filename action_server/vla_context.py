@@ -80,6 +80,11 @@ class VLAContext:
         self.grasp_detector = None  # 抓取状态检测器（由 dispatcher 注入）
 
         # ════════════════════════════════════════════════════════════
+        # 持久化 VLA 组件（跨任务复用，由 init_grasp 创建，finish_grasp 销毁）
+        # ════════════════════════════════════════════════════════════
+        self._vla_components = None
+
+        # ════════════════════════════════════════════════════════════
         # 创建共享 ZMQ 客户端（dispatcher 启动时即建立连接，
         # 避免每个 task 首次推理因连接未就绪而超时）
         # ════════════════════════════════════════════════════════════
@@ -179,6 +184,31 @@ class VLAContext:
     # ================================================================
 
     @property
+    def is_inference_running(self) -> bool:
+        """当前推理线程是否在运行"""
+        vc = self._active_vla_client
+        if vc is None:
+            return False
+        try:
+            return bool(getattr(vc, 'is_inference_thread_running', False))
+        except Exception:
+            return False
+
+    @property
+    def infer_count(self) -> int:
+        """当前已完成的推理步数"""
+        vc = self._active_vla_client
+        if vc is None:
+            return 0
+        try:
+            rdm = getattr(vc, 'realtime_data_manager', None)
+            if rdm is not None:
+                return int(getattr(rdm, 'infer_count', 0))
+            return 0
+        except Exception:
+            return 0
+
+    @property
     def current_task_progress(self) -> float:
         """当前推理任务进度 (0.0~1.0)，无活跃任务时返回 0.0"""
         vc = self._active_vla_client
@@ -241,6 +271,38 @@ class VLAContext:
             'intra_chunk_smoother': intra_chunk_smoother,
             'task_language_manager': task_language_manager,
         }
+
+    # ================================================================
+    # 持久化 VLA 组件（跨任务复用）
+    # ================================================================
+
+    def ensure_vla_components(self) -> dict:
+        """获取持久化的 VLA 组件
+
+        如果组件尚未创建，则创建它们。
+        可跨任务复用（init_grasp 创建，finish_grasp 销毁）。
+        """
+        if self._vla_components is None:
+            self._vla_components = self.create_vla_components()
+            vc = self._vla_components.get('vla_client')
+            if vc is not None:
+                self._active_vla_client = vc
+                print('[VLAContext] Persistent VLA components created')
+        return self._vla_components
+
+    def clear_vla_components(self) -> None:
+        """清理持久化的 VLA 组件"""
+        if self._vla_components is not None:
+            print('[VLAContext] Clearing persistent VLA components...')
+            self._active_vla_client = None
+            self.destroy_vla_components(self._vla_components)
+            self._vla_components = None
+            print('[VLAContext] Persistent VLA components cleared')
+
+    @property
+    def vla_components(self) -> dict | None:
+        """获取持久化的 VLA 组件（可能为 None）"""
+        return self._vla_components
 
     def destroy_vla_components(self, components: dict) -> None:
         """销毁 per-task VLA 组件（不关闭共享 ZMQ 连接）
@@ -320,6 +382,9 @@ class VLAContext:
     def close(self) -> None:
         """清理所有共享资源（dispatcher 关闭时调用）"""
         self._print_init_running = False
+
+        # 清理持久化 VLA 组件
+        self.clear_vla_components()
 
         # 关闭共享 ZMQ 客户端
         if hasattr(self, '_shared_zmq') and self._shared_zmq is not None:

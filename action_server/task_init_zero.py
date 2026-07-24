@@ -41,10 +41,25 @@ class InitZeroHandler(AbstractTaskHandler):
         target_pose = _get_init_grasp_pose(context)
         try:
             self.send_feedback(goal_handle, 10, "正在确认机器人连接...")
+
+            # ===== 复位到默认准备姿态 =====
             self.send_feedback(goal_handle, 30, "正在过渡到默认准备姿态（无中间过渡）...")
             robot_body.reset_robot(target_pose=target_pose)
 
-            self.send_feedback(goal_handle, 100, "机器人已就绪，准备姿态完成（直连模式）")
+            # ===== 创建 VLA 组件并启动 obs+infer =====
+            self.send_feedback(goal_handle, 60, "正在创建 VLA 推理组件...")
+            components = context.ensure_vla_components()
+            vla_client = components["vla_client"]
+
+            self.send_feedback(goal_handle, 80, "正在启动观测和推理线程...")
+            vla_client.start_observe()
+            vla_client.start_inference()
+            vla_client.start_visualize()
+            vla_client.is_running_action = True
+            print(f'[InitZeroHandler] VLA obs+infer threads started')
+
+            # ===== 完成（不销毁组件）=====
+            self.send_feedback(goal_handle, 100, "机器人已就绪，VLA 观测推理已启动（直连模式）")
             return TaskResult(True, error_code=ERR_SUCCESS, error_message=ERR_MSG[ERR_SUCCESS])
 
         except Exception as e:

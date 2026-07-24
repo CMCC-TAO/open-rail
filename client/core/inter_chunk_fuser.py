@@ -34,6 +34,9 @@ class InterChunkFuser:
         # process first inference
         if joint_indices is None:
             joint_indices = list(range(next_action_chunk.shape[0]))
+        # 把 step_indices（如 gripper/hand）也纳入 blend，否则 chunk 切换时这些关节会跳变
+        if step_indices is not None:
+            joint_indices = sorted(set(joint_indices) | set(step_indices))
         if currt_action is None and currt_vel is None and currt_acc is None:
             next_vel_chunk = np.zeros_like(next_action_chunk)
             next_vel_chunk[:, 1:] = (next_action_chunk[:, 1:] - next_action_chunk[:, :-1]) / (next_timestamps[1] - next_timestamps[0])

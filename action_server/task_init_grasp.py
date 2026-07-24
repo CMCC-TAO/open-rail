@@ -91,9 +91,22 @@ class InitGraspHandler(AbstractTaskHandler):
             robot_body.reset_robot(target_pose=init_grasp_pose,
                                    max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
-            # ===== 步骤 4: 完成 =====
+            # ===== 步骤 4: 创建 VLA 组件并启动 obs+infer =====
+            self.send_feedback(goal_handle, 70, "正在创建 VLA 推理组件...")
+            components = context.ensure_vla_components()
+            vla_client = components["vla_client"]
+
+            # 启动 observe 和 inference 线程（多次调用安全，内部有 is_alive 保护）
+            self.send_feedback(goal_handle, 85, "正在启动观测和推理线程...")
+            vla_client.start_observe()
+            vla_client.start_inference()
+            vla_client.start_visualize()
+            vla_client.is_running_action = True
+            print(f'[InitGraspHandler] VLA obs+infer threads started')
+
+            # ===== 步骤 5: 完成（不销毁组件，由 finish_grasp 清理）=====
             context._initialized = True
-            self.send_feedback(goal_handle, 100, "机器人已就绪，准备抓取姿态完成")
+            self.send_feedback(goal_handle, 100, "机器人已就绪，VLA 观测推理已启动")
             return TaskResult(True, error_code=ERR_SUCCESS, error_message=ERR_MSG[ERR_SUCCESS])
 
         except Exception as e:
