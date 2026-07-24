@@ -99,6 +99,7 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
     syncRecordingSwitchUI();
     return false;
   }
+  if (refreshList) await refreshRecordingFileList();
 
   try {
     if (!silent) toast('Recording stopping.', 'info');
@@ -113,9 +114,9 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
     App.config.record.switch = false;
 
     renderRecordingConfigTree(App.config);
-    if (!silent) toast('Recording stopped.', 'warn');
     if (refreshList) await refreshRecordingFileList();
     syncRecordingSwitchUI();
+    if (!silent) toast('Recording stopped.', 'warn');
     return true;
   } catch (_) {
     syncRecordingSwitchUI();
@@ -288,15 +289,16 @@ async function refreshRecordingFileList() {
     const res = await apiFetch(`/api/client/record/episodes${q ? `?${q}` : ''}`);
     renderRecordingFileList(res);
 
-    const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
-    if (changed) {
-      const params2 = new URLSearchParams();
-      if (App.recordingTask) params2.set('task', App.recordingTask);
-      if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
-      const q2 = params2.toString();
-      const res2 = await apiFetch(`/api/client/record/episodes${q2 ? `?${q2}` : ''}`);
-      renderRecordingFileList(res2);
-    }
+    // const hasExplicitRequest = !!(requestedTask || requestedChunk);
+    // const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
+    // if (hasExplicitRequest && changed) {
+    //   const params2 = new URLSearchParams();
+    //   if (App.recordingTask) params2.set('task', App.recordingTask);
+    //   if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
+    //   const q2 = params2.toString();
+    //   const res2 = await apiFetch(`/api/client/record/episodes${q2 ? `?${q2}` : ''}`);
+    //   renderRecordingFileList(res2);
+    // }
   } catch (_) { /* toasted */ }
 }
 
@@ -471,10 +473,10 @@ function setupRecordingPanel() {
           App.config.record.switch = true;
           renderRecordingConfigTree(App.config);
           await refreshRecordingFileList();
-          toast('Recording started.', 'ok');
         } catch (_) { /* toasted */ }
       }
       syncRecordingSwitchUI();
+      toast('Recording started.', 'ok');
     });
   }
 

@@ -1402,7 +1402,7 @@ class DataRecordManager:
             self.writer_process.start()
             self.logger.info(f"Writer process started successfully. session_id={session_id}")
         except Exception as e:
-            self.logger.error(f"Failed to start writer_process: {e}")
+            self.logger.exception(f"Failed to start writer_process: {e}")
 
     def stop_recording(self):
         """
