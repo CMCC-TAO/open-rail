@@ -323,9 +323,9 @@ function startRecordingFileListPolling() {
 function syncRecordingFileListPolling() {
   if (isRecordingPanelExpanded()) {
     refreshRecordingFileList();
-    startRecordingFileListPolling();
+    // startRecordingFileListPolling();
   } else {
-    stopRecordingFileListPolling();
+    // stopRecordingFileListPolling();
   }
 }
 

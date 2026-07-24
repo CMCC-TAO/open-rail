@@ -1,8 +1,8 @@
 import os
 import re
 import json
-import glob
 import cv2
+import csv
 import time
 import logging
 import threading
@@ -489,12 +489,12 @@ class LeRobotDatasetRecorder:
             # self._clear_queues()
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
 
-    def add_frame_async(self, step_state: dict, step_action: np.ndarray):
-        self.record_executor.submit(self._write_frame_fun, step_state, step_action)
+    def add_frame_async(self, step_state: dict, step_action: np.ndarray, step_extra: dict):
+        self.record_executor.submit(self._write_frame_fun, step_state, step_action, step_extra)
 
     # @run_time_decorator
     # First frame takas 20ms and the others tasks 5ms
-    def _write_frame_fun(self, step_state: dict, step_action: np.ndarray):
+    def _write_frame_fun(self, step_state: dict, step_action: np.ndarray, step_extra: dict):
         """
         Main function for the write data frame responsible for writing data to disk.
 
@@ -525,7 +525,7 @@ class LeRobotDatasetRecorder:
                     step_state['obs.state'],
                     np.zeros(self.state_shape - step_state['obs.state'].shape[0], dtype=step_state['obs.state'].dtype)
                 ], axis=0)
-            step_language = step_state['language_instruction']
+            step_language = step_extra.get('language_status', {}).get('language', '')
             
             # Track new language instructions per episode
             if step_language not in self.episode_task_list:
@@ -897,14 +897,9 @@ class EvaluationResultRecorder:
     """
 
     CSV_HEADERS = [
-        'ID', 'TaskIdx', 'Task', 'Sub#', 'Instruction', 'EpisodeID',
-        'StartTime', 'EndTime', 'Duration(s)', 'Paused(s)', 'Status',
-        'Score', 'Note', 'ObvFPS', 'InferCount', 'ImgProcTime(ms)',
-        'AvgInferTime(ms)', 'AvgTrajTime(ms)', 'AvgIntraTrajTime(ms)',
-        'AvgInterTrajTime(ms)', 'AvgCommTime(ms)',
-        'RobotType', 'Mode', 'WaitTime(ms)', 'ControlPeriod(ms)',
-        'ControlSpeed', 'GripperOffset', 'InterChunkMode', 'IntraChunkMode',
-        'ImgProcMethod', 'ImgProcWidth',
+        'ID', 'TaskId', 'SubTaskId', 'Instruction', 'StartTime', 'EndTime', 'Duration(s)', 'Score', 'Note',
+        'EpisodeID', 'Mode', 'WaitTime(ms)', 'ControlPeriod(ms)', 'ControlSpeed', 'InterChunkMode', 'IntraChunkMode', 'ModelType', 'ModelPath',
+        'ObvFPS', 'InferCount', 'ImgProcTime(ms)', 'AvgInferTime(ms)', 'AvgInterTrajTime(ms)', 'AvgIntraTrajTime(ms)', 'AvgCommTime(ms)',
     ]
 
     def __init__(self, evaluation_config: ConfigDict) -> None:
@@ -912,10 +907,16 @@ class EvaluationResultRecorder:
         self.config = evaluation_config
         self._session_id = None 
         self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
+        self._episode_id = -1
 
-    def set_task(self, save_path: str) -> None:
+    def set_task(self, save_path: str, episode_id: int = -1) -> None:
         # self._save_path = save_path
         self._check_dir_create_session(save_path=save_path)
+        # if self._episode_id == episode_id:
+        #     self._episode_id += 1
+        # else:
+        self._episode_id = episode_id
+        self._record_id = -1
     def new_session(self):
         self._session_id = None
     def _check_dir_create_session(self, save_path: str):
@@ -926,7 +927,7 @@ class EvaluationResultRecorder:
         # Create new session if session_id is None
         if self._session_id is None:
             self._session_id = datetime.now().strftime("%H%M%S")
-            self._record_id = 0
+            self._record_id = -1
             # self._eval_meta = {
             #     'model_type': None,
             #     'model_path': None,
@@ -943,28 +944,19 @@ class EvaluationResultRecorder:
             #     json.dump([], f)  # Create empty JSON array
         # If eval folder exists, enumerate existing eval_log files and find the biggest ID
         # return os.path.join(evallog_dir, f"eval_log.{self._session_ts}")
-    def begin_recording(self):
+    def begin_recording(self, eval_record_id: int):
         self._eval_json_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.json") 
         self._eval_csv_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.csv") 
-        self._create_new_record()
+        self._create_new_record(eval_record_id=eval_record_id)
 
-    def _create_new_record(self):
+    def _create_new_record(self, eval_record_id: int):
+        self._record_id = eval_record_id
         self._eval_record_start_time = time.time()
         self._current_record = {
             'id': self._record_id,
-            'mode': None,
-            'wait_time': None,
-            'control_period': None,
-            'control_speed': None,
-            'inter_chunk_mode': None,
-            'intra_chunk_mode': None,
-            'model_type': None,
-            'model_path': None,
-            'task_name': None,
             'task_id': None,
             'sub_task_id': None,
             'instruction': None,
-            'episode_id': None,
             'start_time': None,
             'end_time': None,
             'duration': None,
@@ -973,6 +965,16 @@ class EvaluationResultRecorder:
             # 'status': 'running',
             'score': None,
             'note': '',
+            'episode_id': self._episode_id,
+            'mode': None,
+            'wait_time': None,
+            'control_period': None,
+            'control_speed': None,
+            'inter_chunk_mode': None,
+            'intra_chunk_mode': None,
+            'model_type': None,
+            'model_path': None,
+            # 'task_name': None,
             'obv_fps': [],
             'infer_count': [],
             'img_proc_time': [],
@@ -984,13 +986,14 @@ class EvaluationResultRecorder:
     def end_recording(self):
         self._finalize_current_record()
         self._flush_to_disk()
+        return self._record_id + 1
     
-    def add_frame_async(self, step_runtime: dict, step_config: dict):
-        self.record_executor.submit(self._write_frame_fun, step_runtime, step_config)
+    def add_frame_async(self, step_extra: dict):
+        self._record_executor.submit(self._write_frame_fun, step_extra)
 
     # @run_time_decorator
     # First frame takas 20ms and the others tasks 5ms
-    def _write_frame_fun(self, step_runtime: dict, step_config: dict):
+    def _write_frame_fun(self, step_extra: dict):
         """
         Main function for the write data frame responsible for writing data to disk.
 
@@ -1012,11 +1015,11 @@ class EvaluationResultRecorder:
             # record info for first frame of a sub-task
             if self._current_record['sub_task_id'] is None:
                 # assign value explicitly
-                self._init_current_record(step_runtime=step_runtime, step_config=step_config)
+                self._init_current_record(step_extra=step_extra)
                 self._eval_records.append(self._current_record)
             # record info for the other frames of a sub-task
-            elif self._current_record['sub_task_id'] == step_runtime.get('sub_task_id', None):
-                self._updata_current_record(step_runtime=step_runtime)
+            elif self._current_record['sub_task_id'] == step_extra.get('language_status', {}).get('sub_task_id', None):
+                self._updata_current_record(step_extra=step_extra)
             # New sub-task, save the current record and start a new record
             else:
                 # save the current record
@@ -1024,7 +1027,7 @@ class EvaluationResultRecorder:
                 self._flush_to_disk()
                 # start a new record
                 self._create_new_record()
-                self._init_current_record(step_runtime=step_runtime, step_config=step_config)
+                self._init_current_record(step_extra=step_extra)
                 self._eval_records.append(self._current_record)
                 pass
         except KeyboardInterrupt:
@@ -1035,35 +1038,40 @@ class EvaluationResultRecorder:
         # finally:
             # self.logger.info("Writing frame exited.")
             # self.release_writers()
-    def _init_current_record(self, step_runtime: dict, step_config: dict):
-        self._current_record['mode'] = step_config.get('mode', None)
-        self._current_record['wait_time'] = step_config.get('wait_time', None)
-        self._current_record['control_period'] = step_config.get('control_period', None)
-        self._current_record['control_speed'] = step_config.get('control_speed', None)
-        self._current_record['inter_chunk_mode'] = step_config.get('inter_chunk_mode', None)
-        self._current_record['intra_chunk_mode'] = step_config.get('intra_chunk_mode', None)
-        self._current_record['model_type'] = step_runtime.get('model_type', None)
-        self._current_record['model_path'] = step_runtime.get('model_path', None)
-        self._current_record['task_name'] = step_runtime.get('task_name', None)
-        self._current_record['task_id'] = step_runtime.get('task_id', None)
-        self._current_record['sub_task_id'] = step_runtime.get('sub_task_id', None)
-        self._current_record['instruction'] = step_runtime.get('instruction', None)
-        self._current_record['episode_id'] = step_runtime.get('episode_id', None)
-        self._updata_current_record(step_runtime=step_runtime)
+    def _init_current_record(self, step_extra: dict):
+        runtime_config = step_extra.get('runtime_config', {})
+        self._current_record['mode'] = runtime_config.get('mode', None)
+        self._current_record['wait_time'] = runtime_config.get('wait_time', None)
+        self._current_record['control_period'] = runtime_config.get('control_period', None)
+        self._current_record['control_speed'] = runtime_config.get('control_speed', None)
+        self._current_record['inter_chunk_mode'] = runtime_config.get('inter_chunk_mode', None)
+        self._current_record['intra_chunk_mode'] = runtime_config.get('intra_chunk_mode', None)
+        server_status = step_extra.get('server_status', {})
+        self._current_record['model_type'] = server_status.get('model_type', None)
+        self._current_record['model_path'] = server_status.get('model_path', None)
+        # self._current_record['task_name'] = step_runtime.get('task_name', None)
+        language_status = step_extra.get('language_status', {})
+        self._current_record['task_id'] = language_status.get('task_id', None)
+        self._current_record['sub_task_id'] = language_status.get('sub_task_id', None)
+        self._current_record['instruction'] = language_status.get('language', None)
+        # self._current_record['episode_id'] = step_runtime.get('episode_id', None)
+        self._updata_current_record(step_extra=step_extra)
     
-    def _updata_current_record(self, step_runtime: dict):
-        self._current_record['obv_fps'].append(step_runtime.get('obv_fps', None))
-        self._current_record['infer_count'].append(step_runtime.get('infer_count', None))
-        self._current_record['img_proc_time'].append(step_runtime.get('img_proc_time', None))
-        self._current_record['avg_infer_time'].append(step_runtime.get('avg_infer_time', None))
-        self._current_record['avg_intra_traj_time'].append(step_runtime.get('avg_intra_traj_time', None))
-        self._current_record['avg_inter_traj_time'].append(step_runtime.get('avg_inter_traj_time', None))
-        self._current_record['avg_comm_time'].append(step_runtime.get('avg_comm_time', None))
+    def _updata_current_record(self, step_extra: dict):
+        runtime_status = step_extra.get('runtime_status', {})
+        if not self._current_record['infer_count'] or self._current_record['infer_count'][-1] != runtime_status.get('infer_count', None):
+            self._current_record['obv_fps'].append(runtime_status.get('obv_fps', None))
+            self._current_record['infer_count'].append(runtime_status.get('infer_count', None))
+            self._current_record['img_proc_time'].append(runtime_status.get('img_proc_time', None))
+            self._current_record['avg_infer_time'].append(runtime_status.get('avg_infer_time', None))
+            self._current_record['avg_intra_traj_time'].append(runtime_status.get('avg_intra_traj_time', None))
+            self._current_record['avg_inter_traj_time'].append(runtime_status.get('avg_inter_traj_time', None))
+            self._current_record['avg_comm_time'].append(runtime_status.get('avg_comm_time', None))
 
     def _finalize_current_record(self) -> None:
         self._eval_record_stop_time = time.time()
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
-        self._current_record['stop_time'] = self._timestamp(self._eval_record_stop_time)
+        self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
         self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 3)
     
     def _timestamp(self, time_stamp) -> str:
@@ -1092,7 +1100,7 @@ class EvaluationResultRecorder:
 
     def set_score(self, record_id: int, score: Optional[float]) -> None:
         with self._lock:
-            rec = next((r for r in self._records if r['id'] == record_id), None)
+            rec = next((r for r in self._eval_records if r['id'] == record_id), None)
             if rec is None:
                 return
             rec['score'] = score
@@ -1104,14 +1112,14 @@ class EvaluationResultRecorder:
 
     def set_note(self, record_id: int, note: str) -> None:
         with self._lock:
-            rec = next((r for r in self._records if r['id'] == record_id), None)
+            rec = next((r for r in self._eval_records if r['id'] == record_id), None)
             if rec is None:
                 return
             rec['note'] = note
 
     def delete_record(self, record_id: int) -> None:
         with self._lock:
-            self._records = [r for r in self._records if r['id'] != record_id]
+            self._records = [r for r in self._eval_records if r['id'] != record_id]
 
     def _flush_to_disk(self) -> None:
         """Write records to JSON + CSV files."""
@@ -1123,132 +1131,67 @@ class EvaluationResultRecorder:
 
             # if fmt in ('csv', 'both'):
             #     csv_path = f"{self._save_path}.csv"
-            #     with open(csv_path, 'w', encoding='utf-8-sig', newline='') as f:
-            #         writer = csv.writer(f, lineterminator='\n')
-            #         writer.writerow(self.CSV_HEADERS)
-            #         for r in records_copy:
-            #             writer.writerow(self._record_to_csv_row(r))
+            with open(self._eval_csv_file, 'w', encoding='utf-8-sig', newline='') as f:
+                writer = csv.writer(f, lineterminator='\n')
+                writer.writerow(self.CSV_HEADERS)
+                for record in self._eval_records:
+                    writer.writerow(self._record_to_csv_row(record))
 
             # self.logger.debug(f"EvalLogRecorder: flushed {len(records_copy)} records to {self._save_path}")
         except Exception as e:
             self.logger.exception(f"EvaluationResultRecorder: flush failed: {e}")
 
-    def _serialize_record(self, r: Dict[str, Any]) -> Dict[str, Any]:
-        """Convert internal record to JSON-serializable dict."""
-        def fmt_time(ts):
-            if ts is None:
-                return None
-            return datetime.fromtimestamp(float(ts)).strftime('%Y-%m-%d %H:%M:%S')
+    def _record_to_csv_row(self, record: Dict[str, Any]) -> list:
+        # s = self._serialize_record(r)
+        def _average(data_list: List[float], decimal_places:int = 3) -> float:
+            """
+            Calculate the average value of the numbers in the list.
+            
+            Args:
+                data_list: A list containing integers or floats.
 
-        return {
-            'id': r.get('id', ''),
-            'task_idx': r.get('task_idx', 0) + 1,
-            'task_name': r.get('task_name', ''),
-            'sub_task_idx': r.get('sub_task_idx', 0) + 1,
-            'instruction': r.get('instruction', ''),
-            'episode_id': r.get('episode_id'),
-            'start_time': fmt_time(r.get('start_time')),
-            'end_time': fmt_time(r.get('end_time')),
-            'duration_s': r.get('duration_s'),
-            'paused_s': r.get('paused_s', 0),
-            'status': r.get('status', ''),
-            'score': r.get('score'),
-            'note': r.get('note', ''),
-            'obv_fps': r.get('obv_fps'),
-            'infer_count': r.get('infer_count'),
-            'img_proc_time': r.get('img_proc_time'),
-            'avg_infer_time_ms': round(float(r['avg_infer_time']) * 1000, 1) if r.get('avg_infer_time') is not None else None,
-            'avg_traj_time_ms': None,
-            'avg_intra_traj_time_ms': round(float(r['avg_intra_traj_time']) * 1000, 1) if r.get('avg_intra_traj_time') is not None else None,
-            'avg_inter_traj_time_ms': round(float(r['avg_inter_traj_time']) * 1000, 1) if r.get('avg_inter_traj_time') is not None else None,
-            'avg_comm_time_ms': round(float(r['avg_comm_time']) * 1000, 1) if r.get('avg_comm_time') is not None else None,
-        }
+            Returns:
+                float or int: The calculated average value.
+                None: Returns None if the list is empty.
+            """
+            # 1. Check if the list is empty
+            if not data_list:
+                # print("Warning: List is empty, cannot calculate average") # Uncomment to print log if needed
+                return 0.0
 
-    def _deserialize_record(self, dr: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Convert a disk-format record back to internal memory format."""
-        def parse_time(ts):
-            if not ts or ts == '' or ts == 'None':
-                return None
-            try:
-                return float(datetime.strptime(str(ts), '%Y-%m-%d %H:%M:%S').timestamp())
-            except (ValueError, TypeError):
-                return None
+            # 2. Calculate the sum and length
+            total = sum(data_list)
+            count = len(data_list)
 
-        def to_float(val):
-            if val is None or val == '':
-                return None
-            try:
-                return float(val)
-            except (ValueError, TypeError):
-                return None
+            # 3. Return the average
+            return round(total / count, decimal_places)
 
-        def to_int(val, default=0):
-            if val is None or val == '':
-                return default
-            try:
-                return int(val)
-            except (ValueError, TypeError):
-                return default
-
-        try:
-            status = str(dr.get('status', ''))
-            if status == 'running':
-                status = 'interrupted'
-
-            return {
-                'id': to_int(dr.get('id'), 0),
-                'task_name': str(dr.get('task_name', '')),
-                'task_idx': max(0, to_int(dr.get('task_idx'), 1) - 1),
-                'sub_task_idx': max(0, to_int(dr.get('sub_task_idx'), 1) - 1),
-                'instruction': str(dr.get('instruction', '')),
-                'episode_id': dr.get('episode_id') or None,
-                'start_time': parse_time(dr.get('start_time')),
-                'end_time': parse_time(dr.get('end_time')),
-                'duration_s': to_float(dr.get('duration_s')),
-                'paused_s': to_float(dr.get('paused_s')) or 0.0,
-                'paused_at': None,
-                'status': status,
-                'score': to_float(dr.get('score')),
-                'note': str(dr.get('note', '')),
-                'obv_fps': to_float(dr.get('obv_fps')),
-                'infer_count': to_int(dr.get('infer_count'), None) if dr.get('infer_count') not in (None, '') else None,
-                'img_proc_time': to_float(dr.get('img_proc_time')),
-                'avg_infer_time': (to_float(dr.get('avg_infer_time_ms')) / 1000.0) if to_float(dr.get('avg_infer_time_ms')) is not None else None,
-                'avg_intra_traj_time': (to_float(dr.get('avg_intra_traj_time_ms')) / 1000.0) if to_float(dr.get('avg_intra_traj_time_ms')) is not None else None,
-                'avg_inter_traj_time': (to_float(dr.get('avg_inter_traj_time_ms')) / 1000.0) if to_float(dr.get('avg_inter_traj_time_ms')) is not None else None,
-                'avg_comm_time': (to_float(dr.get('avg_comm_time_ms')) / 1000.0) if to_float(dr.get('avg_comm_time_ms')) is not None else None,
-            }
-        except Exception as e:
-            self.logger.debug(f"EvalLogRecorder: failed to deserialize record: {e}")
-            return None
-
-
-
-    def _record_to_csv_row(self, r: Dict[str, Any]) -> list:
-        s = self._serialize_record(r)
         return [
-            s.get('id', ''),
-            s.get('task_idx', ''),
-            s.get('task_name', ''),
-            s.get('sub_task_idx', ''),
-            s.get('instruction', ''),
-            s.get('episode_id', ''),
-            s.get('start_time', ''),
-            s.get('end_time', ''),
-            s.get('duration_s', ''),
-            s.get('paused_s', ''),
-            s.get('status', ''),
-            s.get('score', ''),
-            s.get('note', ''),
-            s.get('obv_fps', ''),
-            s.get('infer_count', ''),
-            s.get('img_proc_time', ''),
-            s.get('avg_infer_time_ms', ''),
-            s.get('avg_traj_time_ms', ''),
-            s.get('avg_intra_traj_time_ms', ''),
-            s.get('avg_inter_traj_time_ms', ''),
-            s.get('avg_comm_time_ms', ''),
-            '', '', '', '', '', '', '', '', '',
+            record.get('id', ''),
+            record.get('task_id', ''),
+            record.get('sub_task_id', 0) + 1,
+            record.get('instruction', ''),
+            record.get('start_time', ''),
+            record.get('end_time', ''),
+            record.get('duration', ''),
+            record.get('score', None),
+            record.get('note', ''),
+            record.get('episode_id', -1),
+            record.get('mode', ''),
+            record.get('wait_time', 0),
+            record.get('control_period', 0),
+            record.get('control_speed', 1.0),
+            record.get('inter_chunk_mode', ''),
+            record.get('intra_chunk_mode', ''),
+            record.get('model_type', ''),
+            record.get('model_path', ''),
+            _average(record.get('obv_fps', []), 3),
+            len(record.get('infer_count', [])),
+            _average(record.get('img_proc_time', []), 3),
+            _average(record.get('avg_infer_time', []), 6) * 1000,
+            _average(record.get('avg_intra_traj_time', []), 6) * 1000,
+            _average(record.get('avg_inter_traj_time', []), 6) * 1000,
+            _average(record.get('avg_comm_time', []), 6) * 1000,
         ]
 
     def close(self) -> None:
@@ -1292,6 +1235,7 @@ class DataRecordManager:
         # print(f"Debug: record_config: {self.config}")
         self._init_shared_data()
         self.lerobot_recorder = LeRobotDatasetRecorder(lerobot_config=self.config.lerobot)
+        self.eval_recorder = EvaluationResultRecorder(evaluation_config=self.config.evaluation)
         # self.task_language_dict = {}
         # self._parse_config_info(self.config["lerobot"])
 
@@ -1331,6 +1275,7 @@ class DataRecordManager:
         self.shared_data.total_videos = self.manager.Value('i', 0)
         self.shared_data.episode_chunk = self.manager.Value('i', 0)
         self.shared_data.episode_index = self.manager.Value('i', 0)
+        self.shared_data.eval_record_id = self.manager.Value('i', 0)
         self.shared_data.running = self.manager.Value('b', False)
         # self.shared_data.episode_parquet_list = self.manager.list()
         # self.shared_data.save_video_path_list = self.manager.list()
@@ -1382,14 +1327,24 @@ class DataRecordManager:
                                 chunks_size=chunks_size)
         else:
             self.logger.info("Recording lerobot episode is disabled, skip recording.")
+        
+        if self.config.get('is_record_eval_log', False):
+            self.eval_recorder.set_task(save_path=self.save_path, episode_id=self.shared_data.episode_index.value)
+        else:
+            self.logger.info("Recording evaluation log is disabled, skip recording.")
     
-    def _sync_shared_data(self, total_frames: int = 0, total_videos: int = 0, total_episodes: int = 0, chunks_size: int = 1000) -> None:
+    def _sync_shared_data(self, total_frames: int = None, total_videos: int = None, total_episodes: int = None, chunks_size: int = 1000, eval_record_id: int = None) -> None:
         """Sync record lerobot values to shared_data."""
-        self.shared_data.total_frames.value = total_frames
-        self.shared_data.total_videos.value = total_videos
-        self.shared_data.episode_index.value = total_episodes
-        self.shared_data.episode_chunk.value = total_episodes // chunks_size
-        self.logger.info(f"total_frames={self.shared_data.total_frames.value}, total_videos={self.shared_data.total_videos.value}, total_episodes={self.shared_data.episode_index.value}")
+        if total_frames is not None:
+            self.shared_data.total_frames.value = total_frames
+        if total_videos is not None:
+            self.shared_data.total_videos.value = total_videos
+        if total_episodes is not None:
+            self.shared_data.episode_index.value = total_episodes
+            self.shared_data.episode_chunk.value = total_episodes // chunks_size
+        if eval_record_id is not None:
+            self.shared_data.eval_record_id.value = eval_record_id
+        # self.logger.info(f"total_frames={self.shared_data.total_frames.value}, total_videos={self.shared_data.total_videos.value}, total_episodes={self.shared_data.episode_index.value}")
 
     def update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
         """Update camera shape settings for current recording session and metadata.
@@ -1408,19 +1363,19 @@ class DataRecordManager:
             self._recording_session_id += 1
             return self._recording_session_id
 
-    def add_observation_async(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float):
+    def add_observation_async(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float):
         """
         Asynchronously writes observation data into the dataset.
 
         Args:
-            observations (dict):A dictionary containing observation with the following keys:
+            observations (Dict[str, Any]):A dictionary containing observation with the following keys:
                 - 'cam.*': np.ndarray,
                 - 'obs.state': np.ndarray
-            language (str): The language instruction associated with the observation.
+            extra_info (Dict[str, Any]): A dictionary containing extra information such as language status, server status, runtime status, etc.
             time_now (int | float): The current timestamp.
         """
         session_id = self._get_recording_session_id()
-        self.record_obs_executor.submit(self._add_observation_fun, observation, language_instruction, timestamp, session_id)
+        self.record_obs_executor.submit(self._add_observation_fun, observation, extra_info, timestamp, session_id)
 
     def add_action_async(self, action: np.ndarray, timestamp: int | float) -> None:
         """
@@ -1464,7 +1419,7 @@ class DataRecordManager:
 
         # Invalidate future async tasks from next cycle; current queue will still be drained.
         self._bump_recording_session_id()
-
+        print(f"DEBUG: Start to stop recording.")
         if self.writer_process is not None and self.writer_process.is_alive():
             self.logger.info("Waiting writer process to flush queued data...")
             self.writer_process.join()
@@ -1473,18 +1428,19 @@ class DataRecordManager:
 
         self.writer_process = None
         self._clear_queues()
-    def _add_observation_fun(self, observation: Dict[str, np.ndarray], language_instruction: str, timestamp: int | float, session_id: int) -> None:
+        print(f"DEBUG: Recording stopped.")
+    def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
 
         Args:
-            observation (Dict[str, np.ndarray]): Dictionary containing observation data with the following keys:
+            observation (Dict[str, Any]): Dictionary containing observation data with the following keys:
                 - 'cam.head': np.ndarray
                 - 'cam.hand_left': np.ndarray
                 - 'cam.hand_right': np.ndarray
                 - 'loc_timestamp': int
                 - 'obs.state': np.ndarray
-            language_instruction (str): Natural language instruction associated with the observation.
+            extra_info (Dict[str, Any]): Dictionary containing extra information such as language status, server status, runtime status, etc.
             timestamp (int): Timestamp of the current observation.
 
         Raises:
@@ -1502,10 +1458,11 @@ class DataRecordManager:
             else:
                 action, _ = self.action_frame_queue.pop()
         
-        observation['language_instruction'] = language_instruction
+        # observation['language_instruction'] = language_instruction
+        # observation['language_instruction'] = 'Test'
         # check state shape 
 
-        self.record_queue.put((observation, action))
+        self.record_queue.put((observation, action, extra_info))
 
     def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int) -> None:
         """
@@ -1553,18 +1510,25 @@ class DataRecordManager:
                                                     total_frames = self.shared_data.total_frames.value,
                                                     total_videos = self.shared_data.total_videos.value,
                                                     save_raw=self.config.save_raw)
+            if self.config.get('is_record_eval_log', False):
+                self.eval_recorder.begin_recording(eval_record_id=self.shared_data.eval_record_id.value)
             # print(f"DEBUG: Mark1")    
             # recording in the loop for all recorders
             while self.shared_data.running.value or (not self.record_queue.empty()):
                 # Get state and action data from queue
                 try:
-                    step_state, step_action = self.record_queue.get(timeout=0.1)
+                    step_state, step_action, step_extra = self.record_queue.get(timeout=0.1)
                     if self.config.get('is_record_episode', False):
                         self.lerobot_recorder.add_frame_async(step_state=step_state,
-                                                            step_action=step_action)
+                                                            step_action=step_action,
+                                                            step_extra=step_extra)
+                    if self.config.get('is_record_eval_log', False):
+                        self.eval_recorder.add_frame_async(step_extra=step_extra)
                 except Empty:
                     if self.shared_data.running.value:
                         self.logger.info("Record queue empty, waiting for data...")
+                    else:
+                        break
                     continue
                 # print('Write successful ——————————————————')
             # print(f"DEBUG: Mark2")    
@@ -1577,6 +1541,10 @@ class DataRecordManager:
                                     total_videos=total_videos,
                                     total_episodes=episode_index,
                                     chunks_size=self.config.lerobot['chunks_size']) # chunks_size doesn't change
+
+            if self.config.get('is_record_eval_log', False):
+                next_record_id = self.eval_recorder.end_recording()
+                self._sync_shared_data(eval_record_id=next_record_id)
         
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
