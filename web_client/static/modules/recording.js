@@ -473,10 +473,10 @@ function setupRecordingPanel() {
           App.config.record.switch = true;
           renderRecordingConfigTree(App.config);
           await refreshRecordingFileList();
+          toast('Recording started.', 'ok');
         } catch (_) { /* toasted */ }
       }
       syncRecordingSwitchUI();
-      toast('Recording started.', 'ok');
     });
   }
 

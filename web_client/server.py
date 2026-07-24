@@ -1993,7 +1993,8 @@ async def client_record_start(req: RecordStartRequest):
             except Exception as e:
                 logger.exception(f'Failed to update camera shapes before start_recording: {e}')
 
-        vla_client.data_record_manager.start_recording()
+        # vla_client.data_record_manager.start_recording()
+        await asyncio.to_thread(vla_client.data_record_manager.start_recording)
         current_recording_task = str(getattr(vla_client.data_record_manager, 'current_task', '') or '')
         current_recording_dir = ''
         try:
@@ -2018,15 +2019,12 @@ async def client_record_start(req: RecordStartRequest):
 
 @app.post('/api/client/record/stop')
 async def client_record_stop():
-    print(f"DEBUG: recording stop 1")
     vla_client, _ = _require_runtime('stop_recording')
     try:
         if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
             raise HTTPException(400, 'Recorder is not initialized.')
-        print(f"DEBUG: recording stop 2")
         client_state.config.record.switch = False
         vla_client.data_record_manager.stop_recording()
-        print(f"DEBUG: recording stop 3")
         return {'status': 'ok', 'command': 'stop_recording'}
     except HTTPException:
         raise

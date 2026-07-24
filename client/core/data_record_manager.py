@@ -1419,7 +1419,6 @@ class DataRecordManager:
 
         # Invalidate future async tasks from next cycle; current queue will still be drained.
         self._bump_recording_session_id()
-        print(f"DEBUG: Start to stop recording.")
         if self.writer_process is not None and self.writer_process.is_alive():
             self.logger.info("Waiting writer process to flush queued data...")
             self.writer_process.join()
@@ -1428,7 +1427,6 @@ class DataRecordManager:
 
         self.writer_process = None
         self._clear_queues()
-        print(f"DEBUG: Recording stopped.")
     def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
@@ -1524,12 +1522,13 @@ class DataRecordManager:
                                                             step_extra=step_extra)
                     if self.config.get('is_record_eval_log', False):
                         self.eval_recorder.add_frame_async(step_extra=step_extra)
-                except Empty:
+                except Empty as e:
                     if self.shared_data.running.value:
-                        self.logger.info("Record queue empty, waiting for data...")
+                        self.logger.exception(f"Record queue empty, waiting for data: {e}")
+                        # time.sleep(0.03)
                     else:
                         break
-                    continue
+                    # continue
                 # print('Write successful ——————————————————')
             # print(f"DEBUG: Mark2")    
 
