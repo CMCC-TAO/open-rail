@@ -52,6 +52,10 @@ class VLAClientAsync():
         self.inter_chunk_fuser = inter_chunk_fuser
         self.intra_chunk_smoother = intra_chunk_smoother
         self.task_language_manager = task_language_manager
+        # Initialize the dataset writer with the provided recording configuration
+        self.data_record_manager = DataRecordManager(record_config=self.config.record)
+        # Create visualization WebSocket server for live image and trajectory updates
+        self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
         self.vla_zmq = vla_zmq_client
         self.robot = robot
         self.is_running = False
@@ -85,11 +89,6 @@ class VLAClientAsync():
         self.set_observe_period(speed=self.config.controller.speed)
         self._request_id = 0
 
-        # Initialize the dataset writer with the provided recording configuration
-        self.data_record_manager = DataRecordManager(record_config=self.config.record)
-
-        # Create visualization WebSocket server for live image and trajectory updates
-        self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.image_process_time = 0.0
@@ -289,8 +288,22 @@ class VLAClientAsync():
             # timestamp_1 = time.time()
             # timestamp_2 = None
             if observations is not None:
-                if self.config.record.switch :
-                    self.data_record_manager.add_observation_async(observations, self.task_language_manager.get_current_language(), time.perf_counter())
+                if self.config.record.switch:
+                    runtime_config = {
+                        'mode': self.config.rdm.mode,
+                        'wait_time': self.config.controller.wait_time,
+                        'control_period': self.config.controller.period,
+                        'control_speed': self.config.controller.speed,
+                        'inter_chunk_mode': self.config.inter_chunk.inter_chunk_mode,
+                        'intra_chunk_mode': self.config.intra_chunk.intra_chunk_mode,
+                    }
+                    extra_info = {
+                        'runtime_status': self.runtime_status,
+                        'language_status': self.language_status,
+                        'server_status': self.server_status,
+                        'runtime_config': runtime_config
+                    }
+                    self.data_record_manager.add_observation_async(observation=observations, extra_info=extra_info, timestamp=time.perf_counter())
                     # timestamp_2 = time.time()
                     # print(f"Debug: record time={(timestamp_2-timestamp_1) * 1000} ms")
                 # Decide whether to change language instruction based on the task progress predicted by the VLA model
