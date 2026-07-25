@@ -252,7 +252,7 @@ class LeRobotDatasetRecorder:
         # print(f"Debug: record_config: {self.config}")
         self.task_language_dict = {}
         self._parse_config(lerobot_config)
-        self.record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
+        # self.record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
 
     def _check_meta_path_and_dir(self, save_path: str) -> bool:
         self.meta_dir = os.path.join(save_path, 'meta')
@@ -906,7 +906,6 @@ class EvaluationResultRecorder:
         self.logger = logging.getLogger(__name__)
         self.config = evaluation_config
         self._session_id = None 
-        self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
         self._episode_id = -1
 
     def set_task(self, save_path: str, episode_id: int = -1) -> None:
@@ -945,6 +944,7 @@ class EvaluationResultRecorder:
         # If eval folder exists, enumerate existing eval_log files and find the biggest ID
         # return os.path.join(evallog_dir, f"eval_log.{self._session_ts}")
     def begin_recording(self, eval_record_id: int):
+        self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
         self._eval_json_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.json") 
         self._eval_csv_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.csv") 
         self._create_new_record(eval_record_id=eval_record_id)
