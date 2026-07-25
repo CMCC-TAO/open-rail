@@ -1188,10 +1188,10 @@ class EvaluationResultRecorder:
             _average(record.get('obv_fps', []), 3),
             len(record.get('infer_count', [])),
             _average(record.get('img_proc_time', []), 3),
-            _average(record.get('avg_infer_time', []), 6) * 1000,
-            _average(record.get('avg_intra_traj_time', []), 6) * 1000,
-            _average(record.get('avg_inter_traj_time', []), 6) * 1000,
-            _average(record.get('avg_comm_time', []), 6) * 1000,
+            round(_average(record.get('avg_infer_time', []), 6) * 1000, 3),
+            round(_average(record.get('avg_intra_traj_time', []), 6) * 1000, 3),
+            round(_average(record.get('avg_inter_traj_time', []), 6) * 1000, 3),
+            round(_average(record.get('avg_comm_time', []), 6) * 1000, 3),
         ]
 
     def close(self) -> None:
@@ -1241,6 +1241,7 @@ class DataRecordManager:
 
         # Shared Queue
         self.record_queue = Queue()
+        self.writer_command_queue = Queue()
 
         # Action recording queues
         self.action_lock = threading.Lock()
@@ -1249,8 +1250,9 @@ class DataRecordManager:
         self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
         self.record_action_executor = ThreadPoolExecutor(max_workers=4)
 
-        # Writer process initialization
+        # Writer process initialization (resident process)
         self.writer_process = None
+        self._ensure_writer_process()
         self._closed = False
 
         # Session id used to drop stale async tasks across stop/start cycles.
@@ -1277,6 +1279,7 @@ class DataRecordManager:
         self.shared_data.episode_index = self.manager.Value('i', 0)
         self.shared_data.eval_record_id = self.manager.Value('i', 0)
         self.shared_data.running = self.manager.Value('b', False)
+        self.shared_data.writer_task_running = self.manager.Value('b', False)
         # self.shared_data.episode_parquet_list = self.manager.list()
         # self.shared_data.save_video_path_list = self.manager.list()
         # Task and language information storage
@@ -1305,9 +1308,9 @@ class DataRecordManager:
         # if self.current_task == task:
         #     self.logger.warning(f"{self.current_task} is already set, return.")
         #     return
-        if self.shared_data.running.value:
-            self.logger.warning("set_task ignored because recording is running")
-            return
+        # if self.shared_data.running.value:
+        #     self.logger.warning("set_task ignored because recording is running")
+        #     return
 
         self.current_task = task
         # if self.current_task == task_name and os.path.exists(os.path.join(self.project_root_path, self.save_dir, candidate_dir)):
@@ -1363,6 +1366,96 @@ class DataRecordManager:
             self._recording_session_id += 1
             return self._recording_session_id
 
+    def _ensure_writer_process(self) -> None:
+        """Ensure resident writer process is alive."""
+        if self.writer_process is not None and self.writer_process.is_alive():
+            return
+
+        self.writer_process = Process(target=self._writer_process_loop, daemon=True)
+        self.writer_process.start()
+        self.logger.info("Resident writer process started.")
+
+    def _writer_process_loop(self) -> None:
+        """Resident process loop: receives start/shutdown commands and dispatches write tasks in thread executor."""
+        self.logger.info("Writer resident process loop started.")
+        write_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="writer_worker")
+        write_future = None
+
+        try:
+            while True:
+                if write_future is not None and write_future.done():
+                    try:
+                        write_future.result()
+                    except Exception:
+                        self.logger.exception("writer_worker thread exited with exception")
+                    finally:
+                        write_future = None
+
+                try:
+                    command = self.writer_command_queue.get(timeout=0.2)
+                except Empty:
+                    continue
+
+                if command.get("command", "") == "start":
+                    if write_future is not None and (not write_future.done()):
+                        self.logger.warning("Receive start command while previous write task is still running, skip.")
+                        continue
+                    self.set_task(task = command.get("task_id", "default"))
+                    write_future = write_executor.submit(self._write_process_fun)
+                elif command.get("command", "") == "stop":
+                    self.shared_data.running.value = False
+                    if write_future is not None:
+                        try:
+                            write_future.result()
+                            self._clear_queues()
+                        except Exception:
+                            self.logger.exception("writer_worker thread exited with exception during shutdown")
+                elif command.get("command", "") == "shutdown":
+                    self.shared_data.running.value = False
+                    if write_future is not None:
+                        try:
+                            write_future.result()
+                        except Exception:
+                            self.logger.exception("writer_worker thread exited with exception during shutdown")
+                    break
+                else:
+                    self.logger.warning(f"Unknown writer command: {command}")
+        except KeyboardInterrupt:
+            self.logger.warning("Writer resident process interrupted by keyboard.")
+        except Exception:
+            self.logger.exception("Writer resident process loop exited with exception")
+        finally:
+            write_executor.shutdown(wait=True, cancel_futures=True)
+            self.shared_data.writer_task_running.value = False
+            self.logger.info("Writer resident process loop exited.")
+
+    def _wait_writer_task_stop(self, timeout_sec: float = 120.0) -> None:
+        """Wait until current write task in resident process drains queue and exits."""
+        start_ts = time.time()
+        while self.shared_data.writer_task_running.value:
+            if (time.time() - start_ts) >= timeout_sec:
+                self.logger.warning("Timed out waiting writer task to stop.")
+                break
+            time.sleep(0.05)
+
+    def _shutdown_writer_process(self) -> None:
+        """Shutdown resident writer process safely."""
+        if self.writer_process is None:
+            return
+
+        try:
+            if self.writer_process.is_alive():
+                self.writer_command_queue.put("shutdown")
+                self.writer_process.join(timeout=5.0)
+                if self.writer_process.is_alive():
+                    self.logger.warning("Writer process still alive after graceful shutdown, terminate it.")
+                    self.writer_process.terminate()
+                    self.writer_process.join(timeout=2.0)
+        except Exception:
+            self.logger.exception("Failed to shutdown writer process gracefully")
+        finally:
+            self.writer_process = None
+
     def add_observation_async(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float):
         """
         Asynchronously writes observation data into the dataset.
@@ -1387,22 +1480,25 @@ class DataRecordManager:
         session_id = self._get_recording_session_id()
         self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
     
-    def start_recording(self):
+    def start_recording(self, task_id: str):
         """
-        Starts the recording process by launching the writer process.
+        Starts the recording process by dispatching write task in resident writer process.
 
         This method should be called before adding any observations or actions to ensure that
         the writer process is running and ready to handle incoming data.
         """
         try:
             session_id = self._bump_recording_session_id()
-            self.shared_data.running.value = True
             self._clear_queues()
-            self.writer_process = Process(target=self._write_process_fun, daemon=True)
-            self.writer_process.start()
-            self.logger.info(f"Writer process started successfully. session_id={session_id}")
+            self.shared_data.running.value = True
+            command = {
+                "command": "start",
+                "task_id": task_id,
+            }
+            self.writer_command_queue.put(command)
+            self.logger.info(f"Writer task dispatched successfully. session_id={session_id}")
         except Exception as e:
-            self.logger.exception(f"Failed to start writer_process: {e}")
+            self.logger.exception(f"Failed to start writer task: {e}")
 
     def stop_recording(self):
         """
@@ -1410,23 +1506,26 @@ class DataRecordManager:
 
         Behavior:
         - Set ``running=False`` to stop accepting new records.
-        - Let writer process continue draining ``record_queue``.
-        - Wait for writer process to exit naturally after flushing video/parquet.
+        - Let resident writer task continue draining ``record_queue``.
+        - Wait for resident writer task to exit naturally after flushing video/parquet.
         """
         if self.shared_data.running.value:
             self.shared_data.running.value = False
-            self.logger.info("Signaled writer process to stop after draining queue.")
+            self.logger.info("Signaled writer task to stop after draining queue.")
 
         # Invalidate future async tasks from next cycle; current queue will still be drained.
         self._bump_recording_session_id()
-        if self.writer_process is not None and self.writer_process.is_alive():
-            self.logger.info("Waiting writer process to flush queued data...")
-            self.writer_process.join()
-        elif self.writer_process is None:
-            self.logger.debug("stop_recording called but writer process is not initialized.")
+        command = {
+            "command": "stop",
+        }
+        self.writer_command_queue.put(command)
+        # if self.writer_process is not None and self.writer_process.is_alive():
+        #     self.logger.info("Waiting writer task to flush queued data...")
+        #     self._wait_writer_task_stop()
+        # elif self.writer_process is None:
+        #     self.logger.debug("stop_recording called but writer process is not initialized.")
 
-        self.writer_process = None
-        self._clear_queues()
+        # self._clear_queues()
     def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
@@ -1498,6 +1597,7 @@ class DataRecordManager:
             KeyboardInterrupt: If user interrupts execution via keyboard (e.g., Ctrl+C)
             Exception: Any other exception during writing will terminate the thread
         """
+        self.shared_data.writer_task_running.value = True
         self.logger.info("Starting recording process loop...")
 
         try:
@@ -1553,6 +1653,7 @@ class DataRecordManager:
             # self.release_writers()
         
         finally:
+            self.shared_data.writer_task_running.value = False
             self.logger.info("Writing thread exited.")
             # self.release_writers()
 
@@ -1566,6 +1667,11 @@ class DataRecordManager:
             self.logger.debug("stop_recording failed during close", exc_info=True)
 
         self.logger.info("Closing DataRecordManager, recording stopped.")
+        try:
+            self._shutdown_writer_process()
+        except Exception:
+            self.logger.debug("shutdown writer process failed during close", exc_info=True)
+
         try:
             if getattr(self, "record_obs_executor", None) is not None:
                 self.record_obs_executor.shutdown(wait=True, cancel_futures=True)
@@ -1586,6 +1692,14 @@ class DataRecordManager:
                 self.record_queue.cancel_join_thread()
         except Exception:
             self.logger.debug("record_queue close/join failed", exc_info=True)
+
+        try:
+            if getattr(self, "writer_command_queue", None) is not None:
+                self.writer_command_queue.close()
+                self.writer_command_queue.cancel_join_thread()
+        except Exception:
+            self.logger.debug("writer_command_queue close/join failed", exc_info=True)
+
         self.logger.info("Closing DataRecordManager, record queue closed.")
         try:
             if getattr(self, "manager", None) is not None:

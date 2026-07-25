@@ -1973,28 +1973,28 @@ async def client_record_start(req: RecordStartRequest):
     vla_client, _ = _require_runtime('start_recording')
     try:
         # save_items = req.save_items if isinstance(req.save_items, list) else []
-        client_state.config.record.switch = True
-        # client_state.config.record.record_exp_data = ('ExpData' in save_items)
-        task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
-        if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
-            try:
-                from client.core.data_record_manager import DataRecordManager
-                vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record)
-                vla_client.data_record_manager.set_task(task_id)
-            except Exception as e:
-                raise HTTPException(500, f'Failed to initialize recorder: {e}')
-        else:
-            vla_client.data_record_manager.set_task(task_id)
+        # client_state.config.record.switch = True
+        # # client_state.config.record.record_exp_data = ('ExpData' in save_items)
+        # task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
+        # if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
+        #     try:
+        #         from client.core.data_record_manager import DataRecordManager
+        #         vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record)
+        #         vla_client.data_record_manager.set_task(task_id)
+        #     except Exception as e:
+        #         raise HTTPException(500, f'Failed to initialize recorder: {e}')
+        # else:
+        #     vla_client.data_record_manager.set_task(task_id)
 
-        updated_camera_shapes = {}
-        if not bool(getattr(client_state.config.record, 'resize', False)):
-            try:
-                updated_camera_shapes = vla_client.update_camera_shape()
-            except Exception as e:
-                logger.exception(f'Failed to update camera shapes before start_recording: {e}')
+        # updated_camera_shapes = {}
+        # if not bool(getattr(client_state.config.record, 'resize', False)):
+        #     try:
+        #         updated_camera_shapes = vla_client.update_camera_shape()
+        #     except Exception as e:
+        #         logger.exception(f'Failed to update camera shapes before start_recording: {e}')
 
-        # vla_client.data_record_manager.start_recording()
-        await asyncio.to_thread(vla_client.data_record_manager.start_recording)
+        vla_client.start_recording()
+        # await asyncio.to_thread(vla_client.data_record_manager.start_recording)
         current_recording_task = str(getattr(vla_client.data_record_manager, 'current_task', '') or '')
         current_recording_dir = ''
         try:
@@ -2009,7 +2009,7 @@ async def client_record_start(req: RecordStartRequest):
             'command': 'start_recording',
             'recording_task': current_recording_task,
             'recording_task_dir': current_recording_dir,
-            'updated_camera_shapes': updated_camera_shapes,
+            # 'updated_camera_shapes': updated_camera_shapes,
         }
     except HTTPException:
         raise
@@ -2023,8 +2023,8 @@ async def client_record_stop():
     try:
         if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
             raise HTTPException(400, 'Recorder is not initialized.')
-        client_state.config.record.switch = False
-        vla_client.data_record_manager.stop_recording()
+        # client_state.config.record.switch = False
+        vla_client.stop_recording()
         return {'status': 'ok', 'command': 'stop_recording'}
     except HTTPException:
         raise

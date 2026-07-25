@@ -205,6 +205,13 @@ class VLAClientAsync():
             self.current_prob_progress = 0.0
         # TODO: Robot reset
 
+    def start_recording(self):
+        self.config.record.switch = True
+        self.data_record_manager.start_recording(self.config.language.task_id)
+
+    def stop_recording(self):
+        self.config.record.switch = False
+        self.data_record_manager.stop_recording()
     def close(self):
         """Close the VLA client and clean up all resources.
         
