@@ -899,7 +899,7 @@ class EvaluationResultRecorder:
     CSV_HEADERS = [
         'ID', 'TaskId', 'SubTaskId', 'Instruction', 'StartTime', 'EndTime', 'Duration(s)', 'Score', 'Note',
         'EpisodeID', 'Mode', 'WaitTime(ms)', 'ControlPeriod(ms)', 'ControlSpeed', 'InterChunkMode', 'IntraChunkMode', 'ModelType', 'ModelPath',
-        'ObvFPS', 'InferCount', 'ImgProcTime(ms)', 'AvgInferTime(ms)', 'AvgInterTrajTime(ms)', 'AvgIntraTrajTime(ms)', 'AvgCommTime(ms)',
+        'ObvCount', 'AvgObvFPS', 'InferCount', 'ImgProcTime(ms)', 'AvgInferTime(ms)', 'AvgInterTrajTime(ms)', 'AvgIntraTrajTime(ms)', 'AvgCommTime(ms)',
     ]
 
     def __init__(self, evaluation_config: ConfigDict) -> None:
@@ -951,7 +951,8 @@ class EvaluationResultRecorder:
 
     def _create_new_record(self, eval_record_id: int):
         self._record_id = eval_record_id
-        self._eval_record_start_time = time.time()
+        self._obv_count = 0
+        # self._eval_record_start_time = None
         self._current_record = {
             'id': self._record_id,
             'task_id': None,
@@ -975,6 +976,7 @@ class EvaluationResultRecorder:
             'model_type': None,
             'model_path': None,
             # 'task_name': None,
+            'obv_count': None,
             'obv_fps': [],
             'infer_count': [],
             'img_proc_time': [],
@@ -983,6 +985,8 @@ class EvaluationResultRecorder:
             'avg_inter_traj_time': [],
             'avg_comm_time': [],
         }
+        self._eval_records.append(self._current_record)
+
     def end_recording(self):
         self._finalize_current_record()
         self._flush_to_disk()
@@ -1013,10 +1017,10 @@ class EvaluationResultRecorder:
 
         try:
             # record info for first frame of a sub-task
+
             if self._current_record['sub_task_id'] is None:
                 # assign value explicitly
                 self._init_current_record(step_extra=step_extra)
-                self._eval_records.append(self._current_record)
             # record info for the other frames of a sub-task
             elif self._current_record['sub_task_id'] == step_extra.get('language_status', {}).get('sub_task_id', None):
                 self._updata_current_record(step_extra=step_extra)
@@ -1026,10 +1030,8 @@ class EvaluationResultRecorder:
                 self._finalize_current_record()
                 self._flush_to_disk()
                 # start a new record
-                self._create_new_record()
+                self._create_new_record(self._record_id + 1)
                 self._init_current_record(step_extra=step_extra)
-                self._eval_records.append(self._current_record)
-                pass
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
         except Exception as e:
@@ -1039,6 +1041,8 @@ class EvaluationResultRecorder:
             # self.logger.info("Writing frame exited.")
             # self.release_writers()
     def _init_current_record(self, step_extra: dict):
+        self._eval_record_start_time = time.time()
+        # self._obv_count += 1
         runtime_config = step_extra.get('runtime_config', {})
         self._current_record['mode'] = runtime_config.get('mode', None)
         self._current_record['wait_time'] = runtime_config.get('wait_time', None)
@@ -1058,6 +1062,7 @@ class EvaluationResultRecorder:
         self._updata_current_record(step_extra=step_extra)
     
     def _updata_current_record(self, step_extra: dict):
+        self._obv_count += 1
         runtime_status = step_extra.get('runtime_status', {})
         if not self._current_record['infer_count'] or self._current_record['infer_count'][-1] != runtime_status.get('infer_count', None):
             self._current_record['obv_fps'].append(runtime_status.get('obv_fps', None))
@@ -1070,6 +1075,7 @@ class EvaluationResultRecorder:
 
     def _finalize_current_record(self) -> None:
         self._eval_record_stop_time = time.time()
+        self._current_record['obv_count'] = self._obv_count
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
         self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 3)
@@ -1185,6 +1191,7 @@ class EvaluationResultRecorder:
             record.get('intra_chunk_mode', ''),
             record.get('model_type', ''),
             record.get('model_path', ''),
+            record.get('obv_count', -1),
             _average(record.get('obv_fps', []), 3),
             len(record.get('infer_count', [])),
             _average(record.get('img_proc_time', []), 3),
@@ -1279,7 +1286,6 @@ class DataRecordManager:
         self.shared_data.episode_index = self.manager.Value('i', 0)
         self.shared_data.eval_record_id = self.manager.Value('i', 0)
         self.shared_data.running = self.manager.Value('b', False)
-        self.shared_data.writer_task_running = self.manager.Value('b', False)
         # self.shared_data.episode_parquet_list = self.manager.list()
         # self.shared_data.save_video_path_list = self.manager.list()
         # Task and language information storage
@@ -1386,8 +1392,8 @@ class DataRecordManager:
                 if write_future is not None and write_future.done():
                     try:
                         write_future.result()
-                    except Exception:
-                        self.logger.exception("writer_worker thread exited with exception")
+                    except Exception as e:
+                        self.logger.exception(f"writer_worker thread exited with exception: {e}")
                     finally:
                         write_future = None
 
@@ -1408,15 +1414,15 @@ class DataRecordManager:
                         try:
                             write_future.result()
                             self._clear_queues()
-                        except Exception:
-                            self.logger.exception("writer_worker thread exited with exception during shutdown")
+                        except Exception as e:
+                            self.logger.exception(f"writer_worker thread exited with exception during stop recording: {e}")
                 elif command.get("command", "") == "shutdown":
                     self.shared_data.running.value = False
                     if write_future is not None:
                         try:
                             write_future.result()
-                        except Exception:
-                            self.logger.exception("writer_worker thread exited with exception during shutdown")
+                        except Exception as e:
+                            self.logger.exception(f"writer_worker thread exited with exception during shutdown: {e}")
                     break
                 else:
                     self.logger.warning(f"Unknown writer command: {command}")
@@ -1426,17 +1432,7 @@ class DataRecordManager:
             self.logger.exception("Writer resident process loop exited with exception")
         finally:
             write_executor.shutdown(wait=True, cancel_futures=True)
-            self.shared_data.writer_task_running.value = False
             self.logger.info("Writer resident process loop exited.")
-
-    def _wait_writer_task_stop(self, timeout_sec: float = 120.0) -> None:
-        """Wait until current write task in resident process drains queue and exits."""
-        start_ts = time.time()
-        while self.shared_data.writer_task_running.value:
-            if (time.time() - start_ts) >= timeout_sec:
-                self.logger.warning("Timed out waiting writer task to stop.")
-                break
-            time.sleep(0.05)
 
     def _shutdown_writer_process(self) -> None:
         """Shutdown resident writer process safely."""
@@ -1451,8 +1447,8 @@ class DataRecordManager:
                     self.logger.warning("Writer process still alive after graceful shutdown, terminate it.")
                     self.writer_process.terminate()
                     self.writer_process.join(timeout=2.0)
-        except Exception:
-            self.logger.exception("Failed to shutdown writer process gracefully")
+        except Exception as e:
+            self.logger.exception(f"Failed to shutdown writer process gracefully: {e}")
         finally:
             self.writer_process = None
 
@@ -1509,12 +1505,12 @@ class DataRecordManager:
         - Let resident writer task continue draining ``record_queue``.
         - Wait for resident writer task to exit naturally after flushing video/parquet.
         """
+        # Invalidate future async tasks from next cycle; current queue will still be drained.
+        self._bump_recording_session_id()
         if self.shared_data.running.value:
             self.shared_data.running.value = False
             self.logger.info("Signaled writer task to stop after draining queue.")
 
-        # Invalidate future async tasks from next cycle; current queue will still be drained.
-        self._bump_recording_session_id()
         command = {
             "command": "stop",
         }
@@ -1597,7 +1593,6 @@ class DataRecordManager:
             KeyboardInterrupt: If user interrupts execution via keyboard (e.g., Ctrl+C)
             Exception: Any other exception during writing will terminate the thread
         """
-        self.shared_data.writer_task_running.value = True
         self.logger.info("Starting recording process loop...")
 
         try:
@@ -1651,9 +1646,7 @@ class DataRecordManager:
         except Exception as e:
             self.logger.exception(f"Writing thread exited with exception: {e}")
             # self.release_writers()
-        
         finally:
-            self.shared_data.writer_task_running.value = False
             self.logger.info("Writing thread exited.")
             # self.release_writers()
 

@@ -1970,8 +1970,8 @@ async def client_language_set(req: LanguageSetRequest):
 
 @app.post('/api/client/record/start')
 async def client_record_start(req: RecordStartRequest):
-    vla_client, _ = _require_runtime('start_recording')
     try:
+        vla_client, _ = _require_runtime('start_recording')
         # save_items = req.save_items if isinstance(req.save_items, list) else []
         # client_state.config.record.switch = True
         # # client_state.config.record.record_exp_data = ('ExpData' in save_items)
@@ -2019,11 +2019,11 @@ async def client_record_start(req: RecordStartRequest):
 
 @app.post('/api/client/record/stop')
 async def client_record_stop():
-    vla_client, _ = _require_runtime('stop_recording')
     try:
-        if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
-            raise HTTPException(400, 'Recorder is not initialized.')
+        # if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
+        #     raise HTTPException(400, 'Recorder is not initialized.')
         # client_state.config.record.switch = False
+        vla_client, _ = _require_runtime('stop_recording')
         vla_client.stop_recording()
         return {'status': 'ok', 'command': 'stop_recording'}
     except HTTPException:
