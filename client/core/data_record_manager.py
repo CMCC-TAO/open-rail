@@ -875,25 +875,25 @@ class LeRobotDatasetRecorder:
             self.logger.exception(f"Exception in write_meta_files: {e}")
 
 class EvaluationResultRecorder:
-    """Evaluation Result recorder.
+    """Evaluation result recorder.
 
-    Inspired by LeRobotDatasetWriter's architecture (thread isolation, session_id
-    anti-race, batch flush), but simplified for eval log's small data volume:
+    Inspired by LeRobotDatasetWriter's architecture (thread isolation and batch flush),
+    but simplified for eval log's small data volume:
     uses threads instead of processes, JSON+CSV instead of Parquet+Video.
 
     Data flow:
         server.py / vla_client  (main thread)
             │
             ├── start(task, subtask, instruction)   → creates record, starts stats thread
-            ├── finalize(status, score)              → closes running record, flushes to disk
-            ├── pause() / resume()                   → freezes/resumes timer
+            ├── finalize(status, score)             → closes running record, flushes to disk
+            ├── pause() / resume()                  → freezes/resumes timer
             ├── set_score(id, score) / set_note(id, note)
             │
             └── Stats Thread (daemon, 200ms interval)
                     └── reads vla_client.realtime_data_manager → updates running record
 
     Storage:
-        {save_dir}/{task_name}_{date}/evallog/eval_log.{session_ts}.json + .csv
+        {save_dir}/{task_name}_{date}/eval/eval_log.json + eval_log.csv
     """
 
     CSV_HEADERS = [
@@ -905,49 +905,49 @@ class EvaluationResultRecorder:
     def __init__(self, evaluation_config: ConfigDict) -> None:
         self.logger = logging.getLogger(__name__)
         self.config = evaluation_config
-        self._session_id = None 
         self._episode_id = -1
+        self._record_id = -1
+        self._eval_records: List[Dict[str, Any]] = []
+        self._eval_json_file = None
+        self._eval_csv_file = None
 
     def set_task(self, save_path: str, episode_id: int = -1) -> None:
-        # self._save_path = save_path
-        self._check_dir_create_session(save_path=save_path)
-        # if self._episode_id == episode_id:
-        #     self._episode_id += 1
-        # else:
+        self._prepare_eval_dir(save_path=save_path)
         self._episode_id = episode_id
-        self._record_id = -1
-    def new_session(self):
-        self._session_id = None
-    def _check_dir_create_session(self, save_path: str):
+        self._load_existing_records()
+
+    def _prepare_eval_dir(self, save_path: str):
         self._eval_dir = os.path.join(save_path, 'eval')
-        # Check if eval folder exists, create if not
+        # Ensure eval directory exists.
         if not os.path.exists(self._eval_dir):
             os.makedirs(self._eval_dir, exist_ok=True)
-        # Create new session if session_id is None
-        if self._session_id is None:
-            self._session_id = datetime.now().strftime("%H%M%S")
-            self._record_id = -1
-            # self._eval_meta = {
-            #     'model_type': None,
-            #     'model_path': None,
-            #     'task_id': None,
-            #     'task_name': None
-            # }
-            self._eval_records: List[Dict[str, Any]] = []
 
-            # eval_log_filename = f"eval_log_{self._session_id:03d}.json"
-            # eval_log_path = os.path.join(eval_dir, eval_log_filename)
-            
-            # Create empty JSON file
-            # with open(eval_log_path, 'w', encoding='utf-8') as f:
-            #     json.dump([], f)  # Create empty JSON array
-        # If eval folder exists, enumerate existing eval_log files and find the biggest ID
-        # return os.path.join(evallog_dir, f"eval_log.{self._session_ts}")
+        self._eval_json_file = os.path.join(self._eval_dir, 'eval_log.json')
+        self._eval_csv_file = os.path.join(self._eval_dir, 'eval_log.csv')
+
+    def _load_existing_records(self) -> None:
+        """Load existing records from eval_log.json; fallback to empty list."""
+        self._eval_records = []
+        self._record_id = -1
+        if not self._eval_json_file or (not os.path.exists(self._eval_json_file)):
+            return
+
+        try:
+            with open(self._eval_json_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                self._eval_records = [r for r in data if isinstance(r, dict)]
+                if self._eval_records:
+                    self._record_id = max(int(r.get('id', -1)) for r in self._eval_records)
+        except Exception as e:
+            self.logger.exception(f"Load eval_log.json failed: {e}")
+            self._eval_records = []
+            self._record_id = -1
+
     def begin_recording(self, eval_record_id: int):
         self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
-        self._eval_json_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.json") 
-        self._eval_csv_file = os.path.join(self._eval_dir, f"eval_log_{self._session_id}.csv") 
-        self._create_new_record(eval_record_id=eval_record_id)
+        next_record_id = max(int(eval_record_id), self._record_id + 1)
+        self._create_new_record(eval_record_id=next_record_id)
 
     def _create_new_record(self, eval_record_id: int):
         self._record_id = eval_record_id
