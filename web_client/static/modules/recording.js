@@ -99,7 +99,7 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
     syncRecordingSwitchUI();
     return false;
   }
-  if (refreshList) await refreshRecordingFileList();
+  // if (refreshList) await refreshRecordingFileList();
 
   try {
     if (!silent) toast('Recording stopping.', 'info');
