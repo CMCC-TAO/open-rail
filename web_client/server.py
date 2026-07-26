@@ -789,10 +789,12 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
             "selected_chunk": "",
             "episodes": [],
             "files": [],
+            "eval_results": [],
         }
 
     tasks = []
     episodes = []
+    eval_results = []
     chunk_values: list[str] = []
     selected_chunk = ""
     try:
@@ -803,15 +805,17 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
 
         if selected_task:
-            task_dir = base_dir / selected_task
-            recorder = None
+            lerobot_recorder = None
+            eval_recorder = None
             with client_state.lock:
                 vla_client = client_state.vla_client
             if vla_client is not None and getattr(vla_client, "data_record_manager", None) is not None:
-                recorder = getattr(vla_client.data_record_manager, "lerobot_recorder", None)
+                drm = vla_client.data_record_manager
+                lerobot_recorder = getattr(drm, "lerobot_recorder", None)
+                eval_recorder = getattr(drm, "eval_recorder", None)
 
-            if recorder is not None:
-                episodes_all = recorder.parse_episode_records(selected_task=selected_task, base_dir=base_dir)
+            if lerobot_recorder is not None:
+                episodes_all = lerobot_recorder.parse_episode_records(selected_task=selected_task, base_dir=base_dir)
                 chunk_ids = sorted({int(e.get("chunk", -1)) for e in episodes_all if int(e.get("chunk", -1)) >= 0})
                 chunk_values = [f"{x:03d}" for x in chunk_ids]
                 if chunk_values:
@@ -819,6 +823,9 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
                     episodes = [e for e in episodes_all if int(e.get("chunk", -1)) == int(selected_chunk)]
                 else:
                     episodes = episodes_all
+
+            if eval_recorder is not None and hasattr(eval_recorder, "parse_eval_records"):
+                eval_results = eval_recorder.parse_eval_records(selected_task=selected_task, base_dir=base_dir)
             # else:
             #     from client.core.data_record_manager import LeRobotDatasetParser
 
@@ -842,6 +849,7 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
         "selected_chunk": selected_chunk,
         "episodes": episodes,
         "files": episodes,
+        "eval_results": eval_results,
     }
 
 

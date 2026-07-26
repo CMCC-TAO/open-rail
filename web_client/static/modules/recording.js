@@ -133,10 +133,13 @@ async function renderRecordingFileList(data) {
   const episodes = Array.isArray(data?.episodes)
     ? data.episodes
     : (Array.isArray(data?.files) ? data.files : []);
+  const evalResults = Array.isArray(data?.eval_results) ? data.eval_results : [];
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
   const chunks = Array.isArray(data?.chunks) ? data.chunks : [];
   const serverSelectedTask = typeof data?.selected_task === 'string' ? data.selected_task : '';
   const serverSelectedChunk = typeof data?.selected_chunk === 'string' ? data.selected_chunk : '';
+
+  renderEvaluationResults(evalResults);
 
   if (taskSel) {
     const prevTasks = Array.isArray(App.recordingTasksSnapshot) ? App.recordingTasksSnapshot : [];
@@ -259,6 +262,47 @@ async function renderRecordingFileList(data) {
       await deleteRecordingEpisode(episodeId);
     });
   });
+}
+
+function renderEvaluationResults(evalResults = []) {
+  const tbody = $('eval-log-tbody');
+  const countEl = $('eval-log-count');
+  if (!tbody) return;
+
+  const list = Array.isArray(evalResults) ? evalResults.slice() : [];
+  list.sort((a, b) => Number(b?.id ?? -1) - Number(a?.id ?? -1));
+
+  if (countEl) countEl.textContent = String(list.length);
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="eval-log-empty">(empty)</td></tr>';
+    return;
+  }
+
+  const esc = (val) => String(val ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+
+  tbody.innerHTML = list.map((item) => {
+    const id = Number(item?.id ?? -1);
+    const subTask = item?.sub_task_id ?? '';
+    const durationNum = Number(item?.duration);
+    const duration = Number.isFinite(durationNum) ? durationNum.toFixed(1) : '';
+    const score = item?.score ?? '';
+    const note = item?.note ?? '';
+
+    return `
+      <tr>
+        <td class="col-id">${esc(id)}</td>
+        <td class="col-task">${esc(subTask)}</td>
+        <td class="col-dur">${esc(duration)}</td>
+        <td class="col-score">${esc(score)}</td>
+        <td class="col-note">${esc(note)}</td>
+        <td class="col-del"></td>
+      </tr>
+    `;
+  }).join('');
 }
 
 async function deleteRecordingEpisode(episodeId) {

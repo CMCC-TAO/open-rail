@@ -1248,10 +1248,146 @@ class EvaluationResultRecorder:
         self._eval_json_file = None
         self._eval_csv_file = None
 
+        # Runtime cache for evaluation result browsing in main process.
+        self._eval_task_name: str = ""
+        self._eval_task_dir: str = ""
+        self._eval_cache_loaded: bool = False
+        self._eval_json_path: Optional[Path] = None
+        self._eval_json_mtime_ns: int = -1
+        self._eval_browse_records: List[Dict[str, Any]] = []
+
     def set_task(self, save_path: str, episode_id: int = -1) -> None:
         self._prepare_eval_dir(save_path=save_path)
+        self._set_eval_task_from_path(save_path=save_path)
         self._episode_id = episode_id
         self._load_existing_records()
+
+        # Refresh eval browse cache through shared load path.
+        self._eval_cache_loaded = False
+        self._ensure_eval_data_loaded()
+
+    def _set_eval_task_from_path(self, save_path: str) -> None:
+        """Update eval browsing target and clear cache when task path changes."""
+        task_dir = Path(save_path).resolve()
+        task_name = task_dir.name
+        task_dir_str = str(task_dir)
+
+        if self._eval_task_dir != task_dir_str:
+            self._eval_cache_loaded = False
+            self._eval_browse_records = []
+
+        self._eval_task_name = task_name
+        self._eval_task_dir = task_dir_str
+        self._eval_json_path = task_dir / "eval" / "eval_log.json"
+
+    def _resolve_eval_task_dir(self, selected_task: Optional[str], base_dir: Optional[Union[str, Path]] = None) -> Path:
+        """Resolve eval task directory from selected_task or current recorder state."""
+        if selected_task and str(selected_task).strip():
+            if base_dir is not None:
+                return Path(base_dir).resolve() / str(selected_task).strip()
+            if self._eval_task_dir:
+                parent_dir = Path(self._eval_task_dir).parent
+                if parent_dir.exists():
+                    return parent_dir / str(selected_task).strip()
+        if not self._eval_task_dir:
+            raise ValueError("Eval task directory is not initialized. Call set_task() first.")
+        return Path(self._eval_task_dir)
+
+    def _current_eval_json_mtime_ns(self) -> int:
+        if self._eval_json_path is None or (not self._eval_json_path.exists()):
+            return -1
+        try:
+            return int(self._eval_json_path.stat().st_mtime_ns)
+        except Exception:
+            return -1
+
+    def _reload_eval_browse_state(self) -> None:
+        """Reload evaluation browse records using eval_log.json."""
+        records: List[Dict[str, Any]] = []
+        if self._eval_json_path is not None and self._eval_json_path.exists():
+            try:
+                with self._eval_json_path.open("r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    for row in data:
+                        if not isinstance(row, dict):
+                            continue
+                        records.append({
+                            "id": int(row.get("id", -1)),
+                            "sub_task_id": row.get("sub_task_id", None),
+                            "duration": self._normalize_duration_1_decimal(row.get("duration", None)),
+                            "score": row.get("score", None),
+                            "note": row.get("note", ""),
+                        })
+            except Exception:
+                self.logger.warning("Failed to parse eval_log.json: %s", self._eval_json_path, exc_info=True)
+
+        records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
+        self._eval_browse_records = records
+        self._eval_json_mtime_ns = self._current_eval_json_mtime_ns()
+        self._eval_cache_loaded = True
+
+    def _ensure_eval_data_loaded(self, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> None:
+        """Load eval records when task changes, cache is empty, or eval file updates."""
+        task_dir = self._resolve_eval_task_dir(selected_task=selected_task, base_dir=base_dir).resolve()
+        task_name = task_dir.name
+        task_dir_str = str(task_dir)
+
+        file_changed = False
+        if self._eval_task_dir == task_dir_str:
+            latest_mtime = self._current_eval_json_mtime_ns()
+            file_changed = latest_mtime != self._eval_json_mtime_ns
+
+        should_reload = (
+            (not self._eval_cache_loaded)
+            or (task_name != self._eval_task_name)
+            or (task_dir_str != self._eval_task_dir)
+            or file_changed
+        )
+        if not should_reload:
+            return
+
+        self._set_eval_task_from_path(save_path=str(task_dir))
+        self._reload_eval_browse_state()
+
+    def parse_eval_records(self, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
+        """Return evaluation records in reverse order (newest first)."""
+        self._ensure_eval_data_loaded(selected_task=selected_task, base_dir=base_dir)
+        return list(self._eval_browse_records)
+
+    @staticmethod
+    def _normalize_duration_1_decimal(duration: Any) -> Optional[float]:
+        if duration is None or duration == "":
+            return None
+        try:
+            return round(float(duration), 1)
+        except Exception:
+            return None
+
+    def _upsert_eval_browse_record(self, record: Dict[str, Any]) -> None:
+        """Insert or replace one eval record in browse cache."""
+        target_id = int(record.get("id", -1))
+        replaced = False
+        for idx, item in enumerate(self._eval_browse_records):
+            if int(item.get("id", -1)) == target_id:
+                self._eval_browse_records[idx] = record
+                replaced = True
+                break
+        if not replaced:
+            self._eval_browse_records.append(record)
+        self._eval_browse_records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
+
+    def _sync_browse_on_record_start(self, eval_record_id: int) -> None:
+        """Sync main-process eval browse cache immediately when recording starts."""
+        self._ensure_eval_data_loaded()
+        pending_record = {
+            "id": int(eval_record_id),
+            "sub_task_id": None,
+            "duration": 0.0,
+            "score": None,
+            "note": "",
+        }
+        self._upsert_eval_browse_record(pending_record)
 
     def _prepare_eval_dir(self, save_path: str):
         self._eval_dir = os.path.join(save_path, 'eval')
@@ -1415,7 +1551,7 @@ class EvaluationResultRecorder:
         self._current_record['obv_count'] = self._obv_count
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
-        self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 3)
+        self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 1)
     
     def _timestamp(self, time_stamp) -> str:
         dt = datetime.fromtimestamp(time_stamp)
@@ -1676,6 +1812,8 @@ class DataRecordManager:
         
         if self.config.get('is_record_eval_log', False):
             self.eval_recorder.set_task(save_path=self.save_path, episode_id=self.shared_data.episode_index.value)
+            # Keep next eval record id consistent across processes.
+            self._sync_shared_data(eval_record_id=int(self.eval_recorder._record_id) + 1)
         else:
             self.logger.info("Recording evaluation log is disabled, skip recording.")
     
@@ -1833,6 +1971,10 @@ class DataRecordManager:
                     episode_chunk=self.shared_data.episode_chunk.value,
                     episode_index=self.shared_data.episode_index.value,
                 )
+            if self.config.get('is_record_eval_log', False):
+                self.eval_recorder._sync_browse_on_record_start(
+                    eval_record_id=self.shared_data.eval_record_id.value,
+                )
 
             self.shared_data.running.value = True
             command = {
@@ -1856,7 +1998,6 @@ class DataRecordManager:
         # Capture snapshot before stop, used for main-process browse cache sync.
         prev_episode_index = int(self.shared_data.episode_index.value)
         prev_total_frames = int(self.shared_data.total_frames.value)
-        prev_total_videos = int(self.shared_data.total_videos.value)
 
         # Invalidate future async tasks from next cycle; current queue will still be drained.
         stop_session_id = self._bump_recording_session_id()
@@ -1875,26 +2016,13 @@ class DataRecordManager:
                     stop_session_id,
                     prev_episode_index,
                     prev_total_frames,
-                    prev_total_videos,
-                    timeout_s=2)
-            # threading.Thread(
-            #     target=self._sync_browse_on_record_stop_main,
-            #     args=(
-            #         stop_session_id,
-            #         prev_episode_index,
-            #         prev_total_frames,
-            #         prev_total_videos,
-            #     ),
-            #     daemon=True,
-            #     name="record-stop-sync",
-            # ).start()
+                    timeout_s=2.0)
 
     def _sync_browse_on_record_stop_main(
         self,
         stop_session_id: int,
         prev_episode_index: int,
         prev_total_frames: int,
-        prev_total_videos: int,
         timeout_s: float = 8.0,
     ) -> None:
         """Best-effort sync of main-process browse cache when stop_recording is called."""
