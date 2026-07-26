@@ -251,6 +251,21 @@ class LeRobotDatasetRecorder:
         self.config = lerobot_config
         # print(f"Debug: record_config: {self.config}")
         self.task_language_dict = {}
+
+        # Runtime cache for episode browsing in memory.
+        self._dataset_root: Optional[Path] = None
+        self._meta_dir: Optional[Path] = None
+        self._data_dir: Optional[Path] = None
+        self._browse_task_name: str = ""
+        self._browse_task_dir: str = ""
+        self._browse_cache_loaded: bool = False
+        self._browse_info: Dict[str, Any] = {}
+        self._browse_fps: int = 30
+        self._browse_chunks_size: int = 1000
+        self._browse_video_keys: List[str] = []
+        self._browse_episode_length_map: Dict[int, int] = {}
+        self._browse_episode_records: List[Dict[str, Any]] = []
+
         self._parse_config(lerobot_config)
         # self.record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
 
@@ -282,6 +297,8 @@ class LeRobotDatasetRecorder:
             return True
     def set_task(self, save_path: str) -> None:
         self.save_path = save_path
+        # Keep current task path for fast in-memory browsing.
+        self._set_browse_task_from_path(save_path)
         meta_required_file_exists = self._check_meta_path_and_dir(save_path=save_path)
         if meta_required_file_exists:
             self._update_config_from_meta_file()
@@ -290,8 +307,312 @@ class LeRobotDatasetRecorder:
             self.config["total_frames"] = 0
             self.config["total_videos"] = 0
             self.config['chunks_size'] = 1000
+
+        # Always refresh browse cache through the shared meta-loading interface.
+        self._browse_cache_loaded = False
+        self._ensure_browse_data_loaded()
         return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
     
+
+    def _set_browse_task_from_path(self, save_path: str) -> None:
+        """Update recorder browsing target and clear cache if task path changes."""
+        task_dir = Path(save_path).resolve()
+        task_name = task_dir.name
+        task_dir_str = str(task_dir)
+
+        if self._browse_task_dir != task_dir_str:
+            self._browse_cache_loaded = False
+            self._browse_episode_records = []
+
+        self._browse_task_name = task_name
+        self._browse_task_dir = task_dir_str
+        self._dataset_root = task_dir
+        self._meta_dir = task_dir / "meta"
+        self._data_dir = task_dir / "data"
+
+    def _resolve_task_dir(self, selected_task: Optional[str], base_dir: Optional[Union[str, Path]] = None) -> Path:
+        """Resolve dataset task directory from selected_task or current recorder state."""
+        if selected_task and str(selected_task).strip():
+            if base_dir is not None:
+                return Path(base_dir).resolve() / str(selected_task).strip()
+            if self._dataset_root is not None and self._dataset_root.parent.exists():
+                return self._dataset_root.parent / str(selected_task).strip()
+        if self._dataset_root is None:
+            raise ValueError("Task directory is not initialized. Call set_task() first.")
+        return self._dataset_root
+
+    def _reload_browse_state(self) -> None:
+        """Reload browse metadata and episode records using a shared meta-loading path."""
+        self._browse_info = self._load_browse_info()
+        self._browse_fps = int(self._browse_info.get("fps", 30) or 30)
+        self._browse_chunks_size = int(self._browse_info.get("chunks_size", 1000) or 1000)
+        self._browse_video_keys = self._get_browse_video_keys(self._browse_info)
+        self._browse_episode_length_map = self._load_browse_episode_length_map()
+        self._browse_episode_records = self._build_episode_records()
+        self._browse_cache_loaded = True
+
+    def _ensure_browse_data_loaded(self, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> None:
+        """Load episode metadata and records when task changes or cache is empty."""
+        task_dir = self._resolve_task_dir(selected_task=selected_task, base_dir=base_dir).resolve()
+        task_name = task_dir.name
+
+        should_reload = (
+            (not self._browse_cache_loaded)
+            or (task_name != self._browse_task_name)
+            or (str(task_dir) != self._browse_task_dir)
+        )
+        if not should_reload:
+            return
+
+        self._set_browse_task_from_path(str(task_dir))
+        self._reload_browse_state()
+
+    def _load_browse_info(self) -> Dict[str, Any]:
+        info_path = self._meta_dir / "info.json"
+        if not info_path.exists():
+            return {}
+        try:
+            with info_path.open("r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            self.logger.warning("Failed to parse info.json: %s", info_path, exc_info=True)
+            return {}
+
+    def _load_browse_episode_length_map(self) -> Dict[int, int]:
+        episodes_path = self._meta_dir / "episodes.jsonl"
+        mapping: Dict[int, int] = {}
+        if not episodes_path.exists():
+            return mapping
+        try:
+            with episodes_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.strip()
+                    if not s:
+                        continue
+                    data = json.loads(s)
+                    ep_idx = int(data.get("episode_index", -1))
+                    ep_len = int(data.get("length", -1))
+                    if ep_idx >= 0 and ep_len >= 0:
+                        mapping[ep_idx] = ep_len
+        except Exception:
+            self.logger.warning("Failed to parse episodes.jsonl: %s", episodes_path, exc_info=True)
+        return mapping
+
+    @staticmethod
+    def _get_browse_video_keys(info: Dict[str, Any]) -> List[str]:
+        features = info.get("features", {}) if isinstance(info, dict) else {}
+        keys: List[str] = []
+        for key, value in features.items():
+            if isinstance(value, dict) and value.get("dtype") == "video":
+                keys.append(key)
+        return keys
+
+    @staticmethod
+    def _parse_episode_id(episode_id: str) -> tuple[int, int]:
+        m = re.fullmatch(r"chunk-(\d{3})/episode_(\d{6})", str(episode_id or "").strip())
+        if not m:
+            raise ValueError(f"Invalid episode id: {episode_id}")
+        return int(m.group(1)), int(m.group(2))
+
+    def _browse_parquet_num_rows(self, parquet_path: Path) -> int:
+        try:
+            return int(pq.ParquetFile(parquet_path).metadata.num_rows)
+        except Exception:
+            return 0
+
+    def _browse_video_exists(self, chunk_id: int, episode_index: int, video_key: str) -> bool:
+        video_fmt = self._browse_info.get(
+            "video_path",
+            "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
+        )
+        rel = video_fmt.format(
+            episode_chunk=chunk_id,
+            episode_index=episode_index,
+            video_key=video_key,
+        )
+        return (self._dataset_root / rel).exists()
+
+    def _build_episode_records(self) -> List[Dict[str, Any]]:
+        if self._data_dir is None or (not self._data_dir.exists()):
+            return []
+
+        pattern = re.compile(r"chunk-(\d{3})/episode_(\d{6})\.parquet$")
+        meta_ok = all((self._meta_dir / name).exists() for name in ("info.json", "episodes.jsonl", "tasks.jsonl"))
+        records: List[Dict[str, Any]] = []
+
+        for parquet_path in self._data_dir.rglob("episode_*.parquet"):
+            rel_data = parquet_path.relative_to(self._data_dir).as_posix()
+            m = pattern.search(rel_data)
+            if not m:
+                continue
+
+            cur_chunk_id = int(m.group(1))
+            episode_index = int(m.group(2))
+            frames = int(self._browse_episode_length_map.get(episode_index, self._browse_parquet_num_rows(parquet_path)))
+            duration_sec = round((frames / self._browse_fps), 1) if self._browse_fps > 0 else 0.0
+            videos_ok = all(self._browse_video_exists(cur_chunk_id, episode_index, key) for key in self._browse_video_keys)
+
+            records.append({
+                "id": f"chunk-{cur_chunk_id:03d}/episode_{episode_index:06d}",
+                "name": f"episode_{episode_index:06d}",
+                "chunk": cur_chunk_id,
+                "chunk_str": f"{cur_chunk_id:03d}",
+                "episode_index": episode_index,
+                "frames": frames,
+                "duration_sec": duration_sec,
+                "parquet_relpath": str(parquet_path.relative_to(self._dataset_root)),
+                "complete": bool(meta_ok and videos_ok),
+            })
+
+        records.sort(key=lambda x: x["episode_index"], reverse=True)
+        return records
+
+    def _build_episode_record(self, chunk_id: int, episode_index: int, frames: int, complete: bool) -> Dict[str, Any]:
+        duration_sec = round((max(0, int(frames)) / self._browse_fps), 1) if self._browse_fps > 0 else 0.0
+        parquet_relpath = self.config['data_path'].format(episode_chunk=chunk_id, episode_index=episode_index)
+        return {
+            "id": f"chunk-{chunk_id:03d}/episode_{episode_index:06d}",
+            "name": f"episode_{episode_index:06d}",
+            "chunk": int(chunk_id),
+            "chunk_str": f"{int(chunk_id):03d}",
+            "episode_index": int(episode_index),
+            "frames": int(max(0, int(frames))),
+            "duration_sec": duration_sec,
+            "parquet_relpath": str(parquet_relpath),
+            "complete": bool(complete),
+        }
+
+    def _upsert_browse_episode_record(self, record: Dict[str, Any]) -> None:
+        """Insert or replace one episode record in browse cache."""
+        target_id = str(record.get("id", ""))
+        replaced = False
+        for idx, item in enumerate(self._browse_episode_records):
+            if str(item.get("id", "")) == target_id:
+                self._browse_episode_records[idx] = record
+                replaced = True
+                break
+        if not replaced:
+            self._browse_episode_records.append(record)
+        self._browse_episode_records.sort(key=lambda x: int(x.get("episode_index", -1)), reverse=True)
+
+    def _sync_browse_on_record_start(self, episode_chunk: int, episode_index: int) -> None:
+        """Update in-memory meta/episode cache immediately when recording starts."""
+        self._ensure_browse_data_loaded()
+
+        self._browse_episode_length_map[int(episode_index)] = 0
+        pending_record = self._build_episode_record(
+            chunk_id=int(episode_chunk),
+            episode_index=int(episode_index),
+            frames=0,
+            complete=False,
+        )
+        self._upsert_browse_episode_record(pending_record)
+
+        total_episodes = int(self._browse_info.get("total_episodes", 0) or 0)
+        self._browse_info["total_episodes"] = max(total_episodes, int(episode_index) + 1)
+        self._browse_info["total_chunks"] = max(int(self._browse_info.get("total_chunks", 0) or 0), int(episode_chunk) + 1)
+
+    def _sync_browse_on_record_end(self, episode_chunk: int, episode_index: int, episode_length: int, total_episodes: int, total_frames: int, total_videos: int) -> None:
+        """Update in-memory meta/episode cache immediately when recording ends."""
+        self._ensure_browse_data_loaded()
+
+        self._browse_episode_length_map[int(episode_index)] = int(max(0, int(episode_length)))
+        finished_record = self._build_episode_record(
+            chunk_id=int(episode_chunk),
+            episode_index=int(episode_index),
+            frames=int(max(0, int(episode_length))),
+            complete=True,
+        )
+        self._upsert_browse_episode_record(finished_record)
+
+        self._browse_info["total_episodes"] = int(total_episodes)
+        self._browse_info["total_frames"] = int(total_frames)
+        self._browse_info["total_videos"] = int(total_videos)
+        self._browse_info["total_chunks"] = max(int(self._browse_info.get("total_chunks", 0) or 0), int(episode_chunk) + 1)
+
+    def parse_episode_records(self, chunk_id: Optional[int] = None, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
+        """Return cached episode records for current task, or reload when selected_task changes."""
+        self._ensure_browse_data_loaded(selected_task=selected_task, base_dir=base_dir)
+        if chunk_id is None:
+            return list(self._browse_episode_records)
+        return [r for r in self._browse_episode_records if int(r.get("chunk", -1)) == int(chunk_id)]
+
+    def delete_episode(self, episode_id: str, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+        """Delete one episode and refresh in-memory cache."""
+        self._ensure_browse_data_loaded(selected_task=selected_task, base_dir=base_dir)
+        chunk_id, episode_index = self._parse_episode_id(episode_id)
+
+        parquet_path = self._data_dir / f"chunk-{chunk_id:03d}" / f"episode_{episode_index:06d}.parquet"
+        removed_paths: List[str] = []
+
+        if parquet_path.exists():
+            parquet_path.unlink()
+            removed_paths.append(str(parquet_path.relative_to(self._dataset_root)))
+
+        video_fmt = self._browse_info.get(
+            "video_path",
+            "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
+        )
+        for video_key in self._browse_video_keys:
+            rel = video_fmt.format(
+                episode_chunk=chunk_id,
+                episode_index=episode_index,
+                video_key=video_key,
+            )
+            video_path = self._dataset_root / rel
+            if video_path.exists():
+                video_path.unlink()
+                removed_paths.append(str(video_path.relative_to(self._dataset_root)))
+
+        episodes_path = self._meta_dir / "episodes.jsonl"
+        remaining_episode_rows: List[Dict[str, Any]] = []
+        removed_meta_rows = 0
+        if episodes_path.exists():
+            with episodes_path.open("r", encoding="utf-8") as f:
+                for line in f:
+                    s = line.strip()
+                    if not s:
+                        continue
+                    try:
+                        row = json.loads(s)
+                    except Exception:
+                        continue
+                    if int(row.get("episode_index", -1)) == episode_index:
+                        removed_meta_rows += 1
+                        continue
+                    remaining_episode_rows.append(row)
+
+        with episodes_path.open("w", encoding="utf-8") as f:
+            for row in remaining_episode_rows:
+                f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+        remaining_indices = sorted({int(r.get("episode_index", -1)) for r in remaining_episode_rows if int(r.get("episode_index", -1)) >= 0})
+        remaining_frames = sum(max(0, int(r.get("length", 0) or 0)) for r in remaining_episode_rows)
+        next_episode_index = (max(remaining_indices) + 1) if remaining_indices else 0
+        splits_text = "0:-1" if next_episode_index <= 0 else f"0:{next_episode_index - 1}"
+
+        info_path = self._meta_dir / "info.json"
+        info = self._load_browse_info()
+        info["total_episodes"] = int(next_episode_index)
+        info["total_frames"] = int(remaining_frames)
+        info["total_videos"] = int(len(remaining_indices) * len(self._browse_video_keys))
+        info["total_chunks"] = int(len({int(r.get("chunk", -1)) for r in self._browse_episode_records if int(r.get("chunk", -1)) >= 0 and int(r.get("episode_index", -1)) != episode_index}))
+        info["splits"] = {"test": splits_text}
+        with info_path.open("w", encoding="utf-8") as f:
+            json.dump(info, f, indent=2, ensure_ascii=False)
+
+        # Refresh in-memory cache after file mutation.
+        self._browse_cache_loaded = False
+        self._ensure_browse_data_loaded(selected_task=selected_task, base_dir=base_dir)
+
+        deleted = bool(removed_paths or removed_meta_rows > 0)
+        return {
+            "deleted": deleted,
+            "episode_id": f"chunk-{chunk_id:03d}/episode_{episode_index:06d}",
+            "removed_file_count": len(removed_paths),
+            "removed_meta_count": removed_meta_rows,
+            "removed_paths": removed_paths,
+        }
 
     def _update_config_from_meta_file(self):
         """
@@ -443,6 +764,9 @@ class LeRobotDatasetRecorder:
         self.total_videos = total_videos
         self.save_raw = save_raw
         self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}")
+
+        # Sync browse cache immediately so parse_episode_records can see the running episode.
+        self._sync_browse_on_record_start(episode_chunk=episode_chunk, episode_index=episode_index)
         self.video_writers = self._create_video_writer(
             episode_chunk=episode_chunk,
             episode_index=episode_index
@@ -469,6 +793,9 @@ class LeRobotDatasetRecorder:
     def end_record(self):
         try:
             self.record_executor.shutdown(wait=True) 
+            finished_episode_index = self.episode_index
+            finished_episode_chunk = self.episode_chunk
+
             self.episode_index = self.episode_index + 1
             self.total_frames = self.total_frames + self.frame_index
             self.total_videos = self.total_videos + len(self.camera_name_list)
@@ -482,6 +809,16 @@ class LeRobotDatasetRecorder:
             self.write_parquet_thread.join()
             self._release_video_writers()
             self._release_parquet_writer()
+
+            # Sync browse cache right after recording ends.
+            self._sync_browse_on_record_end(
+                episode_chunk=finished_episode_chunk,
+                episode_index=finished_episode_index,
+                episode_length=self.frame_index,
+                total_episodes=self.episode_index,
+                total_frames=self.total_frames,
+                total_videos=self.total_videos,
+            )
         except Exception as e:
             self.logger.exception(f"Finished recording failed: {e}")
         self.logger.info("Finish recording.")
@@ -1486,6 +1823,17 @@ class DataRecordManager:
         try:
             session_id = self._bump_recording_session_id()
             self._clear_queues()
+
+            # Keep main-process browse cache in sync immediately.
+            # begin_recording() also runs inside writer subprocess, but subprocess memory
+            # updates are not visible to the main process cache used by web APIs.
+            self.set_task(task=task_id)
+            if self.config.get('is_record_episode', False):
+                self.lerobot_recorder._sync_browse_on_record_start(
+                    episode_chunk=self.shared_data.episode_chunk.value,
+                    episode_index=self.shared_data.episode_index.value,
+                )
+
             self.shared_data.running.value = True
             command = {
                 "command": "start",
@@ -1505,8 +1853,13 @@ class DataRecordManager:
         - Let resident writer task continue draining ``record_queue``.
         - Wait for resident writer task to exit naturally after flushing video/parquet.
         """
+        # Capture snapshot before stop, used for main-process browse cache sync.
+        prev_episode_index = int(self.shared_data.episode_index.value)
+        prev_total_frames = int(self.shared_data.total_frames.value)
+        prev_total_videos = int(self.shared_data.total_videos.value)
+
         # Invalidate future async tasks from next cycle; current queue will still be drained.
-        self._bump_recording_session_id()
+        stop_session_id = self._bump_recording_session_id()
         if self.shared_data.running.value:
             self.shared_data.running.value = False
             self.logger.info("Signaled writer task to stop after draining queue.")
@@ -1515,13 +1868,74 @@ class DataRecordManager:
             "command": "stop",
         }
         self.writer_command_queue.put(command)
-        # if self.writer_process is not None and self.writer_process.is_alive():
-        #     self.logger.info("Waiting writer task to flush queued data...")
-        #     self._wait_writer_task_stop()
-        # elif self.writer_process is None:
-        #     self.logger.debug("stop_recording called but writer process is not initialized.")
 
-        # self._clear_queues()
+        # Sync browse cache in main process after writer updates shared counters.
+        if self.config.get('is_record_episode', False):
+            self._sync_browse_on_record_stop_main(
+                    stop_session_id,
+                    prev_episode_index,
+                    prev_total_frames,
+                    prev_total_videos,
+                    timeout_s=2)
+            # threading.Thread(
+            #     target=self._sync_browse_on_record_stop_main,
+            #     args=(
+            #         stop_session_id,
+            #         prev_episode_index,
+            #         prev_total_frames,
+            #         prev_total_videos,
+            #     ),
+            #     daemon=True,
+            #     name="record-stop-sync",
+            # ).start()
+
+    def _sync_browse_on_record_stop_main(
+        self,
+        stop_session_id: int,
+        prev_episode_index: int,
+        prev_total_frames: int,
+        prev_total_videos: int,
+        timeout_s: float = 8.0,
+    ) -> None:
+        """Best-effort sync of main-process browse cache when stop_recording is called."""
+        deadline = time.time() + max(0.1, float(timeout_s))
+
+        while time.time() < deadline:
+            # Abort if a newer recording session has already started.
+            if self._get_recording_session_id() != stop_session_id:
+                return
+
+            cur_episode_index = int(self.shared_data.episode_index.value)
+            cur_total_frames = int(self.shared_data.total_frames.value)
+            cur_total_videos = int(self.shared_data.total_videos.value)
+
+            if cur_episode_index >= prev_episode_index + 1:
+                finished_episode_index = cur_episode_index - 1
+                chunks_size = int(self.config.lerobot.get('chunks_size', 1000) or 1000)
+                finished_episode_chunk = finished_episode_index // max(1, chunks_size)
+                episode_length = max(0, cur_total_frames - int(prev_total_frames))
+
+                try:
+                    self.lerobot_recorder._sync_browse_on_record_end(
+                        episode_chunk=finished_episode_chunk,
+                        episode_index=finished_episode_index,
+                        episode_length=episode_length,
+                        total_episodes=cur_episode_index,
+                        total_frames=cur_total_frames,
+                        total_videos=cur_total_videos,
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Failed to sync browse cache on stop in main process: {e}")
+                return
+
+            time.sleep(0.05)
+
+        # Timeout fallback: force main-process browse cache to reload from current task files.
+        try:
+            self.lerobot_recorder._browse_cache_loaded = False
+            self.lerobot_recorder._ensure_browse_data_loaded()
+        except Exception as e:
+            self.logger.warning(f"Failed to refresh browse cache after stop timeout: {e}")
     def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.

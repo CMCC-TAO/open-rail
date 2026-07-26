@@ -803,17 +803,33 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
 
         if selected_task:
-            from client.core.data_record_manager import LeRobotDatasetParser
-
             task_dir = base_dir / selected_task
-            parser = LeRobotDatasetParser(str(task_dir), logger=logger)
-            chunk_ids = parser.get_chunk_ids()
-            chunk_values = [f"{x:03d}" for x in chunk_ids]
-            if chunk_values:
-                selected_chunk = chunk if chunk in chunk_values else chunk_values[-1]
-                episodes = parser.parse_episode_records(chunk_id=int(selected_chunk))
-            else:
-                episodes = parser.parse_episode_records()
+            recorder = None
+            with client_state.lock:
+                vla_client = client_state.vla_client
+            if vla_client is not None and getattr(vla_client, "data_record_manager", None) is not None:
+                recorder = getattr(vla_client.data_record_manager, "lerobot_recorder", None)
+
+            if recorder is not None:
+                episodes_all = recorder.parse_episode_records(selected_task=selected_task, base_dir=base_dir)
+                chunk_ids = sorted({int(e.get("chunk", -1)) for e in episodes_all if int(e.get("chunk", -1)) >= 0})
+                chunk_values = [f"{x:03d}" for x in chunk_ids]
+                if chunk_values:
+                    selected_chunk = chunk if chunk in chunk_values else chunk_values[-1]
+                    episodes = [e for e in episodes_all if int(e.get("chunk", -1)) == int(selected_chunk)]
+                else:
+                    episodes = episodes_all
+            # else:
+            #     from client.core.data_record_manager import LeRobotDatasetParser
+
+            #     parser = LeRobotDatasetParser(str(task_dir), logger=logger)
+            #     chunk_ids = parser.get_chunk_ids()
+            #     chunk_values = [f"{x:03d}" for x in chunk_ids]
+            #     if chunk_values:
+            #         selected_chunk = chunk if chunk in chunk_values else chunk_values[-1]
+            #         episodes = parser.parse_episode_records(chunk_id=int(selected_chunk))
+            #     else:
+            #         episodes = parser.parse_episode_records()
     except Exception as e:
         raise HTTPException(500, f"Failed to list recording files: {e}")
 
@@ -857,10 +873,20 @@ async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
         raise HTTPException(404, f"Task directory not found: {task}")
 
     try:
-        from client.core.data_record_manager import LeRobotDatasetParser
+        recorder = None
+        with client_state.lock:
+            vla_client = client_state.vla_client
+        if vla_client is not None and getattr(vla_client, "data_record_manager", None) is not None:
+            recorder = getattr(vla_client.data_record_manager, "lerobot_recorder", None)
 
-        parser = LeRobotDatasetParser(str(task_dir), logger=logger)
-        result = parser.delete_episode(req.episode_id)
+        if recorder is not None:
+            result = recorder.delete_episode(req.episode_id, selected_task=task, base_dir=base_dir)
+        else:
+            from client.core.data_record_manager import LeRobotDatasetParser
+
+            parser = LeRobotDatasetParser(str(task_dir), logger=logger)
+            result = parser.delete_episode(req.episode_id)
+
         if not result.get("deleted"):
             raise HTTPException(404, f"Episode not found: {req.episode_id}")
         return {"status": "ok", "result": result}
