@@ -37,19 +37,19 @@
   "grasp": [
     {
       "name": "grasp one water",
-      "instruction": "Use one hand to grab one bottle from a pile of Wahaha drinks."
+      "instruction": "use one hand to grab one bottle from a pile of drinks."
     },
     {
       "name": "grasp one Coca-Cola",
-      "instruction": "Use one hand to grab one bottle from a pile of Coca-Cola drinks."
+      "instruction": "use one hand to grab one can from a pile of canned drinks."
     },
     {
       "name": "grasp two water",
-      "instruction": "Use both hands to grab the two nearest bottles from a pile of Wahaha drinks."
+      "instruction": "use both hands to grab the two nearest bottles from a pile of drinks."
     },
     {
       "name": "grasp two Coca-Cola",
-      "instruction": "Use both hands to grab the two nearest bottles from a pile of Coca-Cola drinks."
+      "instruction": "use both hands to grab the two nearest cans from a pile of canned drinks."
     }
   ]
 }

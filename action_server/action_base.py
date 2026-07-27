@@ -212,6 +212,7 @@ _DEFAULT_THRE_PROGRESS = 0.9          # 进度完成阈值
 _DEFAULT_STABLE_COUNT = 20            # 连续稳定计数阈值
 _DEFAULT_STABILITY_RATIO = 0.05       # 变异系数阈值
 _DEFAULT_FEEDBACK_INTERVAL = 1.0 / 3.0  # 3Hz
+_DEFAULT_COMPLETE_THRESHOLD = 0.80    # 直接完成阈值
 
 
 def _monitor_vla_progress(
@@ -222,6 +223,7 @@ def _monitor_vla_progress(
     stable_count_threshold: int = _DEFAULT_STABLE_COUNT,
     stability_ratio_thresh: float = _DEFAULT_STABILITY_RATIO,
     feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
+    complete_threshold: float = _DEFAULT_COMPLETE_THRESHOLD,
 ) -> TaskResult:
     """监控 VLA 推理进度循环
 
@@ -286,8 +288,8 @@ def _monitor_vla_progress(
                 f"[elapsed={int(elapsed)}s] prob_progress={current_prob_progress:.3f}",
             )
 
-            # ===== 条件 1: prob_progress > 80% → 立即完成（无需等待稳定性）+ =====
-            if current_prob_progress > 0.80:
+            # ===== 条件 1: prob_progress > complete_threshold → 立即完成（无需等待稳定性）=====
+            if current_prob_progress > complete_threshold:
                 send_vla_feedback(goal_handle, 100,
                                   f'Task completed (prob_progress={current_prob_progress:.3f})! Elapsed: {elapsed:.1f}s')
                 return TaskResult(True)
@@ -380,6 +382,7 @@ def run_vla_control_only(
     feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
     fixed_duration: float = 0,
     blend_config=None,
+    complete_threshold: float = _DEFAULT_COMPLETE_THRESHOLD,
 ) -> TaskResult:
     """在 obs+infer 已运行的情况下，只启动 control 并监控 VLA 推理进度
 
@@ -449,6 +452,7 @@ def run_vla_control_only(
                 stable_count_threshold=stable_count_threshold,
                 stability_ratio_thresh=stability_ratio_thresh,
                 feedback_interval=feedback_interval,
+                complete_threshold=complete_threshold,
             )
 
         elapsed = time.time() - start_time

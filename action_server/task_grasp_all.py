@@ -151,8 +151,7 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
             vla_client=vla_client,
             language_instruction=instruction,
             max_duration=30.0,
-            thre_progress=1.5,
-            stable_count_threshold=999,
+            thre_progress=0.8,
             blend_config=blend_config,
         )
 

@@ -37,10 +37,10 @@ TARGET_HAND_MAP: dict[str, str] = {
 # ==============================================
 # key 为 params.target（不区分大小写），value 为对应的语言指令
 TARGET_LANGUAGE_MAP: dict[str, str] = {
-    "one water": "Use one hand to grab one bottle from a pile of Wahaha drinks.",
-    "one Coca-Cola": "Use one hand to grab one bottle from a pile of Coca-Cola drinks.",
-    "two water": "Use both hands to grab the two nearest bottles from a pile of Wahaha drinks.",
-    "two Coca-Cola": "Use both hands to grab the two nearest bottles from a pile of Coca-Cola drinks.",
+    "one water": "use one hand to grab one bottle from a pile of drinks.",
+    "one Coca-Cola": "use one hand to grab one can from a pile of canned drinks.",
+    "two water": "use both hands to grab the two nearest bottles from a pile of drinks.",
+    "two Coca-Cola": "use both hands to grab the two nearest cans from a pile of canned drinks.",
 }
 
 
@@ -202,8 +202,7 @@ class GraspHandler(AbstractTaskHandler):
                 vla_client=vla_client,
                 language_instruction=instruction,
                 max_duration=30.0,
-                thre_progress=1.5,
-                stable_count_threshold=999,
+                thre_progress=0.8,
                 blend_config=blend_config,
             )
 
