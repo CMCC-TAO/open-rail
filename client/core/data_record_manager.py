@@ -1271,7 +1271,7 @@ class EvaluationResultRecorder:
                         records.append({
                             "id": int(row.get("id", -1)),
                             "sub_task_id": row.get("sub_task_id", None),
-                            "duration": self._normalize_duration_1_decimal(row.get("duration", None)),
+                            "duration": row.get("duration", None),
                             "score": row.get("score", None),
                             "note": row.get("note", ""),
                         })
@@ -1289,15 +1289,6 @@ class EvaluationResultRecorder:
         except Exception as e:
             self.logger.exception(f"Failed to load eval records: {e}")
         return self._eval_browse_records
-
-    @staticmethod
-    def _normalize_duration_1_decimal(duration: Any) -> Optional[float]:
-        if duration is None or duration == "":
-            return None
-        try:
-            return round(float(duration), 1)
-        except Exception:
-            return None
 
     def _upsert_eval_browse_record(self, record: Dict[str, Any]) -> None:
         """Insert or replace one eval record in browse cache."""
