@@ -765,8 +765,8 @@ class LeRobotDatasetRecorder:
         self.save_raw = save_raw
         self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}")
 
-        # Sync browse cache immediately so parse_episode_records can see the running episode.
-        self._sync_browse_on_record_start(episode_chunk=episode_chunk, episode_index=episode_index)
+        # # Sync browse cache immediately so parse_episode_records can see the running episode.
+        # self._sync_browse_on_record_start(episode_chunk=episode_chunk, episode_index=episode_index)
         self.video_writers = self._create_video_writer(
             episode_chunk=episode_chunk,
             episode_index=episode_index
@@ -1389,32 +1389,32 @@ class EvaluationResultRecorder:
         }
         self._upsert_eval_browse_record(pending_record)
 
-    def _sync_browse_on_runtime_step(self, eval_record_id: int, sub_task_id: Optional[int]) -> None:
-        """Update running eval record in browse cache from main-process runtime data."""
-        if sub_task_id is None:
-            return
-        try:
-            sid = int(sub_task_id)
-        except Exception:
-            return
+    # def _sync_browse_on_runtime_step(self, eval_record_id: int, sub_task_id: Optional[int]) -> None:
+    #     """Update running eval record in browse cache from main-process runtime data."""
+    #     if sub_task_id is None:
+    #         return
+    #     try:
+    #         sid = int(sub_task_id)
+    #     except Exception:
+    #         return
 
-        self._ensure_eval_data_loaded()
-        target_id = int(eval_record_id)
-        for idx, item in enumerate(self._eval_browse_records):
-            if int(item.get("id", -1)) != target_id:
-                continue
-            updated = dict(item)
-            updated["sub_task_id"] = sid
-            self._eval_browse_records[idx] = updated
-            return
+    #     self._ensure_eval_data_loaded()
+    #     target_id = int(eval_record_id)
+    #     for idx, item in enumerate(self._eval_browse_records):
+    #         if int(item.get("id", -1)) != target_id:
+    #             continue
+    #         updated = dict(item)
+    #         updated["sub_task_id"] = sid
+    #         self._eval_browse_records[idx] = updated
+    #         return
 
-        self._upsert_eval_browse_record({
-            "id": target_id,
-            "sub_task_id": sid,
-            "duration": 0.0,
-            "score": None,
-            "note": "",
-        })
+    #     self._upsert_eval_browse_record({
+    #         "id": target_id,
+    #         "sub_task_id": sid,
+    #         "duration": 0.0,
+    #         "score": None,
+    #         "note": "",
+    #     })
 
     def _prepare_eval_dir(self, save_path: str):
         self._eval_dir = os.path.join(save_path, 'eval')
@@ -1516,8 +1516,8 @@ class EvaluationResultRecorder:
         """
 
         try:
+            self._eval_record_stop_time = time.time()
             # record info for first frame of a sub-task
-
             if self._current_record['sub_task_id'] is None:
                 # assign value explicitly
                 self._init_current_record(step_extra=step_extra)
@@ -1574,7 +1574,6 @@ class EvaluationResultRecorder:
             self._current_record['avg_comm_time'].append(runtime_status.get('avg_comm_time', None))
 
     def _finalize_current_record(self) -> None:
-        self._eval_record_stop_time = time.time()
         self._current_record['obv_count'] = self._obv_count
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
@@ -1993,21 +1992,27 @@ class DataRecordManager:
             # begin_recording() also runs inside writer subprocess, but subprocess memory
             # updates are not visible to the main process cache used by web APIs.
             self.set_task(task=task_id)
+            self.shared_data.running.value = True
+            first_record = self._wait_for_record_data(get_timeout_s=0.05, max_attempts=20)
             if self.config.get('is_record_episode', False):
                 self.lerobot_recorder._sync_browse_on_record_start(
                     episode_chunk=self.shared_data.episode_chunk.value,
                     episode_index=self.shared_data.episode_index.value,
                 )
             if self.config.get('is_record_eval_log', False):
-                self.eval_recorder._sync_browse_on_record_start(
-                    eval_record_id=self.shared_data.eval_record_id.value,
-                    sub_task_id=None,
-                )
-
-            self.shared_data.running.value = True
-            if self.config.get('is_record_eval_log', False):
-                self._sync_eval_sub_task_id_from_record_queue_start(timeout_s=1.0)
-
+                if isinstance(first_record, tuple) and len(first_record) == 3:
+                    _, _, step_extra = first_record
+                    language_status = step_extra.get('language_status', {}) if isinstance(step_extra, dict) else {}
+                    sub_task_id = language_status.get('sub_task_id', None)
+                    self.eval_recorder._sync_browse_on_record_start(
+                        eval_record_id=self.shared_data.eval_record_id.value,
+                        sub_task_id=sub_task_id,
+                    )
+                    # if sub_task_id is not None:
+                        # self.eval_recorder._sync_browse_on_runtime_step(
+                        #     eval_record_id=self.shared_data.eval_record_id.value,
+                        #     sub_task_id=sub_task_id,
+                        # )
             command = {
                 "command": "start",
                 "task_id": task_id,
@@ -2017,41 +2022,34 @@ class DataRecordManager:
         except Exception as e:
             self.logger.exception(f"Failed to start writer task: {e}")
 
-    def _sync_eval_sub_task_id_from_record_queue_start(self, timeout_s: float = 1.0, max_samples: int = 20) -> None:
-        """Best-effort: wait for queued runtime extra_info and sync sub_task_id at recording start."""
-        deadline = time.time() + max(0.1, float(timeout_s))
-        samples = 0
+    def _wait_for_record_data(self, get_timeout_s: float = 0.05, max_attempts: int = 20) -> Optional[Any]:
+        """Best-effort: read one record payload from queue and put it back unchanged."""
+        timeout = max(0.001, get_timeout_s)
+        max_attempts = max(1, max_attempts)
 
-        while samples < max(1, int(max_samples)) and time.time() < deadline:
-            remaining = max(0.01, deadline - time.time())
+        for _ in range(max_attempts):
             payload = None
             try:
-                payload = self.record_queue.get(timeout=min(0.05, remaining))
+                payload = self.record_queue.get(timeout=timeout)
             except Empty:
                 continue
             except Exception as e:
-                self.logger.debug(f"Failed to read record_queue while syncing sub_task_id on start: {e}")
-                return
+                self.logger.exception(f"Failed to read record_queue at recording start: {e}")
+                return None
 
             try:
-                samples += 1
-                if isinstance(payload, tuple) and len(payload) == 3:
-                    _, _, step_extra = payload
-                    language_status = step_extra.get('language_status', {}) if isinstance(step_extra, dict) else {}
-                    sub_task_id = language_status.get('sub_task_id', None)
-                    if sub_task_id is not None:
-                        self.eval_recorder._sync_browse_on_runtime_step(
-                            eval_record_id=self.shared_data.eval_record_id.value,
-                            sub_task_id=sub_task_id,
-                        )
-                        return
+                return payload
             finally:
                 try:
-                    if payload is not None:
+                    if payload is not None and self.record_queue.empty():
                         self.record_queue.put(payload)
+                    else:
+                        self.logger.warning("Data skip put back because record queue is not empty.")
                 except Exception as requeue_e:
-                    self.logger.debug(f"Failed to requeue payload after sub_task_id sync attempt: {requeue_e}")
-                    return
+                    self.logger.exception(f"Failed to requeue payload after queue read: {requeue_e}")
+                    return None
+
+        return None
 
     def stop_recording(self):
         """
@@ -2238,6 +2236,10 @@ class DataRecordManager:
 
                 # self.logger.info('write process stopped!!! ')
             # finish recording for all recorders
+            if self.config.get('is_record_eval_log', False):
+                next_record_id = self.eval_recorder.end_recording()
+                self._sync_shared_data(eval_record_id=next_record_id)
+
             if self.config.get('is_record_episode', False):
                 episode_index, total_frames, total_videos = self.lerobot_recorder.end_record()
                 self._sync_shared_data(total_frames=total_frames,
@@ -2245,9 +2247,6 @@ class DataRecordManager:
                                     total_episodes=episode_index,
                                     chunks_size=self.config.lerobot['chunks_size']) # chunks_size doesn't change
 
-            if self.config.get('is_record_eval_log', False):
-                next_record_id = self.eval_recorder.end_recording()
-                self._sync_shared_data(eval_record_id=next_record_id)
         
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
