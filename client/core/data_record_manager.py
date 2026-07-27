@@ -1584,47 +1584,56 @@ class EvaluationResultRecorder:
         return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
     def pause(self) -> None:
         """Pause the timer for the currently running record."""
-        with self._lock:
-            running = self._find_running_unlocked()
-            if running is None or running.get('paused_at') is not None:
-                return
-            if running.get('status') != 'running':
-                return
-            running['paused_at'] = time.time()
-            self._dirty = True
+        pass
+        # with self._lock:
+        #     running = self._find_running_unlocked()
+        #     if running is None or running.get('paused_at') is not None:
+        #         return
+        #     if running.get('status') != 'running':
+        #         return
+        #     running['paused_at'] = time.time()
 
     def resume(self) -> None:
         """Resume the timer for the currently paused record."""
-        with self._lock:
-            running = self._find_running_unlocked()
-            if running is None or running.get('paused_at') is None:
-                return
-            paused_at = float(running.pop('paused_at'))
-            running['paused_s'] = round(float(running.get('paused_s', 0.0)) + (time.time() - paused_at), 1)
-            self._dirty = True
+        pass
+        # with self._lock:
+        #     running = self._find_running_unlocked()
+        #     if running is None or running.get('paused_at') is None:
+        #         return
+        #     paused_at = float(running.pop('paused_at'))
+        #     running['paused_s'] = round(float(running.get('paused_s', 0.0)) + (time.time() - paused_at), 1)
 
     def set_score(self, record_id: int, score: Optional[float]) -> None:
-        with self._lock:
-            rec = next((r for r in self._eval_records if r['id'] == record_id), None)
-            if rec is None:
-                return
-            rec['score'] = score
-            if score is not None and rec.get('status') not in ('running', 'pending'):
-                rec['status'] = 'scored'
-            if score is None and rec.get('status') == 'scored':
-                rec['status'] = 'switched'
-            self._dirty = True
+        # with self._lock:
+        rec = next((r for r in self._eval_records if r['id'] == record_id), None)
+        if rec is None:
+            return
+        rec['score'] = score
+        self._flush_to_disk()
+        # self._finalize_current_record
 
     def set_note(self, record_id: int, note: str) -> None:
-        with self._lock:
-            rec = next((r for r in self._eval_records if r['id'] == record_id), None)
-            if rec is None:
-                return
-            rec['note'] = note
+        # with self._lock:
+        rec = next((r for r in self._eval_records if r['id'] == record_id), None)
+        if rec is None:
+            return
+        rec['note'] = note
+        self._flush_to_disk()
 
     def delete_record(self, record_id: int) -> None:
-        with self._lock:
-            self._records = [r for r in self._eval_records if r['id'] != record_id]
+        # # delete in sequence
+        # for i, r in enumerate(self._eval_records):
+        #     if r.get('id') == record_id:
+        #         self._eval_records.pop(i)
+        #         break
+        # delete in reversed sequence, more efficient
+        for i in range(len(self._eval_records) - 1, -1, -1):
+            if self._eval_records[i].get('id') == record_id:
+                del self._eval_records[i]
+                break
+        self._flush_to_disk()
+        # with self._lock:
+        #     self._records = [r for r in self._eval_records if r['id'] != record_id]
 
     def _flush_to_disk(self) -> None:
         """Write records to JSON + CSV files."""
@@ -1708,9 +1717,8 @@ class EvaluationResultRecorder:
 
         self._stop_stats_thread()
 
-        with self._lock:
-            self._finalize_running_unlocked('interrupted')
-            self._dirty = True
+        # with self._lock:
+        #     self._finalize_running_unlocked('interrupted')
 
         self._flush_to_disk()
         self._stop_write_thread()
