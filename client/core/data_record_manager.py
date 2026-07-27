@@ -766,7 +766,6 @@ class LeRobotDatasetRecorder:
         self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}")
 
         # # Sync browse cache immediately so parse_episode_records can see the running episode.
-        # self._sync_browse_on_record_start(episode_chunk=episode_chunk, episode_index=episode_index)
         self.video_writers = self._create_video_writer(
             episode_chunk=episode_chunk,
             episode_index=episode_index
@@ -1244,69 +1243,26 @@ class EvaluationResultRecorder:
         self.config = evaluation_config
         self._episode_id = -1
         self._record_id = -1
+        self._eval_dir = None
         self._eval_records: List[Dict[str, Any]] = []
         self._eval_json_file = None
         self._eval_csv_file = None
 
         # Runtime cache for evaluation result browsing in main process.
-        self._eval_task_name: str = ""
-        self._eval_task_dir: str = ""
-        self._eval_cache_loaded: bool = False
-        self._eval_json_path: Optional[Path] = None
-        self._eval_json_mtime_ns: int = -1
         self._eval_browse_records: List[Dict[str, Any]] = []
 
     def set_task(self, save_path: str, episode_id: int = -1) -> None:
-        self._prepare_eval_dir(save_path=save_path)
-        self._set_eval_task_from_path(save_path=save_path)
+        """Set task information and prepare for data recording. Called in writer process"""
         self._episode_id = episode_id
-        self._load_existing_records()
+        if self._check_eval_dir(save_path=save_path):
+            self._load_existing_records()
 
-        # Refresh eval browse cache through shared load path.
-        self._eval_cache_loaded = False
-        self._ensure_eval_data_loaded()
-
-    def _set_eval_task_from_path(self, save_path: str) -> None:
-        """Update eval browsing target and clear cache when task path changes."""
-        task_dir = Path(save_path).resolve()
-        task_name = task_dir.name
-        task_dir_str = str(task_dir)
-
-        if self._eval_task_dir != task_dir_str:
-            self._eval_cache_loaded = False
-            self._eval_browse_records = []
-
-        self._eval_task_name = task_name
-        self._eval_task_dir = task_dir_str
-        self._eval_json_path = task_dir / "eval" / "eval_log.json"
-
-    def _resolve_eval_task_dir(self, selected_task: Optional[str], base_dir: Optional[Union[str, Path]] = None) -> Path:
-        """Resolve eval task directory from selected_task or current recorder state."""
-        if selected_task and str(selected_task).strip():
-            if base_dir is not None:
-                return Path(base_dir).resolve() / str(selected_task).strip()
-            if self._eval_task_dir:
-                parent_dir = Path(self._eval_task_dir).parent
-                if parent_dir.exists():
-                    return parent_dir / str(selected_task).strip()
-        if not self._eval_task_dir:
-            raise ValueError("Eval task directory is not initialized. Call set_task() first.")
-        return Path(self._eval_task_dir)
-
-    def _current_eval_json_mtime_ns(self) -> int:
-        if self._eval_json_path is None or (not self._eval_json_path.exists()):
-            return -1
-        try:
-            return int(self._eval_json_path.stat().st_mtime_ns)
-        except Exception:
-            return -1
-
-    def _reload_eval_browse_state(self) -> None:
-        """Reload evaluation browse records using eval_log.json."""
+    def _load_existing_browse_records(self) -> None:
+        """Load evaluation browse records using eval_log.json."""
         records: List[Dict[str, Any]] = []
-        if self._eval_json_path is not None and self._eval_json_path.exists():
+        if self._eval_json_file and os.path.exists(self._eval_json_file):
             try:
-                with self._eval_json_path.open("r", encoding="utf-8") as f:
+                with open(self._eval_json_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 if isinstance(data, list):
                     for row in data:
@@ -1320,40 +1276,19 @@ class EvaluationResultRecorder:
                             "note": row.get("note", ""),
                         })
             except Exception:
-                self.logger.warning("Failed to parse eval_log.json: %s", self._eval_json_path, exc_info=True)
+                self.logger.warning("Failed to parse eval_log.json: %s", self._eval_json_file, exc_info=True)
 
         records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
         self._eval_browse_records = records
-        self._eval_json_mtime_ns = self._current_eval_json_mtime_ns()
-        self._eval_cache_loaded = True
 
-    def _ensure_eval_data_loaded(self, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> None:
-        """Load eval records when task changes, cache is empty, or eval file updates."""
-        task_dir = self._resolve_eval_task_dir(selected_task=selected_task, base_dir=base_dir).resolve()
-        task_name = task_dir.name
-        task_dir_str = str(task_dir)
-
-        file_changed = False
-        if self._eval_task_dir == task_dir_str:
-            latest_mtime = self._current_eval_json_mtime_ns()
-            file_changed = latest_mtime != self._eval_json_mtime_ns
-
-        should_reload = (
-            (not self._eval_cache_loaded)
-            or (task_name != self._eval_task_name)
-            or (task_dir_str != self._eval_task_dir)
-            or file_changed
-        )
-        if not should_reload:
-            return
-
-        self._set_eval_task_from_path(save_path=str(task_dir))
-        self._reload_eval_browse_state()
-
-    def parse_eval_records(self, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
+    def parse_eval_records(self, selected_task: Optional[str] = None, base_dir: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return evaluation records in reverse order (newest first)."""
-        self._ensure_eval_data_loaded(selected_task=selected_task, base_dir=base_dir)
-        return list(self._eval_browse_records)
+        try:
+            if self._check_eval_dir(save_path = base_dir / selected_task):
+                self._load_existing_browse_records()
+        except Exception as e:
+            self.logger.exception(f"Failed to load eval records: {e}")
+        return self._eval_browse_records
 
     @staticmethod
     def _normalize_duration_1_decimal(duration: Any) -> Optional[float]:
@@ -1379,7 +1314,6 @@ class EvaluationResultRecorder:
 
     def _sync_browse_on_record_start(self, eval_record_id: int, sub_task_id: Optional[int] = None) -> None:
         """Sync main-process eval browse cache immediately when recording starts."""
-        self._ensure_eval_data_loaded()
         pending_record = {
             "id": int(eval_record_id),
             "sub_task_id": int(sub_task_id) if sub_task_id is not None else None,
@@ -1389,44 +1323,22 @@ class EvaluationResultRecorder:
         }
         self._upsert_eval_browse_record(pending_record)
 
-    # def _sync_browse_on_runtime_step(self, eval_record_id: int, sub_task_id: Optional[int]) -> None:
-    #     """Update running eval record in browse cache from main-process runtime data."""
-    #     if sub_task_id is None:
-    #         return
-    #     try:
-    #         sid = int(sub_task_id)
-    #     except Exception:
-    #         return
+    def _check_eval_dir(self, save_path: str) -> bool:
+        """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in main and writer process."""
+        load_data = False
+        if self._eval_dir is None or self._eval_dir != os.path.join(save_path, 'eval'):
+            load_data = True
+            self._eval_dir = os.path.join(save_path, 'eval')
+            # Ensure eval directory exists.
+            if not os.path.exists(self._eval_dir):
+                os.makedirs(self._eval_dir, exist_ok=True)
 
-    #     self._ensure_eval_data_loaded()
-    #     target_id = int(eval_record_id)
-    #     for idx, item in enumerate(self._eval_browse_records):
-    #         if int(item.get("id", -1)) != target_id:
-    #             continue
-    #         updated = dict(item)
-    #         updated["sub_task_id"] = sid
-    #         self._eval_browse_records[idx] = updated
-    #         return
-
-    #     self._upsert_eval_browse_record({
-    #         "id": target_id,
-    #         "sub_task_id": sid,
-    #         "duration": 0.0,
-    #         "score": None,
-    #         "note": "",
-    #     })
-
-    def _prepare_eval_dir(self, save_path: str):
-        self._eval_dir = os.path.join(save_path, 'eval')
-        # Ensure eval directory exists.
-        if not os.path.exists(self._eval_dir):
-            os.makedirs(self._eval_dir, exist_ok=True)
-
-        self._eval_json_file = os.path.join(self._eval_dir, 'eval_log.json')
-        self._eval_csv_file = os.path.join(self._eval_dir, 'eval_log.csv')
+            self._eval_json_file = os.path.join(self._eval_dir, 'eval_log.json')
+            self._eval_csv_file = os.path.join(self._eval_dir, 'eval_log.csv')
+        return load_data
 
     def _load_existing_records(self) -> None:
-        """Load existing records from eval_log.json; fallback to empty list."""
+        """Load existing records from eval_log.json; fallback to empty list. Called in main and writer process."""
         self._eval_records = []
         self._record_id = -1
         if not self._eval_json_file or (not os.path.exists(self._eval_json_file)):
@@ -1816,7 +1728,7 @@ class DataRecordManager:
         return os.path.join(self.project_root_path, rel_save_dir, task_name + '_' + date_str)
 
     def set_task(self, task: str) -> None:
-        """Update save path by task/date before a new recording starts."""
+        """Update save path by task/date before a new recording starts. Called in the writer process."""
         # avoid reload data from file
         # if self.current_task == task:
         #     self.logger.warning(f"{self.current_task} is already set, return.")
