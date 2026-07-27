@@ -1913,11 +1913,11 @@ class RecordStartRequest(BaseModel):
     save_items: Optional[list[str]] = None
 
 
-class EvalScoreUpdateRequest(BaseModel):
+class EvalResultCRUDRequest(BaseModel):
     task: str
     record_id: int
     score: Optional[float] = None
-
+    note: str = ""
 
 def _require_runtime(command_name: str):
     vla_client = client_state.vla_client
@@ -2072,64 +2072,74 @@ async def client_record_stop():
         raise HTTPException(500, str(e))
 
 
+def _get_eval_recorder():
+    with client_state.lock:
+        vla_client = client_state.vla_client
+
+    if vla_client is None or getattr(vla_client, 'data_record_manager', None) is None:
+        raise HTTPException(400, 'Client data recorder is not initialized.')
+
+    eval_recorder = getattr(vla_client.data_record_manager, 'eval_recorder', None)
+    if eval_recorder is None:
+        raise HTTPException(400, 'Evaluation recorder is not initialized.')
+
+    return eval_recorder
+
+
 @app.post('/api/client/record/eval/score')
-async def client_record_eval_score(req: EvalScoreUpdateRequest):
-    task = str(req.task or '').strip()
-    if not task:
-        raise HTTPException(400, 'Task is required.')
+async def client_record_eval_score(req: EvalResultCRUDRequest):
+    target_id = int(req.record_id)
+    score = float(req.score)
+    eval_recorder = _get_eval_recorder()
 
-    save_dir = str(getattr(getattr(client_state.config, 'record', None), 'save_dir', 'data/recording') or 'data/recording')
-    base_dir = ROOT / save_dir.lstrip('/').lstrip('\\')
-    task_dir = (base_dir / task).resolve()
-    try:
-        task_dir.relative_to(base_dir.resolve())
-    except ValueError:
-        raise HTTPException(400, 'Task path is outside recording directory.')
-
-    eval_json_path = task_dir / 'eval' / 'eval_log.json'
-    if not eval_json_path.exists():
-        raise HTTPException(404, f'eval_log.json not found for task: {task}')
+    rows = getattr(eval_recorder, '_eval_records', None)
+    if not isinstance(rows, list):
+        raise HTTPException(500, 'Eval records are unavailable.')
 
     try:
-        with eval_json_path.open('r', encoding='utf-8') as f:
-            rows = json.load(f)
-        if not isinstance(rows, list):
-            raise HTTPException(400, 'Invalid eval_log.json format.')
-
-        target_id = int(req.record_id)
-        found = False
-        for row in rows:
-            if not isinstance(row, dict):
-                continue
-            if int(row.get('id', -1)) != target_id:
-                continue
-            row['score'] = req.score
-            found = True
-            break
-
-        if not found:
-            raise HTTPException(404, f'Eval record not found: {target_id}')
-
-        with eval_json_path.open('w', encoding='utf-8') as f:
-            json.dump(rows, f, ensure_ascii=False, indent=2)
-
-        # Best-effort: refresh in-memory eval browse cache in main process.
-        try:
-            with client_state.lock:
-                vla_client = client_state.vla_client
-            if vla_client is not None and getattr(vla_client, 'data_record_manager', None) is not None:
-                eval_recorder = getattr(vla_client.data_record_manager, 'eval_recorder', None)
-                if eval_recorder is not None:
-                    eval_recorder._eval_cache_loaded = False
-                    eval_recorder._ensure_eval_data_loaded(selected_task=task, base_dir=base_dir)
-        except Exception as cache_e:
-            logger.debug(f'Failed to refresh eval browse cache after score update: {cache_e}')
-
-        return {'status': 'ok', 'record_id': target_id, 'score': req.score}
+        eval_recorder.set_score(record_id=target_id, score=score)
+        return {'status': 'ok', 'task': req.task, 'record_id': target_id, 'score': score}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(500, f'Failed to update eval score: {e}')
+
+
+@app.post('/api/client/record/eval/note')
+async def client_record_eval_note(req: EvalResultCRUDRequest):
+    target_id = int(req.record_id)
+    note = str(req.note)
+    eval_recorder, task = _get_eval_recorder()
+
+    rows = getattr(eval_recorder, '_eval_records', None)
+    if not isinstance(rows, list):
+        raise HTTPException(500, 'Eval records are unavailable.')
+
+    try:
+        eval_recorder.set_note(record_id=target_id, note=note)
+        return {'status': 'ok', 'task': task, 'record_id': target_id, 'note': str(req.note or '')}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f'Failed to update eval note: {e}')
+
+
+@app.delete('/api/client/record/eval/delete')
+async def client_record_eval_delete(req: EvalResultCRUDRequest):
+    target_id = int(req.record_id)
+    eval_recorder, task = _get_eval_recorder()
+
+    rows = getattr(eval_recorder, '_eval_records', None)
+    if not isinstance(rows, list):
+        raise HTTPException(500, 'Eval records are unavailable.')
+
+    try:
+        eval_recorder.delete_record(record_id=target_id)
+        return {'status': 'ok', 'task': task, 'record_id': target_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f'Failed to delete eval record: {e}')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
