@@ -1377,17 +1377,44 @@ class EvaluationResultRecorder:
             self._eval_browse_records.append(record)
         self._eval_browse_records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
 
-    def _sync_browse_on_record_start(self, eval_record_id: int) -> None:
+    def _sync_browse_on_record_start(self, eval_record_id: int, sub_task_id: Optional[int] = None) -> None:
         """Sync main-process eval browse cache immediately when recording starts."""
         self._ensure_eval_data_loaded()
         pending_record = {
             "id": int(eval_record_id),
-            "sub_task_id": None,
+            "sub_task_id": int(sub_task_id) if sub_task_id is not None else None,
             "duration": 0.0,
             "score": None,
             "note": "",
         }
         self._upsert_eval_browse_record(pending_record)
+
+    def _sync_browse_on_runtime_step(self, eval_record_id: int, sub_task_id: Optional[int]) -> None:
+        """Update running eval record in browse cache from main-process runtime data."""
+        if sub_task_id is None:
+            return
+        try:
+            sid = int(sub_task_id)
+        except Exception:
+            return
+
+        self._ensure_eval_data_loaded()
+        target_id = int(eval_record_id)
+        for idx, item in enumerate(self._eval_browse_records):
+            if int(item.get("id", -1)) != target_id:
+                continue
+            updated = dict(item)
+            updated["sub_task_id"] = sid
+            self._eval_browse_records[idx] = updated
+            return
+
+        self._upsert_eval_browse_record({
+            "id": target_id,
+            "sub_task_id": sid,
+            "duration": 0.0,
+            "score": None,
+            "note": "",
+        })
 
     def _prepare_eval_dir(self, save_path: str):
         self._eval_dir = os.path.join(save_path, 'eval')
@@ -1974,9 +2001,13 @@ class DataRecordManager:
             if self.config.get('is_record_eval_log', False):
                 self.eval_recorder._sync_browse_on_record_start(
                     eval_record_id=self.shared_data.eval_record_id.value,
+                    sub_task_id=None,
                 )
 
             self.shared_data.running.value = True
+            if self.config.get('is_record_eval_log', False):
+                self._sync_eval_sub_task_id_from_record_queue_start(timeout_s=1.0)
+
             command = {
                 "command": "start",
                 "task_id": task_id,
@@ -1985,6 +2016,42 @@ class DataRecordManager:
             self.logger.info(f"Writer task dispatched successfully. session_id={session_id}")
         except Exception as e:
             self.logger.exception(f"Failed to start writer task: {e}")
+
+    def _sync_eval_sub_task_id_from_record_queue_start(self, timeout_s: float = 1.0, max_samples: int = 20) -> None:
+        """Best-effort: wait for queued runtime extra_info and sync sub_task_id at recording start."""
+        deadline = time.time() + max(0.1, float(timeout_s))
+        samples = 0
+
+        while samples < max(1, int(max_samples)) and time.time() < deadline:
+            remaining = max(0.01, deadline - time.time())
+            payload = None
+            try:
+                payload = self.record_queue.get(timeout=min(0.05, remaining))
+            except Empty:
+                continue
+            except Exception as e:
+                self.logger.debug(f"Failed to read record_queue while syncing sub_task_id on start: {e}")
+                return
+
+            try:
+                samples += 1
+                if isinstance(payload, tuple) and len(payload) == 3:
+                    _, _, step_extra = payload
+                    language_status = step_extra.get('language_status', {}) if isinstance(step_extra, dict) else {}
+                    sub_task_id = language_status.get('sub_task_id', None)
+                    if sub_task_id is not None:
+                        self.eval_recorder._sync_browse_on_runtime_step(
+                            eval_record_id=self.shared_data.eval_record_id.value,
+                            sub_task_id=sub_task_id,
+                        )
+                        return
+            finally:
+                try:
+                    if payload is not None:
+                        self.record_queue.put(payload)
+                except Exception as requeue_e:
+                    self.logger.debug(f"Failed to requeue payload after sub_task_id sync attempt: {requeue_e}")
+                    return
 
     def stop_recording(self):
         """

@@ -1913,6 +1913,12 @@ class RecordStartRequest(BaseModel):
     save_items: Optional[list[str]] = None
 
 
+class EvalScoreUpdateRequest(BaseModel):
+    task: str
+    record_id: int
+    score: Optional[float] = None
+
+
 def _require_runtime(command_name: str):
     vla_client = client_state.vla_client
     robot = client_state.robot
@@ -2064,6 +2070,66 @@ async def client_record_stop():
         raise
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+@app.post('/api/client/record/eval/score')
+async def client_record_eval_score(req: EvalScoreUpdateRequest):
+    task = str(req.task or '').strip()
+    if not task:
+        raise HTTPException(400, 'Task is required.')
+
+    save_dir = str(getattr(getattr(client_state.config, 'record', None), 'save_dir', 'data/recording') or 'data/recording')
+    base_dir = ROOT / save_dir.lstrip('/').lstrip('\\')
+    task_dir = (base_dir / task).resolve()
+    try:
+        task_dir.relative_to(base_dir.resolve())
+    except ValueError:
+        raise HTTPException(400, 'Task path is outside recording directory.')
+
+    eval_json_path = task_dir / 'eval' / 'eval_log.json'
+    if not eval_json_path.exists():
+        raise HTTPException(404, f'eval_log.json not found for task: {task}')
+
+    try:
+        with eval_json_path.open('r', encoding='utf-8') as f:
+            rows = json.load(f)
+        if not isinstance(rows, list):
+            raise HTTPException(400, 'Invalid eval_log.json format.')
+
+        target_id = int(req.record_id)
+        found = False
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            if int(row.get('id', -1)) != target_id:
+                continue
+            row['score'] = req.score
+            found = True
+            break
+
+        if not found:
+            raise HTTPException(404, f'Eval record not found: {target_id}')
+
+        with eval_json_path.open('w', encoding='utf-8') as f:
+            json.dump(rows, f, ensure_ascii=False, indent=2)
+
+        # Best-effort: refresh in-memory eval browse cache in main process.
+        try:
+            with client_state.lock:
+                vla_client = client_state.vla_client
+            if vla_client is not None and getattr(vla_client, 'data_record_manager', None) is not None:
+                eval_recorder = getattr(vla_client.data_record_manager, 'eval_recorder', None)
+                if eval_recorder is not None:
+                    eval_recorder._eval_cache_loaded = False
+                    eval_recorder._ensure_eval_data_loaded(selected_task=task, base_dir=base_dir)
+        except Exception as cache_e:
+            logger.debug(f'Failed to refresh eval browse cache after score update: {cache_e}')
+
+        return {'status': 'ok', 'record_id': target_id, 'score': req.score}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f'Failed to update eval score: {e}')
 
 
 # ─────────────────────────────────────────────────────────────────────────────

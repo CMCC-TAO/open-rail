@@ -264,6 +264,25 @@ async function renderRecordingFileList(data) {
   });
 }
 
+function getEvaluationScoreOptions() {
+  const fromRecord = App?.config?.record?.evaluation?.scores;
+  const fromRoot = App?.config?.evaluation?.scores;
+  const scores = Array.isArray(fromRecord) ? fromRecord : (Array.isArray(fromRoot) ? fromRoot : []);
+  return scores.filter(v => v !== null && v !== undefined && v !== '');
+}
+
+async function updateEvaluationScore(recordId, score) {
+  if (!App.recordingTask) return;
+  await apiFetch('/api/client/record/eval/score', {
+    method: 'POST',
+    body: JSON.stringify({
+      task: App.recordingTask,
+      record_id: Number(recordId),
+      score,
+    }),
+  });
+}
+
 function renderEvaluationResults(evalResults = []) {
   const tbody = $('eval-log-tbody');
   const countEl = $('eval-log-count');
@@ -283,26 +302,59 @@ function renderEvaluationResults(evalResults = []) {
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;');
+  const escAttr = (val) => esc(val).replaceAll('"', '&quot;');
+  const scoreOptions = getEvaluationScoreOptions();
 
   tbody.innerHTML = list.map((item) => {
     const id = Number(item?.id ?? -1);
     const subTask = item?.sub_task_id ?? '';
     const durationNum = Number(item?.duration);
     const duration = Number.isFinite(durationNum) ? durationNum.toFixed(1) : '';
-    const score = item?.score ?? '';
     const note = item?.note ?? '';
+    const currentScore = (item?.score === null || item?.score === undefined) ? '' : String(item.score);
+    const scoreOptionsHtml = ['<option value=""></option>']
+      .concat(scoreOptions.map((opt) => {
+        const val = String(opt);
+        const selected = val === currentScore ? ' selected' : '';
+        return `<option value="${escAttr(val)}"${selected}>${esc(val)}</option>`;
+      }))
+      .join('');
 
     return `
       <tr>
         <td class="col-id">${esc(id)}</td>
         <td class="col-task">${esc(subTask)}</td>
         <td class="col-dur">${esc(duration)}</td>
-        <td class="col-score">${esc(score)}</td>
+        <td class="col-score"><select class="eval-log-score-sel" data-record-id="${escAttr(id)}">${scoreOptionsHtml}</select></td>
         <td class="col-note">${esc(note)}</td>
         <td class="col-del"></td>
       </tr>
     `;
   }).join('');
+
+  tbody.querySelectorAll('.eval-log-score-sel[data-record-id]').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      const recordId = Number(sel.getAttribute('data-record-id'));
+      if (!Number.isFinite(recordId)) return;
+
+      const raw = sel.value;
+      const score = raw === '' ? null : Number(raw);
+      if (raw !== '' && !Number.isFinite(score)) {
+        toast('Invalid score value.', 'warn');
+        await refreshRecordingFileList();
+        return;
+      }
+
+      sel.disabled = true;
+      try {
+        await updateEvaluationScore(recordId, score);
+      } catch (_) {
+        await refreshRecordingFileList();
+      } finally {
+        sel.disabled = false;
+      }
+    });
+  });
 }
 
 async function deleteRecordingEpisode(episodeId) {
