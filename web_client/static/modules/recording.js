@@ -99,6 +99,7 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
     syncRecordingSwitchUI();
     return false;
   }
+  // if (refreshList) await refreshRecordingFileList();
 
   try {
     if (!silent) toast('Recording stopping.', 'info');
@@ -113,9 +114,9 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
     App.config.record.switch = false;
 
     renderRecordingConfigTree(App.config);
-    if (!silent) toast('Recording stopped.', 'warn');
     if (refreshList) await refreshRecordingFileList();
     syncRecordingSwitchUI();
+    if (!silent) toast('Recording stopped.', 'warn');
     return true;
   } catch (_) {
     syncRecordingSwitchUI();
@@ -132,10 +133,13 @@ async function renderRecordingFileList(data) {
   const episodes = Array.isArray(data?.episodes)
     ? data.episodes
     : (Array.isArray(data?.files) ? data.files : []);
+  const evalResults = Array.isArray(data?.eval_results) ? data.eval_results : [];
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
   const chunks = Array.isArray(data?.chunks) ? data.chunks : [];
   const serverSelectedTask = typeof data?.selected_task === 'string' ? data.selected_task : '';
   const serverSelectedChunk = typeof data?.selected_chunk === 'string' ? data.selected_chunk : '';
+
+  renderEvaluationResults(evalResults);
 
   if (taskSel) {
     const prevTasks = Array.isArray(App.recordingTasksSnapshot) ? App.recordingTasksSnapshot : [];
@@ -260,6 +264,99 @@ async function renderRecordingFileList(data) {
   });
 }
 
+function getEvaluationScoreOptions() {
+  const fromRecord = App?.config?.record?.evaluation?.scores;
+  const fromRoot = App?.config?.evaluation?.scores;
+  const scores = Array.isArray(fromRecord) ? fromRecord : (Array.isArray(fromRoot) ? fromRoot : []);
+  return scores.filter(v => v !== null && v !== undefined && v !== '');
+}
+
+async function updateEvaluationScore(recordId, score) {
+  if (!App.recordingTask) return;
+  await apiFetch('/api/client/record/eval/score', {
+    method: 'POST',
+    body: JSON.stringify({
+      task: App.recordingTask,
+      record_id: Number(recordId),
+      score,
+    }),
+  });
+}
+
+function renderEvaluationResults(evalResults = []) {
+  const tbody = $('eval-log-tbody');
+  const countEl = $('eval-log-count');
+  if (!tbody) return;
+
+  const list = Array.isArray(evalResults) ? evalResults.slice() : [];
+  list.sort((a, b) => Number(b?.id ?? -1) - Number(a?.id ?? -1));
+
+  if (countEl) countEl.textContent = String(list.length);
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="eval-log-empty">(empty)</td></tr>';
+    return;
+  }
+
+  const esc = (val) => String(val ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+  const escAttr = (val) => esc(val).replaceAll('"', '&quot;');
+  const scoreOptions = getEvaluationScoreOptions();
+
+  tbody.innerHTML = list.map((item) => {
+    const id = Number(item?.id ?? -1);
+    const subTask = item?.sub_task_id ?? '';
+    const durationNum = Number(item?.duration);
+    const duration = Number.isFinite(durationNum) ? durationNum.toFixed(1) : '';
+    const note = item?.note ?? '';
+    const currentScore = (item?.score === null || item?.score === undefined) ? '' : String(item.score);
+    const scoreOptionsHtml = ['<option value=""></option>']
+      .concat(scoreOptions.map((opt) => {
+        const val = String(opt);
+        const selected = val === currentScore ? ' selected' : '';
+        return `<option value="${escAttr(val)}"${selected}>${esc(val)}</option>`;
+      }))
+      .join('');
+
+    return `
+      <tr>
+        <td class="col-id">${esc(id)}</td>
+        <td class="col-task">${esc(subTask)}</td>
+        <td class="col-dur">${esc(duration)}</td>
+        <td class="col-score"><select class="eval-log-score-sel" data-record-id="${escAttr(id)}">${scoreOptionsHtml}</select></td>
+        <td class="col-note">${esc(note)}</td>
+        <td class="col-del"></td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.querySelectorAll('.eval-log-score-sel[data-record-id]').forEach((sel) => {
+    sel.addEventListener('change', async () => {
+      const recordId = Number(sel.getAttribute('data-record-id'));
+      if (!Number.isFinite(recordId)) return;
+
+      const raw = sel.value;
+      const score = raw === '' ? null : Number(raw);
+      if (raw !== '' && !Number.isFinite(score)) {
+        toast('Invalid score value.', 'warn');
+        await refreshRecordingFileList();
+        return;
+      }
+
+      sel.disabled = true;
+      try {
+        await updateEvaluationScore(recordId, score);
+      } catch (_) {
+        await refreshRecordingFileList();
+      } finally {
+        sel.disabled = false;
+      }
+    });
+  });
+}
+
 async function deleteRecordingEpisode(episodeId) {
   if (!App.recordingTask || !episodeId) return;
   const ok = window.confirm(`Delete ${episodeId} ? This cannot be undone.`);
@@ -288,15 +385,16 @@ async function refreshRecordingFileList() {
     const res = await apiFetch(`/api/client/record/episodes${q ? `?${q}` : ''}`);
     renderRecordingFileList(res);
 
-    const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
-    if (changed) {
-      const params2 = new URLSearchParams();
-      if (App.recordingTask) params2.set('task', App.recordingTask);
-      if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
-      const q2 = params2.toString();
-      const res2 = await apiFetch(`/api/client/record/episodes${q2 ? `?${q2}` : ''}`);
-      renderRecordingFileList(res2);
-    }
+    // const hasExplicitRequest = !!(requestedTask || requestedChunk);
+    // const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
+    // if (hasExplicitRequest && changed) {
+    //   const params2 = new URLSearchParams();
+    //   if (App.recordingTask) params2.set('task', App.recordingTask);
+    //   if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
+    //   const q2 = params2.toString();
+    //   const res2 = await apiFetch(`/api/client/record/episodes${q2 ? `?${q2}` : ''}`);
+    //   renderRecordingFileList(res2);
+    // }
   } catch (_) { /* toasted */ }
 }
 
@@ -323,9 +421,9 @@ function startRecordingFileListPolling() {
 function syncRecordingFileListPolling() {
   if (isRecordingPanelExpanded()) {
     refreshRecordingFileList();
-    startRecordingFileListPolling();
+    // startRecordingFileListPolling();
   } else {
-    stopRecordingFileListPolling();
+    // stopRecordingFileListPolling();
   }
 }
 

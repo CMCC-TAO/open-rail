@@ -673,61 +673,13 @@ def _collect_stats() -> dict:
         return base
 
     try:
-        base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", False))
-        base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", False))
-        base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", False))
-        base["img_proc_time"] = float(getattr(vla_client, "image_process_time", 0.0))
-        base["current_prob_progress"] = float(getattr(vla_client, "current_prob_progress", 0.0))
-        base["infer_count"]     = int(vla_client.realtime_data_manager.infer_count)
-        base["avg_infer_time"]  = float(vla_client.realtime_data_manager.avg_infer_time)
-        base["avg_comm_time"]  = float(vla_client.realtime_data_manager.avg_comm_time)
-        base["avg_intra_traj_time"]   = float(vla_client.realtime_data_manager.avg_intra_traj_time)
-        base["avg_inter_traj_time"]   = float(vla_client.realtime_data_manager.avg_inter_traj_time)
-        base["obv_fps"]         = float(vla_client.realtime_data_manager.get_observe_fps())
-        base["language"]        = str(vla_client.task_language_manager.currt_language_instruction)
-        # 添加 ZMQ 客户端连接状态
-        if hasattr(vla_client, 'vla_zmq') and vla_client.vla_zmq is not None:
-            base["zmq_connected"] = bool(getattr(vla_client.vla_zmq, "is_connected", False))
-            # Update server_ip, server_port, model_type, model_path, lang_cmd
-            base.update(vla_client.vla_zmq.get_heartbeat_info())
-        
-        # Use show_thread_lock to snapshot mutable state safely (written by observe/control threads)
-        # acquired = vla_client.show_thread_lock.acquire(timeout=0.05)
-        # try:
-        #     # current_state  = list(vla_client.info_current_state)
-        #     # current_action = list(vla_client.info_current_action)
-        #     # info_obs = dict(vla_client.info_obs)
-        #     # info_act = dict(vla_client.info_act)
-        # finally:
-        #     pass
-            # if acquired:
-            #     vla_client.show_thread_lock.release()
-        # base["current_state"]   = [round(float(x), 4) for x in current_state]
-        # base["current_action"]  = [round(float(x), 4) for x in current_action]
-        # base["info_obs"]        = {k: str(v) for k, v in info_obs.items()}
-        # base["info_act"]        = {k: str(v) for k, v in info_act.items()}
-        try:
-            # base["current_prob_progress"] = float(info_act.get("current_prob_progress", 0.0))
-            base["sub_task_id"] = int(vla_client.config.language.sub_task_id) if hasattr(vla_client.config.language, 'sub_task_id') else None
-            # print(f"Debug: sub_task_id: {vla_client.config.language.sub_task_id}")
-        except Exception as e:
-            # base["current_prob_progress"] = 0.0
-            logger.error("Failed to get sub task id from language config: {e}")
-        # base["debug_info"]      = str(vla_client.debug_info)
-        # base["config_snapshot"] = {
-        #     "fps":              cfg.observer.fps,
-        #     "wait_time":        cfg.controller.wait_time,
-        #     "inter_chunk_mode": cfg.inter_chunk.inter_chunk_mode,
-        #     "intra_chunk_mode": cfg.intra_chunk.intra_chunk_mode,
-        #     "gripper_offset":   cfg.controller.gripper_offset,
-        #     "preprocess":       cfg.preprocess,
-        #     "robots_type":      cfg.robots.type.value if hasattr(cfg.robots.type, 'value') else str(cfg.robots.type),
-        #     "record":           cfg.record.switch,
-        #     "task_progress_threshold": cfg.task_progress_threshold,
-        # }
+        base.update(vla_client.thread_status)
+        base.update(vla_client.runtime_status)
+        base.update(vla_client.language_status)
+        base.update(vla_client.server_status)
     except Exception as e:
         # base["debug_info"] = f"stats error: {e}"
-        logger.error(f"Failed to collect stats: {e}")
+        logger.exception(f"Failed to collect stats: {e}")
     return base
 
 
@@ -850,10 +802,12 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
             "selected_chunk": "",
             "episodes": [],
             "files": [],
+            "eval_results": [],
         }
 
     tasks = []
     episodes = []
+    eval_results = []
     chunk_values: list[str] = []
     selected_chunk = ""
     try:
@@ -864,17 +818,38 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
         selected_task = task if task in tasks else (tasks[0] if tasks else "")
 
         if selected_task:
-            from client.core.data_record_manager import LeRobotDatasetParser
+            lerobot_recorder = None
+            eval_recorder = None
+            with client_state.lock:
+                vla_client = client_state.vla_client
+            if vla_client is not None and getattr(vla_client, "data_record_manager", None) is not None:
+                drm = vla_client.data_record_manager
+                lerobot_recorder = getattr(drm, "lerobot_recorder", None)
+                eval_recorder = getattr(drm, "eval_recorder", None)
 
-            task_dir = base_dir / selected_task
-            parser = LeRobotDatasetParser(str(task_dir), logger=logger)
-            chunk_ids = parser.get_chunk_ids()
-            chunk_values = [f"{x:03d}" for x in chunk_ids]
-            if chunk_values:
-                selected_chunk = chunk if chunk in chunk_values else chunk_values[-1]
-                episodes = parser.parse_episode_records(chunk_id=int(selected_chunk))
-            else:
-                episodes = parser.parse_episode_records()
+            if lerobot_recorder is not None:
+                episodes_all = lerobot_recorder.parse_episode_records(selected_task=selected_task, base_dir=base_dir)
+                chunk_ids = sorted({int(e.get("chunk", -1)) for e in episodes_all if int(e.get("chunk", -1)) >= 0})
+                chunk_values = [f"{x:03d}" for x in chunk_ids]
+                if chunk_values:
+                    selected_chunk = chunk if chunk in chunk_values else chunk_values[-1]
+                    episodes = [e for e in episodes_all if int(e.get("chunk", -1)) == int(selected_chunk)]
+                else:
+                    episodes = episodes_all
+
+            if eval_recorder is not None and hasattr(eval_recorder, "parse_eval_records"):
+                eval_results = eval_recorder.parse_eval_records(selected_task=selected_task, base_dir=base_dir)
+            # else:
+            #     from client.core.data_record_manager import LeRobotDatasetParser
+
+            #     parser = LeRobotDatasetParser(str(task_dir), logger=logger)
+            #     chunk_ids = parser.get_chunk_ids()
+            #     chunk_values = [f"{x:03d}" for x in chunk_ids]
+            #     if chunk_values:
+            #         selected_chunk = chunk if chunk in chunk_values else chunk_values[-1]
+            #         episodes = parser.parse_episode_records(chunk_id=int(selected_chunk))
+            #     else:
+            #         episodes = parser.parse_episode_records()
     except Exception as e:
         raise HTTPException(500, f"Failed to list recording files: {e}")
 
@@ -887,6 +862,7 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
         "selected_chunk": selected_chunk,
         "episodes": episodes,
         "files": episodes,
+        "eval_results": eval_results,
     }
 
 
@@ -918,10 +894,20 @@ async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
         raise HTTPException(404, f"Task directory not found: {task}")
 
     try:
-        from client.core.data_record_manager import LeRobotDatasetParser
+        recorder = None
+        with client_state.lock:
+            vla_client = client_state.vla_client
+        if vla_client is not None and getattr(vla_client, "data_record_manager", None) is not None:
+            recorder = getattr(vla_client.data_record_manager, "lerobot_recorder", None)
 
-        parser = LeRobotDatasetParser(str(task_dir), logger=logger)
-        result = parser.delete_episode(req.episode_id)
+        if recorder is not None:
+            result = recorder.delete_episode(req.episode_id, selected_task=task, base_dir=base_dir)
+        else:
+            from client.core.data_record_manager import LeRobotDatasetParser
+
+            parser = LeRobotDatasetParser(str(task_dir), logger=logger)
+            result = parser.delete_episode(req.episode_id)
+
         if not result.get("deleted"):
             raise HTTPException(404, f"Episode not found: {req.episode_id}")
         return {"status": "ok", "result": result}
@@ -2011,6 +1997,12 @@ class RecordStartRequest(BaseModel):
     save_items: Optional[list[str]] = None
 
 
+class EvalResultCRUDRequest(BaseModel):
+    task: str
+    record_id: int
+    score: Optional[float] = None
+    note: str = ""
+
 def _require_runtime(command_name: str):
     vla_client = client_state.vla_client
     robot = client_state.robot
@@ -2102,30 +2094,31 @@ async def client_language_set(req: LanguageSetRequest):
 
 @app.post('/api/client/record/start')
 async def client_record_start(req: RecordStartRequest):
-    vla_client, _ = _require_runtime('start_recording')
     try:
-        save_items = req.save_items if isinstance(req.save_items, list) else []
-        client_state.config.record.switch = True
-        client_state.config.record.record_exp_data = ('ExpData' in save_items)
-        task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
-        if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
-            try:
-                from client.core.data_record_manager import DataRecordManager
-                vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record)
-                vla_client.data_record_manager.set_task(task_id)
-            except Exception as e:
-                raise HTTPException(500, f'Failed to initialize recorder: {e}')
-        else:
-            vla_client.data_record_manager.set_task(task_id)
+        vla_client, _ = _require_runtime('start_recording')
+        # save_items = req.save_items if isinstance(req.save_items, list) else []
+        # client_state.config.record.switch = True
+        # # client_state.config.record.record_exp_data = ('ExpData' in save_items)
+        # task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
+        # if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
+        #     try:
+        #         from client.core.data_record_manager import DataRecordManager
+        #         vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record)
+        #         vla_client.data_record_manager.set_task(task_id)
+        #     except Exception as e:
+        #         raise HTTPException(500, f'Failed to initialize recorder: {e}')
+        # else:
+        #     vla_client.data_record_manager.set_task(task_id)
 
-        updated_camera_shapes = {}
-        if not bool(getattr(client_state.config.record, 'resize', False)):
-            try:
-                updated_camera_shapes = vla_client.update_camera_shape()
-            except Exception as e:
-                logger.warning(f'Failed to update camera shapes before start_recording: {e}')
+        # updated_camera_shapes = {}
+        # if not bool(getattr(client_state.config.record, 'resize', False)):
+        #     try:
+        #         updated_camera_shapes = vla_client.update_camera_shape()
+        #     except Exception as e:
+        #         logger.exception(f'Failed to update camera shapes before start_recording: {e}')
 
-        vla_client.data_record_manager.start_recording()
+        vla_client.start_recording()
+        # await asyncio.to_thread(vla_client.data_record_manager.start_recording)
         current_recording_task = str(getattr(vla_client.data_record_manager, 'current_task', '') or '')
         current_recording_dir = ''
         try:
@@ -2134,12 +2127,13 @@ async def client_record_start(req: RecordStartRequest):
                 current_recording_dir = Path(save_path).name
         except Exception:
             current_recording_dir = ''
+        # print(F"DEBUG: record started.")
         return {
             'status': 'ok',
             'command': 'start_recording',
             'recording_task': current_recording_task,
             'recording_task_dir': current_recording_dir,
-            'updated_camera_shapes': updated_camera_shapes,
+            # 'updated_camera_shapes': updated_camera_shapes,
         }
     except HTTPException:
         raise
@@ -2149,17 +2143,87 @@ async def client_record_start(req: RecordStartRequest):
 
 @app.post('/api/client/record/stop')
 async def client_record_stop():
-    vla_client, _ = _require_runtime('stop_recording')
     try:
-        if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
-            raise HTTPException(400, 'Recorder is not initialized.')
-        client_state.config.record.switch = False
-        vla_client.data_record_manager.stop_recording()
+        # if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
+        #     raise HTTPException(400, 'Recorder is not initialized.')
+        # client_state.config.record.switch = False
+        vla_client, _ = _require_runtime('stop_recording')
+        vla_client.stop_recording()
         return {'status': 'ok', 'command': 'stop_recording'}
     except HTTPException:
         raise
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+def _get_eval_recorder():
+    with client_state.lock:
+        vla_client = client_state.vla_client
+
+    if vla_client is None or getattr(vla_client, 'data_record_manager', None) is None:
+        raise HTTPException(400, 'Client data recorder is not initialized.')
+
+    eval_recorder = getattr(vla_client.data_record_manager, 'eval_recorder', None)
+    if eval_recorder is None:
+        raise HTTPException(400, 'Evaluation recorder is not initialized.')
+
+    return eval_recorder
+
+
+@app.post('/api/client/record/eval/score')
+async def client_record_eval_score(req: EvalResultCRUDRequest):
+    target_id = int(req.record_id)
+    score = float(req.score)
+    eval_recorder = _get_eval_recorder()
+
+    rows = getattr(eval_recorder, '_eval_records', None)
+    if not isinstance(rows, list):
+        raise HTTPException(500, 'Eval records are unavailable.')
+
+    try:
+        eval_recorder.set_score(record_id=target_id, score=score)
+        return {'status': 'ok', 'task': req.task, 'record_id': target_id, 'score': score}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f'Failed to update eval score: {e}')
+
+
+@app.post('/api/client/record/eval/note')
+async def client_record_eval_note(req: EvalResultCRUDRequest):
+    target_id = int(req.record_id)
+    note = str(req.note)
+    eval_recorder, task = _get_eval_recorder()
+
+    rows = getattr(eval_recorder, '_eval_records', None)
+    if not isinstance(rows, list):
+        raise HTTPException(500, 'Eval records are unavailable.')
+
+    try:
+        eval_recorder.set_note(record_id=target_id, note=note)
+        return {'status': 'ok', 'task': task, 'record_id': target_id, 'note': str(req.note or '')}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f'Failed to update eval note: {e}')
+
+
+@app.delete('/api/client/record/eval/delete')
+async def client_record_eval_delete(req: EvalResultCRUDRequest):
+    target_id = int(req.record_id)
+    eval_recorder, task = _get_eval_recorder()
+
+    rows = getattr(eval_recorder, '_eval_records', None)
+    if not isinstance(rows, list):
+        raise HTTPException(500, 'Eval records are unavailable.')
+
+    try:
+        eval_recorder.delete_record(record_id=target_id)
+        return {'status': 'ok', 'task': task, 'record_id': target_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f'Failed to delete eval record: {e}')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2211,4 +2275,5 @@ if __name__ == "__main__":
         port=9000,
         reload=False,
         log_level="info",
+        timeout_keep_alive=60,
     )
