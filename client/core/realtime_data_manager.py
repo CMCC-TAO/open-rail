@@ -523,6 +523,17 @@ class RealtimeDataManager():
         else:
             return None
     
+    @property
+    def runtime_status(self):
+        return {
+            "infer_count": self.infer_count,
+            "avg_infer_time": self.avg_infer_time,
+            "avg_comm_time": self.avg_comm_time,
+            "avg_intra_traj_time": self.avg_intra_traj_time,
+            "avg_inter_traj_time": self.avg_inter_traj_time,
+            "obv_fps": float(self.get_observe_fps()),
+        }
+    
     def clear(self):
         """Clear all action-related data to ensure fresh action retrieval.
         

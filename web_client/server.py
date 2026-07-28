@@ -79,6 +79,7 @@ def _finalize_pyarrow_s3():
 async def _lifespan(_: FastAPI):
     # ── startup ──
     setup_logging("client.log")
+
     client_state.config = get_client_config()
     client_state.conf_file = os.environ.get("conf_file", "default_conf.yaml")
     # print(f"Initial client.record config: {client_state.config.record}")
@@ -633,7 +634,7 @@ async def _stats_push_loop():
             # print("Debug: pushing stats to WS clients.")
             await _broadcast_to_web({"type": "stats", "data": stats})
         except Exception as e:
-            logger.debug(f"stats push error: {e}")
+            logger.debug(f"stats push error: {type(e).__name__}: {e}")
 
 def _collect_stats() -> dict:
     """Gather runtime stats from the running vla_client."""
@@ -672,14 +673,61 @@ def _collect_stats() -> dict:
     if vla_client is None:
         return base
 
+    # ── Thread status ──
     try:
         base.update(vla_client.thread_status)
+    except Exception:
+        base["observe_running"] = bool(getattr(vla_client, "is_observe_thread_running", False))
+        base["inference_running"] = bool(getattr(vla_client, "is_inference_thread_running", False))
+        base["control_running"] = bool(getattr(vla_client, "is_control_thread_running", False))
+
+    # ── Runtime status (infer count, avg times, fps) ──
+    try:
         base.update(vla_client.runtime_status)
+    except Exception:
+        base["img_proc_time"] = float(getattr(vla_client, "image_process_time", 0.0))
+        base["current_prob_progress"] = float(getattr(vla_client, "current_prob_progress", 0.0))
+        try:
+            base["infer_count"] = int(vla_client.realtime_data_manager.infer_count)
+            base["avg_infer_time"] = float(vla_client.realtime_data_manager.avg_infer_time)
+            base["avg_comm_time"] = float(vla_client.realtime_data_manager.avg_comm_time)
+            base["avg_intra_traj_time"] = float(vla_client.realtime_data_manager.avg_intra_traj_time)
+            base["avg_inter_traj_time"] = float(vla_client.realtime_data_manager.avg_inter_traj_time)
+            base["obv_fps"] = float(vla_client.realtime_data_manager.get_observe_fps())
+        except Exception:
+            pass
+
+    # ── Language / subtask ──
+    try:
         base.update(vla_client.language_status)
+    except Exception:
+        base["language"] = str(getattr(vla_client.task_language_manager, "currt_language_instruction", ""))
+    try:
+        cfg_lang = getattr(vla_client, "config", None) and getattr(vla_client.config, "language", None)
+        if cfg_lang is not None:
+            base["sub_task_id"] = int(getattr(cfg_lang, "sub_task_id", 0))
+        else:
+            base["sub_task_id"] = None
+    except Exception:
+        base["sub_task_id"] = None
+
+    # ── ZMQ / server status ──
+    try:
         base.update(vla_client.server_status)
-    except Exception as e:
-        # base["debug_info"] = f"stats error: {e}"
-        logger.exception(f"Failed to collect stats: {e}")
+    except Exception:
+        zmq = getattr(vla_client, "vla_zmq", None)
+        if zmq is not None:
+            base["zmq_connected"] = bool(getattr(zmq, "is_connected", False))
+            if hasattr(zmq, "status"):
+                try:
+                    base.update(zmq.status)
+                except Exception:
+                    pass
+            elif hasattr(zmq, "get_heartbeat_info"):
+                try:
+                    base.update(zmq.get_heartbeat_info())
+                except Exception:
+                    pass
     return base
 
 
@@ -1431,6 +1479,7 @@ async def _start_client():
         if client_state.running:
             return
         client_state.running = True
+        logger.info("_start_client: client is now running")
 
     def _run_in_thread():
         try:
@@ -1460,6 +1509,7 @@ async def _start_client():
             # background stopper will perform cleanup. In that case avoid
             # running `_cleanup` here to prevent duplicate attempts.
             if not stopping_flag:
+                logger.info("Worker thread cleanup (stopping_flag=False)")
                 _cleanup()
             else:
                 logger.debug("Worker thread exiting: external stop will run cleanup.")
@@ -1479,12 +1529,16 @@ async def start_client():
     """Create vla_client if needed, then run it in worker thread (non-blocking)."""
     with client_state.lock:
         if client_state.running:
+            logger.info("start_client: client already running")
             return {"status": "ok", "message": "Client already started."}
         if getattr(client_state, "stopping", False):
+            logger.info("start_client: client is stopping")
             return {"status": "ok", "message": "Client is stopping. Please retry shortly."}
         if getattr(client_state, "starting", False):
+            logger.info("start_client: client already starting")
             return {"status": "ok", "message": "Client is already starting."}
         client_state.starting = True
+        logger.info("start_client: scheduling _start_client")
 
     asyncio.create_task(_start_client())
     return {"status": "ok", "message": "Client starting…"}
@@ -2234,7 +2288,7 @@ async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     with client_state.ws_lock:
         client_state.ws_clients.add(ws)
-
+    logger.info(f"WS client connected, total={len(client_state.ws_clients)}")
     # Push current client_state immediately on connect
     try:
         stats = await asyncio.to_thread(_collect_stats)

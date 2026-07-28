@@ -160,6 +160,17 @@ class TaskLanguageManager:
         latest_values = list(self.task_progress_queue)[-win_size:]
         return sum(latest_values) / win_size
     
+    @property
+    def status(self):
+        status = {
+            "language": self.currt_language_instruction,
+        }
+        try:
+            status["sub_task_id"] = int(self.config.sub_task_id) if hasattr(self.config, 'sub_task_id') else None
+        except Exception:
+            status["sub_task_id"] = None
+        return status
+
     def get_current_language(self) -> str:
         """Get current language instruction."""
         return self.currt_language_instruction

@@ -152,6 +152,7 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
             language_instruction=instruction,
             max_duration=30.0,
             thre_progress=0.8,
+            complete_hold_time=2.0,
             blend_config=blend_config,
         )
 

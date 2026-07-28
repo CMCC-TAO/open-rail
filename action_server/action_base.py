@@ -212,7 +212,8 @@ _DEFAULT_THRE_PROGRESS = 0.9          # 进度完成阈值
 _DEFAULT_STABLE_COUNT = 20            # 连续稳定计数阈值
 _DEFAULT_STABILITY_RATIO = 0.05       # 变异系数阈值
 _DEFAULT_FEEDBACK_INTERVAL = 1.0 / 3.0  # 3Hz
-_DEFAULT_COMPLETE_THRESHOLD = 0.80    # 直接完成阈值
+_DEFAULT_COMPLETE_THRESHOLD = 0.80    # 直接完成阈值（需保持 complete_hold_time 秒）
+_DEFAULT_COMPLETE_HOLD_TIME = 2.0     # prob_progress 超过 complete_threshold 后的保持时间（秒）
 
 
 def _monitor_vla_progress(
@@ -224,6 +225,7 @@ def _monitor_vla_progress(
     stability_ratio_thresh: float = _DEFAULT_STABILITY_RATIO,
     feedback_interval: float = _DEFAULT_FEEDBACK_INTERVAL,
     complete_threshold: float = _DEFAULT_COMPLETE_THRESHOLD,
+    complete_hold_time: float = _DEFAULT_COMPLETE_HOLD_TIME,
 ) -> TaskResult:
     """监控 VLA 推理进度循环
 
@@ -246,8 +248,9 @@ def _monitor_vla_progress(
     last_prob = -1.0
     stuck_count = 0
     loop_count = 0
+    hold_start_time = None
 
-    print(f'[DEBUG _monitor_vla_progress] ENTER max_duration={max_duration}s thre_progress={thre_progress} stable_threshold={stable_count_threshold}')
+    print(f'[DEBUG _monitor_vla_progress] ENTER max_duration={max_duration}s thre_progress={thre_progress} stable_threshold={stable_count_threshold} complete_hold_time={complete_hold_time}s')
 
     try:
         while True:
@@ -282,17 +285,31 @@ def _monitor_vla_progress(
             if stuck_count > 0 and stuck_count % 10 == 0:
                 pass
 
-            # 发送 feedback
+            # 发送 feedback（若处于保持阶段，附加保持进度信息）
+            hold_info = ""
+            if hold_start_time is not None:
+                hold_elapsed = time.time() - hold_start_time
+                hold_info = f" [hold {hold_elapsed:.1f}/{complete_hold_time:.0f}s]"
             send_vla_feedback(
                 goal_handle, progress_pct,
-                f"[elapsed={int(elapsed)}s] prob_progress={current_prob_progress:.3f}",
+                f"[elapsed={int(elapsed)}s] prob_progress={current_prob_progress:.3f}{hold_info}",
             )
-
-            # ===== 条件 1: prob_progress > complete_threshold → 立即完成（无需等待稳定性）=====
+            
+            # ===== 条件 1: prob_progress > complete_threshold → 保持阈值一段时间后才完成 =====
             if current_prob_progress > complete_threshold:
-                send_vla_feedback(goal_handle, 100,
-                                  f'Task completed (prob_progress={current_prob_progress:.3f})! Elapsed: {elapsed:.1f}s')
-                return TaskResult(True)
+                if hold_start_time is None:
+                    hold_start_time = time.time()
+                    print(f'[Monitor] prob_progress={current_prob_progress:.3f} > {complete_threshold}, holding for {complete_hold_time}s...')
+            
+                hold_elapsed = time.time() - hold_start_time
+                if hold_elapsed >= complete_hold_time:
+                    send_vla_feedback(goal_handle, 100,
+                                      f'Task completed (prob_progress={current_prob_progress:.3f}, held {hold_elapsed:.1f}s)! Elapsed: {elapsed:.1f}s')
+                    return TaskResult(True)
+            else:
+                if hold_start_time is not None:
+                    hold_start_time = None
+                    print(f'[Monitor] prob_progress={current_prob_progress:.3f} dropped below {complete_threshold}, hold reset')
 
             # ===== 条件 2: prob_progress 稳定性检测（原有逻辑，低于80%时兜底）=====
             if current_prob_progress > thre_progress:
@@ -383,6 +400,7 @@ def run_vla_control_only(
     fixed_duration: float = 0,
     blend_config=None,
     complete_threshold: float = _DEFAULT_COMPLETE_THRESHOLD,
+    complete_hold_time: float = _DEFAULT_COMPLETE_HOLD_TIME,
 ) -> TaskResult:
     """在 obs+infer 已运行的情况下，只启动 control 并监控 VLA 推理进度
 
@@ -453,6 +471,7 @@ def run_vla_control_only(
                 stability_ratio_thresh=stability_ratio_thresh,
                 feedback_interval=feedback_interval,
                 complete_threshold=complete_threshold,
+                complete_hold_time=complete_hold_time,
             )
 
         elapsed = time.time() - start_time
