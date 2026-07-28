@@ -1250,6 +1250,7 @@ class EvaluationResultRecorder:
 
         # Runtime cache for evaluation result browsing in main process.
         self._eval_browse_records: List[Dict[str, Any]] = []
+        self._eval_dir_for_browse = None
 
         # Queue-based CRUD sync between main process and writer process.
         self._eval_record_crud_queue = Queue()
@@ -1258,6 +1259,7 @@ class EvaluationResultRecorder:
 
     def set_task(self, save_path: str, episode_id: int = -1) -> None:
         """Set task information and prepare for data recording. Called in writer process"""
+        self.logger.info(f"save_path: {save_path}, episode_id: {episode_id}")
         self._episode_id = episode_id
         if self._check_eval_dir(save_path=save_path):
             self._load_existing_records()
@@ -1285,12 +1287,14 @@ class EvaluationResultRecorder:
 
         records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
         self._eval_browse_records = records
+        self.logger.info(f"Load eval records for browse successfully, total records = {len(records)}")
 
     def parse_eval_records(self, selected_task: Optional[str] = None, base_dir: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return evaluation records in reverse order (newest first)."""
         try:
             task_path = base_dir / selected_task
-            if self._check_eval_dir(save_path = task_path):
+            self.logger.info(f"Parse eval records: {task_path}")
+            if self._check_eval_dir_for_browse(save_path = task_path):
                 self._load_existing_browse_records()
                 self._enqueue_eval_record_crud(command="LoadRecords", record_id=-1, score=None, note="", task_path=task_path)
         except Exception as e:
@@ -1330,9 +1334,27 @@ class EvaluationResultRecorder:
             # Ensure eval directory exists.
             if not os.path.exists(self._eval_dir):
                 os.makedirs(self._eval_dir, exist_ok=True)
-
+                self.logger.info(f"Eval directory doesn't exist and create it: {self._eval_dir}")
             self._eval_json_file = os.path.join(self._eval_dir, 'eval_log.json')
             self._eval_csv_file = os.path.join(self._eval_dir, 'eval_log.csv')
+        else:
+            self.logger.info(f"Eval directory already exists: {self._eval_dir}")
+
+        return load_data
+    def _check_eval_dir_for_browse(self, save_path: str) -> bool:
+        """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in main and writer process."""
+        load_data = False
+        if self._eval_dir_for_browse is None or self._eval_dir_for_browse != os.path.join(save_path, 'eval'):
+            load_data = True
+            self._eval_dir_for_browse = os.path.join(save_path, 'eval')
+            # Ensure eval directory exists.
+            if not os.path.exists(self._eval_dir_for_browse):
+                self.logger.info(f"Eval directory doesn't exist and create it: {self._eval_dir}")
+            self._eval_json_file = os.path.join(self._eval_dir_for_browse, 'eval_log.json')
+            self._eval_csv_file = os.path.join(self._eval_dir_for_browse, 'eval_log.csv')
+        else:
+            self.logger.info(f"Eval directory already exists: {self._eval_dir_for_browse}")
+
         return load_data
 
     def _load_existing_records(self) -> None:
@@ -1340,6 +1362,7 @@ class EvaluationResultRecorder:
         self._eval_records = []
         self._record_id = -1
         if not self._eval_json_file or (not os.path.exists(self._eval_json_file)):
+            self.logger.info(f"Load eval records for recording terminated, eval_json_file doesn't exist. Total eval records = {len(self._eval_records)}")
             return
 
         try:
@@ -1353,6 +1376,7 @@ class EvaluationResultRecorder:
             self.logger.exception(f"Load eval_log.json failed: {e}")
             self._eval_records = []
             self._record_id = -1
+        self.logger.info(f"Load eval records for recording successfully, total records = {len(self._eval_records)}, max record_id = {self._record_id}")
 
     def begin_recording(self, eval_record_id: int):
         self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
