@@ -1242,7 +1242,6 @@ class EvaluationResultRecorder:
         self.logger = logging.getLogger(__name__)
         self.config = evaluation_config
         self._episode_id = -1
-        self._record_id = -1
         self._eval_dir = None
         self._eval_records: List[Dict[str, Any]] = []
         self._eval_json_file = None
@@ -1258,12 +1257,14 @@ class EvaluationResultRecorder:
         self._eval_record_crud_thread: Optional[threading.Thread] = None
         self._eval_record_crud_stop_event = threading.Event()
 
-    def set_task(self, save_path: str, episode_id: int = -1) -> None:
+    def set_task(self, save_path: str, episode_id: int = -1) -> int:
         """Set task information and prepare for data recording. Called in writer process"""
         self.logger.info(f"save_path: {save_path}, episode_id: {episode_id}")
         self._episode_id = episode_id
+        record_id = 0
         if self._check_eval_dir(save_path=save_path):
-            self._load_existing_records()
+            record_id = self._load_existing_records()
+        return record_id
 
     def set_task_for_browse(self, save_path: str) -> None:
         """Set task information and prepare for data browse. Called in main process"""
@@ -1336,10 +1337,10 @@ class EvaluationResultRecorder:
     def _load_existing_records(self) -> None:
         """Load existing records from eval_log.json; fallback to empty list. Called in writer process."""
         self._eval_records = []
-        self._record_id = -1
+        record_id = 0
         if not self._eval_json_file or (not os.path.exists(self._eval_json_file)):
             self.logger.info(f"Load eval records for recording terminated, eval_json_file doesn't exist. Total eval records = {len(self._eval_records)}")
-            return
+            return record_id
 
         try:
             with open(self._eval_json_file, 'r', encoding='utf-8') as f:
@@ -1347,12 +1348,13 @@ class EvaluationResultRecorder:
             if isinstance(data, list):
                 self._eval_records = [r for r in data if isinstance(r, dict)]
                 if self._eval_records:
-                    self._record_id = max(int(r.get('id', -1)) for r in self._eval_records)
+                    record_id = max(int(r.get('id', -1)) for r in self._eval_records) + 1
         except Exception as e:
             self.logger.exception(f"Load eval_log.json failed: {e}")
             self._eval_records = []
-            self._record_id = -1
-        self.logger.info(f"Load eval records for recording successfully, total records = {len(self._eval_records)}, max record_id = {self._record_id}")
+            record_id = 0
+        self.logger.info(f"Load eval records for recording successfully, total records = {len(self._eval_records)}, max record_id = {record_id}")
+        return record_id
 
     def _check_eval_dir_for_browse(self, save_path: str) -> bool:
         """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in main process."""
@@ -1398,15 +1400,13 @@ class EvaluationResultRecorder:
 
     def begin_recording(self, eval_record_id: int):
         self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
-        next_record_id = max(int(eval_record_id), self._record_id + 1)
-        self._create_new_record(eval_record_id=next_record_id)
+        self._create_new_record(eval_record_id=eval_record_id)
 
     def _create_new_record(self, eval_record_id: int):
-        self._record_id = eval_record_id
         self._obv_count = 0
         # self._eval_record_start_time = None
         self._current_record = {
-            'id': self._record_id,
+            'id': eval_record_id,
             'task_id': None,
             'sub_task_id': None,
             'instruction': None,
@@ -1440,9 +1440,9 @@ class EvaluationResultRecorder:
         self._eval_records.append(self._current_record)
 
     def end_recording(self):
-        duration = self._finalize_current_record()
+        record_id, duration = self._finalize_current_record()
         self._flush_to_disk()
-        return self._record_id + 1, duration
+        return record_id, duration
     
     def add_frame_async(self, step_extra: dict):
         self._record_executor.submit(self._write_frame_fun, step_extra)
@@ -1479,10 +1479,10 @@ class EvaluationResultRecorder:
             # New sub-task, save the current record and start a new record
             else:
                 # save the current record
-                self._finalize_current_record()
+                record_id, _ = self._finalize_current_record()
                 self._flush_to_disk()
                 # start a new record
-                self._create_new_record(self._record_id + 1)
+                self._create_new_record(record_id + 1)
                 self._init_current_record(step_extra=step_extra)
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
@@ -1525,12 +1525,12 @@ class EvaluationResultRecorder:
             self._current_record['avg_inter_traj_time'].append(runtime_status.get('avg_inter_traj_time', None))
             self._current_record['avg_comm_time'].append(runtime_status.get('avg_comm_time', None))
 
-    def _finalize_current_record(self) -> float:
+    def _finalize_current_record(self) -> tuple[int, float]:
         self._current_record['obv_count'] = self._obv_count
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
         self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 1)
-        return self._current_record['duration']
+        return self._current_record['id'], self._current_record['duration']
     
     def _timestamp(self, time_stamp) -> str:
         dt = datetime.fromtimestamp(time_stamp)
@@ -1891,7 +1891,7 @@ class DataRecordManager:
         if self.config.get('is_record_eval_log', False):
             self.eval_recorder.set_task(save_path=self.save_path, episode_id=self.shared_data.episode_index.value)
             # Keep next eval record id consistent across processes.
-            self._sync_shared_data(eval_record_id=int(self.eval_recorder._record_id) + 1)
+            self._sync_shared_data(eval_record_id = self.eval_recorder._record_id)
         else:
             self.logger.info("Recording evaluation log is disabled, skip recording.")
     
@@ -1916,6 +1916,7 @@ class DataRecordManager:
         if self.config.get('is_record_eval_log', False):
             self.eval_recorder.set_task_for_browse(save_path=self.save_path)
             # Keep next eval record id consistent across processes.
+            self._sync_shared_data(eval_record_id = self.eval_recorder._record_id)
         else:
             self.logger.info("Recording evaluation log is disabled, skip recording.")
     def _sync_shared_data(self, total_frames: int = None, total_videos: int = None, total_episodes: int = None, chunks_size: int = 1000, eval_record_id: int = None, eval_record_duration: float = None) -> None:
@@ -2172,9 +2173,6 @@ class DataRecordManager:
         deadline = time.time() + max(0.1, float(timeout_s))
 
         while time.time() < deadline:
-            # Abort if a newer recording session has already started.
-            if self._get_recording_session_id() != stop_session_id:
-                return
 
             cur_episode_index = int(self.shared_data.episode_index.value)
             cur_total_frames = int(self.shared_data.total_frames.value)
@@ -2317,8 +2315,8 @@ class DataRecordManager:
                 # self.logger.info('write process stopped!!! ')
             # finish recording for all recorders
             if self.config.get('is_record_eval_log', False):
-                next_record_id, currt_record_duration = self.eval_recorder.end_recording()
-                self._sync_shared_data(eval_record_id=next_record_id, eval_record_duration=currt_record_duration)
+                currt_record_id, currt_record_duration = self.eval_recorder.end_recording()
+                self._sync_shared_data(eval_record_id=currt_record_id + 1, eval_record_duration=currt_record_duration)
 
             if self.config.get('is_record_episode', False):
                 episode_index, total_frames, total_videos = self.lerobot_recorder.end_record()
