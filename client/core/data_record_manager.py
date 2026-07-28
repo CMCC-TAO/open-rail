@@ -1300,14 +1300,21 @@ class EvaluationResultRecorder:
 
     def _sync_browse_on_record_start(self, eval_record_id: int, sub_task_id: Optional[int] = None) -> None:
         """Sync main-process eval browse cache immediately when recording starts."""
-        pending_record = {
+        self._pending_record = {
             "id": int(eval_record_id),
             "sub_task_id": int(sub_task_id)+1 if sub_task_id is not None else None,
             "duration": 0.0,
             "score": None,
             "note": "",
         }
-        self._upsert_eval_browse_record(pending_record)
+        self._upsert_eval_browse_record(self._pending_record)
+
+    def _sync_browse_on_record_end(self, duration: float) -> None:
+        """Sync main-process eval browse cache immediately when recording ends."""
+        if self._pending_record is not None:
+            self._pending_record['duration'] = duration
+        self._upsert_eval_browse_record(self._pending_record)
+        self._pending_record = None
 
     def _check_eval_dir(self, save_path: str) -> bool:
         """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in writer process."""
@@ -1433,9 +1440,9 @@ class EvaluationResultRecorder:
         self._eval_records.append(self._current_record)
 
     def end_recording(self):
-        self._finalize_current_record()
+        duration = self._finalize_current_record()
         self._flush_to_disk()
-        return self._record_id + 1
+        return self._record_id + 1, duration
     
     def add_frame_async(self, step_extra: dict):
         self._record_executor.submit(self._write_frame_fun, step_extra)
@@ -1518,11 +1525,12 @@ class EvaluationResultRecorder:
             self._current_record['avg_inter_traj_time'].append(runtime_status.get('avg_inter_traj_time', None))
             self._current_record['avg_comm_time'].append(runtime_status.get('avg_comm_time', None))
 
-    def _finalize_current_record(self) -> None:
+    def _finalize_current_record(self) -> float:
         self._current_record['obv_count'] = self._obv_count
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
         self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 1)
+        return self._current_record['duration']
     
     def _timestamp(self, time_stamp) -> str:
         dt = datetime.fromtimestamp(time_stamp)
@@ -1827,6 +1835,7 @@ class DataRecordManager:
         self.shared_data.episode_chunk = self.manager.Value('i', 0)
         self.shared_data.episode_index = self.manager.Value('i', 0)
         self.shared_data.eval_record_id = self.manager.Value('i', 0)
+        self.shared_data.eval_record_duration = self.manager.Value('f', 0.0)
         self.shared_data.running = self.manager.Value('b', False)
         # self.shared_data.episode_parquet_list = self.manager.list()
         # self.shared_data.save_video_path_list = self.manager.list()
@@ -1909,7 +1918,7 @@ class DataRecordManager:
             # Keep next eval record id consistent across processes.
         else:
             self.logger.info("Recording evaluation log is disabled, skip recording.")
-    def _sync_shared_data(self, total_frames: int = None, total_videos: int = None, total_episodes: int = None, chunks_size: int = 1000, eval_record_id: int = None) -> None:
+    def _sync_shared_data(self, total_frames: int = None, total_videos: int = None, total_episodes: int = None, chunks_size: int = 1000, eval_record_id: int = None, eval_record_duration: float = None) -> None:
         """Sync record lerobot values to shared_data."""
         if total_frames is not None:
             self.shared_data.total_frames.value = total_frames
@@ -1920,6 +1929,8 @@ class DataRecordManager:
             self.shared_data.episode_chunk.value = total_episodes // chunks_size
         if eval_record_id is not None:
             self.shared_data.eval_record_id.value = eval_record_id
+        if eval_record_duration is not None:
+            self.shared_data.eval_record_duration.value = eval_record_duration
         # self.logger.info(f"total_frames={self.shared_data.total_frames.value}, total_videos={self.shared_data.total_videos.value}, total_episodes={self.shared_data.episode_index.value}")
 
     def update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
@@ -2144,12 +2155,11 @@ class DataRecordManager:
         self.writer_command_queue.put(command)
 
         # Sync browse cache in main process after writer updates shared counters.
-        if self.config.get('is_record_episode', False):
-            self._sync_browse_on_record_stop_main(
-                    stop_session_id,
-                    prev_episode_index,
-                    prev_total_frames,
-                    timeout_s=2.0)
+        self._sync_browse_on_record_stop_main(
+                stop_session_id,
+                prev_episode_index,
+                prev_total_frames,
+                timeout_s=2.0)
 
     def _sync_browse_on_record_stop_main(
         self,
@@ -2177,14 +2187,15 @@ class DataRecordManager:
                 episode_length = max(0, cur_total_frames - int(prev_total_frames))
 
                 try:
-                    self.lerobot_recorder._sync_browse_on_record_end(
-                        episode_chunk=finished_episode_chunk,
-                        episode_index=finished_episode_index,
-                        episode_length=episode_length,
-                        total_episodes=cur_episode_index,
-                        total_frames=cur_total_frames,
-                        total_videos=cur_total_videos,
-                    )
+                    if self.config.get('is_record_episode', False):
+                        self.lerobot_recorder._sync_browse_on_record_end(
+                            episode_chunk=finished_episode_chunk,
+                            episode_index=finished_episode_index,
+                            episode_length=episode_length,
+                            total_episodes=cur_episode_index,
+                            total_frames=cur_total_frames,
+                            total_videos=cur_total_videos,
+                        )
                 except Exception as e:
                     self.logger.warning(f"Failed to sync browse cache on stop in main process: {e}")
                 return
@@ -2306,8 +2317,8 @@ class DataRecordManager:
                 # self.logger.info('write process stopped!!! ')
             # finish recording for all recorders
             if self.config.get('is_record_eval_log', False):
-                next_record_id = self.eval_recorder.end_recording()
-                self._sync_shared_data(eval_record_id=next_record_id)
+                next_record_id, currt_record_duration = self.eval_recorder.end_recording()
+                self._sync_shared_data(eval_record_id=next_record_id, eval_record_duration=currt_record_duration)
 
             if self.config.get('is_record_episode', False):
                 episode_index, total_frames, total_videos = self.lerobot_recorder.end_record()
