@@ -1251,6 +1251,11 @@ class EvaluationResultRecorder:
         # Runtime cache for evaluation result browsing in main process.
         self._eval_browse_records: List[Dict[str, Any]] = []
 
+        # Queue-based CRUD sync between main process and writer process.
+        self._eval_record_crud_queue = Queue()
+        self._eval_record_crud_thread: Optional[threading.Thread] = None
+        self._eval_record_crud_stop_event = threading.Event()
+
     def set_task(self, save_path: str, episode_id: int = -1) -> None:
         """Set task information and prepare for data recording. Called in writer process"""
         self._episode_id = episode_id
@@ -1284,8 +1289,10 @@ class EvaluationResultRecorder:
     def parse_eval_records(self, selected_task: Optional[str] = None, base_dir: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return evaluation records in reverse order (newest first)."""
         try:
-            if self._check_eval_dir(save_path = base_dir / selected_task):
+            task_path = base_dir / selected_task
+            if self._check_eval_dir(save_path = task_path):
                 self._load_existing_browse_records()
+                self._enqueue_eval_record_crud(command="LoadRecords", record_id=-1, score=None, note="", task_path=task_path)
         except Exception as e:
             self.logger.exception(f"Failed to load eval records: {e}")
         return self._eval_browse_records
@@ -1506,37 +1513,132 @@ class EvaluationResultRecorder:
         #     paused_at = float(running.pop('paused_at'))
         #     running['paused_s'] = round(float(running.get('paused_s', 0.0)) + (time.time() - paused_at), 1)
 
+    def _enqueue_eval_record_crud(self, command: str, record_id: int, score: Optional[float] = None, note: str = "", task_path: str = "") -> None:
+        """Publish one CRUD command to the shared queue for writer-side sync."""
+        payload = {
+            "command": command,
+            "task_path": task_path,
+            "record_id": int(record_id),
+            "score": score,
+            "note": note,
+        }
+        try:
+            self._eval_record_crud_queue.put(payload)
+        except Exception as e:
+            self.logger.exception(f"Failed to enqueue eval record CRUD command: {e}")
+
+    def _apply_eval_record_crud_command(self, payload: Dict[str, Any]) -> None:
+        """Apply one CRUD command to local _eval_records and flush to disk."""
+        command = str(payload.get("command", "")).strip()
+        record_id = int(payload.get("record_id", -1))
+        if command == "LoadRecords":
+            task_path = str(payload.get("task_path", "")).strip()
+            if self._check_eval_dir(save_path=task_path):
+                self._load_existing_records()
+                self.logger.info(f"Load eval records CRUD command: {command}, task_path: {task_path}")
+                return
+
+        rec = next((r for r in self._eval_records if int(r.get('id', -1)) == record_id), None)
+        if rec is None:
+            self.logger.warning(f"Record with id {record_id} not found for CRUD command: {command}")
+            return
+
+        if command == "UpdateScore":
+            rec['score'] = payload.get('score', None)
+            self._flush_to_disk()
+        elif command == "UpdateNote":
+            rec['note'] = payload.get('note', "")
+            self._flush_to_disk()
+        elif command == "DeleteRecord":
+            for i in range(len(self._eval_records) - 1, -1, -1):
+                if int(self._eval_records[i].get('id', -1)) == record_id:
+                    del self._eval_records[i]
+                    self._flush_to_disk()
+                    return
+        else:
+            self.logger.warning(f"Unknown eval record CRUD command: {payload}")
+
+    def _eval_record_crud_listener(self) -> None:
+        """Continuously consume CRUD commands and sync _eval_records in writer process."""
+        while not self._eval_record_crud_stop_event.is_set():
+            try:
+                payload = self._eval_record_crud_queue.get(timeout=0.2)
+            except Empty:
+                continue
+            except Exception as e:
+                self.logger.exception(f"Eval record CRUD listener queue read failed: {e}")
+                continue
+
+            if not isinstance(payload, dict):
+                self.logger.warning(f"Invalid eval record CRUD payload, expected dict: {payload}")
+                continue
+
+            try:
+                self._apply_eval_record_crud_command(payload)
+            except Exception as e:
+                self.logger.exception(f"Eval record CRUD command apply failed: {e}")
+
+    def start_eval_record_crud_listener(self) -> None:
+        """Start writer-side CRUD listener thread."""
+        if self._eval_record_crud_thread is not None and self._eval_record_crud_thread.is_alive():
+            return
+
+        self._eval_record_crud_stop_event.clear()
+        self._eval_record_crud_thread = threading.Thread(
+            target=self._eval_record_crud_listener,
+            daemon=True,
+            name="eval_record_crud_listener",
+        )
+        self._eval_record_crud_thread.start()
+
+    def stop_eval_record_crud_listener(self) -> None:
+        """Stop writer-side CRUD listener thread and drain remaining commands."""
+        self._eval_record_crud_stop_event.set()
+        if self._eval_record_crud_thread is not None and self._eval_record_crud_thread.is_alive():
+            self._eval_record_crud_thread.join(timeout=1.0)
+        self._eval_record_crud_thread = None
+
+        while True:
+            try:
+                payload = self._eval_record_crud_queue.get_nowait()
+            except Empty:
+                break
+            except Exception:
+                break
+
+            if not isinstance(payload, dict):
+                continue
+            try:
+                self._apply_eval_record_crud_command(payload)
+            except Exception as e:
+                self.logger.exception(f"Eval record CRUD drain apply failed: {e}")
+
     def set_score(self, record_id: int, score: Optional[float]) -> None:
-        # with self._lock:
-        rec = next((r for r in self._eval_records if r['id'] == record_id), None)
+        rec = next((r for r in self._eval_browse_records if r['id'] == record_id), None)
         if rec is None:
             return
         rec['score'] = score
-        self._flush_to_disk()
-        # self._finalize_current_record
+        self._enqueue_eval_record_crud(command="UpdateScore", record_id=record_id, score=score, note="")
+        return
+
 
     def set_note(self, record_id: int, note: str) -> None:
-        # with self._lock:
-        rec = next((r for r in self._eval_records if r['id'] == record_id), None)
+        rec = next((r for r in self._eval_browse_records if r['id'] == record_id), None)
         if rec is None:
             return
         rec['note'] = note
-        self._flush_to_disk()
+        self._enqueue_eval_record_crud(command="UpdateNote", record_id=record_id, score=None, note=note)
+        return
+
 
     def delete_record(self, record_id: int) -> None:
-        # # delete in sequence
-        # for i, r in enumerate(self._eval_records):
-        #     if r.get('id') == record_id:
-        #         self._eval_records.pop(i)
-        #         break
-        # delete in reversed sequence, more efficient
-        for i in range(len(self._eval_records) - 1, -1, -1):
-            if self._eval_records[i].get('id') == record_id:
-                del self._eval_records[i]
+        for i in range(len(self._eval_browse_records) - 1, -1, -1):
+            if self._eval_browse_records[i].get('id') == record_id:
+                del self._eval_browse_records[i]
                 break
-        self._flush_to_disk()
-        # with self._lock:
-        #     self._records = [r for r in self._eval_records if r['id'] != record_id]
+        self._enqueue_eval_record_crud(command="DeleteRecord", record_id=record_id, score=None, note="")
+        return
+
 
     def _flush_to_disk(self) -> None:
         """Write records to JSON + CSV files."""
@@ -1796,6 +1898,7 @@ class DataRecordManager:
     def _writer_process_loop(self) -> None:
         """Resident process loop: receives start/shutdown commands and dispatches write tasks in thread executor."""
         self.logger.info("Writer resident process loop started.")
+        self.eval_recorder.start_eval_record_crud_listener()
         write_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="writer_worker")
         write_future = None
 
@@ -1844,6 +1947,7 @@ class DataRecordManager:
             self.logger.exception("Writer resident process loop exited with exception")
         finally:
             write_executor.shutdown(wait=True, cancel_futures=True)
+            self.eval_recorder.stop_eval_record_crud_listener()
             self.logger.info("Writer resident process loop exited.")
 
     def _shutdown_writer_process(self) -> None:
@@ -1853,7 +1957,7 @@ class DataRecordManager:
 
         try:
             if self.writer_process.is_alive():
-                self.writer_command_queue.put("shutdown")
+                self.writer_command_queue.put({"command": "shutdown"})
                 self.writer_process.join(timeout=5.0)
                 if self.writer_process.is_alive():
                     self.logger.warning("Writer process still alive after graceful shutdown, terminate it.")
@@ -2166,6 +2270,11 @@ class DataRecordManager:
             self.logger.exception(f"Writing thread exited with exception: {e}")
             # self.release_writers()
         finally:
+            # if self.config.get('is_record_eval_log', False):
+            #     try:
+            #         self.eval_recorder.stop_eval_record_crud_listener()
+            #     except Exception as e:
+            #         self.logger.warning(f"Failed to stop eval record CRUD listener in finally: {e}")
             self.logger.info("Writing thread exited.")
             # self.release_writers()
 
