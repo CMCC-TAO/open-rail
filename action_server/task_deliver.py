@@ -57,7 +57,7 @@ HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
 # ==============================================
 # 拖拽检测参数
 # ==============================================
-TUG_DETECTION_THRESHOLD_DEG = 5.0   # 拖拽检测阈值（度），手腕关节偏差超过此值触发松手
+TUG_DETECTION_THRESHOLD_DEG = 3.0   # 拖拽检测阈值（度），手腕关节偏差超过此值触发松手
 TUG_DETECTION_TIMEOUT = 30.0        # 等待拖拽超时（秒），超时后强制松手
 TUG_STABILIZE_TIME = 1.0            # 到位后等待 state 稳定的时间（秒）
 TUG_MONITOR_INTERVAL = 0.05         # 监测周期（秒），~20Hz

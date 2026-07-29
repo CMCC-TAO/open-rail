@@ -19,7 +19,12 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from action_server.task_init_grasp import _get_init_grasp_pose, _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM
+from action_server.task_init_grasp import (
+    _get_init_grasp_pose,
+    _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM,
+    _MID_LEFT_ARM, _MID_RIGHT_ARM,
+    _MID_LEFT_ARM_2, _MID_RIGHT_ARM_2,
+)
 from action_server.task_grasp import (
     _get_language_instruction,
     TARGET_HAND_MAP,
@@ -64,7 +69,9 @@ def _get_current_hands(robot_body) -> np.ndarray:
 
 
 def _do_init_grasp(goal_handle, context, send_feedback_fn) -> bool:
-    """执行 init_grasp 阶段：安全抬臂握拳 -> 准备抓取姿态
+    """执行 init_grasp 阶段：安全抬臂 -> 3 个中间过渡 -> 准备抓取姿态
+
+    流程: safe_pose(抬臂握拳) -> mid_pose(落臂收手) -> mid_pose_2(继续落臂) -> init_grasp_pose
 
     Returns:
         True 成功, False 失败
@@ -81,7 +88,7 @@ def _do_init_grasp(goal_handle, context, send_feedback_fn) -> bool:
             send_feedback_fn(goal_handle, 0, "未收到机器人手掌数据")
             return False
 
-        # 过渡到安全中间姿态（抬臂握拳）
+        # ===== 第 1 步：安全中间姿态（抬臂握拳）=====
         send_feedback_fn(goal_handle, 5, "正在过渡到安全中间姿态...")
         safe_pose = np.array([
             *_SAFE_LEFT_ARM,
@@ -92,7 +99,29 @@ def _do_init_grasp(goal_handle, context, send_feedback_fn) -> bool:
         robot_body.reset_robot(target_pose=safe_pose,
                                max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
-        # 过渡到准备抓取姿态
+        # ===== 第 2 步：第二中间姿态（落臂保持收手）=====
+        send_feedback_fn(goal_handle, 10, "正在过渡到第二中间姿态...")
+        mid_pose = np.array([
+            *_MID_LEFT_ARM,
+            *_MID_RIGHT_ARM,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        ])
+        robot_body.reset_robot(target_pose=mid_pose,
+                               max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
+
+        # ===== 第 3 步：第三中间姿态（进一步落臂）=====
+        send_feedback_fn(goal_handle, 12, "正在过渡到第三中间姿态...")
+        mid_pose_2 = np.array([
+            *_MID_LEFT_ARM_2,
+            *_MID_RIGHT_ARM_2,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+        ])
+        robot_body.reset_robot(target_pose=mid_pose_2,
+                               max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
+
+        # ===== 第 4 步：准备抓取姿态 =====
         send_feedback_fn(goal_handle, 15, "正在过渡到准备抓取姿态...")
         robot_body.reset_robot(target_pose=init_grasp_pose,
                                max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
