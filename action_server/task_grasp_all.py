@@ -125,12 +125,19 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
 
     send_feedback_fn(goal_handle, 25, f"第 {attempt} 次抓取尝试...")
 
-    # 创建 VLA 组件
-    components = context.create_vla_components()
+    # 使用持久化 VLA 组件（由 InitGraspHandler 创建），
+    # 避免多个 vla_client 共享同一个 ZMQ DEALER socket 造成响应劫持死锁。
+    components = context.ensure_vla_components()
     vla_client = components["vla_client"]
     task_language_manager = components["task_language_manager"]
 
     try:
+        # 启动 observe + inference（幂等安全，内部有 is_alive 保护）
+        vla_client.start_observe()
+        vla_client.start_inference()
+        vla_client.start_visualize()
+        vla_client.is_running_action = True
+
         # 设置语言指令
         task_language_manager.currt_language_instruction = instruction
         task_language_manager.config.sub_task_id = 0
@@ -144,7 +151,7 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
         except Exception:
             pass
 
-        # 执行推理（只启动 control）
+        # 执行推理（只启动 control，obs+infer 已在上面启动）
         context._active_vla_client = vla_client
         result = run_vla_control_only(
             goal_handle=goal_handle,
@@ -155,6 +162,9 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
             complete_hold_time=2.0,
             blend_config=blend_config,
         )
+
+        # 不停 obs/infer（持久化组件，由 finish_grasp 统一销毁）
+        # 控制线程已在 run_vla_control_only 的 finally 中停掉
 
         # 推理完成后读取抓取状态
         # _do_finish_grasp 会处理手臂复位，此处无需重复复位
@@ -186,7 +196,34 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
 
     finally:
         context._active_vla_client = None
-        context.destroy_vla_components(components)
+        # 不销毁组件（持久化组件，由 finish_grasp 统一清理）
+
+
+def _wait_for_movement(robot_body, target_pose: np.ndarray,
+                       timeout: float = 5.0, tol: float = 0.5) -> bool:
+    """等待机器人实际关节位置到达目标位置
+
+    轮询 _get_reset_current_state() 读取实测关节位置，与目标对比。
+    容差和超时逻辑跟 reset_robot 内部判断一致。
+
+    Args:
+        robot_body: RobotBody 实例
+        target_pose: 26-dim 目标位姿
+        timeout: 超时秒数
+        tol: 关节角度容差 (rad)
+    Returns:
+        True 到位/超时都返回 True（有超时兜底，不卡死）
+    """
+    target_arms = target_pose[:14]
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        state = robot_body._get_reset_current_state()
+        if state is not None:
+            err = np.max(np.abs(state[:14] - target_arms))
+            if err < tol:
+                break
+        time.sleep(0.01)
+    return True
 
 
 def _do_finish_grasp(goal_handle, context, send_feedback_fn) -> bool:
@@ -214,12 +251,14 @@ def _do_finish_grasp(goal_handle, context, send_feedback_fn) -> bool:
         safe_pose = np.array([*_SAFE_LEFT_ARM, *_SAFE_RIGHT_ARM, *hands])
         robot_body.reset_robot(target_pose=safe_pose,
                                max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
+        _wait_for_movement(robot_body, safe_pose)  # 等待机器人物理到位
 
         # 过渡到垂直复位姿态（手掌不变）
         send_feedback_fn(goal_handle, 95, "正在过渡到垂直复位姿态...")
         reset_pose = np.array([*_LEFT_RESET_POSE, *_RIGHT_RESET_POSE, *hands])
         robot_body.reset_robot(target_pose=reset_pose,
                                max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
+        _wait_for_movement(robot_body, reset_pose)  # 等待机器人物理到位
 
         return True
     except Exception as e:
