@@ -1249,8 +1249,8 @@ class EvaluationResultRecorder:
 
         # Runtime cache for evaluation result browsing in main process.
         self._eval_records_for_browse: List[Dict[str, Any]] = []
+        self._eval_records_for_share: Queue = Queue()
         self._eval_dir_for_browse = None
-        self._eval_json_file_for_browse = None
 
         # Queue-based CRUD sync between main process and writer process.
         self._eval_record_crud_queue = Queue()
@@ -1266,56 +1266,121 @@ class EvaluationResultRecorder:
             record_id = self._load_existing_records()
         return record_id
 
-    def set_task_for_browse(self, save_path: str) -> None:
-        """Set task information and prepare for data browse. Called in main process"""
-        self.logger.info(f"save_path: {save_path}")
-        try:
-            if self._check_eval_dir_for_browse(save_path = save_path):
-                self._load_existing_browse_records()
-        except Exception as e:
-            self.logger.exception(f"Failed to load eval records for browse: {e}")
+    # def set_task_for_browse(self, save_path: str) -> None:
+    #     """Set task information and prepare for data browse. Called in main process"""
+    #     self.logger.info(f"save_path: {save_path}")
+    #     try:
+    #         if self._check_eval_dir_for_browse(save_path = save_path):
+    #             self._load_existing_browse_records()
+    #     except Exception as e:
+    #         self.logger.exception(f"Failed to load eval records for browse: {e}")
     def parse_eval_records(self, selected_task: Optional[str] = None, base_dir: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return evaluation records in reverse order (newest first)."""
         try:
             task_path = base_dir / selected_task
-            self.logger.info(f"Parse eval records: {task_path}")
-            if self._check_eval_dir_for_browse(save_path = task_path):
-                self._load_existing_browse_records()
+            # self.logger.info(f"Parse eval records: {task_path}")
+            clear = False
+            append = False
+            if self._is_need_load(save_path = task_path):
+                self._clear_share_queue()
                 self._enqueue_eval_record_crud(command="LoadRecords", record_id=-1, score=None, note="", task_path=task_path)
+                clear = True
+                append = True
+            self._sync_eval_records_for_browse(timeout_s=0.1, max_empty_retries=5, clear=clear, append=append)
         except Exception as e:
             self.logger.exception(f"Failed to load eval records: {e}")
         return self._eval_records_for_browse
+    def _clear_share_queue(self):
+        try:
+            while not self._eval_records_for_share.empty():
+                try:
+                    self._eval_records_for_share.get_nowait()
+                except Empty:
+                    break
+        except Exception:
+            # Fallback: keep calling get_nowait until it fails
+            try:
+                while True:
+                    self._eval_records_for_share.get_nowait()
+            except Exception:
+                self.logger.info("Clear _eval_records_for_share and ready to share the new loaded records.")
+    def _sync_eval_records_for_browse(self, timeout_s: float = 0.1, max_empty_retries: int = 5, clear: bool = False, append: bool = False):
+            """Continuously consume records from _eval_records_for_share and append to _eval_records_for_browse."""
+            # 1. Clear stale data before syncing
+            if clear:
+                self._eval_records_for_browse.clear()
+
+            # 2. Block and wait for data from the shared queue
+            empty_count = 0
+            while True:
+                try:
+                    # Block for 0.2s waiting for data from the writer process
+                    record = self._eval_records_for_share.get(timeout=timeout_s)
+                    empty_count = 0  # Reset counter on successful fetch
+                    
+                    if isinstance(record, dict):
+                        if append:
+                            self._eval_records_for_browse.append(record)
+                            self.logger.info(f"Append new eval record.")
+                        else:
+                            self._upsert_eval_browse_record(record=record)
+                    elif isinstance(record, int):
+                        self._delete_eval_browse_record(record_id=record)
+                except Empty:
+                    # 3. If queue is empty, increment counter. If repeatedly empty, assume sync is done.
+                    empty_count += 1
+                    if empty_count >= max_empty_retries:
+                        break
+                except Exception as e:
+                    self.logger.exception(f"Failed to sync eval records for browse: {e}")
+                    break
+
+            # 4. Sort records by id descending (consistent with _upsert_eval_browse_record)
+            self._eval_records_for_browse.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
 
     def _upsert_eval_browse_record(self, record: Dict[str, Any]) -> None:
-        """Insert or replace one eval record in browse cache."""
+        """update or append one eval record in browse cache."""
         target_id = int(record.get("id", -1))
         replaced = False
         for idx, item in enumerate(self._eval_records_for_browse):
             if int(item.get("id", -1)) == target_id:
                 self._eval_records_for_browse[idx] = record
                 replaced = True
+                self.logger.info(f"Update eval record successfully, id={target_id}")
                 break
         if not replaced:
             self._eval_records_for_browse.append(record)
-        self._eval_records_for_browse.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
+            self.logger.info(f"Update eval record failed, append it.")
+        # self._eval_records_for_browse.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
 
-    def _sync_browse_on_record_start(self, eval_record_id: int, sub_task_id: Optional[int] = None) -> None:
-        """Sync main-process eval browse cache immediately when recording starts."""
-        self._pending_record = {
-            "id": int(eval_record_id),
-            "sub_task_id": int(sub_task_id)+1 if sub_task_id is not None else None,
-            "duration": 0.0,
-            "score": None,
-            "note": "",
-        }
-        self._upsert_eval_browse_record(self._pending_record)
+    def _delete_eval_browse_record(self, record_id: id) -> None:
+        is_deleted = False
+        for i in range(len(self._eval_records_for_browse) - 1, -1, -1):
+            if self._eval_records_for_browse[i].get('id') == record_id:
+                del self._eval_records_for_browse[i]
+                self.logger.info(f"Delete eval record successfully, id={record_id}")
+                is_deleted = True
+                break
+        if not is_deleted:
+            self.logger.info(f"Delete eval record failed, id={record_id}")
 
-    def _sync_browse_on_record_end(self, duration: float) -> None:
-        """Sync main-process eval browse cache immediately when recording ends."""
-        if self._pending_record is not None:
-            self._pending_record['duration'] = duration
-        self._upsert_eval_browse_record(self._pending_record)
-        self._pending_record = None
+    # def _sync_browse_on_record_start(self, eval_record_id: int, sub_task_id: Optional[int] = None) -> None:
+    #     """Sync main-process eval browse cache immediately when recording starts."""
+    #     self._pending_record = {
+    #         "id": int(eval_record_id),
+    #         "sub_task_id": int(sub_task_id)+1 if sub_task_id is not None else None,
+    #         "duration": 0.0,
+    #         "score": None,
+    #         "note": "",
+    #     }
+    #     self._upsert_eval_browse_record(self._pending_record)
+
+    # def _sync_browse_on_record_end(self, duration: float) -> None:
+    #     """Sync main-process eval browse cache immediately when recording ends."""
+    #     if self._pending_record is not None:
+    #         self._pending_record['duration'] = duration
+    #     self._upsert_eval_browse_record(self._pending_record)
+    #     self._pending_record = None
 
     def _check_eval_dir(self, save_path: str) -> bool:
         """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in writer process."""
@@ -1339,7 +1404,7 @@ class EvaluationResultRecorder:
         self._eval_records = []
         record_id = 0
         if not self._eval_json_file or (not os.path.exists(self._eval_json_file)):
-            self.logger.info(f"Load eval records for recording terminated, eval_json_file doesn't exist. Total eval records = {len(self._eval_records)}")
+            self.logger.info(f"Load eval records from json file terminated, eval_json_file doesn't exist. Total eval records = {len(self._eval_records)}")
             return record_id
 
         try:
@@ -1347,55 +1412,83 @@ class EvaluationResultRecorder:
                 data = json.load(f)
             if isinstance(data, list):
                 self._eval_records = [r for r in data if isinstance(r, dict)]
+                self._sync_eval_records_for_share(targets=self._eval_records)
                 if self._eval_records:
                     record_id = max(int(r.get('id', -1)) for r in self._eval_records) + 1
         except Exception as e:
             self.logger.exception(f"Load eval_log.json failed: {e}")
             self._eval_records = []
             record_id = 0
-        self.logger.info(f"Load eval records for recording successfully, total records = {len(self._eval_records)}, max record_id = {record_id}")
+        self.logger.info(f"Load eval records from json file successfully, total records = {len(self._eval_records)}, max record_id = {record_id}")
         return record_id
 
-    def _check_eval_dir_for_browse(self, save_path: str) -> bool:
-        """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in main process."""
-        load_data = False
+    def _sync_eval_records_for_share(self, targets: Union[List[Dict[str, Any]], Dict[str, Any], int]) -> None:
+        """Publish eval records or record_id to the shared queue for main-process browse sync."""
+        if targets is None:
+            return
+        def _convert_to_eval_record_for_browse(record: Dict[str, Any]) -> Dict[str, Any]:
+            return {
+                "id": int(record.get("id", -1)),
+                "sub_task_id": record.get("sub_task_id", None) + 1 if record.get("sub_task_id", None) else None,
+                "duration": record.get("duration", None),
+                "score": record.get("score", None),
+                "note": record.get("note", ""),
+            }
+        # 1. Handle list of dict: iterate and put each record individually
+        if isinstance(targets, list):
+            for item in targets:
+                if isinstance(item, dict):
+                    self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=item))
+                elif isinstance(item, int):
+                    self._eval_records_for_share.put(item)
+            return
+
+        # 2. Handle single dict: put directly
+        if isinstance(targets, dict):
+            self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=item))
+            return
+
+        # 3. Handle int (record_id for deletion): put directly
+        if isinstance(targets, int):
+            self._eval_records_for_share.put(targets)
+            return
+
+        self.logger.warning(f"Unsupported target type for _sync_eval_records_for_share: {type(targets)}")
+
+
+    def _is_need_load(self, save_path: str) -> bool:
+        """Return true when eval_dir assigned or changed. Called in main process."""
+        need_load = False
         if self._eval_dir_for_browse is None or self._eval_dir_for_browse != os.path.join(save_path, 'eval'):
-            load_data = True
+            need_load = True
             self._eval_dir_for_browse = os.path.join(save_path, 'eval')
-            # Ensure eval directory exists.
-            if not os.path.exists(self._eval_dir_for_browse):
-                self.logger.info(f"Eval directory doesn't exist: {self._eval_dir_for_browse}")
-                self._eval_json_file_for_browse = None
-            self._eval_json_file_for_browse = os.path.join(self._eval_dir_for_browse, 'eval_log.json')
-        else:
-            self.logger.info(f"Eval directory already exists: {self._eval_dir_for_browse}")
+        self.logger.info(f"Eval directory: {self._eval_dir_for_browse}, need_load: {need_load}")
+        return need_load
 
-        return load_data
+    # def _load_existing_browse_records(self) -> None:
+    #     """Load evaluation browse records using eval_log.json. Called in main process."""
+    #     records: List[Dict[str, Any]] = []
+    #     if self._eval_json_file_for_browse and os.path.exists(self._eval_json_file_for_browse):
+    #         try:
+    #             with open(self._eval_json_file_for_browse, 'r', encoding='utf-8') as f:
+    #                 data = json.load(f)
+    #             if isinstance(data, list):
+    #                 for row in data:
+    #                     if not isinstance(row, dict):
+    #                         continue
+    #                     records.append({
+    #                         "id": int(row.get("id", -1)),
+    #                         "sub_task_id": row.get("sub_task_id", None) + 1 if row.get("sub_task_id", None) else None,
+    #                         "duration": row.get("duration", None),
+    #                         "score": row.get("score", None),
+    #                         "note": row.get("note", ""),
+    #                     })
+    #         except Exception:
+    #             self.logger.warning("Failed to parse eval_log.json: %s", self._eval_json_file_for_browse, exc_info=True)
 
-    def _load_existing_browse_records(self) -> None:
-        """Load evaluation browse records using eval_log.json. Called in main process."""
-        records: List[Dict[str, Any]] = []
-        if self._eval_json_file_for_browse and os.path.exists(self._eval_json_file_for_browse):
-            try:
-                with open(self._eval_json_file_for_browse, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                if isinstance(data, list):
-                    for row in data:
-                        if not isinstance(row, dict):
-                            continue
-                        records.append({
-                            "id": int(row.get("id", -1)),
-                            "sub_task_id": row.get("sub_task_id", None) + 1 if row.get("sub_task_id", None) else None,
-                            "duration": row.get("duration", None),
-                            "score": row.get("score", None),
-                            "note": row.get("note", ""),
-                        })
-            except Exception:
-                self.logger.warning("Failed to parse eval_log.json: %s", self._eval_json_file_for_browse, exc_info=True)
-
-        records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
-        self._eval_records_for_browse = records
-        self.logger.info(f"Load eval records for browse successfully, eval_json_file = {self._eval_json_file_for_browse}, total records = {len(records)}")
+    #     records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
+    #     self._eval_records_for_browse = records
+    #     self.logger.info(f"Load eval records for browse successfully, eval_json_file = {self._eval_json_file_for_browse}, total records = {len(records)}")
 
 
     def begin_recording(self, eval_record_id: int):
@@ -1512,6 +1605,7 @@ class EvaluationResultRecorder:
         self._current_record['instruction'] = language_status.get('language', None)
         # self._current_record['episode_id'] = step_runtime.get('episode_id', None)
         self._updata_current_record(step_extra=step_extra)
+        self._sync_eval_records_for_share(targets=self._current_record)
     
     def _updata_current_record(self, step_extra: dict):
         self._obv_count += 1
@@ -1530,6 +1624,7 @@ class EvaluationResultRecorder:
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
         self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 1)
+        self._sync_eval_records_for_share(targets=self._current_record)
         return self._current_record['id'], self._current_record['duration']
     
     def _timestamp(self, time_stamp) -> str:
@@ -1571,7 +1666,7 @@ class EvaluationResultRecorder:
             self.logger.exception(f"Failed to enqueue eval record CRUD command: {e}")
 
     def _apply_eval_record_crud_command(self, payload: Dict[str, Any]) -> None:
-        """Apply one CRUD command to local _eval_records and flush to disk."""
+        """Apply one CRUD command to update _eval_records and flush to disk."""
         command = str(payload.get("command", "")).strip()
         record_id = int(payload.get("record_id", -1))
         if command == "LoadRecords":
@@ -1588,14 +1683,17 @@ class EvaluationResultRecorder:
 
         if command == "UpdateScore":
             rec['score'] = payload.get('score', None)
+            self._sync_eval_records_for_share(targets=rec)
             self._flush_to_disk()
         elif command == "UpdateNote":
             rec['note'] = payload.get('note', "")
+            self._sync_eval_records_for_share(targets=rec)
             self._flush_to_disk()
         elif command == "DeleteRecord":
             for i in range(len(self._eval_records) - 1, -1, -1):
                 if int(self._eval_records[i].get('id', -1)) == record_id:
                     del self._eval_records[i]
+                    self._sync_eval_records_for_share(targets=record_id)
                     self._flush_to_disk()
                     return
         else:
@@ -1657,28 +1755,28 @@ class EvaluationResultRecorder:
                 self.logger.exception(f"Eval record CRUD drain apply failed: {e}")
 
     def set_score(self, record_id: int, score: Optional[float]) -> None:
-        rec = next((r for r in self._eval_records_for_browse if r['id'] == record_id), None)
-        if rec is None:
-            return
-        rec['score'] = score
+        # rec = next((r for r in self._eval_records_for_browse if r['id'] == record_id), None)
+        # if rec is None:
+        #     return
+        # rec['score'] = score
         self._enqueue_eval_record_crud(command="UpdateScore", record_id=record_id, score=score, note="")
         return
 
 
     def set_note(self, record_id: int, note: str) -> None:
-        rec = next((r for r in self._eval_records_for_browse if r['id'] == record_id), None)
-        if rec is None:
-            return
-        rec['note'] = note
+        # rec = next((r for r in self._eval_records_for_browse if r['id'] == record_id), None)
+        # if rec is None:
+        #     return
+        # rec['note'] = note
         self._enqueue_eval_record_crud(command="UpdateNote", record_id=record_id, score=None, note=note)
         return
 
 
     def delete_record(self, record_id: int) -> None:
-        for i in range(len(self._eval_records_for_browse) - 1, -1, -1):
-            if self._eval_records_for_browse[i].get('id') == record_id:
-                del self._eval_records_for_browse[i]
-                break
+        # for i in range(len(self._eval_records_for_browse) - 1, -1, -1):
+        #     if self._eval_records_for_browse[i].get('id') == record_id:
+        #         del self._eval_records_for_browse[i]
+        #         break
         self._enqueue_eval_record_crud(command="DeleteRecord", record_id=record_id, score=None, note="")
         return
 
