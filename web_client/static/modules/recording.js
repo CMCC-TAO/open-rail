@@ -86,14 +86,6 @@ function renderRecordingConfigTree(cfg = App.config) {
   syncRecordingSwitchUI();
 }
 
-function getRecordingSaveItems() {
-  const items = [];
-  if ($('chk-record-episode')?.checked) items.push('Episode');
-  // if ($('chk-record-expdata')?.checked) items.push('ExpData');
-  if ($('chk-record-eval-log')?.checked) items.push('Evaluation');
-  return items;
-}
-
 async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } = {}) {
   if (!App.isRunning || !App.isRecording) {
     syncRecordingSwitchUI();
@@ -534,11 +526,10 @@ function setupRecordingPanel() {
         await stopDataRecordingIfNeeded({ silent: false, refreshList: true });
       } else {
         // Start recording
-        const saveItems = getRecordingSaveItems();
         try {
           const res = await apiFetch('/api/client/record/start', {
             method: 'POST',
-            body: JSON.stringify({ save_items: saveItems }),
+            body: JSON.stringify({}),
           });
           const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
           if (currentTaskDir) {

@@ -1261,7 +1261,7 @@ class EvaluationResultRecorder:
         """Set task information and prepare for data recording. Called in writer process"""
         self.logger.info(f"save_path: {save_path}, episode_id: {episode_id}")
         self._episode_id = episode_id
-        record_id = 0
+        record_id = None
         if self._check_eval_dir(save_path=save_path):
             record_id = self._load_existing_records()
         return record_id
@@ -1364,24 +1364,6 @@ class EvaluationResultRecorder:
         if not is_deleted:
             self.logger.info(f"Delete eval record failed, id={record_id}")
 
-    # def _sync_browse_on_record_start(self, eval_record_id: int, sub_task_id: Optional[int] = None) -> None:
-    #     """Sync main-process eval browse cache immediately when recording starts."""
-    #     self._pending_record = {
-    #         "id": int(eval_record_id),
-    #         "sub_task_id": int(sub_task_id)+1 if sub_task_id is not None else None,
-    #         "duration": 0.0,
-    #         "score": None,
-    #         "note": "",
-    #     }
-    #     self._upsert_eval_browse_record(self._pending_record)
-
-    # def _sync_browse_on_record_end(self, duration: float) -> None:
-    #     """Sync main-process eval browse cache immediately when recording ends."""
-    #     if self._pending_record is not None:
-    #         self._pending_record['duration'] = duration
-    #     self._upsert_eval_browse_record(self._pending_record)
-    #     self._pending_record = None
-
     def _check_eval_dir(self, save_path: str) -> bool:
         """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in writer process."""
         load_data = False
@@ -1402,7 +1384,7 @@ class EvaluationResultRecorder:
     def _load_existing_records(self) -> None:
         """Load existing records from eval_log.json; fallback to empty list. Called in writer process."""
         self._eval_records = []
-        record_id = 0
+        record_id = -1
         if not self._eval_json_file or (not os.path.exists(self._eval_json_file)):
             self.logger.info(f"Load eval records from json file terminated, eval_json_file doesn't exist. Total eval records = {len(self._eval_records)}")
             return record_id
@@ -1418,7 +1400,7 @@ class EvaluationResultRecorder:
         except Exception as e:
             self.logger.exception(f"Load eval_log.json failed: {e}")
             self._eval_records = []
-            record_id = 0
+            record_id = -1
         self.logger.info(f"Load eval records from json file successfully, total records = {len(self._eval_records)}, max record_id = {record_id}")
         return record_id
 
@@ -1466,32 +1448,6 @@ class EvaluationResultRecorder:
             self._eval_dir_for_browse = os.path.join(save_path, 'eval')
         self.logger.info(f"Eval directory: {self._eval_dir_for_browse}, need_load: {need_load}")
         return need_load
-
-    # def _load_existing_browse_records(self) -> None:
-    #     """Load evaluation browse records using eval_log.json. Called in main process."""
-    #     records: List[Dict[str, Any]] = []
-    #     if self._eval_json_file_for_browse and os.path.exists(self._eval_json_file_for_browse):
-    #         try:
-    #             with open(self._eval_json_file_for_browse, 'r', encoding='utf-8') as f:
-    #                 data = json.load(f)
-    #             if isinstance(data, list):
-    #                 for row in data:
-    #                     if not isinstance(row, dict):
-    #                         continue
-    #                     records.append({
-    #                         "id": int(row.get("id", -1)),
-    #                         "sub_task_id": row.get("sub_task_id", None) + 1 if row.get("sub_task_id", None) else None,
-    #                         "duration": row.get("duration", None),
-    #                         "score": row.get("score", None),
-    #                         "note": row.get("note", ""),
-    #                     })
-    #         except Exception:
-    #             self.logger.warning("Failed to parse eval_log.json: %s", self._eval_json_file_for_browse, exc_info=True)
-
-    #     records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
-    #     self._eval_records_for_browse = records
-    #     self.logger.info(f"Load eval records for browse successfully, eval_json_file = {self._eval_json_file_for_browse}, total records = {len(records)}")
-
 
     def begin_recording(self, eval_record_id: int):
         self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
@@ -1675,6 +1631,7 @@ class EvaluationResultRecorder:
             task_path = str(payload.get("task_path", "")).strip()
             if self._check_eval_dir(save_path=task_path):
                 self._load_existing_records()
+                self._eval_dir = None
                 self.logger.info(f"CRUD command: {command} executed successfully, task_path: {task_path}")
                 return
 
@@ -1979,7 +1936,8 @@ class DataRecordManager:
         if self.config.get('is_record_eval_log', False):
             record_id = self.eval_recorder.set_task(save_path=self.save_path, episode_id=self.shared_data.episode_index.value)
             # Keep next eval record id consistent across processes.
-            self._sync_shared_data(eval_record_id = record_id + 1)
+            if record_id is not None:
+                self._sync_shared_data(eval_record_id = record_id + 1)
         else:
             self.logger.info("Recording evaluation log is disabled, skip recording.")
     
