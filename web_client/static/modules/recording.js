@@ -324,7 +324,7 @@ function renderEvaluationResults(evalResults = []) {
       <tr>
         <td class="col-id">${esc(id)}</td>
         <td class="col-task">${esc(subTask)}</td>
-        <td class="col-dur">${esc(duration)}</td>
+        <td class="col-dur">${esc(duration)}s</td>
         <td class="col-score"><select class="eval-log-score-sel" data-record-id="${escAttr(id)}">${scoreOptionsHtml}</select></td>
         <td class="col-note">${esc(note)}</td>
         <td class="col-del"></td>

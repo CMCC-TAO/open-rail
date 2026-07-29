@@ -319,12 +319,12 @@
   table-layout: fixed;
 }
 /* Table Column Controls */
-.col-id    { width: 10%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.col-task  { width: 20%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.col-dur   { width: 20%; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.col-score { width: 22%; text-align: center; }
-.col-note  { width: 20%; text-align: center; }
-.col-del   { width:  8%; min-width: 22px; text-align: center; }
+.col-id    { width: 12%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-task  { width: 10%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-dur   { width: 22%; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.col-score { width: 16%; text-align: center; }
+.col-note  { width: 24%; text-align: center; }
+.col-del   { width:  6%; min-width: 22px; text-align: center; }
 
 .eval-log-table thead th {
   position: sticky;
