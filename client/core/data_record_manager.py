@@ -1286,7 +1286,7 @@ class EvaluationResultRecorder:
                 self._enqueue_eval_record_crud(command="LoadRecords", record_id=-1, score=None, note="", task_path=task_path)
                 clear = True
                 append = True
-            self._sync_eval_records_for_browse(timeout_s=0.1, max_empty_retries=5, clear=clear, append=append)
+            self._sync_eval_records_for_browse(timeout_s=0.05, max_empty_retries=5, clear=clear, append=append)
         except Exception as e:
             self.logger.exception(f"Failed to load eval records: {e}")
         return self._eval_records_for_browse
@@ -1427,9 +1427,11 @@ class EvaluationResultRecorder:
         if targets is None:
             return
         def _convert_to_eval_record_for_browse(record: Dict[str, Any]) -> Dict[str, Any]:
+            sub_task_id = record.get("sub_task_id", None)
+            # self.logger.debug(f"sub_task_id={sub_task_id}")
             return {
                 "id": int(record.get("id", -1)),
-                "sub_task_id": record.get("sub_task_id", None) + 1 if record.get("sub_task_id", None) else None,
+                "sub_task_id": sub_task_id + 1 if sub_task_id else None,
                 "duration": record.get("duration", None),
                 "score": record.get("score", None),
                 "note": record.get("note", ""),
@@ -1445,7 +1447,7 @@ class EvaluationResultRecorder:
 
         # 2. Handle single dict: put directly
         if isinstance(targets, dict):
-            self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=item))
+            self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=targets))
             return
 
         # 3. Handle int (record_id for deletion): put directly
