@@ -228,8 +228,8 @@ class RobotBody(RobotBase):
             self.currt_index += 1
 
         current_timestamp = time.time()
-        if current_timestamp - self.last_timestamp < self.period:
-            time.sleep(self.period - (current_timestamp - self.last_timestamp))
+        if current_timestamp - self.last_timestamp < self.period - 0.0003:
+            time.sleep(self.period - (current_timestamp - self.last_timestamp) - 0.0003)
         self.last_timestamp = time.time()
         return result
 
