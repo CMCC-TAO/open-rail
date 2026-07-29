@@ -205,9 +205,10 @@ class VLAClientAsync():
             self.current_prob_progress = 0.0
         # TODO: Robot reset
 
-    def start_recording(self):
+    def start_recording(self) -> str:
         self.config.record.switch = True
-        self.data_record_manager.start_recording(self.config.language.task_id)
+        task_dir = self.data_record_manager.start_recording(self.config.language.task_id)
+        return task_dir
 
     def stop_recording(self):
         self.config.record.switch = False

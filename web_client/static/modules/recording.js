@@ -541,16 +541,11 @@ function setupRecordingPanel() {
             body: JSON.stringify({ save_items: saveItems }),
           });
           const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
-          const currentTask = typeof res?.recording_task === 'string' ? res.recording_task : '';
           if (currentTaskDir) {
             App.recordingTask = currentTaskDir;
             App.recordingChunk = null;
             App.recordingChunksSnapshot = [];
-          } else if (currentTask) {
-            App.recordingTask = currentTask;
-            App.recordingChunk = null;
-            App.recordingChunksSnapshot = [];
-          }
+          } 
 
           App.isRecording = true;
           if (!App.config || typeof App.config !== 'object') App.config = {};
