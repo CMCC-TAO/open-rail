@@ -80,8 +80,8 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.0
-  wait_time: 200
+  speed: 1.5
+  wait_time: 50
 inter_chunk:
   inter_chunk_mode: min_jerk
   min_jerk:
@@ -815,6 +815,6 @@ visualize:
 vla_zmq:
   heartbeat_interval: 1000
   heartbeat_timeout: 30000
-  infer_timeout: 500
+  infer_timeout: 5000
   ip: 127.0.0.1
   port: '5566'

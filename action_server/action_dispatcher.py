@@ -737,6 +737,40 @@ def main(args=None):
         _ = dispatcher._context.robot_body
         dispatcher.get_logger().info('robot_body pre-initialized, wait set is stable')
 
+        # ===== VLA Warmup: GPU 预热 =====
+        # 利用 server 冷启动（CUDA kernel 编译、显存分配）的时间窗口做首帧推理，
+        # 后续 init_grasp 的任务推理直接命中热 GPU，首帧不卡。
+        dispatcher.get_logger().info('VLA warmup: starting pre-inference to warm GPU...')
+        try:
+            _components = dispatcher._context.ensure_vla_components()
+            _vla_client = _components["vla_client"]
+            _rdm = _components["rdm"]
+
+            _vla_client.start_observe()
+            _vla_client.start_inference()
+
+            # 等待首帧推理结果（超时 15 秒）
+            _deadline = time.time() + 15
+            _warmup_ok = False
+            while time.time() < _deadline:
+                if _rdm.action_chunk_fitted is not None:
+                    _warmup_ok = True
+                    break
+                time.sleep(0.05)
+
+            # 停掉线程（is_*_thread_running = False，线程进入 sleep-wait）。
+            # init_grasp 调用 start_observe/inference 时只需设回 flag，
+            # 线程本身还活着，瞬间恢复工作。
+            _vla_client.stop_inference()
+            _vla_client.stop_observe()
+
+            if _warmup_ok:
+                dispatcher.get_logger().info('VLA warmup: GPU warmed successfully')
+            else:
+                dispatcher.get_logger().warn('VLA warmup: no inference result within 15s, continuing')
+        except Exception as _e:
+            dispatcher.get_logger().error(f'VLA warmup failed (continuing anyway): {_e}')
+
         # 启动观测数据桥接（供 action_web_vision 服务器消费）
         dispatcher._obs_bridge = ObsDataBridge(dispatcher._context, dispatcher._grasp_detector)
         dispatcher._obs_bridge.start()
