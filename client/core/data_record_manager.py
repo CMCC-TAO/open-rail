@@ -1431,7 +1431,7 @@ class EvaluationResultRecorder:
             # self.logger.debug(f"sub_task_id={sub_task_id}")
             return {
                 "id": int(record.get("id", -1)),
-                "sub_task_id": sub_task_id + 1 if sub_task_id else None,
+                "sub_task_id": sub_task_id + 1 if sub_task_id is not None else None,
                 "duration": record.get("duration", None),
                 "score": record.get("score", None),
                 "note": record.get("note", ""),
