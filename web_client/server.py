@@ -2012,22 +2012,11 @@ async def client_language_set(req: LanguageSetRequest):
 async def client_record_start(req: RecordStartRequest):
     try:
         vla_client, _ = _require_runtime('start_recording')
-        vla_client.start_recording()
-        # await asyncio.to_thread(vla_client.data_record_manager.start_recording)
-        current_recording_task = str(getattr(vla_client.data_record_manager, 'current_task', '') or '')
-        current_recording_dir = ''
-        try:
-            save_path = str(getattr(vla_client.data_record_manager, 'save_path', '') or '')
-            if save_path:
-                current_recording_dir = Path(save_path).name
-        except Exception:
-            current_recording_dir = ''
-        # print(F"DEBUG: record started.")
+        task_dir = vla_client.start_recording()
         return {
             'status': 'ok',
             'command': 'start_recording',
-            'recording_task': current_recording_task,
-            'recording_task_dir': current_recording_dir,
+            'recording_task_dir': task_dir,
             # 'updated_camera_shapes': updated_camera_shapes,
         }
     except HTTPException:

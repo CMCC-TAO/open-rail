@@ -2050,7 +2050,7 @@ class DataRecordManager:
                     if write_future is not None and (not write_future.done()):
                         self.logger.warning("Receive start command while previous write task is still running, skip.")
                         continue
-                    self.set_task(task = command.get("task_dir", "default"))
+                    self.set_task(task_dir = command.get("task_dir", "default"))
                     write_future = write_executor.submit(self._write_process_fun)
                 elif command.get("command", "") == "stop":
                     self.shared_data.running.value = False
