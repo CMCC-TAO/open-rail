@@ -185,6 +185,10 @@ class GraspHandler(AbstractTaskHandler):
         print(f'[DEBUG GraspHandler] Using persistent VLA components, starting control only...')
 
         try:
+            # 开启 GraspDetector 调试打印
+            if context.grasp_detector is not None:
+                context.grasp_detector.set_verbose(True)
+
             # ===== 步骤 3: 执行 VLA 推理（只启动 control） =====
             context._active_vla_client = vla_client
 
@@ -206,7 +210,12 @@ class GraspHandler(AbstractTaskHandler):
                 blend_config=blend_config,
             )
 
-            # ===== 步骤 4: 分析结果 =====
+            # ===== 步骤 4: 等待 3s 让触觉检测持续判定 =====
+            # GraspDetector 在此期间持续监控触觉条件，结果以 3s 结束时的状态为准
+            print(f'[GraspHandler] VLA done, waiting 3s for grasp detection...')
+            time.sleep(3.0)
+
+            # ===== 步骤 5: 分析结果 =====
             if not result.success:
                 if result.error_code == 6:
                     return TaskResult(False, error_code=ERR_GRASP_TIMEOUT,
@@ -235,6 +244,9 @@ class GraspHandler(AbstractTaskHandler):
                               error_message="Right hand grasp failed")
 
         finally:
+            # 关闭 GraspDetector 调试打印
+            if context.grasp_detector is not None:
+                context.grasp_detector.set_verbose(False)
             # ===== 步骤 5: 清理（仅清除 active 引用，不销毁组件） =====
             context._active_vla_client = None
             _elapsed = time.time() - _t0

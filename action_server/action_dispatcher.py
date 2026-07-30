@@ -7,8 +7,15 @@ VLA Action Dispatcher - 任务分发型 ROS2 Action Server
 # ════════════════════════════════════════════════════════════════
 # 抓取检测配置参数 —— 修改此处即可调节抓取判定灵敏度
 # ════════════════════════════════════════════════════════════════
-GRASP_ANGLE_DIFF_THRESHOLD = 200.0   # 拇指弯曲角度差阈值 (set_angle - get_angle)
-GRASP_HOLD_DURATION_SEC = 0.5        # 差值需持续超过阈值的最短时间（秒）
+
+# ── 触觉方案 ──
+# 抓取条件（两项同时满足并持续 TOUCH_GRASP_HOLD_SEC）：
+#   1. nf_sum > TOUCH_NF_THRESHOLD
+#   2. tf_sum > TOUCH_TF_THRESHOLD
+TOUCH_NF_THRESHOLD = 1000             # 法向力总和阈值
+TOUCH_TF_THRESHOLD = 1000             # 切向力总和阈值
+TOUCH_PER_FINGER_NF = 40             # 单指 NF 阈值（仅用于调试显示）
+TOUCH_GRASP_HOLD_SEC = 0.5           # 条件持续满足多久才判定抓取成功（秒）
 
 import sys
 import os
@@ -31,176 +38,191 @@ from message_center.action import ExecutionUnit
 from action_server.action_base import AbstractTaskHandler, TaskResult
 from action_server.vla_context import VLAContext
 
+# 判断触觉传感器消息类型是否可用
+try:
+    from message_center.msg import TouchStatus  # noqa: F401
+    _HAS_TOUCH_STATUS = True
+except ImportError:
+    _HAS_TOUCH_STATUS = False
+
 
 # ════════════════════════════════════════════════════════════════
-# Grasp Detector — 实时监控手部 set_angle/get_angle 差值判断抓取状态
+# Grasp Detector — 触觉传感器判断抓取状态
 # ════════════════════════════════════════════════════════════════
 class GraspDetector:
-    """通过比较手部 set_angle 与 get_angle 的 thumb_bend 差值来检测抓取状态。
+    """通过触觉传感器判断抓取状态。
 
-    判定逻辑:
-        对于每只手，如果 set_angle[thumb_bend] - get_angle[thumb_bend] > 阈值
-        并且持续超过 GRASP_HOLD_DURATION_SEC 秒，则判定该手处于抓取状态。
-
-    内部维护 [左手抓取, 右手抓取] 的 bool 列表，实时更新。
-
-    监控的 ROS2 话题:
-        - /left_hand/set_angle   (期望角度, JointState)
-        - /left_hand/get_angle   (实际角度, JointState)
-        - /right_hand/set_angle  (期望角度, JointState)
-        - /right_hand/get_angle  (实际角度, JointState)
+    判定条件（两项同时满足且持续 TOUCH_GRASP_HOLD_SEC）：
+        1. nf_sum > TOUCH_NF_THRESHOLD
+        2. tf_sum > TOUCH_TF_THRESHOLD
     """
 
-    # 手部关节顺序: little, ring, middle, index, thumb_bend, thumb_rotate
-    THUMB_BEND_INDEX = 4
-
     def __init__(self, node: Node):
-        from sensor_msgs.msg import JointState
-        from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
-
         self._node = node
         self._lock = threading.Lock()
 
-        # ── 抓取状态：[左手是否抓取, 右手是否抓取] ──
+        # ── 抓取状态 ──
         self._grasp_state = [False, False]
+        self._verbose = False  # 是否打印调试信息（grasp 任务期间才开启）
 
-        # ── 缓存最新的 set/get 角度 ──
-        # key: 'left_set', 'left_get', 'right_set', 'right_get'
-        self._angle_cache = {
-            'left_set': None,
-            'left_get': None,
-            'right_set': None,
-            'right_get': None,
-        }
+        # ── 触觉缓存 ──
+        self._left_nf_sum: int = 0
+        self._left_tf_sum: int = 0
+        self._left_contact: int = 0          # 调试显示用
+        self._left_nf_per_finger: list = []   # 调试显示用
 
-        # ── 差值首次超过阈值的时间戳 ──
-        self._left_exceed_since: float = 0.0   # 0.0 表示当前未超限
-        self._right_exceed_since: float = 0.0
+        self._right_nf_sum: int = 0
+        self._right_tf_sum: int = 0
+        self._right_contact: int = 0
+        self._right_nf_per_finger: list = []
 
-        # ── 定时打印线程（约 1s 间隔）──
+        # 触觉抓取计时器
+        self._left_touch_hold_since: float = 0.0
+        self._right_touch_hold_since: float = 0.0
+
+        # ── 定时打印线程 ──
         self._print_running = True
         self._print_thread = threading.Thread(target=self._print_loop, daemon=True)
         self._print_thread.start()
 
-        # QoS: 与机器人驱动匹配 BEST_EFFORT
-        qos_sensor = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
-            durability=QoSDurabilityPolicy.VOLATILE,
-            depth=10,
-        )
+        # ── 订阅触觉 ──
+        self._touch_available = _HAS_TOUCH_STATUS
+        if self._touch_available:
+            node.create_subscription(
+                TouchStatus, '/left_hand/touch_status',
+                self._cb_left_touch, 10)
+            node.create_subscription(
+                TouchStatus, '/right_hand/touch_status',
+                self._cb_right_touch, 10)
 
-        # ── 订阅 4 个话题 ──
-        node.create_subscription(
-            JointState, '/left_hand/set_angle',
-            self._cb_left_set, qos_sensor)
-        node.create_subscription(
-            JointState, '/left_hand/get_angle',
-            self._cb_left_get, qos_sensor)
-        node.create_subscription(
-            JointState, '/right_hand/set_angle',
-            self._cb_right_set, qos_sensor)
-        node.create_subscription(
-            JointState, '/right_hand/get_angle',
-            self._cb_right_get, qos_sensor)
+        touch_info = (
+            f'nf>{TOUCH_NF_THRESHOLD} tf>{TOUCH_TF_THRESHOLD} '
+            f'hold={TOUCH_GRASP_HOLD_SEC}s'
+        ) if self._touch_available else '触觉不可用'
+        node.get_logger().info(f'[GraspDetector] Started | {touch_info}')
 
-        node.get_logger().info(
-            f'[GraspDetector] Started | threshold={GRASP_ANGLE_DIFF_THRESHOLD}, '
-            f'hold={GRASP_HOLD_DURATION_SEC}s'
-        )
+    # ── 定时打印 ──────────────────────────────────────────────────
 
-    # ── 定时打印 ──
+    def set_verbose(self, enabled: bool):
+        """开启/关闭调试打印（grasp 任务期间开启，其他时间关闭）"""
+        self._verbose = enabled
 
     def _print_loop(self):
-        """每隔约 1 秒打印一次当前抓取状态及角度差，便于调试观察"""
+        """每秒打印抓取状态（仅 verbose=True 时）"""
         while self._print_running:
             time.sleep(1.0)
+            if not self._verbose:
+                continue
             with self._lock:
                 state = list(self._grasp_state)
-                diffs = {
-                    'left': self._compute_diff('left_set', 'left_get'),
-                    'right': self._compute_diff('right_set', 'right_get'),
-                }
-            left_str = f"{diffs['left']:+8.1f}" if diffs['left'] is not None else "    N/A"
-            right_str = f"{diffs['right']:+8.1f}" if diffs['right'] is not None else "    N/A"
-            print(
-                f"[GraspDetector] state={state}  "
+                l_info = (self._left_nf_sum, self._left_tf_sum, self._left_contact,
+                          list(self._left_nf_per_finger))
+                r_info = (self._right_nf_sum, self._right_tf_sum, self._right_contact,
+                          list(self._right_nf_per_finger))
+
+            self._print_hand('L', state[0], l_info)
+            self._print_hand('R', state[1], r_info)
+
+    def _print_hand(self, tag, grasped, info):
+        nf_sum, tf_sum, contact, nf_pf = info
+
+        if nf_pf:
+            finger_s = ''.join(
+                'T' if nf >= TOUCH_PER_FINGER_NF else ('t' if nf > 0 else '.')
+                for nf in nf_pf
             )
+        else:
+            finger_s = '?'
+
+        state_mark = "✓" if grasped else " "
+        print(
+            f"[GraspDetector] [{state_mark}] {tag}: "
+            f"nf={nf_sum:4d} tf={tf_sum:4d} cnt={contact} "
+            f"fingers=[{finger_s}]"
+        )
 
     def stop(self):
-        """停止打印线程"""
         self._print_running = False
 
-    # ── 回调函数 ──
+    # ── 触觉回调 ──────────────────────────────────────────────────
 
-    def _cb_left_set(self, msg):
-        self._on_angle('left_set', msg)
+    def _cb_left_touch(self, msg):
+        nf_sum, tf_sum, contact, nf_pf = self._extract_touch_data(msg)
+        with self._lock:
+            self._left_nf_sum = nf_sum
+            self._left_tf_sum = tf_sum
+            self._left_contact = contact
+            self._left_nf_per_finger = nf_pf
+            self._evaluate_grasp()
 
-    def _cb_left_get(self, msg):
-        self._on_angle('left_get', msg)
+    def _cb_right_touch(self, msg):
+        nf_sum, tf_sum, contact, nf_pf = self._extract_touch_data(msg)
+        with self._lock:
+            self._right_nf_sum = nf_sum
+            self._right_tf_sum = tf_sum
+            self._right_contact = contact
+            self._right_nf_per_finger = nf_pf
+            self._evaluate_grasp()
 
-    def _cb_right_set(self, msg):
-        self._on_angle('right_set', msg)
+    @staticmethod
+    def _extract_touch_data(msg) -> tuple:
+        """从 TouchStatus 消息提取触觉特征。
+        Returns: (nf_sum, tf_sum, contact_count, nf_per_finger)"""
+        nf_sum = 0
+        tf_sum = 0
+        contact = 0
+        nf_pf = []
+        for f in msg.fingers:
+            nf = f.normal_force1 + f.normal_force2 + f.normal_force3
+            tf = f.tangential_force1 + f.tangential_force2 + f.tangential_force3
+            nf_sum += nf
+            tf_sum += tf
+            nf_pf.append(nf)
+            if nf > TOUCH_PER_FINGER_NF:
+                contact += 1
+        return nf_sum, tf_sum, contact, nf_pf
 
-    def _cb_right_get(self, msg):
-        self._on_angle('right_get', msg)
-
-    def _on_angle(self, key: str, msg):
-        """提取 thumb_bend position 并缓存，然后更新抓取判定"""
-        idx = self.THUMB_BEND_INDEX
-        if msg.position and len(msg.position) > idx:
-            with self._lock:
-                self._angle_cache[key] = float(msg.position[idx])
-                self._evaluate_grasp()
+    # ── 核心判定逻辑 ───────────────────────────────────────────────
 
     def _evaluate_grasp(self):
-        """重新评估左右手抓取状态（必须在 _lock 内调用）"""
+        """评估左右手抓取状态（必须在 _lock 内调用）"""
         now = time.time()
 
-        # ── 左手 ──
-        left_diff = self._compute_diff('left_set', 'left_get')
-        if left_diff is not None and left_diff > GRASP_ANGLE_DIFF_THRESHOLD:
-            if self._left_exceed_since == 0.0:
-                self._left_exceed_since = now
-            if now - self._left_exceed_since >= GRASP_HOLD_DURATION_SEC:
-                self._grasp_state[0] = True
+        g0, self._left_touch_hold_since = self._eval_one_hand(
+            now, self._left_nf_sum, self._left_tf_sum,
+            self._left_touch_hold_since)
+        self._grasp_state[0] = g0
+
+        g1, self._right_touch_hold_since = self._eval_one_hand(
+            now, self._right_nf_sum, self._right_tf_sum,
+            self._right_touch_hold_since)
+        self._grasp_state[1] = g1
+
+    def _eval_one_hand(self, now, nf_sum, tf_sum, hold_since):
+        """条件满足且持续 TOUCH_GRASP_HOLD_SEC → 抓取成功。
+        返回 (grasped, hold_since)。"""
+        if not self._touch_available:
+            return False, 0.0
+
+        touch_ok = (nf_sum > TOUCH_NF_THRESHOLD
+                    and tf_sum > TOUCH_TF_THRESHOLD)
+
+        if touch_ok:
+            if hold_since == 0.0:
+                hold_since = now
+            grasped = (now - hold_since >= TOUCH_GRASP_HOLD_SEC)
         else:
-            self._left_exceed_since = 0.0
-            self._grasp_state[0] = False
+            hold_since = 0.0
+            grasped = False
 
-        # ── 右手 ──
-        right_diff = self._compute_diff('right_set', 'right_get')
-        if right_diff is not None and right_diff > GRASP_ANGLE_DIFF_THRESHOLD:
-            if self._right_exceed_since == 0.0:
-                self._right_exceed_since = now
-            if now - self._right_exceed_since >= GRASP_HOLD_DURATION_SEC:
-                self._grasp_state[1] = True
-        else:
-            self._right_exceed_since = 0.0
-            self._grasp_state[1] = False
+        return grasped, hold_since
 
-    def _compute_diff(self, set_key: str, get_key: str):
-        """计算 set_angle - get_angle 的差值，数据缺失时返回 None"""
-        set_val = self._angle_cache[set_key]
-        get_val = self._angle_cache[get_key]
-        if set_val is None or get_val is None:
-            return None
-        return set_val - get_val
-
-    # ── 公开接口 ──
+    # ── 公开接口 ──────────────────────────────────────────────────
 
     @property
     def grasp_state(self) -> list:
-        """返回当前抓取状态 [左手, 右手]，线程安全"""
         with self._lock:
             return list(self._grasp_state)
-
-    def get_angle_diffs(self) -> dict:
-        """返回当前左右手的 set/get 角度差（调试用）"""
-        with self._lock:
-            return {
-                'left': self._compute_diff('left_set', 'left_get'),
-                'right': self._compute_diff('right_set', 'right_get'),
-            }
 
 
 # ════════════════════════════════════════════════════════════════

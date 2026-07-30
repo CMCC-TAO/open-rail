@@ -30,6 +30,7 @@ import sys
 import os
 import time
 import math
+from collections import deque
 import numpy as np
 
 _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,6 +44,13 @@ from action_server.action_base import (
     ERR_DELIVER_ONE_HAND_STILL_HOLDING,
 )
 
+# 判断触觉传感器消息类型是否可用（决定使用触觉还是关节角度检测拖拽）
+try:
+    from message_center.msg import TouchStatus  # noqa: F401
+    _HAS_TOUCH_STATUS = True
+except ImportError:
+    _HAS_TOUCH_STATUS = False
+
 # ==============================================
 # 递物目标位姿（7 关节，弧度）
 # ==============================================
@@ -55,12 +63,21 @@ RIGHT_DELIVER_POSE = np.array([-1.0, -0.1, 0.0, 0.5, 0.0, 0.0, 0.0])
 HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
 
 # ==============================================
-# 拖拽检测参数
+# 拖拽检测参数（关节角度方案 - 回退用）
 # ==============================================
-TUG_DETECTION_THRESHOLD_DEG = 5.0   # 拖拽检测阈值（度），手腕关节偏差超过此值触发松手
+TUG_DETECTION_THRESHOLD_DEG = 3.0   # 拖拽检测阈值（度），手腕关节偏差超过此值触发松手
 TUG_DETECTION_TIMEOUT = 30.0        # 等待拖拽超时（秒），超时后强制松手
 TUG_STABILIZE_TIME = 1.0            # 到位后等待 state 稳定的时间（秒）
 TUG_MONITOR_INTERVAL = 0.05         # 监测周期（秒），~20Hz
+
+# ==============================================
+# 拖拽检测参数（触觉传感器方案 - 滚动基线）
+# ==============================================
+TOUCH_TF_DIFF_ABS = 100             # 切向力下降绝对阈值（兜底值）
+TOUCH_TF_DIFF_RATIO = 0.1           # 切向力下降相对比例阈值
+_TOUCH_ROLLING_SIZE = 20            # 滚动基线窗口帧数（0.05s × 20 = 1s）
+                                    # 递送到位后持续维护 tf_sum 的 1 秒滑动窗口中位数作为实时基线
+                                    # 缓慢漂移会被滚动基线自动吸收，只有快速下降才会触发
 
 
 class DeliverHandler(AbstractTaskHandler):
@@ -101,11 +118,10 @@ class DeliverHandler(AbstractTaskHandler):
         self, robot_body, hand_side: str,
         goal_handle, base_state: np.ndarray,
     ) -> bool:
-        """到位后保持位姿，建立 measured state 基线，监测拖拽干扰，检测后松手。
+        """到位后保持位姿，同时使用触觉传感器和关节角度检测拖拽，任一触发即松手。
 
-        对于 G1 这类控制精度低的机器人，commanded action 与 measured state
-        存在稳定偏差，因此不能直接用 action 作参考。先等待机械臂稳定，
-        读取当前 state 作为基线，再基于基线检测拖拽尖峰。
+        触觉方案：采集切向力滚动基线，检测 drop > 阈值触发
+        关节方案：采集 shoulder_pitch 基线，检测角度偏差 > 阈值触发
 
         Args:
             hand_side: 'left' / 'right' / 'both'
@@ -114,12 +130,20 @@ class DeliverHandler(AbstractTaskHandler):
         Returns:
             True = 拖拽触发后松手, False = 超时后强制松手
         """
-        WRIST_IDXS = [0]  # shoulder_pitch（第一个关节，人拽动时受力最直接）
-        threshold = math.radians(TUG_DETECTION_THRESHOLD_DEG)
-
         robot = robot_body.robot
 
-        # --- Step 1: 到位后持续下发保持位姿，等待 state 稳定 ---
+        # ── 判断触觉传感器是否可用 ──
+        touch_available = (_HAS_TOUCH_STATUS
+                           and hasattr(robot, 'latest_left_touch')
+                           and hasattr(robot, 'latest_right_touch'))
+        if touch_available:
+            print('[Deliver] 同时使用触觉+关节角度检测拖拽（任一触发即松手）')
+        else:
+            print('[Deliver] 触觉传感器不可用，仅使用关节角度检测')
+
+        # ================================================================
+        # Step 1: 到位后持续下发保持位姿，等待 state 稳定
+        # ================================================================
         robot.send_robot_action(base_state)
         print(f'[Deliver] 到位，等待 {TUG_STABILIZE_TIME}s 让 state 稳定...')
         t0 = time.time()
@@ -127,63 +151,182 @@ class DeliverHandler(AbstractTaskHandler):
             robot.send_robot_action(base_state)
             time.sleep(TUG_MONITOR_INTERVAL)
 
-        # --- Step 2: 采集 measured state 作为基线（取 5 次 median，抗噪） ---
-        left_samples, right_samples = [], []
+        # ================================================================
+        # Step 2a: 采集触觉基线（如可用）
+        # ================================================================
+        touch_bl_left = None
+        touch_bl_right = None
+        th_touch_left = TOUCH_TF_DIFF_ABS
+        th_touch_right = TOUCH_TF_DIFF_ABS
+
+        if touch_available:
+            left_samples, right_samples = [], []
+            _BASELINE_SAMPLES = 10
+            for _ in range(_BASELINE_SAMPLES):
+                if hand_side in ('left', 'both'):
+                    touch = robot.latest_left_touch
+                    if touch is not None:
+                        msg, _ = touch
+                        tf = robot.get_touch_tf_sum(msg)
+                        if tf > 0:
+                            left_samples.append(tf)
+                if hand_side in ('right', 'both'):
+                    touch = robot.latest_right_touch
+                    if touch is not None:
+                        msg, _ = touch
+                        tf = robot.get_touch_tf_sum(msg)
+                        if tf > 0:
+                            right_samples.append(tf)
+                robot.send_robot_action(base_state)
+                time.sleep(0.05)
+
+            touch_bl_left = np.median(left_samples) if left_samples else None
+            touch_bl_right = np.median(right_samples) if right_samples else None
+
+            if touch_bl_left is not None:
+                th_touch_left = max(TOUCH_TF_DIFF_ABS, int(touch_bl_left * TOUCH_TF_DIFF_RATIO))
+                print(f'[Deliver] 触觉基线 tf_sum={touch_bl_left:.0f}, '
+                      f'阈值={th_touch_left} (有效样本{len(left_samples)})')
+            else:
+                print(f'[WARN] 左手触觉基线采集失败，跳过触觉检测')
+
+            if touch_bl_right is not None:
+                th_touch_right = max(TOUCH_TF_DIFF_ABS, int(touch_bl_right * TOUCH_TF_DIFF_RATIO))
+                print(f'[Deliver] 触觉基线 tf_sum={touch_bl_right:.0f}, '
+                      f'阈值={th_touch_right} (有效样本{len(right_samples)})')
+            else:
+                print(f'[WARN] 右手触觉基线采集失败，跳过触觉检测')
+
+        # ================================================================
+        # Step 2b: 采集关节角度基线（始终可用）
+        # ================================================================
+        WRIST_IDXS = [0]  # shoulder_pitch
+        joint_threshold = math.radians(TUG_DETECTION_THRESHOLD_DEG)
+        joint_bl_left = None
+        joint_bl_right = None
+
+        left_j_samples, right_j_samples = [], []
         for _ in range(5):
             if hand_side in ('left', 'both'):
                 arm = robot.latest_left_arm
                 if arm is not None:
                     msg, _ = arm
-                    left_samples.append(np.array([msg.position[i] for i in WRIST_IDXS]))
+                    left_j_samples.append(np.array([msg.position[i] for i in WRIST_IDXS]))
             if hand_side in ('right', 'both'):
                 arm = robot.latest_right_arm
                 if arm is not None:
                     msg, _ = arm
-                    right_samples.append(np.array([msg.position[i] for i in WRIST_IDXS]))
+                    right_j_samples.append(np.array([msg.position[i] for i in WRIST_IDXS]))
             robot.send_robot_action(base_state)
             time.sleep(0.05)
 
-        baseline_left = np.median(left_samples, axis=0) if left_samples else None
-        baseline_right = np.median(right_samples, axis=0) if right_samples else None
+        joint_bl_left = np.median(left_j_samples, axis=0) if left_j_samples else None
+        joint_bl_right = np.median(right_j_samples, axis=0) if right_j_samples else None
 
-        left_str = baseline_left.round(4).tolist() if baseline_left is not None else "N/A"
-        right_str = baseline_right.round(4).tolist() if baseline_right is not None else "N/A"
-        print(f'[Deliver] 手腕基线(rad) - left: {left_str}, right: {right_str}')
+        ls = joint_bl_left.round(4).tolist() if joint_bl_left is not None else "N/A"
+        rs = joint_bl_right.round(4).tolist() if joint_bl_right is not None else "N/A"
+        print(f'[Deliver] 关节基线(rad) - left: {ls}, right: {rs}')
 
-        # --- Step 3: 持续下发保持 + 监测拖拽 ---
+        # ================================================================
+        # Step 3: 持续下发保持 + 同时监测触觉和关节角度
+        # ================================================================
         start_time = time.time()
         check_count = 0
+        left_t_counter = 0      # 触觉连续触发计数
+        right_t_counter = 0
+        trigger_source = ""     # 记录触发来源
+
+        # 滚动基线窗口：递送到位后持续维护 1s 滑动窗口中位数
+        # 缓慢漂移会被滚动基线自动吸收，只有快速下降才会触发
+        left_rolling = deque(maxlen=_TOUCH_ROLLING_SIZE)
+        right_rolling = deque(maxlen=_TOUCH_ROLLING_SIZE)
+        rolling_bl_left = touch_bl_left   # 初始用采集到的基线
+        rolling_bl_right = touch_bl_right
+        rolling_th_left = th_touch_left
+        rolling_th_right = th_touch_right
+
         while time.time() - start_time < TUG_DETECTION_TIMEOUT:
             robot.send_robot_action(base_state)
-
             tug_detected = False
 
-            if baseline_left is not None:
-                arm = robot.latest_left_arm
-                if arm is not None:
-                    msg, _ = arm
-                    wrist = np.array([msg.position[i] for i in WRIST_IDXS])
-                    diff = np.abs(wrist - baseline_left)
-                    if np.any(diff > threshold):
-                        diff_deg = np.rad2deg(diff).round(2)
-                        print(f'[Deliver] 左手拖拽检测到！diff={diff_deg} deg')
-                        tug_detected = True
+            # ── 触觉检测（连续 2 帧确认 + 滚动基线） ──
+            if touch_available:
+                if rolling_bl_left is not None:
+                    touch = robot.latest_left_touch
+                    if touch is not None:
+                        msg, _ = touch
+                        tf = robot.get_touch_tf_sum(msg)
+                        if tf > 0:
+                            left_rolling.append(tf)
+                        # 滚动基线：用窗口满了之后的中位数替换初始基线
+                        if len(left_rolling) >= _TOUCH_ROLLING_SIZE:
+                            rolling_bl_left = np.median(left_rolling)
+                            rolling_th_left = max(TOUCH_TF_DIFF_ABS,
+                                                  int(rolling_bl_left * TOUCH_TF_DIFF_RATIO))
+                        drop = rolling_bl_left - tf
+                        if drop > rolling_th_left:
+                            left_t_counter += 1
+                            if left_t_counter >= 2:
+                                print(f'[Deliver] 左手触觉触发！tf={tf}, '
+                                      f'rolling_bl={rolling_bl_left:.0f}, drop={drop:.0f}, '
+                                      f'threshold={rolling_th_left}')
+                                tug_detected = True
+                                trigger_source = '左手触觉（切向力下降）'
+                        else:
+                            left_t_counter = 0
 
-            if not tug_detected and baseline_right is not None:
-                arm = robot.latest_right_arm
-                if arm is not None:
-                    msg, _ = arm
-                    wrist = np.array([msg.position[i] for i in WRIST_IDXS])
-                    diff = np.abs(wrist - baseline_right)
-                    if np.any(diff > threshold):
-                        diff_deg = np.rad2deg(diff).round(2)
-                        print(f'[Deliver] 右手拖拽检测到！diff={diff_deg} deg')
-                        tug_detected = True
+                if not tug_detected and rolling_bl_right is not None:
+                    touch = robot.latest_right_touch
+                    if touch is not None:
+                        msg, _ = touch
+                        tf = robot.get_touch_tf_sum(msg)
+                        if tf > 0:
+                            right_rolling.append(tf)
+                        if len(right_rolling) >= _TOUCH_ROLLING_SIZE:
+                            rolling_bl_right = np.median(right_rolling)
+                            rolling_th_right = max(TOUCH_TF_DIFF_ABS,
+                                                   int(rolling_bl_right * TOUCH_TF_DIFF_RATIO))
+                        drop = rolling_bl_right - tf
+                        if drop > rolling_th_right:
+                            right_t_counter += 1
+                            if right_t_counter >= 2:
+                                print(f'[Deliver] 右手触觉触发！tf={tf}, '
+                                      f'rolling_bl={rolling_bl_right:.0f}, drop={drop:.0f}, '
+                                      f'threshold={rolling_th_right}')
+                                tug_detected = True
+                                trigger_source = '右手触觉（切向力下降）'
+                        else:
+                            right_t_counter = 0
+
+            # ── 关节角度检测（单帧触发） ──
+            if not tug_detected:
+                if joint_bl_left is not None:
+                    arm = robot.latest_left_arm
+                    if arm is not None:
+                        msg, _ = arm
+                        wrist = np.array([msg.position[i] for i in WRIST_IDXS])
+                        diff = np.abs(wrist - joint_bl_left)
+                        if np.any(diff > joint_threshold):
+                            diff_deg = np.rad2deg(diff).round(2)
+                            print(f'[Deliver] 左手关节触发！diff={diff_deg} deg')
+                            tug_detected = True
+                            trigger_source = f'左手关节（偏差 {diff_deg}°）'
+
+            if not tug_detected:
+                if joint_bl_right is not None:
+                    arm = robot.latest_right_arm
+                    if arm is not None:
+                        msg, _ = arm
+                        wrist = np.array([msg.position[i] for i in WRIST_IDXS])
+                        diff = np.abs(wrist - joint_bl_right)
+                        if np.any(diff > joint_threshold):
+                            diff_deg = np.rad2deg(diff).round(2)
+                            print(f'[Deliver] 右手关节触发！diff={diff_deg} deg')
+                            tug_detected = True
+                            trigger_source = f'右手关节（偏差 {diff_deg}°）'
 
             if tug_detected:
-                side_label = {'left': '左手', 'right': '右手',
-                              'both': '双手'}.get(hand_side, hand_side)
-                print(f'[Deliver] {side_label}拖拽触发，松手！')
+                print(f'[Deliver] 触发来源: {trigger_source}，松手！')
                 self._open_hand_and_hold(robot_body, hand_side, goal_handle,
                                          HAND_OPEN_HOLD_TIME, base_state=base_state)
                 return True
@@ -194,10 +337,12 @@ class DeliverHandler(AbstractTaskHandler):
                 elapsed = time.time() - start_time
                 print(f'[Deliver] 等待拖拽中... {elapsed:.0f}s / {TUG_DETECTION_TIMEOUT:.0f}s')
 
-        # --- Step 4: 超时，强制松手 ---
+        # ================================================================
+        # Step 4: 超时，强制松手
+        # ================================================================
         side_label = {'left': '左手', 'right': '右手',
                       'both': '双手'}.get(hand_side, hand_side)
-        print(f'[Deliver] 超时 {TUG_DETECTION_TIMEOUT}s，{side_label}强制松手')
+        print(f'[Deliver] 触发来源: 超时（{TUG_DETECTION_TIMEOUT}s未检测到拖拽），{side_label}强制松手')
         self._open_hand_and_hold(robot_body, hand_side, goal_handle,
                                  HAND_OPEN_HOLD_TIME, base_state=base_state)
         return False

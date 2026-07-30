@@ -131,6 +131,10 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
     task_language_manager = components["task_language_manager"]
 
     try:
+        # 开启 GraspDetector 调试打印
+        if context.grasp_detector is not None:
+            context.grasp_detector.set_verbose(True)
+
         # 设置语言指令
         task_language_manager.currt_language_instruction = instruction
         task_language_manager.config.sub_task_id = 0
@@ -154,6 +158,10 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
             thre_progress=0.8,
             blend_config=blend_config,
         )
+
+        # 等待 3s 让触觉检测持续判定，结果以 3s 结束时的状态为准
+        import time as _time
+        _time.sleep(3.0)
 
         # 推理完成后读取抓取状态
         # _do_finish_grasp 会处理手臂复位，此处无需重复复位
@@ -184,6 +192,9 @@ def _do_single_grasp(goal_handle, context, target: str, instruction: str,
         return result
 
     finally:
+        # 关闭 GraspDetector 调试打印
+        if context.grasp_detector is not None:
+            context.grasp_detector.set_verbose(False)
         context._active_vla_client = None
         context.destroy_vla_components(components)
 
