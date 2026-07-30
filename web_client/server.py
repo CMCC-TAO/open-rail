@@ -863,8 +863,8 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
         # Default task order: newest first by modification time (fallback by name).
         task_dirs.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
         tasks = [p.name for p in task_dirs]
-        selected_task = task if task in tasks else (tasks[0] if tasks else "")
-
+        selected_task = task if task is not None else (tasks[0] if tasks else "")
+        # print(F"DEBUG: selected_task={selected_task}")
         if selected_task:
             lerobot_recorder = None
             eval_recorder = None
@@ -2150,43 +2150,11 @@ async def client_language_set(req: LanguageSetRequest):
 async def client_record_start(req: RecordStartRequest):
     try:
         vla_client, _ = _require_runtime('start_recording')
-        # save_items = req.save_items if isinstance(req.save_items, list) else []
-        # client_state.config.record.switch = True
-        # # client_state.config.record.record_exp_data = ('ExpData' in save_items)
-        # task_id = getattr(getattr(client_state.config, 'language', None), 'task_id', None)
-        # if not hasattr(vla_client, 'data_record_manager') or vla_client.data_record_manager is None:
-        #     try:
-        #         from client.core.data_record_manager import DataRecordManager
-        #         vla_client.data_record_manager = DataRecordManager(record_config=client_state.config.record)
-        #         vla_client.data_record_manager.set_task(task_id)
-        #     except Exception as e:
-        #         raise HTTPException(500, f'Failed to initialize recorder: {e}')
-        # else:
-        #     vla_client.data_record_manager.set_task(task_id)
-
-        # updated_camera_shapes = {}
-        # if not bool(getattr(client_state.config.record, 'resize', False)):
-        #     try:
-        #         updated_camera_shapes = vla_client.update_camera_shape()
-        #     except Exception as e:
-        #         logger.exception(f'Failed to update camera shapes before start_recording: {e}')
-
-        vla_client.start_recording()
-        # await asyncio.to_thread(vla_client.data_record_manager.start_recording)
-        current_recording_task = str(getattr(vla_client.data_record_manager, 'current_task', '') or '')
-        current_recording_dir = ''
-        try:
-            save_path = str(getattr(vla_client.data_record_manager, 'save_path', '') or '')
-            if save_path:
-                current_recording_dir = Path(save_path).name
-        except Exception:
-            current_recording_dir = ''
-        # print(F"DEBUG: record started.")
+        task_dir = vla_client.start_recording()
         return {
             'status': 'ok',
             'command': 'start_recording',
-            'recording_task': current_recording_task,
-            'recording_task_dir': current_recording_dir,
+            'recording_task_dir': task_dir,
             # 'updated_camera_shapes': updated_camera_shapes,
         }
     except HTTPException:

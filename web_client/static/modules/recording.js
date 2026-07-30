@@ -86,14 +86,6 @@ function renderRecordingConfigTree(cfg = App.config) {
   syncRecordingSwitchUI();
 }
 
-function getRecordingSaveItems() {
-  const items = [];
-  if ($('chk-record-episode')?.checked) items.push('Episode');
-  // if ($('chk-record-expdata')?.checked) items.push('ExpData');
-  if ($('chk-record-eval-log')?.checked) items.push('Evaluation');
-  return items;
-}
-
 async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } = {}) {
   if (!App.isRunning || !App.isRecording) {
     syncRecordingSwitchUI();
@@ -324,7 +316,7 @@ function renderEvaluationResults(evalResults = []) {
       <tr>
         <td class="col-id">${esc(id)}</td>
         <td class="col-task">${esc(subTask)}</td>
-        <td class="col-dur">${esc(duration)}</td>
+        <td class="col-dur">${esc(duration)}s</td>
         <td class="col-score"><select class="eval-log-score-sel" data-record-id="${escAttr(id)}">${scoreOptionsHtml}</select></td>
         <td class="col-note">${esc(note)}</td>
         <td class="col-del"></td>
@@ -384,17 +376,6 @@ async function refreshRecordingFileList() {
     const q = params.toString();
     const res = await apiFetch(`/api/client/record/episodes${q ? `?${q}` : ''}`);
     renderRecordingFileList(res);
-
-    // const hasExplicitRequest = !!(requestedTask || requestedChunk);
-    // const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
-    // if (hasExplicitRequest && changed) {
-    //   const params2 = new URLSearchParams();
-    //   if (App.recordingTask) params2.set('task', App.recordingTask);
-    //   if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
-    //   const q2 = params2.toString();
-    //   const res2 = await apiFetch(`/api/client/record/episodes${q2 ? `?${q2}` : ''}`);
-    //   renderRecordingFileList(res2);
-    // }
   } catch (_) { /* toasted */ }
 }
 
@@ -545,23 +526,17 @@ function setupRecordingPanel() {
         await stopDataRecordingIfNeeded({ silent: false, refreshList: true });
       } else {
         // Start recording
-        const saveItems = getRecordingSaveItems();
         try {
           const res = await apiFetch('/api/client/record/start', {
             method: 'POST',
-            body: JSON.stringify({ save_items: saveItems }),
+            body: JSON.stringify({}),
           });
           const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
-          const currentTask = typeof res?.recording_task === 'string' ? res.recording_task : '';
           if (currentTaskDir) {
             App.recordingTask = currentTaskDir;
             App.recordingChunk = null;
             App.recordingChunksSnapshot = [];
-          } else if (currentTask) {
-            App.recordingTask = currentTask;
-            App.recordingChunk = null;
-            App.recordingChunksSnapshot = [];
-          }
+          } 
 
           App.isRecording = true;
           if (!App.config || typeof App.config !== 'object') App.config = {};

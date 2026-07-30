@@ -1241,87 +1241,130 @@ class EvaluationResultRecorder:
         self.logger = logging.getLogger(__name__)
         self.config = evaluation_config
         self._episode_id = -1
-        self._record_id = -1
         self._eval_dir = None
         self._eval_records: List[Dict[str, Any]] = []
         self._eval_json_file = None
         self._eval_csv_file = None
 
         # Runtime cache for evaluation result browsing in main process.
-        self._eval_browse_records: List[Dict[str, Any]] = []
+        self._eval_records_for_browse: List[Dict[str, Any]] = []
+        self._eval_records_for_share: Queue = Queue()
+        self._eval_dir_for_browse = None
 
         # Queue-based CRUD sync between main process and writer process.
         self._eval_record_crud_queue = Queue()
         self._eval_record_crud_thread: Optional[threading.Thread] = None
         self._eval_record_crud_stop_event = threading.Event()
 
-    def set_task(self, save_path: str, episode_id: int = -1) -> None:
+    def set_task(self, save_path: str, episode_id: int = -1) -> int:
         """Set task information and prepare for data recording. Called in writer process"""
+        self.logger.info(f"save_path: {save_path}, episode_id: {episode_id}")
         self._episode_id = episode_id
+        record_id = None
         if self._check_eval_dir(save_path=save_path):
-            self._load_existing_records()
+            record_id = self._load_existing_records()
+        return record_id
 
-    def _load_existing_browse_records(self) -> None:
-        """Load evaluation browse records using eval_log.json."""
-        records: List[Dict[str, Any]] = []
-        if self._eval_json_file and os.path.exists(self._eval_json_file):
-            try:
-                with open(self._eval_json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                if isinstance(data, list):
-                    for row in data:
-                        if not isinstance(row, dict):
-                            continue
-                        records.append({
-                            "id": int(row.get("id", -1)),
-                            "sub_task_id": row.get("sub_task_id", None),
-                            "duration": row.get("duration", None),
-                            "score": row.get("score", None),
-                            "note": row.get("note", ""),
-                        })
-            except Exception:
-                self.logger.warning("Failed to parse eval_log.json: %s", self._eval_json_file, exc_info=True)
-
-        records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
-        self._eval_browse_records = records
-
+    # def set_task_for_browse(self, save_path: str) -> None:
+    #     """Set task information and prepare for data browse. Called in main process"""
+    #     self.logger.info(f"save_path: {save_path}")
+    #     try:
+    #         if self._check_eval_dir_for_browse(save_path = save_path):
+    #             self._load_existing_browse_records()
+    #     except Exception as e:
+    #         self.logger.exception(f"Failed to load eval records for browse: {e}")
     def parse_eval_records(self, selected_task: Optional[str] = None, base_dir: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return evaluation records in reverse order (newest first)."""
         try:
             task_path = base_dir / selected_task
-            if self._check_eval_dir(save_path = task_path):
-                self._load_existing_browse_records()
+            # self.logger.info(f"Parse eval records: {task_path}")
+            clear = False
+            append = False
+            if self._is_need_load(save_path = task_path):
+                self._clear_share_queue()
                 self._enqueue_eval_record_crud(command="LoadRecords", record_id=-1, score=None, note="", task_path=task_path)
+                clear = True
+                append = True
+            self._sync_eval_records_for_browse(timeout_s=0.05, max_empty_retries=5, clear=clear, append=append)
         except Exception as e:
             self.logger.exception(f"Failed to load eval records: {e}")
-        return self._eval_browse_records
+        return self._eval_records_for_browse
+    def _clear_share_queue(self):
+        try:
+            while not self._eval_records_for_share.empty():
+                try:
+                    self._eval_records_for_share.get_nowait()
+                except Empty:
+                    break
+        except Exception:
+            # Fallback: keep calling get_nowait until it fails
+            try:
+                while True:
+                    self._eval_records_for_share.get_nowait()
+            except Exception:
+                self.logger.info("Clear _eval_records_for_share and ready to share the new loaded records.")
+    def _sync_eval_records_for_browse(self, timeout_s: float = 0.1, max_empty_retries: int = 5, clear: bool = False, append: bool = False):
+            """Continuously consume records from _eval_records_for_share and append to _eval_records_for_browse."""
+            # 1. Clear stale data before syncing
+            if clear:
+                self._eval_records_for_browse.clear()
+
+            # 2. Block and wait for data from the shared queue
+            empty_count = 0
+            while True:
+                try:
+                    # Block for 0.2s waiting for data from the writer process
+                    record = self._eval_records_for_share.get(timeout=timeout_s)
+                    empty_count = 0  # Reset counter on successful fetch
+                    
+                    if isinstance(record, dict):
+                        if append:
+                            self._eval_records_for_browse.append(record)
+                            self.logger.info(f"Append new eval record.")
+                        else:
+                            self._upsert_eval_browse_record(record=record)
+                    elif isinstance(record, int):
+                        self._delete_eval_browse_record(record_id=record)
+                except Empty:
+                    # 3. If queue is empty, increment counter. If repeatedly empty, assume sync is done.
+                    empty_count += 1
+                    if empty_count >= max_empty_retries:
+                        break
+                except Exception as e:
+                    self.logger.exception(f"Failed to sync eval records for browse: {e}")
+                    break
+
+            # 4. Sort records by id descending (consistent with _upsert_eval_browse_record)
+            self._eval_records_for_browse.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
 
     def _upsert_eval_browse_record(self, record: Dict[str, Any]) -> None:
-        """Insert or replace one eval record in browse cache."""
+        """update or append one eval record in browse cache."""
         target_id = int(record.get("id", -1))
         replaced = False
-        for idx, item in enumerate(self._eval_browse_records):
+        for idx, item in enumerate(self._eval_records_for_browse):
             if int(item.get("id", -1)) == target_id:
-                self._eval_browse_records[idx] = record
+                self._eval_records_for_browse[idx] = record
                 replaced = True
+                self.logger.info(f"Update eval record successfully, id={target_id}")
                 break
         if not replaced:
-            self._eval_browse_records.append(record)
-        self._eval_browse_records.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
+            self._eval_records_for_browse.append(record)
+            self.logger.info(f"Update eval record failed, append it.")
+        # self._eval_records_for_browse.sort(key=lambda x: int(x.get("id", -1)), reverse=True)
 
-    def _sync_browse_on_record_start(self, eval_record_id: int, sub_task_id: Optional[int] = None) -> None:
-        """Sync main-process eval browse cache immediately when recording starts."""
-        pending_record = {
-            "id": int(eval_record_id),
-            "sub_task_id": int(sub_task_id) if sub_task_id is not None else None,
-            "duration": 0.0,
-            "score": None,
-            "note": "",
-        }
-        self._upsert_eval_browse_record(pending_record)
+    def _delete_eval_browse_record(self, record_id: id) -> None:
+        is_deleted = False
+        for i in range(len(self._eval_records_for_browse) - 1, -1, -1):
+            if self._eval_records_for_browse[i].get('id') == record_id:
+                del self._eval_records_for_browse[i]
+                self.logger.info(f"Delete eval record successfully, id={record_id}")
+                is_deleted = True
+                break
+        if not is_deleted:
+            self.logger.info(f"Delete eval record failed, id={record_id}")
 
     def _check_eval_dir(self, save_path: str) -> bool:
-        """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in main and writer process."""
+        """Check and ensure eval directory exists. Return true when eval_dir assigned or changed. Called in writer process."""
         load_data = False
         if self._eval_dir is None or self._eval_dir != os.path.join(save_path, 'eval'):
             load_data = True
@@ -1329,41 +1372,91 @@ class EvaluationResultRecorder:
             # Ensure eval directory exists.
             if not os.path.exists(self._eval_dir):
                 os.makedirs(self._eval_dir, exist_ok=True)
-
+                self.logger.info(f"Eval directory doesn't exist and create it: {self._eval_dir}")
             self._eval_json_file = os.path.join(self._eval_dir, 'eval_log.json')
             self._eval_csv_file = os.path.join(self._eval_dir, 'eval_log.csv')
+        else:
+            self.logger.info(f"Eval directory already exists: {self._eval_dir}")
+
         return load_data
 
     def _load_existing_records(self) -> None:
-        """Load existing records from eval_log.json; fallback to empty list. Called in main and writer process."""
+        """Load existing records from eval_log.json; fallback to empty list. Called in writer process."""
         self._eval_records = []
-        self._record_id = -1
+        record_id = -1
         if not self._eval_json_file or (not os.path.exists(self._eval_json_file)):
-            return
+            self.logger.info(f"Load eval records from json file terminated, eval_json_file doesn't exist. Total eval records = {len(self._eval_records)}")
+            return record_id
 
         try:
             with open(self._eval_json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             if isinstance(data, list):
                 self._eval_records = [r for r in data if isinstance(r, dict)]
+                self._sync_eval_records_for_share(targets=self._eval_records)
                 if self._eval_records:
-                    self._record_id = max(int(r.get('id', -1)) for r in self._eval_records)
+                    record_id = max(int(r.get('id', -1)) for r in self._eval_records)
         except Exception as e:
             self.logger.exception(f"Load eval_log.json failed: {e}")
             self._eval_records = []
-            self._record_id = -1
+            record_id = -1
+        self.logger.info(f"Load eval records from json file successfully, total records = {len(self._eval_records)}, max record_id = {record_id}")
+        return record_id
+
+    def _sync_eval_records_for_share(self, targets: Union[List[Dict[str, Any]], Dict[str, Any], int]) -> None:
+        """Publish eval records or record_id to the shared queue for main-process browse sync."""
+        if targets is None:
+            return
+        def _convert_to_eval_record_for_browse(record: Dict[str, Any]) -> Dict[str, Any]:
+            sub_task_id = record.get("sub_task_id", None)
+            # self.logger.debug(f"sub_task_id={sub_task_id}")
+            return {
+                "id": int(record.get("id", -1)),
+                "sub_task_id": sub_task_id + 1 if sub_task_id is not None else None,
+                "duration": record.get("duration", None),
+                "score": record.get("score", None),
+                "note": record.get("note", ""),
+            }
+        # 1. Handle list of dict: iterate and put each record individually
+        if isinstance(targets, list):
+            for item in targets:
+                if isinstance(item, dict):
+                    self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=item))
+                elif isinstance(item, int):
+                    self._eval_records_for_share.put(item)
+            return
+
+        # 2. Handle single dict: put directly
+        if isinstance(targets, dict):
+            self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=targets))
+            return
+
+        # 3. Handle int (record_id for deletion): put directly
+        if isinstance(targets, int):
+            self._eval_records_for_share.put(targets)
+            return
+
+        self.logger.warning(f"Unsupported target type for _sync_eval_records_for_share: {type(targets)}")
+
+
+    def _is_need_load(self, save_path: str) -> bool:
+        """Return true when eval_dir assigned or changed. Called in main process."""
+        need_load = False
+        if self._eval_dir_for_browse is None or self._eval_dir_for_browse != os.path.join(save_path, 'eval'):
+            need_load = True
+            self._eval_dir_for_browse = os.path.join(save_path, 'eval')
+        self.logger.info(f"Eval directory: {self._eval_dir_for_browse}, need_load: {need_load}")
+        return need_load
 
     def begin_recording(self, eval_record_id: int):
         self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
-        next_record_id = max(int(eval_record_id), self._record_id + 1)
-        self._create_new_record(eval_record_id=next_record_id)
+        self._create_new_record(eval_record_id=eval_record_id)
 
     def _create_new_record(self, eval_record_id: int):
-        self._record_id = eval_record_id
         self._obv_count = 0
         # self._eval_record_start_time = None
         self._current_record = {
-            'id': self._record_id,
+            'id': eval_record_id,
             'task_id': None,
             'sub_task_id': None,
             'instruction': None,
@@ -1397,9 +1490,9 @@ class EvaluationResultRecorder:
         self._eval_records.append(self._current_record)
 
     def end_recording(self):
-        self._finalize_current_record()
+        record_id = self._finalize_current_record()
         self._flush_to_disk()
-        return self._record_id + 1
+        return record_id
     
     def add_frame_async(self, step_extra: dict):
         self._record_executor.submit(self._write_frame_fun, step_extra)
@@ -1436,10 +1529,10 @@ class EvaluationResultRecorder:
             # New sub-task, save the current record and start a new record
             else:
                 # save the current record
-                self._finalize_current_record()
+                record_id, _ = self._finalize_current_record()
                 self._flush_to_disk()
                 # start a new record
-                self._create_new_record(self._record_id + 1)
+                self._create_new_record(record_id + 1)
                 self._init_current_record(step_extra=step_extra)
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
@@ -1469,6 +1562,7 @@ class EvaluationResultRecorder:
         self._current_record['instruction'] = language_status.get('language', None)
         # self._current_record['episode_id'] = step_runtime.get('episode_id', None)
         self._updata_current_record(step_extra=step_extra)
+        self._sync_eval_records_for_share(targets=self._current_record)
     
     def _updata_current_record(self, step_extra: dict):
         self._obv_count += 1
@@ -1482,11 +1576,13 @@ class EvaluationResultRecorder:
             self._current_record['avg_inter_traj_time'].append(runtime_status.get('avg_inter_traj_time', None))
             self._current_record['avg_comm_time'].append(runtime_status.get('avg_comm_time', None))
 
-    def _finalize_current_record(self) -> None:
+    def _finalize_current_record(self) -> tuple[int, float]:
         self._current_record['obv_count'] = self._obv_count
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
         self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 1)
+        self._sync_eval_records_for_share(targets=self._current_record)
+        return self._current_record['id']
     
     def _timestamp(self, time_stamp) -> str:
         dt = datetime.fromtimestamp(time_stamp)
@@ -1527,14 +1623,15 @@ class EvaluationResultRecorder:
             self.logger.exception(f"Failed to enqueue eval record CRUD command: {e}")
 
     def _apply_eval_record_crud_command(self, payload: Dict[str, Any]) -> None:
-        """Apply one CRUD command to local _eval_records and flush to disk."""
+        """Apply one CRUD command to update _eval_records and flush to disk."""
         command = str(payload.get("command", "")).strip()
         record_id = int(payload.get("record_id", -1))
         if command == "LoadRecords":
             task_path = str(payload.get("task_path", "")).strip()
             if self._check_eval_dir(save_path=task_path):
                 self._load_existing_records()
-                self.logger.info(f"Load eval records CRUD command: {command}, task_path: {task_path}")
+                self._eval_dir = None
+                self.logger.info(f"CRUD command: {command} executed successfully, task_path: {task_path}")
                 return
 
         rec = next((r for r in self._eval_records if int(r.get('id', -1)) == record_id), None)
@@ -1543,16 +1640,24 @@ class EvaluationResultRecorder:
             return
 
         if command == "UpdateScore":
-            rec['score'] = payload.get('score', None)
+            score = payload.get('score', None)
+            rec['score'] = score
+            self._sync_eval_records_for_share(targets=rec)
             self._flush_to_disk()
+            self.logger.info(f"CRUD command: {command} executed successfully, record_id: {record_id}, score: {score}")
         elif command == "UpdateNote":
-            rec['note'] = payload.get('note', "")
+            note = payload.get('note', "")
+            rec['note'] = note
+            self._sync_eval_records_for_share(targets=rec)
             self._flush_to_disk()
+            self.logger.info(f"CRUD command: {command} executed successfully, record_id: {record_id}, note: {note}")
         elif command == "DeleteRecord":
             for i in range(len(self._eval_records) - 1, -1, -1):
                 if int(self._eval_records[i].get('id', -1)) == record_id:
                     del self._eval_records[i]
+                    self._sync_eval_records_for_share(targets=record_id)
                     self._flush_to_disk()
+                    self.logger.info(f"CRUD command: {command} executed successfully, record_id: {record_id}")
                     return
         else:
             self.logger.warning(f"Unknown eval record CRUD command: {payload}")
@@ -1578,7 +1683,7 @@ class EvaluationResultRecorder:
                 self.logger.exception(f"Eval record CRUD command apply failed: {e}")
 
     def start_eval_record_crud_listener(self) -> None:
-        """Start writer-side CRUD listener thread."""
+        """Start writer-side CRUD listener thread. Called in writer process."""
         if self._eval_record_crud_thread is not None and self._eval_record_crud_thread.is_alive():
             return
 
@@ -1591,7 +1696,7 @@ class EvaluationResultRecorder:
         self._eval_record_crud_thread.start()
 
     def stop_eval_record_crud_listener(self) -> None:
-        """Stop writer-side CRUD listener thread and drain remaining commands."""
+        """Stop writer-side CRUD listener thread and drain remaining commands. Called in writer process."""
         self._eval_record_crud_stop_event.set()
         if self._eval_record_crud_thread is not None and self._eval_record_crud_thread.is_alive():
             self._eval_record_crud_thread.join(timeout=1.0)
@@ -1613,28 +1718,28 @@ class EvaluationResultRecorder:
                 self.logger.exception(f"Eval record CRUD drain apply failed: {e}")
 
     def set_score(self, record_id: int, score: Optional[float]) -> None:
-        rec = next((r for r in self._eval_browse_records if r['id'] == record_id), None)
-        if rec is None:
-            return
-        rec['score'] = score
+        # rec = next((r for r in self._eval_records_for_browse if r['id'] == record_id), None)
+        # if rec is None:
+        #     return
+        # rec['score'] = score
         self._enqueue_eval_record_crud(command="UpdateScore", record_id=record_id, score=score, note="")
         return
 
 
     def set_note(self, record_id: int, note: str) -> None:
-        rec = next((r for r in self._eval_browse_records if r['id'] == record_id), None)
-        if rec is None:
-            return
-        rec['note'] = note
+        # rec = next((r for r in self._eval_records_for_browse if r['id'] == record_id), None)
+        # if rec is None:
+        #     return
+        # rec['note'] = note
         self._enqueue_eval_record_crud(command="UpdateNote", record_id=record_id, score=None, note=note)
         return
 
 
     def delete_record(self, record_id: int) -> None:
-        for i in range(len(self._eval_browse_records) - 1, -1, -1):
-            if self._eval_browse_records[i].get('id') == record_id:
-                del self._eval_browse_records[i]
-                break
+        # for i in range(len(self._eval_records_for_browse) - 1, -1, -1):
+        #     if self._eval_records_for_browse[i].get('id') == record_id:
+        #         del self._eval_records_for_browse[i]
+        #         break
         self._enqueue_eval_record_crud(command="DeleteRecord", record_id=record_id, score=None, note="")
         return
 
@@ -1719,13 +1824,8 @@ class EvaluationResultRecorder:
             return
         self._closed = True
 
-        self._stop_stats_thread()
-
-        # with self._lock:
-        #     self._finalize_running_unlocked('interrupted')
-
         self._flush_to_disk()
-        self._stop_write_thread()
+
 class DataRecordManager:
     """
     A class to manage writing robotic observation and action data to disk in a structured format.
@@ -1749,8 +1849,6 @@ class DataRecordManager:
         # Define logger
         self.logger = logging.getLogger(__name__)
         self.config = record_config
-        self.current_task = None
-        # print(f"Debug: record_config: {self.config}")
         self._init_shared_data()
         self.lerobot_recorder = LeRobotDatasetRecorder(lerobot_config=self.config.lerobot)
         self.eval_recorder = EvaluationResultRecorder(evaluation_config=self.config.evaluation)
@@ -1795,7 +1893,8 @@ class DataRecordManager:
         self.shared_data.total_videos = self.manager.Value('i', 0)
         self.shared_data.episode_chunk = self.manager.Value('i', 0)
         self.shared_data.episode_index = self.manager.Value('i', 0)
-        self.shared_data.eval_record_id = self.manager.Value('i', 0)
+        self.shared_data.eval_record_id = self.manager.Value('i', 0) # id for new record
+        # self.shared_data.eval_record_duration = self.manager.Value('f', 0.0)
         self.shared_data.running = self.manager.Value('b', False)
         # self.shared_data.episode_parquet_list = self.manager.list()
         # self.shared_data.save_video_path_list = self.manager.list()
@@ -1811,30 +1910,15 @@ class DataRecordManager:
             task_name = task_name.replace(ch, '_')
         return task_name
 
-    def _build_full_save_path(self, save_dir: str, task: Optional[str]) -> str:
+    def _build_full_save_path(self, save_dir: str, task_dir: str) -> str:
         self.project_root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        rel_save_dir = str(save_dir or "data/recording").strip().lstrip('/').lstrip('\\')
-        date_str = datetime.now().strftime("%Y%m%d")
-        task_name = self._sanitize_task_name(task)
-        self.current_task = task_name
-        return os.path.join(self.project_root_path, rel_save_dir, task_name + '_' + date_str)
+        rel_save_dir = str(save_dir).strip().lstrip('/').lstrip('\\')
+        return os.path.join(self.project_root_path, rel_save_dir, task_dir)
 
-    def set_task(self, task: str) -> None:
+    def set_task(self, task_dir: str) -> None:
         """Update save path by task/date before a new recording starts. Called in the writer process."""
-        # avoid reload data from file
-        # if self.current_task == task:
-        #     self.logger.warning(f"{self.current_task} is already set, return.")
-        #     return
-        # if self.shared_data.running.value:
-        #     self.logger.warning("set_task ignored because recording is running")
-        #     return
-
-        self.current_task = task
-        # if self.current_task == task_name and os.path.exists(os.path.join(self.project_root_path, self.save_dir, candidate_dir)):
-        #     self.logger.info(f"set_task with the same task name {task_name} and existing directory, reuse it.")
-        #     return
         self.save_dir = self.config.get("save_dir", "data/recording")     # relative path
-        self.save_path = self._build_full_save_path(self.save_dir, task)  # full path
+        self.save_path = self._build_full_save_path(self.save_dir, task_dir)  # full path
         if not os.path.exists(self.save_path):
             os.makedirs(self.save_path, exist_ok=True)
             self.logger.info(f"{self.save_path} not exists, create it")
@@ -1849,9 +1933,10 @@ class DataRecordManager:
             self.logger.info("Recording lerobot episode is disabled, skip recording.")
         
         if self.config.get('is_record_eval_log', False):
-            self.eval_recorder.set_task(save_path=self.save_path, episode_id=self.shared_data.episode_index.value)
+            record_id = self.eval_recorder.set_task(save_path=self.save_path, episode_id=self.shared_data.episode_index.value)
             # Keep next eval record id consistent across processes.
-            self._sync_shared_data(eval_record_id=int(self.eval_recorder._record_id) + 1)
+            if record_id is not None:
+                self._sync_shared_data(eval_record_id = record_id + 1)
         else:
             self.logger.info("Recording evaluation log is disabled, skip recording.")
     
@@ -1866,6 +1951,8 @@ class DataRecordManager:
             self.shared_data.episode_chunk.value = total_episodes // chunks_size
         if eval_record_id is not None:
             self.shared_data.eval_record_id.value = eval_record_id
+        # if eval_record_duration is not None:
+        #     self.shared_data.eval_record_duration.value = eval_record_duration
         # self.logger.info(f"total_frames={self.shared_data.total_frames.value}, total_videos={self.shared_data.total_videos.value}, total_episodes={self.shared_data.episode_index.value}")
 
     def update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
@@ -1920,7 +2007,7 @@ class DataRecordManager:
                     if write_future is not None and (not write_future.done()):
                         self.logger.warning("Receive start command while previous write task is still running, skip.")
                         continue
-                    self.set_task(task = command.get("task_id", "default"))
+                    self.set_task(task_dir = command.get("task_dir", "default"))
                     write_future = write_executor.submit(self._write_process_fun)
                 elif command.get("command", "") == "stop":
                     self.shared_data.running.value = False
@@ -1991,7 +2078,7 @@ class DataRecordManager:
         session_id = self._get_recording_session_id()
         self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
     
-    def start_recording(self, task_id: str):
+    def start_recording(self, task_id: str) -> str:
         """
         Starts the recording process by dispatching write task in resident writer process.
 
@@ -2005,36 +2092,39 @@ class DataRecordManager:
             # Keep main-process browse cache in sync immediately.
             # begin_recording() also runs inside writer subprocess, but subprocess memory
             # updates are not visible to the main process cache used by web APIs.
-            self.set_task(task=task_id)
+            # self.set_task(task=task_id)
             self.shared_data.running.value = True
-            first_record = self._wait_for_record_data(get_timeout_s=0.05, max_attempts=20)
+            # first_record = self._wait_for_record_data(get_timeout_s=0.05, max_attempts=20)
             if self.config.get('is_record_episode', False):
                 self.lerobot_recorder._sync_browse_on_record_start(
                     episode_chunk=self.shared_data.episode_chunk.value,
                     episode_index=self.shared_data.episode_index.value,
                 )
-            if self.config.get('is_record_eval_log', False):
-                if isinstance(first_record, tuple) and len(first_record) == 3:
-                    _, _, step_extra = first_record
-                    language_status = step_extra.get('language_status', {}) if isinstance(step_extra, dict) else {}
-                    sub_task_id = language_status.get('sub_task_id', None)
-                    self.eval_recorder._sync_browse_on_record_start(
-                        eval_record_id=self.shared_data.eval_record_id.value,
-                        sub_task_id=sub_task_id,
-                    )
-                    # if sub_task_id is not None:
-                        # self.eval_recorder._sync_browse_on_runtime_step(
-                        #     eval_record_id=self.shared_data.eval_record_id.value,
-                        #     sub_task_id=sub_task_id,
-                        # )
+            # if self.config.get('is_record_eval_log', False):
+            #     if isinstance(first_record, tuple) and len(first_record) == 3:
+            #         _, _, step_extra = first_record
+            #         language_status = step_extra.get('language_status', {}) if isinstance(step_extra, dict) else {}
+            #         sub_task_id = language_status.get('sub_task_id', None)
+            #         self.eval_recorder._sync_browse_on_record_start(
+            #             eval_record_id=self.shared_data.eval_record_id.value,
+            #             sub_task_id=sub_task_id,
+            #         )
+            #         # if sub_task_id is not None:
+            #             # self.eval_recorder._sync_browse_on_runtime_step(
+            #             #     eval_record_id=self.shared_data.eval_record_id.value,
+            #             #     sub_task_id=sub_task_id,
+            #             # )
+            task_dir = self._sanitize_task_name(task_id) + '_' + datetime.now().strftime("%Y%m%d")
             command = {
                 "command": "start",
-                "task_id": task_id,
+                "task_dir": task_dir,
             }
             self.writer_command_queue.put(command)
-            self.logger.info(f"Writer task dispatched successfully. session_id={session_id}")
+            self.logger.info(f"Writer task dispatched successfully. task_dir={task_dir}, session_id={session_id}")
+            return task_dir
         except Exception as e:
             self.logger.exception(f"Failed to start writer task: {e}")
+            return None
 
     def _wait_for_record_data(self, get_timeout_s: float = 0.05, max_attempts: int = 20) -> Optional[Any]:
         """Best-effort: read one record payload from queue and put it back unchanged."""
@@ -2090,12 +2180,11 @@ class DataRecordManager:
         self.writer_command_queue.put(command)
 
         # Sync browse cache in main process after writer updates shared counters.
-        if self.config.get('is_record_episode', False):
-            self._sync_browse_on_record_stop_main(
-                    stop_session_id,
-                    prev_episode_index,
-                    prev_total_frames,
-                    timeout_s=2.0)
+        self._sync_browse_on_record_stop_main(
+                stop_session_id,
+                prev_episode_index,
+                prev_total_frames,
+                timeout_s=2.0)
 
     def _sync_browse_on_record_stop_main(
         self,
@@ -2108,9 +2197,6 @@ class DataRecordManager:
         deadline = time.time() + max(0.1, float(timeout_s))
 
         while time.time() < deadline:
-            # Abort if a newer recording session has already started.
-            if self._get_recording_session_id() != stop_session_id:
-                return
 
             cur_episode_index = int(self.shared_data.episode_index.value)
             cur_total_frames = int(self.shared_data.total_frames.value)
@@ -2123,14 +2209,15 @@ class DataRecordManager:
                 episode_length = max(0, cur_total_frames - int(prev_total_frames))
 
                 try:
-                    self.lerobot_recorder._sync_browse_on_record_end(
-                        episode_chunk=finished_episode_chunk,
-                        episode_index=finished_episode_index,
-                        episode_length=episode_length,
-                        total_episodes=cur_episode_index,
-                        total_frames=cur_total_frames,
-                        total_videos=cur_total_videos,
-                    )
+                    if self.config.get('is_record_episode', False):
+                        self.lerobot_recorder._sync_browse_on_record_end(
+                            episode_chunk=finished_episode_chunk,
+                            episode_index=finished_episode_index,
+                            episode_length=episode_length,
+                            total_episodes=cur_episode_index,
+                            total_frames=cur_total_frames,
+                            total_videos=cur_total_videos,
+                        )
                 except Exception as e:
                     self.logger.warning(f"Failed to sync browse cache on stop in main process: {e}")
                 return
@@ -2143,6 +2230,7 @@ class DataRecordManager:
             self.lerobot_recorder._ensure_browse_data_loaded()
         except Exception as e:
             self.logger.warning(f"Failed to refresh browse cache after stop timeout: {e}")
+
     def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
@@ -2251,8 +2339,8 @@ class DataRecordManager:
                 # self.logger.info('write process stopped!!! ')
             # finish recording for all recorders
             if self.config.get('is_record_eval_log', False):
-                next_record_id = self.eval_recorder.end_recording()
-                self._sync_shared_data(eval_record_id=next_record_id)
+                currt_record_id = self.eval_recorder.end_recording()
+                self._sync_shared_data(eval_record_id=currt_record_id + 1)
 
             if self.config.get('is_record_episode', False):
                 episode_index, total_frames, total_videos = self.lerobot_recorder.end_record()
