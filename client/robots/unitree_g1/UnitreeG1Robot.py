@@ -8,6 +8,14 @@ import threading
 import time
 import numpy as np
 
+# TouchStatus is optional — may not be available in some environments
+try:
+    from message_center.msg import TouchStatus
+    _HAS_TOUCH_STATUS = True
+except ImportError:
+    TouchStatus = None
+    _HAS_TOUCH_STATUS = False
+
 
 # ==============================================
 # Arm joint **relative** limits (radians/control step)
@@ -122,6 +130,12 @@ class UnitreeG1Robot(Node):
         self.topic_right_hand = "/right_hand/get_angle"
 
         # ======================
+        # Subscription topics (touch status)
+        # ======================
+        self.topic_left_touch = "/left_hand/touch_status"
+        self.topic_right_touch = "/right_hand/touch_status"
+
+        # ======================
         # Subscription topics (action reading)
         # ======================
         self.topic_joint_action = "/joint_action"
@@ -151,6 +165,10 @@ class UnitreeG1Robot(Node):
         self.latest_right_arm = None
         self.latest_left_hand = None
         self.latest_right_hand = None
+
+        # Latest touch-status cache
+        self.latest_left_touch = None   # (TouchStatus_msg, timestamp) or None
+        self.latest_right_touch = None
 
         # ===== Action cache (from /joint_action, /left_hand/set_angle, /right_hand/set_angle) =====
         self.latest_left_arm_action = None
@@ -190,6 +208,14 @@ class UnitreeG1Robot(Node):
         self.create_subscription(JointState, self.topic_left_hand_action, self._cb_left_hand_action, qos_correct)
         self.create_subscription(JointState, self.topic_right_hand_action, self._cb_right_hand_action, qos_correct)
 
+        # Touch-status subscriptions
+        if _HAS_TOUCH_STATUS and TouchStatus is not None:
+            self.create_subscription(TouchStatus, self.topic_left_touch, self._cb_left_touch, qos_correct)
+            self.create_subscription(TouchStatus, self.topic_right_touch, self._cb_right_touch, qos_correct)
+            print(f"[DBG UnitreeG1Robot] TouchStatus subscriptions OK")
+        else:
+            print(f"[DBG UnitreeG1Robot] TouchStatus NOT available")
+
         # ======================
         # Publishers (control robot)
         # ======================
@@ -218,10 +244,16 @@ class UnitreeG1Robot(Node):
         self.enable_relative_clamp = True   # Relative limits (single-step delta protection)
         self.enable_absolute_clamp = True   # Absolute limits (safety fallback)
 
+        # ======================
+        # Force sensor runtime detection
+        # Set to True when TouchStatus message is first received
+        # ======================
+        self.has_force_sensor = False
+
         self.running = True
 
         # ######################
-        # NEW: Deduplication flag, avoid sampling thread enqueueing same timestamp data repeatedly
+        # Deduplication flag, avoid sampling thread enqueueing same timestamp data repeatedly
         # ######################
         self._last_queue_ts_left_arm = 0.0
         self._last_queue_ts_right_arm = 0.0
@@ -384,6 +416,29 @@ class UnitreeG1Robot(Node):
         self.latest_right_hand = (msg, ts)
         _dprint(f"_cb_right_hand received: ts={ts:.6f}, positions={msg.position[:3]}...")
 
+    def _cb_left_touch(self, msg):
+        ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        self.latest_left_touch = (msg, ts)
+        self.has_force_sensor = True
+
+    def _cb_right_touch(self, msg):
+        ts = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
+        self.latest_right_touch = (msg, ts)
+        self.has_force_sensor = True
+
+    @staticmethod
+    def get_touch_tf_sum(msg) -> int:
+        """Extract total tangential force sum (tf_sum) across all fingers from a TouchStatus message.
+
+        Tangential force = tangential_force1 + tangential_force2 + tangential_force3,
+        i.e. force along the skin surface (shear/friction). Drops sharply when
+        someone tugs on a held object.
+        """
+        total = 0
+        for f in msg.fingers:
+            total += f.tangential_force1 + f.tangential_force2 + f.tangential_force3
+        return total
+
     # ======================
     # Action subscription callbacks
     #   /joint_action has same joint names as /joint_state
@@ -453,7 +508,7 @@ class UnitreeG1Robot(Node):
         while self.running:
             loop_count += 1
             # ######################
-            # MODIFIED: Timestamp deduplication (use 1ms threshold for float comparison)
+            # Timestamp deduplication (use 1ms threshold for float comparison)
             # ######################
             eps = 1e-4
             if self.latest_left_arm:
@@ -624,7 +679,7 @@ def main():
                 robot.send_robot_action(action)
 
             count += 1
-            if count % 10 != 0:  # 每秒打印一次
+            if count % 10 != 0:  # print once per second
                 continue
 
             print("=" * 70)

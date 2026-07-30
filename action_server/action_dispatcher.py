@@ -5,14 +5,9 @@ VLA Action Dispatcher - 任务分发型 ROS2 Action Server
 """
 
 # ════════════════════════════════════════════════════════════════
-# 抓取检测配置参数 —— 修改此处即可调节抓取判定灵敏度
-# 判定条件：thumb_bend diff > GRASP_ANGLE_DIFF_THRESHOLD
-#       且 middle finger diff > GRASP_MIDDLE_DIFF_THRESHOLD
-#       持续 GRASP_HOLD_DURATION_SEC 秒
+# 力传感器开关 —— True=有力传感器模式, False=无力传感器(关节角度)模式
 # ════════════════════════════════════════════════════════════════
-GRASP_ANGLE_DIFF_THRESHOLD = 200.0     # 拇指弯曲角度差阈值
-GRASP_MIDDLE_DIFF_THRESHOLD = 100.0    # 中指角度差阈值
-GRASP_HOLD_DURATION_SEC = 0.5          # 差值需持续超过阈值的最短时间（秒）
+FORCE_SENSOR_ENABLED = True
 
 import sys
 import os
@@ -34,167 +29,14 @@ from message_center.action import ExecutionUnit
 
 from action_server.action_base import AbstractTaskHandler, TaskResult
 from action_server.vla_context import VLAContext
+from action_server.grasp_detector import GraspDetector
 
-
-# ════════════════════════════════════════════════════════════════
-# Grasp Detector — 实时监控手部 set_angle/get_angle 差值判断抓取状态
-# ════════════════════════════════════════════════════════════════
-class GraspDetector:
-    """通过比较手部 set_angle 与 get_angle 的多个手指差值来检测抓取状态。
-
-    判定逻辑:
-        对于每只手，同时满足以下两个条件并持续超过 GRASP_HOLD_DURATION_SEC 秒，
-        则判定该手处于抓取状态：
-          - set_angle[thumb_bend] - get_angle[thumb_bend] > GRASP_ANGLE_DIFF_THRESHOLD (200)
-          - set_angle[middle]     - get_angle[middle]     > GRASP_MIDDLE_DIFF_THRESHOLD (100)
-
-    内部维护 [左手抓取, 右手抓取] 的 bool 列表，实时更新。
-
-    监控的 ROS2 话题:
-        - /left_hand/set_angle   (期望角度, JointState)
-        - /left_hand/get_angle   (实际角度, JointState)
-        - /right_hand/set_angle  (期望角度, JointState)
-        - /right_hand/get_angle  (实际角度, JointState)
-    """
-
-    # 手部关节顺序: little, ring, middle, index, thumb_bend, thumb_rotate
-    THUMB_BEND_INDEX = 4
-    MIDDLE_FINGER_INDEX = 2
-
-    def __init__(self, node: Node):
-        from sensor_msgs.msg import JointState
-        from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSDurabilityPolicy
-
-        self._node = node
-        self._lock = threading.Lock()
-
-        # ── 抓取状态：[左手是否抓取, 右手是否抓取] ──
-        self._grasp_state = [False, False]
-
-        # ── 缓存最新的 set/get 角度 ──
-        # key: 'left_set', 'left_get', 'right_set', 'right_get'
-        self._angle_cache = {
-            'left_set': None,
-            'left_get': None,
-            'right_set': None,
-            'right_get': None,
-        }
-
-        # ── 差值首次超过阈值的时间戳 ──
-        self._left_exceed_since: float = 0.0   # 0.0 表示当前未超限
-        self._right_exceed_since: float = 0.0
-
-        # QoS: 与机器人驱动匹配 BEST_EFFORT
-        qos_sensor = QoSProfile(
-            reliability=QoSReliabilityPolicy.BEST_EFFORT,
-            durability=QoSDurabilityPolicy.VOLATILE,
-            depth=10,
-        )
-
-        # ── 订阅 4 个话题 ──
-        node.create_subscription(
-            JointState, '/left_hand/set_angle',
-            self._cb_left_set, qos_sensor)
-        node.create_subscription(
-            JointState, '/left_hand/get_angle',
-            self._cb_left_get, qos_sensor)
-        node.create_subscription(
-            JointState, '/right_hand/set_angle',
-            self._cb_right_set, qos_sensor)
-        node.create_subscription(
-            JointState, '/right_hand/get_angle',
-            self._cb_right_get, qos_sensor)
-
-        node.get_logger().info(
-            f'[GraspDetector] Started | threshold={GRASP_ANGLE_DIFF_THRESHOLD}, '
-            f'hold={GRASP_HOLD_DURATION_SEC}s'
-        )
-
-    def stop(self):
-        """停止 GraspDetector（当前无后台线程，保留供外部调用）"""
-        pass
-
-    # ── 回调函数 ──
-
-    def _cb_left_set(self, msg):
-        self._on_angle('left_set', msg)
-
-    def _cb_left_get(self, msg):
-        self._on_angle('left_get', msg)
-
-    def _cb_right_set(self, msg):
-        self._on_angle('right_set', msg)
-
-    def _cb_right_get(self, msg):
-        self._on_angle('right_get', msg)
-
-    def _on_angle(self, key: str, msg):
-        """缓存全关节 position 数组（用于计算多个手指差值），然后更新抓取判定"""
-        if msg.position and len(msg.position) > max(self.THUMB_BEND_INDEX, self.MIDDLE_FINGER_INDEX):
-            with self._lock:
-                self._angle_cache[key] = [float(v) for v in msg.position]
-                self._evaluate_grasp()
-
-    def _evaluate_grasp(self):
-        """重新评估左右手抓取状态（同时检查 thumb_bend 和 middle finger，必须在 _lock 内调用）"""
-        now = time.time()
-
-        def _both_over_threshold(set_key: str, get_key: str) -> bool:
-            """thumb_bend > 200 且 middle > 100 同时满足"""
-            thumb_diff = self._compute_diff(set_key, get_key, self.THUMB_BEND_INDEX)
-            mid_diff = self._compute_diff(set_key, get_key, self.MIDDLE_FINGER_INDEX)
-            if thumb_diff is None or mid_diff is None:
-                return False
-            return thumb_diff > GRASP_ANGLE_DIFF_THRESHOLD and mid_diff > GRASP_MIDDLE_DIFF_THRESHOLD
-
-        # ── 左手 ──
-        if _both_over_threshold('left_set', 'left_get'):
-            if self._left_exceed_since == 0.0:
-                self._left_exceed_since = now
-            if now - self._left_exceed_since >= GRASP_HOLD_DURATION_SEC:
-                self._grasp_state[0] = True
-        else:
-            self._left_exceed_since = 0.0
-            self._grasp_state[0] = False
-
-        # ── 右手 ──
-        if _both_over_threshold('right_set', 'right_get'):
-            if self._right_exceed_since == 0.0:
-                self._right_exceed_since = now
-            if now - self._right_exceed_since >= GRASP_HOLD_DURATION_SEC:
-                self._grasp_state[1] = True
-        else:
-            self._right_exceed_since = 0.0
-            self._grasp_state[1] = False
-
-    def _compute_diff(self, set_key: str, get_key: str, index: int):
-        """计算指定关节索引的 set_angle - get_angle 差值，数据缺失时返回 None"""
-        set_val = self._angle_cache[set_key]
-        get_val = self._angle_cache[get_key]
-        if set_val is None or get_val is None:
-            return None
-        if len(set_val) <= index or len(get_val) <= index:
-            return None
-        return set_val[index] - get_val[index]
-
-    # ── 公开接口 ──
-
-    @property
-    def grasp_state(self) -> list:
-        """返回当前抓取状态 [左手, 右手]，线程安全"""
-        with self._lock:
-            return list(self._grasp_state)
-
-    def get_angle_diffs(self) -> dict:
-        """返回当前左右手的 set/get 角度差（调试用），含 thumb 和 middle"""
-        with self._lock:
-            return {
-                'left_thumb': self._compute_diff('left_set', 'left_get', self.THUMB_BEND_INDEX),
-                'left_mid':   self._compute_diff('left_set', 'left_get', self.MIDDLE_FINGER_INDEX),
-                'right_thumb': self._compute_diff('right_set', 'right_get', self.THUMB_BEND_INDEX),
-                'right_mid':   self._compute_diff('right_set', 'right_get', self.MIDDLE_FINGER_INDEX),
-            }
-
+# 判断触觉传感器消息类型是否可用
+try:
+    from message_center.msg import TouchStatus  # noqa: F401
+    _HAS_TOUCH_STATUS = True
+except ImportError:
+    _HAS_TOUCH_STATUS = False
 
 # ════════════════════════════════════════════════════════════════
 # Observation Data Bridge — 把观测数据推送到内部 WebSocket 端口
@@ -486,8 +328,8 @@ class VLAActionDispatcher(Node):
         # 注册内置 handler
         self._register_builtin_handlers()
 
-        # 创建抓取检测器（订阅 set_angle/get_angle 话题，判断抓取状态）
-        self._grasp_detector = GraspDetector(self)
+        # 创建抓取检测器（双模式：力传感器/关节角度，由 FORCE_SENSOR_ENABLED 控制）
+        self._grasp_detector = GraspDetector(self, force_sensor_enabled=FORCE_SENSOR_ENABLED)
         self._context.grasp_detector = self._grasp_detector
 
         # 创建 Action Server
@@ -564,6 +406,17 @@ class VLAActionDispatcher(Node):
             self.get_logger().info(f'Registered deliver handler for 4 target variants')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load deliver handler: {e}')
+
+        # 力传感器专用递物处理器（仅在触觉可用时注册）
+        if _HAS_TOUCH_STATUS:
+            try:
+                from action_server.task_deliver_force import ForceDeliverHandler
+                force_handler = ForceDeliverHandler()
+                for target in ["left arm", "right arm", "one arm", "both arm"]:
+                    self._handlers[f"deliver_force:{target}"] = force_handler
+                self.get_logger().info(f'Registered deliver_force handler for 4 target variants (force only)')
+            except ImportError as e:
+                self.get_logger().warn(f'Failed to load deliver_force handler: {e}')
 
         try:
             from action_server.task_place import PlaceHandler
@@ -768,6 +621,28 @@ def main(args=None):
         dispatcher._obs_bridge = ObsDataBridge(dispatcher._context, dispatcher._grasp_detector)
         dispatcher._obs_bridge.start()
         dispatcher.get_logger().info('ObsDataBridge started (ws://127.0.0.1:9001)')
+
+        # ===== 力传感器配置验证（延迟 3s 等待消息到达）=====
+        if FORCE_SENSOR_ENABLED:
+            def _check_force_sensor():
+                import time as _time
+                _time.sleep(3.0)
+                try:
+                    robot = dispatcher._context.robot_body.robot
+                    if hasattr(robot, 'has_force_sensor') and not robot.has_force_sensor:
+                        print('[ERROR] ============================================================')
+                        print('[ERROR] force_sensor_enabled=True 但未收到触觉传感器消息！')
+                        print('[ERROR] 请检查：')
+                        print('[ERROR]   1. 手掌是否支持触觉传感器（TouchStatus）')
+                        print('[ERROR]   2. 触觉话题 /left_hand/touch_status, /right_hand/touch_status 是否正确发布')
+                        print('[ERROR]   3. 如需关闭力传感器模式，请将 action_dispatcher.py 中的')
+                        print('[ERROR]      FORCE_SENSOR_ENABLED 设为 False（第 11 行附近）')
+                        print('[ERROR] ============================================================')
+                except Exception:
+                    pass
+            import threading as _threading
+            _check_thread = _threading.Thread(target=_check_force_sensor, daemon=True)
+            _check_thread.start()
 
         # 使用 MultiThreadedExecutor 确保 action 回调在独立线程执行，
         # 不会阻塞 spin 线程的 wait set 管理。
