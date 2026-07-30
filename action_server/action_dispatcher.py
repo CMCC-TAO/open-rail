@@ -398,23 +398,34 @@ class VLAActionDispatcher(Node):
         except ImportError as e:
             self.get_logger().warn(f'Failed to load grasp_all handler: {e}')
 
-        try:
-            from action_server.task_deliver import DeliverHandler
-            handler = DeliverHandler()
-            for target in ["left arm", "right arm", "one arm", "both arm"]:
-                self._handlers[f"deliver:{target}"] = handler
-            self.get_logger().info(f'Registered deliver handler for 4 target variants')
-        except ImportError as e:
-            self.get_logger().warn(f'Failed to load deliver handler: {e}')
+        # 递物任务处理器：根据力传感器配置选择版本
+        if FORCE_SENSOR_ENABLED and _HAS_TOUCH_STATUS:
+            try:
+                from action_server.task_deliver_force import ForceDeliverHandler
+                handler = ForceDeliverHandler()
+                for target in ["left arm", "right arm", "one arm", "both arm"]:
+                    self._handlers[f"deliver:{target}"] = handler
+                self.get_logger().info(f'Registered deliver handler for 4 target variants (force mode)')
+            except ImportError as e:
+                self.get_logger().warn(f'Failed to load deliver_force handler: {e}')
+        else:
+            try:
+                from action_server.task_deliver import DeliverHandler
+                handler = DeliverHandler()
+                for target in ["left arm", "right arm", "one arm", "both arm"]:
+                    self._handlers[f"deliver:{target}"] = handler
+                self.get_logger().info(f'Registered deliver handler for 4 target variants (joint angle mode)')
+            except ImportError as e:
+                self.get_logger().warn(f'Failed to load deliver handler: {e}')
 
-        # 力传感器专用递物处理器（仅在触觉可用时注册）
+        # 力传感器专用递物处理器（显式调用入口）
         if _HAS_TOUCH_STATUS:
             try:
                 from action_server.task_deliver_force import ForceDeliverHandler
                 force_handler = ForceDeliverHandler()
                 for target in ["left arm", "right arm", "one arm", "both arm"]:
                     self._handlers[f"deliver_force:{target}"] = force_handler
-                self.get_logger().info(f'Registered deliver_force handler for 4 target variants (force only)')
+                self.get_logger().info(f'Registered deliver_force handler for 4 target variants (explicit)')
             except ImportError as e:
                 self.get_logger().warn(f'Failed to load deliver_force handler: {e}')
 
