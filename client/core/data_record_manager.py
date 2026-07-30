@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+# from __future__ import annotations
 from queue import Empty
 from pathlib import Path
 from datetime import datetime
@@ -17,8 +18,9 @@ from collections import deque
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Process, Manager,Queue
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Tuple
 from client.utils.util import run_time_decorator
+
 class LeRobotDatasetParser:
     """Parse LeRobot dataset episodes from one task recording directory."""
 
@@ -252,139 +254,179 @@ class LeRobotDatasetRecorder:
         # print(f"Debug: record_config: {self.config}")
         self.task_language_dict = {}
 
-        # Runtime cache for episode browsing in memory.
-        self._dataset_root: Optional[Path] = None
-        self._meta_dir: Optional[Path] = None
-        self._data_dir: Optional[Path] = None
-        self._browse_task_name: str = ""
-        self._browse_task_dir: str = ""
-        self._browse_cache_loaded: bool = False
-        self._browse_info: Dict[str, Any] = {}
-        self._browse_fps: int = 30
-        self._browse_chunks_size: int = 1000
-        self._browse_video_keys: List[str] = []
-        self._browse_episode_length_map: Dict[int, int] = {}
-        self._browse_episode_records: List[Dict[str, Any]] = []
+        # Runtime cache for writer-side episode metadata.
+        self._save_path: Optional[str] = None
+        self._meta_dir: Optional[str] = None
+        self._data_dir: Optional[str] = None
+        self._dataset_info: Dict[str, Any] = {}
+        self._dataset_fps: int = 30
+        self._video_keys: List[str] = []
+        self._episode_length_map: Dict[int, int] = {}
+        self._writer_episode_records: List[Dict[str, Any]] = []
+
+        # Queue-based browse sync between main process and writer process.
+        self._episode_records_for_browse: List[Dict[str, Any]] = []
+        self._episode_records_for_share: Queue = Queue()
+        self._task_dir_for_browse: Optional[str] = None
+        self._episode_record_crud_queue: Queue = Queue()
+        self._episode_record_crud_thread: Optional[threading.Thread] = None
+        self._episode_record_crud_stop_event = threading.Event()
 
         self._parse_config(lerobot_config)
         # self.record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
 
     def _check_meta_path_and_dir(self, save_path: str) -> bool:
-        self.meta_dir = os.path.join(save_path, 'meta')
-        # self.logger.info(f"_check_meta_path_and_dir: save_dir={self.save_dir!r}, save_path={self.save_path!r}, meta_dir={self.meta_dir!r}")
+        """
+        Check and create the metadata directory if it doesn't exist, then verify required meta files.
 
-        if not os.path.exists(self.meta_dir):
-            os.makedirs(self.meta_dir, exist_ok=True)
-            self.logger.info(f"{self.meta_dir} not exists, create it")
+        This method performs the following operations:
+        1. Constructs the metadata directory path by joining save_path with 'meta'
+        2. Creates the directory if it doesn't exist
+        3. Logs the directory creation if performed
+        4. Checks for required metadata files if directory already exists
+
+        Args:
+            save_path (str): The base path where metadata directory should be located
+
+        Returns:
+            bool: False if directory was created, otherwise returns result of _check_required_meta_files() which indicates whether all required meta files exist.
+
+        Notes:
+            Handles special characters in paths including \t, \r, \n
+            Uses exist_ok=True to prevent race conditions
+        """
+        if not os.path.exists(self._meta_dir):
+            os.makedirs(self._meta_dir, exist_ok=True)
+            self.logger.info(f"{self._meta_dir} not exists, create it")
             return False
         return self._check_required_meta_files()
 
     def _check_required_meta_files(self, required_files: List[str] = ['info.json', 'episodes.jsonl', 'tasks.jsonl']) -> bool:
+        """
+        Check if the required meta files exist in the meta directory. Called in writer process.
+
+        Args:
+            required_files (List[str]): A list of required filenames to check for. 
+                                        Defaults to ['info.json', 'episodes.jsonl', 'tasks.jsonl'].
+
+        Returns:
+            bool: True if all required files exist, False otherwise.
+
+        Note:
+            If any files are missing, a warning message is logged listing the missing files.
+        """
         # Check for required files
         missing_files = []
 
         for filename in required_files:
-            file_path = os.path.join(self.meta_dir, filename)
+            file_path = os.path.join(self._meta_dir, filename)
             if not os.path.exists(file_path):
                 missing_files.append(filename)
 
         # Raise error if any required file is missing
         if missing_files:
-            self.logger.warning(f"{self.meta_dir} is missing the following required files: {', '.join(missing_files)}")
+            self.logger.warning(f"{self._meta_dir} is missing the following required files: {', '.join(missing_files)}")
             # assert False, "Missing required meta files."
             return False
         else:
+            self.logger.info(f"{self._meta_dir} has the following required files: {', '.join(required_files)}")
             return True
-    def set_task(self, save_path: str) -> None:
-        self.save_path = save_path
-        # Keep current task path for fast in-memory browsing.
-        self._set_browse_task_from_path(save_path)
+    def set_task(self, save_path: str) -> Tuple[int, int, int, int]:
+        """
+        Set up a new task with the specified save path and initialize configuration. Called in writer process.
+
+        This method performs the following operations:
+        1. Sets the save path for the task
+        2. Initializes task-specific paths
+        3. Checks for existing metadata files
+        4. Updates configuration either from metadata or with default values
+        5. Refreshes writer-side cache for queue-based synchronization
+
+        Args:
+            save_path (str): The directory path where task data will be saved.
+                            The path may contain special characters:
+                            - \\t: Tab character
+                            - \\r: Carriage return
+                            - \\n: Newline character
+
+        Returns:
+            Tuple[int, int, int, int]: A tuple containing:
+                - total_frames (int): Total number of frames in the task
+                - total_videos (int): Total number of videos in the task
+                - total_episodes (int): Total number of episodes in the task
+                - chunks_size (int): Size of chunks for data processing (default 1000)
+
+        Side Effects:
+            - Modifies self._save_path
+            - Updates self.config with task parameters
+            - Reloads browse state for synchronization
+        """
+        self._set_task_path(save_path=save_path)
         meta_required_file_exists = self._check_meta_path_and_dir(save_path=save_path)
         if meta_required_file_exists:
             self._update_config_from_meta_file()
         else:
-            self.config["total_episodes"] = 0
-            self.config["total_frames"] = 0
-            self.config["total_videos"] = 0
-            self.config['chunks_size'] = 1000
+            self._update_config_from_init()
 
-        # Always refresh browse cache through the shared meta-loading interface.
-        self._browse_cache_loaded = False
-        self._ensure_browse_data_loaded()
+        # Refresh writer-side cache for subsequent queue-based sync.
+        self._reload_browse_state()
         return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
-    
-
-    def _set_browse_task_from_path(self, save_path: str) -> None:
-        """Update recorder browsing target and clear cache if task path changes."""
-        task_dir = Path(save_path).resolve()
-        task_name = task_dir.name
-        task_dir_str = str(task_dir)
-
-        if self._browse_task_dir != task_dir_str:
-            self._browse_cache_loaded = False
-            self._browse_episode_records = []
-
-        self._browse_task_name = task_name
-        self._browse_task_dir = task_dir_str
-        self._dataset_root = task_dir
-        self._meta_dir = task_dir / "meta"
-        self._data_dir = task_dir / "data"
-
-    def _resolve_task_dir(self, selected_task: Optional[str], base_dir: Optional[Union[str, Path]] = None) -> Path:
-        """Resolve dataset task directory from selected_task or current recorder state."""
-        if selected_task and str(selected_task).strip():
-            if base_dir is not None:
-                return Path(base_dir).resolve() / str(selected_task).strip()
-            if self._dataset_root is not None and self._dataset_root.parent.exists():
-                return self._dataset_root.parent / str(selected_task).strip()
-        if self._dataset_root is None:
-            raise ValueError("Task directory is not initialized. Call set_task() first.")
-        return self._dataset_root
+    def _set_task_path(self, save_path: str):
+        """
+        Set the paths for saving task-related data and metadata.
+        
+        Args:
+            save_path (str): The base directory path where all task-related 
+                folders will be created.
+                
+        Note:
+            This method initializes two subdirectories path string under the save_path:
+            1. 'data' directory for storing task data
+            2. 'meta' directory for storing metadata
+            
+            The paths are stored as instance variables for later use.
+        """
+        self._save_path = save_path
+        self._data_dir = os.path.join(save_path, 'data')
+        self._meta_dir = os.path.join(save_path, 'meta')
 
     def _reload_browse_state(self) -> None:
-        """Reload browse metadata and episode records using a shared meta-loading path."""
-        self._browse_info = self._load_browse_info()
-        self._browse_fps = int(self._browse_info.get("fps", 30) or 30)
-        self._browse_chunks_size = int(self._browse_info.get("chunks_size", 1000) or 1000)
-        self._browse_video_keys = self._get_browse_video_keys(self._browse_info)
-        self._browse_episode_length_map = self._load_browse_episode_length_map()
-        self._browse_episode_records = self._build_episode_records()
-        self._browse_cache_loaded = True
+        """Reload writer-side dataset metadata and episode records."""
+        self._dataset_info = self._load_dataset_info()
+        self._dataset_fps = int(self._dataset_info.get("fps", 30) or 30)
+        self._video_keys = self._get_video_keys(self._dataset_info)
+        self._episode_length_map = self._load_episode_length_map()
+        self._writer_episode_records = self._build_episode_records()
 
-    def _ensure_browse_data_loaded(self, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> None:
-        """Load episode metadata and records when task changes or cache is empty."""
-        task_dir = self._resolve_task_dir(selected_task=selected_task, base_dir=base_dir).resolve()
-        task_name = task_dir.name
+    def _load_dataset_info(self) -> Dict[str, Any]:
+        """
+        Load dataset information from a JSON file named info.json.
+        
+        This method attempts to read and parse a JSON file containing metadata about the dataset. If the file doesn't exist or cannot be parsed, it returns an empty dictionary.
 
-        should_reload = (
-            (not self._browse_cache_loaded)
-            or (task_name != self._browse_task_name)
-            or (str(task_dir) != self._browse_task_dir)
-        )
-        if not should_reload:
-            return
-
-        self._set_browse_task_from_path(str(task_dir))
-        self._reload_browse_state()
-
-    def _load_browse_info(self) -> Dict[str, Any]:
-        info_path = self._meta_dir / "info.json"
-        if not info_path.exists():
+        Returns:
+            Dict[str, Any]: A dictionary containing the dataset information if successfully loaded, otherwise an empty dictionary.
+        
+        Note:
+            Any exceptions during file parsing are caught and logged as warnings, with an empty dictionary returned in such cases.
+        """
+        info_path = os.path.join(self._meta_dir, "info.json")
+        if not os.path.exists(info_path):
             return {}
         try:
-            with info_path.open("r", encoding="utf-8") as f:
+            with open(info_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            self.logger.warning("Failed to parse info.json: %s", info_path, exc_info=True)
+            self.logger.warning(f"Failed to parse info.json: {info_path}", exc_info=True)
             return {}
 
-    def _load_browse_episode_length_map(self) -> Dict[int, int]:
-        episodes_path = self._meta_dir / "episodes.jsonl"
+    def _load_episode_length_map(self) -> Dict[int, int]:
+        episodes_path = os.path.join(self._meta_dir, "episodes.jsonl")
         mapping: Dict[int, int] = {}
-        if not episodes_path.exists():
+        if not os.path.exists(episodes_path):
             return mapping
         try:
-            with episodes_path.open("r", encoding="utf-8") as f:
+            with open(episodes_path, "r", encoding="utf-8") as f:
                 for line in f:
                     s = line.strip()
                     if not s:
@@ -399,7 +441,7 @@ class LeRobotDatasetRecorder:
         return mapping
 
     @staticmethod
-    def _get_browse_video_keys(info: Dict[str, Any]) -> List[str]:
+    def _get_video_keys(info: Dict[str, Any]) -> List[str]:
         features = info.get("features", {}) if isinstance(info, dict) else {}
         keys: List[str] = []
         for key, value in features.items():
@@ -414,14 +456,14 @@ class LeRobotDatasetRecorder:
             raise ValueError(f"Invalid episode id: {episode_id}")
         return int(m.group(1)), int(m.group(2))
 
-    def _browse_parquet_num_rows(self, parquet_path: Path) -> int:
+    def _parquet_num_rows(self, parquet_path: Path) -> int:
         try:
             return int(pq.ParquetFile(parquet_path).metadata.num_rows)
         except Exception:
             return 0
 
-    def _browse_video_exists(self, chunk_id: int, episode_index: int, video_key: str) -> bool:
-        video_fmt = self._browse_info.get(
+    def _video_exists(self, chunk_id: int, episode_index: int, video_key: str) -> bool:
+        video_fmt = self._dataset_info.get(
             "video_path",
             "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
         )
@@ -430,17 +472,17 @@ class LeRobotDatasetRecorder:
             episode_index=episode_index,
             video_key=video_key,
         )
-        return (self._dataset_root / rel).exists()
+        return os.path.exists(os.path.join(self._save_path, rel))
 
     def _build_episode_records(self) -> List[Dict[str, Any]]:
-        if self._data_dir is None or (not self._data_dir.exists()):
+        if self._data_dir is None or (not os.path.exists(self._data_dir)):
             return []
 
         pattern = re.compile(r"chunk-(\d{3})/episode_(\d{6})\.parquet$")
-        meta_ok = all((self._meta_dir / name).exists() for name in ("info.json", "episodes.jsonl", "tasks.jsonl"))
+        meta_ok = all(os.path.exists(os.path.join(self._meta_dir, name)) for name in ("info.json", "episodes.jsonl", "tasks.jsonl"))
         records: List[Dict[str, Any]] = []
 
-        for parquet_path in self._data_dir.rglob("episode_*.parquet"):
+        for parquet_path in Path(self._data_dir).rglob("episode_*.parquet"):
             rel_data = parquet_path.relative_to(self._data_dir).as_posix()
             m = pattern.search(rel_data)
             if not m:
@@ -448,27 +490,35 @@ class LeRobotDatasetRecorder:
 
             cur_chunk_id = int(m.group(1))
             episode_index = int(m.group(2))
-            frames = int(self._browse_episode_length_map.get(episode_index, self._browse_parquet_num_rows(parquet_path)))
-            duration_sec = round((frames / self._browse_fps), 1) if self._browse_fps > 0 else 0.0
-            videos_ok = all(self._browse_video_exists(cur_chunk_id, episode_index, key) for key in self._browse_video_keys)
+            frames = int(self._episode_length_map.get(episode_index, self._parquet_num_rows(parquet_path)))
+            # duration_sec = round((frames / self._dataset_fps), 1) if self._dataset_fps > 0 else 0.0
+            videos_ok = all(self._video_exists(cur_chunk_id, episode_index, key) for key in self._video_keys)
 
-            records.append({
-                "id": f"chunk-{cur_chunk_id:03d}/episode_{episode_index:06d}",
-                "name": f"episode_{episode_index:06d}",
-                "chunk": cur_chunk_id,
-                "chunk_str": f"{cur_chunk_id:03d}",
-                "episode_index": episode_index,
-                "frames": frames,
-                "duration_sec": duration_sec,
-                "parquet_relpath": str(parquet_path.relative_to(self._dataset_root)),
-                "complete": bool(meta_ok and videos_ok),
-            })
+            records.append(
+                self._build_episode_record(
+                    chunk_id=cur_chunk_id,
+                    episode_index=episode_index,
+                    frames=frames,
+                    complete=bool(meta_ok and videos_ok)
+                    )
+                )
+            # records.append({
+            #     "id": f"chunk-{cur_chunk_id:03d}/episode_{episode_index:06d}",
+            #     "name": f"episode_{episode_index:06d}",
+            #     "chunk": cur_chunk_id,
+            #     "chunk_str": f"{cur_chunk_id:03d}",
+            #     "episode_index": episode_index,
+            #     "frames": frames,
+            #     "duration_sec": duration_sec,
+            #     "parquet_relpath": str(parquet_path.relative_to(self._save_path)),
+            #     "complete": bool(meta_ok and videos_ok),
+            # })
 
         records.sort(key=lambda x: x["episode_index"], reverse=True)
         return records
 
     def _build_episode_record(self, chunk_id: int, episode_index: int, frames: int, complete: bool) -> Dict[str, Any]:
-        duration_sec = round((max(0, int(frames)) / self._browse_fps), 1) if self._browse_fps > 0 else 0.0
+        duration_sec = round((max(0, int(frames)) / self._dataset_fps), 1) if self._dataset_fps > 0 else 0.0
         parquet_relpath = self.config['data_path'].format(episode_chunk=chunk_id, episode_index=episode_index)
         return {
             "id": f"chunk-{chunk_id:03d}/episode_{episode_index:06d}",
@@ -482,93 +532,374 @@ class LeRobotDatasetRecorder:
             "complete": bool(complete),
         }
 
-    def _upsert_browse_episode_record(self, record: Dict[str, Any]) -> None:
-        """Insert or replace one episode record in browse cache."""
+    def _upsert_writer_episode_record(self, record: Dict[str, Any]) -> None:
+        """
+        Insert or replace one episode record in browse cache.
+        
+        This method checks if an episode with the same ID already exists in the cache.
+        If found, it replaces the existing record with the new one. If not found,
+        it appends the new record to the cache. Finally, it sorts all records by episode index in descending order.
+        
+        Args:
+            record (Dict[str, Any]): The episode record to be inserted or replaced. Must contain an 'id' field and optionally an 'episode_index' field for sorting.
+        
+        Returns:
+            None
+        """
         target_id = str(record.get("id", ""))
         replaced = False
-        for idx, item in enumerate(self._browse_episode_records):
+        for idx, item in enumerate(self._writer_episode_records):
             if str(item.get("id", "")) == target_id:
-                self._browse_episode_records[idx] = record
+                self._writer_episode_records[idx] = record
                 replaced = True
                 break
         if not replaced:
-            self._browse_episode_records.append(record)
-        self._browse_episode_records.sort(key=lambda x: int(x.get("episode_index", -1)), reverse=True)
+            self._writer_episode_records.append(record)
+        self._writer_episode_records.sort(key=lambda x: int(x.get("episode_index", -1)), reverse=True)
+
+    def _clear_episode_share_queue(self):
+        """
+        Clear stale shared browse records before loading a new task. Called in main process.
+        
+        This method empties the queue of episode records that are shared between processes.
+        It handles both normal queue clearing and edge cases where the queue might be in an inconsistent state.
+        
+        Special characters handled:
+        - \t (tab)
+        - \r (carriage return)
+        - \n (newline)
+        
+        Raises:
+            Exception: If queue clearing fails, attempts alternative clearing method
+        """
+        try:
+            while not self._episode_records_for_share.empty():
+                try:
+                    self._episode_records_for_share.get_nowait()
+                except Empty:
+                    break
+        except Exception:
+            try:
+                while True:
+                    self._episode_records_for_share.get_nowait()
+            except Exception:
+                self.logger.info("Episode browse share queue cleared.")
+
+    def _sync_episode_records_for_browse(
+        self,
+        timeout_s: float = 0.1,
+        max_empty_retries: int = 5,
+        clear: bool = False,
+        append: bool = False,
+    ) -> None:
+        """Synchronize episode records for browsing purposes.
+        
+        This method continuously retrieves episode records from a shared queue and updates the browse records accordingly. It handles both dictionary records for insertion update and string records for deletion.
+        
+        Args:
+            timeout_s (float, optional): Timeout in seconds for queue operations. Defaults to 0.1.
+            max_empty_retries (int, optional): Maximum number of consecutive empty queue retrievals before breaking. Defaults to 5.
+            clear (bool, optional): Whether to clear existing browse records before synchronization. Defaults to False.
+            append (bool, optional): Whether to append records instead of upserting. If True, appends dictionary records. If False, upserts records. Defaults to False.
+        
+        Returns:
+            None
+        
+        Note:
+            Records are sorted by episode_index in descending order after synchronization. The method breaks after max_empty_retries consecutive empty queue retrievals or if an exception occurs during processing.
+        """
+        if clear:
+            self._episode_records_for_browse.clear()
+
+        empty_count = 0
+        while True:
+            try:
+                payload = self._episode_records_for_share.get(timeout=timeout_s)
+                empty_count = 0
+
+                if isinstance(payload, dict):
+                    if append:
+                        self._episode_records_for_browse.append(payload)
+                    else:
+                        self._upsert_episode_browse_record(payload)
+                elif isinstance(payload, str):
+                    self._delete_episode_browse_record(payload)
+            except Empty:
+                empty_count += 1
+                if empty_count >= max_empty_retries:
+                    break
+            except Exception as e:
+                self.logger.exception(f"Failed to sync episode records for browse: {e}")
+                break
+
+        self._episode_records_for_browse.sort(key=lambda x: int(x.get("episode_index", -1)), reverse=True)
+
+    def _upsert_episode_browse_record(self, record: Dict[str, Any]) -> None:
+        """
+        Upsert (insert or update) an episode browse record in the internal list.
+        
+        This method checks if a record with the same ID already exists in the list.
+        If found, it replaces the existing record with the new one.
+        If not found, it appends the new record to the list.
+        
+        Args:
+            record (Dict[str, Any]): The episode record to be inserted or updated. Must contain an 'id' field for comparison.
+        
+        Returns:
+            None
+        """
+        target_id = str(record.get("id", ""))
+        replaced = False
+        for idx, item in enumerate(self._episode_records_for_browse):
+            if str(item.get("id", "")) == target_id:
+                self._episode_records_for_browse[idx] = record
+                replaced = True
+                break
+        if not replaced:
+            self._episode_records_for_browse.append(record)
+
+    def _delete_episode_browse_record(self, record_id: str) -> None:
+        """Delete one episode record from browse cache by record id."""
+        for i in range(len(self._episode_records_for_browse) - 1, -1, -1):
+            if str(self._episode_records_for_browse[i].get("id", "")) == str(record_id):
+                del self._episode_records_for_browse[i]
+                return
+
+    def _sync_episode_records_for_share(self, targets: Union[List[Dict[str, Any]], Dict[str, Any], str]) -> None:
+        """Publish episode browse records to shared queue for main-process sync."""
+        if targets is None:
+            return
+
+        if isinstance(targets, list):
+            for item in targets:
+                if isinstance(item, dict):
+                    self._episode_records_for_share.put(item)
+                elif isinstance(item, str):
+                    self._episode_records_for_share.put(item)
+            return
+
+        if isinstance(targets, dict):
+            self._episode_records_for_share.put(targets)
+            return
+
+        if isinstance(targets, str):
+            self._episode_records_for_share.put(targets)
+            return
+
+        self.logger.warning(f"Unsupported target type for episode browse sync: {type(targets)}")
+
+    def _is_need_load(self, save_path: str) -> bool:
+        """
+        Check if the task directory needs to be loaded based on the current and new save paths. Called in main process.
+
+        This method compares the current task directory for browsing with the provided save path. If they differ or if no directory is currently set, it marks that loading is needed and updates the current task directory. The result is logged before returning.
+
+        Args:
+            save_path (str): The path to the directory that needs to be checked for loading.
+
+        Returns:
+            bool: True if the task directory needs to be loaded, False otherwise.
+
+        Note:
+            This method handles special characters in paths including \t, \r, or \n.
+        """
+        need_load = False
+        if self._task_dir_for_browse is None or self._task_dir_for_browse != save_path:
+            need_load = True
+            self._task_dir_for_browse = save_path
+        self.logger.info(f"Episode directory: {self._task_dir_for_browse}, need_load: {need_load}")
+        return need_load
+
+    def _enqueue_episode_record_crud(self, command: str, task_path: str) -> None:
+        """
+        Enqueue an episode record CRUD (Create, Read, Update, Delete) command to the processing queue.
+
+        This method packages the command and task path into a payload and attempts to add it to the episode record CRUD queue. If the operation fails, an exception is logged.
+
+        Args:
+            command (str): The CRUD command to be executed (e.g., 'create', 'read', 'update', 'delete').
+                            The command may contain special characters like:
+                            - '\\t' (tab)
+                            - '\\r' (carriage return)
+                            - '\\n' (newline)
+            task_path (str): The path to the task associated with the episode record.
+                            The path may contain special characters like:
+                            - '\\t' (tab)
+                            - '\\r' (carriage return)
+                            - '\\n' (newline)
+
+        Returns:
+            None
+
+        Raises:
+            Exception: If there's an error while adding the payload to the queue. The exception is caught and logged rather than being re-raised.
+        """
+        payload = {
+            "command": command,
+            "task_path": task_path,
+        }
+        try:
+            self._episode_record_crud_queue.put(payload)
+        except Exception as e:
+            self.logger.exception(f"Failed to enqueue episode record CRUD command: {e}")
+
+    def _apply_episode_record_crud_command(self, payload: Dict[str, Any]) -> None:
+        command = str(payload.get("command", "")).strip()
+        if command != "LoadRecords":
+            self.logger.warning(f"Unknown episode record CRUD command: {payload}")
+            return
+
+        task_path = str(payload.get("task_path", "")).strip()
+        if not task_path:
+            self.logger.warning("LoadRecords missing task_path for episode browse sync.")
+            return
+
+        self._set_task_path(task_path)
+        self._reload_browse_state()
+        self._sync_episode_records_for_share(self._writer_episode_records)
+
+    def _episode_record_crud_listener(self) -> None:
+        """Continuously consume browse commands in writer process."""
+        while not self._episode_record_crud_stop_event.is_set():
+            try:
+                payload = self._episode_record_crud_queue.get(timeout=0.2)
+            except Empty:
+                continue
+            except Exception as e:
+                self.logger.exception(f"Episode record CRUD listener queue read failed: {e}")
+                continue
+
+            if not isinstance(payload, dict):
+                self.logger.warning(f"Invalid episode record CRUD payload, expected dict: {payload}")
+                continue
+
+            try:
+                self._apply_episode_record_crud_command(payload)
+            except Exception as e:
+                self.logger.exception(f"Episode record CRUD command apply failed: {e}")
+
+    def start_episode_record_crud_listener(self) -> None:
+        """Start writer-side browse listener thread."""
+        if self._episode_record_crud_thread is not None and self._episode_record_crud_thread.is_alive():
+            return
+
+        self._episode_record_crud_stop_event.clear()
+        self._episode_record_crud_thread = threading.Thread(
+            target=self._episode_record_crud_listener,
+            daemon=True,
+            name="episode_record_crud_listener",
+        )
+        self._episode_record_crud_thread.start()
+
+    def stop_episode_record_crud_listener(self) -> None:
+        """Stop writer-side browse listener thread and drain pending commands."""
+        self._episode_record_crud_stop_event.set()
+        if self._episode_record_crud_thread is not None and self._episode_record_crud_thread.is_alive():
+            self._episode_record_crud_thread.join(timeout=1.0)
+        self._episode_record_crud_thread = None
+
+        while True:
+            try:
+                payload = self._episode_record_crud_queue.get_nowait()
+            except Empty:
+                break
+            except Exception:
+                break
+
+            if not isinstance(payload, dict):
+                continue
+            try:
+                self._apply_episode_record_crud_command(payload)
+            except Exception as e:
+                self.logger.exception(f"Episode record CRUD drain apply failed: {e}")
 
     def _sync_browse_on_record_start(self, episode_chunk: int, episode_index: int) -> None:
-        """Update in-memory meta/episode cache immediately when recording starts."""
-        self._ensure_browse_data_loaded()
-
-        self._browse_episode_length_map[int(episode_index)] = 0
+        """Update writer-side browse cache on recording start and publish to share queue."""
+        self._episode_length_map[int(episode_index)] = 0
         pending_record = self._build_episode_record(
             chunk_id=int(episode_chunk),
             episode_index=int(episode_index),
             frames=0,
             complete=False,
         )
-        self._upsert_browse_episode_record(pending_record)
+        self._upsert_writer_episode_record(pending_record)
+        self._sync_episode_records_for_share(pending_record)
 
-        total_episodes = int(self._browse_info.get("total_episodes", 0) or 0)
-        self._browse_info["total_episodes"] = max(total_episodes, int(episode_index) + 1)
-        self._browse_info["total_chunks"] = max(int(self._browse_info.get("total_chunks", 0) or 0), int(episode_chunk) + 1)
+        total_episodes = int(self._dataset_info.get("total_episodes", 0) or 0)
+        self._dataset_info["total_episodes"] = max(total_episodes, int(episode_index) + 1)
+        self._dataset_info["total_chunks"] = max(int(self._dataset_info.get("total_chunks", 0) or 0), int(episode_chunk) + 1)
 
     def _sync_browse_on_record_end(self, episode_chunk: int, episode_index: int, episode_length: int, total_episodes: int, total_frames: int, total_videos: int) -> None:
-        """Update in-memory meta/episode cache immediately when recording ends."""
-        self._ensure_browse_data_loaded()
-
-        self._browse_episode_length_map[int(episode_index)] = int(max(0, int(episode_length)))
+        """Update writer-side browse cache on recording end and publish to share queue."""
+        self._episode_length_map[int(episode_index)] = int(max(0, int(episode_length)))
         finished_record = self._build_episode_record(
             chunk_id=int(episode_chunk),
             episode_index=int(episode_index),
             frames=int(max(0, int(episode_length))),
             complete=True,
         )
-        self._upsert_browse_episode_record(finished_record)
+        self._upsert_writer_episode_record(finished_record)
+        self._sync_episode_records_for_share(finished_record)
 
-        self._browse_info["total_episodes"] = int(total_episodes)
-        self._browse_info["total_frames"] = int(total_frames)
-        self._browse_info["total_videos"] = int(total_videos)
-        self._browse_info["total_chunks"] = max(int(self._browse_info.get("total_chunks", 0) or 0), int(episode_chunk) + 1)
+        self._dataset_info["total_episodes"] = int(total_episodes)
+        self._dataset_info["total_frames"] = int(total_frames)
+        self._dataset_info["total_videos"] = int(total_videos)
+        self._dataset_info["total_chunks"] = max(int(self._dataset_info.get("total_chunks", 0) or 0), int(episode_chunk) + 1)
 
     def parse_episode_records(self, chunk_id: Optional[int] = None, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
-        """Return cached episode records for current task, or reload when selected_task changes."""
-        self._ensure_browse_data_loaded(selected_task=selected_task, base_dir=base_dir)
+        """Return browse episode records synced from writer process."""
+        try:
+            task_path = base_dir / selected_task
+            clear = False
+            append = False
+            if self._is_need_load(save_path=task_path):
+                self._clear_episode_share_queue()
+                self._enqueue_episode_record_crud(command="LoadRecords", task_path=task_path)
+                clear = True
+                append = True
+            self._sync_episode_records_for_browse(timeout_s=0.1, max_empty_retries=5, clear=clear, append=append)
+        except Exception as e:
+            self.logger.exception(f"Failed to parse episode records: {e}")
+
         if chunk_id is None:
-            return list(self._browse_episode_records)
-        return [r for r in self._browse_episode_records if int(r.get("chunk", -1)) == int(chunk_id)]
+            return list(self._episode_records_for_browse)
+        return [r for r in self._episode_records_for_browse if int(r.get("chunk", -1)) == int(chunk_id)]
 
     def delete_episode(self, episode_id: str, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
-        """Delete one episode and refresh in-memory cache."""
-        self._ensure_browse_data_loaded(selected_task=selected_task, base_dir=base_dir)
+        """Delete one episode and update browse cache in main process."""
+        task_path = base_dir / selected_task
+        self._set_task_paths(str(task_path))
+        self.parse_episode_records(selected_task=selected_task, base_dir=base_dir)
+
         chunk_id, episode_index = self._parse_episode_id(episode_id)
 
-        parquet_path = self._data_dir / f"chunk-{chunk_id:03d}" / f"episode_{episode_index:06d}.parquet"
+        parquet_path = os.path.join(self._data_dir , f"chunk-{chunk_id:03d}" , f"episode_{episode_index:06d}.parquet")
         removed_paths: List[str] = []
 
         if parquet_path.exists():
             parquet_path.unlink()
-            removed_paths.append(str(parquet_path.relative_to(self._dataset_root)))
+            removed_paths.append(parquet_path.relative_to(self._save_path))
 
-        video_fmt = self._browse_info.get(
+        video_fmt = self._dataset_info.get(
             "video_path",
             "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
         )
-        for video_key in self._browse_video_keys:
+        for video_key in self._video_keys:
             rel = video_fmt.format(
                 episode_chunk=chunk_id,
                 episode_index=episode_index,
                 video_key=video_key,
             )
-            video_path = self._dataset_root / rel
+            video_path = self._save_path / rel
             if video_path.exists():
                 video_path.unlink()
-                removed_paths.append(str(video_path.relative_to(self._dataset_root)))
+                removed_paths.append(str(video_path.relative_to(self._save_path)))
 
-        episodes_path = self._meta_dir / "episodes.jsonl"
+        episodes_path = os.path.join(self._meta_dir, "episodes.jsonl")
         remaining_episode_rows: List[Dict[str, Any]] = []
         removed_meta_rows = 0
-        if episodes_path.exists():
-            with episodes_path.open("r", encoding="utf-8") as f:
+        if os.path.exists(episodes_path):
+            with open(episodes_path, "r", encoding="utf-8") as f:
                 for line in f:
                     s = line.strip()
                     if not s:
@@ -591,21 +922,27 @@ class LeRobotDatasetRecorder:
         next_episode_index = (max(remaining_indices) + 1) if remaining_indices else 0
         splits_text = "0:-1" if next_episode_index <= 0 else f"0:{next_episode_index - 1}"
 
-        info_path = self._meta_dir / "info.json"
-        info = self._load_browse_info()
+        info_path = os.path.join(self._meta_dir, "info.json")
+        info = self._load_dataset_info()
         info["total_episodes"] = int(next_episode_index)
         info["total_frames"] = int(remaining_frames)
-        info["total_videos"] = int(len(remaining_indices) * len(self._browse_video_keys))
-        info["total_chunks"] = int(len({int(r.get("chunk", -1)) for r in self._browse_episode_records if int(r.get("chunk", -1)) >= 0 and int(r.get("episode_index", -1)) != episode_index}))
+        info["total_videos"] = int(len(remaining_indices) * len(self._video_keys))
+        info["total_chunks"] = int(len({
+            int(r.get("chunk", -1))
+            for r in self._episode_records_for_browse
+            if int(r.get("chunk", -1)) >= 0 and int(r.get("episode_index", -1)) != episode_index
+        }))
         info["splits"] = {"test": splits_text}
-        with info_path.open("w", encoding="utf-8") as f:
+        with open(info_path, "w", encoding="utf-8") as f:
             json.dump(info, f, indent=2, ensure_ascii=False)
 
-        # Refresh in-memory cache after file mutation.
-        self._browse_cache_loaded = False
-        self._ensure_browse_data_loaded(selected_task=selected_task, base_dir=base_dir)
-
         deleted = bool(removed_paths or removed_meta_rows > 0)
+        if deleted:
+            target_id = f"chunk-{chunk_id:03d}/episode_{episode_index:06d}"
+            self._delete_episode_browse_record(target_id)
+
+        # Keep browse cache order stable after deletion.
+        self._episode_records_for_browse.sort(key=lambda x: int(x.get("episode_index", -1)), reverse=True)
         return {
             "deleted": deleted,
             "episode_id": f"chunk-{chunk_id:03d}/episode_{episode_index:06d}",
@@ -613,30 +950,48 @@ class LeRobotDatasetRecorder:
             "removed_meta_count": removed_meta_rows,
             "removed_paths": removed_paths,
         }
-
+    def _update_config_from_init(self):
+        self.config["total_episodes"] = 0
+        self.config["total_frames"] = 0
+        self.config["total_videos"] = 0
+        self.config['chunks_size'] = 1000
     def _update_config_from_meta_file(self):
         """
-        Checks whether the directory `self.meta_dir` exists.
-
-        If it exists and contains required files (info.json, episodes.jsonl, tasks.jsonl),
-        updates the configuration using these files. Otherwise, raises an error due to missing files.
-
-        Raises:
-            AssertionError: If any of the required files are missing in the existing directory.
-        """
+        Update configuration by reading metadata files from the meta directory.
         
-
+        This method performs the following operations:
+        1. Loads and processes 'info.json' to update dataset information
+        2. Loads and processes 'tasks.jsonl' to update task languages
+        
+        The method handles file paths with proper joining and processes files that may contain special characters including \t (tab), \r (carriage return), or \n (newline).
+        
+        Returns:
+            None: Updates internal state but doesn't return any value
+        """
         # Load info.json and update dataset info
-        info_file_path = os.path.join(self.meta_dir, 'info.json')
+        info_file_path = os.path.join(self._meta_dir, 'info.json')
         self._update_dataset_info_from_meta_file(info_file_path)
 
         # Load tasks.jsonl and update task languages
-        task_file_path = os.path.join(self.meta_dir, 'tasks.jsonl')
+        task_file_path = os.path.join(self._meta_dir, 'tasks.jsonl')
         self._update_task_languages_from_meta_file(task_file_path)
 
-    def _update_dataset_info_from_meta_file(self, file_path: str) -> None:
+    def _update_dataset_info_from_meta_file(self, file_path: str):
         """
-        Updates the dataset info using the provided JSON file.
+        Update dataset configuration information from a metadata JSON file.
+
+        This method reads a JSON file containing dataset metadata and updates
+        the configuration dictionary with the loaded values. The metadata includes
+        information about chunk sizes, video properties, camera configurations,
+        and various dataset statistics.
+
+        Args:
+            file_path (str): Path to the JSON metadata file to be read.
+
+        Notes:
+            - The method handles special characters in the file path including \t (tab), \r (carriage return), and \n (newline).
+            - Updates configuration for multiple camera views (head, hand_left, hand_right) including encoding parameters and shape information.
+            - Errors during the update process are caught and logged.
         """
         # Open the specified JSON file and load its contents
         with open(file_path, 'r') as file:
@@ -789,7 +1144,7 @@ class LeRobotDatasetRecorder:
             self.logger.exception(f"Write parquet thread can't start: {e}")
             return
     
-    def end_record(self):
+    def end_recording(self):
         try:
             self.record_executor.shutdown(wait=True) 
             finished_episode_index = self.episode_index
@@ -798,6 +1153,15 @@ class LeRobotDatasetRecorder:
             self.episode_index = self.episode_index + 1
             self.total_frames = self.total_frames + self.frame_index
             self.total_videos = self.total_videos + len(self.camera_name_list)
+            # Sync browse cache right after recording ends.
+            self._sync_browse_on_record_end(
+                episode_chunk=finished_episode_chunk,
+                episode_index=finished_episode_index,
+                episode_length=self.frame_index,
+                total_episodes=self.episode_index,
+                total_frames=self.total_frames,
+                total_videos=self.total_videos,
+            )
             self._write_meta_files(total_frames=self.total_frames,
                                 total_episodes=self.episode_index,
                                 episode_length=self.frame_index,
@@ -809,15 +1173,6 @@ class LeRobotDatasetRecorder:
             self._release_video_writers()
             self._release_parquet_writer()
 
-            # Sync browse cache right after recording ends.
-            self._sync_browse_on_record_end(
-                episode_chunk=finished_episode_chunk,
-                episode_index=finished_episode_index,
-                episode_length=self.frame_index,
-                total_episodes=self.episode_index,
-                total_frames=self.total_frames,
-                total_videos=self.total_videos,
-            )
         except Exception as e:
             self.logger.exception(f"Finished recording failed: {e}")
         self.logger.info("Finish recording.")
@@ -956,7 +1311,7 @@ class LeRobotDatasetRecorder:
         """
         # Video writing setup
         # print(f"DEBUG: Mark 1")
-        save_video_path = os.path.join(self.save_path, 'videos', f'chunk-{episode_chunk:03d}')
+        save_video_path = os.path.join(self._save_path, 'videos', f'chunk-{episode_chunk:03d}')
         filename = f"{'episode'}_{episode_index:06d}.{'mp4'}"
         video_write_dict = {}
         # self.camera_shape_dict = {}
@@ -1003,7 +1358,7 @@ class LeRobotDatasetRecorder:
         ('timestamp', pa.float64())])
 
         parquet_file_path = os.path.join(
-            self.save_path,
+            self._save_path,
             self.config['data_path'].format(episode_chunk=episode_chunk, episode_index=episode_index)
         )
         os.makedirs(os.path.dirname(parquet_file_path), exist_ok=True)
@@ -1069,9 +1424,8 @@ class LeRobotDatasetRecorder:
         These files contain global dataset statistics, per-episode information, and task mappings respectively.
         """
         try:
-            # os.makedirs(self.meta_dir, exist_ok=True)
             # Write info.json file (always overwrite to keep metadata in sync)
-            info_file_path = os.path.join(self.meta_dir, 'info.json')
+            info_file_path = os.path.join(self._meta_dir, 'info.json')
             self.config["total_episodes"] = total_episodes
             self.config["total_frames"] = total_frames
             self.config["total_videos"] = total_videos
@@ -1185,7 +1539,7 @@ class LeRobotDatasetRecorder:
             self.logger.info(f"info.json has been written to: {info_file_path}")
 
             # Write episodes.jsonl file
-            episodes_file_path = os.path.join(self.meta_dir, 'episodes.jsonl')
+            episodes_file_path = os.path.join(self._meta_dir, 'episodes.jsonl')
             episodes_content = {
                 "episode_index": total_episodes - 1,
                 "tasks": episode_task_list,
@@ -1197,7 +1551,7 @@ class LeRobotDatasetRecorder:
             self.logger.info(f"episodes.jsonl has been written to: {episodes_file_path}")
 
             # Write tasks.jsonl file
-            tasks_file_path = os.path.join(self.meta_dir, 'tasks.jsonl')
+            tasks_file_path = os.path.join(self._meta_dir, 'tasks.jsonl')
             with open(tasks_file_path, 'w', encoding='utf-8') as f:
                 for task_language in self.task_language_dict.keys():
                     tasks_content = {
@@ -1985,6 +2339,7 @@ class DataRecordManager:
     def _writer_process_loop(self) -> None:
         """Resident process loop: receives start/shutdown commands and dispatches write tasks in thread executor."""
         self.logger.info("Writer resident process loop started.")
+        self.lerobot_recorder.start_episode_record_crud_listener()
         self.eval_recorder.start_eval_record_crud_listener()
         write_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="writer_worker")
         write_future = None
@@ -2035,6 +2390,7 @@ class DataRecordManager:
         finally:
             write_executor.shutdown(wait=True, cancel_futures=True)
             self.eval_recorder.stop_eval_record_crud_listener()
+            self.lerobot_recorder.stop_episode_record_crud_listener()
             self.logger.info("Writer resident process loop exited.")
 
     def _shutdown_writer_process(self) -> None:
@@ -2090,17 +2446,7 @@ class DataRecordManager:
             session_id = self._bump_recording_session_id()
             self._clear_queues()
 
-            # Keep main-process browse cache in sync immediately.
-            # begin_recording() also runs inside writer subprocess, but subprocess memory
-            # updates are not visible to the main process cache used by web APIs.
-            # self.set_task(task=task_id)
             self.shared_data.running.value = True
-            # first_record = self._wait_for_record_data(get_timeout_s=0.05, max_attempts=20)
-            if self.config.get('is_record_episode', False):
-                self.lerobot_recorder._sync_browse_on_record_start(
-                    episode_chunk=self.shared_data.episode_chunk.value,
-                    episode_index=self.shared_data.episode_index.value,
-                )
             # if self.config.get('is_record_eval_log', False):
             #     if isinstance(first_record, tuple) and len(first_record) == 3:
             #         _, _, step_extra = first_record
@@ -2163,14 +2509,8 @@ class DataRecordManager:
         Behavior:
         - Set ``running=False`` to stop accepting new records.
         - Let resident writer task continue draining ``record_queue``.
-        - Wait for resident writer task to exit naturally after flushing video/parquet.
         """
-        # Capture snapshot before stop, used for main-process browse cache sync.
-        prev_episode_index = int(self.shared_data.episode_index.value)
-        prev_total_frames = int(self.shared_data.total_frames.value)
-
-        # Invalidate future async tasks from next cycle; current queue will still be drained.
-        stop_session_id = self._bump_recording_session_id()
+        self._bump_recording_session_id()
         if self.shared_data.running.value:
             self.shared_data.running.value = False
             self.logger.info("Signaled writer task to stop after draining queue.")
@@ -2179,58 +2519,6 @@ class DataRecordManager:
             "command": "stop",
         }
         self.writer_command_queue.put(command)
-
-        # Sync browse cache in main process after writer updates shared counters.
-        self._sync_browse_on_record_stop_main(
-                stop_session_id,
-                prev_episode_index,
-                prev_total_frames,
-                timeout_s=2.0)
-
-    def _sync_browse_on_record_stop_main(
-        self,
-        stop_session_id: int,
-        prev_episode_index: int,
-        prev_total_frames: int,
-        timeout_s: float = 8.0,
-    ) -> None:
-        """Best-effort sync of main-process browse cache when stop_recording is called."""
-        deadline = time.time() + max(0.1, float(timeout_s))
-
-        while time.time() < deadline:
-
-            cur_episode_index = int(self.shared_data.episode_index.value)
-            cur_total_frames = int(self.shared_data.total_frames.value)
-            cur_total_videos = int(self.shared_data.total_videos.value)
-
-            if cur_episode_index >= prev_episode_index + 1:
-                finished_episode_index = cur_episode_index - 1
-                chunks_size = int(self.config.lerobot.get('chunks_size', 1000) or 1000)
-                finished_episode_chunk = finished_episode_index // max(1, chunks_size)
-                episode_length = max(0, cur_total_frames - int(prev_total_frames))
-
-                try:
-                    if self.config.get('is_record_episode', False):
-                        self.lerobot_recorder._sync_browse_on_record_end(
-                            episode_chunk=finished_episode_chunk,
-                            episode_index=finished_episode_index,
-                            episode_length=episode_length,
-                            total_episodes=cur_episode_index,
-                            total_frames=cur_total_frames,
-                            total_videos=cur_total_videos,
-                        )
-                except Exception as e:
-                    self.logger.warning(f"Failed to sync browse cache on stop in main process: {e}")
-                return
-
-            time.sleep(0.05)
-
-        # Timeout fallback: force main-process browse cache to reload from current task files.
-        try:
-            self.lerobot_recorder._browse_cache_loaded = False
-            self.lerobot_recorder._ensure_browse_data_loaded()
-        except Exception as e:
-            self.logger.warning(f"Failed to refresh browse cache after stop timeout: {e}")
 
     def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
@@ -2313,6 +2601,10 @@ class DataRecordManager:
                                                     total_frames = self.shared_data.total_frames.value,
                                                     total_videos = self.shared_data.total_videos.value,
                                                     save_raw=self.config.save_raw)
+                self.lerobot_recorder._sync_browse_on_record_start(
+                    episode_chunk=self.shared_data.episode_chunk.value,
+                    episode_index=self.shared_data.episode_index.value,
+                )
             if self.config.get('is_record_eval_log', False):
                 self.eval_recorder.begin_recording(eval_record_id=self.shared_data.eval_record_id.value)
             # print(f"DEBUG: Mark1")    
@@ -2344,7 +2636,7 @@ class DataRecordManager:
                 self._sync_shared_data(eval_record_id=currt_record_id + 1)
 
             if self.config.get('is_record_episode', False):
-                episode_index, total_frames, total_videos = self.lerobot_recorder.end_record()
+                episode_index, total_frames, total_videos = self.lerobot_recorder.end_recording()
                 self._sync_shared_data(total_frames=total_frames,
                                     total_videos=total_videos,
                                     total_episodes=episode_index,
