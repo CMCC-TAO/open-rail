@@ -6,9 +6,13 @@ VLA Action Dispatcher - 任务分发型 ROS2 Action Server
 
 # ════════════════════════════════════════════════════════════════
 # 抓取检测配置参数 —— 修改此处即可调节抓取判定灵敏度
+# 判定条件：thumb_bend diff > GRASP_ANGLE_DIFF_THRESHOLD
+#       且 middle finger diff > GRASP_MIDDLE_DIFF_THRESHOLD
+#       持续 GRASP_HOLD_DURATION_SEC 秒
 # ════════════════════════════════════════════════════════════════
-GRASP_ANGLE_DIFF_THRESHOLD = 200.0   # 拇指弯曲角度差阈值 (set_angle - get_angle)
-GRASP_HOLD_DURATION_SEC = 0.5        # 差值需持续超过阈值的最短时间（秒）
+GRASP_ANGLE_DIFF_THRESHOLD = 200.0     # 拇指弯曲角度差阈值
+GRASP_MIDDLE_DIFF_THRESHOLD = 100.0    # 中指角度差阈值
+GRASP_HOLD_DURATION_SEC = 0.5          # 差值需持续超过阈值的最短时间（秒）
 
 import sys
 import os
@@ -36,11 +40,13 @@ from action_server.vla_context import VLAContext
 # Grasp Detector — 实时监控手部 set_angle/get_angle 差值判断抓取状态
 # ════════════════════════════════════════════════════════════════
 class GraspDetector:
-    """通过比较手部 set_angle 与 get_angle 的 thumb_bend 差值来检测抓取状态。
+    """通过比较手部 set_angle 与 get_angle 的多个手指差值来检测抓取状态。
 
     判定逻辑:
-        对于每只手，如果 set_angle[thumb_bend] - get_angle[thumb_bend] > 阈值
-        并且持续超过 GRASP_HOLD_DURATION_SEC 秒，则判定该手处于抓取状态。
+        对于每只手，同时满足以下两个条件并持续超过 GRASP_HOLD_DURATION_SEC 秒，
+        则判定该手处于抓取状态：
+          - set_angle[thumb_bend] - get_angle[thumb_bend] > GRASP_ANGLE_DIFF_THRESHOLD (200)
+          - set_angle[middle]     - get_angle[middle]     > GRASP_MIDDLE_DIFF_THRESHOLD (100)
 
     内部维护 [左手抓取, 右手抓取] 的 bool 列表，实时更新。
 
@@ -53,6 +59,7 @@ class GraspDetector:
 
     # 手部关节顺序: little, ring, middle, index, thumb_bend, thumb_rotate
     THUMB_BEND_INDEX = 4
+    MIDDLE_FINGER_INDEX = 2
 
     def __init__(self, node: Node):
         from sensor_msgs.msg import JointState
@@ -76,11 +83,6 @@ class GraspDetector:
         # ── 差值首次超过阈值的时间戳 ──
         self._left_exceed_since: float = 0.0   # 0.0 表示当前未超限
         self._right_exceed_since: float = 0.0
-
-        # ── 定时打印线程（约 1s 间隔）──
-        self._print_running = True
-        self._print_thread = threading.Thread(target=self._print_loop, daemon=True)
-        self._print_thread.start()
 
         # QoS: 与机器人驱动匹配 BEST_EFFORT
         qos_sensor = QoSProfile(
@@ -108,27 +110,9 @@ class GraspDetector:
             f'hold={GRASP_HOLD_DURATION_SEC}s'
         )
 
-    # ── 定时打印 ──
-
-    def _print_loop(self):
-        """每隔约 1 秒打印一次当前抓取状态及角度差，便于调试观察"""
-        while self._print_running:
-            time.sleep(1.0)
-            with self._lock:
-                state = list(self._grasp_state)
-                diffs = {
-                    'left': self._compute_diff('left_set', 'left_get'),
-                    'right': self._compute_diff('right_set', 'right_get'),
-                }
-            left_str = f"{diffs['left']:+8.1f}" if diffs['left'] is not None else "    N/A"
-            right_str = f"{diffs['right']:+8.1f}" if diffs['right'] is not None else "    N/A"
-            print(
-                f"[GraspDetector] state={state}  "
-            )
-
     def stop(self):
-        """停止打印线程"""
-        self._print_running = False
+        """停止 GraspDetector（当前无后台线程，保留供外部调用）"""
+        pass
 
     # ── 回调函数 ──
 
@@ -145,20 +129,26 @@ class GraspDetector:
         self._on_angle('right_get', msg)
 
     def _on_angle(self, key: str, msg):
-        """提取 thumb_bend position 并缓存，然后更新抓取判定"""
-        idx = self.THUMB_BEND_INDEX
-        if msg.position and len(msg.position) > idx:
+        """缓存全关节 position 数组（用于计算多个手指差值），然后更新抓取判定"""
+        if msg.position and len(msg.position) > max(self.THUMB_BEND_INDEX, self.MIDDLE_FINGER_INDEX):
             with self._lock:
-                self._angle_cache[key] = float(msg.position[idx])
+                self._angle_cache[key] = [float(v) for v in msg.position]
                 self._evaluate_grasp()
 
     def _evaluate_grasp(self):
-        """重新评估左右手抓取状态（必须在 _lock 内调用）"""
+        """重新评估左右手抓取状态（同时检查 thumb_bend 和 middle finger，必须在 _lock 内调用）"""
         now = time.time()
 
+        def _both_over_threshold(set_key: str, get_key: str) -> bool:
+            """thumb_bend > 200 且 middle > 100 同时满足"""
+            thumb_diff = self._compute_diff(set_key, get_key, self.THUMB_BEND_INDEX)
+            mid_diff = self._compute_diff(set_key, get_key, self.MIDDLE_FINGER_INDEX)
+            if thumb_diff is None or mid_diff is None:
+                return False
+            return thumb_diff > GRASP_ANGLE_DIFF_THRESHOLD and mid_diff > GRASP_MIDDLE_DIFF_THRESHOLD
+
         # ── 左手 ──
-        left_diff = self._compute_diff('left_set', 'left_get')
-        if left_diff is not None and left_diff > GRASP_ANGLE_DIFF_THRESHOLD:
+        if _both_over_threshold('left_set', 'left_get'):
             if self._left_exceed_since == 0.0:
                 self._left_exceed_since = now
             if now - self._left_exceed_since >= GRASP_HOLD_DURATION_SEC:
@@ -168,8 +158,7 @@ class GraspDetector:
             self._grasp_state[0] = False
 
         # ── 右手 ──
-        right_diff = self._compute_diff('right_set', 'right_get')
-        if right_diff is not None and right_diff > GRASP_ANGLE_DIFF_THRESHOLD:
+        if _both_over_threshold('right_set', 'right_get'):
             if self._right_exceed_since == 0.0:
                 self._right_exceed_since = now
             if now - self._right_exceed_since >= GRASP_HOLD_DURATION_SEC:
@@ -178,13 +167,15 @@ class GraspDetector:
             self._right_exceed_since = 0.0
             self._grasp_state[1] = False
 
-    def _compute_diff(self, set_key: str, get_key: str):
-        """计算 set_angle - get_angle 的差值，数据缺失时返回 None"""
+    def _compute_diff(self, set_key: str, get_key: str, index: int):
+        """计算指定关节索引的 set_angle - get_angle 差值，数据缺失时返回 None"""
         set_val = self._angle_cache[set_key]
         get_val = self._angle_cache[get_key]
         if set_val is None or get_val is None:
             return None
-        return set_val - get_val
+        if len(set_val) <= index or len(get_val) <= index:
+            return None
+        return set_val[index] - get_val[index]
 
     # ── 公开接口 ──
 
@@ -195,11 +186,13 @@ class GraspDetector:
             return list(self._grasp_state)
 
     def get_angle_diffs(self) -> dict:
-        """返回当前左右手的 set/get 角度差（调试用）"""
+        """返回当前左右手的 set/get 角度差（调试用），含 thumb 和 middle"""
         with self._lock:
             return {
-                'left': self._compute_diff('left_set', 'left_get'),
-                'right': self._compute_diff('right_set', 'right_get'),
+                'left_thumb': self._compute_diff('left_set', 'left_get', self.THUMB_BEND_INDEX),
+                'left_mid':   self._compute_diff('left_set', 'left_get', self.MIDDLE_FINGER_INDEX),
+                'right_thumb': self._compute_diff('right_set', 'right_get', self.THUMB_BEND_INDEX),
+                'right_mid':   self._compute_diff('right_set', 'right_get', self.MIDDLE_FINGER_INDEX),
             }
 
 
