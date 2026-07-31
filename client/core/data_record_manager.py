@@ -510,7 +510,7 @@ class LeRobotDatasetRecorder:
         self.logger.info(f"Episode directory: {self._task_dir_for_browse}, need_load: {need_load}")
         return need_load
 
-    def _enqueue_episode_record_crud(self, command: str, task_path: str) -> None:
+    def _enqueue_episode_record_crud(self, command: str, param: str) -> None:
         """
         Enqueue an episode record CRUD (Create, Read, Update, Delete) command to the processing queue.
 
@@ -522,12 +522,9 @@ class LeRobotDatasetRecorder:
                             - '\\t' (tab)
                             - '\\r' (carriage return)
                             - '\\n' (newline)
-            task_path (str): The path to the task associated with the episode record.
-                            The path may contain special characters like:
-                            - '\\t' (tab)
-                            - '\\r' (carriage return)
-                            - '\\n' (newline)
-
+            param (str): The parameter associated with the command.
+                            If command == LoadRecords, param should be save_path.
+                            If command == DeleteRecord, param should be episode_id.
         Returns:
             None
 
@@ -536,7 +533,7 @@ class LeRobotDatasetRecorder:
         """
         payload = {
             "command": command,
-            "task_path": task_path,
+            "param": param,
         }
         try:
             self._episode_record_crud_queue.put(payload)
@@ -546,14 +543,21 @@ class LeRobotDatasetRecorder:
     def _apply_episode_record_crud_command(self, payload: Dict[str, Any]) -> None:
         command = str(payload.get("command", "")).strip()
         if command == "LoadRecords":
-            task_path = str(payload.get("task_path", "")).strip()
-            if not task_path:
-                self.logger.warning("LoadRecords missing task_path for episode browse sync.")
+            save_path = str(payload.get("param", "")).strip()
+            if not save_path:
+                self.logger.warning("LoadRecords missing save_path for episode browse sync.")
                 return
 
-            if self._set_task_path(task_path):
+            if self._set_task_path(save_path):
                 self._reload_browse_state()
                 self._sync_episode_records_for_share(self._writer_episode_records)
+            return
+        elif command == "DeleteRecord":
+            episode_id = str(payload.get("param", "")).strip()
+            if not episode_id:
+                self.logger.warning("DeleteRecord missing episode_id.")
+                return
+            self._delete_episode_backend(episode_id=episode_id)
             return
         self.logger.warning(f"Unknown episode record CRUD command: {payload}")
         return
@@ -649,12 +653,12 @@ class LeRobotDatasetRecorder:
     def parse_episode_records(self, chunk_id: Optional[int] = None, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
         """Return browse episode records synced from writer process."""
         try:
-            task_path = base_dir / selected_task
+            save_path = base_dir / selected_task
             clear = False
             append = False
-            if self._is_need_load(save_path=task_path):
+            if self._is_need_load(save_path=save_path):
                 # self._clear_episode_share_queue()
-                self._enqueue_episode_record_crud(command="LoadRecords", task_path=task_path)
+                self._enqueue_episode_record_crud(command="LoadRecords", param=save_path)
                 clear = True
                 append = True
             self._sync_episode_records_for_browse(timeout_s=0.2, max_empty_retries=5, clear=clear, append=append)
@@ -665,12 +669,15 @@ class LeRobotDatasetRecorder:
             return list(self._episode_records_for_browse)
         return [r for r in self._episode_records_for_browse if int(r.get("chunk", -1)) == int(chunk_id)]
 
-    def delete_episode(self, episode_id: str, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> Dict[str, Any]:
+    def delete_episode(self, episode_id: str) -> Dict[str, Any]:
         """Delete one episode and update browse cache in main process."""
-        task_path = base_dir / selected_task
-        self._set_task_paths(str(task_path))
-        self.parse_episode_records(selected_task=selected_task, base_dir=base_dir)
+        self._enqueue_episode_record_crud(command="DeleteRecord", param=episode_id)
 
+        return {
+            "deleted": True,
+            "episode_id": episode_id,
+        }
+    def _delete_episode_backend(self, episode_id: str):
         chunk_id, episode_index = self._parse_episode_id(episode_id)
 
         parquet_path = os.path.join(self._data_dir , f"chunk-{chunk_id:03d}" , f"episode_{episode_index:06d}.parquet")
@@ -743,13 +750,6 @@ class LeRobotDatasetRecorder:
 
         # Keep browse cache order stable after deletion.
         self._episode_records_for_browse.sort(key=lambda x: int(x.get("episode_index", -1)), reverse=True)
-        return {
-            "deleted": deleted,
-            "episode_id": f"chunk-{chunk_id:03d}/episode_{episode_index:06d}",
-            "removed_file_count": len(removed_paths),
-            "removed_meta_count": removed_meta_rows,
-            "removed_paths": removed_paths,
-        }
     def _update_config_from_init(self):
         self.config["total_episodes"] = 0
         self.config["total_frames"] = 0
@@ -1792,7 +1792,6 @@ class EvaluationResultRecorder:
                 self._eval_dir = None # load data when start recording for first time
                 self.logger.info(f"CRUD command: {command} executed successfully, task_path: {task_path}")
                 return
-
         rec = next((r for r in self._eval_records if int(r.get('id', -1)) == record_id), None)
         if rec is None:
             self.logger.warning(f"Record with id {record_id} not found for CRUD command: {command}")
