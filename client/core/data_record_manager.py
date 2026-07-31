@@ -370,6 +370,7 @@ class LeRobotDatasetRecorder:
 
             # Refresh writer-side cache for subsequent queue-based sync.
             self._reload_browse_state()
+            self._sync_episode_records_for_share(self._writer_episode_records)
         return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
     def _set_task_path(self, save_path: str) -> bool:
         """
@@ -751,18 +752,18 @@ class LeRobotDatasetRecorder:
 
     def _apply_episode_record_crud_command(self, payload: Dict[str, Any]) -> None:
         command = str(payload.get("command", "")).strip()
-        if command != "LoadRecords":
-            self.logger.warning(f"Unknown episode record CRUD command: {payload}")
-            return
+        if command == "LoadRecords":
+            task_path = str(payload.get("task_path", "")).strip()
+            if not task_path:
+                self.logger.warning("LoadRecords missing task_path for episode browse sync.")
+                return
 
-        task_path = str(payload.get("task_path", "")).strip()
-        if not task_path:
-            self.logger.warning("LoadRecords missing task_path for episode browse sync.")
+            if self._set_task_path(task_path):
+                self._reload_browse_state()
+                self._sync_episode_records_for_share(self._writer_episode_records)
             return
-
-        if self._set_task_path(task_path):
-            self._reload_browse_state()
-            self._sync_episode_records_for_share(self._writer_episode_records)
+        self.logger.warning(f"Unknown episode record CRUD command: {payload}")
+        return
 
     def _episode_record_crud_listener(self) -> None:
         """Continuously consume browse commands in writer process."""
@@ -859,7 +860,7 @@ class LeRobotDatasetRecorder:
             clear = False
             append = False
             if self._is_need_load(save_path=task_path):
-                self._clear_episode_share_queue()
+                # self._clear_episode_share_queue()
                 self._enqueue_episode_record_crud(command="LoadRecords", task_path=task_path)
                 clear = True
                 append = True
