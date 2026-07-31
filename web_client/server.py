@@ -850,26 +850,6 @@ class RecordingEpisodeDeleteRequest(BaseModel):
 
 @app.delete("/api/client/record/delete")
 async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
-    recoding_dir = ROOT / "data" / "recoding"
-    fallback_dir = ROOT / "data" / "recording"
-    base_dir = recoding_dir if (recoding_dir.exists() or not fallback_dir.exists()) else fallback_dir
-
-    if not base_dir.exists():
-        raise HTTPException(404, "Recording directory does not exist.")
-
-    task = str(req.task or "").strip()
-    if not task:
-        raise HTTPException(400, "Task is required.")
-
-    task_dir = (base_dir / task).resolve()
-    try:
-        task_dir.relative_to(base_dir.resolve())
-    except ValueError:
-        raise HTTPException(400, "Task path is outside recording directory.")
-
-    if not task_dir.exists() or not task_dir.is_dir():
-        raise HTTPException(404, f"Task directory not found: {task}")
-
     try:
         recorder = None
         with client_state.lock:
@@ -878,7 +858,7 @@ async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
             recorder = getattr(vla_client.data_record_manager, "lerobot_recorder", None)
 
         if recorder is not None:
-            result = recorder.delete_episode(req.episode_id, selected_task=task, base_dir=base_dir)
+            result = recorder.delete_episode(episode_id = req.episode_id)
         else:
             raise HTTPException(404, f"Lerobot recorder not found.")
 
