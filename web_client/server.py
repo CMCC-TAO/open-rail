@@ -827,16 +827,6 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
             if eval_recorder is not None and hasattr(eval_recorder, "parse_eval_records"):
                 eval_results = eval_recorder.parse_eval_records(selected_task=selected_task, base_dir=base_dir)
             # else:
-            #     from client.core.data_record_manager import LeRobotDatasetParser
-
-            #     parser = LeRobotDatasetParser(str(task_dir), logger=logger)
-            #     chunk_ids = parser.get_chunk_ids()
-            #     chunk_values = [f"{x:03d}" for x in chunk_ids]
-            #     if chunk_values:
-            #         selected_chunk = chunk if chunk in chunk_values else chunk_values[-1]
-            #         episodes = parser.parse_episode_records(chunk_id=int(selected_chunk))
-            #     else:
-            #         episodes = parser.parse_episode_records()
     except Exception as e:
         raise HTTPException(500, f"Failed to list recording files: {e}")
 
@@ -890,10 +880,7 @@ async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
         if recorder is not None:
             result = recorder.delete_episode(req.episode_id, selected_task=task, base_dir=base_dir)
         else:
-            from client.core.data_record_manager import LeRobotDatasetParser
-
-            parser = LeRobotDatasetParser(str(task_dir), logger=logger)
-            result = parser.delete_episode(req.episode_id)
+            raise HTTPException(404, f"Lerobot recorder not found.")
 
         if not result.get("deleted"):
             raise HTTPException(404, f"Episode not found: {req.episode_id}")
