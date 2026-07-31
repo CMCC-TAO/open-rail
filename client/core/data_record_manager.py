@@ -361,17 +361,17 @@ class LeRobotDatasetRecorder:
             - Updates self.config with task parameters
             - Reloads browse state for synchronization
         """
-        self._set_task_path(save_path=save_path)
-        meta_required_file_exists = self._check_meta_path_and_dir(save_path=save_path)
-        if meta_required_file_exists:
-            self._update_config_from_meta_file()
-        else:
-            self._update_config_from_init()
+        if self._set_task_path(save_path=save_path):
+            meta_required_file_exists = self._check_meta_path_and_dir(save_path=save_path)
+            if meta_required_file_exists:
+                self._update_config_from_meta_file()
+            else:
+                self._update_config_from_init()
 
-        # Refresh writer-side cache for subsequent queue-based sync.
-        self._reload_browse_state()
+            # Refresh writer-side cache for subsequent queue-based sync.
+            self._reload_browse_state()
         return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
-    def _set_task_path(self, save_path: str):
+    def _set_task_path(self, save_path: str) -> bool:
         """
         Set the paths for saving task-related data and metadata.
         
@@ -379,6 +379,8 @@ class LeRobotDatasetRecorder:
             save_path (str): The base directory path where all task-related 
                 folders will be created.
                 
+        Returns:
+            bool: True if save_path is new and False if save_path is same with the existing one.:
         Note:
             This method initializes two subdirectories path string under the save_path:
             1. 'data' directory for storing task data
@@ -386,9 +388,13 @@ class LeRobotDatasetRecorder:
             
             The paths are stored as instance variables for later use.
         """
-        self._save_path = save_path
-        self._data_dir = os.path.join(save_path, 'data')
-        self._meta_dir = os.path.join(save_path, 'meta')
+        new_path = False
+        if self._save_path is None or self._save_path != save_path:
+            new_path = True
+            self._save_path = save_path
+            self._data_dir = os.path.join(save_path, 'data')
+            self._meta_dir = os.path.join(save_path, 'meta')
+        return new_path
 
     def _reload_browse_state(self) -> None:
         """Reload writer-side dataset metadata and episode records."""
@@ -615,7 +621,7 @@ class LeRobotDatasetRecorder:
         while True:
             try:
                 payload = self._episode_records_for_share.get(timeout=timeout_s)
-                empty_count = 0
+                empty_count = max_empty_retries-2
 
                 if isinstance(payload, dict):
                     if append:
@@ -754,9 +760,9 @@ class LeRobotDatasetRecorder:
             self.logger.warning("LoadRecords missing task_path for episode browse sync.")
             return
 
-        self._set_task_path(task_path)
-        self._reload_browse_state()
-        self._sync_episode_records_for_share(self._writer_episode_records)
+        if self._set_task_path(task_path):
+            self._reload_browse_state()
+            self._sync_episode_records_for_share(self._writer_episode_records)
 
     def _episode_record_crud_listener(self) -> None:
         """Continuously consume browse commands in writer process."""
@@ -857,7 +863,7 @@ class LeRobotDatasetRecorder:
                 self._enqueue_episode_record_crud(command="LoadRecords", task_path=task_path)
                 clear = True
                 append = True
-            self._sync_episode_records_for_browse(timeout_s=0.1, max_empty_retries=5, clear=clear, append=append)
+            self._sync_episode_records_for_browse(timeout_s=0.2, max_empty_retries=5, clear=clear, append=append)
         except Exception as e:
             self.logger.exception(f"Failed to parse episode records: {e}")
 
@@ -1636,14 +1642,15 @@ class EvaluationResultRecorder:
             clear = False
             append = False
             if self._is_need_load(save_path = task_path):
-                self._clear_share_queue()
+                # self._clear_share_queue()
                 self._enqueue_eval_record_crud(command="LoadRecords", record_id=-1, score=None, note="", task_path=task_path)
                 clear = True
                 append = True
-            self._sync_eval_records_for_browse(timeout_s=0.05, max_empty_retries=5, clear=clear, append=append)
+            self._sync_eval_records_for_browse(timeout_s=0.1, max_empty_retries=10, clear=clear, append=append)
         except Exception as e:
             self.logger.exception(f"Failed to load eval records: {e}")
         return self._eval_records_for_browse
+
     def _clear_share_queue(self):
         try:
             while not self._eval_records_for_share.empty():
@@ -1658,6 +1665,7 @@ class EvaluationResultRecorder:
                     self._eval_records_for_share.get_nowait()
             except Exception:
                 self.logger.info("Clear _eval_records_for_share and ready to share the new loaded records.")
+
     def _sync_eval_records_for_browse(self, timeout_s: float = 0.1, max_empty_retries: int = 5, clear: bool = False, append: bool = False):
             """Continuously consume records from _eval_records_for_share and append to _eval_records_for_browse."""
             # 1. Clear stale data before syncing
@@ -1670,7 +1678,7 @@ class EvaluationResultRecorder:
                 try:
                     # Block for 0.2s waiting for data from the writer process
                     record = self._eval_records_for_share.get(timeout=timeout_s)
-                    empty_count = 0  # Reset counter on successful fetch
+                    empty_count = max_empty_retries - 2  # Reset counter on successful fetch
                     
                     if isinstance(record, dict):
                         if append:
@@ -1684,6 +1692,7 @@ class EvaluationResultRecorder:
                     # 3. If queue is empty, increment counter. If repeatedly empty, assume sync is done.
                     empty_count += 1
                     if empty_count >= max_empty_retries:
+                        self.logger.exception(f"Reach max empty retries when sync eval records for browse.")
                         break
                 except Exception as e:
                     self.logger.exception(f"Failed to sync eval records for browse: {e}")
@@ -1731,14 +1740,14 @@ class EvaluationResultRecorder:
             self._eval_json_file = os.path.join(self._eval_dir, 'eval_log.json')
             self._eval_csv_file = os.path.join(self._eval_dir, 'eval_log.csv')
         else:
-            self.logger.info(f"Eval directory already exists: {self._eval_dir}")
+            self.logger.info(f"Eval directory already exists: {self._eval_dir}, load_data: {load_data}")
 
         return load_data
 
     def _load_existing_records(self) -> None:
         """Load existing records from eval_log.json; fallback to empty list. Called in writer process."""
         self._eval_records = []
-        record_id = -1
+        record_id = None
         if not self._eval_json_file or (not os.path.exists(self._eval_json_file)):
             self.logger.info(f"Load eval records from json file terminated, eval_json_file doesn't exist. Total eval records = {len(self._eval_records)}")
             return record_id
@@ -1754,7 +1763,7 @@ class EvaluationResultRecorder:
         except Exception as e:
             self.logger.exception(f"Load eval_log.json failed: {e}")
             self._eval_records = []
-            record_id = -1
+            record_id = None
         self.logger.info(f"Load eval records from json file successfully, total records = {len(self._eval_records)}, max record_id = {record_id}")
         return record_id
 
@@ -1777,6 +1786,7 @@ class EvaluationResultRecorder:
             for item in targets:
                 if isinstance(item, dict):
                     self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=item))
+                    self.logger.info(f"Sync one record for share: {item.get('id')}")
                 elif isinstance(item, int):
                     self._eval_records_for_share.put(item)
             return
@@ -1784,6 +1794,7 @@ class EvaluationResultRecorder:
         # 2. Handle single dict: put directly
         if isinstance(targets, dict):
             self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=targets))
+            self.logger.info(f"Sync one record for share: {targets.get('id')}")
             return
 
         # 3. Handle int (record_id for deletion): put directly
@@ -1792,7 +1803,6 @@ class EvaluationResultRecorder:
             return
 
         self.logger.warning(f"Unsupported target type for _sync_eval_records_for_share: {type(targets)}")
-
 
     def _is_need_load(self, save_path: str) -> bool:
         """Return true when eval_dir assigned or changed. Called in main process."""
@@ -1985,7 +1995,7 @@ class EvaluationResultRecorder:
             task_path = str(payload.get("task_path", "")).strip()
             if self._check_eval_dir(save_path=task_path):
                 self._load_existing_records()
-                self._eval_dir = None
+                self._eval_dir = None # load data when start recording for first time
                 self.logger.info(f"CRUD command: {command} executed successfully, task_path: {task_path}")
                 return
 
@@ -2595,6 +2605,8 @@ class DataRecordManager:
 
         try:
             # prepare recording for all recorders
+            if self.config.get('is_record_eval_log', False):
+                self.eval_recorder.begin_recording(eval_record_id=self.shared_data.eval_record_id.value)
             if self.config.get('is_record_episode', False):
                 self.lerobot_recorder.begin_recording(episode_chunk = self.shared_data.episode_chunk.value,
                                                     episode_index = self.shared_data.episode_index.value,
@@ -2605,8 +2617,6 @@ class DataRecordManager:
                     episode_chunk=self.shared_data.episode_chunk.value,
                     episode_index=self.shared_data.episode_index.value,
                 )
-            if self.config.get('is_record_eval_log', False):
-                self.eval_recorder.begin_recording(eval_record_id=self.shared_data.eval_record_id.value)
             # print(f"DEBUG: Mark1")    
             # recording in the loop for all recorders
             while self.shared_data.running.value or (not self.record_queue.empty()):
@@ -2631,18 +2641,16 @@ class DataRecordManager:
 
                 # self.logger.info('write process stopped!!! ')
             # finish recording for all recorders
-            if self.config.get('is_record_eval_log', False):
-                currt_record_id = self.eval_recorder.end_recording()
-                self._sync_shared_data(eval_record_id=currt_record_id + 1)
-
             if self.config.get('is_record_episode', False):
                 episode_index, total_frames, total_videos = self.lerobot_recorder.end_recording()
                 self._sync_shared_data(total_frames=total_frames,
                                     total_videos=total_videos,
                                     total_episodes=episode_index,
                                     chunks_size=self.config.lerobot['chunks_size']) # chunks_size doesn't change
+            if self.config.get('is_record_eval_log', False):
+                currt_record_id = self.eval_recorder.end_recording()
+                self._sync_shared_data(eval_record_id=currt_record_id + 1)
 
-        
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
             # self.release_writers()
