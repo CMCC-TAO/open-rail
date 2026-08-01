@@ -119,7 +119,7 @@ class LeRobotDatasetRecorder:
             self.logger.info(f"{self._meta_dir} has the following required files: {', '.join(required_files)}")
             return True
 
-    def set_task(self, save_path: str) -> Tuple[int, int, int, int]:
+    def set_task(self, save_path: str) -> Tuple[int, int, int, int, int]:
         """
         Set up a new task with the specified save path and initialize configuration. Called in writer process.
 
@@ -143,6 +143,7 @@ class LeRobotDatasetRecorder:
                 - total_videos (int): Total number of videos in the task
                 - total_episodes (int): Total number of episodes in the task
                 - chunks_size (int): Size of chunks for data processing (default 1000)
+                - episode_index (int): Index for recording next episode (default 0)
 
         Side Effects:
             - Modifies self._save_path
@@ -159,9 +160,9 @@ class LeRobotDatasetRecorder:
             # Refresh writer-side cache for subsequent queue-based sync.
             self._reload_browse_state()
             self._sync_episode_records_for_share(self._writer_episode_records)
-        total_frames, total_videos, total_episodes, chunks_size = self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
-        self.logger.info(f"total_frames: {total_frames}, total_videos: {total_videos}, total_episodes: {total_episodes}, chunks_size: {chunks_size}")
-        return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
+        # total_frames, total_videos, total_episodes, chunks_size = self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
+        # self.logger.info(f"total_frames: {total_frames}, total_videos: {total_videos}, total_episodes: {total_episodes}, chunks_size: {chunks_size}")
+        return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size'], self.config['episode_index']
 
     def _set_task_path(self, save_path: str) -> bool:
         """
@@ -235,15 +236,6 @@ class LeRobotDatasetRecorder:
         except Exception:
             self.logger.warning("Failed to parse episodes.jsonl: %s", episodes_path, exc_info=True)
         return mapping
-
-    @staticmethod
-    def _get_video_keys(info: Dict[str, Any]) -> List[str]:
-        features = info.get("features", {}) if isinstance(info, dict) else {}
-        keys: List[str] = []
-        for key, value in features.items():
-            if isinstance(value, dict) and value.get("dtype") == "video":
-                keys.append(key)
-        return keys
 
     @staticmethod
     def _parse_episode_id(episode_id: str) -> tuple[int, int]:
@@ -418,7 +410,7 @@ class LeRobotDatasetRecorder:
                         self._episode_records_for_browse.append(payload)
                     else:
                         self._upsert_episode_browse_record(payload)
-                elif isinstance(payload, str):
+                elif isinstance(payload, str): # episode_id
                     self._delete_episode_browse_record(payload)
             except Empty:
                 empty_count += 1
@@ -626,13 +618,13 @@ class LeRobotDatasetRecorder:
         self._upsert_writer_episode_record(pending_record)
         self._sync_episode_records_for_share(pending_record)
 
-    def _sync_browse_on_record_end(self, episode_chunk: int, episode_index: int, episode_length: int, total_episodes: int, total_frames: int, total_videos: int) -> None:
+    def _sync_browse_on_record_end(self, episode_chunk: int, episode_index: int, episode_length: int) -> None:
         """Update writer-side browse cache on recording end and publish to share queue."""
         self._episode_length_map[int(episode_index)] = int(max(0, int(episode_length)))
         finished_record = self._build_episode_record(
-            chunk_id=int(episode_chunk),
-            episode_index=int(episode_index),
-            frames=int(max(0, int(episode_length))),
+            chunk_id=episode_chunk,
+            episode_index=episode_index,
+            frames=episode_length,
             complete=True,
         )
         self._upsert_writer_episode_record(finished_record)
@@ -666,9 +658,124 @@ class LeRobotDatasetRecorder:
             "episode_id": episode_id,
         }
     def _delete_episode_backend(self, episode_id: str):
-        chunk_id, episode_index = self._parse_episode_id(episode_id)
+        """Delete one episode's data/meta and sync browse cache to main process."""
+        try:
+            chunk_id, episode_index = self._parse_episode_id(episode_id)
+        except Exception as e:
+            self.logger.warning(f"Invalid episode_id for delete: {episode_id}, error={e}")
+            return
+
+        if not self._save_path or not self._meta_dir:
+            self.logger.warning("Delete episode skipped: task path is not initialized.")
+            return
+
+        deleted_video_count = 0
+        deleted_from_parquet_rows = 0
+        deleted_any_data = False
+
+        # 1) Delete parquet file.
+        data_path_tpl = self.config.get("data_path", "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet")
+        parquet_rel = str(data_path_tpl).format(episode_chunk=chunk_id, episode_index=episode_index)
+        parquet_path = Path(self._save_path) / parquet_rel
+        if parquet_path.exists():
+            deleted_from_parquet_rows = self._parquet_num_rows(parquet_path)
+            try:
+                parquet_path.unlink()
+                deleted_any_data = True
+                self.logger.info(f"Deleted parquet file: {parquet_path}")
+            except Exception as e:
+                self.logger.exception(f"Failed to delete parquet file: {parquet_path}, error={e}")
+
+        # 2) Delete video files for this episode.
+        # info = self._load_dataset_info()
+
+        video_path_tpl = self.config.get(
+            "video_path",
+            "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
+        )
+
+        for video_key in self.camera_name_list:
+            rel_video = str(video_path_tpl).format(
+                episode_chunk=chunk_id,
+                episode_index=episode_index,
+                video_key=video_key,
+            )
+            abs_video = Path(self._save_path) / rel_video
+            if not abs_video.exists():
+                continue
+            try:
+                abs_video.unlink()
+                deleted_video_count += 1
+                deleted_any_data = True
+                self.logger.info(f"Deleted video file: {abs_video}")
+            except Exception as e:
+                self.logger.exception(f"Failed to delete video file: {abs_video}, error={e}")
+
+        # 3) Update episodes.jsonl (remove target episode) and collect removed length.
+        episodes_path = Path(self._meta_dir) / "episodes.jsonl"
+        kept_lines: List[str] = []
+        kept_count = 0
+        removed_count = 0
+        removed_length = 0
+
+        if episodes_path.exists():
+            try:
+                with open(episodes_path, "r", encoding="utf-8") as f:
+                    for raw_line in f:
+                        line = raw_line.strip()
+                        if not line:
+                            continue
+                        try:
+                            row = json.loads(line)
+                        except Exception:
+                            # Keep malformed lines unchanged to avoid data loss.
+                            kept_lines.append(line)
+                            continue
+
+                        row_episode = int(row.get("episode_index", -1))
+                        if row_episode == int(episode_index):
+                            removed_count += 1
+                            try:
+                                removed_length += int(row.get("length", 0) or 0)
+                            except Exception:
+                                pass
+                            continue
+
+                        kept_lines.append(json.dumps(row, ensure_ascii=False))
+                        kept_count += 1
+
+                with open(episodes_path, "w", encoding="utf-8") as f:
+                    for line in kept_lines:
+                        f.write(line + "\n")
+                self.logger.info(
+                    f"Updated episodes.jsonl after delete: episode_id={episode_id}, removed_count={removed_count}, kept_count={kept_count}"
+                )
+            except Exception as e:
+                self.logger.exception(f"Failed to update episodes.jsonl: {episodes_path}, error={e}")
+
+        # 4) Update info.json and runtime config counters.
+        frames_to_sub = int(removed_length if removed_length > 0 else deleted_from_parquet_rows)
+        total_frames_new = max(0, self.config["total_frames"] - max(0, frames_to_sub))
+        if removed_count > 0:
+            total_episodes_new = max(0, kept_count)
+        else:
+            total_episodes_new = max(0, self.config["total_episodes"] - (1 if deleted_any_data else 0))
+        total_videos_new = max(0, self.config["total_videos"] - max(0, deleted_video_count))
+        self._write_info_file(total_episodes=total_episodes_new, total_frames=total_frames_new, total_videos=total_videos_new, episode_index=self.config["episode_index"])
+
+        # 5) Update writer-side cache and publish delete event for main-process browse cache.
+        self._episode_length_map.pop(int(episode_index), None)
+        for i in range(len(self._writer_episode_records) - 1, -1, -1):
+            if str(self._writer_episode_records[i].get("id", "")) == str(episode_id):
+                del self._writer_episode_records[i]
+
+        self._sync_episode_records_for_share(str(episode_id))
+        self.logger.info(
+            f"Delete episode backend done: episode_id={episode_id}, videos_deleted={deleted_video_count}, frames_removed={removed_length or deleted_from_parquet_rows}"
+        )
 
     def _update_config_from_init(self):
+        self.config["episode_index"] = 0
         self.config["total_episodes"] = 0
         self.config["total_frames"] = 0
         self.config["total_videos"] = 0
@@ -722,6 +829,7 @@ class LeRobotDatasetRecorder:
             self.config['codebase_version'] = data['codebase_version']
             self.config['data_path'] = data['data_path']
             self.config['video_path'] = data['video_path']
+            self.config['episode_index'] = data['episode_index']
             self.config['total_videos'] = data['total_videos']
             self.config['total_frames'] = data['total_frames']
             self.config['total_tasks'] = data['total_tasks']
@@ -831,13 +939,14 @@ class LeRobotDatasetRecorder:
         else:
             self.logger.warning("No valid camera shape found in shape_dict, keep original config.")
 
-    def begin_recording(self, episode_chunk: int = 0, episode_index: int = 0, total_frames: int = 0, total_videos: int = 0, save_raw: bool =True):
+    def begin_recording(self, episode_chunk: int = 0, episode_index: int = 0, total_frames: int = 0, total_videos: int = 0, total_episodes: int = 0, save_raw: bool =True):
         self.episode_chunk = episode_chunk
         self.episode_index = episode_index
         self.total_frames = total_frames
         self.total_videos = total_videos
+        self.total_episodes = total_episodes
         self.save_raw = save_raw
-        self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}")
+        self.logger.info(f"episode_chunk={episode_chunk}, episode_index={episode_index}, total_frames={total_frames}, total_videos={total_videos}, total_episodes={total_episodes}")
 
         # # Sync browse cache immediately so parse_episode_records can see the running episode.
         self.video_writers = self._create_video_writer(
@@ -870,6 +979,7 @@ class LeRobotDatasetRecorder:
             finished_episode_chunk = self.episode_chunk
 
             self.episode_index = self.episode_index + 1
+            self.total_episodes = self.total_episodes + 1
             self.total_frames = self.total_frames + self.frame_index
             self.total_videos = self.total_videos + len(self.camera_name_list)
             # Sync browse cache right after recording ends.
@@ -877,15 +987,13 @@ class LeRobotDatasetRecorder:
                 episode_chunk=finished_episode_chunk,
                 episode_index=finished_episode_index,
                 episode_length=self.frame_index,
-                total_episodes=self.episode_index,
-                total_frames=self.total_frames,
-                total_videos=self.total_videos,
             )
-            self._write_meta_files(total_frames=self.total_frames,
-                                total_episodes=self.episode_index,
-                                episode_length=self.frame_index,
+            self._write_meta_files(total_episodes=self.total_episodes,
+                                total_frames=self.total_frames,
                                 total_videos=self.total_videos,
-                                episode_task_list=self.episode_task_list)
+                                episode_length=self.frame_index,
+                                episode_task_list=self.episode_task_list,
+                                episode_index=self.episode_index)
             # stop recording for current episode: flush video/parquet after all queue data drained
             self.write_loop_done.set()
             self.write_parquet_thread.join()
@@ -895,7 +1003,7 @@ class LeRobotDatasetRecorder:
         except Exception as e:
             self.logger.exception(f"Finished recording failed: {e}")
         self.logger.info("Finish recording.")
-        return self.episode_index, self.total_frames, self.total_videos
+        return self.episode_index, self.total_frames, self.total_videos, self.total_episodes
             # self._clear_queues()
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
 
@@ -1136,7 +1244,7 @@ class LeRobotDatasetRecorder:
         self.logger.info("Successfully wrote Parquet file.")
             
 
-    def _write_meta_files(self, total_episodes: int, total_frames: int, episode_length: int, total_videos: int, episode_task_list: list[str]):
+    def _write_meta_files(self, total_episodes: int, total_frames: int, total_videos: int, episode_length: int, episode_task_list: list[str], episode_index: int):
         """
         Writes metadata files including info.json, episodes.jsonl, and tasks.jsonl.
 
@@ -1144,7 +1252,39 @@ class LeRobotDatasetRecorder:
         """
         try:
             # Write info.json file (always overwrite to keep metadata in sync)
+            self._write_info_file(total_episodes=total_episodes, total_frames=total_frames, total_videos=total_videos, episode_index=episode_index)
+
+            # Write episodes.jsonl file
+            episodes_file_path = os.path.join(self._meta_dir, 'episodes.jsonl')
+            episodes_content = {
+                "episode_index": episode_index - 1,
+                "tasks": episode_task_list,
+                "length": episode_length
+            }
+            with open(episodes_file_path, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(episodes_content, ensure_ascii=False) + '\n')
+
+            self.logger.info(f"episodes.jsonl has been written to: {episodes_file_path}")
+
+            # Write tasks.jsonl file
+            tasks_file_path = os.path.join(self._meta_dir, 'tasks.jsonl')
+            with open(tasks_file_path, 'w', encoding='utf-8') as f:
+                for task_language in self.task_language_dict.keys():
+                    tasks_content = {
+                        "task_index": self.task_language_dict[task_language],
+                        "tasks": task_language
+                    }
+                    f.write(json.dumps(tasks_content, ensure_ascii=False) + '\n')
+            self.logger.info(f"tasks.jsonl has been written to: {tasks_file_path}")
+
+        except Exception as e:
+            self.logger.exception(f"Exception in write_meta_files: {e}")
+
+    def _write_info_file(self, total_episodes: int, total_frames: int, total_videos: int, episode_index: int):
+        try:
+            # Write info.json file (always overwrite to keep metadata in sync)
             info_file_path = os.path.join(self._meta_dir, 'info.json')
+            self.config["episode_index"] = episode_index
             self.config["total_episodes"] = total_episodes
             self.config["total_frames"] = total_frames
             self.config["total_videos"] = total_videos
@@ -1244,6 +1384,7 @@ class LeRobotDatasetRecorder:
                 'fps': float(self.config['fps']),
                 'robot_type': self.config['robot_type'],
                 'splits': {'train': f'0:{total_episodes-1}'},
+                'episode_index': episode_index,
                 'total_chunks': 1,
                 'total_episodes': total_episodes,
                 'total_frames': total_frames,
@@ -1256,32 +1397,8 @@ class LeRobotDatasetRecorder:
                 json.dump(meta_info_dict, f, indent=2, ensure_ascii=False, default=str)
 
             self.logger.info(f"info.json has been written to: {info_file_path}")
-
-            # Write episodes.jsonl file
-            episodes_file_path = os.path.join(self._meta_dir, 'episodes.jsonl')
-            episodes_content = {
-                "episode_index": total_episodes - 1,
-                "tasks": episode_task_list,
-                "length": episode_length
-            }
-            with open(episodes_file_path, 'a', encoding='utf-8') as f:
-                f.write(json.dumps(episodes_content, ensure_ascii=False) + '\n')
-
-            self.logger.info(f"episodes.jsonl has been written to: {episodes_file_path}")
-
-            # Write tasks.jsonl file
-            tasks_file_path = os.path.join(self._meta_dir, 'tasks.jsonl')
-            with open(tasks_file_path, 'w', encoding='utf-8') as f:
-                for task_language in self.task_language_dict.keys():
-                    tasks_content = {
-                        "task_index": self.task_language_dict[task_language],
-                        "tasks": task_language
-                    }
-                    f.write(json.dumps(tasks_content, ensure_ascii=False) + '\n')
-            self.logger.info(f"tasks.jsonl has been written to: {tasks_file_path}")
-
         except Exception as e:
-            self.logger.exception(f"Exception in write_meta_files: {e}")
+            self.logger.exception(f"Exception in write_info_file: {e}")
 
 if __name__ == "__main__":
     pass
