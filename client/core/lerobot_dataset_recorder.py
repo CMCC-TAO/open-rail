@@ -47,9 +47,7 @@ class LeRobotDatasetRecorder:
         self._save_path: Optional[str] = None
         self._meta_dir: Optional[str] = None
         self._data_dir: Optional[str] = None
-        self._dataset_info: Dict[str, Any] = {}
         self._dataset_fps: int = 30
-        self._video_keys: List[str] = []
         self._episode_length_map: Dict[int, int] = {}
         self._writer_episode_records: List[Dict[str, Any]] = []
 
@@ -120,6 +118,7 @@ class LeRobotDatasetRecorder:
         else:
             self.logger.info(f"{self._meta_dir} has the following required files: {', '.join(required_files)}")
             return True
+
     def set_task(self, save_path: str) -> Tuple[int, int, int, int]:
         """
         Set up a new task with the specified save path and initialize configuration. Called in writer process.
@@ -160,7 +159,10 @@ class LeRobotDatasetRecorder:
             # Refresh writer-side cache for subsequent queue-based sync.
             self._reload_browse_state()
             self._sync_episode_records_for_share(self._writer_episode_records)
+        total_frames, total_videos, total_episodes, chunks_size = self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
+        self.logger.info(f"total_frames: {total_frames}, total_videos: {total_videos}, total_episodes: {total_episodes}, chunks_size: {chunks_size}")
         return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
+
     def _set_task_path(self, save_path: str) -> bool:
         """
         Set the paths for saving task-related data and metadata.
@@ -188,9 +190,7 @@ class LeRobotDatasetRecorder:
 
     def _reload_browse_state(self) -> None:
         """Reload writer-side dataset metadata and episode records."""
-        self._dataset_info = self._load_dataset_info()
-        self._dataset_fps = int(self._dataset_info.get("fps", 30) or 30)
-        self._video_keys = self._get_video_keys(self._dataset_info)
+        self._dataset_fps = int(self.config.get("fps", 30) or 30)
         self._episode_length_map = self._load_episode_length_map()
         self._writer_episode_records = self._build_episode_records()
 
@@ -259,7 +259,7 @@ class LeRobotDatasetRecorder:
             return 0
 
     def _video_exists(self, chunk_id: int, episode_index: int, video_key: str) -> bool:
-        video_fmt = self._dataset_info.get(
+        video_fmt = self.config.get(
             "video_path",
             "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
         )
@@ -288,7 +288,7 @@ class LeRobotDatasetRecorder:
             episode_index = int(m.group(2))
             frames = int(self._episode_length_map.get(episode_index, self._parquet_num_rows(parquet_path)))
             # duration_sec = round((frames / self._dataset_fps), 1) if self._dataset_fps > 0 else 0.0
-            videos_ok = all(self._video_exists(cur_chunk_id, episode_index, key) for key in self._video_keys)
+            videos_ok = all(self._video_exists(cur_chunk_id, episode_index, key) for key in self.camera_name_list)
 
             records.append(
                 self._build_episode_record(
@@ -544,9 +544,10 @@ class LeRobotDatasetRecorder:
                 self.logger.warning("LoadRecords missing save_path for episode browse sync.")
                 return
 
-            if self._set_task_path(save_path):
-                self._reload_browse_state()
-                self._sync_episode_records_for_share(self._writer_episode_records)
+            # if self._set_task_path(save_path):
+            #     self._reload_browse_state()
+            #     self._sync_episode_records_for_share(self._writer_episode_records)
+            self.set_task(save_path=save_path)
             return
         elif command == "DeleteRecord":
             episode_id = str(payload.get("param", "")).strip()
@@ -625,10 +626,6 @@ class LeRobotDatasetRecorder:
         self._upsert_writer_episode_record(pending_record)
         self._sync_episode_records_for_share(pending_record)
 
-        total_episodes = int(self._dataset_info.get("total_episodes", 0) or 0)
-        self._dataset_info["total_episodes"] = max(total_episodes, int(episode_index) + 1)
-        self._dataset_info["total_chunks"] = max(int(self._dataset_info.get("total_chunks", 0) or 0), int(episode_chunk) + 1)
-
     def _sync_browse_on_record_end(self, episode_chunk: int, episode_index: int, episode_length: int, total_episodes: int, total_frames: int, total_videos: int) -> None:
         """Update writer-side browse cache on recording end and publish to share queue."""
         self._episode_length_map[int(episode_index)] = int(max(0, int(episode_length)))
@@ -640,11 +637,6 @@ class LeRobotDatasetRecorder:
         )
         self._upsert_writer_episode_record(finished_record)
         self._sync_episode_records_for_share(finished_record)
-
-        self._dataset_info["total_episodes"] = int(total_episodes)
-        self._dataset_info["total_frames"] = int(total_frames)
-        self._dataset_info["total_videos"] = int(total_videos)
-        self._dataset_info["total_chunks"] = max(int(self._dataset_info.get("total_chunks", 0) or 0), int(episode_chunk) + 1)
 
     def parse_episode_records(self, chunk_id: Optional[int] = None, selected_task: Optional[str] = None, base_dir: Optional[Union[str, Path]] = None) -> List[Dict[str, Any]]:
         """Return browse episode records synced from writer process."""
@@ -683,11 +675,11 @@ class LeRobotDatasetRecorder:
             parquet_path.unlink()
             removed_paths.append(parquet_path.relative_to(self._save_path))
 
-        video_fmt = self._dataset_info.get(
+        video_fmt = self.config.get(
             "video_path",
             "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4",
         )
-        for video_key in self._video_keys:
+        for video_key in self.camera_name_list:
             rel = video_fmt.format(
                 episode_chunk=chunk_id,
                 episode_index=episode_index,
@@ -729,7 +721,7 @@ class LeRobotDatasetRecorder:
         info = self._load_dataset_info()
         info["total_episodes"] = int(next_episode_index)
         info["total_frames"] = int(remaining_frames)
-        info["total_videos"] = int(len(remaining_indices) * len(self._video_keys))
+        info["total_videos"] = int(len(remaining_indices) * len(self.camera_name_list))
         info["total_chunks"] = int(len({
             int(r.get("chunk", -1))
             for r in self._episode_records_for_browse
@@ -751,6 +743,7 @@ class LeRobotDatasetRecorder:
         self.config["total_frames"] = 0
         self.config["total_videos"] = 0
         self.config['chunks_size'] = 1000
+    
     def _update_config_from_meta_file(self):
         """
         Update configuration by reading metadata files from the meta directory.
