@@ -79,6 +79,7 @@ class DataRecordManager:
         # self.shared_data.init_write = self.manager.Value('b', True)
         self.shared_data.total_frames = self.manager.Value('i', 0)
         self.shared_data.total_videos = self.manager.Value('i', 0)
+        self.shared_data.total_episodes = self.manager.Value('i', 0)
         self.shared_data.episode_chunk = self.manager.Value('i', 0)
         self.shared_data.episode_index = self.manager.Value('i', 0)
         self.shared_data.eval_record_id = self.manager.Value('i', 0) # id for new record
@@ -112,11 +113,12 @@ class DataRecordManager:
             self.logger.info(f"{self.save_path} not exists, create it")
         
         if self.config.get('is_record_episode', False):
-            total_frames, total_videos, total_episodes, chunks_size = self.lerobot_recorder.set_task(save_path=self.save_path)
+            total_frames, total_videos, total_episodes, chunks_size, episode_index = self.lerobot_recorder.set_task(save_path=self.save_path)
             self._sync_shared_data(total_frames=total_frames,
                                 total_videos=total_videos,
                                 total_episodes=total_episodes,
-                                chunks_size=chunks_size)
+                                chunks_size=chunks_size,
+                                episode_index=episode_index)
         else:
             self.logger.info("Recording lerobot episode is disabled, skip recording.")
         
@@ -128,15 +130,17 @@ class DataRecordManager:
         else:
             self.logger.info("Recording evaluation log is disabled, skip recording.")
     
-    def _sync_shared_data(self, total_frames: int = None, total_videos: int = None, total_episodes: int = None, chunks_size: int = 1000, eval_record_id: int = None) -> None:
+    def _sync_shared_data(self, total_frames: int = None, total_videos: int = None, total_episodes: int = None, chunks_size: int = 1000, episode_index: int = None, eval_record_id: int = None) -> None:
         """Sync record lerobot values to shared_data."""
         if total_frames is not None:
             self.shared_data.total_frames.value = total_frames
         if total_videos is not None:
             self.shared_data.total_videos.value = total_videos
         if total_episodes is not None:
-            self.shared_data.episode_index.value = total_episodes
-            self.shared_data.episode_chunk.value = total_episodes // chunks_size
+            self.shared_data.total_episodes.value = total_episodes
+        if episode_index is not None:
+            self.shared_data.episode_index.value = episode_index
+            self.shared_data.episode_chunk.value = episode_index // chunks_size
         if eval_record_id is not None:
             self.shared_data.eval_record_id.value = eval_record_id
         # if eval_record_duration is not None:
@@ -435,6 +439,7 @@ class DataRecordManager:
                                                     episode_index = self.shared_data.episode_index.value,
                                                     total_frames = self.shared_data.total_frames.value,
                                                     total_videos = self.shared_data.total_videos.value,
+                                                    total_episodes = self.shared_data.total_episodes.value,
                                                     save_raw=self.config.save_raw)
                 self.lerobot_recorder._sync_browse_on_record_start(
                     episode_chunk=self.shared_data.episode_chunk.value,
@@ -465,11 +470,11 @@ class DataRecordManager:
                 # self.logger.info('write process stopped!!! ')
             # finish recording for all recorders
             if self.config.get('is_record_episode', False):
-                episode_index, total_frames, total_videos = self.lerobot_recorder.end_recording()
+                episode_index, total_frames, total_videos, total_episodes = self.lerobot_recorder.end_recording()
                 self._sync_shared_data(total_frames=total_frames,
                                     total_videos=total_videos,
-                                    total_episodes=episode_index,
-                                    chunks_size=self.config.lerobot['chunks_size']) # chunks_size doesn't change
+                                    total_episodes=total_episodes,
+                                    episode_index=episode_index) # chunks_size doesn't change
             if self.config.get('is_record_eval_log', False):
                 currt_record_id = self.eval_recorder.end_recording()
                 self._sync_shared_data(eval_record_id=currt_record_id + 1)
