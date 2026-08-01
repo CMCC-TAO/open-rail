@@ -218,6 +218,16 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "level": "DEBUG",
                 "propagate": False,
             },
+            "client.core.lerobot_dataset_recorder": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
+            "client.core.evaluation_result_recorder": {
+                "handlers": ["file"],
+                "level": "DEBUG",
+                "propagate": False,
+            },
             "client.utils.util": {
                 "handlers": ["file"],
                 "level": "DEBUG",
