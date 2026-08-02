@@ -310,10 +310,13 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg2);
+  padding: 0 6px;
+  box-sizing: border-box;
 }
 .eval-log-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: var(--font-size-2);
   font-family: var(--font);
   table-layout: fixed;
@@ -322,9 +325,9 @@
 .col-id    { width: 12%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .col-task  { width: 10%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .col-dur   { width: 22%; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.col-score { width: 16%; text-align: center; }
-.col-note  { width: 24%; text-align: center; }
-.col-del   { width:  6%; min-width: 22px; text-align: center; }
+.col-score { width: 18%; text-align: center; }
+.col-note  { width: 29%; text-align: center; }
+.col-del   { width: 12px; min-width: 12px; max-width: 12px; text-align: center; }
 
 .eval-log-table thead th {
   position: sticky;
@@ -347,6 +350,12 @@
   padding: 1px 4px;
   line-height: 1.5;
 }
+
+.eval-log-table thead th.col-del,
+.eval-log-table tbody td.col-del {
+  padding-left: 0;
+  padding-right: 0;
+}
 .eval-log-table tbody td.col-note,
 .eval-log-table tbody td.col-score {
   cursor: text;
@@ -355,21 +364,26 @@
 .eval-log-note-input {
   width: 100%;
   text-align: left;
-  background: transparent;
-  border: none;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
   color: var(--text);
   font-size: var(--font-size-2);
-  padding: 1px 3px;
+  padding: 1px 6px;
   outline: none;
   font-family: var(--font);
   box-sizing: border-box;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.eval-log-note-input:hover {
+  background: var(--bg2);
 }
 
 .eval-log-note-input:focus {
+  border-color: var(--accent);
   background: var(--bg);
 }
-
-.eval-log-table tbody tr:hover { background: var(--accent-soft); }
 
 /* Score colors (only for score buttons, not for rows or select) — commented out
 .score-color-low { color: var(--danger); }
@@ -377,11 +391,48 @@
 .score-color-high { color: var(--success); }
 End of score colors */
 
-/* Row highlight — running and selected rows are blue like episode list */
-.eval-log-row.active { background: var(--accent-soft-hover); color: var(--accent); }
-.eval-log-row.eval-log-running { background: var(--accent-soft-hover); }
-.eval-log-table tbody tr.eval-log-row.active:hover,
-.eval-log-table tbody tr.eval-log-row.eval-log-running:hover { background: var(--accent-soft-hover); }
+/* Row highlight — keep visual style aligned with episode list (rounded + side inset) */
+.eval-log-row.active { color: var(--accent); }
+.eval-log-row.eval-log-running { color: var(--accent); }
+
+.eval-log-table tbody tr.eval-log-row {
+  border-radius: 4px;
+}
+
+.eval-log-table tbody tr.eval-log-row:hover,
+.eval-log-table tbody tr.eval-log-row.active,
+.eval-log-table tbody tr.eval-log-row.eval-log-running {
+  box-shadow: none;
+}
+
+.eval-log-table tbody tr.eval-log-row:hover td {
+  background: var(--accent-soft);
+}
+
+.eval-log-table tbody tr.eval-log-row.active td,
+.eval-log-table tbody tr.eval-log-row.eval-log-running td {
+  background: var(--accent-soft-hover);
+}
+
+.eval-log-table tbody tr.eval-log-row.active:hover td,
+.eval-log-table tbody tr.eval-log-row.eval-log-running:hover td {
+  background: var(--accent-soft-hover);
+}
+
+.eval-log-table tbody tr.eval-log-row:hover td:first-child,
+.eval-log-table tbody tr.eval-log-row.active td:first-child,
+.eval-log-table tbody tr.eval-log-row.eval-log-running td:first-child {
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+.eval-log-table tbody tr.eval-log-row:hover td:last-child,
+.eval-log-table tbody tr.eval-log-row.active td:last-child,
+.eval-log-table tbody tr.eval-log-row.eval-log-running td:last-child {
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
 .eval-log-timer { color: var(--accent); }
 
 /* Score select */
@@ -418,6 +469,7 @@ End of score colors */
   pointer-events: none;
   margin: 0 auto;
 }
+.eval-log-row:hover .eval-log-del-btn,
 .eval-log-row.active .eval-log-del-btn {
   visibility: visible;
   pointer-events: auto;
