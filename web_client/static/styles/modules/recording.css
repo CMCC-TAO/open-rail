@@ -322,11 +322,11 @@
   table-layout: fixed;
 }
 /* Table Column Controls */
-.col-id    { width: 12%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.col-task  { width: 10%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-id    { width: 11%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.col-task  { width: 8%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .col-dur   { width: 22%; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.col-score { width: 18%; text-align: center; }
-.col-note  { width: 29%; text-align: center; }
+.col-score { width: 22%; text-align: center; }
+.col-note  { width: 28%; text-align: center; }
 .col-del   { width: 12px; min-width: 12px; max-width: 12px; text-align: center; }
 
 .eval-log-table thead th {
@@ -437,18 +437,25 @@ End of score colors */
 
 /* Score select */
 .eval-log-score-sel {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: var(--font-size-2);
-  padding: 1px 2px;
-  outline: none;
   width: 100%;
   text-align: left;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: var(--font-size-2);
+  padding: 1px 18px 1px 1px;
+  outline: none;
+  font-family: var(--font);
+  box-sizing: border-box;
+  transition: border-color 120ms ease, background-color 120ms ease;
   cursor: pointer;
 }
 .eval-log-score-sel:hover { background: var(--bg2); }
-.eval-log-score-sel:focus { background: var(--bg); }
+.eval-log-score-sel:focus {
+  border-color: var(--accent);
+  background: var(--bg);
+}
 .eval-log-score-sel option { color: var(--text); }
 
 /* Delete button — hidden by default, shown on row hover/active, centered */
