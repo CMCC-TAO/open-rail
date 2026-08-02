@@ -275,6 +275,11 @@ async function updateEvaluationScore(recordId, score) {
   });
 }
 
+async function updateEvaluationNote(recordId, note) {
+  // Reserved for future backend API integration.
+  console.info('[Evaluation Results] note update reserved, record_id=', recordId, 'note=', note);
+}
+
 function renderEvaluationResults(evalResults = []) {
   const tbody = $('eval-log-tbody');
   const countEl = $('eval-log-count');
@@ -286,6 +291,8 @@ function renderEvaluationResults(evalResults = []) {
   if (countEl) countEl.textContent = String(list.length);
 
   if (!list.length) {
+    App.evalResultSnapshot = [];
+    App.evalResultActiveId = null;
     tbody.innerHTML = '<tr><td colspan="6" class="eval-log-empty">(empty)</td></tr>';
     return;
   }
@@ -297,13 +304,32 @@ function renderEvaluationResults(evalResults = []) {
   const escAttr = (val) => esc(val).replaceAll('"', '&quot;');
   const scoreOptions = getEvaluationScoreOptions();
 
+  const recordIds = list
+    .map(item => String(item?.id ?? ''))
+    .filter(Boolean);
+  const prevRecordIds = Array.isArray(App.evalResultSnapshot) ? App.evalResultSnapshot : [];
+  const prevRecordSet = new Set(prevRecordIds);
+  const addedRecordIds = recordIds.filter(id => !prevRecordSet.has(id));
+
+  let activeRecordId = App.evalResultActiveId;
+  if (addedRecordIds.length > 0) {
+    activeRecordId = addedRecordIds[0];
+  } else if (!recordIds.includes(String(activeRecordId ?? ''))) {
+    activeRecordId = recordIds[0] || null;
+  }
+  activeRecordId = activeRecordId ? String(activeRecordId) : null;
+  App.evalResultActiveId = activeRecordId;
+  App.evalResultSnapshot = recordIds;
+
   tbody.innerHTML = list.map((item) => {
-    const id = Number(item?.id ?? -1);
+    const idNum = Number(item?.id ?? -1);
+    const id = String(idNum);
     const subTask = item?.sub_task_id ?? '';
     const durationNum = Number(item?.duration);
     const duration = Number.isFinite(durationNum) ? durationNum.toFixed(1) : '';
     const note = item?.note ?? '';
     const currentScore = (item?.score === null || item?.score === undefined) ? '' : String(item.score);
+    const activeCls = id === activeRecordId ? ' active' : '';
     const scoreOptionsHtml = ['<option value=""></option>']
       .concat(scoreOptions.map((opt) => {
         const val = String(opt);
@@ -313,18 +339,42 @@ function renderEvaluationResults(evalResults = []) {
       .join('');
 
     return `
-      <tr>
+      <tr class="eval-log-row${activeCls}" data-record-id="${escAttr(id)}">
         <td class="col-id">${esc(id)}</td>
         <td class="col-task">${esc(subTask)}</td>
         <td class="col-dur">${esc(duration)}s</td>
         <td class="col-score"><select class="eval-log-score-sel" data-record-id="${escAttr(id)}">${scoreOptionsHtml}</select></td>
-        <td class="col-note">${esc(note)}</td>
-        <td class="col-del"></td>
+        <td class="col-note"><input class="eval-log-note-input" data-record-id="${escAttr(id)}" value="${escAttr(note)}" placeholder="Add note" /></td>
+        <td class="col-del"><button class="eval-log-del-btn" data-record-id="${escAttr(id)}" title="Delete evaluation result" aria-label="Delete evaluation result"><svg class="recording-file-item-delete-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-1 6h2v9H8V9zm4 0h2v9h-2V9zm4 0h2v9h-2V9z"/></svg></button></td>
       </tr>
     `;
   }).join('');
 
+  const setActiveEvalRecord = (recordId, row = null) => {
+    const targetId = String(recordId ?? '').trim();
+    if (!targetId) return;
+    App.evalResultActiveId = targetId;
+
+    tbody.querySelectorAll('.eval-log-row.active').forEach(node => node.classList.remove('active'));
+    const target = row || tbody.querySelector(`.eval-log-row[data-record-id="${CSS.escape(targetId)}"]`);
+    if (target) target.classList.add('active');
+  };
+
+  tbody.querySelectorAll('.eval-log-row[data-record-id]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const id = row.getAttribute('data-record-id') || '';
+      setActiveEvalRecord(id, row);
+    });
+  });
+
   tbody.querySelectorAll('.eval-log-score-sel[data-record-id]').forEach((sel) => {
+    sel.addEventListener('focus', () => {
+      const row = sel.closest('.eval-log-row');
+      if (!row) return;
+      const id = row.getAttribute('data-record-id') || '';
+      setActiveEvalRecord(id, row);
+    });
+
     sel.addEventListener('change', async () => {
       const recordId = Number(sel.getAttribute('data-record-id'));
       if (!Number.isFinite(recordId)) return;
@@ -347,6 +397,61 @@ function renderEvaluationResults(evalResults = []) {
       }
     });
   });
+
+  tbody.querySelectorAll('.eval-log-note-input[data-record-id]').forEach((input) => {
+    let currentValue = String(input.value || '');
+
+    input.addEventListener('focus', () => {
+      const row = input.closest('.eval-log-row');
+      if (!row) return;
+      const id = row.getAttribute('data-record-id') || '';
+      setActiveEvalRecord(id, row);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      input.blur();
+    });
+
+    input.addEventListener('change', async () => {
+      const recordId = Number(input.getAttribute('data-record-id'));
+      if (!Number.isFinite(recordId)) return;
+
+      const nextValue = String(input.value ?? '');
+      if (nextValue === currentValue) return;
+
+      input.disabled = true;
+      try {
+        await updateEvaluationNote(recordId, nextValue);
+        currentValue = nextValue;
+      } catch (_) {
+        // Reserved: backend not connected yet.
+      } finally {
+        input.disabled = false;
+      }
+    });
+  });
+
+  tbody.querySelectorAll('.eval-log-del-btn[data-record-id]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const recordId = Number(btn.getAttribute('data-record-id'));
+      if (!Number.isFinite(recordId)) return;
+      const row = btn.closest('.eval-log-row');
+      if (row) {
+        const id = row.getAttribute('data-record-id') || '';
+        setActiveEvalRecord(id, row);
+      }
+      await deleteEvaluationResult(recordId);
+    });
+  });
+}
+
+async function deleteEvaluationResult(recordId) {
+  // Reserved for future backend API integration.
+  console.info('[Evaluation Results] delete action reserved, record_id=', recordId);
 }
 
 async function deleteRecordingEpisode(episodeId) {
