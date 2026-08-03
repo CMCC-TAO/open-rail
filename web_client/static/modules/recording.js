@@ -270,14 +270,22 @@ async function updateEvaluationScore(recordId, score) {
     body: JSON.stringify({
       task: App.recordingTask,
       record_id: Number(recordId),
-      score,
+      score: score,
     }),
   });
 }
 
 async function updateEvaluationNote(recordId, note) {
   // Reserved for future backend API integration.
-  console.info('[Evaluation Results] note update reserved, record_id=', recordId, 'note=', note);
+  if (!App.recordingTask) return;
+  await apiFetch('/api/client/record/eval/note', {
+    method: 'POST',
+    body: JSON.stringify({
+      task: App.recordingTask,
+      record_id: Number(recordId),
+      note: note,
+    }),
+  });
 }
 
 function renderEvaluationResults(evalResults = []) {
@@ -392,9 +400,9 @@ function renderEvaluationResults(evalResults = []) {
       try {
         await updateEvaluationScore(recordId, score);
       } catch (_) {
-        await refreshRecordingFileList();
       } finally {
         sel.disabled = false;
+        await refreshRecordingFileList();
       }
     });
   });
@@ -429,6 +437,7 @@ function renderEvaluationResults(evalResults = []) {
       } catch (_) {
         // Reserved: backend not connected yet.
       } finally {
+        await refreshRecordingFileList();
         input.disabled = false;
       }
     });

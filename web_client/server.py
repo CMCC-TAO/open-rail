@@ -2045,7 +2045,7 @@ async def client_record_eval_score(req: EvalResultCRUDRequest):
 async def client_record_eval_note(req: EvalResultCRUDRequest):
     target_id = int(req.record_id)
     note = str(req.note)
-    eval_recorder, task = _get_eval_recorder()
+    eval_recorder = _get_eval_recorder()
 
     rows = getattr(eval_recorder, '_eval_records', None)
     if not isinstance(rows, list):
@@ -2053,7 +2053,7 @@ async def client_record_eval_note(req: EvalResultCRUDRequest):
 
     try:
         eval_recorder.set_note(record_id=target_id, note=note)
-        return {'status': 'ok', 'task': task, 'record_id': target_id, 'note': str(req.note or '')}
+        return {'status': 'ok', 'task': req.task, 'record_id': target_id, 'note': str(req.note or '')}
     except HTTPException:
         raise
     except Exception as e:
