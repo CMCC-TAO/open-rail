@@ -846,7 +846,7 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
 class RecordingItemDeleteRequest(BaseModel):
     task: str
     episode_id: Optional[str] = None
-    record_id: Optional[str] = None
+    record_id: Optional[int] = None
 
 
 @app.delete("/api/client/record/delete")
@@ -859,6 +859,11 @@ async def delete_recording_item(req: RecordingItemDeleteRequest):
             result = vla_client.delete_recording_item(episode_id = req.episode_id)
             if not result.get("deleted"):
                 raise HTTPException(404, f"Episode not found: {req.episode_id}")
+
+        if req.record_id is not None:
+            result = vla_client.delete_recording_item(record_id = req.record_id)
+            if not result.get("deleted"):
+                raise HTTPException(404, f"Evaluation record not found: {req.record_id}")
 
         return {"status": "ok", "result": result}
     except HTTPException:

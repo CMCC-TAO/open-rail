@@ -476,7 +476,6 @@ End of score colors */
   pointer-events: none;
   margin: 0 auto;
 }
-.eval-log-row:hover .eval-log-del-btn,
 .eval-log-row.active .eval-log-del-btn {
   visibility: visible;
   pointer-events: auto;
