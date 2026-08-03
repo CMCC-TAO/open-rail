@@ -843,32 +843,28 @@ async def get_recording_files(task: Optional[str] = None, chunk: Optional[str] =
     }
 
 
-class RecordingEpisodeDeleteRequest(BaseModel):
+class RecordingItemDeleteRequest(BaseModel):
     task: str
-    episode_id: str
+    episode_id: Optional[str] = None
+    record_id: Optional[str] = None
 
 
 @app.delete("/api/client/record/delete")
-async def delete_recording_episode(req: RecordingEpisodeDeleteRequest):
+async def delete_recording_item(req: RecordingItemDeleteRequest):
     try:
-        recorder = None
         with client_state.lock:
             vla_client = client_state.vla_client
-        if vla_client is not None and getattr(vla_client, "data_record_manager", None) is not None:
-            recorder = getattr(vla_client.data_record_manager, "lerobot_recorder", None)
 
-        if recorder is not None:
-            result = recorder.delete_episode(episode_id = req.episode_id)
-        else:
-            raise HTTPException(404, f"Lerobot recorder not found.")
+        if req.episode_id is not None:
+            result = vla_client.delete_recording_item(episode_id = req.episode_id)
+            if not result.get("deleted"):
+                raise HTTPException(404, f"Episode not found: {req.episode_id}")
 
-        if not result.get("deleted"):
-            raise HTTPException(404, f"Episode not found: {req.episode_id}")
         return {"status": "ok", "result": result}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(500, f"Failed to delete recording episode: {e}")
+        raise HTTPException(500, f"Failed to delete recording item: {e}")
 
 
 @app.get("/api/client/language/load/default")
