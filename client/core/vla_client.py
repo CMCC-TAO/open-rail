@@ -2,6 +2,7 @@ import cv2
 import time
 import logging
 import threading
+from git import Optional
 import numpy as np
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
@@ -213,6 +214,13 @@ class VLAClientAsync():
     def stop_recording(self):
         self.config.record.switch = False
         self.data_record_manager.stop_recording()
+
+    def delete_recording_item(self, episode_id: Optional[str] = None, record_id: Optional[str] = None):
+        if episode_id is not None:
+            return self.data_record_manager.lerobot_recorder.delete_episode(episode_id=episode_id)
+        if record_id is not None:
+            pass
+
     def close(self):
         """Close the VLA client and clean up all resources.
         
