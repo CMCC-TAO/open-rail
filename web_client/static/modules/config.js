@@ -159,6 +159,58 @@ const CUSTOM_GROUP_ORDER = [
   // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
 ];
 let _cfgInputSyncing = false;
+const CFG_ENTER_IMMEDIATE_APPLY_KEYS = new Set([
+  'record.evaluation.scores',
+  // 'evaluation.scores',
+]);
+
+function shouldApplyConfigImmediatelyOnEnter(dotKey) {
+  return CFG_ENTER_IMMEDIATE_APPLY_KEYS.has(String(dotKey || '').trim());
+}
+
+async function applySingleConfigPatchImmediately(dotKey) {
+  const key = String(dotKey || '').trim();
+  if (!key) return;
+  if (!App.pendingPatch || typeof App.pendingPatch !== 'object' || !(key in App.pendingPatch)) return;
+
+  const patchValue = App.pendingPatch[key];
+  try {
+    const res = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch: { [key]: patchValue } }),
+    });
+
+    App.config = res.config || App.config || {};
+    delete App.pendingPatch[key];
+    if (!Object.keys(App.pendingPatch).length) clearPending();
+
+    renderConfigTree(App.config);
+    renderRecordingConfigTree(App.config);
+    applyVisualConfig(App.config);
+
+    if (key === 'record.evaluation.scores' || key === 'evaluation.scores') {
+      if (typeof renderEvaluationResults === 'function' && Array.isArray(App.evalResultsSnapshot)) {
+        renderEvaluationResults(App.evalResultsSnapshot);
+      } else if (typeof refreshRecordingFileList === 'function') {
+        await refreshRecordingFileList();
+      }
+    }
+
+    try {
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          body: JSON.stringify({ path: confRes.path }),
+        });
+      }
+    } catch (_) {
+      // Keep runtime config applied even if save fails.
+    }
+  } catch (_) {
+    toast(`Failed to apply ${key}.`, 'warn', 2200);
+  }
+}
 
 function getConfigValueByDotKey(cfg, dotKey) {
   if (!cfg || typeof cfg !== 'object') return undefined;
@@ -956,6 +1008,13 @@ function createCfgRow(dotKey, label, value, options = {}) {
   } else {
     input.addEventListener('input',  () => onCfgChange(dotKey, input, value));
     input.addEventListener('change', () => onCfgChange(dotKey, input, value));
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      if (!shouldApplyConfigImmediatelyOnEnter(dotKey)) return;
+      e.preventDefault();
+      onCfgChange(dotKey, input, value);
+      void applySingleConfigPatchImmediately(dotKey);
+    });
   }
   valEl.appendChild(input);
   row.appendChild(keyEl);
