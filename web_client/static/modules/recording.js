@@ -450,13 +450,23 @@ function renderEvaluationResults(evalResults = []) {
 }
 
 async function deleteEvaluationResult(recordId) {
-  // Reserved for future backend API integration.
-  console.info('[Evaluation Results] delete action reserved, record_id=', recordId);
+  if (!App.recordingTask || !recordId) return;
+  const ok = window.confirm(`Delete Evaluation Record ${recordId} ? This cannot be undone.`);
+  if (!ok) return;
+
+  try {
+    await apiFetch('/api/client/record/delete', {
+      method: 'DELETE',
+      body: JSON.stringify({ task: App.recordingTask, record_id: recordId }),
+    });
+    await refreshRecordingFileList();
+    toast(`Deleted record ${recordId}.`, 'ok', 1800);
+  } catch (_) { /* toasted */ }
 }
 
 async function deleteRecordingEpisode(episodeId) {
   if (!App.recordingTask || !episodeId) return;
-  const ok = window.confirm(`Delete ${episodeId} ? This cannot be undone.`);
+  const ok = window.confirm(`Delete LeRobot Episode ${episodeId} ? This cannot be undone.`);
   if (!ok) return;
 
   try {
@@ -465,8 +475,8 @@ async function deleteRecordingEpisode(episodeId) {
       body: JSON.stringify({ task: App.recordingTask, episode_id: episodeId }),
     });
     if (App.recordingEpisodeId === episodeId) App.recordingEpisodeId = null;
-    toast(`Deleted ${episodeId}.`, 'ok', 1800);
     await refreshRecordingFileList();
+    toast(`Deleted ${episodeId}.`, 'ok', 1800);
   } catch (_) { /* toasted */ }
 }
 

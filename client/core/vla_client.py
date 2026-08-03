@@ -215,11 +215,11 @@ class VLAClientAsync():
         self.config.record.switch = False
         self.data_record_manager.stop_recording()
 
-    def delete_recording_item(self, episode_id: Optional[str] = None, record_id: Optional[str] = None):
+    def delete_recording_item(self, episode_id: Optional[str] = None, record_id: Optional[int] = None):
         if episode_id is not None:
             return self.data_record_manager.lerobot_recorder.delete_episode(episode_id=episode_id)
         if record_id is not None:
-            pass
+            return self.data_record_manager.eval_recorder.delete_record(record_id=record_id)
 
     def close(self):
         """Close the VLA client and clean up all resources.

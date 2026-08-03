@@ -420,7 +420,7 @@ class EvaluationResultRecorder:
         payload = {
             "command": command,
             "task_path": task_path,
-            "record_id": int(record_id),
+            "record_id": record_id,
             "score": score,
             "note": note,
         }
@@ -524,30 +524,23 @@ class EvaluationResultRecorder:
                 self.logger.exception(f"Eval record CRUD drain apply failed: {e}")
 
     def set_score(self, record_id: int, score: Optional[float]) -> None:
-        # rec = next((r for r in self._eval_records_for_browse if r['id'] == record_id), None)
-        # if rec is None:
-        #     return
-        # rec['score'] = score
         self._enqueue_eval_record_crud(command="UpdateScore", record_id=record_id, score=score, note="")
         return
 
 
     def set_note(self, record_id: int, note: str) -> None:
-        # rec = next((r for r in self._eval_records_for_browse if r['id'] == record_id), None)
-        # if rec is None:
-        #     return
-        # rec['note'] = note
         self._enqueue_eval_record_crud(command="UpdateNote", record_id=record_id, score=None, note=note)
         return
 
 
-    def delete_record(self, record_id: int) -> None:
-        # for i in range(len(self._eval_records_for_browse) - 1, -1, -1):
-        #     if self._eval_records_for_browse[i].get('id') == record_id:
-        #         del self._eval_records_for_browse[i]
-        #         break
-        self._enqueue_eval_record_crud(command="DeleteRecord", record_id=record_id, score=None, note="")
-        return
+    def delete_record(self, record_id: int) -> Dict[str, Any]:
+        """Delete one episode and update browse cache in main process."""
+        self._enqueue_eval_record_crud(command="DeleteRecord", record_id=record_id)
+
+        return {
+            "deleted": True,
+            "record_id": record_id,
+        }
 
 
     def _flush_to_disk(self) -> None:
