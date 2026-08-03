@@ -287,6 +287,7 @@ function renderEvaluationResults(evalResults = []) {
 
   const list = Array.isArray(evalResults) ? evalResults.slice() : [];
   list.sort((a, b) => Number(b?.id ?? -1) - Number(a?.id ?? -1));
+  App.evalResultsSnapshot = list.map(item => ({ ...(item || {}) }));
 
   if (countEl) countEl.textContent = String(list.length);
 
