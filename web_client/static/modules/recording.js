@@ -18,11 +18,11 @@ function syncRecordingSwitchUI() {
     btnStartStop.className = 'btn btn-sm btn-success';
   }
   if (recording) {
-    btnPauseResume.innerHTML = '<i class="fas fa-play"></i> Resume';
-    btnPauseResume.className = 'btn btn-sm btn-success';
-  } else {
     btnPauseResume.innerHTML = '<i class="fas fa-pause"></i> Pause';
     btnPauseResume.className = 'btn btn-sm btn-danger';
+  } else {
+    btnPauseResume.innerHTML = '<i class="fas fa-play"></i> Resume';
+    btnPauseResume.className = 'btn btn-sm btn-success';
   }
 }
 
@@ -806,18 +806,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  $('btn-log-clear')?.addEventListener('click', () => {
-    if (typeof ExecLog === 'undefined') return;
-    if (!confirm('Clear all execution log records?')) return;
-    ExecLog.records = [];
-    ExecLog._nextId = 1;
-    if (typeof saveExecLogToStorage === 'function') saveExecLogToStorage();
-    if (typeof renderExecLog === 'function') renderExecLog();
-    if (typeof _updateScoreRow === 'function') _updateScoreRow();
-  });
+  // $('btn-log-clear')?.addEventListener('click', () => {
+  //   if (typeof ExecLog === 'undefined') return;
+  //   if (!confirm('Clear all execution log records?')) return;
+  //   ExecLog.records = [];
+  //   ExecLog._nextId = 1;
+  //   if (typeof saveExecLogToStorage === 'function') saveExecLogToStorage();
+  //   if (typeof renderExecLog === 'function') renderExecLog();
+  //   if (typeof _updateScoreRow === 'function') _updateScoreRow();
+  // });
 
   // Init: restore from localStorage
-  if (typeof loadExecLogFromStorage === 'function') loadExecLogFromStorage();
+  // if (typeof loadExecLogFromStorage === 'function') loadExecLogFromStorage();
   
   // Set initial state without triggering auto-start
   // if (execlogChk) {
@@ -825,8 +825,8 @@ document.addEventListener('DOMContentLoaded', function() {
   //   toggleExecLog(ExecLog.enabled);
   // }
   
-  if (typeof renderExecLog === 'function') renderExecLog();
-  if (typeof syncExecLogRecButton === 'function') syncExecLogRecButton();
+  // if (typeof renderExecLog === 'function') renderExecLog();
+  // if (typeof syncExecLogRecButton === 'function') syncExecLogRecButton();
 
   // Initialization complete - allow new records to be created after a short delay
   // setTimeout(() => {
@@ -834,11 +834,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // }, 500);
 
   // On page unload, finalize any running record
-  window.addEventListener('beforeunload', () => {
-    if (typeof ExecLog === 'undefined') return;
-    const running = ExecLog.records.find(r => r.status === 'running');
-    if (!running) return;
-    _finalizeRunningRecord('interrupted');
-    saveExecLogToStorage();
-  });
+  // window.addEventListener('beforeunload', () => {
+  //   if (typeof ExecLog === 'undefined') return;
+  //   const running = ExecLog.records.find(r => r.status === 'running');
+  //   if (!running) return;
+  //   _finalizeRunningRecord('interrupted');
+  //   saveExecLogToStorage();
+  // });
 });
