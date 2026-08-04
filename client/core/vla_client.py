@@ -2,9 +2,9 @@ import cv2
 import time
 import logging
 import threading
-# from type import Optional
-from typing import Optional
 import numpy as np
+
+from typing import Optional
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 
