@@ -81,8 +81,8 @@ class DataRecordManager:
         self.shared_data.total_videos = self.manager.Value('i', 0)
         self.shared_data.total_episodes = self.manager.Value('i', 0)
         self.shared_data.episode_chunk = self.manager.Value('i', 0)
-        self.shared_data.episode_index = self.manager.Value('i', 0)
-        self.shared_data.eval_record_id = self.manager.Value('i', 0) # id for new record
+        self.shared_data.episode_index = self.manager.Value('i', -1)
+        self.shared_data.eval_record_id = self.manager.Value('i', -1) # id for new record
         # self.shared_data.eval_record_duration = self.manager.Value('f', 0.0)
         self.shared_data.running = self.manager.Value('b', False)
         # self.shared_data.episode_parquet_list = self.manager.list()
@@ -104,8 +104,11 @@ class DataRecordManager:
         rel_save_dir = str(save_dir).strip().lstrip('/').lstrip('\\')
         return os.path.join(self.project_root_path, rel_save_dir, task_dir)
 
-    def set_task(self, task_dir: str) -> None:
+    def set_task(self, task_dir: str, is_record_episode: bool = False, is_record_eval_log: bool = False, is_record_expe_data: bool = False) -> None:
         """Update save path by task/date before a new recording starts. Called in the writer process."""
+        self.config.is_record_episode = is_record_episode
+        self.config.is_record_eval_log = is_record_eval_log
+        self.config.is_record_expe_data = is_record_expe_data
         self.save_dir = self.config.get("save_dir", "data/recording")     # relative path
         self.save_path = self._build_full_save_path(self.save_dir, task_dir)  # full path
         if not os.path.exists(self.save_path):
@@ -200,7 +203,10 @@ class DataRecordManager:
                     if write_future is not None and (not write_future.done()):
                         self.logger.warning("Receive start command while previous write task is still running, skip.")
                         continue
-                    self.set_task(task_dir = command.get("task_dir", "default"))
+                    self.set_task(task_dir = command.get("task_dir", "default"),
+                                is_record_episode = command.get("is_record_episode", False),
+                                is_record_eval_log = command.get("is_record_eval_log", False),
+                                is_record_expe_data = command.get("is_record_expe_data", False))
                     write_future = write_executor.submit(self._write_process_fun)
                 elif command.get("command", "") == "stop":
                     self.shared_data.running.value = False
@@ -284,24 +290,13 @@ class DataRecordManager:
             self._clear_queues()
 
             self.shared_data.running.value = True
-            # if self.config.get('is_record_eval_log', False):
-            #     if isinstance(first_record, tuple) and len(first_record) == 3:
-            #         _, _, step_extra = first_record
-            #         language_status = step_extra.get('language_status', {}) if isinstance(step_extra, dict) else {}
-            #         sub_task_id = language_status.get('sub_task_id', None)
-            #         self.eval_recorder._sync_browse_on_record_start(
-            #             eval_record_id=self.shared_data.eval_record_id.value,
-            #             sub_task_id=sub_task_id,
-            #         )
-            #         # if sub_task_id is not None:
-            #             # self.eval_recorder._sync_browse_on_runtime_step(
-            #             #     eval_record_id=self.shared_data.eval_record_id.value,
-            #             #     sub_task_id=sub_task_id,
-            #             # )
             task_dir = self._sanitize_task_name(task_id) + '_' + datetime.now().strftime("%Y%m%d")
             command = {
                 "command": "start",
                 "task_dir": task_dir,
+                "is_record_episode": self.config.is_record_episode,
+                "is_record_eval_log": self.config.is_record_eval_log,
+                "is_record_expe_data": self.config.is_record_expe_data
             }
             self.writer_command_queue.put(command)
             self.logger.info(f"Writer task dispatched successfully. task_dir={task_dir}, session_id={session_id}")
@@ -434,6 +429,7 @@ class DataRecordManager:
             # prepare recording for all recorders
             if self.config.get('is_record_eval_log', False):
                 self.eval_recorder.begin_recording(eval_record_id=self.shared_data.eval_record_id.value)
+            
             if self.config.get('is_record_episode', False):
                 self.lerobot_recorder.begin_recording(episode_chunk = self.shared_data.episode_chunk.value,
                                                     episode_index = self.shared_data.episode_index.value,
