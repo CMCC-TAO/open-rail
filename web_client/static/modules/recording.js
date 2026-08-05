@@ -86,13 +86,33 @@ function renderRecordingConfigTree(cfg = App.config) {
   syncRecordingSwitchUI();
 }
 
-async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } = {}) {
-  if (!App.isRunning || !App.isRecording) {
-    syncRecordingSwitchUI();
+async function startDataRecording({} = {}) {
+  try {
+    const res = await apiFetch('/api/client/record/start', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
+    if (currentTaskDir) {
+      App.recordingTask = currentTaskDir;
+      App.recordingChunk = null;
+      App.recordingChunksSnapshot = [];
+    } 
+
+    App.isRecording = true;
+    if (!App.config || typeof App.config !== 'object') App.config = {};
+    if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+    App.config.record.switch = true;
+    renderRecordingConfigTree(App.config);
+    await refreshRecordingFileList();
+    toast('Recording started.', 'ok');
+    return true;
+  } catch (_) { 
+    /* toasted */ 
     return false;
   }
-  // if (refreshList) await refreshRecordingFileList();
-
+}
+async function stopDataRecording({ silent = false, refreshList = true } = {}) {
   try {
     if (!silent) toast('Recording stopping.', 'info');
     await apiFetch('/api/client/record/stop', {
@@ -648,29 +668,10 @@ function setupRecordingPanel() {
 
       if (App.isRecording) {
         // Stop recording
-        await stopDataRecordingIfNeeded({ silent: false, refreshList: true });
+        await stopDataRecording({ silent: false, refreshList: true });
       } else {
         // Start recording
-        try {
-          const res = await apiFetch('/api/client/record/start', {
-            method: 'POST',
-            body: JSON.stringify({}),
-          });
-          const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
-          if (currentTaskDir) {
-            App.recordingTask = currentTaskDir;
-            App.recordingChunk = null;
-            App.recordingChunksSnapshot = [];
-          } 
-
-          App.isRecording = true;
-          if (!App.config || typeof App.config !== 'object') App.config = {};
-          if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
-          App.config.record.switch = true;
-          renderRecordingConfigTree(App.config);
-          await refreshRecordingFileList();
-          toast('Recording started.', 'ok');
-        } catch (_) { /* toasted */ }
+        await startDataRecording();
       }
       syncRecordingSwitchUI();
     });

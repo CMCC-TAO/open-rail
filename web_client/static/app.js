@@ -553,8 +553,8 @@ async function wireEvents() {
         const prevPaused = App.isPaused;
 
         // If data recording is active, stop recording first.
-        if (App.isRecording && typeof stopDataRecordingIfNeeded === 'function') {
-          await stopDataRecordingIfNeeded({ silent: false, refreshList: true });
+        if (App.isRecording && typeof stopDataRecording === 'function') {
+          await stopDataRecording({ silent: false, refreshList: true });
         }
 
         setRunningUI(false, false);
