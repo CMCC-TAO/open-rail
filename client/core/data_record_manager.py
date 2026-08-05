@@ -302,6 +302,37 @@ class DataRecordManager:
             self.logger.exception(f"Failed to start writer task: {e}")
             return None
 
+    def stop_recording(self):
+        """
+        Stops recording and waits for all queued data to be written before exiting.
+
+        Behavior:
+        - Set ``running=False`` to stop accepting new records.
+        - Let resident writer task continue draining ``record_queue``.
+        """
+        self._bump_recording_session_id()
+        if self.shared_data.running.value:
+            self.shared_data.running.value = False
+            self.logger.info("Signaled writer task to stop after draining queue.")
+
+        command = {
+            "command": "stop",
+        }
+        self.writer_command_queue.put(command)
+
+
+    def pause_recording(self):
+        command = {
+            "command": "pause",
+        }
+        self.writer_command_queue.put(command)
+
+    def resume_recording(self):
+        command = {
+            "command": "resume",
+        }
+        self.writer_command_queue.put(command)
+    
     def _wait_for_record_data(self, get_timeout_s: float = 0.05, max_attempts: int = 20) -> Optional[Any]:
         """Best-effort: read one record payload from queue and put it back unchanged."""
         timeout = max(0.001, get_timeout_s)
@@ -330,24 +361,6 @@ class DataRecordManager:
                     return None
 
         return None
-
-    def stop_recording(self):
-        """
-        Stops recording and waits for all queued data to be written before exiting.
-
-        Behavior:
-        - Set ``running=False`` to stop accepting new records.
-        - Let resident writer task continue draining ``record_queue``.
-        """
-        self._bump_recording_session_id()
-        if self.shared_data.running.value:
-            self.shared_data.running.value = False
-            self.logger.info("Signaled writer task to stop after draining queue.")
-
-        command = {
-            "command": "stop",
-        }
-        self.writer_command_queue.put(command)
 
     def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
