@@ -211,6 +211,21 @@ class DataRecordManager:
                             self._clear_queues()
                         except Exception as e:
                             self.logger.exception(f"writer_worker thread exited with exception during stop recording: {e}")
+                elif command.get("command", "") == "pause":
+                    try:
+                        # self._clear_queues()
+                        if self.config.get('is_record_eval_log', False):
+                            self.eval_recorder.pause_recording()
+                        self.logger.info("Data recording paused.")
+                    except Exception as e:
+                        self.logger.exception(f"writer_worker thread exited with exception during pause recording: {e}")
+                elif command.get("command", "") == "resume":
+                    try:
+                        if self.config.get('is_record_eval_log', False):
+                            self.eval_recorder.resume_recording()
+                        self.logger.info("Data recording resumed.")
+                    except Exception as e:
+                        self.logger.exception(f"writer_worker thread exited with exception during resume recording: {e}")
                 elif command.get("command", "") == "shutdown":
                     self.shared_data.running.value = False
                     if write_future is not None:

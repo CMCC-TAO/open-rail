@@ -218,10 +218,12 @@ class VLAClientAsync():
         self.data_record_manager.stop_recording()
 
     def pause_recording(self):
-        self.data_record_manager.pause_recording()
+        if self.config.record.switch:
+            self.data_record_manager.pause_recording()
 
     def resume_recording(self):
-        self.data_record_manager.resume_recording()
+        if self.config.record.switch:
+            self.data_record_manager.resume_recording()
 
     def delete_recording_item(self, episode_id: Optional[str] = None, record_id: Optional[int] = None):
         if episode_id is not None:

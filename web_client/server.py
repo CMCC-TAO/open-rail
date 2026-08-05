@@ -1513,7 +1513,7 @@ def _stop_control(vla_client):
 
 
 def _pause_vla_client(vla_client) -> dict:
-    # 获取线程状态
+    # main threads status
     state = _thread_state(vla_client)
     # print(f"_pause_vla_client with state: {state}")
     if state.get("observe_running", False):
@@ -1522,6 +1522,7 @@ def _pause_vla_client(vla_client) -> dict:
         _stop_inference(vla_client)
     if state.get("control_running", False):
         _stop_control(vla_client)
+    vla_client.pause_recording()
     return state
 
 
@@ -1534,6 +1535,7 @@ def _resume_vla_client(vla_client, state: Optional[dict] = None):
 
     if state.get("control_running", False):
         _start_control(vla_client)
+    vla_client.resume_recording()
     return
 
 # Background helpers to avoid blocking the asyncio thread
@@ -1643,9 +1645,7 @@ async def _bg_toggle_control_and_broadcast(vla_client):
 @app.post("/api/client/pause")
 async def pause_client():
     """Pause observe/inference/control without releasing resources."""
-    vla_client = client_state.vla_client
-    if vla_client is None or not client_state.running:
-        raise HTTPException(400, "Client is not running.")
+    vla_client, _ = _require_runtime('pause')
 
     asyncio.create_task(_bg_pause_and_broadcast(vla_client))
     return {"status": "ok", "message": "Pausing scheduled."}
@@ -1654,9 +1654,7 @@ async def pause_client():
 @app.post("/api/client/resume")
 async def resume_client():
     """Resume observe/inference/control to the exact state before pause."""
-    vla_client = client_state.vla_client
-    if vla_client is None or not client_state.running:
-        raise HTTPException(400, "Client is not running.")
+    vla_client, _ = _require_runtime('resume')
 
     asyncio.create_task(_bg_resume_and_broadcast(vla_client))
     return {"status": "ok", "message": "Resume scheduled."}

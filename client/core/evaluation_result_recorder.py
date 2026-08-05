@@ -260,9 +260,20 @@ class EvaluationResultRecorder:
         self._create_new_record(eval_record_id=eval_record_id, sub_task_id=sub_task_id)
 
     def end_recording(self):
+        if self._eval_record_pause_time is not None and self._eval_record_resume_time is None:
+            self._eval_record_stop_time = time.time() # required for special case 
+            self.resume_recording()
         record_id = self._finalize_current_record()
         self._flush_to_disk()
         return record_id
+    
+    def pause_recording(self):
+        self._eval_record_pause_time = time.time()
+        self._eval_record_resume_time = None
+
+    def resume_recording(self):
+        self._eval_record_resume_time = time.time()
+        self._eval_record_pause_duration += self._eval_record_resume_time - self._eval_record_pause_time
     
     def add_frame_async(self, step_extra: dict):
         self._record_executor.submit(self._write_frame_fun, step_extra)
@@ -316,6 +327,9 @@ class EvaluationResultRecorder:
         self._obv_count = 0
         self._eval_record_start_time = None
         self._eval_record_stop_time = None
+        self._eval_record_pause_time = None
+        self._eval_record_resume_time = None
+        self._eval_record_pause_duration = 0.0
         self._current_record = {
             'id': eval_record_id,
             'task_id': None,
@@ -388,7 +402,7 @@ class EvaluationResultRecorder:
         self._current_record['obv_count'] = self._obv_count
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time) if self._eval_record_start_time is not None else None
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time) if self._eval_record_stop_time is not None else None
-        self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 1) if self._eval_record_start_time is not None and self._eval_record_stop_time is not None else 0.0
+        self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time - self._eval_record_pause_duration, 1) if self._eval_record_start_time is not None and self._eval_record_stop_time is not None else 0.0
         self._sync_eval_records_for_share(targets=self._current_record)
         return self._current_record['id']
     
