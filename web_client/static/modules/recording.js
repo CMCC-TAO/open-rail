@@ -3,11 +3,11 @@ function syncRecordingSwitchUI() {
   const recording = !!App.isRecording;
   const btnStartStop = $('btn-recording-startstop');
   if (!btnStartStop) return;
-  const btnPauseResume = $('btn-recording-pauseresume');
-  if (!btnPauseResume) return;
+  // const btnPauseResume = $('btn-recording-pauseresume');
+  // if (!btnPauseResume) return;
 
   btnStartStop.disabled = !running;
-  btnPauseResume.disabled = !running || !recording
+  // btnPauseResume.disabled = !running || !recording
   
   // Update button text/icon/style based on recording status
   if (recording) {
@@ -17,13 +17,13 @@ function syncRecordingSwitchUI() {
     btnStartStop.innerHTML = '<i class="fas fa-play"></i> Start';
     btnStartStop.className = 'btn btn-sm btn-success';
   }
-  if (recording) {
-    btnPauseResume.innerHTML = '<i class="fas fa-pause"></i> Pause';
-    btnPauseResume.className = 'btn btn-sm btn-danger';
-  } else {
-    btnPauseResume.innerHTML = '<i class="fas fa-play"></i> Resume';
-    btnPauseResume.className = 'btn btn-sm btn-success';
-  }
+  // if (recording) {
+  //   btnPauseResume.innerHTML = '<i class="fas fa-pause"></i> Pause';
+  //   btnPauseResume.className = 'btn btn-sm btn-danger';
+  // } else {
+  //   btnPauseResume.innerHTML = '<i class="fas fa-play"></i> Resume';
+  //   btnPauseResume.className = 'btn btn-sm btn-success';
+  // }
 }
 
 function syncRecordingCheckboxesFromConfig(cfg = App.config) {
