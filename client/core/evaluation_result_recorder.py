@@ -395,26 +395,6 @@ class EvaluationResultRecorder:
     def _timestamp(self, time_stamp) -> str:
         dt = datetime.fromtimestamp(time_stamp)
         return dt.strftime("%Y-%m-%d %H:%M:%S.%f")
-    def pause(self) -> None:
-        """Pause the timer for the currently running record."""
-        pass
-        # with self._lock:
-        #     running = self._find_running_unlocked()
-        #     if running is None or running.get('paused_at') is not None:
-        #         return
-        #     if running.get('status') != 'running':
-        #         return
-        #     running['paused_at'] = time.time()
-
-    def resume(self) -> None:
-        """Resume the timer for the currently paused record."""
-        pass
-        # with self._lock:
-        #     running = self._find_running_unlocked()
-        #     if running is None or running.get('paused_at') is None:
-        #         return
-        #     paused_at = float(running.pop('paused_at'))
-        #     running['paused_s'] = round(float(running.get('paused_s', 0.0)) + (time.time() - paused_at), 1)
 
     def _enqueue_eval_record_crud(self, command: str, record_id: int, score: Optional[float] = None, note: str = "", task_path: str = "") -> None:
         """Publish one CRUD command to the shared queue for writer-side sync."""
