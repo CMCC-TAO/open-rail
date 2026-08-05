@@ -209,7 +209,8 @@ class VLAClientAsync():
 
     def start_recording(self) -> str:
         self.config.record.switch = True
-        task_dir = self.data_record_manager.start_recording(self.config.language.task_id)
+        task_dir = self.data_record_manager.start_recording(task_id=self.config.language.task_id, 
+                                                            sub_task_id=self.config.language.sub_task_id)
         return task_dir
 
     def stop_recording(self):
