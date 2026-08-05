@@ -552,7 +552,9 @@ class EvaluationResultRecorder:
                 writer = csv.writer(f, lineterminator='\n')
                 writer.writerow(self.CSV_HEADERS)
                 for record in self._eval_records:
-                    writer.writerow(self._record_to_csv_row(record))
+                    csv_row = self._record_to_csv_row(record)
+                    # self.logger.info(f"csv row: {csv_row}")
+                    writer.writerow(csv_row)
 
             # self.logger.debug(f"EvalLogRecorder: flushed {len(records_copy)} records to {self._save_path}")
         except Exception as e:
@@ -586,7 +588,7 @@ class EvaluationResultRecorder:
         return [
             record.get('id', ''),
             record.get('task_id', ''),
-            record.get('sub_task_id', 0) + 1,
+            record.get('sub_task_id', 0) + 1 if record.get('sub_task_id', 0) is not None else 1,
             record.get('instruction', ''),
             record.get('start_time', ''),
             record.get('end_time', ''),
