@@ -244,7 +244,7 @@ class EvaluationResultRecorder:
             self._eval_records_for_share.put(targets)
             return
 
-        self.logger.warning(f"Unsupported target type for _sync_eval_records_for_share: {type(targets)}")
+        self.logger.warning(f"Unsupported target type: {type(targets)}, only support dict and int.")
 
     def _is_need_load(self, save_path: str) -> bool:
         """Return true when eval_dir assigned or changed. Called in main process."""
@@ -255,46 +255,9 @@ class EvaluationResultRecorder:
         self.logger.info(f"Eval directory: {self._eval_dir_for_browse}, need_load: {need_load}")
         return need_load
 
-    def begin_recording(self, eval_record_id: int):
+    def begin_recording(self, eval_record_id: int, sub_task_id: int):
         self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
-        self._create_new_record(eval_record_id=eval_record_id)
-
-    def _create_new_record(self, eval_record_id: int):
-        self._obv_count = 0
-        # self._eval_record_start_time = None
-        self._current_record = {
-            'id': eval_record_id,
-            'task_id': None,
-            'sub_task_id': None,
-            'instruction': None,
-            'start_time': None,
-            'end_time': None,
-            'duration': None,
-            # 'paused_s': 0.0,
-            # 'paused_at': None,
-            # 'status': 'running',
-            'score': None,
-            'note': '',
-            'episode_id': self._episode_id,
-            'mode': None,
-            'wait_time': None,
-            'control_period': None,
-            'control_speed': None,
-            'inter_chunk_mode': None,
-            'intra_chunk_mode': None,
-            'model_type': None,
-            'model_path': None,
-            # 'task_name': None,
-            'obv_count': None,
-            'obv_fps': [],
-            'infer_count': [],
-            'img_proc_time': [],
-            'avg_infer_time': [],
-            'avg_intra_traj_time': [],
-            'avg_inter_traj_time': [],
-            'avg_comm_time': [],
-        }
-        self._eval_records.append(self._current_record)
+        self._create_new_record(eval_record_id=eval_record_id, sub_task_id=sub_task_id)
 
     def end_recording(self):
         record_id = self._finalize_current_record()
@@ -327,7 +290,7 @@ class EvaluationResultRecorder:
         try:
             self._eval_record_stop_time = time.time()
             # record info for first frame of a sub-task
-            if self._current_record['sub_task_id'] is None:
+            if self._current_record['task_id'] is None:
                 # assign value explicitly
                 self._init_current_record(step_extra=step_extra)
             # record info for the other frames of a sub-task
@@ -339,7 +302,7 @@ class EvaluationResultRecorder:
                 record_id, _ = self._finalize_current_record()
                 self._flush_to_disk()
                 # start a new record
-                self._create_new_record(record_id + 1)
+                self._create_new_record(eval_record_id=record_id + 1, sub_task_id=step_extra.get('language_status', {}).get('sub_task_id', None))
                 self._init_current_record(step_extra=step_extra)
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
@@ -349,6 +312,45 @@ class EvaluationResultRecorder:
         # finally:
             # self.logger.info("Writing frame exited.")
             # self.release_writers()
+    def _create_new_record(self, eval_record_id: int, sub_task_id: int):
+        self._obv_count = 0
+        self._eval_record_start_time = None
+        self._eval_record_stop_time = None
+        self._current_record = {
+            'id': eval_record_id,
+            'task_id': None,
+            'sub_task_id': sub_task_id,
+            'instruction': None,
+            'start_time': None,
+            'end_time': None,
+            'duration': None,
+            # 'paused_s': 0.0,
+            # 'paused_at': None,
+            # 'status': 'running',
+            'score': None,
+            'note': '',
+            'episode_id': self._episode_id,
+            'mode': None,
+            'wait_time': None,
+            'control_period': None,
+            'control_speed': None,
+            'inter_chunk_mode': None,
+            'intra_chunk_mode': None,
+            'model_type': None,
+            'model_path': None,
+            # 'task_name': None,
+            'obv_count': None,
+            'obv_fps': [],
+            'infer_count': [],
+            'img_proc_time': [],
+            'avg_infer_time': [],
+            'avg_intra_traj_time': [],
+            'avg_inter_traj_time': [],
+            'avg_comm_time': [],
+        }
+        self._eval_records.append(self._current_record)
+        self._sync_eval_records_for_share(targets=self._current_record)
+
     def _init_current_record(self, step_extra: dict):
         self._eval_record_start_time = time.time()
         # self._obv_count += 1
@@ -369,7 +371,6 @@ class EvaluationResultRecorder:
         self._current_record['instruction'] = language_status.get('language', None)
         # self._current_record['episode_id'] = step_runtime.get('episode_id', None)
         self._updata_current_record(step_extra=step_extra)
-        self._sync_eval_records_for_share(targets=self._current_record)
     
     def _updata_current_record(self, step_extra: dict):
         self._obv_count += 1
@@ -385,9 +386,9 @@ class EvaluationResultRecorder:
 
     def _finalize_current_record(self) -> tuple[int, float]:
         self._current_record['obv_count'] = self._obv_count
-        self._current_record['start_time'] = self._timestamp(self._eval_record_start_time)
-        self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time)
-        self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 1)
+        self._current_record['start_time'] = self._timestamp(self._eval_record_start_time) if self._eval_record_start_time is not None else None
+        self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time) if self._eval_record_stop_time is not None else None
+        self._current_record['duration'] = round(self._eval_record_stop_time - self._eval_record_start_time, 1) if self._eval_record_start_time is not None and self._eval_record_stop_time is not None else 0.0
         self._sync_eval_records_for_share(targets=self._current_record)
         return self._current_record['id']
     
