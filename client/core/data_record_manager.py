@@ -81,8 +81,8 @@ class DataRecordManager:
         self.shared_data.total_videos = self.manager.Value('i', 0)
         self.shared_data.total_episodes = self.manager.Value('i', 0)
         self.shared_data.episode_chunk = self.manager.Value('i', 0)
-        self.shared_data.episode_index = self.manager.Value('i', -1)
-        self.shared_data.eval_record_id = self.manager.Value('i', -1) # id for new record
+        self.shared_data.episode_index = self.manager.Value('i', 0)
+        self.shared_data.eval_record_id = self.manager.Value('i', 0) # id for new record
         # self.shared_data.eval_record_duration = self.manager.Value('f', 0.0)
         self.shared_data.running = self.manager.Value('b', False)
         # self.shared_data.episode_parquet_list = self.manager.list()
