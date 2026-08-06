@@ -310,7 +310,7 @@ class EvaluationResultRecorder:
             # New sub-task, save the current record and start a new record
             else:
                 # save the current record
-                record_id, _ = self._finalize_current_record()
+                record_id = self._finalize_current_record()
                 self._flush_to_disk()
                 # start a new record
                 self._create_new_record(eval_record_id=record_id + 1, sub_task_id=step_extra.get('language_status', {}).get('sub_task_id', None))
@@ -364,6 +364,7 @@ class EvaluationResultRecorder:
         }
         self._eval_records.append(self._current_record)
         self._sync_eval_records_for_share(targets=self._current_record)
+        self.logger.info(f"Create new evaluation record, record_id={eval_record_id}, sub_task_id={sub_task_id}")
 
     def _init_current_record(self, step_extra: dict):
         self._eval_record_start_time = time.time()

@@ -21,7 +21,7 @@ function renderStats(data) {
   $('val-net-latency').textContent   = data.avg_comm_time != null
     ? (data.avg_comm_time * 1000).toFixed(1) + ' ms' : '–';
 
-  updateTaskProgress(data?.current_prob_progress, data?.sub_task_id, data?.task_finished);
+  updateTaskProgress(data?.current_prob_progress, data?.sub_task_id, data?.task_finished, data?.sub_task_finished);
 
   const cpuVal = Number(data.cpu_usage);
   const gpuVal = Number(data.gpu_usage);
@@ -102,7 +102,7 @@ function renderKV(containerId, obj) {
 }
 
 
-async function updateTaskProgress(rawProgress, subTaskId = null, taskFinished = false) {
+async function updateTaskProgress(rawProgress, subTaskId = null, taskFinished = false, subTaskFinished = false) {
   const fillEl = $('task-progress-fill');
   const valueEl = $('task-progress-value');
   if (!fillEl || !valueEl) return;
@@ -119,6 +119,26 @@ async function updateTaskProgress(rawProgress, subTaskId = null, taskFinished = 
   valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
   renderSubTask(subTaskId);
   handleTaskCompletion(taskFinished);
+  handleSubTaskRecordingRefresh(subTaskFinished);
+}
+
+async function handleSubTaskRecordingRefresh(subTaskFinished = false) {
+  if (!subTaskFinished) return;
+
+  const panelExpanded = (typeof isRecordingPanelExpanded === 'function')
+    ? isRecordingPanelExpanded()
+    : (() => {
+        const body = $('recording-body');
+        return !!body && !body.classList.contains('collapsed');
+      })();
+
+  if (!panelExpanded || typeof refreshRecordingFileList !== 'function') return;
+
+  try {
+    await refreshRecordingFileList();
+  } catch (_) {
+    // no-op: apiFetch already handles toasts
+  }
 }
 
 async function handleTaskCompletion(taskFinished = false) {
