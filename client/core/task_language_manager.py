@@ -95,6 +95,7 @@ class TaskLanguageManager:
             # new task
             self.is_task_finished = False
             self.is_sub_task_finished = False
+
     @property
     def status(self):
         currt_status = {
@@ -104,9 +105,13 @@ class TaskLanguageManager:
             "task_id": self.config.task_id,
             "task_finished": self.is_task_finished
         }
+        # print(f"DEBUG: sub_task_finished={self.is_sub_task_finished}")
+        return currt_status
+
+    def reset_sub_task(self):
         if self.is_sub_task_finished:
             self.is_sub_task_finished = False
-        return currt_status
+    
     def _resolve_task_file_path(self, file_path: str) -> str:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return file_path if os.path.isabs(file_path) else os.path.join(root_dir, "conf", file_path)

@@ -123,6 +123,9 @@ async function updateTaskProgress(rawProgress, subTaskId = null, taskFinished = 
 }
 
 async function handleSubTaskRecordingRefresh(subTaskFinished = false) {
+  // Log subTaskFinished right at the beginning
+  console.log('handleSubTaskRecordingRefresh - subTaskFinished:', subTaskFinished);
+
   if (!subTaskFinished) return;
 
   const panelExpanded = (typeof isRecordingPanelExpanded === 'function')
@@ -131,6 +134,9 @@ async function handleSubTaskRecordingRefresh(subTaskFinished = false) {
         const body = $('recording-body');
         return !!body && !body.classList.contains('collapsed');
       })();
+  
+  // Log panelExpanded after it is evaluated
+  console.log('handleSubTaskRecordingRefresh - panelExpanded:', panelExpanded);
 
   if (!panelExpanded || typeof refreshRecordingFileList !== 'function') return;
 
@@ -146,6 +152,11 @@ async function handleTaskCompletion(taskFinished = false) {
   if (!autoChk || !autoChk.checked) return;
   if (!App.isRunning || App.isPaused) return;
   if (!taskFinished) return;
+
+  if (App.isRecording) {
+    // Stop recording
+    await stopDataRecording({ silent: false, refreshList: true });
+  }
 
   try {
     await apiFetch('/api/client/pause', {

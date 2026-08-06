@@ -663,6 +663,9 @@ def _collect_stats() -> dict:
         base.update(vla_client.runtime_status)
         base.update(vla_client.language_status)
         base.update(vla_client.server_status)
+
+        if base.get("sub_task_finished", False):
+            vla_client.reset_sub_task()
         
     except Exception as e:
         # base["debug_info"] = f"stats error: {e}"

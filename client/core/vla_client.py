@@ -224,6 +224,9 @@ class VLAClientAsync():
     def resume_recording(self):
         if self.config.record.switch:
             self.data_record_manager.resume_recording()
+    
+    def reset_sub_task(self):
+        self.task_language_manager.reset_sub_task()
 
     def delete_recording_item(self, episode_id: Optional[str] = None, record_id: Optional[int] = None):
         if episode_id is not None:
