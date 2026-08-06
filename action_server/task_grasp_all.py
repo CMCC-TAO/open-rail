@@ -256,7 +256,7 @@ def _wait_for_movement(robot_body, target_pose: np.ndarray,
 
 
 def _do_finish_grasp(goal_handle, context, send_feedback_fn) -> bool:
-    """执行 finish_grasp 阶段：获取手掌 -> 安全抬臂 -> 垂直复位
+    """执行 finish_grasp 阶段：获取手掌 -> 安全抬臂 -> 垂直复位 -> 清理 VLA 组件
 
     Returns:
         True 成功, False 失败
@@ -288,6 +288,10 @@ def _do_finish_grasp(goal_handle, context, send_feedback_fn) -> bool:
         robot_body.reset_robot(target_pose=reset_pose,
                                max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
         _wait_for_movement(robot_body, reset_pose)  # 等待机器人物理到位
+
+        # 清理 VLA 组件（停止 observe/inference 线程，与 task_finish_grasp.py 对齐）
+        send_feedback_fn(goal_handle, 97, "正在清理 VLA 推理资源...")
+        context.clear_vla_components()
 
         return True
     except Exception as e:
