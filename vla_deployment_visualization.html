@@ -156,7 +156,7 @@
 │   ├── ObsDataBridge         内联于 dispatcher(WS 9001)</span>
 │   ├── task_init_grasp.py    <span style="color:var(--text-dim);">初始化抓取</span>
 │   ├── task_grasp.py         <span style="color:var(--text-dim);">单手抓取</span>
-│   ├── task_grasp_all.py     <span style="color:var(--text-dim);">双手抓取</span>
+│   ├── task_grasp_all.py     <span style="color:var(--text-dim);">全流程抓取(init+grasp+finish)</span>
 │   ├── task_finish_grasp.py  <span style="color:var(--text-dim);">完成抓取</span>
 │   ├── task_deliver.py       <span style="color:var(--text-dim);">递送(4种目标变体)</span>
 │   ├── task_place.py         <span style="color:var(--text-dim);">放置(4种目标变体)</span>
@@ -823,8 +823,7 @@ elif mean &lt; min_threshold: gripper = 0.0
         <strong>grasp:init</strong> → task_init_grasp.py<br>
         <strong>grasp</strong> → task_grasp.py（单手抓取）<br>
         <strong>grasp:finish</strong> → task_finish_grasp.py<br>
-        <strong>grasp_all</strong> → task_grasp_all.py（双手）<br>
-        <strong>grasp:all</strong> → 同上<br>
+        <strong>grasp:all</strong>（task="grasp" + waypoint="all"）→ task_grasp_all.py（全流程抓取）<br>
         <strong>deliver:left/right/one/both arm</strong> → task_deliver.py（4种目标变体）<br>
         <strong>place:left/right/one/both arm</strong> → task_place.py（4种目标变体）<br>
         <strong>release:left/right/both hand</strong> → task_release.py（3种目标变体）<br>

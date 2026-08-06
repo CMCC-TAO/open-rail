@@ -1,7 +1,7 @@
 """
-grasp_all 任务 - 全流程抓取（init_grasp + grasp + finish_grasp）
+全流程抓取任务 - init_grasp + grasp + finish_grasp
 
-当 waypoint="all" 时，执行完整的抓取全流程：
+协议触发方式: task="grasp" + waypoint="all" 时，执行完整的抓取全流程：
   1. init_grasp: 安全抬臂握拳 -> 准备抓取姿态
   2. grasp: VLA 推理执行抓取（最多 3 次重试）
   3. finish_grasp: 安全抬臂 -> 垂直复位
@@ -300,7 +300,7 @@ def _do_finish_grasp(goal_handle, context, send_feedback_fn) -> bool:
 # ==============================================
 
 class GraspAllHandler(AbstractTaskHandler):
-    """'grasp_all' 任务处理器 — 全流程抓取
+    """'grasp' task + waypoint='all' 任务处理器 — 全流程抓取
 
     完整流程:
       1. init_grasp: 安全抬臂握拳 -> 准备抓取姿态
@@ -313,7 +313,7 @@ class GraspAllHandler(AbstractTaskHandler):
 
     @property
     def task_name(self) -> str:
-        return "grasp_all"
+        return "grasp"
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
         _t0 = time.time()

@@ -91,7 +91,7 @@ AVAILABLE_TASKS = {
         "name": "grasp all one water",
         "desc": "全流程抓取（带重试）— init_grasp + grasp(最多3次) + finish_grasp，target=one water",
         "params": {
-            "task": "grasp_all",
+            "task": "grasp",
             "target": "one water",
             "waypoint": "all",
         },

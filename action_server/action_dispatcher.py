@@ -394,7 +394,9 @@ class VLAActionDispatcher(Node):
 
         try:
             from action_server.task_grasp_all import GraspAllHandler
-            self.register_handler(GraspAllHandler())
+            # 协议触发方式: task="grasp" + waypoint="all"
+            self._handlers["grasp:all"] = GraspAllHandler()
+            self.get_logger().info('Registered handler for task="grasp:all" (waypoint=all)')
         except ImportError as e:
             self.get_logger().warn(f'Failed to load grasp_all handler: {e}')
 
@@ -499,10 +501,16 @@ class VLAActionDispatcher(Node):
                                error_message='Missing "task" field in params')
 
         # ========== 2. 路由到 handler ==========
-        # 复合键优先: "task:target" → 回退到 "task"
+        # 匹配顺序: "task:target" → "task:waypoint" → "task"
         target = params.get('target', '')
+        waypoint = params.get('waypoint', '')
         compound_key = f"{task_name}:{target}" if target else task_name
-        handler = self._handlers.get(compound_key) or self._handlers.get(task_name)
+        waypoint_key = f"{task_name}:{waypoint}" if waypoint else None
+        handler = (
+            self._handlers.get(compound_key)
+            or (self._handlers.get(waypoint_key) if waypoint_key else None)
+            or self._handlers.get(task_name)
+        )
         if handler is None:
             known = list(self._handlers.keys())
             return self._abort(goal_handle, error_code=3,
