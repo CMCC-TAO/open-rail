@@ -28,8 +28,9 @@ class TaskLanguageManager:
                                                                                 sub_task_id=self.config.sub_task_id)
         self.task_progress_queue: Deque[float] = deque()
         self.ready_for_try: bool = True
-        self.ready_for_confirm: bool = False
-        self.is_task_finished: bool = False
+        self.ready_for_confirm: bool = False    # Confirm advance to next sub-task and whole task finished or not
+        self.is_task_finished: bool = False     # Task finish flag, True for task finished.
+        self.is_sub_task_finished: bool = False # Sub-Task finish flag, True for sub-task finished.
         self.sub_task_id_tmp: int = int(self.config.sub_task_id)
         self.logger.info(f"Task language manager inited. tasks={self.task_language_map}, currt_language_instruction={self.currt_language_instruction}")
 
@@ -84,6 +85,7 @@ class TaskLanguageManager:
         self.ready_for_try = True
         self.ready_for_confirm = False
         self.is_task_finished = False
+        self.is_sub_task_finished = False
         self.currt_language_instruction, self.currt_task_steps = self._retrieve_language_instruction(task_id=self.config.task_id,
                                                                                 sub_task_id=self.config.sub_task_id)
     
@@ -92,14 +94,19 @@ class TaskLanguageManager:
         if self.config.auto_mode and self.is_task_finished:
             # new task
             self.is_task_finished = False
+            self.is_sub_task_finished = False
     @property
     def status(self):
-        return {
+        currt_status = {
             "language": self.currt_language_instruction,
             "sub_task_id": self.config.sub_task_id,
+            "sub_task_finished": self.is_sub_task_finished,
             "task_id": self.config.task_id,
             "task_finished": self.is_task_finished
         }
+        if self.is_sub_task_finished:
+            self.is_sub_task_finished = False
+        return currt_status
     def _resolve_task_file_path(self, file_path: str) -> str:
         root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return file_path if os.path.isabs(file_path) else os.path.join(root_dir, "conf", file_path)
@@ -201,6 +208,7 @@ class TaskLanguageManager:
             avg_task_progress_next = np.mean(task_progress_next[:length]) if length > 0 else 0.0
             if avg_task_progress_next < self.config.task_progress_threshold / 10.0:
                 # Only reset if the next sub-task progress is very low, indicating a new sub-task has started
+                self.is_sub_task_finished = True
                 self.logger.info(f"Task progress is ready to advance to next subtask: {avg_task_progress_next:.2f}")
                 # check task is finished
                 if self.sub_task_id_tmp >= self.currt_task_steps:
@@ -217,9 +225,6 @@ class TaskLanguageManager:
             self.ready_for_try = True
             self.ready_for_confirm = False
         
-        # if self.is_task_finished:
-        #     self.is_task_finished = False
-
     def _average_task_progress(self, win_size: int) -> float:
         """Return average of the latest win_size task progress values, or 0.0 if not enough data."""
         # print(f"Debug: window size for average task progress: {win_size}")
