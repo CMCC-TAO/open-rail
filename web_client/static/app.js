@@ -647,8 +647,14 @@ async function wireEvents() {
     try {
       if (App.isPaused) {
         await apiFetch('/api/client/resume', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
+        if (App.isRecording && typeof resumeDataRecording === 'function') {
+          resumeDataRecording(silent=false, refreshList=false);
+        }
       } else {
         await apiFetch('/api/client/pause', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
+        if (App.isRecording && typeof pauseDataRecording === 'function') {
+          pauseDataRecording(silent=false, refreshList=false);
+        }
       }
     } catch (e) { /* toasted */ }
     finally {

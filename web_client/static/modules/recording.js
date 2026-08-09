@@ -136,6 +136,37 @@ async function stopDataRecording({ silent = false, refreshList = true } = {}) {
   }
 }
 
+async function pauseDataRecording({ silent = false, refreshList = true } = {}) {
+  try {
+    const res = await apiFetch('/api/client/record/pause', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    if (refreshList) await refreshRecordingFileList();
+    // syncRecordingSwitchUI();
+    if (!silent) toast('Recording paused.', 'ok');
+    return true;
+  } catch (_) { 
+    /* toasted */ 
+    return false;
+  }
+}
+
+async function resumeDataRecording({ silent = false, refreshList = true } = {}) {
+  try {
+    const res = await apiFetch('/api/client/record/resume', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    if (refreshList) await refreshRecordingFileList();
+    // syncRecordingSwitchUI();
+    if (!silent) toast('Recording resumed.', 'ok');
+    return true;
+  } catch (_) { 
+    /* toasted */ 
+    return false;
+  }
+}
 async function renderRecordingFileList(data) {
   const listEl = $('recording-file-list');
   const taskSel = $('recording-task-select');

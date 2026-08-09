@@ -1528,7 +1528,6 @@ def _pause_vla_client(vla_client) -> dict:
         _stop_inference(vla_client)
     if state.get("control_running", False):
         _stop_control(vla_client)
-    vla_client.pause_recording()
     return state
 
 
@@ -1541,7 +1540,6 @@ def _resume_vla_client(vla_client, state: Optional[dict] = None):
 
     if state.get("control_running", False):
         _start_control(vla_client)
-    vla_client.resume_recording()
     return
 
 # Background helpers to avoid blocking the asyncio thread
