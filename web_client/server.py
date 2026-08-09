@@ -1334,8 +1334,8 @@ def _ensure_vla_client_created():
         intra_chunk_smoother = IntraChunkSmoother(config=client_config.intra_chunk)
         task_language_manager = TaskLanguageManager(config=client_config.language)
 
-        from client.core.vla_client import VLAClientAsync
-        vla_client = VLAClientAsync(
+        from client.core.vla_client import VLAClient
+        vla_client = VLAClient(
             config=client_config,
             realtime_data_manager=realtime_data_manager,
             inter_chunk_fuser=inter_chunk_fuser,

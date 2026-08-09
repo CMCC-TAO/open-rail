@@ -21,7 +21,7 @@ from client.core.data_record_manager import DataRecordManager
 from client.robots.base_robot import RobotBase
 
 
-class VLAClientAsync():
+class VLAClient():
     """VLA (Vision-Language-Action) Client for real-time robot control.
     
     This class manages the complete pipeline for VLA-based robot control, including:
