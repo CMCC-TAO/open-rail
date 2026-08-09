@@ -621,13 +621,15 @@ async function wireEvents() {
       // Now start client
       toast('Client starting…', 'info');
       await apiFetch('/api/client/start', { method: 'POST', timeoutMs: 15000 });
+      setRunningUI(true, false);
       // Now data recording if in auto mode
       const autoCheckRecordMode = $('chk-record-auto');
+      // console.log('Data recording auto check', autoCheckRecordMode.checked);
       if (autoCheckRecordMode && autoCheckRecordMode.checked) {
-        // console.log('Data recording auto check', autoCheckRecordMode.checked);
         const startStopRecordingBtn = $('btn-recording-startstop');
         // Trigger the click event programmatically
         if (startStopRecordingBtn) {
+          startStopRecordingBtn.disabled = false
           startStopRecordingBtn.click();
           // console.log('Data recording started.');
         }

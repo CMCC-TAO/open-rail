@@ -691,12 +691,14 @@ function setupRecordingPanel() {
   const startStopBtn = $('btn-recording-startstop');
   if (startStopBtn) {
     startStopBtn.addEventListener('click', async function() {
+      // console.log('Data recording button clicked.');
       if (!App.isRunning) {
         toast('Client is not running.', 'warn');
         syncRecordingSwitchUI();
         return;
       }
 
+      // console.log('Data recording button working.');
       if (App.isRecording) {
         // Stop recording
         await stopDataRecording({ silent: false, refreshList: true });
