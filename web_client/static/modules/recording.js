@@ -1,6 +1,7 @@
 function syncRecordingSwitchUI() {
   const running = !!App.isRunning;
   const recording = !!App.isRecording;
+  const paused = !!App.isRecordingPaused;
   const btnStartStop = $('btn-recording-startstop');
   if (!btnStartStop) return;
   // const btnPauseResume = $('btn-recording-pauseresume');
@@ -17,6 +18,9 @@ function syncRecordingSwitchUI() {
     btnStartStop.innerHTML = '<i class="fas fa-play"></i> Start';
     btnStartStop.className = 'btn btn-sm btn-success';
   }
+
+  syncRecordingTimerState({ running, recording, paused });
+
   // if (recording) {
   //   btnPauseResume.innerHTML = '<i class="fas fa-pause"></i> Pause';
   //   btnPauseResume.className = 'btn btn-sm btn-danger';
@@ -24,6 +28,117 @@ function syncRecordingSwitchUI() {
   //   btnPauseResume.innerHTML = '<i class="fas fa-play"></i> Resume';
   //   btnPauseResume.className = 'btn btn-sm btn-success';
   // }
+}
+
+const RecordingTimer = {
+  elapsedMs: 0,
+  startedAtMs: null,
+  ticker: null,
+  status: 'stopped',
+};
+
+function _formatRecordingDuration(ms) {
+  const safeMs = Number.isFinite(ms) && ms > 0 ? ms : 0;
+  const totalSeconds = Math.floor(safeMs / 1000);
+  const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+  const ss = String(totalSeconds % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
+function _currentRecordingElapsedMs() {
+  if (RecordingTimer.startedAtMs == null) return RecordingTimer.elapsedMs;
+  return RecordingTimer.elapsedMs + Math.max(0, Date.now() - RecordingTimer.startedAtMs);
+}
+
+function _clearRecordingTicker() {
+  if (!RecordingTimer.ticker) return;
+  clearInterval(RecordingTimer.ticker);
+  RecordingTimer.ticker = null;
+}
+
+function _startRecordingTicker() {
+  if (RecordingTimer.ticker) return;
+  RecordingTimer.ticker = setInterval(() => {
+    renderRecordingTimer();
+  }, 250);
+}
+
+function renderRecordingTimer() {
+  const timerEl = $('recording-timer');
+  const timeEl = $('recording-timer-time');
+  const statusEl = $('recording-timer-status');
+  if (!timerEl || !timeEl || !statusEl) return;
+
+  const elapsed = _currentRecordingElapsedMs();
+  timeEl.textContent = _formatRecordingDuration(elapsed);
+  statusEl.textContent = RecordingTimer.status;
+
+  timerEl.classList.remove('recording-timer-recording', 'recording-timer-paused', 'recording-timer-stopped');
+  timerEl.classList.add(`recording-timer-${RecordingTimer.status}`);
+}
+
+function setRecordingTimerStatus(status) {
+  const nextStatus = status === 'recording' || status === 'paused' ? status : 'stopped';
+  RecordingTimer.status = nextStatus;
+  renderRecordingTimer();
+}
+
+function startRecordingTimer({ reset = true } = {}) {
+  if (reset) {
+    RecordingTimer.elapsedMs = 0;
+  }
+  RecordingTimer.startedAtMs = Date.now();
+  setRecordingTimerStatus('recording');
+  _startRecordingTicker();
+}
+
+function pauseRecordingTimer() {
+  if (RecordingTimer.startedAtMs != null) {
+    RecordingTimer.elapsedMs = _currentRecordingElapsedMs();
+    RecordingTimer.startedAtMs = null;
+  }
+  setRecordingTimerStatus('paused');
+  _clearRecordingTicker();
+}
+
+function resumeRecordingTimer() {
+  if (RecordingTimer.status !== 'paused') return;
+  RecordingTimer.startedAtMs = Date.now();
+  setRecordingTimerStatus('recording');
+  _startRecordingTicker();
+}
+
+function stopRecordingTimer({ reset = false } = {}) {
+  RecordingTimer.elapsedMs = _currentRecordingElapsedMs();
+  RecordingTimer.startedAtMs = null;
+  _clearRecordingTicker();
+  setRecordingTimerStatus('stopped');
+  if (reset) {
+    RecordingTimer.elapsedMs = 0;
+    renderRecordingTimer();
+  }
+}
+
+function syncRecordingTimerState({ running = !!App.isRunning, recording = !!App.isRecording, paused = !!App.isRecordingPaused } = {}) {
+  if (!running || !recording) {
+    stopRecordingTimer();
+    return;
+  }
+  if (paused) {
+    pauseRecordingTimer();
+    return;
+  }
+  if (RecordingTimer.status === 'paused') {
+    resumeRecordingTimer();
+    return;
+  }
+  if (RecordingTimer.startedAtMs == null) {
+    startRecordingTimer({ reset: false });
+  }
+}
+
+function initRecordingTimer() {
+  stopRecordingTimer({ reset: true });
 }
 
 function syncRecordingCheckboxesFromConfig(cfg = App.config) {
@@ -100,6 +215,8 @@ async function startDataRecording({} = {}) {
     } 
 
     App.isRecording = true;
+    App.isRecordingPaused = false;
+    startRecordingTimer({ reset: true });
     if (!App.config || typeof App.config !== 'object') App.config = {};
     if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
     App.config.record.switch = true;
@@ -121,6 +238,8 @@ async function stopDataRecording({ silent = false, refreshList = true } = {}) {
     });
 
     App.isRecording = false;
+    App.isRecordingPaused = false;
+    stopRecordingTimer();
     if (!App.config || typeof App.config !== 'object') App.config = {};
     if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
     App.config.record.switch = false;
@@ -142,8 +261,10 @@ async function pauseDataRecording({ silent = false, refreshList = true } = {}) {
       method: 'POST',
       body: JSON.stringify({}),
     });
+    App.isRecordingPaused = true;
+    pauseRecordingTimer();
     if (refreshList) await refreshRecordingFileList();
-    // syncRecordingSwitchUI();
+    syncRecordingSwitchUI();
     if (!silent) toast('Recording paused.', 'ok');
     return true;
   } catch (_) { 
@@ -158,8 +279,10 @@ async function resumeDataRecording({ silent = false, refreshList = true } = {}) 
       method: 'POST',
       body: JSON.stringify({}),
     });
+    App.isRecordingPaused = false;
+    resumeRecordingTimer();
     if (refreshList) await refreshRecordingFileList();
-    // syncRecordingSwitchUI();
+    syncRecordingSwitchUI();
     if (!silent) toast('Recording resumed.', 'ok');
     return true;
   } catch (_) { 
@@ -687,6 +810,8 @@ async function setRecordSwitch(enable) {
 }
 
 function setupRecordingPanel() {
+  initRecordingTimer();
+
   // Handle the unified start/stop button
   const startStopBtn = $('btn-recording-startstop');
   if (startStopBtn) {
