@@ -29,7 +29,7 @@ function syncRecordingSwitchUI() {
 function syncRecordingCheckboxesFromConfig(cfg = App.config) {
   const episodeChk = $('chk-record-episode');
   const evalLogChk = $('chk-record-eval-log');
-  const autoChk = $('chk-record-auto');
+  const autoCheckRecordMode = $('chk-record-auto');
   const expDataChk = $('chk-record-expdata');
   const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : null;
 
@@ -39,8 +39,8 @@ function syncRecordingCheckboxesFromConfig(cfg = App.config) {
   if (evalLogChk && recordCfg && typeof recordCfg.is_record_eval_log === 'boolean') {
     evalLogChk.checked = recordCfg.is_record_eval_log;
   }
-  if (autoChk && recordCfg && typeof recordCfg.auto === 'boolean') {
-    autoChk.checked = recordCfg.auto;
+  if (autoCheckRecordMode && recordCfg && typeof recordCfg.auto === 'boolean') {
+    autoCheckRecordMode.checked = recordCfg.auto;
   }
   if (expDataChk && recordCfg && typeof recordCfg.is_record_expe_data === 'boolean') {
     expDataChk.checked = recordCfg.is_record_expe_data;
@@ -726,7 +726,7 @@ document.addEventListener('DOMContentLoaded', function() {
   // Restore checkbox states from config and keep UI in sync
   const episodeChk = $('chk-record-episode');
   const evallogChk = $('chk-record-eval-log');
-  const autoChk = $('chk-record-auto');
+  const autoCheckRecordMode = $('chk-record-auto');
   const expDataChk = $('chk-record-expdata');
 
   const getCoreRecordCheckboxes = () => [evallogChk, episodeChk, expDataChk].filter(Boolean);
@@ -788,19 +788,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  if (autoChk) {
-    autoChk.addEventListener('change', async () => {
+  if (autoCheckRecordMode) {
+    autoCheckRecordMode.addEventListener('change', async () => {
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
       const previousValue = !!App.config.record.auto;
-      App.config.record.auto = autoChk.checked;
+      App.config.record.auto = autoCheckRecordMode.checked;
 
       try {
-        await persistRecordingConfigChange({ 'record.auto': autoChk.checked });
+        await persistRecordingConfigChange({ 'record.auto': autoCheckRecordMode.checked });
       } catch (e) {
         App.config.record.auto = previousValue;
-        autoChk.checked = previousValue;
+        autoCheckRecordMode.checked = previousValue;
         syncRecordingCheckboxesFromConfig(App.config);
         console.error('Failed to update auto config:', e);
       }

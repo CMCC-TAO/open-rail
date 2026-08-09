@@ -666,6 +666,9 @@ def _collect_stats() -> dict:
 
         if base.get("sub_task_finished", False):
             vla_client.reset_sub_task()
+
+        if base.get("task_finished", False):
+            vla_client.reset_task()
         
     except Exception as e:
         # base["debug_info"] = f"stats error: {e}"
@@ -2008,6 +2011,27 @@ async def client_record_stop():
     except Exception as e:
         raise HTTPException(500, str(e))
 
+@app.post('/api/client/record/pause')
+async def client_record_pause():
+    try:
+        vla_client, _ = _require_runtime('pause_recording')
+        vla_client.pause_recording()
+        return {'status': 'ok', 'command': 'pause_recording'}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post('/api/client/record/resume')
+async def client_record_resume():
+    try:
+        vla_client, _ = _require_runtime('resume_recording')
+        vla_client.resume_recording()
+        return {'status': 'ok', 'command': 'resume_recording'}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 def _get_eval_recorder():
     with client_state.lock:

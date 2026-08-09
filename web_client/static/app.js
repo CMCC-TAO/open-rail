@@ -124,7 +124,7 @@ async function updateTaskProgress(rawProgress, subTaskId = null, taskFinished = 
 
 async function handleSubTaskRecordingRefresh(subTaskFinished = false) {
   // Log subTaskFinished right at the beginning
-  console.log('handleSubTaskRecordingRefresh - subTaskFinished:', subTaskFinished);
+  // console.log('handleSubTaskRecordingRefresh - subTaskFinished:', subTaskFinished);
 
   if (!subTaskFinished) return;
 
@@ -136,7 +136,7 @@ async function handleSubTaskRecordingRefresh(subTaskFinished = false) {
       })();
   
   // Log panelExpanded after it is evaluated
-  console.log('handleSubTaskRecordingRefresh - panelExpanded:', panelExpanded);
+  // console.log('handleSubTaskRecordingRefresh - panelExpanded:', panelExpanded);
 
   if (!panelExpanded || typeof refreshRecordingFileList !== 'function') return;
 
@@ -148,17 +148,16 @@ async function handleSubTaskRecordingRefresh(subTaskFinished = false) {
 }
 
 async function handleTaskCompletion(taskFinished = false) {
-  const autoChk = $('chk-lang-auto-mode');
-  if (!autoChk || !autoChk.checked) return;
+  const autoCheckLangMode = $('chk-lang-auto-mode');
+  if (!autoCheckLangMode || !autoCheckLangMode.checked) return;
   if (!App.isRunning || App.isPaused) return;
   if (!taskFinished) return;
 
-  if (App.isRecording) {
-    // Stop recording
-    await stopDataRecording({ silent: false, refreshList: true });
-  }
-
   try {
+    if (App.isRecording) {
+      // Stop recording
+      await stopDataRecording({ silent: false, refreshList: true });
+    }
     await apiFetch('/api/client/pause', {
       method: 'POST',
       timeoutMs: 3000,
@@ -175,8 +174,8 @@ async function handleTaskCompletion(taskFinished = false) {
 async function renderSubTask(subTaskId = null) {
   // console.log('renderSubTask called', { subTaskId });
 
-  const autoChk = $('chk-lang-auto-mode');
-  if (!autoChk || !autoChk.checked) {
+  const autoCheckLangMode = $('chk-lang-auto-mode');
+  if (!autoCheckLangMode || !autoCheckLangMode.checked) {
     // console.log('renderSubTask skipped: auto mode disabled or checkbox not found');
     return;
   }
@@ -622,6 +621,8 @@ async function wireEvents() {
       // Now start client
       toast('Client starting…', 'info');
       await apiFetch('/api/client/start', { method: 'POST', timeoutMs: 15000 });
+      // Now data recording if in auto mode
+      // const autoCheckRecordMode = $('chk-record-auto');
     } catch (e) { /* toasted */ }
     finally {
       delete btnStart.dataset.pending;
