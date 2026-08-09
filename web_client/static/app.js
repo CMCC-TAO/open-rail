@@ -649,8 +649,19 @@ async function wireEvents() {
     try {
       if (App.isPaused) {
         await apiFetch('/api/client/resume', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
-        if (App.isRecording && typeof resumeDataRecording === 'function') {
-          resumeDataRecording(silent=false, refreshList=false);
+        if (App.isRecording ) {
+          if (typeof resumeDataRecording === 'function') resumeDataRecording(silent=false, refreshList=false);
+        }
+        else {
+          const autoCheckRecordMode = $('chk-record-auto');
+          if (autoCheckRecordMode && autoCheckRecordMode.checked) {
+            const startStopRecordingBtn = $('btn-recording-startstop');
+            // Trigger the click event programmatically
+            if (startStopRecordingBtn) {
+              startStopRecordingBtn.disabled = false
+              startStopRecordingBtn.click();
+            }
+          }
         }
       } else {
         await apiFetch('/api/client/pause', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
