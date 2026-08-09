@@ -348,6 +348,7 @@ function setRunningUI(running, paused = false) {
 
     if (!running) {
       App.isRecording = false;
+      App.isRecordingPaused = false;
     }
     syncRecordingSwitchUI();
   }
