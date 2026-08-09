@@ -703,6 +703,14 @@ async function wireEvents() {
       const res = await apiFetch('/api/client/observe/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       applyThreadState(res?.data);
       connectCamWS();
+      if (App.isRecording){ 
+        if (!App.isObserveRunning && !App.isRecordingPaused && typeof pauseDataRecording === 'function') {
+          pauseDataRecording(silent=false, refreshList=false);
+        }
+        if (App.isObserveRunning && App.isRecordingPaused && typeof resumeDataRecording === 'function') {
+          resumeDataRecording(silent=false, refreshList=false);
+        }
+      }
     } catch (e) {
       if (e && e.name === 'AbortError') {
         // manual abort from repeated click; keep silent.
@@ -723,6 +731,14 @@ async function wireEvents() {
       const res = await apiFetch('/api/client/infer/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       applyThreadState(res?.data);
       setThreadControlUI();
+      if (App.isRecording){ 
+        if (!App.isInferenceRunning && !App.isRecordingPaused && typeof pauseDataRecording === 'function') {
+          pauseDataRecording(silent=false, refreshList=false);
+        }
+        if (App.isInferenceRunning && App.isRecordingPaused && typeof resumeDataRecording === 'function') {
+          resumeDataRecording(silent=false, refreshList=false);
+        }
+      }
     } catch (_) { /* toasted */ }
     finally {
       if (App.currentFetchController === controller) App.currentFetchController = null;
@@ -740,6 +756,14 @@ async function wireEvents() {
       const res = await apiFetch('/api/client/control/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       applyThreadState(res?.data);
       setThreadControlUI();
+      if (App.isRecording){ 
+        if (!App.isControlRunning && !App.isRecordingPaused && typeof pauseDataRecording === 'function') {
+          pauseDataRecording(silent=false, refreshList=false);
+        }
+        if (App.isControlRunning && App.isRecordingPaused && typeof resumeDataRecording === 'function') {
+          resumeDataRecording(silent=false, refreshList=false);
+        }
+      }
     } catch (_) { /* toasted */ }
     finally {
       if (App.currentFetchController === controller) App.currentFetchController = null;
