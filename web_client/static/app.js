@@ -680,6 +680,17 @@ async function wireEvents() {
   $('btn-reset').addEventListener('click',  async () => {
     await sendControl('reset');
     toast('Robot reset initiated.', 'info');
+    if (App.isRecording ) {
+      const autoCheckRecordMode = $('chk-record-auto');
+      if (autoCheckRecordMode && autoCheckRecordMode.checked) {
+        const startStopRecordingBtn = $('btn-recording-startstop');
+        // Trigger the click event programmatically
+        if (startStopRecordingBtn) {
+          startStopRecordingBtn.disabled = false
+          startStopRecordingBtn.click();
+        }
+      }
+    }
   });
 
   $('btn-observe').addEventListener('click', async () => {

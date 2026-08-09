@@ -30,6 +30,44 @@ class VLAClient():
     - Trajectory generation and fitting
     - Real-time robot control
     - Data recording for dataset creation
+
+    Core functionalities and key methods include:
+    - Pipeline Management: `start()`, `pause()`, `resume()`, and `close()` to control the lifecycle of observation, inference, control, and visualization threads.
+    - Data Recording: `start_recording()`, `stop_recording()`, and `pause_recording()` for capturing observation and action data to build datasets.
+    - Task Management: `reset_task()` and `reset_sub_task()` to handle language instructions and task progression.
+    - Status Monitoring: Properties like `thread_status`, `runtime_status`, and `server_status` to monitor the real-time state of the system.
+
+    Example:
+        >>> config = load_config("config.yaml")
+        >>> robot = MyRobot()
+        >>> client = VLAClient(
+        ...     config=config,
+        ...     realtime_data_manager=rdm,
+        ...     inter_chunk_fuser=fuser,
+        ...     intra_chunk_smoother=smoother,
+        ...     task_language_manager=task_mgr,
+        ...     vla_zmq_client=zmq_client,
+        ...     robot=robot
+        ... )
+        >>> client.start()
+        >>> client.start_recording()
+        >>> # ... perform robot tasks ...
+        >>> client.stop_recording()
+        >>> client.close()
+
+    Args:
+        config (ConfigDict): Configuration dictionary containing all system parameters.
+        realtime_data_manager (RealtimeDataManager): Real-time data manager for handling observation and action data.
+        inter_chunk_fuser (InterChunkFuser): Inter-chunk fuser for blending consecutive action chunks smoothly.
+        intra_chunk_smoother (IntraChunkSmoother): Intra-chunk smoother for action smoothing and fitting within a single chunk.
+        task_language_manager (TaskLanguageManager): Manager for handling task language instructions and sub-task progression.
+        vla_zmq_client (ZMQClient): ZMQ client for communication with the VLA inference server.
+        robot (RobotBase): Robot interface for observation collection and action execution.
+
+    Notes:
+        - Threading: This class internally manages multiple threads (observation, inference, control, and visualization). Ensure thread-safe operations when accessing shared resources externally.
+        - Resource Cleanup: It is crucial to call `close()` to properly stop all running threads, close ZMQ connections, and release system resources before the object is destroyed to prevent zombie threads and memory leaks.
+        - Network Dependency: Real-time inference heavily depends on the connection quality with the VLA server. Network latency or timeouts may cause the control loop to drop frames or pause temporarily.
     """
     def __init__(self, config: ConfigDict,
                 realtime_data_manager: RealtimeDataManager,
@@ -38,15 +76,17 @@ class VLAClient():
                 task_language_manager: TaskLanguageManager,
                 vla_zmq_client: ZMQClient,
                 robot: RobotBase):
-        """Initialize the VLA Client.
-        
+        """
+        Initialize the controller/manager instance with required configurations and components.
+
         Args:
-            config (ConfigDict): Configuration dictionary containing all system parameters
-            realtime_data_manager (RealtimeDataManager): Real-time data manager for handling observation and action data
-            intra_chunk_smoother (IntraChunkSmoother): Intra-chunk smoother for action smoothing and fitting
-            zmq_client (ZMQClient): ZMQ client for communication with VLA inference server
-            vis_action_cams_zmq_client (ZMQClient): ZMQ client for communication with camera-action visualization server
-            robot: Robot interface for observation collection and action execution
+            config (ConfigDict): The main configuration dictionary for the system.
+            realtime_data_manager (RealtimeDataManager): Manager for handling real-time data streams.
+            inter_chunk_fuser (InterChunkFuser): Fuser for integrating data across different chunks.
+            intra_chunk_smoother (IntraChunkSmoother): Smoother for processing data within a single chunk.
+            task_language_manager (TaskLanguageManager): Manager for handling task-level language instructions.
+            vla_zmq_client (ZMQClient): ZeroMQ client for Vision-Language-Action (VLA) model communication.
+            robot (RobotBase): The base robot instance to be controlled.
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
@@ -67,15 +107,6 @@ class VLAClient():
         
         # Define image preprocess function
         self.update_preprocess_func()
-        # if self.config.vision.preprocess.method != 'none':
-        #     preprocess_func = getattr(misc, self.config.vision.preprocess.method)
-        #     self._preprocess_func = lambda img: preprocess_func(
-        #         img,
-        #         target_height=self.config.vision.preprocess.height,
-        #         target_width=self.config.vision.preprocess.width,
-        #         keep_ratio=self.config.vision.preprocess.keep_ratio)
-        # else:
-        #     self._preprocess_func = None
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
@@ -97,25 +128,38 @@ class VLAClient():
         self.current_prob_progress = 0.0
         # self.info_obs, self.info_act = {}, {}
         self.camera_shape_dict = None
-        # self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
-    #################### VLA Client APIs ####################
+        self.logger.info('VLAClient initialized.')
+
+    ######################### VLAClient APIs #########################
     def start_observe(self):
+        """
+        Starts the observation process by activating the observation thread.
+
+        This method sets the running and observation thread flags to True, and starts the observation thread if it is not currently alive.
+
+        Returns:
+            None
+        """
         self.is_running = True
         self.is_observe_thread_running = True
         if not self.observe_thread.is_alive():
             self.observe_thread.start()
+        self.logger.info('VLAClient observe thread started.')
 
     def stop_observe(self):
         self.is_observe_thread_running = False
+        self.logger.info('VLAClient observe thread stopped.')
 
     def start_inference(self):
         self.is_running = True
         self.is_inference_thread_running = True
         if not self.inference_thread.is_alive():
             self.inference_thread.start()
+        self.logger.info('VLAClient inference thread started.')
 
     def stop_inference(self):
         self.is_inference_thread_running = False
+        self.logger.info('VLAClient inference thread stopped.')
 
     def start_control(self):
         self.is_running = True
