@@ -228,6 +228,9 @@ class VLAClientAsync():
     def reset_sub_task(self):
         self.task_language_manager.reset_sub_task()
 
+    def reset_task(self):
+        self.task_language_manager.new_task()
+
     def delete_recording_item(self, episode_id: Optional[str] = None, record_id: Optional[int] = None):
         if episode_id is not None:
             return self.data_record_manager.lerobot_recorder.delete_episode(episode_id=episode_id)

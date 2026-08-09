@@ -171,7 +171,7 @@ async function persistLanguagePatch (patch) {
 function setupLangPanel() {
   const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
-  const autoChk = $('chk-lang-auto-mode');
+  const autoCheckLangMode = $('chk-lang-auto-mode');
   const thresholdInput = $('inp-lang-threshold');
   const winSizeInput = $('inp-lang-win-size');
   let thresholdSaveTimer = null;
@@ -298,9 +298,9 @@ function setupLangPanel() {
     });
   }
 
-  if (autoChk) {
-    autoChk.addEventListener('change', async () => {
-      const enabled = !!autoChk.checked;
+  if (autoCheckLangMode) {
+    autoCheckLangMode.addEventListener('change', async () => {
+      const enabled = !!autoCheckLangMode.checked;
       setAutoModeEditable(enabled);
 
       if (enabled) {
@@ -392,7 +392,7 @@ function setupLangPanel() {
     });
   }
 
-  setAutoModeEditable(!!(autoChk && autoChk.checked));
+  setAutoModeEditable(!!(autoCheckLangMode && autoCheckLangMode.checked));
 }
 
 /** Load language command JSON from App.config.language.file_path (fallback to default endpoint). */
@@ -523,10 +523,10 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   const winSizeRaw = App.config && App.config.language && App.config.language.task_progress_win_size;
   const winSize = Number(winSizeRaw);
 
-  const autoChk = $('chk-lang-auto-mode');
-  if (autoChk) autoChk.checked = autoMode;
+  const autoCheckLangMode = $('chk-lang-auto-mode');
+  if (autoCheckLangMode) autoCheckLangMode.checked = autoMode;
 
-  const editable = !!(autoChk ? autoChk.checked : autoMode);
+  const editable = !!(autoCheckLangMode ? autoCheckLangMode.checked : autoMode);
 
   const thresholdInput = $('inp-lang-threshold');
   if (thresholdInput) {
@@ -719,7 +719,7 @@ setupLanguageShortcuts();
 $('btn-lang-send').addEventListener('click', async () => {
   const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
-  const autoChk = $('chk-lang-auto-mode');
+  const autoCheckLangMode = $('chk-lang-auto-mode');
   const task = taskSel ? taskSel.value : null;
   if (task == null) { toast('Select a valid task.', 'warn'); return; }
   let lang = $('lang-cmd-text').value.trim();
@@ -730,7 +730,7 @@ $('btn-lang-send').addEventListener('click', async () => {
   if (!Number.isFinite(idx) || idx < 0) idx = 0;
 
   // Auto mode should always start from first sub-task.
-  if (autoChk && autoChk.checked) {
+  if (autoCheckLangMode && autoCheckLangMode.checked) {
     idx = 0;
     if (subtaskSel && subtaskSel.value !== '0') {
       subtaskSel.value = '0';

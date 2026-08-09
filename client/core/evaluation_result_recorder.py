@@ -313,8 +313,9 @@ class EvaluationResultRecorder:
                 record_id = self._finalize_current_record()
                 self._flush_to_disk()
                 # start a new record
-                self._create_new_record(eval_record_id=record_id + 1, sub_task_id=step_extra.get('language_status', {}).get('sub_task_id', None))
-                self._init_current_record(step_extra=step_extra)
+                if not step_extra.get('language_status', {}).get('task_finished', False):
+                    self._create_new_record(eval_record_id=record_id + 1, sub_task_id=step_extra.get('language_status', {}).get('sub_task_id', None))
+                    self._init_current_record(step_extra=step_extra)
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
         except Exception as e:
