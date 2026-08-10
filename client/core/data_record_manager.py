@@ -377,6 +377,12 @@ class DataRecordManager:
 
         return None
 
+    def _safe_queue_size(self, queue_obj) -> int:
+        try:
+            return queue_obj.qsize()
+        except Exception:
+            return -1
+
     def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
@@ -397,6 +403,8 @@ class DataRecordManager:
         if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
             return
 
+        start_time = time.perf_counter()
+
         # When action_frame_queue is empty, discard the observation frame
         action = None
         with self.action_lock:
@@ -411,6 +419,17 @@ class DataRecordManager:
         # check state shape 
 
         self.record_queue.put((observation, action, extra_info))
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        queue_size = self._safe_queue_size(self.record_queue)
+        log_message = (
+            f"_add_observation_fun: elapsed={elapsed_ms:.6f}ms, queue_size={queue_size}, "
+            f"action_shape={getattr(action, 'shape', None)}, cam_keys={[k for k in observation.keys() if str(k).startswith('cam.')][:3]}"
+        )
+        if elapsed_ms > 20.0 or (queue_size is not None and queue_size > 20):
+            self.logger.warning(log_message)
+        else:
+            self.logger.debug(log_message)
 
     def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int) -> None:
         """
@@ -473,6 +492,9 @@ class DataRecordManager:
                 # Get state and action data from queue
                 try:
                     step_state, step_action, step_extra = self.record_queue.get(timeout=0.1)
+                    queue_size = self._safe_queue_size(self.record_queue)
+                    if queue_size > 10:
+                        self.logger.warning(f"_write_process_fun: record_queue backlog before processing={queue_size}")
                     if self.config.get('is_record_episode', False):
                         self.lerobot_recorder.add_frame_async(step_state=step_state,
                                                             step_action=step_action,

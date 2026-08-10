@@ -29,38 +29,38 @@ intra_chunk:
       presets:
         left:
           Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - -1.0748
+          - 0.6107
+          - 0.2816
+          - -1.2823
+          - 0.7292
+          - 1.4957
+          - -0.1869
           Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - -1.0748
+          - 0.6107
+          - 0.2816
+          - -1.2823
+          - 0.7292
+          - 1.4957
+          - -0.1869
         right:
           Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - 1.072
+          - -0.6103
+          - -0.278
+          - 1.2822
+          - -0.7299
+          - -1.4929
+          - 0.1873
           Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - 1.072
+          - -0.6103
+          - -0.278
+          - 1.2822
+          - -0.7299
+          - -1.4929
+          - 0.1873
     gripper:
       start: 14
       end: 16
@@ -70,12 +70,62 @@ intra_chunk:
           Default:
           - 0.0
           Custom:
+          - 0.5
+          Open:
           - 0.0
+          Close:
+          - 1.0
         right:
           Default:
           - 0.0
           Custom:
+          - 0.5
+          Open:
           - 0.0
+          Close:
+          - 1.0
+    head:
+      start: 16
+      end: 18
+      policy: manual
+      presets:
+        Default:
+        - 0.0
+        - 0.4363
+        Custom:
+        - 0.0
+        - 0.4363
+    waist:
+      start: 18
+      end: 20
+      policy: manual
+      presets:
+        Default:
+        - 0.4012
+        - 27.0
+        Custom:
+        - 0.4012
+        - 27.0
+    wheel:
+      start: 20
+      end: 22
+      policy: manual
+      presets:
+        Default:
+        - 0
+        - 0
+        Forward:
+        - 0.1
+        - 0.0
+        Backward:
+        - -0.1
+        - 0
+        Left:
+        - 0
+        - 0.1
+        Right:
+        - 0
+        - -0.1
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -104,38 +154,38 @@ rdm:
       presets:
         left:
           Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - -1.0748
+          - 0.6107
+          - 0.2816
+          - -1.2823
+          - 0.7292
+          - 1.4957
+          - -0.1869
           Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - -1.0748
+          - 0.6107
+          - 0.2816
+          - -1.2823
+          - 0.7292
+          - 1.4957
+          - -0.1869
         right:
           Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - 1.072
+          - -0.6103
+          - -0.278
+          - 1.2822
+          - -0.7299
+          - -1.4929
+          - 0.1873
           Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
+          - 1.072
+          - -0.6103
+          - -0.278
+          - 1.2822
+          - -0.7299
+          - -1.4929
+          - 0.1873
     gripper:
       start: 14
       end: 16
@@ -145,19 +195,68 @@ rdm:
           Default:
           - 0.0
           Custom:
+          - 0.5
+          Open:
           - 0.0
+          Close:
+          - 1.0
         right:
           Default:
           - 0.0
           Custom:
+          - 0.5
+          Open:
           - 0.0
+          Close:
+          - 1.0
+    head:
+      start: 16
+      end: 18
+      policy: manual
+      presets:
+        Default:
+        - 0.0
+        - 0.4363
+        Custom:
+        - 0.0
+        - 0.4363
+    waist:
+      start: 18
+      end: 20
+      policy: manual
+      presets:
+        Default:
+        - 0.4012
+        - 27.0
+        Custom:
+        - 0.4012
+        - 27.0
+    wheel:
+      start: 20
+      end: 22
+      policy: manual
+      presets:
+        Default:
+        - 0
+        - 0
+        Forward:
+        - 0.1
+        - 0.0
+        Backward:
+        - -0.1
+        - 0
+        Left:
+        - 0
+        - 0.1
+        Right:
+        - 0
+        - -0.1
   max_len: 100
   mode: async
   observe_fps_window_size: 10
 record:
   auto: false
   evaluation:
-    log_format: json
     scores:
     - 0
     - 0.5
@@ -391,11 +490,11 @@ robots:
             - 0.0
     camera:
       names:
-        hand_left: observation.images.hand_left
-        hand_right: observation.images.hand_right
-        head: observation.images.top_head
+        hand_left: observation.images.left_wrist_rgb
+        hand_right: observation.images.right_wrist_rgb
+        head: observation.images.head_rgb
       ref: head
-    dataset_path: /home/zl/zl/mdata/task_1196
+    dataset_path: /home/robot/Music/task_39_only1
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -563,7 +662,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: a2d
 vision:
   history_frame: false
   preprocess:
@@ -582,15 +681,14 @@ visualize:
   ping_timeout: 10
   port: 8765
   trajectory:
-    play: false
+    play: true
     selected_joints:
-    - 0
-    - 1
-    - 2
-    - 3
+    - 7
     source:
+    - ActionRaw
+    - ActionFitted
     - State
-    window_span_sec: 10.0
+    window_span_sec: 8.0
   updata_fps: 30
 vla_zmq:
   heartbeat_interval: 1000
