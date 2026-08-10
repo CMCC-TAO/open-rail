@@ -17,6 +17,7 @@ import sys
 import os
 import json
 import time
+from typing import cast
 
 # 项目根目录
 _project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -28,11 +29,17 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 from message_center.action import ExecutionUnit
 
+# 全流程抓取配置表（单一数据源）
+# 新增物体只需在 task_grasp.py 映射表 + task_grasp_all.py 配置表登记，
+# 此处自动出现对应测试条目，无需手动维护。
+from action_server.task_grasp_all import GRASP_ALL_SEQUENCES
+
 
 # ============================================================
 # 可用任务清单
 # ============================================================
 AVAILABLE_TASKS = {
+    # ==================== 0-9: 初始化 (init) ====================
     "1": {
         "name": "init grasp",
         "desc": "初始化抓取 — 机器人双臂从当前状态过渡到准备抓取姿态",
@@ -43,42 +50,27 @@ AVAILABLE_TASKS = {
         },
     },
     "2": {
-        "name": "grasp one water",
-        "desc": "单手抓取 — 使用一只手从娃哈哈堆中抓取一瓶",
+        "name": "init zero",
+        "desc": "直接初始化 — 一步到位过渡到默认准备姿态（终点=init grasp，跳过中间安全姿态）",
         "params": {
-            "task": "grasp",
-            "target": "one water",
+            "task": "zero",
+            "target": "init",
             "waypoint": "none",
         },
     },
     "3": {
-        "name": "grasp one Coca-Cola",
-        "desc": "单手抓取 — 使用一只手从可口可乐堆中抓取一瓶",
+        "name": "init clean",
+        "desc": "初始化清理 — 机器人双臂从当前状态过渡到准备桌面清理姿态",
         "params": {
-            "task": "grasp",
-            "target": "one Coca-Cola",
+            "task": "clean",
+            "target": "init",
             "waypoint": "none",
         },
     },
-    "4": {
-        "name": "grasp two water",
-        "desc": "双手抓取 — 使用两只手从娃哈哈堆中抓取最近的两瓶",
-        "params": {
-            "task": "grasp",
-            "target": "two water",
-            "waypoint": "none",
-        },
-    },
-    "5": {
-        "name": "grasp two Coca-Cola",
-        "desc": "双手抓取 — 使用两只手从可口可乐堆中抓取最近的两瓶",
-        "params": {
-            "task": "grasp",
-            "target": "two Coca-Cola",
-            "waypoint": "none",
-        },
-    },
-    "6": {
+    # (4-9 预留: 更多初始化任务)
+
+    # ==================== 10-19: 完成复位 (finish) ====================
+    "10": {
         "name": "finish grasp",
         "desc": "抓取完成复位 — reset_robot 经安全中间姿态过渡到垂直复位姿态",
         "params": {
@@ -87,16 +79,55 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "7": {
-        "name": "grasp all one water",
-        "desc": "全流程抓取（带重试）— init_grasp + grasp(最多3次) + finish_grasp，target=one water",
+    "11": {
+        "name": "finish grasp drainer",
+        "desc": "抓取完成平衡点 — 双臂过渡到平衡点(默认全零)，手掌保持当前状态",
+        "params": {
+            "task": "grasp",
+            "target": "finish",
+            "waypoint": "drainer",
+        },
+    },
+    # (12-19 预留: 更多 finish 任务)
+
+    # ==================== 20+: 常规功能 ====================
+    "20": {
+        "name": "grasp one water",
+        "desc": "单手抓取 — 使用一只手从娃哈哈堆中抓取一瓶",
         "params": {
             "task": "grasp",
             "target": "one water",
-            "waypoint": "all",
+            "waypoint": "none",
         },
     },
-    "8": {
+    "21": {
+        "name": "grasp one Coca-Cola",
+        "desc": "单手抓取 — 使用一只手从可口可乐堆中抓取一瓶",
+        "params": {
+            "task": "grasp",
+            "target": "one Coca-Cola",
+            "waypoint": "none",
+        },
+    },
+    "22": {
+        "name": "grasp two water",
+        "desc": "双手抓取 — 使用两只手从娃哈哈堆中抓取最近的两瓶",
+        "params": {
+            "task": "grasp",
+            "target": "two water",
+            "waypoint": "none",
+        },
+    },
+    "23": {
+        "name": "grasp two Coca-Cola",
+        "desc": "双手抓取 — 使用两只手从可口可乐堆中抓取最近的两瓶",
+        "params": {
+            "task": "grasp",
+            "target": "two Coca-Cola",
+            "waypoint": "none",
+        },
+    },
+    "29": {
         "name": "left arm deliver",
         "desc": "左手递物 — 3s 线性插值到左递物位姿 → 左手全开 → 保持 1s",
         "params": {
@@ -105,7 +136,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "9": {
+    "30": {
         "name": "right arm deliver",
         "desc": "右手递物 — 3s 线性插值到右递物位姿 → 右手全开 → 保持 1s",
         "params": {
@@ -114,7 +145,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "10": {
+    "31": {
         "name": "one arm deliver",
         "desc": "单手递物 — 自动判断哪只手有物体，路由到左手/右手递物",
         "params": {
@@ -123,7 +154,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "11": {
+    "32": {
         "name": "both arm deliver",
         "desc": "双手递物 — 双臂同时递物，需双手都有物体",
         "params": {
@@ -132,7 +163,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "12": {
+    "33": {
         "name": "left arm place",
         "desc": "左手放置 — 录制轨迹回放（左手），过渡+插补+平滑",
         "params": {
@@ -141,7 +172,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "13": {
+    "34": {
         "name": "right arm place",
         "desc": "右手放置 — 录制轨迹回放（右手），过渡+插补+平滑",
         "params": {
@@ -150,7 +181,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "14": {
+    "35": {
         "name": "one arm place",
         "desc": "单手放置 — 自动判断哪只手有物体，路由到左手/右手放置",
         "params": {
@@ -159,7 +190,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "15": {
+    "36": {
         "name": "both arm place",
         "desc": "双手放置 — 录制轨迹回放（双手），需双手都有物体",
         "params": {
@@ -168,7 +199,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "16": {
+    "37": {
         "name": "left hand release",
         "desc": "左手松手 — 左手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -177,7 +208,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "17": {
+    "38": {
         "name": "right hand release",
         "desc": "右手松手 — 右手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -186,7 +217,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "18": {
+    "39": {
         "name": "both hand release",
         "desc": "双手松手 — 双手 hand 的 6 个电机控制量设为 0，维持 1s",
         "params": {
@@ -195,7 +226,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "19": {
+    "40": {
         "name": "left arm reset",
         "desc": "左手复位 — 3s 线性插值到左复位姿态 [0,0.3,0,1.3,0,0,0]，手掌不变",
         "params": {
@@ -204,7 +235,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "20": {
+    "41": {
         "name": "right arm reset",
         "desc": "右手复位 — 3s 线性插值到右复位姿态 [0,-0.3,0,1.3,0,0,0]，手掌不变",
         "params": {
@@ -213,7 +244,7 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "21": {
+    "42": {
         "name": "both arm reset",
         "desc": "双手复位 — 3s 线性插值双臂同时到复位姿态，手掌不变",
         "params": {
@@ -222,12 +253,21 @@ AVAILABLE_TASKS = {
             "waypoint": "none",
         },
     },
-    "22": {
-        "name": "init zero",
-        "desc": "直接初始化 — 一步到位过渡到默认准备姿态（终点=init grasp，跳过中间安全姿态）",
+    "43": {
+        "name": "clean start",
+        "desc": "桌面清洁开始 — 固定语言指令调用 VLA 推理执行桌面清洁（收带垃圾的盘子/收空盘/清理散落垃圾）",
         "params": {
-            "task": "init zero",
-            "target": "none",
+            "task": "clean",
+            "target": "start",
+            "waypoint": "none",
+        },
+    },
+    "44": {
+        "name": "clean all",
+        "desc": "全流程桌面清洁（无重试）— init_clean + clean + finish_clean，target=all",
+        "params": {
+            "task": "clean",
+            "target": "all",
             "waypoint": "none",
         },
     },
@@ -235,54 +275,98 @@ AVAILABLE_TASKS = {
 
 
 # ============================================================
+# 全流程抓取条目：动态生成（与 task_grasp_all.GRASP_ALL_SEQUENCES 保持同步）
+# 新增物体只需在 task_grasp.py 两个映射表 + task_grasp_all.py 配置表登记，
+# 此处自动出现对应测试条目，无需手动维护编号。
+# ============================================================
+_grasp_all_items: list[tuple[str, str]] = []  # (编号, 名称)
+_next_id = 24
+for _target in GRASP_ALL_SEQUENCES:
+    _key = str(_next_id)
+    _next_id += 1
+    AVAILABLE_TASKS[_key] = {
+        "name": f"grasp all {_target}",
+        "desc": f"全流程抓取（带重试）— init_grasp + grasp + finish_grasp，target={_target}",
+        "params": {
+            "task": "grasp",
+            "target": _target,
+            "waypoint": "all",
+        },
+    }
+    _grasp_all_items.append((_key, f"grasp all {_target}"))
+
+# 最大任务编号（用于交互提示）
+_last_id = max(int(k) for k in AVAILABLE_TASKS)
+
+
+# ============================================================
 # 按源文件分组的任务结构（用于菜单展示）
 # ============================================================
 TASK_GROUPS = [
     {
-        "title": "grasp",
+        "title": "init",
         "items": [
             ("1", "init grasp"),
-            ("2", "grasp one water"),
-            ("3", "grasp one Coca-Cola"),
-            ("4", "grasp two water"),
-            ("5", "grasp two Coca-Cola"),
-            ("6", "finish grasp"),
-            ("7", "grasp all one water"),
+            ("2", "init zero"),
+            ("3", "init clean"),
+        ],
+    },
+    {
+        "title": "finish",
+        "items": [
+            ("10", "finish grasp"),
+            ("11", "finish grasp drainer"),
+        ],
+    },
+    {
+        "title": "grasp",
+        "items": [
+            ("20", "grasp one water"),
+            ("21", "grasp one Coca-Cola"),
+            ("22", "grasp two water"),
+            ("23", "grasp two Coca-Cola"),
+            *_grasp_all_items,
         ],
     },
     {
         "title": "deliver",
         "items": [
-            ("8", "left arm deliver"),
-            ("9", "right arm deliver"),
-            ("10", "one arm deliver"),
-            ("11", "both arm deliver"),
+            ("29", "left arm deliver"),
+            ("30", "right arm deliver"),
+            ("31", "one arm deliver"),
+            ("32", "both arm deliver"),
         ],
     },
     {
         "title": "place",
         "items": [
-            ("12", "left arm place"),
-            ("13", "right arm place"),
-            ("14", "one arm place"),
-            ("15", "both arm place"),
+            ("33", "left arm place"),
+            ("34", "right arm place"),
+            ("35", "one arm place"),
+            ("36", "both arm place"),
         ],
     },
     {
         "title": "release",
         "items": [
-            ("16", "left hand release"),
-            ("17", "right hand release"),
-            ("18", "both hand release"),
+            ("37", "left hand release"),
+            ("38", "right hand release"),
+            ("39", "both hand release"),
         ],
     },
     {
         "title": "reset",
         "items": [
-            ("19", "left arm reset"),
-            ("20", "right arm reset"),
-            ("21", "both arm reset"),
-            ("22", "init zero"),
+            ("40", "left arm reset"),
+            ("41", "right arm reset"),
+            ("42", "both arm reset"),
+        ],
+    },
+    {
+        "title": "clean",
+        "items": [
+            ("43", "clean start"),
+            ("44", "clean all"),
         ],
     },
 ]
@@ -440,14 +524,14 @@ def main():
 
     while True:
         print_menu()
-        choice = input('请选择任务编号 (1-22 / q): ').strip().lower()
+        choice = input(f'请选择任务编号 (1-{_last_id} / q): ').strip().lower()
 
         if choice == 'q':
             print('退出测试客户端。')
             break
 
         if choice not in AVAILABLE_TASKS:
-            print(f'⚠  无效选择: "{choice}"，请输入 1-22 或 q')
+            print(f'⚠  无效选择: "{choice}"，请输入 1-{_last_id} 或 q')
             continue
 
         task = AVAILABLE_TASKS[choice]
@@ -456,7 +540,8 @@ def main():
         print()
 
         # 发送 goal（task_src=2 表示图形化编程/测试来源）
-        success = client.send_goal(task_src=2, params=task["params"])
+        params = cast(dict[str, object], task["params"])
+        success = client.send_goal(task_src=2, params=params)
 
         if success:
             print('  ↳ 任务执行成功 ✓')

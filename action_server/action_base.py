@@ -25,6 +25,12 @@ ERR_MONITOR_ERROR = 95
 # task_init_grasp 专用 (1)
 ERR_INIT_GRASP_FAILED = 1
 
+# clean 任务族专用 (51-59)
+ERR_INIT_CLEAN_FAILED = 51
+ERR_CLEAN_TIMEOUT = 52
+ERR_FINISH_CLEAN_FAILED = 53
+# 预留: ERR_CLEAN_ALL_RETRIES_EXHAUSTED = 54
+
 # task_grasp 专用 (11-19)
 ERR_GRASP_TIMEOUT = 11
 ERR_ONE_HAND_FAILED = 12
@@ -34,7 +40,7 @@ ERR_TWO_HAND_BOTH_FAILED = 15
 ERR_MISSING_TARGET = 16
 ERR_UNKNOWN_TARGET = 17
 
-# task_finish_grasp 专用 (18)
+# task_finish 专用 (18)
 ERR_FINISH_GRASP_FAILED = 18
 
 # task_grasp_all 专用 (19)
@@ -73,9 +79,16 @@ ERR_MSG = {
 
     # task_init_grasp 专用
     ERR_INIT_GRASP_FAILED: "Init grasp failed",
+
+    # task_init_clean 专用
+    ERR_INIT_CLEAN_FAILED: "Init clean failed",
+
+    # task_clean 专用
+    ERR_CLEAN_TIMEOUT: "Clean task timed out",
     
-    # task_finish_grasp 专用
+    # task_finish 专用
     ERR_FINISH_GRASP_FAILED: "Finish grasp failed",
+    ERR_FINISH_CLEAN_FAILED: "Finish clean failed",
 
     # task_grasp_all 专用
     ERR_GRASP_ALL_RETRIES_EXHAUSTED: "All 3 grasp attempts exhausted",

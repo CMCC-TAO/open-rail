@@ -30,6 +30,7 @@ TARGET_HAND_MAP: dict[str, str] = {
     "one Coca-Cola": "one hand",
     "two water": "two hand",
     "two Coca-Cola": "two hand",
+    "drainer": "two hand",
 }
 
 # ==============================================
@@ -41,6 +42,7 @@ TARGET_LANGUAGE_MAP: dict[str, str] = {
     "one Coca-Cola": "use one hand to grab one can from a pile of canned drinks.",
     "two water": "use both hands to grab the two nearest bottles from a pile of drinks.",
     "two Coca-Cola": "use both hands to grab the two nearest cans from a pile of canned drinks.",
+    "drainer": "Lift up the drainer in front of you with both hands and keep it balanced.",
 }
 
 

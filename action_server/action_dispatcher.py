@@ -366,25 +366,42 @@ class VLAActionDispatcher(Node):
 
     def _register_builtin_handlers(self) -> None:
         """注册内置任务处理器"""
+        # ===== 统一 init 处理器 =====
+        # grasp / clean / zero 共用 InitHandler，按组合键 f"{task}-{target}-{waypoint}"
+        # 在 task_init.INIT_POSE_SEQUENCES 中查询点位序列（见 task_init.py）
         try:
-            from action_server.task_init_grasp import InitGraspHandler
-            self._handlers["grasp:init"] = InitGraspHandler()
-            self.get_logger().info('Registered handler for task="grasp:init"')
+            from action_server.task_init import InitHandler
+            _init_handler = InitHandler()
+            self._handlers["grasp:init"] = _init_handler
+            self._handlers["clean:init"] = _init_handler
+            self._handlers["zero:init"] = _init_handler
+            self.get_logger().info('Registered unified init handler for task="grasp:init"/"clean:init"/"zero:init"')
         except ImportError as e:
-            self.get_logger().warn(f'Failed to load init_grasp handler: {e}')
+            self.get_logger().warn(f'Failed to load unified init handler: {e}')
 
         try:
-            from action_server.task_init_zero import InitZeroHandler
-            self.register_handler(InitZeroHandler())
+            from action_server.task_clean import CleanHandler
+            self._handlers["clean:start"] = CleanHandler()
+            self.get_logger().info('Registered handler for task="clean:start"')
         except ImportError as e:
-            self.get_logger().warn(f'Failed to load init_zero handler: {e}')
+            self.get_logger().warn(f'Failed to load clean handler: {e}')
 
         try:
-            from action_server.task_finish_grasp import FinishGraspHandler
-            self._handlers["grasp:finish"] = FinishGraspHandler()
-            self.get_logger().info('Registered handler for task="grasp:finish"')
+            from action_server.task_clean_all import CleanAllHandler
+            # 协议触发方式: task="clean" + target="all"
+            self._handlers["clean:all"] = CleanAllHandler()
+            self.get_logger().info('Registered handler for task="clean:all" (target=all)')
         except ImportError as e:
-            self.get_logger().warn(f'Failed to load finish_grasp handler: {e}')
+            self.get_logger().warn(f'Failed to load clean_all handler: {e}')
+
+        try:
+            from action_server.task_finish import FinishHandler
+            _finish_handler = FinishHandler()
+            self._handlers["grasp:finish"] = _finish_handler
+            self._handlers["clean:finish"] = _finish_handler
+            self.get_logger().info('Registered unified finish handler for task="grasp:finish"/"clean:finish"')
+        except ImportError as e:
+            self.get_logger().warn(f'Failed to load unified finish handler: {e}')
 
         try:
             from action_server.task_grasp import GraspHandler

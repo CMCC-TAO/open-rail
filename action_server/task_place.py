@@ -35,7 +35,7 @@ _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _project_root not in sys.path:
     sys.path.insert(0, _project_root)
 
-from action_server.task_init_grasp import _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM, _get_init_grasp_pose
+from action_server.task_init import _SAFE_LEFT_ARM, _SAFE_RIGHT_ARM, _get_init_grasp_pose
 from action_server.task_reset import _LEFT_RESET_POSE, _RIGHT_RESET_POSE
 from action_server.action_base import (
     AbstractTaskHandler, TaskResult, send_vla_feedback,
