@@ -230,7 +230,7 @@ class RobotBody(RobotBase):
         current_timestamp = time.time()
         if current_timestamp - self.last_timestamp < self.period - 0.0003:
             time_to_sleep = self.period - (current_timestamp - self.last_timestamp) - 0.0003
-            print(f'DEBUG: time_to_sleep={time_to_sleep*1000: .3f}ms')
+            # print(f'DEBUG: time_to_sleep={time_to_sleep*1000: .3f}ms')
             time.sleep(time_to_sleep)
         self.last_timestamp = time.time()
         return result
