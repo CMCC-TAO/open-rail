@@ -168,6 +168,29 @@ async function persistLanguagePatch (patch) {
     return false;
   }
 };
+function setAutoModeEditable (checked) {
+  console.log('setAutoModeEditable', checked);
+  const thresholdInput = $('inp-lang-threshold');
+  if (thresholdInput) thresholdInput.disabled = !checked;
+  
+  const winSizeInput = $('inp-lang-win-size');
+  if (winSizeInput) winSizeInput.disabled = !checked;
+  
+  const taskSel = $('lang-task-select');
+  if (taskSel) taskSel.disabled = checked;
+  
+  const subtaskSel = $('lang-subtask-select');
+  if (subtaskSel) subtaskSel.disabled = checked;
+  
+  const textEditArea = $('lang-cmd-text');
+  if (textEditArea) textEditArea.disabled = checked;
+  // console.log('setAutoModeEditable, textEditArea.disable', textEditArea.disabled);
+  ['btn-lang-edit', 'btn-lang-add', 'btn-lang-del', 'btn-lang-send'].forEach(id => {
+    const btn = $(id);
+    if (btn) btn.disabled = checked;
+  });
+};
+
 function setupLangPanel() {
   const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
@@ -176,21 +199,6 @@ function setupLangPanel() {
   const winSizeInput = $('inp-lang-win-size');
   let thresholdSaveTimer = null;
   let winSizeSaveTimer = null;
-
-  const setAutoModeEditable = (enabled) => {
-    if (thresholdInput) thresholdInput.disabled = !enabled;
-    if (winSizeInput) winSizeInput.disabled = !enabled;
-    if (taskSel) taskSel.disabled = enabled;
-    if (subtaskSel) subtaskSel.disabled = enabled;
-    const sendBtn = $('btn-lang-send');
-    if (sendBtn) sendBtn.disabled = enabled;
-    const textEditArea = $('lang-cmd-text');
-    if (textEditArea) textEditArea.disabled = enabled;
-    ['btn-lang-edit', 'btn-lang-add', 'btn-lang-del'].forEach(id => {
-      const btn = $(id);
-      if (btn) btn.disabled = enabled;
-    });
-  };
 
   const commitThreshold = async () => {
     if (!thresholdInput || thresholdInput.disabled) return;
@@ -262,10 +270,9 @@ function setupLangPanel() {
 
   if (autoCheckLangMode) {
     autoCheckLangMode.addEventListener('change', async () => {
-      const enabled = !!autoCheckLangMode.checked;
-      setAutoModeEditable(enabled);
+      setAutoModeEditable(autoCheckLangMode.checked);
 
-      if (enabled) {
+      if (autoCheckLangMode.checked) {
         const taskName = taskSel ? taskSel.value : null;
         const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
 
@@ -284,13 +291,14 @@ function setupLangPanel() {
         }
 
         await persistLanguagePatch({
-          'language.auto_mode': true,
+          'language.auto_mode': autoCheckLangMode.checked,
           'language.sub_task_id': 0,
         });
         return;
       }
-
-      await persistLanguagePatch({ 'language.auto_mode': false });
+      else {
+        await persistLanguagePatch({ 'language.auto_mode': autoCheckLangMode.checked });
+      }
     });
   }
 
@@ -353,8 +361,6 @@ function setupLangPanel() {
       await commitWinSize();
     });
   }
-
-  setAutoModeEditable(!!(autoCheckLangMode && autoCheckLangMode.checked));
 }
 
 /** Load language command JSON from App.config.language.file_path (fallback to default endpoint). */
@@ -477,48 +483,37 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   let index = Number(rawIndex);
   if (!Number.isFinite(index)) index = 0;
 
-  const autoModeRaw = App.config && App.config.language && App.config.language.auto_mode;
-  const autoMode = (autoModeRaw === true || autoModeRaw === 'true' || autoModeRaw === 1 || autoModeRaw === '1');
+  const autoMode = App.config && App.config.language && App.config.language.auto_mode;
+  // const autoMode = (autoModeRaw === true || autoModeRaw === 'true' || autoModeRaw === 1 || autoModeRaw === '1');
   if (forceFirstSubtask || autoMode) index = 0;
-  const thresholdRaw = App.config && App.config.language && App.config.language.task_progress_threshold;
-  const threshold = Number(thresholdRaw);
-  const winSizeRaw = App.config && App.config.language && App.config.language.task_progress_win_size;
-  const winSize = Number(winSizeRaw);
 
   const autoCheckLangMode = $('chk-lang-auto-mode');
   if (autoCheckLangMode) autoCheckLangMode.checked = autoMode;
 
-  const editable = !!(autoCheckLangMode ? autoCheckLangMode.checked : autoMode);
-
   const thresholdInput = $('inp-lang-threshold');
   if (thresholdInput) {
+    const thresholdRaw = App.config && App.config.language && App.config.language.task_progress_threshold;
+    const threshold = Number(thresholdRaw);
     const fallback = Number(thresholdInput.value);
-    const displayThreshold = Number.isFinite(threshold)
-      ? threshold
-      : (Number.isFinite(fallback) ? fallback : 0.95);
+    const displayThreshold = Number.isFinite(threshold) ? threshold : (Number.isFinite(fallback) ? fallback : 0.95);
     thresholdInput.value = String(displayThreshold);
-    thresholdInput.disabled = !editable;
+    // thresholdInput.disabled = !editable;
     thresholdInput.style.borderColor = '';
   }
 
   const winSizeInput = $('inp-lang-win-size');
   if (winSizeInput) {
+    const winSizeRaw = App.config && App.config.language && App.config.language.task_progress_win_size;
+    const winSize = Number(winSizeRaw);
     const fallback = Number(winSizeInput.value);
-    const displayWinSize = (Number.isInteger(winSize) && winSize > 0)
-      ? winSize
-      : ((Number.isInteger(fallback) && fallback > 0) ? fallback : 10);
+    const displayWinSize = (Number.isInteger(winSize) && winSize > 0) ? winSize : ((Number.isInteger(fallback) && fallback > 0) ? fallback : 10);
     winSizeInput.value = String(displayWinSize);
-    winSizeInput.disabled = !editable;
+    // winSizeInput.disabled = !editable;
     winSizeInput.style.borderColor = '';
   }
 
   // Sync Lang Panel Task select
   const taskSel = $('lang-task-select');
-  if (taskSel) taskSel.disabled = editable;
-  const subtaskSel = $('lang-subtask-select');
-  if (subtaskSel) subtaskSel.disabled = editable;
-  const sendBtn = $('btn-lang-send');
-  if (sendBtn) sendBtn.disabled = editable;
   if (taskSel && task && LangCmd.tasks[task]) {
     taskSel.value = task;
   } else if (taskSel && taskSel.options.length > 0 && !taskSel.value) {
@@ -531,10 +526,9 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   // Sync Lang Panel Sub-task select
   const taskName = taskSel ? taskSel.value : null;
   const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  const safeIndex = subtasks.length > 0
-    ? Math.max(0, Math.min(index, subtasks.length - 1))
-    : -1;
+  const safeIndex = subtasks.length > 0 ? Math.max(0, Math.min(index, subtasks.length - 1)) : -1;
 
+  const subtaskSel = $('lang-subtask-select');
   if (subtaskSel) {
     if (safeIndex >= 0) {
       subtaskSel.value = String(safeIndex);
@@ -555,6 +549,9 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   // Sync Config panel selects
   syncLangTaskOptions(taskName || task, safeIndex >= 0 ? safeIndex : 0);
   refreshLangAppliedMarkers(taskName || task, safeIndex >= 0 ? safeIndex : null);
+  // sync editable status according to auto mode
+  const checked = autoCheckLangMode ? autoCheckLangMode.checked : autoMode;
+  setAutoModeEditable(checked)
 }
 
 function setupLanguageEvents() {
@@ -634,49 +631,6 @@ function setupLanguageShortcuts() {
 }
 
 setupLanguageShortcuts();
-// Language Command panel — JSON file picker
-// $('lang-file-input').addEventListener('change', async (e) => {
-//   const file = e.target.files[0];
-//   if (!file) return;
-//   const path = file.path || file.name;
-//   try {
-//     const res = await apiFetch('/api/client/language/load', { method: 'POST', body: JSON.stringify({ path }) });
-//     buildLangTasksFromData(res.data);
-//     renderLangTaskSelect();
-//
-//     if (!App.config || typeof App.config !== 'object') App.config = {};
-//     if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
-//     App.config.language.file_path = path;
-//
-//     App.pendingPatch['language.file_path'] = path;
-//     markPending();
-//
-//     try {
-//       const patchRes = await apiFetch('/api/client/config/patch', {
-//         method: 'POST',
-//         body: JSON.stringify({ patch: { 'language.file_path': path } }),
-//       });
-//       App.config = patchRes.config || App.config;
-//       delete App.pendingPatch['language.file_path'];
-//       if (!Object.keys(App.pendingPatch).length) clearPending();
-//
-//       const confRes = await apiFetch('/api/client/config/path');
-//       if (confRes.path) {
-//         await apiFetch('/api/client/config/save', {
-//           method: 'POST',
-//           body: JSON.stringify({ path: confRes.path }),
-//         });
-//       }
-//     } catch (_) {
-//       App.pendingPatch['language.file_path'] = path;
-//       markPending();
-//     }
-//
-//     toast('Language file loaded.', 'ok', 2000);
-//   } catch (_) { /* toasted */ }
-//   e.target.value = '';
-// });
-
 // Language Command panel — send
 $('btn-lang-send').addEventListener('click', async () => {
   const taskSel = $('lang-task-select');
@@ -718,6 +672,7 @@ $('btn-lang-send').addEventListener('click', async () => {
   }
   toast('Language command updated.', 'info');
 });
+
 $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
 
 $('btn-lang-edit').addEventListener('click', editLangSubtask);
