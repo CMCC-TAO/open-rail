@@ -184,51 +184,13 @@ function setupLangPanel() {
     if (subtaskSel) subtaskSel.disabled = enabled;
     const sendBtn = $('btn-lang-send');
     if (sendBtn) sendBtn.disabled = enabled;
+    const textEditArea = $('lang-cmd-text');
+    if (textEditArea) textEditArea.disabled = enabled;
     ['btn-lang-edit', 'btn-lang-add', 'btn-lang-del'].forEach(id => {
       const btn = $(id);
       if (btn) btn.disabled = enabled;
     });
   };
-
-  // const persistLanguagePatch = async (patch) => {
-  //   if (!App.config || typeof App.config !== 'object') App.config = {};
-  //   if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
-
-  //   Object.entries(patch).forEach(([dotKey, value]) => {
-  //     App.pendingPatch[dotKey] = value;
-  //     if (dotKey.startsWith('language.')) {
-  //       const key = dotKey.slice('language.'.length);
-  //       App.config.language[key] = value;
-  //     }
-  //   });
-  //   markPending();
-
-  //   try {
-  //     const res = await apiFetch('/api/client/config/patch', {
-  //       method: 'POST',
-  //       body: JSON.stringify({ patch }),
-  //     });
-  //     App.config = res.config || App.config;
-
-  //     Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
-  //     if (!Object.keys(App.pendingPatch).length) clearPending();
-
-  //     const confRes = await apiFetch('/api/client/config/path');
-  //     if (confRes.path) {
-  //       await apiFetch('/api/client/config/save', {
-  //         method: 'POST',
-  //         body: JSON.stringify({ path: confRes.path }),
-  //       });
-  //     }
-  //     return true;
-  //   } catch (_) {
-  //     Object.entries(patch).forEach(([dotKey, value]) => {
-  //       App.pendingPatch[dotKey] = value;
-  //     });
-  //     markPending();
-  //     return false;
-  //   }
-  // };
 
   const commitThreshold = async () => {
     if (!thresholdInput || thresholdInput.disabled) return;
