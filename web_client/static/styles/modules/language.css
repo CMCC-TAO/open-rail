@@ -237,6 +237,13 @@
   border-color: var(--accent); 
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 }
+.lang-cmd-textarea:disabled {
+  background: var(--bg2);
+  color: var(--text);
+  border-color: var(--border);
+  opacity: .75;
+  cursor: not-allowed;
+}
 
 /* Language Apply button: minimal-tech style matching config panel */
 .lang-cmd-btn-row {
