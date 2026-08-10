@@ -99,8 +99,7 @@ class RobotBody(RobotBase):
         """Retrieve current observation data including camera images and joint states.
         
         Returns:
-            dict or None: Dictionary containing camera images, joint states, and timestamp.
-                         Returns None if no new data is available.
+            dict or None: Dictionary containing camera images, joint states, and timestamp. Returns None if no new data is available.
         """
         try:
             result = {}

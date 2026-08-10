@@ -1418,9 +1418,6 @@ async function loadConfigFromServer() {
     renderConfigTree(App.config);
     renderRecordingConfigTree(App.config);
     applyVisualConfig(App.config);
-    // Apply language-related UI state from config (task/sub-task/auto/threshold/win_size)
-    // On initial startup from YAML config, default sub-task to first entry.
-    applyLangConfigSelection(true);
     toast(`Config ${CONF_FILE} loaded.`, 'ok', 2000);
   } catch (e) { /* already toasted */ }
 }
