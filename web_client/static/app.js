@@ -482,7 +482,7 @@ async function wireEvents() {
         renderConfigTree(App.config);
         renderRecordingConfigTree(App.config);
         await loadDefaultLangFile();
-        applyLangConfigSelection();
+        // applyLangConfigSelection();
         applyVisualConfig(App.config);
         const confRes = await apiFetch('/api/client/config/path', { 
           method: 'POST', 
@@ -534,8 +534,8 @@ async function wireEvents() {
       clearPending();
       renderConfigTree(App.config);
       renderRecordingConfigTree(App.config);
-      await loadDefaultLangFile();
-      applyLangConfigSelection();
+      // await loadDefaultLangFile();
+      // applyLangConfigSelection();
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
@@ -799,7 +799,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initConfDir().then(async () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
-    applyLangConfigSelection(true);
+    // applyLangConfigSelection(true);
     wireEvents();
   });
   setupCameraPanel();

@@ -32,7 +32,6 @@
     "[PRIMARY_ARM=RIGHT]Take tea leaves",
     "[PRIMARY_ARM=RIGHT]Add water",
     "[PRIMARY_ARM=LEFT] Put the kettle",
-    "[PRIMARY_ARM=LEFT] Divide tea",
-    "[PRIMARY_ARM=RIGHT]Take tea leaves"
+    "[PRIMARY_ARM=LEFT] Divide tea."
   ]
 }
