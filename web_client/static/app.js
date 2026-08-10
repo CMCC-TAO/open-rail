@@ -172,71 +172,30 @@ async function handleTaskCompletion(taskFinished = false) {
 }
 
 async function renderSubTask(subTaskId = null) {
-  // console.log('renderSubTask called', { subTaskId });
-
   const autoCheckLangMode = $('chk-lang-auto-mode');
-  if (!autoCheckLangMode || !autoCheckLangMode.checked) {
-    // console.log('renderSubTask skipped: auto mode disabled or checkbox not found');
-    return;
-  }
+  if (!autoCheckLangMode || !autoCheckLangMode.checked) return;
+  if (subTaskId === null || subTaskId === undefined) return;
 
-  if (subTaskId === null || subTaskId === undefined) {
-    // console.log('renderSubTask skipped: no subTaskId provided');
-    return;
-  }
-
-  const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
-  const textEl = $('lang-cmd-text');
-  if (!taskSel || !subtaskSel || !textEl) {
-    // console.warn('renderSubTask aborted: missing DOM elements', { taskSel, subtaskSel, textEl });
-    return;
-  }
-
-  const taskName = taskSel.value;
-  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  if (!Array.isArray(subtasks) || subtasks.length === 0) {
-    // console.warn('renderSubTask aborted: no subtasks available', { taskName, subtasks });
-    return;
-  }
+  if (!subtaskSel) return;
 
   const targetIdx = Number(subTaskId);
   if (!Number.isFinite(targetIdx)) return;
 
   let curIdx = parseInt(subtaskSel.value, 10);
   if (!Number.isFinite(curIdx) || curIdx < 0) curIdx = 0;
-
-  if (targetIdx === curIdx) {
-    // console.log('renderSubTask no-op: target subTaskId equals current', { targetIdx, curIdx });
-    return;
-  }
-  if (targetIdx < 0 || targetIdx >= subtasks.length) {
-    console.warn('renderSubTask aborted: subTaskId out of range', { subTaskId: targetIdx, length: subtasks.length });
-    return;
-  }
+  if (targetIdx === curIdx) return;
 
   const appliedTaskIdRaw = App.config && App.config.language ? App.config.language.task_id : null;
   const appliedTaskId = appliedTaskIdRaw == null ? null : String(appliedTaskIdRaw);
 
-  if (!App.config || typeof App.config !== 'object') App.config = {};
-  if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
   App.config.language.sub_task_id = targetIdx;
 
   if (typeof refreshLangAppliedMarkers === 'function') {
-    const markerTaskId = appliedTaskId != null ? appliedTaskId : taskName;
-    refreshLangAppliedMarkers(markerTaskId, targetIdx);
+    refreshLangAppliedMarkers(appliedTaskId, targetIdx);
   }
-
-
-  // console.log('renderSubTask switching subtask', { from: curIdx, to: targetIdx, taskName, subtaskText: subtasks[targetIdx] });
   subtaskSel.value = String(targetIdx);
   subtaskSel.dispatchEvent(new Event('change'));
-
-  // const lang = subtasks[targetIdx];
-  // if (typeof lang === 'string' && lang.trim()) {
-  //   textEl.value = lang;
-  //   await sendLanguageSet(lang);
-  // }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -482,7 +441,6 @@ async function wireEvents() {
         renderConfigTree(App.config);
         renderRecordingConfigTree(App.config);
         await loadDefaultLangFile();
-        // applyLangConfigSelection();
         applyVisualConfig(App.config);
         const confRes = await apiFetch('/api/client/config/path', { 
           method: 'POST', 
@@ -534,8 +492,6 @@ async function wireEvents() {
       clearPending();
       renderConfigTree(App.config);
       renderRecordingConfigTree(App.config);
-      // await loadDefaultLangFile();
-      // applyLangConfigSelection();
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
@@ -799,7 +755,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initConfDir().then(async () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
-    // applyLangConfigSelection(true);
     wireEvents();
   });
   setupCameraPanel();

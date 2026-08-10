@@ -154,7 +154,6 @@ async function persistLanguagePatch (patch) {
       body: JSON.stringify({ patch }),
     });
     App.config = res.config || App.config;
-    // applyLangConfigSelection();
 
     const confRes = await apiFetch('/api/client/config/path');
     if (confRes.path) {
@@ -267,7 +266,6 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   applyConfigWinSize(winSize);
   applyConfigTaskSelection(languageConfig.task_id);
   applyConfigSubtaskSelection(languageConfig.sub_task_id, autoMode, forceFirstSubtask);
-  console.log('sub_task_id=', languageConfig.sub_task_id)
 }
 
 function setupLangPanel() {
@@ -532,6 +530,33 @@ async function deleteLangSubtask() {
   toast('Sub-task deleted.', 'ok');
 }
 
+async function sendLanguageCommand() {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  const task = taskSel ? taskSel.value : null;
+  if (task == null) { toast('Select a valid task.', 'warn'); return; }
+  let lang = $('lang-cmd-text').value.trim();
+  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
+
+  const subtasks = LangCmd.tasks[task] ? LangCmd.tasks[task] : [];
+  let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
+  if (!Number.isFinite(idx) || idx < 0) idx = 0;
+
+  // 1. persistLanguagePatch
+  await persistLanguagePatch({
+    'language.task_id': task,
+    'language.sub_task_id': idx
+  });
+  // applyConfigTaskSelection(task);
+  applyConfigSubtaskSelection(idx, false, false);
+
+  // 2. Send language command to robot
+  try {
+    await sendLanguageSet(lang);
+  } finally {
+  }
+  toast('Language command updated.', 'info');
+}
 async function loadDefaultLangFile() {
   try {
     const langPath = App.config && App.config.language && App.config.language.file_path;
@@ -633,48 +658,7 @@ function setupLanguageShortcuts() {
 
 setupLanguageShortcuts();
 // Language Command panel — send
-$('btn-lang-send').addEventListener('click', async () => {
-  const taskSel = $('lang-task-select');
-  const subtaskSel = $('lang-subtask-select');
-  const autoCheckLangMode = $('chk-lang-auto-mode');
-  const task = taskSel ? taskSel.value : null;
-  if (task == null) { toast('Select a valid task.', 'warn'); return; }
-  let lang = $('lang-cmd-text').value.trim();
-  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
-
-  const subtasks = LangCmd.tasks[task] ? LangCmd.tasks[task] : [];
-  let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
-  if (!Number.isFinite(idx) || idx < 0) idx = 0;
-
-  // Auto mode should always start from first sub-task.
-  if (autoCheckLangMode && autoCheckLangMode.checked) {
-    idx = 0;
-    if (subtaskSel && subtaskSel.value !== '0') {
-      subtaskSel.value = '0';
-      subtaskSel.dispatchEvent(new Event('change'));
-    }
-    if (subtasks[0] !== undefined) {
-      lang = String(subtasks[0]).trim();
-      $('lang-cmd-text').value = lang;
-    }
-  }
-  // 1. persistLanguagePatch
-  if (task != null) {
-    await persistLanguagePatch({
-      'language.task_id': task,
-      'language.sub_task_id': idx
-    });
-    applyConfigTaskSelection(task);
-    applyConfigSubtaskSelection(idx, false, false);
-  }
-
-  // 2. Send language command to robot
-  try {
-    await sendLanguageSet(lang);
-  } finally {
-  }
-  toast('Language command updated.', 'info');
-});
+$('btn-lang-send').addEventListener('click', sendLanguageCommand); 
 
 $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
 
