@@ -362,6 +362,7 @@ function setupLangPanel() {
             subtaskSel.selectedIndex = 0;
             subtaskSel.value = '0';
             subtaskSel.dispatchEvent(new Event('change'));
+            applyConfigSubtaskSelection(0, false, false);
           } else {
             subtaskSel.value = '';
           }
@@ -483,6 +484,11 @@ async function editLangSubtask() {
   toast('Sub-task instruction updated.', 'ok');
 }
 
+async function sendLanguageSet(language = '') {
+  try {
+    await apiFetch('/api/client/language/set', { method: 'POST', body: JSON.stringify({ language }) });
+  } catch (e) { /* toasted */ }
+}
 /** Add a new sub-task after the current list using the textarea content. */
 async function addLangSubtask() {
   const taskSel = $('lang-task-select');
@@ -541,7 +547,17 @@ async function sendLanguageCommand() {
   const subtasks = LangCmd.tasks[task] ? LangCmd.tasks[task] : [];
   let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
   if (!Number.isFinite(idx) || idx < 0) idx = 0;
-
+  if (App.config.language.task_id==task && App.config.language.sub_task_id == idx) {
+    toast('Language command updated.', 'info');
+    return;
+  }
+  if (App.config.record.switch && App.config.language.task_id != task) {
+    toast('Can not change task when recording.', 'warn');
+    return;
+  }
+  // console.info('old task: ', App.config.language.task_id, 'new task: ', task);
+  // console.info('old sub_task: ', App.config.language.sub_task_id, 'new sub_task: ', idx);
+  // console.info('recording: ', App.config.record.switch);
   // 1. persistLanguagePatch
   await persistLanguagePatch({
     'language.task_id': task,
@@ -553,7 +569,11 @@ async function sendLanguageCommand() {
   // 2. Send language command to robot
   try {
     await sendLanguageSet(lang);
-  } finally {
+  }
+  finally {
+    if (App.config.record.switch) {
+      handleSubTaskRecordingRefresh(true);
+    }
   }
   toast('Language command updated.', 'info');
 }
