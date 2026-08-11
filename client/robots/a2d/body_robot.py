@@ -132,7 +132,7 @@ class RobotBody(RobotBase):
             result['obs.state'] = np.array(joint_states)
             if self.current_state.size < result['obs.state'].size:
                 self.current_state = np.zeros(result['obs.state'].size)
-            self.current_state[:result['obs.state'].size] = result['obs.state']
+            self.current_state[:result['obs.state'].size] = result['obs.state'].copy()
             vmin, vmax = 35, 120
             self.current_state[gripper_start:gripper_start + 2] = (self.current_state[gripper_start:gripper_start + 2] - vmin) / (vmax - vmin) # norm
             # currt_joint_states = np.array(list(currt_joint_states)) * (vmax - vmin) + vmin # re-norm
