@@ -11,6 +11,7 @@
   - "grasp-init-drainer":  ["safe", "init"]            # 2 点: 去掉两个中间过渡
 
 新增任务时只需在 INIT_POSE_SEQUENCES 中添加组合键与点位序列，
+在 INIT_LANGUAGE_MAP 中配置对应的语言指令（缺省不设置，沿用客户端默认指令），
 并在 action_dispatcher.py 中注册对应的 "task:init" key。
 
 流程:
@@ -34,6 +35,8 @@ from action_server.action_base import (
     AbstractTaskHandler, TaskResult, ERR_SUCCESS, ERR_MSG,
     ERR_INIT_GRASP_FAILED, ERR_INIT_CLEAN_FAILED,
 )
+from action_server.task_clean import CLEAN_LANGUAGE_INSTRUCTION
+from action_server.task_grasp import TARGET_LANGUAGE_MAP
 
 
 # ==============================================
@@ -114,6 +117,19 @@ INIT_POSE_SEQUENCES: dict[str, list[str]] = {
 }
 
 
+# ==============================================
+# 组合键 → 语言指令（init 启动推理线程时设置到 VLA，新 push 的 obs 会携带该指令）
+# ==============================================
+# 直接引用 task_grasp.TARGET_LANGUAGE_MAP / task_clean.CLEAN_LANGUAGE_INSTRUCTION，
+# 语言文案统一维护在对应任务文件里；也可以直接写死字符串覆盖。
+INIT_LANGUAGE_MAP: dict[str, str] = {
+    "zero-init-none":     TARGET_LANGUAGE_MAP["one water"],   # "use one hand to grab one bottle from a pile of drinks."
+    "grasp-init-none":    TARGET_LANGUAGE_MAP["one water"],   # "use one hand to grab one bottle from a pile of drinks."
+    "clean-init-none":    CLEAN_LANGUAGE_INSTRUCTION,         # 桌面清洁多步骤指令（见 task_clean.py）
+    "grasp-init-drainer": TARGET_LANGUAGE_MAP["drainer"],     # "Lift up the drainer in front of you with both hands and keep it balanced."
+}
+
+
 class InitHandler(AbstractTaskHandler):
     """统一 init 任务处理器 — 按组合键 f"{task}-{target}-{waypoint}" 查询点位序列
 
@@ -168,6 +184,15 @@ class InitHandler(AbstractTaskHandler):
             self.send_feedback(goal_handle, 70, "正在创建 VLA 推理组件...")
             components = context.ensure_vla_components()
             vla_client = components["vla_client"]
+
+            # 设置与组合键对应的语言指令（须在 start_observe 之前设置，
+            # 之后 push 的 obs 会携带该指令进入推理）
+            instruction = INIT_LANGUAGE_MAP.get(key)
+            if instruction:
+                vla_client.task_language_manager.currt_language_instruction = instruction
+                print(f'[InitHandler] language instruction set (key={key}): {instruction}')
+            else:
+                print(f'[InitHandler] keep default language instruction (key={key})')
 
             # 启动 observe 和 inference 线程（多次调用安全，内部有 is_alive 保护）
             self.send_feedback(goal_handle, 85, "正在启动观测和推理线程...")
