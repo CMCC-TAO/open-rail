@@ -358,7 +358,10 @@ class VLAClient():
             if not self.is_observe_thread_running:
                 time.sleep(0.001)
                 continue
+            timestamp_1 = time.time()
             observations = self.robot.retrieve_observation()
+            timestamp_2 = time.time()
+            self.logger.debug(f'Robot retrieve observation time: {(timestamp_2-timestamp_1) * 1000: .4f}ms')
             # observations keys=dict_keys(['ref_timestamp', 'cam.hand_left', 'cam.hand_right', 'cam.head', 'obs.state', 'action'])
             # print(f"Debug: observations keys={observations.keys()}")
             # timestamp_1 = time.time()
@@ -380,6 +383,8 @@ class VLAClient():
                         'runtime_config': runtime_config
                     }
                     self.data_record_manager.add_observation_async(observation=observations, extra_info=extra_info, timestamp=time.perf_counter())
+                    timestamp_3 = time.time()
+                    self.logger.debug(f'Data recorder add observation time: {(timestamp_3-timestamp_2) * 1000: .4f}ms')
                     # timestamp_2 = time.time()
                     # print(f"Debug: record time={(timestamp_2-timestamp_1) * 1000} ms")
                 # Decide whether to change language instruction based on the task progress predicted by the VLA model
