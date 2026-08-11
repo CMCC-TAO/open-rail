@@ -108,7 +108,7 @@ class RobotBody(RobotBase):
             if self.current_timestamp == ref_timestamp:
                 return None
             else:
-                self.logger.debug(f'Retrieve image time: {ref_timestamp-self.current_timestamp}')
+                self.logger.debug(f'Retrieve image time: {(ref_timestamp-self.current_timestamp)/1e6: .3f}ms')
                 self.current_timestamp = ref_timestamp
 
             result['ref_timestamp'] = ref_timestamp

@@ -115,9 +115,3 @@ async function sendControl(action, payload = {}) {
     return false;
   }
 }
-
-async function sendLanguageSet(language = '') {
-  try {
-    await apiFetch('/api/client/language/set', { method: 'POST', body: JSON.stringify({ language }) });
-  } catch (e) { /* toasted */ }
-}

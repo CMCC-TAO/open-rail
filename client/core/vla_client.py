@@ -361,7 +361,7 @@ class VLAClient():
             timestamp_1 = time.time()
             observations = self.robot.retrieve_observation()
             timestamp_2 = time.time()
-            self.logger.debug(f'Robot retrieve observation time: {(timestamp_2-timestamp_1) * 1000: .4f}ms')
+            self.logger.debug(f"Robot retrieve observation time: {(timestamp_2-timestamp_1) * 1000: .4f}ms, observations is {'None' if observations is None else 'dict'}")
             # observations keys=dict_keys(['ref_timestamp', 'cam.hand_left', 'cam.hand_right', 'cam.head', 'obs.state', 'action'])
             # print(f"Debug: observations keys={observations.keys()}")
             # timestamp_1 = time.time()

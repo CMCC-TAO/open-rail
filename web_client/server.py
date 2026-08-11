@@ -1965,11 +1965,11 @@ async def client_control_wheel(req: ManualControlRequest):
 async def client_language_set(req: LanguageSetRequest):
     vla_client, _ = _require_runtime('set_language')
     try:
-        with client_state.lock:
-            client_state.paused_thread_state = _pause_vla_client(vla_client)
+        # with client_state.lock:
+        #     client_state.paused_thread_state = _pause_vla_client(vla_client)
         vla_client.task_language_manager.currt_language_instruction = req.language if isinstance(req.language, str) else ''
-        with client_state.lock:
-            _resume_vla_client(vla_client, client_state.paused_thread_state)
+        # with client_state.lock:
+        #     _resume_vla_client(vla_client, client_state.paused_thread_state)
         return {"status": "ok", "command": 'set_language'}
     except HTTPException:
         raise
