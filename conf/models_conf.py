@@ -114,6 +114,7 @@ def get_tao_config():
     config = ConfigDict()
     config.model_path = '/path/to/model'
     config.embodiment_tag = 'a2d_gripper'
+    config.action_keys = []
 
     return config
 

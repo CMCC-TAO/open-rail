@@ -55,6 +55,16 @@ class IntraChunkSmoother():
         start_time = timestamps[0]
         end_time = timestamps[-1]
         time_step = time_step / 1000 # convert milliseconds to seconds
+        output_sample_ratio = getattr(self.config, 'output_sample_ratio', None)
+        if output_sample_ratio is None and getattr(self.config, 'preserve_action_count', False):
+            output_sample_ratio = 1.0
+        if output_sample_ratio is not None and float(output_sample_ratio) <= 0:
+            raise ValueError('output_sample_ratio must be positive')
+        output_samples = (
+            max(1, int(round(action_chunk.shape[1] * float(output_sample_ratio))))
+            if output_sample_ratio is not None
+            else None
+        )
         
         if self.config.intra_chunk_mode == 'raw':
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_raw(
@@ -72,14 +82,16 @@ class IntraChunkSmoother():
                 start_time=start_time,
                 end_time=end_time,
                 time_step=time_step,
-                step_indices=step_indices
+                step_indices=step_indices,
+                output_samples=output_samples,
             )
             task_progress_fitted = self._task_progress_interpolation(
                 timestamps=timestamps,
                 task_progress=task_progress,
                 start_time=start_time,
                 end_time=end_time,
-                time_step=time_step
+                time_step=time_step,
+                output_samples=output_samples,
             ) if task_progress is not None else None
         elif self.config.intra_chunk_mode == 'fitting':
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
@@ -89,14 +101,16 @@ class IntraChunkSmoother():
                 end_time=end_time,
                 time_step=time_step,
                 joint_indices=joint_indices,
-                step_indices=step_indices
+                step_indices=step_indices,
+                output_samples=output_samples,
             )
             task_progress_fitted = self._task_progress_interpolation(
                 timestamps=timestamps,
                 task_progress=task_progress,
                 start_time=start_time,
                 end_time=end_time,
-                time_step=time_step
+                time_step=time_step,
+                output_samples=output_samples,
             ) if task_progress is not None else None
         else:  # fit mode (default)
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted = self._traj_fitting(
@@ -106,18 +120,29 @@ class IntraChunkSmoother():
                 end_time=end_time,
                 time_step=time_step,
                 joint_indices=joint_indices,
-                step_indices=step_indices
+                step_indices=step_indices,
+                output_samples=output_samples,
             )
             task_progress_fitted = self._task_progress_interpolation(
                 timestamps=timestamps,
                 task_progress=task_progress,
                 start_time=start_time,
                 end_time=end_time,
-                time_step=time_step
+                time_step=time_step,
+                output_samples=output_samples,
             ) if task_progress is not None else None
         return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted
 
-    def _joint_traj_fitting(self, timestamps, joint_chunk, index, start_time, end_time, deg = 5, time_step = 0.001):
+    @staticmethod
+    def _sample_timestamps(start_time, end_time, time_step, output_samples=None):
+        if output_samples is not None:
+            return np.linspace(start_time, end_time, num=max(1, int(output_samples)))
+        return np.arange(start_time, end_time, time_step)
+
+    def _joint_traj_fitting(
+        self, timestamps, joint_chunk, index, start_time, end_time,
+        deg=5, time_step=0.001, output_samples=None,
+    ):
         """Fit a joint trajectory using polynomial fitting with deg parameter and return the fitted trajectory defined by start_time, end_time and time_step.
 
         Args:
@@ -141,7 +166,7 @@ class IntraChunkSmoother():
         # Second derivative (acceleration)
         second_derivative_coefficients = np.polyder(derivative_coefficients)
 
-        x = np.arange(start_time, end_time, time_step)
+        x = self._sample_timestamps(start_time, end_time, time_step, output_samples)
         
         # Calculate fitted joint angles using the polynomial
         polynomial = np.poly1d(coefficients)
@@ -160,7 +185,10 @@ class IntraChunkSmoother():
         # print(f"fitting degree: {deg}, time_step: {time_step}")
         return index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
-    def _gripper_traj_fitting(self, timestamps, gripper_chunk, index, start_time, end_time, time_step = 0.001):
+    def _gripper_traj_fitting(
+        self, timestamps, gripper_chunk, index, start_time, end_time,
+        time_step=0.001, output_samples=None,
+    ):
         """Fit a gripper trajectory using mean filtering and return the fitted trajectory defined by start_time, end_time and time_step.
 
         Args:
@@ -198,7 +226,7 @@ class IntraChunkSmoother():
             gripper_chunk[currt_index] = mean
         
         # Interpolate the trajectory using linear interpolation
-        timestamp_fitted = np.arange(start_time, end_time, time_step)
+        timestamp_fitted = self._sample_timestamps(start_time, end_time, time_step, output_samples)
         gripper_chunk_fitted = []
         currt_index = 0
         for timestamp in timestamp_fitted:
@@ -208,8 +236,29 @@ class IntraChunkSmoother():
 
         return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted), np.zeros_like(gripper_chunk_fitted)  # Gripper velocity and acceleration are not considered
 
+    def _stepwise_traj_passthrough(
+        self, timestamps, action_values, index, start_time, end_time,
+        time_step=0.001, output_samples=None,
+    ):
+        timestamps_fitted = self._sample_timestamps(
+            start_time, end_time, time_step, output_samples
+        )
+        interpolate = interp1d(
+            timestamps,
+            action_values,
+            kind='previous',
+            bounds_error=False,
+            fill_value='extrapolate',
+        )
+        values_fitted = interpolate(timestamps_fitted)
+        zeros = np.zeros_like(values_fitted)
+        return index, values_fitted, zeros, zeros
+
     @run_time_decorator
-    def _traj_fitting(self, timestamps, action_chunk, start_time, end_time, time_step, joint_indices, step_indices):
+    def _traj_fitting(
+        self, timestamps, action_chunk, start_time, end_time, time_step,
+        joint_indices, step_indices, output_samples=None,
+    ):
         """Fit trajectories for both joints and grippers.
         
         Args:
@@ -234,11 +283,17 @@ class IntraChunkSmoother():
                 joint_chunk = np.array(action_chunk[index, :])
                 if seg['policy'] == 'gradual':
                     futures.append(self.joint_fitting_executor.submit(
-                        self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
+                        self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step, output_samples
                     ))
                 elif seg['policy'] == 'stepwise':
+                    fitting_func = (
+                        self._gripper_traj_fitting
+                        if seg.get('smooth', True)
+                        else self._stepwise_traj_passthrough
+                    )
                     futures.append(self.gripper_fitting_executor.submit(
-                        self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
+                        fitting_func, timestamps, joint_chunk, index, start_time,
+                        end_time, time_step, output_samples
                     ))
                 else:
                     raise ValueError(f"Unknown policy: {seg['policy']}")
@@ -259,7 +314,7 @@ class IntraChunkSmoother():
         traj_fitted = np.array(final_joint_results)
         vel_fitted = np.array(final_velocity_results)
         acc_fitted = np.array(final_acceleration_results)
-        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        timestamps_fitted = self._sample_timestamps(start_time, end_time, time_step, output_samples)
         # else:
         #     traj_fitted_new = np.array(final_joint_results)
         #     vel_fitted_new = np.array(final_velocity_results)
@@ -290,7 +345,10 @@ class IntraChunkSmoother():
         return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
     
     @run_time_decorator
-    def _traj_interpolation(self, timestamps, action_chunk, start_time, end_time, time_step, step_indices):
+    def _traj_interpolation(
+        self, timestamps, action_chunk, start_time, end_time, time_step,
+        step_indices, output_samples=None,
+    ):
         """Interpolate trajectories for both joints and grippers using CubicSpline.
         
         Args:
@@ -304,7 +362,7 @@ class IntraChunkSmoother():
         # timestamps = np.asarray(timestamps)
         
         # Create dense timestamps for interpolation
-        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        timestamps_fitted = self._sample_timestamps(start_time, end_time, time_step, output_samples)
         
         # Interpolate each joint dimension using CubicSpline
         n_joints = action_chunk.shape[0]
@@ -327,7 +385,10 @@ class IntraChunkSmoother():
             acc_fitted[j] = cubic_spline(timestamps_fitted, 2)  # 2nd derivative
         return traj_fitted, vel_fitted, acc_fitted, timestamps_fitted
     
-    def _task_progress_interpolation(self, timestamps, task_progress, start_time, end_time, time_step):
+    def _task_progress_interpolation(
+        self, timestamps, task_progress, start_time, end_time, time_step,
+        output_samples=None,
+    ):
         """Interpolate task progress using linear interpolation.
         
         Args:
@@ -336,7 +397,7 @@ class IntraChunkSmoother():
             start_time (float): Start time for the interpolated task progress.
             end_time (float): End time for the interpolated task progress.
         """
-        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        timestamps_fitted = self._sample_timestamps(start_time, end_time, time_step, output_samples)
         interp_1d = interp1d(timestamps, task_progress, kind='linear', bounds_error=False, fill_value='extrapolate')
         task_progress_fitted = interp_1d(timestamps_fitted)
         # self.logger.debug(f"Task progress interpolation: original task progress: {task_progress}, fitted task progress: {task_progress_fitted}")

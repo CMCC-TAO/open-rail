@@ -70,6 +70,9 @@ def parse_args():
     parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
+    parser.add_argument('--embodiment_tag', type=str, help='Model embodiment tag')
+    parser.add_argument('--data_config_key', type=str, help='GR00T data configuration key')
+    parser.add_argument('--action_keys', nargs='+', help='Explicit TAO action output order')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
     return parser.parse_args()
@@ -106,6 +109,21 @@ def override_config_with_args(config, args):
             config.models.pi05.model_path = args.model_path
         elif config.models.type == ModelType.TAO:
             config.models.tao.model_path = args.model_path
+    if args.embodiment_tag:
+        if config.models.type == ModelType.TAO:
+            config.models.tao.embodiment_tag = args.embodiment_tag
+        elif config.models.type == ModelType.GR00T_N1_5:
+            config.models.gr00t.embodiment_tag = args.embodiment_tag
+        else:
+            raise ValueError(f'{config.models.type.value} does not support --embodiment_tag')
+    if args.data_config_key:
+        if config.models.type != ModelType.GR00T_N1_5:
+            raise ValueError('--data_config_key is only supported by GR00T N1.5')
+        config.models.gr00t.data_config_key = args.data_config_key
+    if args.action_keys:
+        if config.models.type != ModelType.TAO:
+            raise ValueError('--action_keys is only supported by TAO')
+        config.models.tao.action_keys = args.action_keys
     
     return config
 

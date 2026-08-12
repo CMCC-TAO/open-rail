@@ -51,6 +51,11 @@ def get_rdm_config() -> ConfigDict:
     config.mode = 'async'  # inference mode, choices = ('async', 'sync')
     config.max_len = 100  # Maximum length of observation data sequence buffer
     config.observe_fps_window_size = 10  # FPS estimation window size based on latest N added observation frames
+    config.skip_initial_frames = 5
+    config.action_consume_mode = 'realtime'  # choices = ('realtime', 'sequential')
+    config.latency_compensation = True
+    config.action_replenish_threshold = 0
+    config.max_async_observation_lag_steps = 4
     return config
 
 def get_intra_chunk_config() -> ConfigDict:
@@ -131,6 +136,7 @@ def get_controller_config() -> ConfigDict:
     config.speed = 1.0     # The execution speed with respect to tele-operation speed
     config.raw_fps = 30    # The FPS of the dataset used to train vla/wam model
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
+    config.action_steps = None  # Optional maximum number of model actions executed per chunk
     return config
 
 def get_observer_config() -> ConfigDict:

@@ -2,6 +2,9 @@ import time
 import cv2
 import numpy as np
 import logging
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Optional
 
 from client.utils.util import parse_action_layout
 
@@ -9,6 +12,25 @@ try:
     import ruckig
 except ImportError:
     ruckig = None
+
+
+class ObservationMode(str, Enum):
+    POLLING = 'polling'
+    STEP_RESULT = 'step_result'
+    STREAM = 'stream'
+
+
+@dataclass
+class RobotStepResult:
+    observation: Optional[dict] = None
+    success: bool = False
+    terminated: bool = False
+    truncated: bool = False
+    observation_step: Optional[int] = None
+    applied_action_step: Optional[int] = None
+    sim_time: Optional[float] = None
+    observation_source: Optional[str] = None
+    info: dict = field(default_factory=dict)
 
 class RobotBase():
     def __init__(self, config):

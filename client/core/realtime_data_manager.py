@@ -45,6 +45,8 @@ class RealtimeDataManager():
         self.acc_chunk_fitted = None
         self.timestamps_fitted = None
         self.action_chunk_index = None
+        self.action_executed_index = None
+        self.wait_generation = 0
         self.prob_progress = None
         self.old_buffer = None
 
@@ -162,7 +164,7 @@ class RealtimeDataManager():
         """
         self.frame_count += 1
         # Skip the first few frames as they may be unstable
-        if self.frame_count > 5:
+        if self.frame_count > int(getattr(self.rdm_config, 'skip_initial_frames', 5)):
             now = time.perf_counter()
             with self.observe_thread_lock:
                 self.observe_buffer.append(frame)
@@ -382,7 +384,11 @@ class RealtimeDataManager():
             action_chunk_smoothed, step_indices, gripper_offset
         )
         with self.polynomial_thread_lock:
-            self.action_chunk_index = target_chunk_index if self.action_chunk_index is not None else 0
+            if getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential':
+                self.action_chunk_index = int(target_chunk_index) - 1
+                self.action_executed_index = int(target_chunk_index) - 1
+            else:
+                self.action_chunk_index = target_chunk_index if self.action_chunk_index is not None else 0
             self.action_chunk_fitted = action_chunk_smoothed
             self.vel_chunk_fitted = vel_chunk_smoothed
             self.acc_chunk_fitted = acc_chunk_smoothed
@@ -392,6 +398,8 @@ class RealtimeDataManager():
             self.polynomial_cond.notify_all()
 
     def get_start_chunk_index(self, next_timestamps):
+        if not bool(getattr(self.rdm_config, 'latency_compensation', True)):
+            return 0
         start_chunk_index = 0
         time_offset = self.start_ctrl_marker - self.observe_marker
         self.logger.debug(f'total inference time: {time_offset:.3f}s')
@@ -422,13 +430,21 @@ class RealtimeDataManager():
                 return None, None, None, None
             if self.action_chunk_fitted.shape[1] == 0:
                 return None, None, None, None
+            sequential = getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential'
+            last_index = self.action_chunk_fitted.shape[1] - 1
+            if (
+                sequential
+                and self.action_executed_index is not None
+                and self.action_executed_index >= last_index
+            ):
+                return None, None, None, None
             if self.mode != 'control' and mode == 'control':
                 # print(f"Switching to control mode, current action_chunk_index={self.action_chunk_index}, reset action_chunk_index to 0.")
                 self.action_chunk_index = 0
             self.mode = mode
             self.action_chunk_index = min(self.action_chunk_index + 1, self.action_chunk_fitted.shape[1] - 1)
-            # notify any waiter that the action index advanced
-            self.polynomial_cond.notify_all()
+            if not sequential:
+                self.polynomial_cond.notify_all()
             # print(self.action_chunk_fitted.shape, len(self.action_chunks), self.action_chunks[0].shape, "!"*50)
             action_raw_index = int(self.action_chunk_index/(self.action_chunk_fitted.shape[1]/len(self.action_chunks)))
             action_raw_index = min(action_raw_index, len(self.action_chunks)-1)
@@ -438,6 +454,34 @@ class RealtimeDataManager():
             vel_fitted = self.vel_chunk_fitted[:, self.action_chunk_index]
             acc_fitted = self.acc_chunk_fitted[:, self.action_chunk_index]
             return action_fitted, action_raw, vel_fitted, acc_fitted
+
+    def mark_action_executed(self):
+        """Acknowledge completion of the action most recently selected for control."""
+        with self.polynomial_cond:
+            if self.action_chunk_index is not None:
+                self.action_executed_index = self.action_chunk_index
+            self.polynomial_cond.notify_all()
+
+    def needs_action_replenishment(self, min_remaining=0):
+        """Return True when the fitted action chunk is close to being consumed."""
+        threshold = max(0, int(min_remaining))
+        with self.polynomial_thread_lock:
+            if self.action_chunk_fitted is None or self.action_chunk_index is None:
+                return True
+            if self.action_chunk_fitted.shape[1] == 0:
+                return True
+            last_index = self.action_chunk_fitted.shape[1] - 1
+            sequential = getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential'
+            index = self.action_executed_index if sequential else self.action_chunk_index
+            if index is None:
+                return True
+            return last_index - int(index) <= threshold
+
+    def cancel_waiters(self):
+        """Cancel synchronous waits, for example when an episode terminates."""
+        with self.polynomial_cond:
+            self.wait_generation += 1
+            self.polynomial_cond.notify_all()
     
     def get_prob_progress(self):
         """Get the current prob_progress value indexed by action_chunk_index.
@@ -464,11 +508,12 @@ class RealtimeDataManager():
         with self.action_thread_lock:
             return copy.copy(self.action_chunks)
     
-    def pop_observe_data(self, num_samples = 1):
+    def pop_observe_data(self, num_samples=1, latest_only=False):
         """Pop the latest observe data from the buffer.
 
         Args:
             num_samples (int, optional): The number of data frames to pop. Defaults to 1. If num_samples is greater than 1, a list of data frames will be returned.
+            latest_only (bool, optional): Drop older queued frames after popping the latest samples.
 
         Returns:
             dict | list: The observe data frame. None if the buffer is empty.
@@ -477,7 +522,20 @@ class RealtimeDataManager():
         with self.observe_thread_lock:
             if len(self.observe_buffer) >= num_samples:
                 data = self.observe_buffer.pop() if num_samples == 1 else [self.observe_buffer.pop() for _ in range(num_samples)]
+                if latest_only:
+                    self.observe_buffer.clear()
         return data
+
+    def restore_observe_data(self, data, only_if_empty=False):
+        """Restore observations removed for an inference request that did not complete."""
+        if data is None:
+            return
+        frames = data if isinstance(data, list) else [data]
+        with self.observe_thread_lock:
+            if only_if_empty and self.observe_buffer:
+                return
+            for frame in reversed(frames):
+                self.observe_buffer.append(frame)
     
     def read_observe_data(self):
         """Read the latest observe data from the buffer.
@@ -523,6 +581,7 @@ class RealtimeDataManager():
             self.observe_buffer.clear()
             self.observe_add_timestamps.clear()
             self.observe_fps = 0.0
+            self.frame_count = 0
         
         with self.polynomial_thread_lock:
             self.action_chunk_fitted = None
@@ -530,7 +589,9 @@ class RealtimeDataManager():
             self.acc_chunk_fitted = None
             self.timestamps_fitted = None
             self.action_chunk_index = None
+            self.action_executed_index = None
             self.prob_progress = None
+            self.wait_generation += 1
             # notify waiters that action data has been cleared
             self.polynomial_cond.notify_all()
             
@@ -559,12 +620,20 @@ class RealtimeDataManager():
                     result = False
                 else:
                     target_index = max(0, self.action_chunk_fitted.shape[1] - 1)
+                    generation = self.wait_generation
+                    sequential = getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential'
                     self.polynomial_cond.wait_for(
-                        lambda: (self.action_chunk_index is not None
-                                 and self.action_chunk_fitted is not None
-                                 and self.action_chunk_index >= target_index)
+                        lambda: self.wait_generation != generation or (
+                            self.action_chunk_fitted is not None
+                            and (
+                                self.action_executed_index if sequential else self.action_chunk_index
+                            ) is not None
+                            and (
+                                self.action_executed_index if sequential else self.action_chunk_index
+                            ) >= target_index
+                        )
                     )
-                    result = True
+                    result = self.wait_generation == generation
         else:
             raise ValueError("mode must be 'async' or 'sync'")
 

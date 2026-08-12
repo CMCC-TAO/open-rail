@@ -6,6 +6,8 @@ import logging
 import time
 import threading
 import os
+import signal
+import subprocess
 import numpy as np
 from collections import deque
 from typing import Dict, Set, Optional
@@ -19,7 +21,6 @@ class VisualizeServer:
         # including script/uvicorn execution paths.
         self.logger = logging.getLogger(__name__)
         self.config = visualize_config
-        self.kill_port(self.config.port)
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = False
 
@@ -39,10 +40,21 @@ class VisualizeServer:
         self.vis_global_step = 0
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
-        self.logger.info("Initializing server on %s:%d", self.config.host, self.config.port)
+        self.logger.info("Visualization component initialized for %s:%d", self.config.host, self.config.port)
 
     def kill_port(self, port):
-        os.system(f'kill -9 $(lsof -t -i:{port})')
+        try:
+            result = subprocess.run(
+                ['lsof', '-t', f'-i:{port}'],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            return
+        for value in result.stdout.split():
+            if value.isdigit() and int(value) != os.getpid():
+                os.kill(int(value), signal.SIGKILL)
 
     def update_image_data(self, imgs: Dict):
         """Update image data.
@@ -443,6 +455,7 @@ class VisualizeServer:
         """Start the server in a background daemon thread (idempotent)."""
         if hasattr(self, 'main_thread') and self.main_thread and self.main_thread.is_alive():
             return
+        self.kill_port(self.config.port)
         # self._create_img_executor()
         self.main_thread = threading.Thread(
             target=self._main_thread_fun,

@@ -63,11 +63,27 @@ def get_robot(config: ConfigDict):
     elif robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
         return RobotBody(robot_config)
+    elif robot_type == RobotType.ROBOCASA:
+        from client.robots.robocasa.body_robot import RobotBody
+        return RobotBody(robot_config)
     elif robot_type == RobotType.NAVI_WA2:
         from client.robots.navi_wa2.body_robot import RobotBody
         return RobotBody(robot_config)
     else:
         raise ValueError(f'Invalid Robot Type: {robot_type}')
+
+
+def configure_client_for_robot(config: ConfigDict, robot):
+    robot_type = RobotType(config.robots.type)
+    robot_cfg = getattr(config.robots, robot_type.value, None)
+    if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
+        config.rdm.action_layout = robot_cfg.action_layout
+        config.intra_chunk.action_layout = robot_cfg.action_layout
+    if robot_type == RobotType.ROBOCASA:
+        config.record.lerobot.robot_type = robot_type.value
+        config.record.lerobot.state_shape = int(robot.current_state.size)
+        config.record.lerobot.action_shape = int(robot.action_dim)
+    return config
 
 def parse_args():
     """Parse command line arguments for VLA-RAIL Client
@@ -250,10 +266,7 @@ if __name__ == "__main__":
     vla_zmq_client = ZMQClient(config.vla_zmq)
     
     robot = get_robot(config)
-    robot_cfg = getattr(config.robots, config.robots.type.value, None)
-    if robot_cfg is not None and hasattr(robot_cfg, 'action_layout'):
-        config.rdm.action_layout = robot_cfg.action_layout
-        config.intra_chunk.action_layout = robot_cfg.action_layout
+    configure_client_for_robot(config, robot)
     realtime_data_manager = RealtimeDataManager(config.rdm)
     inter_chunk_fuser = InterChunkFuser(config=config.inter_chunk)
     intra_chunk_smoother = IntraChunkSmoother(config=config.intra_chunk)

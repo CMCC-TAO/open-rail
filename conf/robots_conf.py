@@ -16,6 +16,7 @@ def _ordered_config(value):
 class RobotType(str, Enum):
     A2D = 'a2d'
     MOCK = 'mock'
+    ROBOCASA = 'robocasa'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
 
@@ -104,6 +105,46 @@ def get_mock_config():
     config.state_action_range = [[0, 16], [58, 70]]
     config.dataset_path = '/home/robot/Music/task_39_only1'
     # config.dataset_path = '/home/robot/Music'
+    return config
+
+
+def get_robocasa_config():
+    config = ConfigDict()
+    config.env_name = 'PickPlaceCounterToCabinet'
+    config.split = 'target'
+    config.seed = 42
+    config.camera_width = 256
+    config.camera_height = 256
+    config.enable_render = True
+    config.max_episode_steps = 1000
+    config.video_dir = ''
+    config.video_fps = 20
+    config.video_layout = 'grid'
+    config.camera = ConfigDict()
+    config.camera.ref = 'head'
+    config.camera.names = {
+        'head': 'video.robot0_agentview_left',
+        'hand_left': 'video.robot0_agentview_right',
+        'hand_right': 'video.robot0_eye_in_hand',
+    }
+    config.state_keys = [
+        'state.base_position',
+        'state.base_rotation',
+        'state.end_effector_position_relative',
+        'state.end_effector_rotation_relative',
+        'state.gripper_qpos',
+    ]
+    config.action_layout = _ordered_config({
+        'end_effector_position': {'start': 0, 'end': 3, 'policy': 'gradual'},
+        'end_effector_rotation': {'start': 3, 'end': 6, 'policy': 'gradual'},
+        'gripper_close': {
+            'start': 6, 'end': 7, 'policy': 'stepwise', 'smooth': False,
+        },
+        'base_motion': {'start': 7, 'end': 11, 'policy': 'gradual'},
+        'control_mode': {
+            'start': 11, 'end': 12, 'policy': 'stepwise', 'smooth': False,
+        },
+    })
     return config
 
 def get_ti5_t170c_config():
@@ -240,6 +281,7 @@ def get_robots_config():
     config.type = RobotType.A2D
     config.a2d = get_a2d_config()
     config.mock = get_mock_config()
+    config.robocasa = get_robocasa_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()
     return config

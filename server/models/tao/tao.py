@@ -30,6 +30,7 @@ class ModelVLA:
             device=device, 
             embodiment_tag=embodiment_tag
         )
+        self._reported_action_order = False
         
     def infer(self, sequence, verbose:bool=False):
         """Perform inference on input sequence data
@@ -63,6 +64,29 @@ class ModelVLA:
         if isinstance(predicted_action, dict) and 'progress' in predicted_action:
             ext_result['prob_progress'] = predicted_action['progress'][0, :, -1]
             del predicted_action['progress']
-        predicted_action = np.concatenate([v.squeeze(0) for v in predicted_action['action'].values()], axis=1)
+        action_dict = predicted_action['action']
+        action_keys = list(self.cfg.get('action_keys', []))
+        robocasa_keys = [
+            'end_effector_position',
+            'end_effector_rotation',
+            'gripper_close',
+            'base_motion',
+            'control_mode',
+        ]
+        if not action_keys and all(key in action_dict for key in robocasa_keys):
+            action_keys = robocasa_keys
+        if not action_keys and all(f'action.{key}' in action_dict for key in robocasa_keys):
+            action_keys = [f'action.{key}' for key in robocasa_keys]
+        if action_keys:
+            missing = [key for key in action_keys if key not in action_dict]
+            if missing:
+                raise KeyError(f'TAO action output is missing configured keys: {missing}')
+            action_values = [action_dict[key] for key in action_keys]
+        else:
+            action_values = list(action_dict.values())
+        if not self._reported_action_order:
+            print(f'TAO action order: {action_keys or list(action_dict.keys())}')
+            self._reported_action_order = True
+        predicted_action = np.concatenate([value.squeeze(0) for value in action_values], axis=1)
         print(time.time() - time1, 'action shape:', predicted_action.shape)
         return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp'], 'ext': ext_result}
