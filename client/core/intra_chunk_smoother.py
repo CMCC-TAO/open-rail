@@ -22,8 +22,10 @@ class IntraChunkSmoother():
         self.action_layout = dict(getattr(config, 'action_layout', {}) or {})
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         # Create thread pools for parallel trajectory fitting
-        self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers)
-        self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers)
+        self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers,
+                                                        thread_name_prefix="joint_fitting_thread")
+        self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers,
+                                                        thread_name_prefix="gripper_fitting_thread")
         
         # Initialize trajectory data storage
         # self.traj = None
