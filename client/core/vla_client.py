@@ -414,15 +414,6 @@ class VLAClient():
             # print(f'\rInference count: {self.realtime_data_manager.infer_count}, current infer time: {self.realtime_data_manager.start_intra_traj_marker-self.realtime_data_manager.start_infer_marker:.4f}s, current traj time: {self.realtime_data_manager.start_ctrl_marker-self.realtime_data_manager.start_intra_traj_marker:.4f}s', end='', flush=True)
             # symbol = '=' * 10
     def _control_thread_fun(self):
-        """Control thread function for real-time robot action execution.
-        
-        This method runs periodically to:
-        - Retrieve fitted actions from the data manager
-        - Send actions to the robot for execution
-        - Record actions if recording is enabled
-        - Update visualization if enabled
-        - Update monitoring information
-        """
         if not self.is_control_thread_running:
             return
 
