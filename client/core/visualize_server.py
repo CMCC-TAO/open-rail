@@ -256,7 +256,8 @@ class VisualizeServer:
         with self.data_lock:
             if not self.latest_imgs or self.latest_imgs_seq == self.sent_imgs_seq:
                 return
-            imgs = self.latest_imgs.copy()
+            # imgs = self.latest_imgs.copy()
+            imgs = self.latest_imgs
             img_seq = self.latest_imgs_seq
 
         camera_open = self._get_camera_open_map()
@@ -395,6 +396,7 @@ class VisualizeServer:
             self.client_handler,
             self.config.host,
             self.config.port,
+            compression=None,
             max_size=self.config.max_size,
             ping_interval=self.config.ping_interval,
             ping_timeout=self.config.ping_timeout
