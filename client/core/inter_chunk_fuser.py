@@ -75,7 +75,7 @@ class InterChunkFuser:
             # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
             # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
         elif mode == 'min_jerk':
-            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition(
+            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition_numpy(
                 next_action_chunk,
                 next_vel_chunk,
                 next_acc_chunk,
@@ -439,6 +439,108 @@ class InterChunkFuser:
                 # Update the action chunk with the new smoothed position.
                 if target_chunk_index + i < action_chunk_smoothed.shape[1]:
                     action_chunk_smoothed[joint_idx, target_chunk_index + i] = smoothed_pos
+        return action_chunk_smoothed, target_chunk_index
+
+
+    @run_time_decorator
+    def _min_jerk_chunk_transition_numpy(self,
+        next_action_chunk,
+        next_vel_chunk,
+        next_acc_chunk,
+        next_timestamps,
+        target_chunk_index,
+        current_pos,
+        current_vel,
+        current_acc,
+        joint_indices,
+        blend_threshold=0.7,
+        adaptive_factor=-1,
+    ):
+        """
+        Vectorized NumPy version of minimum-jerk chunk transition.
+        Keeps `_min_jerk_chunk_transition` unchanged and computes
+        joint/time dimensions in parallel for better performance.
+        """
+        if current_pos is None or current_vel is None:
+            return next_action_chunk, target_chunk_index
+
+        target_pos = next_action_chunk[:, target_chunk_index].copy()
+        target_vel = next_vel_chunk[:, target_chunk_index].copy()
+        target_acc = next_acc_chunk[:, target_chunk_index].copy() if next_acc_chunk is not None else np.zeros_like(target_vel)
+
+        pos_diff = np.linalg.norm(current_pos[joint_indices] - target_pos[joint_indices])
+        vel_diff = np.linalg.norm(current_vel[joint_indices] - target_vel[joint_indices])
+        acc_diff = np.linalg.norm(current_acc[joint_indices] - target_acc[joint_indices])
+
+        base_transition = next_action_chunk.shape[1]
+        if adaptive_factor < 0:
+            adaptive_factor = min(1.0, 0.25 + pos_diff * 1.0 + vel_diff * 0.75 + acc_diff * 0.15)
+        else:
+            adaptive_factor = min(1.0, max(0.0, float(adaptive_factor)))
+        transition_length = min(int(base_transition * adaptive_factor), next_action_chunk.shape[1] - target_chunk_index)
+
+        if transition_length <= 1:
+            return next_action_chunk, target_chunk_index
+
+        action_chunk_smoothed = next_action_chunk.copy()
+
+        dt = next_timestamps[1] - next_timestamps[0] if len(next_timestamps) > 1 else 0.005
+        T = transition_length * dt
+
+        end_index = min(target_chunk_index + transition_length - 1, next_action_chunk.shape[1] - 1)
+
+        # Boundary conditions for selected joints, all in shape (num_joints, 1)
+        x0 = current_pos[joint_indices][:, None]
+        v0 = (current_vel[joint_indices] * T)[:, None]
+        a0 = (current_acc[joint_indices] * T * T)[:, None]
+
+        xf = next_action_chunk[joint_indices, end_index][:, None]
+        vf = (
+            (next_vel_chunk[joint_indices, end_index] * T)[:, None]
+            if end_index < next_vel_chunk.shape[1]
+            else np.zeros_like(xf)
+        )
+        af = (
+            (next_acc_chunk[joint_indices, end_index] * T * T)[:, None]
+            if (next_acc_chunk is not None and end_index < next_acc_chunk.shape[1])
+            else np.zeros_like(xf)
+        )
+
+        # Normalized time basis in shape (1, transition_length)
+        tau = np.linspace(0.0, 1.0, transition_length, dtype=next_action_chunk.dtype)[None, :]
+        tau2 = tau * tau
+        tau3 = tau2 * tau
+        tau4 = tau3 * tau
+        tau5 = tau4 * tau
+
+        h0 = 1 - 10 * tau3 + 15 * tau4 - 6 * tau5
+        h1 = tau - 6 * tau3 + 8 * tau4 - 3 * tau5
+        h2 = 0.5 * tau2 - 1.5 * tau3 + 1.5 * tau4 - 0.5 * tau5
+        h3 = 10 * tau3 - 15 * tau4 + 6 * tau5
+        h4 = -4 * tau3 + 7 * tau4 - 3 * tau5
+        h5 = 0.5 * tau3 - tau4 + 0.5 * tau5
+
+        # Parallel compute for (num_joints, transition_length)
+        smoothed_pos = h0 * x0 + h1 * v0 + h2 * a0 + h3 * xf + h4 * vf + h5 * af
+
+        # Blend tail with original target trajectory for seamless continuation
+        blend_mask = tau[0] > blend_threshold
+        if np.any(blend_mask):
+            blend_ratio = (tau[0, blend_mask] - blend_threshold) / (1.0 - blend_threshold)
+            target_segment = next_action_chunk[
+                joint_indices,
+                target_chunk_index : target_chunk_index + transition_length,
+            ]
+            smoothed_pos[:, blend_mask] = (
+                (1.0 - blend_ratio)[None, :] * smoothed_pos[:, blend_mask]
+                + blend_ratio[None, :] * target_segment[:, blend_mask]
+            )
+
+        action_chunk_smoothed[
+            joint_indices,
+            target_chunk_index : target_chunk_index + transition_length,
+        ] = smoothed_pos
+
         return action_chunk_smoothed, target_chunk_index
 
 
