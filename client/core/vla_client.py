@@ -116,7 +116,7 @@ class VLAClient():
         self.show_thread_lock = threading.Lock()
 
         # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
-        self._img_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_enc")
+        # self._img_executor = ThreadPoolExecutor(max_workers=3*1, thread_name_prefix="img_enc")
 
         # Inference variables
         self.set_observe_period(speed=self.config.controller.speed)
@@ -313,8 +313,8 @@ class VLAClient():
         self.vla_zmq.close()
         self.visualize_server.stop_server()
 
-        if hasattr(self, '_img_executor') and self._img_executor is not None:
-            self._img_executor.shutdown(wait=False)
+        # if hasattr(self, '_img_executor') and self._img_executor is not None:
+        #     self._img_executor.shutdown(wait=False)
 
         self.logger.info('Inference client closed.')
     def reset(self):
@@ -711,10 +711,14 @@ class VLAClient():
             self.camera_shape_dict = {key: value.shape for key, value in cam_items}
             # print(f"Debug: camera shape dict={self.camera_shape_dict}")
         # Use shared thread pool to parallel process all cameras (avoid per-frame pool creation)
-        futures = [self._img_executor.submit(self._process_image_thread_fun, key, value) for key, value in cam_items]
-        results = [future.result() for future in futures]  # Wait for all tasks to complete
+        # futures = [self._img_executor.submit(self._process_image_thread_fun, key, value) for key, value in cam_items]
+        # results = [future.result() for future in futures]  # Wait for all tasks to complete
         encoded_imgs = {}
-        for key, encoded_img in results:
+        # for key, encoded_img in results:
+        #     encoded_imgs[key] = encoded_img
+        # Note: process image one by one is more efficiency
+        for key, value in cam_items:
+            key, encoded_img = self._process_image_thread_fun(key, value)
             encoded_imgs[key] = encoded_img
             # Print the size of encoded_img in MB
             # Encoded image size for cam.hand_left: 66376 bytes (0.0633 MB)

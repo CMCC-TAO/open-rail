@@ -161,6 +161,70 @@ class IntraChunkSmoother():
         # acceleration_chunk_fitted = np.polyval(second_derivative_coefficients, x)
         # print(f"fitting degree: {deg}, time_step: {time_step}")
         return index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
+    def _joint_traj_fitting_batch(self, timestamps, joint_chunks, start_time, end_time, deg = 5, time_step = 0.001):
+        """Batch polynomial fitting for multiple joints.
+
+        Args:
+            timestamps (np.ndarray): shape [num_points]
+            joint_chunks (np.ndarray): shape [num_joints, num_points]
+        Returns:
+            tuple: fitted trajectory / velocity / acceleration,
+                each in shape [num_joints, num_fitted_points]
+        """
+        timestamps = np.asarray(timestamps, dtype=float).reshape(-1)
+        joint_chunks = np.asarray(joint_chunks, dtype=float)
+
+        if joint_chunks.ndim != 2:
+            raise ValueError(f"joint_chunks must be 2D, got shape {joint_chunks.shape}")
+
+        num_joints, num_points = joint_chunks.shape
+        if num_points != timestamps.size:
+            raise ValueError(
+                f"timestamps length ({timestamps.size}) must match joint_chunks.shape[1] ({num_points})"
+            )
+
+        # Fit degree cannot exceed num_points - 1
+        fit_deg = int(min(deg, max(num_points - 1, 0)))
+
+        # Solve polynomial coefficients for all joints together.
+        # coeffs shape: [fit_deg + 1, num_joints], highest power first.
+        vander = np.vander(timestamps, N=fit_deg + 1)
+        coeffs, _, _, _ = np.linalg.lstsq(vander, joint_chunks.T, rcond=None)
+
+        # Derivative coefficients in batch (avoid np.polyder on 2D arrays).
+        # p'(x): c_k * (n-k), where k iterates over coefficient index.
+        if fit_deg >= 1:
+            deriv1_weights = np.arange(fit_deg, 0, -1, dtype=coeffs.dtype)[:, None]
+            deriv1_coeffs = coeffs[:-1, :] * deriv1_weights
+        else:
+            deriv1_coeffs = np.zeros((0, num_joints), dtype=coeffs.dtype)
+
+        if fit_deg >= 2:
+            deriv2_weights = np.arange(fit_deg - 1, 0, -1, dtype=coeffs.dtype)[:, None]
+            deriv2_coeffs = deriv1_coeffs[:-1, :] * deriv2_weights
+        else:
+            deriv2_coeffs = np.zeros((0, num_joints), dtype=coeffs.dtype)
+
+        # Generate fitted timestamps and evaluate in batch via Vandermonde matrices.
+        x = np.arange(start_time, end_time, time_step)
+        num_x = x.size
+
+        vander_x = np.vander(x, N=fit_deg + 1)
+        joint_chunk_fitted = (vander_x @ coeffs).T
+
+        if deriv1_coeffs.shape[0] > 0:
+            vander_x_d1 = np.vander(x, N=deriv1_coeffs.shape[0])
+            velocity_chunk_fitted = (vander_x_d1 @ deriv1_coeffs).T
+        else:
+            velocity_chunk_fitted = np.zeros((num_joints, num_x), dtype=coeffs.dtype)
+
+        if deriv2_coeffs.shape[0] > 0:
+            vander_x_d2 = np.vander(x, N=deriv2_coeffs.shape[0])
+            acceleration_chunk_fitted = (vander_x_d2 @ deriv2_coeffs).T
+        else:
+            acceleration_chunk_fitted = np.zeros((num_joints, num_x), dtype=coeffs.dtype)
+
+        return joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
     def _gripper_traj_fitting(self, timestamps, gripper_chunk, index, start_time, end_time, time_step = 0.001):
         """Fit a gripper trajectory using mean filtering and return the fitted trajectory defined by start_time, end_time and time_step.
@@ -227,31 +291,50 @@ class IntraChunkSmoother():
         """
         # use config parameters for fitting degree and time step to allow dynamic adjustment without modifying code
         deg=self.config.fitting_deg 
+        action_dim = action_chunk.shape[0]
+        final_joint_results = [None] * action_dim
+        final_velocity_results = [None] * action_dim
+        final_acceleration_results = [None] * action_dim
 
         futures = []
         for name, seg in self.action_layout.items():
             if seg['policy'] == 'manual':
                 continue
-            for index in range(seg['start'], seg['end']):
-                joint_chunk = np.array(action_chunk[index, :])
-                if seg['policy'] == 'gradual':
-                    futures.append(self.joint_fitting_executor.submit(
-                        self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
-                    ))
-                elif seg['policy'] == 'stepwise':
+            elif seg['policy'] == 'gradual':
+                joint_chunks = np.array(action_chunk[seg['start']:seg['end'], :])
+                # 一次性并行计算该段所有关节
+                j_fitted, v_fitted, a_fitted = self._joint_traj_fitting_batch(
+                    timestamps, joint_chunks, start_time, end_time, deg, time_step
+                )
+                # 将结果存入 final 结果数组
+                final_joint_results[seg['start']:seg['end']] = j_fitted
+                final_velocity_results[seg['start']:seg['end']] = v_fitted
+                final_acceleration_results[seg['start']:seg['end']] = a_fitted
+            elif seg['policy'] == 'stepwise':
+                for index in range(seg['start'], seg['end']):
+                    joint_chunk = np.array(action_chunk[index, :])
                     futures.append(self.gripper_fitting_executor.submit(
                         self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
                     ))
-                else:
-                    raise ValueError(f"Unknown policy: {seg['policy']}")
+            else:
+                raise ValueError(f"Unknown policy: {seg['policy']}")
+
+            # for index in range(seg['start'], seg['end']):
+            #     joint_chunk = np.array(action_chunk[index, :])
+            #     if seg['policy'] == 'gradual':
+            #         futures.append(self.joint_fitting_executor.submit(
+            #             self._joint_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, deg, time_step
+            #         ))
+            #     elif seg['policy'] == 'stepwise':
+            #         futures.append(self.gripper_fitting_executor.submit(
+            #             self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
+            #         ))
+            #     else:
+            #         raise ValueError(f"Unknown policy: {seg['policy']}")
 
         results = [future.result() for future in futures]
         
         # Parse results - joint_results represent joint angle data, velocity_results represent joint velocity data
-        action_dim = action_chunk.shape[0]
-        final_joint_results = [None] * action_dim
-        final_velocity_results = [None] * action_dim
-        final_acceleration_results = [None] * action_dim
         
         for index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted in results:
             final_joint_results[index] = joint_chunk_fitted

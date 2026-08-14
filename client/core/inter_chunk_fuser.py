@@ -19,7 +19,6 @@ class InterChunkFuser:
     def _cfg_value(self, cfg, key, default):
         return getattr(cfg, key, getattr(self.config, key, default))
 
-    @run_time_decorator
     def process(self, 
             next_action_chunk,
             next_vel_chunk,
@@ -31,10 +30,15 @@ class InterChunkFuser:
             currt_acc=None,
             joint_indices= None,
             step_indices = None):
+        mode = self.config.inter_chunk_mode
+        mode_cfg = self._mode_config(mode)
+        # self.logger.info(f"mode = {mode}")
+        # print(f"DEBUG: mode={mode}")
         # process first inference
         if joint_indices is None:
             joint_indices = list(range(next_action_chunk.shape[0]))
         if currt_action is None and currt_vel is None and currt_acc is None:
+            # print(f"DEBUG: NONE")
             next_vel_chunk = np.zeros_like(next_action_chunk)
             next_vel_chunk[:, 1:] = (next_action_chunk[:, 1:] - next_action_chunk[:, :-1]) / (next_timestamps[1] - next_timestamps[0])
             next_vel_chunk[:, 0] = next_vel_chunk[:, 1]
@@ -45,8 +49,6 @@ class InterChunkFuser:
             
             return next_action_chunk, next_vel_chunk, next_acc_chunk, target_chunk_index
 
-        mode = self.config.inter_chunk_mode
-        mode_cfg = self._mode_config(mode)
 
         if mode == 'search_action':
             action_chunk_smoothed, target_chunk_index = self._search_smooth_action(
@@ -311,6 +313,8 @@ class InterChunkFuser:
         action_chunk_smoothed[joint_indices, target_chunk_index:] = pos_seq
         return action_chunk_smoothed, target_chunk_index 
 
+
+    @run_time_decorator
     def _min_jerk_chunk_transition(self,
         next_action_chunk,
         next_vel_chunk,
@@ -437,6 +441,8 @@ class InterChunkFuser:
                     action_chunk_smoothed[joint_idx, target_chunk_index + i] = smoothed_pos
         return action_chunk_smoothed, target_chunk_index
 
+
+    @run_time_decorator
     def _search_smooth_action(self,
                             next_action_chunk,
                             target_chunk_index,
