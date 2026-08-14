@@ -31,6 +31,7 @@ class VisualizeServer:
 
         # Data send queue (deque gives O(1) append/popleft; bounded by maxlen)
         self.data_send_queue = deque(maxlen=1000)
+        self._trajectory_type = ['position'] # position, velocity, and acceleration， TODO: move this to config
 
         # Server instance
         self.server = None
@@ -112,6 +113,8 @@ class VisualizeServer:
 
             # TODO: use real velocity/acceleration
             # Velocity/acceleration for state (derived from state)
+            if 'velocity' not in self._trajectory_type and 'acceleration' not in self._trajectory_type:
+                return
             state_vel = None
             state_acc = None
             if current_state is not None:
@@ -312,9 +315,11 @@ class VisualizeServer:
         with self.data_lock:
             data_to_send = self.data_send_queue.copy()
             self.data_send_queue.clear()
+            # print(f"DEBUG: send chart data length: {len(data_to_send)}")
 
         for data_packet in data_to_send:
             message_json = json.dumps({'type': 'joint_data', 'data': data_packet})
+            # print(f"send chart data pack: {data_packet}")
 
             for client in self.clients.copy():
                 try:
@@ -378,7 +383,19 @@ class VisualizeServer:
             await self.unregister_client(websocket)
 
     async def data_sender(self):
-        """Main data-sending loop: camera frames and chart data at up to 50 Hz."""
+        """
+        Main data-sending loop: camera frames and chart data at up to 50 Hz.
+
+        This asynchronous method continuously sends camera frames and chart data 
+        while the instance is running. The loop frequency is determined by the 
+        configured `updata_fps` setting. If an exception occurs during the 
+        sending process, it logs the error and waits for 1 second before 
+        retrying to prevent tight error loops.
+
+        Raises:
+            Exception: Catches and logs any exception that occurs within the 
+                    data sending loop, allowing the loop to continue running.
+        """
         while self.running:
             try:
                 await self.send_camera_data()
