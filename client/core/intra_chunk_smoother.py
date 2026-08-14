@@ -302,11 +302,11 @@ class IntraChunkSmoother():
                 continue
             elif seg['policy'] == 'gradual':
                 joint_chunks = np.array(action_chunk[seg['start']:seg['end'], :])
-                # 一次性并行计算该段所有关节
+                # Compute all joints in this segment in parallel at once
                 j_fitted, v_fitted, a_fitted = self._joint_traj_fitting_batch(
                     timestamps, joint_chunks, start_time, end_time, deg, time_step
                 )
-                # 将结果存入 final 结果数组
+                # Store the results into the final result arrays
                 final_joint_results[seg['start']:seg['end']] = j_fitted
                 final_velocity_results[seg['start']:seg['end']] = v_fitted
                 final_acceleration_results[seg['start']:seg['end']] = a_fitted
