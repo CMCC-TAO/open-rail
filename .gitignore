@@ -141,3 +141,4 @@ install
 log
 conf/*.yaml
 !config/default_conf.yaml
+*.svg

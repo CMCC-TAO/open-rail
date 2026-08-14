@@ -180,7 +180,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
         "loggers": {
             "client.core.vla_client": {
                 "handlers": ["file"],
-                "level": "DEBUG",
+                "level": "INFO",
                 "propagate": False,
             },
             "client.core.vla_client_sync": {
@@ -190,7 +190,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
             },
             "client.core.realtime_data_manager": {
                 "handlers": ["file"],
-                "level": "DEBUG",
+                "level": "INFO",
                 "propagate": False,
             },
             "client.core.task_language_manager": {
@@ -199,7 +199,7 @@ def get_logging_config(log_filename: str = "app.log") -> dict:
                 "propagate": False,
             },
             "client.core.visualize_server": {
-                "handlers": ["console", "file"],
+                "handlers": ["file"],
                 "level": "DEBUG",
                 "propagate": False,
             },
