@@ -306,29 +306,34 @@ class VisualizeServer:
             await self.unregister_client(client)
 
     async def send_chart_data(self):
-        """Send chart (joint trajectory) data to all clients."""
+        """Send chart (joint trajectory) data to all clients in one batched message."""
         if not self.clients or not self.data_send_queue:
             return
 
         disconnected_clients = set()
 
         with self.data_lock:
-            data_to_send = self.data_send_queue.copy()
+            data_to_send = list(self.data_send_queue)
             self.data_send_queue.clear()
-            # print(f"DEBUG: send chart data length: {len(data_to_send)}")
 
-        for data_packet in data_to_send:
-            message_json = json.dumps({'type': 'joint_data', 'data': data_packet})
-            # print(f"send chart data pack: {data_packet}")
+        if not data_to_send:
+            return
 
-            for client in self.clients.copy():
-                try:
-                    await client.send(message_json)
-                except websockets.exceptions.ConnectionClosed:
-                    disconnected_clients.add(client)
-                except Exception as e:
-                    self.logger.warning("Failed to send chart data to client: %s", e)
-                    disconnected_clients.add(client)
+        message_json = json.dumps({
+            'type': 'joint_data_batch',
+            'data': data_to_send,
+            'count': len(data_to_send),
+            'timestamp': time.time()
+        })
+
+        for client in self.clients.copy():
+            try:
+                await client.send(message_json)
+            except websockets.exceptions.ConnectionClosed:
+                disconnected_clients.add(client)
+            except Exception as e:
+                self.logger.warning("Failed to send chart data batch to client: %s", e)
+                disconnected_clients.add(client)
 
         for client in disconnected_clients:
             await self.unregister_client(client)
