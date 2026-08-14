@@ -40,17 +40,19 @@ async function decodeCameraBinaryFrame(raw) {
 }
 
 function handleCamWSMessage(msg) {
-  if (!msg || msg.type !== 'joint_data' || !msg.data) return;
+  if (!msg || msg.type !== 'joint_data_batch' || !Array.isArray(msg.data) || msg.data.length === 0) return;
 
-  const { tab, type, joints_y, timestamp } = msg.data;
-  if (tab !== 'position' || !Array.isArray(joints_y) || joints_y.length === 0) return;
+  for (const packet of msg.data) {
+    const { tab, type, joints_y, timestamp } = packet;
+    if (tab !== 'position' || !Array.isArray(joints_y) || joints_y.length === 0) continue;
 
-  if (type === 'state') {
-    ingestTrajData(joints_y, [], [], timestamp);
-  } else if (type === 'action_fitted' || type === 'action') {
-    ingestTrajData([], joints_y, [], timestamp);
-  } else if (type === 'action_raw' || type === 'origin') {
-    ingestTrajData([], [], joints_y, timestamp);
+    if (type === 'state') {
+      ingestTrajData(joints_y, [], [], timestamp);
+    } else if (type === 'action_fitted' || type === 'action') {
+      ingestTrajData([], joints_y, [], timestamp);
+    } else if (type === 'action_raw' || type === 'origin') {
+      ingestTrajData([], [], joints_y, timestamp);
+    }
   }
 }
 
