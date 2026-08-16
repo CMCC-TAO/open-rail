@@ -6,9 +6,10 @@ import numpy as np
 from queue import Empty
 from datetime import datetime
 from collections import deque
+from types import SimpleNamespace
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Process, Manager,Queue
+from multiprocessing import Process, Queue, Value, Event
 from typing import Any, Dict, List, Optional, Union, Tuple
 from client.utils.util import run_time_decorator
 from client.core.lerobot_dataset_recorder import LeRobotDatasetRecorder
@@ -70,17 +71,27 @@ class DataRecordManager:
         This method sets up the necessary shared variables and data structures that will be used
         across multiple processes for synchronization and data sharing.
         """
-        self.manager = Manager()
-        self.shared_data = self.manager.Namespace()
-        # Shared state and counters
-        self.shared_data.total_frames = self.manager.Value('i', 0)
-        self.shared_data.total_videos = self.manager.Value('i', 0)
-        self.shared_data.total_episodes = self.manager.Value('i', 0)
-        self.shared_data.episode_chunk = self.manager.Value('i', 0)
-        self.shared_data.episode_index = self.manager.Value('i', 0)
-        self.shared_data.eval_record_id = self.manager.Value('i', 0) # record_id for new record
-        self.shared_data.sub_task_id = self.manager.Value('i', 0) # sub_task_id for new record
-        self.shared_data.running = self.manager.Value('b', False)
+        # Shared state and counters: use multiprocessing.Value/Event for hot fields.
+        self.shared_total_frames = Value('i', 0)
+        self.shared_total_videos = Value('i', 0)
+        self.shared_total_episodes = Value('i', 0)
+        self.shared_episode_chunk = Value('i', 0)
+        self.shared_episode_index = Value('i', 0)
+        self.shared_eval_record_id = Value('i', 0)  # record_id for new record
+        self.shared_sub_task_id = Value('i', 0)  # sub_task_id for new record
+        self.shared_running_event = Event()
+
+        # Backward-compatible shared_data access.
+        self.shared_data = SimpleNamespace(
+            total_frames=self.shared_total_frames,
+            total_videos=self.shared_total_videos,
+            total_episodes=self.shared_total_episodes,
+            episode_chunk=self.shared_episode_chunk,
+            episode_index=self.shared_episode_index,
+            eval_record_id=self.shared_eval_record_id,
+            sub_task_id=self.shared_sub_task_id,
+            running=self.shared_running_event,
+        )
     
     def _sanitize_task_name(self, task: Optional[str]) -> str:
         task_name = str(task).strip() if task is not None else ""
@@ -204,7 +215,7 @@ class DataRecordManager:
                                 is_record_expe_data = command.get("is_record_expe_data", False))
                     write_future = write_executor.submit(self._write_process_fun)
                 elif command.get("command", "") == "stop":
-                    self.shared_data.running.value = False
+                    self.shared_data.running.clear()
                     if write_future is not None:
                         try:
                             write_future.result()
@@ -227,7 +238,7 @@ class DataRecordManager:
                     except Exception as e:
                         self.logger.exception(f"writer_worker thread exited with exception during resume recording: {e}")
                 elif command.get("command", "") == "shutdown":
-                    self.shared_data.running.value = False
+                    self.shared_data.running.clear()
                     if write_future is not None:
                         try:
                             write_future.result()
@@ -299,7 +310,7 @@ class DataRecordManager:
             session_id = self._bump_recording_session_id()
             self._clear_queues()
 
-            self.shared_data.running.value = True
+            self.shared_data.running.set()
             task_dir = self._sanitize_task_name(task_id) + '_' + datetime.now().strftime("%Y%m%d")
             command = {
                 "command": "start",
@@ -326,8 +337,8 @@ class DataRecordManager:
         - Let resident writer task continue draining ``record_queue``.
         """
         self._bump_recording_session_id()
-        if self.shared_data.running.value:
-            self.shared_data.running.value = False
+        if self.shared_data.running.is_set():
+            self.shared_data.running.clear()
             self.logger.info("Signaled writer task to stop after draining queue.")
 
         command = {
@@ -400,7 +411,7 @@ class DataRecordManager:
         Raises:
             AssertionError: If the provided timestamp is not greater than the last recorded timestamp.
         """
-        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
+        if (not self.shared_data.running.is_set()) or (session_id != self._get_recording_session_id()):
             return
 
         start_time = time.perf_counter()
@@ -442,7 +453,7 @@ class DataRecordManager:
         Raises:
             AssertionError: If the provided timestamp is not strictly increasing compared to the last recorded one.
         """
-        if (not self.shared_data.running.value) or (session_id != self._get_recording_session_id()):
+        if (not self.shared_data.running.is_set()) or (session_id != self._get_recording_session_id()):
             return
 
         # check action shape 
@@ -488,7 +499,7 @@ class DataRecordManager:
                 )
             # print(f"DEBUG: Mark1")    
             # recording in the loop for all recorders
-            while self.shared_data.running.value or (not self.record_queue.empty()):
+            while self.shared_data.running.is_set() or (not self.record_queue.empty()):
                 # Get state and action data from queue
                 try:
                     step_state, step_action, step_extra = self.record_queue.get(timeout=0.1)
@@ -502,7 +513,7 @@ class DataRecordManager:
                     if self.config.get('is_record_eval_log', False):
                         self.eval_recorder.add_frame_async(step_extra=step_extra)
                 except Empty as e:
-                    if self.shared_data.running.value:
+                    if self.shared_data.running.is_set():
                         self.logger.exception(f"Record queue empty, waiting for data: {e}")
                         # time.sleep(0.03)
                     else:
@@ -582,12 +593,6 @@ class DataRecordManager:
             self.logger.debug("writer_command_queue close/join failed", exc_info=True)
 
         self.logger.info("Closing DataRecordManager, record queue closed.")
-        try:
-            if getattr(self, "manager", None) is not None:
-                self.manager.shutdown()
-        except Exception:
-            self.logger.debug("manager shutdown failed", exc_info=True)
-
         self.logger.info("DataRecordManager closed successfully.")
         
     def _clear_queues(self):
