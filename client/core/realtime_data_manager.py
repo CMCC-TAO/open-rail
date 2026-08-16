@@ -395,7 +395,7 @@ class RealtimeDataManager():
             bool: True if the wait condition was satisfied (or sleep completed). False if
                   there was no fitted action chunk to wait on.
         """
-        start_time = time.perf_counter()
+        # start_time = time.perf_counter()
         result = False
         if mode == 'async':
             time.sleep(wait_time)
@@ -415,6 +415,6 @@ class RealtimeDataManager():
         else:
             raise ValueError("mode must be 'async' or 'sync'")
 
-        actual_wait_time = (time.perf_counter() - start_time) * 1000.0
-        self.logger.info(f"mode={mode}, real_wait_time={actual_wait_time:.3f}ms.")
+        # actual_wait_time = (time.perf_counter() - start_time) * 1000.0
+        # self.logger.debug(f"mode={mode}, real_wait_time={actual_wait_time:.3f} ms.")
         return result
