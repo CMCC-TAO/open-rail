@@ -22,10 +22,10 @@ class IntraChunkSmoother():
         self.action_layout = dict(getattr(config, 'action_layout', {}) or {})
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         # Create thread pools for parallel trajectory fitting
-        self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers,
-                                                        thread_name_prefix="joint_fitting_thread")
-        self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers,
-                                                        thread_name_prefix="gripper_fitting_thread")
+        # self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers,
+        #                                                 thread_name_prefix="joint_fitting_thread")
+        # self.gripper_fitting_executor = ThreadPoolExecutor(max_workers=config.max_gripper_fitting_workers,
+        #                                                 thread_name_prefix="gripper_fitting_thread")
         
         # Initialize trajectory data storage
         # self.traj = None
@@ -227,52 +227,85 @@ class IntraChunkSmoother():
         return joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted
 
     def _gripper_traj_fitting(self, timestamps, gripper_chunk, index, start_time, end_time, time_step = 0.001):
-        """Fit a gripper trajectory using mean filtering and return the fitted trajectory defined by start_time, end_time and time_step.
+        """Fit one gripper trajectory (legacy single-dimension API kept for compatibility)."""
+        gripper_chunk = np.asarray(gripper_chunk, dtype=float).reshape(1, -1)
+        gripper_fitted, velocity_fitted, acceleration_fitted = self._gripper_traj_fitting_batch(
+            timestamps=timestamps,
+            gripper_chunks=gripper_chunk,
+            start_time=start_time,
+            end_time=end_time,
+            time_step=time_step
+        )
+        return index, gripper_fitted[0], velocity_fitted[0], acceleration_fitted[0]
+
+    def _gripper_traj_fitting_batch(self, timestamps, gripper_chunks, start_time, end_time, time_step=0.001):
+        """Batch fitting for multiple gripper trajectories using numpy vectorization.
 
         Args:
-            timestamps (np.array): The timestamps of the joint trajectory in seconds.
-            gripper_chunk (np.array): The gripper trajectory to be fitted.
-            index (int): The index of the gripper with respect to the arms
-            start_time (float): The start time of the fitted trajectory in seconds.
-            end_time (float): The end time of the fitted trajectory in seconds.
-            time_step (float, optional): The time step to compute the fitted trajectory. Defaults to 0.001.
+            timestamps (np.ndarray): shape [num_points]
+            gripper_chunks (np.ndarray): shape [num_grippers, num_points]
 
         Returns:
-            tuple(int, np.array, np.array): The index of the joint, the fitted trajectory and the velocity of the fitted trajectory.
+            tuple: fitted trajectory / velocity / acceleration,
+                each in shape [num_grippers, num_fitted_points]
         """
-        # Remove outliers using mean filtering
-        length = len(gripper_chunk)
-        window_size_half = self.config.filter_window_size
+        timestamps = np.asarray(timestamps, dtype=float).reshape(-1)
+        gripper_chunks = np.asarray(gripper_chunks, dtype=float)
+
+        if gripper_chunks.ndim != 2:
+            raise ValueError(f"gripper_chunks must be 2D, got shape {gripper_chunks.shape}")
+
+        num_grippers, length = gripper_chunks.shape
+        if length != timestamps.size:
+            raise ValueError(
+                f"timestamps length ({timestamps.size}) must match gripper_chunks.shape[1] ({length})"
+            )
+
+        if length == 0:
+            return np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0))
+
+        # Keep the same filtering behavior as legacy implementation,
+        # while processing all gripper dimensions in numpy batch.
+        window_size_half = int(self.config.filter_window_size)
+        filtered = gripper_chunks.copy()
+
         for currt_index in range(length):
             if currt_index < window_size_half:
                 window_min = 0
                 window_max = min(length, window_size_half * 2 + 1)
             elif currt_index >= length - window_size_half:
-                window_min = max(0, length - window_size_half * 2 -1)
+                window_min = max(0, length - window_size_half * 2 - 1)
                 window_max = length
             else:
                 window_min = currt_index - window_size_half
                 window_max = currt_index + window_size_half + 1
-            mean = np.mean(gripper_chunk[window_min:window_max])
 
-            if mean > self.config.max_gripper_action_threshold:
-                mean = 1.0
-            elif mean < self.config.min_gripper_action_threshold:
-                mean = 0.0
-            else:
-                pass
-            gripper_chunk[currt_index] = mean
-        
-        # Interpolate the trajectory using linear interpolation
-        timestamp_fitted = np.arange(start_time, end_time, time_step)
-        gripper_chunk_fitted = []
+            mean_vec = np.mean(filtered[:, window_min:window_max], axis=1)
+            mean_vec = np.where(
+                mean_vec > self.config.max_gripper_action_threshold,
+                1.0,
+                np.where(mean_vec < self.config.min_gripper_action_threshold, 0.0, mean_vec)
+            )
+            filtered[:, currt_index] = mean_vec
+
+        # Keep interpolation behavior consistent with legacy implementation.
+        timestamps_fitted = np.arange(start_time, end_time, time_step)
+        if timestamps_fitted.size == 0:
+            return np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0))
+
+        num_fitted = timestamps_fitted.size
+        gripper_chunk_fitted = np.zeros((num_grippers, num_fitted), dtype=filtered.dtype)
+
         currt_index = 0
-        for timestamp in timestamp_fitted:
+        for i, timestamp in enumerate(timestamps_fitted):
             if timestamp > timestamps[currt_index]:
                 currt_index = min(length, currt_index + 1)
-            gripper_chunk_fitted.append((gripper_chunk[max(currt_index - 1, 0)] + gripper_chunk[min(currt_index, length - 1)]) / 2.0)
+            left_index = max(currt_index - 1, 0)
+            right_index = min(currt_index, length - 1)
+            gripper_chunk_fitted[:, i] = (filtered[:, left_index] + filtered[:, right_index]) / 2.0
 
-        return index, gripper_chunk_fitted, np.zeros_like(gripper_chunk_fitted), np.zeros_like(gripper_chunk_fitted)  # Gripper velocity and acceleration are not considered
+        zero_like = np.zeros_like(gripper_chunk_fitted)
+        return gripper_chunk_fitted, zero_like, zero_like  # Gripper velocity and acceleration are not considered
 
     @run_time_decorator
     def _traj_fitting(self, timestamps, action_chunk, start_time, end_time, time_step, joint_indices, step_indices):
@@ -311,11 +344,24 @@ class IntraChunkSmoother():
                 final_velocity_results[seg['start']:seg['end']] = v_fitted
                 final_acceleration_results[seg['start']:seg['end']] = a_fitted
             elif seg['policy'] == 'stepwise':
-                for index in range(seg['start'], seg['end']):
-                    joint_chunk = np.array(action_chunk[index, :])
-                    futures.append(self.gripper_fitting_executor.submit(
-                        self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
-                    ))
+                gripper_chunks = np.array(action_chunk[seg['start']:seg['end'], :])
+                g_fitted, g_vel_fitted, g_acc_fitted = self._gripper_traj_fitting_batch(
+                    timestamps=timestamps,
+                    gripper_chunks=gripper_chunks,
+                    start_time=start_time,
+                    end_time=end_time,
+                    time_step=time_step
+                )
+                final_joint_results[seg['start']:seg['end']] = g_fitted
+                final_velocity_results[seg['start']:seg['end']] = g_vel_fitted
+                final_acceleration_results[seg['start']:seg['end']] = g_acc_fitted
+
+                # Legacy per-dimension calling logic (kept for reference):
+                # for index in range(seg['start'], seg['end']):
+                #     joint_chunk = np.array(action_chunk[index, :])
+                #     futures.append(self.gripper_fitting_executor.submit(
+                #         self._gripper_traj_fitting, timestamps, joint_chunk, index, start_time, end_time, time_step
+                #     ))
             else:
                 raise ValueError(f"Unknown policy: {seg['policy']}")
 
