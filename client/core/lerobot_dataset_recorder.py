@@ -1036,14 +1036,12 @@ class LeRobotDatasetRecorder:
             if step_action.shape[0] < self.action_shape:
                 step_action = np.concatenate([step_action, np.zeros(self.action_shape-step_action.shape[0])], axis=0)
             # check action shape 
-            if step_state['obs.state'].shape[0] < self.state_shape:
+            obs_state = step_state['obs']['state']
+            if obs_state.shape[0] < self.state_shape:
                 # self.logger.warning(f"obs shape {observation['obs.state'].shape[0]} is not correct, config shape is {self.state_shape}, add 0 to obs.state")
                 # assert state['obs.state'].shape[0] <= self.state_shape, \
                 # f"obs shape {state['obs.state'].shape[0]} is bigger than config shape {self.state_shape}"
-                step_state['obs.state'] = np.concatenate([
-                    step_state['obs.state'],
-                    np.zeros(self.state_shape - step_state['obs.state'].shape[0], dtype=step_state['obs.state'].dtype)
-                ], axis=0)
+                obs_state = np.concatenate([obs_state, np.zeros(self.state_shape - obs_state.shape[0], dtype=obs_state.dtype)], axis=0)
             step_language = step_extra.get('language_status', {}).get('language', '')
             
             # Track new language instructions per episode
@@ -1060,7 +1058,7 @@ class LeRobotDatasetRecorder:
             # Write image frames to video files
             for camera_name in self.camera_name_list:
                 expected_shape = self.camera_shape_dict[camera_name]
-                raw_frame = step_state.get(camera_name)
+                raw_frame = step_state['obs'].get(camera_name)
                 # self.logger.info(f"step_state: {step_state.keys()}")
                 # TODO: use three threads in the future
                 frame = self._prepare_video_frame(raw_frame, self.save_raw, expected_shape)
