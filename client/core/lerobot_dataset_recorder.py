@@ -1077,7 +1077,7 @@ class LeRobotDatasetRecorder:
                     self.logger.debug(f"{camera_name} writes a frame with expected_shape {frame.shape}.")
             # Construct record dictionary for Parquet file
             parquet_frame = {
-                'observation.state': step_state['obs.state'].tolist(),
+                'observation.state': obs_state.tolist(),
                 'action': step_action.tolist(),
                 'episode_index': self.episode_index,
                 'frame_index': self.frame_index,
@@ -1114,24 +1114,66 @@ class LeRobotDatasetRecorder:
             # self.release_writers()
     def _prepare_video_frame(self, frame: Any, save_raw: bool=True, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
         """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
-        # print(f"frame ndim={frame.ndim}, dtype={frame.dtype}, shape={frame.shape}, expected_shape={expected_shape}")
-        if not isinstance(frame, np.ndarray):
-            self.logger.warning(f"Frame is not np.ndarray, skip process and return None.")
+        # Accept several input encodings:
+        # - raw HWC numpy array (uint8/float)
+        # - JPEG-encoded bytes / bytearray
+        # - 1-D numpy array of uint8 containing JPEG bytes
+        try:
+            # If bytes/bytearray, decode directly
+            if isinstance(frame, (bytes, bytearray)):
+                arr = np.frombuffer(frame, dtype=np.uint8)
+                img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
+                if img is None:
+                    self.logger.warning("Failed to decode image from bytes, skip process and return None.")
+                    return None
+                frame = img
+
+            # If numpy array but not HWC, it might be encoded JPEG bytes
+            elif isinstance(frame, np.ndarray) and frame.ndim != 3:
+                # Try decoding when dtype is uint8 (common for encoded bytes)
+                if frame.dtype == np.uint8:
+                    try:
+                        arr = np.frombuffer(frame.tobytes(), dtype=np.uint8)
+                        img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
+                        if img is None:
+                            self.logger.warning("Failed to decode numpy image buffer, skip process and return None.")
+                            return None
+                        frame = img
+                    except Exception:
+                        self.logger.warning("Exception while decoding numpy image buffer, skip process and return None.")
+                        return None
+                else:
+                    self.logger.warning(f"Frame ndim is not equal 3 (ndim={getattr(frame, 'ndim', None)}), skip process and return None.")
+                    return None
+
+            # By now we should have a numpy ndarray representing the image
+            if not isinstance(frame, np.ndarray):
+                self.logger.warning("Frame is not a numpy.ndarray after decoding, skip process and return None.")
+                return None
+
+            if frame.ndim == 2:
+                # grayscale -> convert to BGR
+                frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+            elif frame.ndim == 3 and frame.shape[2] == 4:
+                # RGBA -> BGR
+                frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+
+            # Ensure dtype is uint8
+            if frame.dtype != np.uint8:
+                # Scale/convert floats to uint8 if necessary
+                if np.issubdtype(frame.dtype, np.floating):
+                    frame = np.clip(frame * 255.0, 0, 255).astype(np.uint8)
+                else:
+                    frame = frame.astype(np.uint8)
+
+            exp_h, exp_w = expected_shape[0], expected_shape[1]
+            if not save_raw and (frame.shape[0] != exp_h or frame.shape[1] != exp_w):
+                frame = cv2.resize(frame, (exp_w, exp_h), interpolation=cv2.INTER_LINEAR)
+
+            return np.ascontiguousarray(frame)
+        except Exception as e:
+            self.logger.exception(f"_prepare_video_frame failed: {e}")
             return None
-
-        if frame.ndim != 3:
-            self.logger.warning(f"Frame ndim is not equal 3, skip process and return None.")
-            return None
-
-        # Convert RGB frames to BGR for OpenCV VideoWriter compatibility
-        # if frame.shape[2] == 3:
-        #     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
-
-        exp_h, exp_w = expected_shape[0], expected_shape[1]
-        if not save_raw and (frame.shape[0] != exp_h or frame.shape[1] != exp_w):
-            frame = cv2.resize(frame, (exp_w, exp_h), interpolation=cv2.INTER_LINEAR)
-        
-        return np.ascontiguousarray(frame)
 
     def _create_video_writer(self, episode_chunk: int = 0, episode_index: int = 0) -> Dict[str, Any]:
         """
