@@ -185,17 +185,6 @@ class VLAClient():
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
 
-    def update_camera_shape(self) -> dict:
-        """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
-        if not hasattr(self, "data_record_manager") or self.data_record_manager is None:
-            self.logger.warning("data_record_manager is not initialized, skip update_camera_shape.")
-            return {}
-
-        # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
-        self.data_record_manager.update_camera_shape_dict(self.camera_shape_dict)
-        self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
-        return self.camera_shape_dict
-
     def start_visualize(self):
         self.visualize_server.start_server()
         if not self.visualize_thread_timer.is_alive():
@@ -252,6 +241,7 @@ class VLAClient():
         # TODO: Robot reset
 
     def start_recording(self) -> str:
+        self._update_camera_shape()
         self.config.record.switch = True
         task_dir = self.data_record_manager.start_recording(task_id=self.config.language.task_id, 
                                                             sub_task_id=self.config.language.sub_task_id)
@@ -345,6 +335,17 @@ class VLAClient():
     def server_status(self):
         return self.vla_zmq.status
     #################### VLA Client Inline functions ####################
+    def _update_camera_shape(self) -> dict:
+        """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
+        if not hasattr(self, "data_record_manager") or self.data_record_manager is None:
+            self.logger.warning("data_record_manager is not initialized, skip update_camera_shape.")
+            return {}
+
+        # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
+        self.data_record_manager.update_camera_shape_dict(self.camera_shape_dict)
+        self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
+        return self.camera_shape_dict
+
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
         
@@ -358,15 +359,22 @@ class VLAClient():
             if not self.is_observe_thread_running:
                 time.sleep(0.001)
                 continue
-            timestamp_1 = time.time()
+            # timestamp_1 = time.time()
             observations = self.robot.retrieve_observation()
-            timestamp_2 = time.time()
-            self.logger.debug(f"Robot retrieve observation time: {(timestamp_2-timestamp_1) * 1000: .4f}ms, observations is {'None' if observations is None else 'dict'}")
+            # timestamp_2 = time.time()
+            # self.logger.debug(f"Robot retrieve observation time: {(timestamp_2-timestamp_1) * 1000: .4f}ms, observations is {'None' if observations is None else 'dict'}")
             # observations keys=dict_keys(['ref_timestamp', 'cam.hand_left', 'cam.hand_right', 'cam.head', 'obs.state', 'action'])
             # print(f"Debug: observations keys={observations.keys()}")
             # timestamp_1 = time.time()
             # timestamp_2 = None
             if observations is not None:
+                # Decide whether to change language instruction based on the task progress predicted by the VLA model
+                data = self._process_data(observations)
+                # timestamp_3 = time.time()
+                # print(f"Debug: process time={((timestamp_3-timestamp_1) if timestamp_2 is None else (timestamp_3-timestamp_2)) * 1000} ms")
+                self.realtime_data_manager.add_observe_data(data)
+                # timestamp_4 = time.time()
+                # print(f"Debug: add time={(timestamp_4-timestamp_3)*1000} ms")
                 if self.config.record.switch:
                     runtime_config = {
                         'mode': self.config.rdm.mode,
@@ -382,18 +390,11 @@ class VLAClient():
                         'server_status': self.server_status,
                         'runtime_config': runtime_config
                     }
-                    self.data_record_manager.add_observation_async(observation=observations, extra_info=extra_info, timestamp=time.perf_counter())
-                    timestamp_3 = time.time()
-                    self.logger.debug(f'Data recorder add observation time: {(timestamp_3-timestamp_2) * 1000: .4f}ms')
+                    self.data_record_manager.add_observation_async(observation=data, extra_info=extra_info, timestamp=time.perf_counter())
+                    # timestamp_3 = time.time()
+                    # self.logger.debug(f'Data recorder add observation time: {(timestamp_3-timestamp_2) * 1000: .4f}ms')
                     # timestamp_2 = time.time()
                     # print(f"Debug: record time={(timestamp_2-timestamp_1) * 1000} ms")
-                # Decide whether to change language instruction based on the task progress predicted by the VLA model
-                data = self._process_data(observations)
-                # timestamp_3 = time.time()
-                # print(f"Debug: process time={((timestamp_3-timestamp_1) if timestamp_2 is None else (timestamp_3-timestamp_2)) * 1000} ms")
-                self.realtime_data_manager.add_observe_data(data)
-                # timestamp_4 = time.time()
-                # print(f"Debug: add time={(timestamp_4-timestamp_3)*1000} ms")
             # time.sleep(0.001)
     
     def _inference_thread_fun(self):

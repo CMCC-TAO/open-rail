@@ -52,8 +52,8 @@ class DataRecordManager:
         self.action_lock = threading.Lock()
         self.action_frame_queue = deque(maxlen=10)
 
-        self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
-        self.record_action_executor = ThreadPoolExecutor(max_workers=4)
+        # self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
+        # self.record_action_executor = ThreadPoolExecutor(max_workers=4)
 
         # Writer process initialization (resident process)
         self.writer_process = None
@@ -287,7 +287,8 @@ class DataRecordManager:
             time_now (int | float): The current timestamp.
         """
         session_id = self._get_recording_session_id()
-        self.record_obs_executor.submit(self._add_observation_fun, observation, extra_info, timestamp, session_id)
+        # self.record_obs_executor.submit(self._add_observation_fun, observation, extra_info, timestamp, session_id)
+        self._add_observation_fun(observation, extra_info, timestamp, session_id)
 
     def add_action_async(self, action: np.ndarray, timestamp: int | float) -> None:
         """
@@ -297,7 +298,8 @@ class DataRecordManager:
             action (np.ndarray): A dictionary containing action data from the environment.
         """
         session_id = self._get_recording_session_id()
-        self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
+        # self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
+        self._add_action_fun(action, timestamp, session_id)
     
     def start_recording(self, task_id: str, sub_task_id: int) -> str:
         """
@@ -431,16 +433,16 @@ class DataRecordManager:
 
         self.record_queue.put((observation, action, extra_info))
 
-        elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-        queue_size = self._safe_queue_size(self.record_queue)
-        log_message = (
-            f"_add_observation_fun: elapsed={elapsed_ms:.6f}ms, queue_size={queue_size}, "
-            f"action_shape={getattr(action, 'shape', None)}, cam_keys={[k for k in observation.keys() if str(k).startswith('cam.')][:3]}"
-        )
-        if elapsed_ms > 20.0 or (queue_size is not None and queue_size > 20):
-            self.logger.warning(log_message)
-        else:
-            self.logger.debug(log_message)
+        # elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+        # queue_size = self._safe_queue_size(self.record_queue)
+        # log_message = (
+        #     f"_add_observation_fun: elapsed={elapsed_ms:.6f}ms, queue_size={queue_size}, "
+        #     f"action_shape={getattr(action, 'shape', None)}, cam_keys={[k for k in observation.keys() if str(k).startswith('cam.')][:3]}"
+        # )
+        # if elapsed_ms > 20.0 or (queue_size is not None and queue_size > 20):
+        #     self.logger.warning(log_message)
+        # else:
+        #     self.logger.debug(log_message)
 
     def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int) -> None:
         """
@@ -503,9 +505,9 @@ class DataRecordManager:
                 # Get state and action data from queue
                 try:
                     step_state, step_action, step_extra = self.record_queue.get(timeout=0.1)
-                    queue_size = self._safe_queue_size(self.record_queue)
-                    if queue_size > 10:
-                        self.logger.warning(f"_write_process_fun: record_queue backlog before processing={queue_size}")
+                    # queue_size = self._safe_queue_size(self.record_queue)
+                    # if queue_size > 10:
+                    #     self.logger.warning(f"_write_process_fun: record_queue backlog before processing={queue_size}")
                     if self.config.get('is_record_episode', False):
                         self.lerobot_recorder.add_frame_async(step_state=step_state,
                                                             step_action=step_action,
@@ -564,19 +566,19 @@ class DataRecordManager:
         except Exception:
             self.logger.debug("shutdown writer process failed during close", exc_info=True)
 
-        try:
-            if getattr(self, "record_obs_executor", None) is not None:
-                self.record_obs_executor.shutdown(wait=True, cancel_futures=True)
-        except Exception:
-            self.logger.debug("record_obs_executor shutdown failed", exc_info=True)
-        self.logger.info("Closing DataRecordManager, observation executor shutdown.")
+        # try:
+        #     if getattr(self, "record_obs_executor", None) is not None:
+        #         self.record_obs_executor.shutdown(wait=True, cancel_futures=True)
+        # except Exception:
+        #     self.logger.debug("record_obs_executor shutdown failed", exc_info=True)
+        # self.logger.info("Closing DataRecordManager, observation executor shutdown.")
 
-        try:
-            if getattr(self, "record_action_executor", None) is not None:
-                self.record_action_executor.shutdown(wait=True, cancel_futures=True)
-        except Exception:
-            self.logger.debug("record_action_executor shutdown failed", exc_info=True)
-        self.logger.info("Closing DataRecordManager, action executor shutdown.")
+        # try:
+        #     if getattr(self, "record_action_executor", None) is not None:
+        #         self.record_action_executor.shutdown(wait=True, cancel_futures=True)
+        # except Exception:
+        #     self.logger.debug("record_action_executor shutdown failed", exc_info=True)
+        # self.logger.info("Closing DataRecordManager, action executor shutdown.")
 
         try:
             if getattr(self, "record_queue", None) is not None:
