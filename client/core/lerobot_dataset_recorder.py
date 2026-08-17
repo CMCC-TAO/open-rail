@@ -1030,7 +1030,7 @@ class LeRobotDatasetRecorder:
             Exception: Any other exception during writing will terminate the thread
         """
 
-        start_time = time.perf_counter()
+        # start_time = time.perf_counter()
         try:
             # check action shape 
             if step_action.shape[0] < self.action_shape:
@@ -1089,18 +1089,18 @@ class LeRobotDatasetRecorder:
                 self.parquet_frame_list.append(parquet_frame)
             
             # Update counters
-            frame_elapsed_ms = (time.perf_counter() - start_time) * 1000.0
-            if self.frame_index % 30 == 0 or frame_elapsed_ms > 30.0:
-                self.logger.info(
-                    f"_write_frame_fun: episode={self.episode_index}, frame_index={self.frame_index}, "
-                    f"frame_time={frame_elapsed_ms:.1f}ms, cached_records={len(self.parquet_frame_list)}, "
-                    f"camera_names={self.camera_name_list}"
-                )
-            if frame_elapsed_ms > 30.0:
-                self.logger.warning(
-                    f"_write_frame_fun slow frame: episode={self.episode_index}, frame_index={self.frame_index}, "
-                    f"frame_time={frame_elapsed_ms:.1f}ms"
-                )
+            # frame_elapsed_ms = (time.perf_counter() - start_time) * 1000.0
+            # if self.frame_index % 30 == 0 or frame_elapsed_ms > 30.0:
+            #     self.logger.info(
+            #         f"_write_frame_fun: episode={self.episode_index}, frame_index={self.frame_index}, "
+            #         f"frame_time={frame_elapsed_ms:.1f}ms, cached_records={len(self.parquet_frame_list)}, "
+            #         f"camera_names={self.camera_name_list}"
+            #     )
+            # if frame_elapsed_ms > 30.0:
+            #     self.logger.warning(
+            #         f"_write_frame_fun slow frame: episode={self.episode_index}, frame_index={self.frame_index}, "
+            #         f"frame_time={frame_elapsed_ms:.1f}ms"
+            #     )
             self.frame_index += 1
         except KeyboardInterrupt:
             self.logger.warning("Child process detected keyboard interrupt, preparing to exit...")
