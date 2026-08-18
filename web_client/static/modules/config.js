@@ -47,6 +47,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.task_id',
   'language.sub_task_id',
   'language.auto_mode',
+  'language.auto_mode_start_sub_task_id',
   'language.task_progress_threshold',
   'language.task_progress_win_size',
   'visualize.camera.connect_when_running',

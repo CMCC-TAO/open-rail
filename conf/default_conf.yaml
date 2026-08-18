@@ -140,6 +140,7 @@ intra_chunk:
   min_gripper_action_threshold: 0.05
 language:
   auto_mode: false
+  auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: make_coffee

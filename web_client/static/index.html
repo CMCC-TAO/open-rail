@@ -415,11 +415,15 @@
               <input id="chk-lang-auto-mode" type="checkbox" />
               <span>Auto Mode</span>
             </label>
+            <label class="lang-auto-start-wrap" title="Start SubTask id when Auto Mode starts">
+              <span class="lang-threshold-label">Start</span>
+              <select id="sel-lang-auto-start-subtask" class="input-text"></select>
+            </label>
             <label class="lang-threshold-wrap" title="Task progress threshold for auto mode">
               <span class="lang-threshold-label">Thresh</span>
               <input id="inp-lang-threshold" class="input-text" type="number" step="0.01" disabled />
             </label>
-            <label class="lang-threshold-wrap" title="Sliding window size for task progress average">
+            <label class="lang-win-size-wrap" title="Sliding window size for task progress average">
               <span class="lang-threshold-label">Win-Size</span>
               <input id="inp-lang-win-size" class="input-text" type="number" min="1" step="1" disabled />
             </label>
