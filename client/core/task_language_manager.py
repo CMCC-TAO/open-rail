@@ -85,7 +85,7 @@ class TaskLanguageManager:
             self.logger.warning("Missing 'task_progress_win_size' in config, set default to 10.")
 
     def _resolve_auto_mode_start_sub_task_id(self) -> int:
-        start_sub_task_id = int(getattr(self.config, 'auto_mode_start_sub_task_id', 0))
+        # start_sub_task_id = int(getattr(self.config, 'auto_mode_start_sub_task_id', 0))
         task_cmds = self.task_language_map.get(self.config.task_id, [])
 
         if not task_cmds and self.task_language_map:
@@ -95,7 +95,7 @@ class TaskLanguageManager:
         if not task_cmds:
             return 0
 
-        return max(0, min(start_sub_task_id, len(task_cmds) - 1))
+        return min(self.config.auto_mode_start_sub_task_id, len(task_cmds) - 1)
 
     def reset(self) -> None:
         start_sub_task_id = self._resolve_auto_mode_start_sub_task_id()
@@ -199,7 +199,7 @@ class TaskLanguageManager:
         # Ensure sub_task_id is within valid range
         task_steps = len(task_cmds)
         sub_task_id = max(0, sub_task_id)
-        sub_task_id = 0 if sub_task_id >= task_steps else sub_task_id
+        sub_task_id = self.config.auto_mode_start_sub_task_id if sub_task_id >= task_steps else sub_task_id
         self.logger.debug(f"Retrieve language instruction for task_id='{task_id}', sub_task_id={sub_task_id}.")
         return task_cmds[sub_task_id], task_steps
 
@@ -243,8 +243,10 @@ class TaskLanguageManager:
                 # check task is finished
                 if self.sub_task_id_tmp >= self.currt_task_steps:
                     self.config.sub_task_id = self._resolve_auto_mode_start_sub_task_id()
+                    self.currt_language_instruction, self.currt_task_steps = self._retrieve_language_instruction(task_id=self.config.task_id,
+                                                                                                                sub_task_id=self.config.sub_task_id)
                     self.is_task_finished = True
-                    # print(F"DEBUG: TASK FINISHED.")
+                    print(F"DEBUG: TASK FINISHED, RESET SUB TASK ID = {self.config.sub_task_id}.")
                 else:
                     self.config.sub_task_id = self.sub_task_id_tmp  # Sign the sub_task_id to the new one
                 self.task_progress_queue.clear()
