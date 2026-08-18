@@ -1112,6 +1112,7 @@ class LeRobotDatasetRecorder:
         # finally:
             # self.logger.info("Writing frame exited.")
             # self.release_writers()
+    # @run_time_decorator
     def _prepare_video_frame(self, frame: Any, save_raw: bool=True, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
         """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
         # Accept several input encodings:

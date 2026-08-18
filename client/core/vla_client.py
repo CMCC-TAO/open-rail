@@ -241,10 +241,13 @@ class VLAClient():
         # TODO: Robot reset
 
     def start_recording(self) -> str:
-        self._update_camera_shape()
+        # self._update_camera_shape()
         self.config.record.switch = True
+        while self.camera_shape_dict is None:
+            time.sleep(0.01)
         task_dir = self.data_record_manager.start_recording(task_id=self.config.language.task_id, 
-                                                            sub_task_id=self.config.language.sub_task_id)
+                                                        sub_task_id=self.config.language.sub_task_id,
+                                                        camera_shape=self.camera_shape_dict)
         return task_dir
 
     def stop_recording(self):
@@ -334,17 +337,19 @@ class VLAClient():
     @property
     def server_status(self):
         return self.vla_zmq.status
-    #################### VLA Client Inline functions ####################
-    def _update_camera_shape(self) -> dict:
-        """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
-        if not hasattr(self, "data_record_manager") or self.data_record_manager is None:
-            self.logger.warning("data_record_manager is not initialized, skip update_camera_shape.")
-            return {}
 
-        # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
-        self.data_record_manager.update_camera_shape_dict(self.camera_shape_dict)
-        self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
-        return self.camera_shape_dict
+    ####################========== VLA Client Inline functions ==========####################
+
+    # def _update_camera_shape(self) -> dict:
+    #     """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
+    #     if not hasattr(self, "data_record_manager") or self.data_record_manager is None:
+    #         self.logger.warning("data_record_manager is not initialized, skip update_camera_shape.")
+    #         return {}
+
+    #     # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
+    #     self.data_record_manager.update_camera_shape_dict(self.camera_shape_dict)
+    #     self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
+    #     return self.camera_shape_dict
 
     def _observe_thread_fun(self):
         """Observation thread function for continuous data collection from robot sensors.
@@ -774,7 +779,7 @@ class VLAClient():
         # print(f"Debug: {data['obs'].keys()}")
         return data
 
-    @run_time_decorator
+    # @run_time_decorator
     def _process_action_chunk(self, action_raw:dict):
         """Process an action chunk by generating reference timestamp chunk and passing local timestamp.
 
