@@ -128,6 +128,7 @@ function renderLangSubtaskSelect() {
   subtaskSel.innerHTML = '';
   const taskName = taskSel ? taskSel.value : null;
   const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  syncAutoModeStartSubtaskOptions(taskName);
   // const maxChars = getLangSubtaskMaxCharsByWidth(subtaskSel);
 
   const { taskId: appliedTaskId, subTaskId: appliedSubTaskId } = getAppliedLangSelection();
@@ -167,12 +168,49 @@ async function persistLanguagePatch (patch) {
     return false;
   }
 };
+function syncAutoModeStartSubtaskOptions(taskName, selectedId) {
+  const startSel = $('sel-lang-auto-start-subtask');
+  if (!startSel) return;
+
+  const activeTask = taskName || $('lang-task-select')?.value;
+  const subtasks = (activeTask && LangCmd.tasks[activeTask]) ? LangCmd.tasks[activeTask] : [];
+  startSel.innerHTML = '';
+
+  subtasks.forEach((text, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = String(i);
+    opt.title = text;
+    startSel.appendChild(opt);
+  });
+
+  if (!subtasks.length) {
+    startSel.value = '';
+    return;
+  }
+
+  const parsedSelected = Number(selectedId);
+  const fallback = Number(App.config?.language?.auto_mode_start_sub_task_id);
+  const candidate = Number.isFinite(parsedSelected)
+    ? parsedSelected
+    : (Number.isFinite(fallback) ? fallback : 0);
+  const safe = Math.max(0, Math.min(candidate, subtasks.length - 1));
+  startSel.value = String(safe);
+}
+
+function applyConfigAutoStartSubtask(rawSubTaskId) {
+  syncAutoModeStartSubtaskOptions($('lang-task-select')?.value, rawSubTaskId);
+}
+
 function setAutoModeEditable(checked) {
   const thresholdInput = $('inp-lang-threshold');
   if (thresholdInput) thresholdInput.disabled = !checked;
 
   const winSizeInput = $('inp-lang-win-size');
   if (winSizeInput) winSizeInput.disabled = !checked;
+
+  const startSel = $('sel-lang-auto-start-subtask');
+  if (startSel) startSel.disabled = !checked;
 
   const taskSel = $('lang-task-select');
   if (taskSel) taskSel.disabled = checked;
@@ -265,6 +303,7 @@ function applyLangConfigSelection(forceFirstSubtask = false) {
   applyConfigThreshold(threshold);
   applyConfigWinSize(winSize);
   applyConfigTaskSelection(languageConfig.task_id);
+  applyConfigAutoStartSubtask(languageConfig.auto_mode_start_sub_task_id);
   applyConfigSubtaskSelection(languageConfig.sub_task_id, autoMode, forceFirstSubtask);
 }
 
@@ -274,6 +313,7 @@ function setupLangPanel() {
   const autoCheckLangMode = $('chk-lang-auto-mode');
   const thresholdInput = $('inp-lang-threshold');
   const winSizeInput = $('inp-lang-win-size');
+  const autoStartSel = $('sel-lang-auto-start-subtask');
   let thresholdSaveTimer = null;
   let winSizeSaveTimer = null;
 
@@ -319,6 +359,7 @@ function setupLangPanel() {
           subtaskSel.value = '';
         }
       }
+      syncAutoModeStartSubtaskOptions(taskName);
       $('lang-cmd-text').value = subtasks[0] ?? '';
 
       // Sync Config panel selects to task + first sub-task.
@@ -349,6 +390,26 @@ function setupLangPanel() {
     });
   }
 
+  if (autoStartSel) {
+    autoStartSel.addEventListener('change', async () => {
+      const taskName = taskSel ? taskSel.value : null;
+      const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+      let startSubTaskId = Number(autoStartSel.value);
+      if (!Number.isFinite(startSubTaskId)) startSubTaskId = 0;
+      startSubTaskId = subtasks.length > 0 ? Math.max(0, Math.min(startSubTaskId, subtasks.length - 1)) : 0;
+
+      autoStartSel.value = String(startSubTaskId);
+      await persistLanguagePatch({ 'language.auto_mode_start_sub_task_id': startSubTaskId });
+
+      if (autoCheckLangMode && autoCheckLangMode.checked && subtaskSel && subtaskSel.options.length > 0) {
+        subtaskSel.value = String(startSubTaskId);
+        subtaskSel.selectedIndex = startSubTaskId;
+        subtaskSel.dispatchEvent(new Event('change'));
+        await persistLanguagePatch({ 'language.sub_task_id': startSubTaskId });
+      }
+    });
+  }
+
   if (autoCheckLangMode) {
     autoCheckLangMode.addEventListener('change', async () => {
       setAutoModeEditable(autoCheckLangMode.checked);
@@ -356,26 +417,35 @@ function setupLangPanel() {
       if (autoCheckLangMode.checked) {
         const taskName = taskSel ? taskSel.value : null;
         const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+        const startRaw = autoStartSel ? autoStartSel.value : null;
+        let startSubTaskId = Number(startRaw);
+        if (!Number.isFinite(startSubTaskId)) {
+          startSubTaskId = Number(App.config?.language?.auto_mode_start_sub_task_id);
+        }
+        if (!Number.isFinite(startSubTaskId)) startSubTaskId = 0;
+        startSubTaskId = subtasks.length > 0 ? Math.max(0, Math.min(startSubTaskId, subtasks.length - 1)) : 0;
 
         if (subtaskSel) {
           if (subtaskSel.options.length > 0) {
-            subtaskSel.selectedIndex = 0;
-            subtaskSel.value = '0';
+            subtaskSel.selectedIndex = startSubTaskId;
+            subtaskSel.value = String(startSubTaskId);
             subtaskSel.dispatchEvent(new Event('change'));
-            applyConfigSubtaskSelection(0, false, false);
+            applyConfigSubtaskSelection(startSubTaskId, false, false);
           } else {
             subtaskSel.value = '';
           }
         }
 
-        if (subtasks[0] !== undefined) {
-          $('lang-cmd-text').value = subtasks[0];
+        if (subtasks[startSubTaskId] !== undefined) {
+          $('lang-cmd-text').value = subtasks[startSubTaskId];
         }
 
         await persistLanguagePatch({
           'language.auto_mode': autoCheckLangMode.checked,
-          'language.sub_task_id': 0,
+          'language.auto_mode_start_sub_task_id': startSubTaskId,
+          'language.sub_task_id': startSubTaskId,
         });
+        applyConfigAutoStartSubtask(startSubTaskId);
         return;
       }
       else {

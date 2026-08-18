@@ -1222,7 +1222,7 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
     # print(f"config after flat patch: {config}")
     # print(f"config after flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config after flat patch: {cam_head}")
-    config.language.sub_task_id = 0  # reset sub_task_id to avoid invalid value after patch
+    config.language.sub_task_id = int(getattr(config.language, 'auto_mode_start_sub_task_id', 0))  # reset sub_task_id with configured auto mode start index
     logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
 
 

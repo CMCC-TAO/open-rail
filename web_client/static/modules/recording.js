@@ -634,17 +634,18 @@ function renderEvaluationResults(evalResults = []) {
 }
 
 async function deleteEvaluationResult(recordId) {
-  if (!App.recordingTask || !recordId) return;
-  const ok = window.confirm(`Delete Evaluation Record ${recordId} ? This cannot be undone.`);
+  const validRecordId = Number(recordId);
+  if (!App.recordingTask || !Number.isFinite(validRecordId)) return;
+  const ok = window.confirm(`Delete Evaluation Record ${validRecordId} ? This cannot be undone.`);
   if (!ok) return;
 
   try {
     await apiFetch('/api/client/record/delete', {
       method: 'DELETE',
-      body: JSON.stringify({ task: App.recordingTask, record_id: recordId }),
+      body: JSON.stringify({ task: App.recordingTask, record_id: validRecordId }),
     });
     await refreshRecordingFileList();
-    toast(`Deleted record ${recordId}.`, 'ok', 1800);
+    toast(`Deleted record ${validRecordId}.`, 'ok', 1800);
   } catch (_) { /* toasted */ }
 }
 

@@ -44,6 +44,7 @@ class TaskLanguageManager:
         - task_id (str): Defaults to "default_task".
         - sub_task_id (int): Defaults to 0.
         - auto_mode (bool): Defaults to False.
+        - auto_mode_start_sub_task_id (int): Defaults to 0.
         - file_path (str): Defaults to "language_cmd.json".
         - task_progress_threshold (float): Defaults to 0.9.
         - task_progress_win_size (int): Defaults to 10.
@@ -63,6 +64,11 @@ class TaskLanguageManager:
             setattr(self.config, "auto_mode", False)
             self.logger.warning("Missing 'auto_mode' in config, set default to False.")
 
+        # Ensure auto_mode_start_sub_task_id exists; set to 0 if missing
+        if not hasattr(self.config, "auto_mode_start_sub_task_id"):
+            setattr(self.config, "auto_mode_start_sub_task_id", 0)
+            self.logger.warning("Missing 'auto_mode_start_sub_task_id' in config, set default to 0.")
+
         # Ensure file_path exists; set to empty string if missing
         if not hasattr(self.config, "file_path"):
             setattr(self.config, "file_path", "language_cmd.json")
@@ -78,9 +84,23 @@ class TaskLanguageManager:
             setattr(self.config, "task_progress_win_size", 10)
             self.logger.warning("Missing 'task_progress_win_size' in config, set default to 10.")
 
+    def _resolve_auto_mode_start_sub_task_id(self) -> int:
+        start_sub_task_id = int(getattr(self.config, 'auto_mode_start_sub_task_id', 0))
+        task_cmds = self.task_language_map.get(self.config.task_id, [])
+
+        if not task_cmds and self.task_language_map:
+            fallback_task_id = next(iter(self.task_language_map.keys()))
+            task_cmds = self.task_language_map.get(fallback_task_id, [])
+
+        if not task_cmds:
+            return 0
+
+        return max(0, min(start_sub_task_id, len(task_cmds) - 1))
+
     def reset(self) -> None:
-        self.sub_task_id_tmp = 0
-        self.config.sub_task_id = 0
+        start_sub_task_id = self._resolve_auto_mode_start_sub_task_id()
+        self.sub_task_id_tmp = start_sub_task_id
+        self.config.sub_task_id = start_sub_task_id
         self.task_progress_queue.clear()
         self.ready_for_try = True
         self.ready_for_confirm = False
@@ -178,6 +198,7 @@ class TaskLanguageManager:
 
         # Ensure sub_task_id is within valid range
         task_steps = len(task_cmds)
+        sub_task_id = max(0, sub_task_id)
         sub_task_id = 0 if sub_task_id >= task_steps else sub_task_id
         self.logger.debug(f"Retrieve language instruction for task_id='{task_id}', sub_task_id={sub_task_id}.")
         return task_cmds[sub_task_id], task_steps
@@ -221,7 +242,7 @@ class TaskLanguageManager:
                 self.logger.info(f"Task progress is ready to advance to next subtask: {avg_task_progress_next:.2f}")
                 # check task is finished
                 if self.sub_task_id_tmp >= self.currt_task_steps:
-                    self.config.sub_task_id = 0
+                    self.config.sub_task_id = self._resolve_auto_mode_start_sub_task_id()
                     self.is_task_finished = True
                     # print(F"DEBUG: TASK FINISHED.")
                 else:

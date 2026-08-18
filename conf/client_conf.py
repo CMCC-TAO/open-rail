@@ -178,6 +178,7 @@ def get_language_config() -> ConfigDict:
     config.file_path = 'language_cmd.json'  # Path to language configuration file, must in conf dir.
     config.task_id = 'make_coffee'
     config.sub_task_id = 0
+    config.auto_mode_start_sub_task_id = 0
     config.auto_mode = False  # If True, automatically switch language instructions based on probability threshold
     config.task_progress_threshold = 0.9  # Probability threshold for switching language instructions
     config.task_progress_win_size = 10 # Sliding window size to compute average task progress
