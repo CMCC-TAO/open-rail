@@ -106,7 +106,7 @@ class DataRecordManager:
         rel_save_dir = str(save_dir).strip().lstrip('/').lstrip('\\')
         return os.path.join(self.project_root_path, rel_save_dir, task_dir)
 
-    def set_task(self, task_dir: str, sub_task_id: int, is_record_episode: bool = False, is_record_eval_log: bool = False, is_record_expe_data: bool = False) -> None:
+    def _set_task(self, task_dir: str, sub_task_id: int, is_record_episode: bool = False, is_record_eval_log: bool = False, is_record_expe_data: bool = False) -> None:
         """Update save path by task/date before a new recording starts. Called in the writer process."""
         self.config.is_record_episode = is_record_episode
         self.config.is_record_eval_log = is_record_eval_log
@@ -155,7 +155,7 @@ class DataRecordManager:
         #     self.shared_data.eval_record_duration.value = eval_record_duration
         # self.logger.info(f"total_frames={self.shared_data.total_frames.value}, total_videos={self.shared_data.total_videos.value}, total_episodes={self.shared_data.episode_index.value}")
 
-    def update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
+    def _update_camera_shape_dict(self, shape_dict: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
         """Update camera shape settings for current recording session and metadata.
 
         Args:
@@ -208,7 +208,8 @@ class DataRecordManager:
                     if write_future is not None and (not write_future.done()):
                         self.logger.warning("Receive start command while previous write task is still running, skip.")
                         continue
-                    self.set_task(task_dir = command.get("task_dir", "default"),
+                    self._update_camera_shape_dict(shape_dict = command.get("camera_shape", {}))
+                    self._set_task(task_dir = command.get("task_dir", "default"),
                                 sub_task_id = command.get("sub_task_id", 0),
                                 is_record_episode = command.get("is_record_episode", False),
                                 is_record_eval_log = command.get("is_record_eval_log", False),
@@ -301,7 +302,7 @@ class DataRecordManager:
         # self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
         self._add_action_fun(action, timestamp, session_id)
     
-    def start_recording(self, task_id: str, sub_task_id: int) -> str:
+    def start_recording(self, task_id: str, sub_task_id: int, camera_shape: dict) -> str:
         """
         Starts the recording process by dispatching write task in resident writer process.
 
@@ -321,7 +322,8 @@ class DataRecordManager:
                 "sub_task_id": sub_task_id,
                 "is_record_episode": self.config.is_record_episode,
                 "is_record_eval_log": self.config.is_record_eval_log,
-                "is_record_expe_data": self.config.is_record_expe_data
+                "is_record_expe_data": self.config.is_record_expe_data,
+                "camera_shape": camera_shape
             }
             self.writer_command_queue.put(command)
             self.logger.info(f"Writer task dispatched successfully. task_dir={task_dir}, session_id={session_id}")
