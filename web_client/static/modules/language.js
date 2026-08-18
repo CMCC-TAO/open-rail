@@ -179,7 +179,8 @@ function syncAutoModeStartSubtaskOptions(taskName, selectedId) {
   subtasks.forEach((text, i) => {
     const opt = document.createElement('option');
     opt.value = String(i);
-    opt.textContent = String(i);
+    // display as 1-based index to match SubTask list UI
+    opt.textContent = String(i + 1);
     opt.title = text;
     startSel.appendChild(opt);
   });
@@ -398,15 +399,26 @@ function setupLangPanel() {
       if (!Number.isFinite(startSubTaskId)) startSubTaskId = 0;
       startSubTaskId = subtasks.length > 0 ? Math.max(0, Math.min(startSubTaskId, subtasks.length - 1)) : 0;
 
-      autoStartSel.value = String(startSubTaskId);
-      await persistLanguagePatch({ 'language.auto_mode_start_sub_task_id': startSubTaskId });
 
+      // If auto-mode is enabled, also apply the start subtask to the visible SubTask select
       if (autoCheckLangMode && autoCheckLangMode.checked && subtaskSel && subtaskSel.options.length > 0) {
+        autoStartSel.value = String(startSubTaskId);
         subtaskSel.value = String(startSubTaskId);
         subtaskSel.selectedIndex = startSubTaskId;
         subtaskSel.dispatchEvent(new Event('change'));
-        await persistLanguagePatch({ 'language.sub_task_id': startSubTaskId });
+        await persistLanguagePatch({
+          'language.sub_task_id': startSubTaskId,
+          'language.auto_mode_start_sub_task_id': startSubTaskId
+        });
       }
+
+      // // Ensure UI reflects applied configuration: update config selection and applied markers
+      // try {
+      //   applyConfigSubtaskSelection(startSubTaskId, false, false);
+      // } catch (e) {
+      //   // ignore UI update errors
+      // }
+      refreshLangAppliedMarkers(taskName || (taskSel ? taskSel.value : null), startSubTaskId);
     });
   }
 
