@@ -552,7 +552,8 @@ async function editLangSubtask() {
   if (!taskName || !LangCmd.tasks[taskName]) { toast('Select a task first.', 'warn'); return; }
   if (!Number.isFinite(idx) || idx < 0 || idx >= LangCmd.tasks[taskName].length) { toast('Select a sub-task first.', 'warn'); return; }
   if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
-
+  if (LangCmd.tasks[taskName][idx] == lang) { toast('Nothing changed.', 'warn'); return; }
+  
   LangCmd.tasks[taskName][idx] = lang;
   await saveLangFile();
   renderLangSubtaskSelect();
@@ -629,8 +630,13 @@ async function sendLanguageCommand() {
   const subtasks = LangCmd.tasks[task] ? LangCmd.tasks[task] : [];
   let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
   if (!Number.isFinite(idx) || idx < 0) idx = 0;
-  if (App.config.language.task_id==task && App.config.language.sub_task_id == idx) {
-    toast('Language command updated.', 'info');
+  if (App.config.language.task_id == task && App.config.language.sub_task_id == idx) {
+    if (subtasks[idx] != lang) {
+      editLangSubtask()
+    }
+    else {
+      toast('Language command not changed.', 'info');
+    }
     return;
   }
   if (App.config.record.switch && App.config.language.task_id != task) {
@@ -641,12 +647,23 @@ async function sendLanguageCommand() {
   // console.info('old sub_task: ', App.config.language.sub_task_id, 'new sub_task: ', idx);
   // console.info('recording: ', App.config.record.switch);
   // 1. persistLanguagePatch
-  await persistLanguagePatch({
+  const patch = {
     'language.task_id': task,
-    'language.sub_task_id': idx
-  });
+    'language.sub_task_id': idx,
+  };
+  // If not in auto mode, keep auto start id in sync with manual selection
+  const isAutoMode = !!(App.config && App.config.language && App.config.language.auto_mode);
+  if (!isAutoMode) {
+    patch['language.auto_mode_start_sub_task_id'] = idx;
+  }
+  await persistLanguagePatch(patch);
   // applyConfigTaskSelection(task);
   applyConfigSubtaskSelection(idx, false, false);
+
+  if (!isAutoMode) {
+    // ensure auto-start selector reflects the manual selection
+    try { applyConfigAutoStartSubtask(idx); } catch (e) { /* best-effort */ }
+  }
 
   // 2. Send language command to robot
   try {
