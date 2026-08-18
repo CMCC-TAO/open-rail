@@ -236,7 +236,7 @@ class TaskLanguageManager:
             # Compute task progress for the next sub-task based on the provided task_progress_next array
             length = min(len(task_progress_next), self.config.task_progress_win_size)
             avg_task_progress_next = np.mean(task_progress_next[:length]) if length > 0 else 0.0
-            if avg_task_progress_next < self.config.task_progress_threshold / 10.0:
+            if avg_task_progress_next < self.config.task_progress_threshold / 3.0:
                 # Only reset if the next sub-task progress is very low, indicating a new sub-task has started
                 self.is_sub_task_finished = True
                 self.logger.info(f"Task progress is ready to advance to next subtask: {avg_task_progress_next:.2f}")
