@@ -401,6 +401,8 @@ class EvaluationResultRecorder:
             self._current_record['avg_comm_time'].append(runtime_status.get('avg_comm_time', None))
 
     def _finalize_current_record(self) -> tuple[int, float]:
+        if self._eval_record_pause_time is not None and self._eval_record_resume_time is None:
+            self.resume_recording()
         self._current_record['obv_count'] = self._obv_count
         self._current_record['start_time'] = self._timestamp(self._eval_record_start_time) if self._eval_record_start_time is not None else None
         self._current_record['end_time'] = self._timestamp(self._eval_record_stop_time) if self._eval_record_stop_time is not None else None
