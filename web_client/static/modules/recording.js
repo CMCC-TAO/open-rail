@@ -216,12 +216,12 @@ async function startDataRecording({} = {}) {
 
     App.isRecording = true;
     App.isRecordingPaused = false;
-    startRecordingTimer({ reset: true });
     if (!App.config || typeof App.config !== 'object') App.config = {};
     if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
     App.config.record.switch = true;
     renderRecordingConfigTree(App.config);
     await refreshRecordingFileList();
+    startRecordingTimer({ reset: true });
     toast('Recording started.', 'ok');
     return true;
   } catch (_) { 
