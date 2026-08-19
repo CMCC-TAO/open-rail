@@ -570,7 +570,7 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
         client_config = client_state.config
     finally:
         client_state.lock.release()
-
+    logger.debug(f"retrieve cla_client and config")
     if vla_client is None:
         return None
 
@@ -593,10 +593,12 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
 
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
     _sync_robot_action_layout(client_config, robot_config, vla_client)
+    logger.debug(f"sync robot action layout")
 
     robot, _ = _get_robot(client_config.robots.type, robot_config)
 
     _bind_robot_to_vla_client(vla_client, robot)
+    logger.debug(f"ensure config and robot successfully.")
     return robot
 
 
@@ -1460,6 +1462,7 @@ def _ensure_vla_client_created():
 
     # TODO: Load config from yaml file
     if client_state.config is None:
+        logger.debug(f"DEBUG: config is None.")
         client_state.config = get_client_config()
     client_config = client_state.config
 
@@ -1474,7 +1477,7 @@ def _ensure_vla_client_created():
         inter_chunk_fuser = InterChunkFuser(config=client_config.inter_chunk)
         intra_chunk_smoother = IntraChunkSmoother(config=client_config.intra_chunk)
         task_language_manager = TaskLanguageManager(config=client_config.language)
-
+        logger.debug(f"DEBUG: required components are created.")
         from client.core.vla_client import VLAClient
         vla_client = VLAClient(
             config=client_config,
@@ -1485,7 +1488,9 @@ def _ensure_vla_client_created():
             vla_zmq_client=vla_zmq_client,
             robot=robot,
         )
-    except Exception:
+        logger.debug(f"DEBUG: vla client is created.")
+    except Exception as e:
+        logger.exception(f"DEBUG: catched exception when vla client is created: {e}")
         if vla_zmq_client is not None:
             try:
                 vla_zmq_client.close()
@@ -1496,10 +1501,12 @@ def _ensure_vla_client_created():
     with client_state.lock:
         client_state.vla_client = vla_client
         client_state.robot = robot
+        logger.debug(f"DEBUG: Start successfully.")
     return vla_client
 
 
 async def _start_client():
+    logger.debug(f"DEBUG: Try to start client.")
     loop = asyncio.get_running_loop()
     client_state._loop = loop
 
