@@ -540,6 +540,7 @@ def _bind_robot_to_vla_client(vla_client, robot):
             client_state.robot = robot
     finally:
         client_state.lock.release()
+    logger.debug(f"bind robot to vla client success.")
 
 
 def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
@@ -599,7 +600,7 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
 
     _bind_robot_to_vla_client(vla_client, robot)
     logger.debug(f"ensure config and robot successfully.")
-    return robot
+    # return robot
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1513,15 +1514,19 @@ async def _start_client():
     try:
         await asyncio.to_thread(_ensure_vla_client_created)
 
-        await asyncio.wait_for(asyncio.to_thread(_ensure_config_robot_bound), timeout=8.0)
+        await asyncio.to_thread(_ensure_config_robot_bound)
+        logger.debug(f"ensure config robot bound success.")
 
         lock_acquired = client_state.lock.acquire(timeout=2.0)
+        logger.debug(f"acquire lock success.")
         if not lock_acquired:
             raise RuntimeError("Timeout acquiring client_state.lock in _start_client (read vla_client).")
         try:
             vla_client = client_state.vla_client
+            logger.debug(f"create vla_client successfully.")
         finally:
             client_state.lock.release()
+            logger.debug(f"release lock successfully.")
     except Exception as e:
         logger.exception(f"Client init error: {e}")
         lock_acquired = client_state.lock.acquire(timeout=2.0)
@@ -1554,6 +1559,7 @@ async def _start_client():
         else:
             client_state.running = True
     finally:
+        logger.debug(f"release lock successfully.")
         client_state.lock.release()
 
     if should_close_after_unlock:
@@ -1566,6 +1572,7 @@ async def _start_client():
     def _run_in_thread():
         try:
             vla_client.start()
+            logger.debug(f"vla_client start successfully.")
             asyncio.run_coroutine_threadsafe(
                 _broadcast_to_web({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
                 loop
@@ -1977,7 +1984,12 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
 
         if vla_client is not None:
             try:
-                vla_client.stop()
+                # During process shutdown (Ctrl-C), perform full close to ensure
+                # multiprocessing writer/sub-resources are released before os._exit.
+                if force_release_robot:
+                    vla_client.close()
+                else:
+                    vla_client.stop()
             except Exception:
                 pass
         # TODO: robot should be reset.
