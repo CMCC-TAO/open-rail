@@ -1,7 +1,7 @@
 """
 递物任务（力传感器专用版）- 将物体递出（左手/右手/单手/双手）
 
-仅使用触觉传感器检测拖拽（切向力下降），无关节角度回退。
+使用触觉传感器检测拖拽（切向力下降），并结合手腕关节变化判断。
 适用于手掌带有力传感器的场景。
 
 任务接口:
@@ -16,6 +16,7 @@
 import sys
 import os
 import time
+import math
 from collections import deque
 import numpy as np
 
@@ -47,6 +48,7 @@ HAND_OPEN_HOLD_TIME = 1.0       # 手掌打开后保持时长（秒）
 TUG_DETECTION_TIMEOUT = 30.0        # 等待拖拽超时（秒），超时后强制松手
 TUG_STABILIZE_TIME = 1.0            # 到位后等待 state 稳定的时间（秒）
 TUG_MONITOR_INTERVAL = 0.05         # 监测周期（秒），~20Hz
+TUG_DETECTION_THRESHOLD_DEG = 3.0   # 手腕关节偏差超过此值触发松手
 
 TOUCH_TF_DIFF_ABS = 100             # 切向力下降绝对阈值（兜底值）
 TOUCH_TF_DIFF_RATIO = 0.1           # 切向力下降相对比例阈值
@@ -56,7 +58,7 @@ _TOUCH_ROLLING_SIZE = 20            # 滚动基线窗口帧数（0.05s * 20 = 1s
 class ForceDeliverHandler(AbstractTaskHandler):
     """递物任务处理器（力传感器专用版）
 
-    仅使用触觉传感器检测拖拽，无关节角度回退。
+    使用触觉传感器和手腕关节变化检测拖拽，任一条件触发即松手。
     由 dispatcher 路由到以下 4 个 task:target 复合键之一:
       - "deliver_force:left arm"
       - "deliver_force:right arm"
@@ -93,10 +95,11 @@ class ForceDeliverHandler(AbstractTaskHandler):
         goal_handle, base_state: np.ndarray,
         context=None,
     ) -> bool:
-        """到位后保持位姿，仅使用触觉传感器检测拖拽。
+        """到位后保持位姿，使用触觉或手腕关节变化检测拖拽。
 
         触觉方案：采集切向力滚动基线，检测 drop > 阈值触发。
-        无关节角度回退 —— 必须有力传感器可用。
+        关节方案：检测手腕关节相对到位基线偏差超过 3 度触发。
+        任一方案触发后松手。
 
         Args:
             hand_side: 'left' / 'right' / 'both'
@@ -118,7 +121,7 @@ class ForceDeliverHandler(AbstractTaskHandler):
                                      HAND_OPEN_HOLD_TIME, base_state=base_state)
             return True
 
-        print('[ForceDeliver] 仅使用触觉传感器检测拖拽')
+        print('[ForceDeliver] 使用触觉传感器和手腕关节变化检测拖拽')
 
         # ================================================================
         # Step 1: 到位后持续下发保持位姿，等待 state 稳定
@@ -137,8 +140,11 @@ class ForceDeliverHandler(AbstractTaskHandler):
         touch_bl_right = None
         th_touch_left = TOUCH_TF_DIFF_ABS
         th_touch_right = TOUCH_TF_DIFF_ABS
+        wrist_idxs = [0]
+        joint_threshold = math.radians(TUG_DETECTION_THRESHOLD_DEG)
 
         left_samples, right_samples = [], []
+        left_joint_samples, right_joint_samples = [], []
         _BASELINE_SAMPLES = 10
         for _ in range(_BASELINE_SAMPLES):
             if hand_side in ('left', 'both'):
@@ -155,11 +161,23 @@ class ForceDeliverHandler(AbstractTaskHandler):
                     tf = robot.get_touch_tf_sum(msg)
                     if tf > 0:
                         right_samples.append(tf)
+            if hand_side in ('left', 'both'):
+                arm = robot.latest_left_arm
+                if arm is not None:
+                    msg, _ = arm
+                    left_joint_samples.append(np.array([msg.position[i] for i in wrist_idxs]))
+            if hand_side in ('right', 'both'):
+                arm = robot.latest_right_arm
+                if arm is not None:
+                    msg, _ = arm
+                    right_joint_samples.append(np.array([msg.position[i] for i in wrist_idxs]))
             robot.send_robot_action(base_state)
             time.sleep(0.05)
 
         touch_bl_left = np.median(left_samples) if left_samples else None
         touch_bl_right = np.median(right_samples) if right_samples else None
+        joint_bl_left = np.median(left_joint_samples, axis=0) if left_joint_samples else None
+        joint_bl_right = np.median(right_joint_samples, axis=0) if right_joint_samples else None
 
         if touch_bl_left is not None:
             th_touch_left = max(TOUCH_TF_DIFF_ABS, int(touch_bl_left * TOUCH_TF_DIFF_RATIO))
@@ -175,8 +193,13 @@ class ForceDeliverHandler(AbstractTaskHandler):
         else:
             print(f'[WARN] 右手触觉基线采集失败，跳过触觉检测')
 
+        left_joint_str = joint_bl_left.round(4).tolist() if joint_bl_left is not None else "N/A"
+        right_joint_str = joint_bl_right.round(4).tolist() if joint_bl_right is not None else "N/A"
+        print(f'[ForceDeliver] 手腕关节基线(rad) - left: {left_joint_str}, '
+              f'right: {right_joint_str}, 阈值={TUG_DETECTION_THRESHOLD_DEG} deg')
+
         # ================================================================
-        # Step 3: 持续下发保持 + 仅监测触觉
+        # Step 3: 持续下发保持 + 监测触觉和手腕关节
         # ================================================================
         start_time = time.time()
         check_count = 0
@@ -242,6 +265,31 @@ class ForceDeliverHandler(AbstractTaskHandler):
                             trigger_source = '右手触觉（切向力下降）'
                     else:
                         right_t_counter = 0
+
+            # ── 手腕关节检测：与普通递物任务使用相同的偏差条件 ──
+            if not tug_detected and joint_bl_left is not None:
+                arm = robot.latest_left_arm
+                if arm is not None:
+                    msg, _ = arm
+                    wrist = np.array([msg.position[i] for i in wrist_idxs])
+                    diff = np.abs(wrist - joint_bl_left)
+                    if np.any(diff > joint_threshold):
+                        diff_deg = np.rad2deg(diff).round(2)
+                        print(f'[ForceDeliver] 左手腕关节拖拽检测到！diff={diff_deg} deg')
+                        tug_detected = True
+                        trigger_source = '左手关节变化'
+
+            if not tug_detected and joint_bl_right is not None:
+                arm = robot.latest_right_arm
+                if arm is not None:
+                    msg, _ = arm
+                    wrist = np.array([msg.position[i] for i in wrist_idxs])
+                    diff = np.abs(wrist - joint_bl_right)
+                    if np.any(diff > joint_threshold):
+                        diff_deg = np.rad2deg(diff).round(2)
+                        print(f'[ForceDeliver] 右手腕关节拖拽检测到！diff={diff_deg} deg')
+                        tug_detected = True
+                        trigger_source = '右手关节变化'
 
             if tug_detected:
                 print(f'[ForceDeliver] 触发来源: {trigger_source}，松手！')

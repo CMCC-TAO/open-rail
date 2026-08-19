@@ -51,8 +51,8 @@ GRASP_HOLD_DURATION_SEC = 0.5          # 差值需持续超过阈值的最短时
 #   1. nf_sum > TOUCH_NF_THRESHOLD
 #   2. tf_sum > TOUCH_TF_THRESHOLD
 # ════════════════════════════════════════════════════════════════
-TOUCH_NF_THRESHOLD = 1000             # 法向力总和阈值
-TOUCH_TF_THRESHOLD = 1000             # 切向力总和阈值
+TOUCH_NF_THRESHOLD = 800             # 法向力总和阈值
+TOUCH_TF_THRESHOLD = 800             # 切向力总和阈值
 TOUCH_PER_FINGER_NF = 40             # 单指 NF 阈值（仅用于调试显示）
 TOUCH_GRASP_HOLD_SEC = 0.5           # 条件持续满足多久才判定抓取成功（秒）
 
@@ -255,11 +255,21 @@ class GraspDetector:
             g0, self._left_touch_hold_since = self._eval_one_hand(
                 time.time(), self._left_nf_sum, self._left_tf_sum,
                 self._left_touch_hold_since)
+            if g0 and not self._grasp_state[0]:
+                print(
+                    f"[GraspDetector] left grasp succeeded: "
+                    f"nf_sum={self._left_nf_sum}, tf_sum={self._left_tf_sum}"
+                )
             self._grasp_state[0] = g0
 
             g1, self._right_touch_hold_since = self._eval_one_hand(
                 time.time(), self._right_nf_sum, self._right_tf_sum,
                 self._right_touch_hold_since)
+            if g1 and not self._grasp_state[1]:
+                print(
+                    f"[GraspDetector] right grasp succeeded: "
+                    f"nf_sum={self._right_nf_sum}, tf_sum={self._right_tf_sum}"
+                )
             self._grasp_state[1] = g1
         else:
             # ── 无力传感器模式：关节角度方案 ──

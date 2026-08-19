@@ -2371,7 +2371,10 @@ class DataRecordManager:
         self.logger.info("Closing DataRecordManager...")
 
         try:
-            self.stop_recording()
+            if self.shared_data.running.value:
+                self.stop_recording()
+            else:
+                self.logger.info("Recording is not active, skip stop synchronization.")
         except Exception:
             self.logger.debug("stop_recording failed during close", exc_info=True)
 
