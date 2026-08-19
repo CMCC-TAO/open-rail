@@ -1425,7 +1425,7 @@ def _ensure_vla_client_created():
 
 
 async def _start_client():
-    logger.debug(f"DEBUG: Try to start client.")
+    # logger.debug(f"DEBUG: Try to start client.")
     loop = asyncio.get_running_loop()
     client_state._loop = loop
 
