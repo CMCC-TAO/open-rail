@@ -85,7 +85,6 @@ class TaskLanguageManager:
             self.logger.warning("Missing 'task_progress_win_size' in config, set default to 10.")
 
     def _resolve_auto_mode_start_sub_task_id(self) -> int:
-        # start_sub_task_id = int(getattr(self.config, 'auto_mode_start_sub_task_id', 0))
         task_cmds = self.task_language_map.get(self.config.task_id, [])
 
         if not task_cmds and self.task_language_map:
@@ -95,7 +94,12 @@ class TaskLanguageManager:
         if not task_cmds:
             return 0
 
-        return min(self.config.auto_mode_start_sub_task_id, len(task_cmds) - 1)
+        try:
+            raw_start_id = int(getattr(self.config, 'auto_mode_start_sub_task_id', 0))
+        except Exception:
+            raw_start_id = 0
+
+        return max(0, min(raw_start_id, len(task_cmds) - 1))
 
     def reset(self) -> None:
         start_sub_task_id = self._resolve_auto_mode_start_sub_task_id()
@@ -198,9 +202,30 @@ class TaskLanguageManager:
 
         # Ensure sub_task_id is within valid range
         task_steps = len(task_cmds)
-        sub_task_id = max(0, sub_task_id)
-        sub_task_id = self.config.auto_mode_start_sub_task_id if sub_task_id >= task_steps else sub_task_id
-        self.logger.debug(f"Retrieve language instruction for task_id='{task_id}', sub_task_id={sub_task_id}.")
+        if task_steps <= 0:
+            self.logger.warning(f"Task '{task_id}' has no valid language commands.")
+            return "", 0
+
+        try:
+            raw_sub_task_id = int(sub_task_id)
+        except Exception:
+            raw_sub_task_id = 0
+
+        if raw_sub_task_id < 0:
+            self.logger.warning(f"Negative sub_task_id={raw_sub_task_id} for task_id='{task_id}', clamp to 0.")
+            raw_sub_task_id = 0
+
+        if raw_sub_task_id >= task_steps:
+            fallback_id = self._resolve_auto_mode_start_sub_task_id()
+            sub_task_id = max(0, min(fallback_id, task_steps - 1))
+            self.logger.warning(
+                f"sub_task_id={raw_sub_task_id} out of range for task_id='{task_id}' (steps={task_steps}), "
+                f"fallback to {sub_task_id}."
+            )
+        else:
+            sub_task_id = raw_sub_task_id
+
+        self.logger.debug(f"Retrieve language instruction for task_id='{task_id}', sub_task_id={sub_task_id}, task_steps={task_steps}.")
         return task_cmds[sub_task_id], task_steps
 
     def try_advance_subtask(self) -> None:
