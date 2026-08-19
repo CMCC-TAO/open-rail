@@ -256,10 +256,27 @@ class EvaluationResultRecorder:
         return need_load
 
     def begin_recording(self, eval_record_id: int, sub_task_id: int):
+        # Ensure previous executor is not leaked across sessions.
+        prev_executor = getattr(self, '_record_executor', None)
+        if prev_executor is not None:
+            try:
+                prev_executor.shutdown(wait=True, cancel_futures=True)
+            except Exception:
+                pass
         self._record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
         self._create_new_record(eval_record_id=eval_record_id, sub_task_id=sub_task_id)
 
     def end_recording(self):
+        # Drain frame-write tasks first to avoid post-finalize mutations/new records.
+        record_executor = getattr(self, '_record_executor', None)
+        if record_executor is not None:
+            try:
+                record_executor.shutdown(wait=True, cancel_futures=False)
+            except Exception as e:
+                self.logger.warning(f"Shutdown eval record executor failed during end_recording: {e}")
+            finally:
+                self._record_executor = None
+
         if self._eval_record_pause_time is not None and self._eval_record_resume_time is None:
             self._eval_record_stop_time = time.time() # required for special case 
             self.resume_recording()

@@ -400,24 +400,20 @@ function setupLangPanel() {
       startSubTaskId = subtasks.length > 0 ? Math.max(0, Math.min(startSubTaskId, subtasks.length - 1)) : 0;
 
 
+      const patch = {
+        'language.auto_mode_start_sub_task_id': startSubTaskId,
+      };
+
       // If auto-mode is enabled, also apply the start subtask to the visible SubTask select
       if (autoCheckLangMode && autoCheckLangMode.checked && subtaskSel && subtaskSel.options.length > 0) {
         autoStartSel.value = String(startSubTaskId);
         subtaskSel.value = String(startSubTaskId);
         subtaskSel.selectedIndex = startSubTaskId;
         subtaskSel.dispatchEvent(new Event('change'));
-        await persistLanguagePatch({
-          'language.sub_task_id': startSubTaskId,
-          'language.auto_mode_start_sub_task_id': startSubTaskId
-        });
+        patch['language.sub_task_id'] = startSubTaskId;
       }
 
-      // // Ensure UI reflects applied configuration: update config selection and applied markers
-      // try {
-      //   applyConfigSubtaskSelection(startSubTaskId, false, false);
-      // } catch (e) {
-      //   // ignore UI update errors
-      // }
+      await persistLanguagePatch(patch);
       refreshLangAppliedMarkers(taskName || (taskSel ? taskSel.value : null), startSubTaskId);
     });
   }

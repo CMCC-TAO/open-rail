@@ -529,9 +529,17 @@ def _get_robot(robot_type, robot_config):
 def _bind_robot_to_vla_client(vla_client, robot):
     if vla_client is not None:
         vla_client.robot = robot
-    with client_state.lock:
+
+    lock_acquired = client_state.lock.acquire(timeout=2.0)
+    if not lock_acquired:
+        logger.error("timeout acquiring client_state.lock in _bind_robot_to_vla_client")
+        raise RuntimeError("Timeout binding robot to client state (lock busy).")
+
+    try:
         if client_state.vla_client is vla_client:
             client_state.robot = robot
+    finally:
+        client_state.lock.release()
 
 
 def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
@@ -553,16 +561,28 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
     """Create robot by current config and inject into existing vla_client."""
     global robot_instance
 
-    with client_state.lock:
+    lock_acquired = client_state.lock.acquire(timeout=2.0)
+    if not lock_acquired:
+        raise RuntimeError("Timeout reading client state before robot bind (lock busy).")
+
+    try:
         vla_client = client_state.vla_client
         client_config = client_state.config
-        current_robot = client_state.robot
+    finally:
+        client_state.lock.release()
 
     if vla_client is None:
         return None
+
     if client_config is None:
         client_config = get_client_config()
-        client_state.config = client_config
+        lock_acquired = client_state.lock.acquire(timeout=2.0)
+        if not lock_acquired:
+            raise RuntimeError("Timeout writing config during robot bind (lock busy).")
+        try:
+            client_state.config = client_config
+        finally:
+            client_state.lock.release()
 
     if force_recreate and robot_instance is not None:
         try:
@@ -575,12 +595,7 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
     _sync_robot_action_layout(client_config, robot_config, vla_client)
 
     robot, _ = _get_robot(client_config.robots.type, robot_config)
-    if current_robot is robot:
-        _bind_robot_to_vla_client(vla_client, robot)
-        return robot
 
-    # Default RobotBase instance used at init can be replaced directly.
-    # Non-cached previous robot release is handled by _get_robot() path.
     _bind_robot_to_vla_client(vla_client, robot)
     return robot
 
@@ -858,8 +873,13 @@ class RecordingItemDeleteRequest(BaseModel):
 @app.delete("/api/client/record/delete")
 async def delete_recording_item(req: RecordingItemDeleteRequest):
     try:
-        with client_state.lock:
+        lock_acquired = client_state.lock.acquire(timeout=2.0)
+        if not lock_acquired:
+            raise RuntimeError("Timeout acquiring client_state.lock in _start_client (read vla_client).")
+        try:
             vla_client = client_state.vla_client
+        finally:
+            client_state.lock.release()
 
         if req.episode_id is not None:
             result = vla_client.delete_recording_item(episode_id = req.episode_id)
@@ -1002,6 +1022,7 @@ async def patch_config(req: ConfigPatchRequest):
     vision_preprocess_keys = []
     dataset_path_changed = False
     robot_type_changed = False
+    language_patch_changed = False
     current_vla_client = None
     current_robot = None
     is_running = False
@@ -1028,6 +1049,8 @@ async def patch_config(req: ConfigPatchRequest):
                 next_dataset_path = str(flat[k]).strip()
             elif k.startswith('robots.type'):
                 robot_type_changed = True
+            elif k.startswith('language.'):
+                language_patch_changed = True
             elif k.startswith('controller.period'):
                 if current_vla_client is not None:
                     current_vla_client.set_control_period(float(flat[k]))
@@ -1050,6 +1073,13 @@ async def patch_config(req: ConfigPatchRequest):
                 logger.error(f"Failed to update preprocess function: {e}")
     finally:
         client_state.lock.release()
+    if language_patch_changed and current_vla_client is not None:
+        try:
+            await asyncio.wait_for(asyncio.to_thread(_sync_runtime_language_state, current_vla_client, flat), timeout=3.0)
+            cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
+        except Exception as e:
+            logger.warning(f"[language-sync] failed to apply runtime language sync after patch: {e}")
+
     if (
         robot_type_changed
         and is_running
@@ -1180,6 +1210,99 @@ async def save_config_file(req: ConfigFileRequest):
     return {"status": "ok", "path": str(save_path)}
 
 
+def _sanitize_language_sub_task_id(language_cfg, task_cmd_data) -> int:
+    """Clamp language.sub_task_id based on configured auto mode start index and task steps."""
+    try:
+        auto_start_id = int(getattr(language_cfg, 'auto_mode_start_sub_task_id', 0))
+    except Exception:
+        auto_start_id = 0
+
+    fallback_id = max(0, auto_start_id)
+    task_steps = 0
+
+    if isinstance(task_cmd_data, dict):
+        task_id = getattr(language_cfg, 'task_id', None)
+        task_cmds = task_cmd_data.get(task_id, []) if task_id in task_cmd_data else []
+        if not task_cmds and task_cmd_data:
+            fallback_task_id = next(iter(task_cmd_data.keys()))
+            task_cmds = task_cmd_data.get(fallback_task_id, [])
+            logger.warning(
+                f"No commands found for task_id='{task_id}' during config load, fallback to '{fallback_task_id}'."
+            )
+        task_steps = len(task_cmds) if isinstance(task_cmds, list) else 0
+
+    if task_steps > 0:
+        clamped_id = min(fallback_id, task_steps - 1)
+    else:
+        clamped_id = fallback_id
+
+    if clamped_id != auto_start_id:
+        logger.warning(
+            f"Clamp language auto_mode_start_sub_task_id from {auto_start_id} to {clamped_id} "
+            f"(task_steps={task_steps})."
+        )
+
+    setattr(language_cfg, 'sub_task_id', clamped_id)
+    return clamped_id
+
+
+def _sync_runtime_language_state(vla_client, flat_patch: dict):
+    """Best-effort runtime sync for language manager after config patch."""
+    if vla_client is None:
+        return
+
+    tlm = getattr(vla_client, 'task_language_manager', None)
+    if tlm is None:
+        return
+
+    changed_keys = set(flat_patch.keys())
+    if not any(k.startswith('language.') for k in changed_keys):
+        return
+
+    language_cfg = getattr(getattr(vla_client, 'config', None), 'language', None)
+    if language_cfg is None:
+        return
+
+    if 'language.auto_mode_start_sub_task_id' in changed_keys and 'language.sub_task_id' not in changed_keys:
+        try:
+            auto_start = int(getattr(language_cfg, 'auto_mode_start_sub_task_id', 0))
+        except Exception:
+            auto_start = 0
+        setattr(language_cfg, 'sub_task_id', max(0, auto_start))
+
+    # Reload task map only when task source/task id changed.
+    if 'language.file_path' in changed_keys or 'language.task_id' in changed_keys:
+        tlm.reload()
+
+    try:
+        safe_sub_task_id = int(getattr(language_cfg, 'sub_task_id', 0))
+    except Exception:
+        safe_sub_task_id = 0
+
+    tlm.currt_language_instruction, tlm.currt_task_steps = tlm._retrieve_language_instruction(
+        task_id=getattr(language_cfg, 'task_id', ''),
+        sub_task_id=safe_sub_task_id,
+    )
+
+    try:
+        tlm.sub_task_id_tmp = int(getattr(language_cfg, 'sub_task_id', 0))
+    except Exception:
+        tlm.sub_task_id_tmp = 0
+
+    tlm.task_progress_queue.clear()
+    tlm.ready_for_try = True
+    tlm.ready_for_confirm = False
+    tlm.is_sub_task_finished = False
+
+    logger.info(
+        "[language-sync] runtime language updated after patch: "
+        f"task_id={getattr(language_cfg, 'task_id', None)}, "
+        f"sub_task_id={getattr(language_cfg, 'sub_task_id', None)}, "
+        f"auto_start={getattr(language_cfg, 'auto_mode_start_sub_task_id', None)}, "
+        f"instruction={tlm.currt_language_instruction}"
+    )
+
+
 def _apply_yaml_config(config, yaml_conf_path: Path):
     """Read yaml conf file and apply flat/nested overrides onto config (best-effort)."""
     if not _HAS_YAML:
@@ -1196,6 +1319,8 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
                 if v and not v.startswith('#'):
                     patch[k] = v
         _apply_flat_patch_new(config, patch)
+        _sanitize_language_sub_task_id(getattr(config, 'language', None), None)
+        logger.info(f"Load and apply yaml config overrides from {yaml_conf_path} (fallback parser)")
         return
 
     text = yaml_conf_path.read_text(encoding="utf-8")
@@ -1222,7 +1347,23 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
     # print(f"config after flat patch: {config}")
     # print(f"config after flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config after flat patch: {cam_head}")
-    config.language.sub_task_id = int(getattr(config.language, 'auto_mode_start_sub_task_id', 0))  # reset sub_task_id with configured auto mode start index
+
+    task_cmd_data = None
+    try:
+        lang_file_path = getattr(getattr(config, 'language', None), 'file_path', '')
+        if lang_file_path:
+            lang_path = Path(lang_file_path)
+            if not lang_path.is_absolute():
+                lang_path = ROOT / "conf" / lang_path
+            if lang_path.exists():
+                task_cmd_data = json.loads(lang_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning(f"Failed to load language command file for sub_task_id clamp: {e}")
+
+    if getattr(config, 'language', None) is not None:
+        sanitized_sub_task_id = _sanitize_language_sub_task_id(config.language, task_cmd_data)
+        logger.info(f"Reset language.sub_task_id to {sanitized_sub_task_id} after config load.")
+
     logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
 
 
@@ -1364,34 +1505,56 @@ async def _start_client():
 
     try:
         await asyncio.to_thread(_ensure_vla_client_created)
-        await asyncio.to_thread(_ensure_config_robot_bound)
-        vla_client = client_state.vla_client
+
+        await asyncio.wait_for(asyncio.to_thread(_ensure_config_robot_bound), timeout=8.0)
+
+        lock_acquired = client_state.lock.acquire(timeout=2.0)
+        if not lock_acquired:
+            raise RuntimeError("Timeout acquiring client_state.lock in _start_client (read vla_client).")
+        try:
+            vla_client = client_state.vla_client
+        finally:
+            client_state.lock.release()
     except Exception as e:
-        # err = traceback.format_exc()
         logger.exception(f"Client init error: {e}")
-        with client_state.lock:
-            client_state.running = False
-            client_state.vla_client = None
-            client_state.robot = None
-            client_state.paused_thread_state = None
-            client_state.starting = False
+        lock_acquired = client_state.lock.acquire(timeout=2.0)
+        if lock_acquired:
+            try:
+                client_state.running = False
+                client_state.vla_client = None
+                client_state.robot = None
+                client_state.paused_thread_state = None
+                client_state.starting = False
+            finally:
+                client_state.lock.release()
+        else:
+            logger.error("Timeout acquiring lock in _start_client exception cleanup")
         await _broadcast_to_web({"type": "error", "data": {"message": f"Failed to initialize client: {e}"}})
         return
 
-    with client_state.lock:
+    should_close_after_unlock = False
+    lock_acquired = client_state.lock.acquire(timeout=2.0)
+    if not lock_acquired:
+        raise RuntimeError("Timeout acquiring client_state.lock in _start_client (state transition).")
+    try:
         client_state.starting = False
         if client_state.stopping:
-            logger.warning("Client start aborted because stop was requested during initialization.")
-            try:
-                vla_client.close()
-            except Exception:
-                pass
             client_state.vla_client = None
             client_state.robot = None
+            should_close_after_unlock = True
+        elif client_state.running:
             return
-        if client_state.running:
-            return
-        client_state.running = True
+        else:
+            client_state.running = True
+    finally:
+        client_state.lock.release()
+
+    if should_close_after_unlock:
+        try:
+            await asyncio.to_thread(vla_client.close)
+        except Exception:
+            logger.exception("failed to close vla_client after aborted start")
+        return
 
     def _run_in_thread():
         try:
@@ -1428,8 +1591,13 @@ async def _start_client():
                     client_state.worker_thread = None
 
     t = threading.Thread(target=_run_in_thread, daemon=True, name="vla-client")
-    with client_state.lock:
+    lock_acquired = client_state.lock.acquire(timeout=2.0)
+    if not lock_acquired:
+        raise RuntimeError("Timeout acquiring client_state.lock in _start_client (set worker_thread).")
+    try:
         client_state.worker_thread = t
+    finally:
+        client_state.lock.release()
     t.start()
 
 
@@ -1706,7 +1874,6 @@ async def stop_client():
         client_state.stopping = bool(is_active)
 
     if not is_active:
-        print(f"Debug: stop_client called but client is not active (running={client_state.running}, starting={getattr(client_state, 'starting', False)})")
         raise HTTPException(400, "Client is not running.")
 
     asyncio.create_task(_stop_cleanup_background())
@@ -1786,7 +1953,10 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
         return
 
     try:
-        with client_state.lock:
+        lock_acquired = client_state.lock.acquire(timeout=2.0)
+        if not lock_acquired:
+            raise RuntimeError("Timeout acquiring client_state.lock in _cleanup.")
+        try:
             vla_client = client_state.vla_client
             robot = client_state.robot
             # client_state.vla_client = None
@@ -1795,6 +1965,8 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
             client_state.paused = False
             client_state.paused_thread_state = None
             client_state.stopping = False
+        finally:
+            client_state.lock.release()
 
         if vla_client is not None:
             try:

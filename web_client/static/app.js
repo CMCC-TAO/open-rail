@@ -527,9 +527,11 @@ async function wireEvents() {
   $('btn-start').addEventListener('click', async () => {
     const btnStart = $('btn-start');
     const btnPause = $('btn-pause');
-    
+
     // Prevent duplicate rapid clicks
-    if (btnStart.dataset.pending === '1') return;
+    if (btnStart.dataset.pending === '1') {
+      return;
+    }
     btnStart.dataset.pending = '1';
     btnStart.disabled = true;
     if (btnPause) btnPause.disabled = true;
@@ -553,14 +555,16 @@ async function wireEvents() {
         finally {
           try {
             const json = await apiFetch('/api/client/status', { timeoutMs: 3000, suppressToast: true });
-            if (json && json.data) renderStats(json.data);
-          } catch (e) { /* ignore */ }
+            if (json && json.data) {
+              renderStats(json.data);
+            }
+          } catch (e) {
+          }
         }
         return;
       }
 
       // Apply config patch BEFORE starting
-      // const patchToApply = { ...App.pendingPatch };
       if (Object.keys(App.pendingPatch).length) {
         try {
           const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
@@ -568,7 +572,7 @@ async function wireEvents() {
           applyVisualConfig(App.config);
           App.pendingPatch = {};
           clearPending();
-        } catch (e) { 
+        } catch (e) {
           delete btnStart.dataset.pending;
           setRunningUI(App.isRunning, App.isPaused);
           return;
@@ -579,23 +583,20 @@ async function wireEvents() {
       toast('Client starting…', 'info');
       await apiFetch('/api/client/start', { method: 'POST', timeoutMs: 15000 });
       setRunningUI(true, false);
+
       // Now data recording if in auto mode
       const autoCheckRecordMode = $('chk-record-auto');
-      // console.log('Data recording auto check', autoCheckRecordMode.checked);
       if (autoCheckRecordMode && autoCheckRecordMode.checked) {
         const startStopRecordingBtn = $('btn-recording-startstop');
-        // Trigger the click event programmatically
         if (startStopRecordingBtn) {
-          startStopRecordingBtn.disabled = false
+          startStopRecordingBtn.disabled = false;
           startStopRecordingBtn.click();
-          // console.log('Data recording started.');
         }
-        // await startDataRecording();
       }
-    } catch (e) { /* toasted */ }
+    } catch (e) {
+    }
     finally {
       delete btnStart.dataset.pending;
-      // Re-sync UI state (status broadcast will update, but unlock buttons)
       setRunningUI(App.isRunning, App.isPaused);
     }
   });
