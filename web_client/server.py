@@ -77,15 +77,17 @@ def _finalize_pyarrow_s3():
 async def _lifespan(_: FastAPI):
     # ── startup ──
     setup_logging("client.log")
-    client_state.config = get_client_config()
+    client_config = get_client_config()
+    # The environment variable conf_file is injected via command-line args
     client_state.conf_file = os.environ.get("conf_file", "default_conf.yaml")
     # print(f"Initial client.record config: {client_state.config.record}")
-    DEFAULT_YAML = ROOT / "conf" / client_state.conf_file
-    if DEFAULT_YAML.exists():
+    CONFIG_YAML = ROOT / "conf" / client_state.conf_file
+    if CONFIG_YAML.exists():
         try:
-            _apply_yaml_config(client_state.config, DEFAULT_YAML)
+            _apply_yaml_config(client_config, CONFIG_YAML)
         except Exception as e:
             logger.warning(f"Failed to apply yaml conf: {e}")
+    client_state.config = client_config
     # print(f"Debug: config_file = {client_state.conf_file}")
     # print(f"Initial client.record config: {client_state.config.record}")
     # print(f"Visualize trajectory config: {client_state.config.visualize.trajectory}")
@@ -96,6 +98,7 @@ async def _lifespan(_: FastAPI):
     _api_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="api_worker")
     loop = asyncio.get_running_loop()
     loop.set_default_executor(_api_executor)
+    client_state.loop = loop
 
     asyncio.create_task(_stats_push_loop())
     _ensure_vla_client_created()
@@ -140,7 +143,7 @@ class ClientState:
         self.ws_clients: set[WebSocket] = set()
         self.ws_lock = threading.Lock()
         self._broadcast_task: Optional[asyncio.Task] = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.paused_thread_state: Optional[dict] = None
         self.worker_thread: Optional[threading.Thread] = None
 
@@ -1377,12 +1380,9 @@ def _ensure_vla_client_created():
             return client_state.vla_client
         client_config = client_state.config
 
-    if client_config is None:
-        client_config = get_client_config()
-        with client_state.lock:
-            client_state.config = client_config
-
+    print(f"DEBUG, robot = {client_config.robots}, type = {client_config.robots.type.value}")
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
+    print(f"DEBUG = {robot_config}")
     _sync_robot_action_layout(client_config, robot_config)
 
     vla_zmq_client = None
@@ -1425,10 +1425,6 @@ def _ensure_vla_client_created():
 
 
 async def _start_client():
-    # logger.debug(f"DEBUG: Try to start client.")
-    loop = asyncio.get_running_loop()
-    client_state._loop = loop
-
     try:
         vla_client = await asyncio.to_thread(_ensure_vla_client_created)
     except Exception as e:
@@ -1479,7 +1475,7 @@ async def _start_client():
             logger.debug(f"vla_client start successfully.")
             asyncio.run_coroutine_threadsafe(
                 _broadcast_to_web({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
-                loop
+                client_state.loop
             )
 
             while client_state.running:
@@ -1491,7 +1487,7 @@ async def _start_client():
             client_state.running = False
             asyncio.run_coroutine_threadsafe(
                 _broadcast_to_web({"type": "error", "data": {"message": str(e)}}),
-                loop
+                client_state.loop
             )
         finally:
             with client_state.lock:
