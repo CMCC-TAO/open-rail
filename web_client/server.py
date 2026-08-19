@@ -56,7 +56,6 @@ from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.utils.util import load_user_config, apply_user_config, parse_action_layout
-from client.robots.base_robot import RobotBase
 
 logger = logging.getLogger(__name__)
 
@@ -465,82 +464,23 @@ def _apply_flat_patch_new(config, patch: dict):
         logger.debug(f"Ignored non-existing config keys in patch: {dropped}")
 
     logger.info(f"Applied config patch keys: {applied}/{len(patch)}")
-robot_instance = None
 _cleanup_guard = threading.Lock()
 
-def _get_robot(robot_type, robot_config):
-    global robot_instance
 
-    # Reuse existing robot instance when the type matches.
-    # This avoids re-initializing A2D DDS node after stop/start cycles.
-    if robot_instance is not None:
-        module_name = getattr(robot_instance.__class__, "__module__", "")
-        if robot_type == RobotType.A2D and module_name.endswith("client.robots.a2d.body_robot"):
-            return robot_instance, True
-        
-        if robot_type == RobotType.TI5_T170C and module_name.endswith("client.robots.ti5_t170c.body_robot"):
-            return robot_instance, True
-
-        if robot_type == RobotType.NAVI_WA2 and module_name.endswith("client.robots.navi_wa2.body_robot"):
-            return robot_instance, True
-
-        if robot_type == RobotType.MOCK and module_name.endswith("client.robots.mock.body_robot"):
-            desired_path = str(getattr(robot_config, 'dataset_path', '') or '')
-            current_path = str(getattr(robot_instance, 'dataset_path', '') or '')
-            if desired_path and desired_path != current_path and hasattr(robot_instance, 'reset'):
-                try:
-                    robot_instance.reset(dataset_path=desired_path, reload_dataset=True)
-                    logger.info(f"Reload mock dataset during robot reuse: {current_path} -> {desired_path}")
-                except Exception as e:
-                    logger.warning(f"Failed to reload reused mock robot with new dataset path, will recreate robot: {e}")
-                    try:
-                        robot_instance.close()
-                    except Exception:
-                        pass
-                    robot_instance = None
-                else:
-                    return robot_instance, True
-            else:
-                return robot_instance, True
-
-        try:
-            robot_instance.close()
-        except Exception:
-            pass
-        robot_instance = None
-
+def _create_robot(robot_type, robot_config):
     if robot_type == RobotType.A2D:
         from client.robots.a2d.body_robot import RobotBody
-        robot_instance = RobotBody(robot_config)
-    elif robot_type == RobotType.NAVI_WA2:
+        return RobotBody(robot_config)
+    if robot_type == RobotType.NAVI_WA2:
         from client.robots.navi_wa2.body_robot import RobotBody
-        robot_instance = RobotBody(robot_config)
-    elif robot_type == RobotType.MOCK:
+        return RobotBody(robot_config)
+    if robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
-        robot_instance = RobotBody(robot_config)
-    elif robot_type == RobotType.TI5_T170C:
+        return RobotBody(robot_config)
+    if robot_type == RobotType.TI5_T170C:
         from client.robots.ti5_t170c.body_robot import RobotBody
-        robot_instance = RobotBody(robot_config)
-    else:
-        raise ValueError(f"Unsupported robot type: {robot_type}")
-    return robot_instance, False
-
-
-def _bind_robot_to_vla_client(vla_client, robot):
-    if vla_client is not None:
-        vla_client.robot = robot
-
-    lock_acquired = client_state.lock.acquire(timeout=2.0)
-    if not lock_acquired:
-        logger.error("timeout acquiring client_state.lock in _bind_robot_to_vla_client")
-        raise RuntimeError("Timeout binding robot to client state (lock busy).")
-
-    try:
-        if client_state.vla_client is vla_client:
-            client_state.robot = robot
-    finally:
-        client_state.lock.release()
-    logger.debug(f"bind robot to vla client success.")
+        return RobotBody(robot_config)
+    raise ValueError(f"Unsupported robot type: {robot_type}")
 
 
 def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
@@ -558,10 +498,8 @@ def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
             vla_client.realtime_data_manager.clear()
 
 
-def _ensure_config_robot_bound(force_recreate: bool = False):
-    """Create robot by current config and inject into existing vla_client."""
-    global robot_instance
-
+def _ensure_config_robot_bound():
+    """Sync runtime robot/layout with current config without recreating robot."""
     lock_acquired = client_state.lock.acquire(timeout=2.0)
     if not lock_acquired:
         raise RuntimeError("Timeout reading client state before robot bind (lock busy).")
@@ -569,9 +507,10 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
     try:
         vla_client = client_state.vla_client
         client_config = client_state.config
+        robot = client_state.robot
     finally:
         client_state.lock.release()
-    logger.debug(f"retrieve cla_client and config")
+
     if vla_client is None:
         return None
 
@@ -579,28 +518,30 @@ def _ensure_config_robot_bound(force_recreate: bool = False):
         client_config = get_client_config()
         lock_acquired = client_state.lock.acquire(timeout=2.0)
         if not lock_acquired:
-            raise RuntimeError("Timeout writing config during robot bind (lock busy).")
+            raise RuntimeError("Timeout writing config during robot sync (lock busy).")
         try:
             client_state.config = client_config
         finally:
             client_state.lock.release()
 
-    if force_recreate and robot_instance is not None:
-        try:
-            robot_instance.close()
-        except Exception:
-            pass
-        robot_instance = None
-
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
     _sync_robot_action_layout(client_config, robot_config, vla_client)
-    logger.debug(f"sync robot action layout")
 
-    robot, _ = _get_robot(client_config.robots.type, robot_config)
+    if robot is None:
+        robot = getattr(vla_client, "robot", None)
+    if robot is None:
+        return None
 
-    _bind_robot_to_vla_client(vla_client, robot)
-    logger.debug(f"ensure config and robot successfully.")
-    # return robot
+    vla_client.robot = robot
+    lock_acquired = client_state.lock.acquire(timeout=2.0)
+    if not lock_acquired:
+        raise RuntimeError("Timeout writing robot sync to client state (lock busy).")
+    try:
+        if client_state.vla_client is vla_client:
+            client_state.robot = robot
+    finally:
+        client_state.lock.release()
+    return robot
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1089,49 +1030,30 @@ async def patch_config(req: ConfigPatchRequest):
         and current_vla_client is not None
         and prev_robot_type != next_robot_type
     ):
-        try:
-            with client_state.lock:
-                client_state.paused_thread_state = _pause_vla_client(current_vla_client)
-            await asyncio.to_thread(_ensure_config_robot_bound, True)
-            logger.info(f"Robot type changed: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
-        except Exception as e:
-            logger.error(f"Failed to recreate robot for type change {prev_robot_type} -> {next_robot_type}: {e}")
-            raise HTTPException(500, f"Failed to recreate robot for type change: {e}")
-        finally:
-            with client_state.lock:
-                try:
-                    _resume_vla_client(current_vla_client, client_state.paused_thread_state)
-                except Exception as e:
-                    logger.error(f"Failed to resume client after robot recreate: {e}")
+        logger.warning(
+            f"Robot type changed: {prev_robot_type} -> {next_robot_type}. "
+            "Runtime robot recreation is disabled; restart client to take effect."
+        )
 
     if dataset_path_changed and not (robot_type_changed and prev_robot_type != next_robot_type):
-        targets = []
         if current_robot is not None:
-            targets.append(current_robot)
-        if robot_instance is not None and robot_instance is not current_robot:
-            targets.append(robot_instance)
-
-        for robot in targets:
-            module_name = getattr(robot.__class__, "__module__", "")
-            if not module_name.endswith("client.robots.mock.body_robot"):
-                continue
-            if not hasattr(robot, 'reset'):
-                continue
-            try:
-                if is_running and current_vla_client is not None and robot is current_robot:
+            module_name = getattr(current_robot.__class__, "__module__", "")
+            if module_name.endswith("client.robots.mock.body_robot") and hasattr(current_robot, 'reset'):
+                try:
+                    if is_running and current_vla_client is not None:
+                        with client_state.lock:
+                            client_state.paused_thread_state = _pause_vla_client(current_vla_client)
+                    current_robot.reset(dataset_path=next_dataset_path or None, reload_dataset=True)
+                    logger.info(f"Applied mock dataset_path change: {next_dataset_path}")
+                except Exception as e:
+                    logger.error(f"Failed to apply mock dataset_path change '{next_dataset_path}': {e}")
+                    raise HTTPException(500, f"Failed to reload mock dataset: {e}")
+                finally:
                     with client_state.lock:
-                        client_state.paused_thread_state = _pause_vla_client(current_vla_client)
-                robot.reset(dataset_path=next_dataset_path or None, reload_dataset=True)
-                logger.info(f"Applied mock dataset_path change: {next_dataset_path}")
-            except Exception as e:
-                logger.error(f"Failed to apply mock dataset_path change '{next_dataset_path}': {e}")
-                raise HTTPException(500, f"Failed to reload mock dataset: {e}")
-            finally:
-                with client_state.lock:
-                    try:
-                        _resume_vla_client(current_vla_client, client_state.paused_thread_state)
-                    except Exception as e:
-                        logger.error(f"Failed to resume client after dataset reload: {e}")
+                        try:
+                            _resume_vla_client(current_vla_client, client_state.paused_thread_state)
+                        except Exception as e:
+                            logger.error(f"Failed to resume client after dataset reload: {e}")
 
     return {"status": "ok", "config": cfg_dict}
 
@@ -1169,17 +1091,10 @@ async def load_config_file(req: ConfigFileRequest):
         and current_vla_client is not None
         and prev_robot_type != next_robot_type
     ):
-        try:
-            with client_state.lock:
-                client_state.paused_thread_state = _pause_vla_client(current_vla_client)
-            await asyncio.to_thread(_ensure_config_robot_bound, True)
-            logger.info(f"Robot type changed by config load: {prev_robot_type} -> {next_robot_type}. Recreated and rebound robot instance.")
-        finally:
-            with client_state.lock:
-                try:
-                    await asyncio.to_thread(_resume_vla_client, current_vla_client, client_state.paused_thread_state)
-                except Exception as e:
-                    logger.error(f"Failed to resume client after config-load robot recreate: {e}")
+        logger.warning(
+            f"Robot type changed by config load: {prev_robot_type} -> {next_robot_type}. "
+            "Runtime robot recreation is disabled; restart client to take effect."
+        )
 
     cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     return {"status": "ok", "config": cfg_dict}
@@ -1460,25 +1375,25 @@ def _ensure_vla_client_created():
     with client_state.lock:
         if client_state.vla_client is not None:
             return client_state.vla_client
+        client_config = client_state.config
 
-    # TODO: Load config from yaml file
-    if client_state.config is None:
-        logger.debug(f"DEBUG: config is None.")
-        client_state.config = get_client_config()
-    client_config = client_state.config
+    if client_config is None:
+        client_config = get_client_config()
+        with client_state.lock:
+            client_state.config = client_config
 
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
     _sync_robot_action_layout(client_config, robot_config)
 
     vla_zmq_client = None
-    robot = RobotBase(robot_config)
+    robot = None
     try:
+        robot = _create_robot(client_config.robots.type, robot_config)
         vla_zmq_client = ZMQClient(client_config.vla_zmq)
         realtime_data_manager = RealtimeDataManager(client_config.rdm)
         inter_chunk_fuser = InterChunkFuser(config=client_config.inter_chunk)
         intra_chunk_smoother = IntraChunkSmoother(config=client_config.intra_chunk)
         task_language_manager = TaskLanguageManager(config=client_config.language)
-        logger.debug(f"DEBUG: required components are created.")
         from client.core.vla_client import VLAClient
         vla_client = VLAClient(
             config=client_config,
@@ -1489,12 +1404,16 @@ def _ensure_vla_client_created():
             vla_zmq_client=vla_zmq_client,
             robot=robot,
         )
-        logger.debug(f"DEBUG: vla client is created.")
     except Exception as e:
-        logger.exception(f"DEBUG: catched exception when vla client is created: {e}")
+        logger.exception(f"Client creation failed: {e}")
         if vla_zmq_client is not None:
             try:
                 vla_zmq_client.close()
+            except Exception:
+                pass
+        if robot is not None:
+            try:
+                robot.close()
             except Exception:
                 pass
         raise
@@ -1502,7 +1421,6 @@ def _ensure_vla_client_created():
     with client_state.lock:
         client_state.vla_client = vla_client
         client_state.robot = robot
-        logger.debug(f"DEBUG: Start successfully.")
     return vla_client
 
 
@@ -1512,21 +1430,7 @@ async def _start_client():
     client_state._loop = loop
 
     try:
-        await asyncio.to_thread(_ensure_vla_client_created)
-
-        await asyncio.to_thread(_ensure_config_robot_bound)
-        logger.debug(f"ensure config robot bound success.")
-
-        lock_acquired = client_state.lock.acquire(timeout=2.0)
-        logger.debug(f"acquire lock success.")
-        if not lock_acquired:
-            raise RuntimeError("Timeout acquiring client_state.lock in _start_client (read vla_client).")
-        try:
-            vla_client = client_state.vla_client
-            logger.debug(f"create vla_client successfully.")
-        finally:
-            client_state.lock.release()
-            logger.debug(f"release lock successfully.")
+        vla_client = await asyncio.to_thread(_ensure_vla_client_created)
     except Exception as e:
         logger.exception(f"Client init error: {e}")
         lock_acquired = client_state.lock.acquire(timeout=2.0)
@@ -1961,8 +1865,6 @@ def _has_alive_vla_threads(vla_client) -> bool:
 
 
 def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_alive: bool = True):
-    global robot_instance
-
     if not _cleanup_guard.acquire(blocking=False):
         return
 
@@ -1973,8 +1875,8 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
         try:
             vla_client = client_state.vla_client
             robot = client_state.robot
-            # client_state.vla_client = None
-            # client_state.robot = None
+            client_state.vla_client = None
+            client_state.robot = None
             client_state.running = False
             client_state.paused = False
             client_state.paused_thread_state = None
@@ -1992,22 +1894,10 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
                     vla_client.stop()
             except Exception:
                 pass
-        # TODO: robot should be reset.
+
         threads_alive = _has_alive_vla_threads(vla_client)
-        # print(f"Debug: vla_client threads alive={threads_alive}")
-
-        keep_robot_alive = False
-        if robot is not None and not force_release_robot:
-            module_name = getattr(robot.__class__, "__module__", "")
-            keep_robot_alive = (
-                module_name.endswith("client.robots.a2d.body_robot")
-                or module_name.endswith("client.robots.navi_wa2.body_robot")
-            )
-            # print(f"Debug: keep_robot_alive={keep_robot_alive}")
-
-        if robot is not None and not keep_robot_alive:
+        if robot is not None:
             should_close_robot = not (skip_robot_close_if_threads_alive and threads_alive)
-            # print(f"Debug: should_close_robot={should_close_robot}")
             if should_close_robot:
                 try:
                     robot.close()
@@ -2015,26 +1905,6 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
                     pass
             else:
                 logger.warning("Skip robot.close(): VLA worker threads are still alive during shutdown.")
-                keep_robot_alive = True
-
-        if keep_robot_alive:
-            robot_instance = robot
-        elif robot_instance is robot:
-            robot_instance = None
-            # print(f"Debug: Robot instance was destroyed.")
-
-        # On process shutdown, client_state.robot may already be None while a reused
-        # robot instance is still cached globally. Ensure it is released as well.
-        if force_release_robot and robot_instance is not None:
-            should_close_cached_robot = not (skip_robot_close_if_threads_alive and threads_alive)
-            if should_close_cached_robot:
-                try:
-                    robot_instance.close()
-                except Exception:
-                    pass
-                robot_instance = None
-            else:
-                logger.warning("Skip cached robot.close(): VLA worker threads are still alive during shutdown.")
     finally:
         _cleanup_guard.release()
 
