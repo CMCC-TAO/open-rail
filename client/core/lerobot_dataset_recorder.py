@@ -1114,54 +1114,21 @@ class LeRobotDatasetRecorder:
             # self.release_writers()
     # @run_time_decorator
     def _prepare_video_frame(self, frame: Any, save_raw: bool=True, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
-        """Normalize input frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
-        # Accept several input encodings:
-        # - raw HWC numpy array (uint8/float)
-        # - JPEG-encoded bytes / bytearray
-        # - 1-D numpy array of uint8 containing JPEG bytes
+        """Normalize raw ndarray frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
         try:
-            # If bytes/bytearray, decode directly
-            if isinstance(frame, (bytes, bytearray)):
-                arr = np.frombuffer(frame, dtype=np.uint8)
-                img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
-                if img is None:
-                    self.logger.warning("Failed to decode image from bytes, skip process and return None.")
-                    return None
-                frame = img
-
-            # If numpy array but not HWC, it might be encoded JPEG bytes
-            elif isinstance(frame, np.ndarray) and frame.ndim != 3:
-                # Try decoding when dtype is uint8 (common for encoded bytes)
-                if frame.dtype == np.uint8:
-                    try:
-                        arr = np.frombuffer(frame.tobytes(), dtype=np.uint8)
-                        img = cv2.imdecode(arr, cv2.IMREAD_UNCHANGED)
-                        if img is None:
-                            self.logger.warning("Failed to decode numpy image buffer, skip process and return None.")
-                            return None
-                        frame = img
-                    except Exception:
-                        self.logger.warning("Exception while decoding numpy image buffer, skip process and return None.")
-                        return None
-                else:
-                    self.logger.warning(f"Frame ndim is not equal 3 (ndim={getattr(frame, 'ndim', None)}), skip process and return None.")
-                    return None
-
-            # By now we should have a numpy ndarray representing the image
             if not isinstance(frame, np.ndarray):
-                self.logger.warning("Frame is not a numpy.ndarray after decoding, skip process and return None.")
+                self.logger.warning("Frame must be numpy.ndarray in raw-record mode, skip process and return None.")
                 return None
 
             if frame.ndim == 2:
-                # grayscale -> convert to BGR
                 frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
             elif frame.ndim == 3 and frame.shape[2] == 4:
-                # RGBA -> BGR
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
+            elif frame.ndim != 3:
+                self.logger.warning(f"Frame ndim invalid (ndim={getattr(frame, 'ndim', None)}), skip process and return None.")
+                return None
 
-            # Ensure dtype is uint8
             if frame.dtype != np.uint8:
-                # Scale/convert floats to uint8 if necessary
                 if np.issubdtype(frame.dtype, np.floating):
                     frame = np.clip(frame * 255.0, 0, 255).astype(np.uint8)
                 else:

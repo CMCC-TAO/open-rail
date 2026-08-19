@@ -374,7 +374,7 @@ class VLAClient():
             # timestamp_2 = None
             if observations is not None:
                 # Decide whether to change language instruction based on the task progress predicted by the VLA model
-                data = self._process_data(observations)
+                data, record_data = self._process_data(observations)
                 # timestamp_3 = time.time()
                 # print(f"Debug: process time={((timestamp_3-timestamp_1) if timestamp_2 is None else (timestamp_3-timestamp_2)) * 1000} ms")
                 self.realtime_data_manager.add_observe_data(data)
@@ -395,7 +395,7 @@ class VLAClient():
                         'server_status': self.server_status,
                         'runtime_config': runtime_config
                     }
-                    self.data_record_manager.add_observation_async(observation=data, extra_info=extra_info, timestamp=time.perf_counter())
+                    self.data_record_manager.add_observation_async(observation=record_data, extra_info=extra_info, timestamp=time.perf_counter())
                     # timestamp_3 = time.time()
                     # self.logger.debug(f'Data recorder add observation time: {(timestamp_3-timestamp_2) * 1000: .4f}ms')
                     # timestamp_2 = time.time()
@@ -677,7 +677,7 @@ class VLAClient():
             self.logger.warning("No observe data, skip inference.")
 
     def _process_image_thread_fun(self, key, value):
-        """Process image data by padding, resize and encoding.
+        """Process image data for inference transport while preserving raw frame for recorder.
 
         Args:
             key (str): Image key identifier.
@@ -686,58 +686,44 @@ class VLAClient():
         Returns:
             tuple: A tuple containing:
                 - key (str): Original image key
-                - img_encoded (np.ndarray): Encoded image data for transmission
+                - img_raw (np.ndarray): Unmodified raw image from robot
+                - img_encoded (np.ndarray): Encoded image data for network transmission
         """
         ext = '.png' if 'depth.' in key else '.jpg'
-        # print(f"Debug: raw image shape: {value.shape}")
-        # print(f"Debug: preprocess_fun={self._preprocess_func}")
-        img_processed = self._preprocess_func(value) if self._preprocess_func else value
-        # print(f"Debug: processed image shape: {value.shape}")
-        # encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
-        # img_encoded = cv2.imencode(ext, img_processed, encode_params)[1]
-        # image is encoded in BGR space, default for OpenCV
-        encode_result, img_encoded = cv2.imencode(ext, img_processed)
+        img_for_infer = self._preprocess_func(value) if self._preprocess_func else value
+        encode_result, img_encoded = cv2.imencode(ext, img_for_infer)
         if not encode_result:
             self.logger.warning(f"Image encoding failed for {key}.")
-        return key, img_encoded
+        return key, value, img_encoded
 
     def _process_image(self, frame):
-        """Process multiple images in threads.
+        """Process multiple images and produce both encoded and raw outputs.
 
         Args:
             frame (dict): A dictionary containing observation data, including image data, proprioception state data.
 
         Returns:
-            dict: The encoded images with key and values.
+            tuple[dict, dict]:
+                - encoded images (for inference and visualization)
+                - raw images from robot (for recording)
         """
         start_time = time.perf_counter()
-        
-        cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
-        if self.camera_shape_dict is None:
-            self.camera_shape_dict = {key: value.shape for key, value in cam_items}
-            # print(f"Debug: camera shape dict={self.camera_shape_dict}")
-        # Use shared thread pool to parallel process all cameras (avoid per-frame pool creation)
-        # futures = [self._img_executor.submit(self._process_image_thread_fun, key, value) for key, value in cam_items]
-        # results = [future.result() for future in futures]  # Wait for all tasks to complete
-        encoded_imgs = {}
-        # for key, encoded_img in results:
-        #     encoded_imgs[key] = encoded_img
-        # Note: process image one by one is more efficiency
-        for key, value in cam_items:
-            key, encoded_img = self._process_image_thread_fun(key, value)
-            encoded_imgs[key] = encoded_img
-            # Print the size of encoded_img in MB
-            # Encoded image size for cam.hand_left: 66376 bytes (0.0633 MB)
-            # Encoded image size for cam.hand_right: 69349 bytes (0.0661 MB)
-            # Encoded image size for cam.head: 94484 bytes (0.0901 MB)
-            # encoded_img_size_mb = len(encoded_img) / (1024 * 1024)
-            # print(f"Encoded image size for {key}: {len(encoded_img)} bytes ({encoded_img_size_mb:.4f} MB)")
 
-        # Calculate processing time in milliseconds
+        cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
+
+        encoded_imgs = {}
+        raw_imgs = {}
+        for key, value in cam_items:
+            key, raw_img, encoded_img = self._process_image_thread_fun(key, value)
+            raw_imgs[key] = raw_img
+            encoded_imgs[key] = encoded_img
+
+        if self.camera_shape_dict is None and raw_imgs:
+            self.camera_shape_dict = {key: img.shape for key, img in raw_imgs.items()}
+
         self.image_process_time = self.image_process_time * 0.8 +  (time.perf_counter() - start_time) * 1000 * 0.2
-        # Send images to visualization interface
         self.visualize_server.update_image_data(encoded_imgs)
-        return encoded_imgs
+        return encoded_imgs, raw_imgs
     def _parse_prob_progress(self, action_data):
         prob_progress = None
         if 'ext' in action_data and 'prob_progress' in action_data['ext']:
@@ -759,25 +745,33 @@ class VLAClient():
             dict: The processed data by encoding images and adding local timestamp.
         """
         loc_timestamp = time.perf_counter()
-        encoded_imgs = self._process_image(frame)
-        
-        # with self.show_thread_lock:
-            # if 'obs.state' in frame and frame['obs.state'] is not None:
-            #     self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
-            # self.info_obs['state'] = frame['obs.state'].shape
-        data = {
+        encoded_imgs, raw_imgs = self._process_image(frame)
+
+        language = [self.task_language_manager.get_current_language()]
+        obs_state = frame['obs.state']
+
+        infer_data = {
             'type': 'vla_obs',
             'ref_timestamp': frame['ref_timestamp'],
             'loc_timestamp': loc_timestamp,
             'obs': {
                 **encoded_imgs,
-                'state': frame['obs.state'],
-                'language': [self.task_language_manager.get_current_language()],
+                'state': obs_state,
+                'language': language,
             },
         }
-        # data['obs'] keys = dict_keys(['cam.hand_left', 'cam.hand_right', 'cam.head', 'state', 'language'])
-        # print(f"Debug: {data['obs'].keys()}")
-        return data
+
+        record_data = {
+            'type': 'vla_obs',
+            'ref_timestamp': frame['ref_timestamp'],
+            'loc_timestamp': loc_timestamp,
+            'obs': {
+                **raw_imgs,
+                'state': obs_state,
+                'language': language,
+            },
+        }
+        return infer_data, record_data
 
     # @run_time_decorator
     def _process_action_chunk(self, action_raw:dict):
