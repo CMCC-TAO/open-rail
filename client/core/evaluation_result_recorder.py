@@ -125,7 +125,7 @@ class EvaluationResultRecorder:
                     if isinstance(record, dict):
                         if append:
                             self._eval_records_for_browse.append(record)
-                            self.logger.info(f"Append new eval record.")
+                            # self.logger.info(f"Append new eval record.")
                         else:
                             self._upsert_eval_browse_record(record=record)
                     elif isinstance(record, int):
@@ -228,7 +228,7 @@ class EvaluationResultRecorder:
             for item in targets:
                 if isinstance(item, dict):
                     self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=item))
-                    self.logger.info(f"Sync one record for share: {item.get('id')}")
+                    # self.logger.info(f"Sync one record for share: {item.get('id')}")
                 elif isinstance(item, int):
                     self._eval_records_for_share.put(item)
             return
@@ -236,7 +236,7 @@ class EvaluationResultRecorder:
         # 2. Handle single dict: put directly
         if isinstance(targets, dict):
             self._eval_records_for_share.put(_convert_to_eval_record_for_browse(record=targets))
-            self.logger.info(f"Sync one record for share: {targets.get('id')}")
+            # self.logger.info(f"Sync one record for share: {targets.get('id')}")
             return
 
         # 3. Handle int (record_id for deletion): put directly
