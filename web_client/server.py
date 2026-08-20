@@ -146,7 +146,6 @@ class ClientState:
         self._broadcast_task: Optional[asyncio.Task] = None
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.paused_thread_state: Optional[dict] = None
-        self.worker_thread: Optional[threading.Thread] = None
 
 client_state = ClientState()
 select_directory_lock = asyncio.Lock()
@@ -376,25 +375,6 @@ def _config_to_dict(cfg) -> dict:
     except Exception:
         pass
     return {}
-
-
-def _normalize_record_features_cam(cfg_dict: dict) -> dict:
-    """Normalize legacy nested record.lerobot.features.cam.* into dotted cam.* keys."""
-    print(f"normalize reocord features cam")
-    if not isinstance(cfg_dict, dict):
-        return cfg_dict
-
-    record_cfg = cfg_dict.get("record", {})
-    lerobot_cfg = record_cfg.get("lerobot")
-    features = lerobot_cfg.get("features", {}) if isinstance(lerobot_cfg, dict) else {}
-    if isinstance(features, dict):
-        cam = features.get("cam")
-        print(f"DEBUG: {cam}")
-        if isinstance(cam, dict):
-            features.pop("cam", None)
-            for cam_key, cam_val in cam.items():
-                features[f"cam.{cam_key}"] = cam_val
-    return cfg_dict
 
 def _apply_flat_patch_new(config, patch: dict):
     """Apply flat patch only to existing config leaf keys (no new key creation)."""
@@ -910,12 +890,12 @@ async def patch_config(req: ConfigPatchRequest):
     if not acquired:
         raise HTTPException(503, "Config is busy. Please retry.")
     try:
-        prev_robot_type = str(getattr(getattr(client_state.config, 'robots', None), 'type', ''))
-        _apply_flat_patch_new(client_state.config, flat)
-        next_robot_type = str(getattr(getattr(client_state.config, 'robots', None), 'type', ''))
-        cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
+        client_conf = client_state.config
         current_vla_client = client_state.vla_client
         current_robot = client_state.robot
+        prev_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
+        _apply_flat_patch_new(client_conf, flat)
+        next_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
         is_running = bool(client_state.running)
 
         for k in flat.keys():
@@ -953,7 +933,6 @@ async def patch_config(req: ConfigPatchRequest):
     if language_patch_changed and current_vla_client is not None:
         try:
             await asyncio.wait_for(asyncio.to_thread(_sync_runtime_language_state, current_vla_client, flat), timeout=3.0)
-            cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
         except Exception as e:
             logger.warning(f"[language-sync] failed to apply runtime language sync after patch: {e}")
 
@@ -988,7 +967,7 @@ async def patch_config(req: ConfigPatchRequest):
                         except Exception as e:
                             logger.error(f"Failed to resume client after dataset reload: {e}")
 
-    return {"status": "ok", "config": cfg_dict}
+    return {"status": "ok", "config": client_conf}
 
 
 
@@ -1023,7 +1002,9 @@ async def save_config_file(req: ConfigFileRequest):
     Supported formats (determined by file extension):
       .yaml / .yml  →  YAML  (via _dict_to_user_conf_yaml)
     """
-    if client_state.config is None:
+    with client_state.lock:
+        client_conf = client_state.config
+    if client_conf is None:
         raise HTTPException(400, "No config loaded.")
     # print(f"DEBUG: save path = {req.path}")
     save_path = Path(req.path)
@@ -1034,11 +1015,10 @@ async def save_config_file(req: ConfigFileRequest):
         save_path.resolve().relative_to(ROOT.resolve())
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
-    cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
     if save_path.suffix in (".yaml", ".yml"):
-        content = _dict_to_user_conf_yaml(cfg_dict)
+        content = _dict_to_user_conf_yaml(client_conf)
     else:
-        content = _dict_to_user_conf_py(cfg_dict)
+        content = _dict_to_user_conf_py(client_conf)
     save_path.parent.mkdir(parents=True, exist_ok=True)
     save_path.write_text(content, encoding="utf-8")
     return {"status": "ok", "path": str(save_path)}
@@ -1711,7 +1691,6 @@ async def client_status():
     # print(f"Debug: {stats}")
     return {"status": "ok", "data": stats}
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: runtime controls
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1900,7 +1879,6 @@ def _get_eval_recorder():
         raise HTTPException(400, 'Evaluation recorder is not initialized.')
 
     return eval_recorder
-
 
 @app.post('/api/client/record/eval/score')
 async def client_record_eval_score(req: EvalResultCRUDRequest):
