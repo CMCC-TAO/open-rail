@@ -94,12 +94,13 @@ class VLAClient():
         self.inter_chunk_fuser = inter_chunk_fuser
         self.intra_chunk_smoother = intra_chunk_smoother
         self.task_language_manager = task_language_manager
+        self.vla_zmq = vla_zmq_client
+        self.robot = robot
+        self.intra_chunk_smoother.set_action_layout(action_layout=self.robot.config.action_layout)
         # Initialize the dataset writer with the provided recording configuration
         self.data_record_manager = DataRecordManager(record_config=self.config.record)
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
-        self.vla_zmq = vla_zmq_client
-        self.robot = robot
         self.is_running = False
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False

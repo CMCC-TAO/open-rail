@@ -469,19 +469,19 @@ def _apply_flat_patch_new(config, patch: dict):
     logger.info(f"Applied config patch keys: {applied}/{len(patch)}")
 _cleanup_guard = threading.Lock()
 
-def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
-    if robot_config is None or not hasattr(robot_config, 'action_layout'):
-        return
-    layout = robot_config.action_layout
-    # client_config.rdm.action_layout = layout
-    client_config.intra_chunk.action_layout = layout
-    if vla_client is not None:
-        changed = vla_client.intra_chunk_smoother.action_layout != dict(layout)
-        smoother = vla_client.intra_chunk_smoother
-        smoother.action_layout = dict(layout)
-        smoother.action_dim, smoother.joint_indices, smoother.step_indices = parse_action_layout(layout)
-        if changed:
-            vla_client.realtime_data_manager.clear()
+# def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
+#     if robot_config is None or not hasattr(robot_config, 'action_layout'):
+#         return
+#     layout = robot_config.action_layout
+#     # client_config.rdm.action_layout = layout
+#     client_config.intra_chunk.action_layout = layout
+#     if vla_client is not None:
+#         changed = vla_client.intra_chunk_smoother.action_layout != dict(layout)
+#         smoother = vla_client.intra_chunk_smoother
+#         smoother.action_layout = dict(layout)
+#         smoother.action_dim, smoother.joint_indices, smoother.step_indices = parse_action_layout(layout)
+#         if changed:
+#             vla_client.realtime_data_manager.clear()
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  WebSocket broadcast
@@ -1316,14 +1316,13 @@ def _ensure_vla_client_created():
             return client_state.vla_client
         client_config = client_state.config
 
-    # print(f"DEBUG, robot = {client_config.robots}, type = {client_config.robots.type.value}")
-    robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
-    # print(f"DEBUG = {robot_config}")
-    _sync_robot_action_layout(client_config, robot_config)
-
     vla_zmq_client = None
     robot = None
     try:
+        # print(f"DEBUG, robot = {client_config.robots}, type = {client_config.robots.type.value}")
+        robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
+        # print(f"DEBUG = {robot_config}")
+        # _sync_robot_action_layout(client_config, robot_config)
         robot = _create_robot(client_config.robots.type, robot_config)
         vla_zmq_client = ZMQClient(client_config.vla_zmq)
         realtime_data_manager = RealtimeDataManager(client_config.rdm)
@@ -1360,19 +1359,27 @@ def _ensure_vla_client_created():
     return vla_client
 
 def _create_robot(robot_type, robot_config):
-    if robot_type == RobotType.A2D:
-        from client.robots.a2d.body_robot import RobotBody
-        return RobotBody(robot_config)
-    if robot_type == RobotType.NAVI_WA2:
-        from client.robots.navi_wa2.body_robot import RobotBody
-        return RobotBody(robot_config)
-    if robot_type == RobotType.MOCK:
-        from client.robots.mock.body_robot import RobotBody
-        return RobotBody(robot_config)
-    if robot_type == RobotType.TI5_T170C:
-        from client.robots.ti5_t170c.body_robot import RobotBody
-        return RobotBody(robot_config)
-    raise ValueError(f"Unsupported robot type: {robot_type}")
+    robot = None
+    try:
+        if robot_type == RobotType.A2D:
+            from client.robots.a2d.body_robot import RobotBody
+            robot = RobotBody(robot_config)
+        elif robot_type == RobotType.NAVI_WA2:
+            from client.robots.navi_wa2.body_robot import RobotBody
+            robot = RobotBody(robot_config)
+        elif robot_type == RobotType.MOCK:
+            from client.robots.mock.body_robot import RobotBody
+            robot = RobotBody(robot_config)
+        elif robot_type == RobotType.TI5_T170C:
+            from client.robots.ti5_t170c.body_robot import RobotBody
+            robot = RobotBody(robot_config)
+        else:
+            logger.error(f"Unsupported robot type: {robot_type}")
+            raise ValueError(f"Unsupported robot type: {robot_type}")
+    except Exception as e:
+        logger.exception(f"Robot creation failed: {e}")
+        raise ValueError(f"Create robot failed, type: {robot_type}")
+    return robot
 
 async def _start_client():
     try:
@@ -1394,76 +1401,41 @@ async def _start_client():
         await _broadcast_to_web({"type": "error", "data": {"message": f"Failed to initialize client: {e}"}})
         return
 
-    should_close_after_unlock = False
-    lock_acquired = client_state.lock.acquire(timeout=2.0)
-    if not lock_acquired:
-        raise RuntimeError("Timeout acquiring client_state.lock in _start_client (state transition).")
-    try:
-        client_state.starting = False
-        if client_state.stopping:
-            client_state.vla_client = None
-            client_state.robot = None
-            should_close_after_unlock = True
-        elif client_state.running:
-            return
-        else:
-            client_state.running = True
-    finally:
-        logger.debug(f"release lock successfully.")
-        client_state.lock.release()
-
-    if should_close_after_unlock:
-        try:
-            await asyncio.to_thread(vla_client.close)
-        except Exception:
-            logger.exception("failed to close vla_client after aborted start")
-        return
-
     def _run_in_thread():
         try:
             vla_client.start()
-            logger.debug(f"vla_client start successfully.")
+            logger.info(f"vla_client start successfully.")
             asyncio.run_coroutine_threadsafe(
                 _broadcast_to_web({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
-                client_state.loop
-            )
+                client_state.loop)
 
             while client_state.running:
                 time.sleep(1.0)
-
         except Exception as e:
             # err = traceback.format_exc()
             logger.exception(f"Client thread error: {e}")
-            client_state.running = False
+            with client_state.lock:
+                client_state.running = False
             asyncio.run_coroutine_threadsafe(
                 _broadcast_to_web({"type": "error", "data": {"message": str(e)}}),
-                client_state.loop
-            )
+                client_state.loop)
         finally:
-            with client_state.lock:
-                stopping_flag = bool(getattr(client_state, "stopping", False))
-            # If an external stop was requested (via /api/client/stop), the
-            # background stopper will perform cleanup. In that case avoid
-            # running `_cleanup` here to prevent duplicate attempts.
-            if not stopping_flag:
-                _cleanup()
-            else:
-                logger.debug("Worker thread exiting: external stop will run cleanup.")
-
             with client_state.lock:
                 if client_state.worker_thread is threading.current_thread():
                     client_state.worker_thread = None
 
-    t = threading.Thread(target=_run_in_thread, daemon=True, name="vla-client")
+    main_thread = threading.Thread(target=_run_in_thread, daemon=True, name="open-rail-client")
     lock_acquired = client_state.lock.acquire(timeout=2.0)
-    if not lock_acquired:
+    if lock_acquired:
+        try:
+            client_state.worker_thread = main_thread
+            client_state.running = True
+            client_state.starting = False
+        finally:
+            client_state.lock.release()
+    else:
         raise RuntimeError("Timeout acquiring client_state.lock in _start_client (set worker_thread).")
-    try:
-        client_state.worker_thread = t
-    finally:
-        client_state.lock.release()
-    t.start()
-
+    main_thread.start()
 
 @app.post("/api/client/start")
 async def start_client():
@@ -1716,7 +1688,7 @@ async def start_control_only():
 async def stop_client():
     """Stop client quickly; release heavy native resources in background."""
     with client_state.lock:
-        is_active = client_state.running or (client_state.vla_client is not None) or getattr(client_state, "starting", False)
+        is_active = client_state.running or (client_state.vla_client is not None) or client_state.starting
         client_state.running = False
         client_state.paused = False
         client_state.stopping = bool(is_active)
