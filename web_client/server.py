@@ -24,6 +24,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
+from conf import client_conf
+
 try:
     import psutil
     _HAS_PSUTIL = True
@@ -47,15 +49,14 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from conf.logging_conf import setup_logging
 from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
-from conf.logging_conf import setup_logging
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
-from client.utils.util import load_user_config, apply_user_config, parse_action_layout
 
 logger = logging.getLogger(__name__)
 
@@ -379,6 +380,7 @@ def _config_to_dict(cfg) -> dict:
 
 def _normalize_record_features_cam(cfg_dict: dict) -> dict:
     """Normalize legacy nested record.lerobot.features.cam.* into dotted cam.* keys."""
+    print(f"normalize reocord features cam")
     if not isinstance(cfg_dict, dict):
         return cfg_dict
 
@@ -387,6 +389,7 @@ def _normalize_record_features_cam(cfg_dict: dict) -> dict:
     features = lerobot_cfg.get("features", {}) if isinstance(lerobot_cfg, dict) else {}
     if isinstance(features, dict):
         cam = features.get("cam")
+        print(f"DEBUG: {cam}")
         if isinstance(cam, dict):
             features.pop("cam", None)
             for cam_key, cam_val in cam.items():
@@ -757,7 +760,7 @@ async def delete_recording_item(req: RecordingItemDeleteRequest):
     try:
         lock_acquired = client_state.lock.acquire(timeout=2.0)
         if not lock_acquired:
-            raise RuntimeError("Timeout acquiring client_state.lock in _start_client (read vla_client).")
+            raise RuntimeError("Timeout acquiring client_state.lock in delete_recording_item.")
         try:
             vla_client = client_state.vla_client
         finally:
@@ -796,7 +799,6 @@ async def get_default_lang_file():
 class LangFileRequest(BaseModel):
     path: str
 
-
 @app.post("/api/client/language/load")
 async def load_lang_file(req: LangFileRequest):
     """Load a JSON language command file and return its contents."""
@@ -827,7 +829,6 @@ class LangSaveRequest(BaseModel):
     path: str
     data: dict
 
-
 @app.post("/api/client/language/save")
 async def save_lang_file(req: LangSaveRequest):
     """Save the language command JSON file."""
@@ -852,14 +853,11 @@ async def save_lang_file(req: LangSaveRequest):
 @app.get("/api/client/config")
 async def get_config():
     """Return current config as a nested dict."""
-    if client_state.config is None:
-        cfg = get_client_config()
-        client_state.config = cfg
-        # print(f"Debug: return default config")
-    # print(f"DEBUG: visualize trajectory: {client_state.config.visualize.trajectory}")
-    cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
-    return {"status": "ok", "config": cfg_dict}
-
+    with client_state.lock:
+        client_conf = client_state.config
+    if client_conf is None:
+        client_conf = get_client_config()
+    return {"status": "ok", "config": client_conf}
 
 @app.get("/api/client/config/yaml_files")
 async def list_yaml_configs():
@@ -886,9 +884,6 @@ class VisualCameraConfigRequest(BaseModel):
 @app.post("/api/client/config/patch")
 async def patch_config(req: ConfigPatchRequest):
     """Apply a partial update to in-memory config. Effective immediately when possible."""
-    if client_state.config is None:
-        client_state.config = get_client_config()
-
     # Support both nested dict and flat dot-key dict
     def _flatten(d, prefix=""):
         out = {}
@@ -1001,41 +996,24 @@ async def patch_config(req: ConfigPatchRequest):
 async def load_config_file(req: ConfigFileRequest):
     """Load a yaml conf file and apply it. Effective immediately when possible."""
     # Guard against path-traversal
-    p = Path(req.path)
-    # print(f"DEBUG: Logger name is: {logger.name}")
-    # print(f"DEBUG: Logger effective level is: {logger.getEffectiveLevel()}")
-    # print(f"DEBUG: Logging module root level is: {logging.root.getEffectiveLevel()}")
-    if not p.is_absolute():
-        p = ROOT / "conf" / p
+    conf_path = Path(req.path)
+    if not conf_path.is_absolute():
+        conf_path = ROOT / "conf" / conf_path
     try:
-        p.resolve().relative_to(ROOT.resolve())
+        conf_path.resolve().relative_to(ROOT.resolve())
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
 
-    current_vla_client = None
-    is_running = False
-    prev_robot_type = None
-    next_robot_type = None
+    # print(f"DEBUG: load yaml conf: {conf_path}")
+    _shutdown_stop_if_running()
+    _cleanup()
 
     with client_state.lock:
-        prev_robot_type = str(getattr(getattr(client_state.config, 'robots', None), 'type', ''))
-        _apply_yaml_config(client_state.config, p)
-        next_robot_type = str(getattr(getattr(client_state.config, 'robots', None), 'type', ''))
-        current_vla_client = client_state.vla_client
-        is_running = bool(client_state.running)
+        _apply_yaml_config(client_state.config, conf_path)
+        client_conf = client_state.config
+    await asyncio.to_thread(_ensure_vla_client_created)
 
-    if (
-        is_running
-        and current_vla_client is not None
-        and prev_robot_type != next_robot_type
-    ):
-        logger.warning(
-            f"Robot type changed by config load: {prev_robot_type} -> {next_robot_type}. "
-            "Runtime robot recreation is disabled; restart client to take effect."
-        )
-
-    cfg_dict = _normalize_record_features_cam(_config_to_dict(client_state.config))
-    return {"status": "ok", "config": cfg_dict}
+    return {"status": "ok", "config": client_conf}
 
 
 @app.post("/api/client/config/save")
@@ -1456,22 +1434,6 @@ def _status_payload(vla_client, message: str, running: bool = True, paused: bool
     status.update(state)
     return status
 
-def _status_abnormal(message: str,
-                    running: bool = False,
-                    paused: bool = False,
-                    observe_running: bool = False,
-                    inference_running: bool = False,
-                    control_running: bool = False) -> dict:
-    return {
-        "running": running,
-        "paused": paused,
-        "observe_running": observe_running,
-        "inference_running": inference_running,
-        "control_running": control_running,
-        "message": message,
-    }
-
-
 def _start_observe(vla_client):
     if hasattr(vla_client, "start_observe"):
         vla_client.start_observe()
@@ -1552,11 +1514,49 @@ async def _bg_resume_and_broadcast(vla_client):
     except Exception as e:
         logger.exception(f"Resume failed: {e}")
 
+async def _bg_toggle_control_and_broadcast(vla_client):
+    try:
+        with client_state.lock:
+            client_state.running = True
+            client_state.paused = False
+
+        if bool(getattr(vla_client, "is_control_thread_running", False)):
+            await asyncio.to_thread(_stop_control, vla_client)
+            message = "Control stopped."
+        else:
+            await asyncio.to_thread(_start_control, vla_client)
+            message = "Control started."
+
+        payload = _status_payload(vla_client, message, running=True, paused=False)
+        await _broadcast_to_web({"type": "status", "data": payload})
+    except Exception as e:
+        logger.exception(f"Toggle control failed: {e}")
+
+@app.post("/api/client/pause")
+async def pause_client():
+    """Pause observe/inference/control without releasing resources."""
+    vla_client, _ = _require_runtime('pause')
+
+    asyncio.create_task(_bg_pause_and_broadcast(vla_client))
+    return {"status": "ok", "message": "Pausing scheduled."}
+
+@app.post("/api/client/resume")
+async def resume_client():
+    """Resume observe/inference/control to the exact state before pause."""
+    vla_client, _ = _require_runtime('resume')
+
+    asyncio.create_task(_bg_resume_and_broadcast(vla_client))
+    return {"status": "ok", "message": "Resume scheduled."}
+
+
+@app.post("/api/client/observe/start")
+async def start_observe_only():
+    asyncio.create_task(_bg_toggle_observe_and_broadcast())
+    return {"status": "ok", "message": "Observe toggle scheduled."}
 
 async def _bg_toggle_observe_and_broadcast():
     try:
         await asyncio.to_thread(_ensure_vla_client_created)
-        
         with client_state.lock:
             vla_client = client_state.vla_client
             client_state.running = True
@@ -1577,6 +1577,18 @@ async def _bg_toggle_observe_and_broadcast():
     except Exception as e:
         logger.exception(f"Toggle observe failed: {e}")
 
+@app.post("/api/client/infer/start")
+async def start_infer_only():
+    with client_state.lock:
+        vla_client = client_state.vla_client
+        running = client_state.running
+    if vla_client is None or not running:
+        raise HTTPException(400, "Client is not running.")
+    if not bool(getattr(vla_client, "is_observe_thread_running", False)):
+        raise HTTPException(400, "Observe is not running. Start Observe first.")
+
+    asyncio.create_task(_bg_toggle_infer_and_broadcast(vla_client))
+    return {"status": "ok", "message": "Inference toggle scheduled."}
 
 async def _bg_toggle_infer_and_broadcast(vla_client):
     try:
@@ -1596,62 +1608,6 @@ async def _bg_toggle_infer_and_broadcast(vla_client):
         await _broadcast_to_web({"type": "status", "data": payload})
     except Exception as e:
         logger.exception(f"Toggle infer failed: {e}")
-
-
-async def _bg_toggle_control_and_broadcast(vla_client):
-    try:
-        with client_state.lock:
-            client_state.running = True
-            client_state.paused = False
-
-        if bool(getattr(vla_client, "is_control_thread_running", False)):
-            await asyncio.to_thread(_stop_control, vla_client)
-            message = "Control stopped."
-        else:
-            await asyncio.to_thread(_start_control, vla_client)
-            message = "Control started."
-
-        payload = _status_payload(vla_client, message, running=True, paused=False)
-        await _broadcast_to_web({"type": "status", "data": payload})
-    except Exception as e:
-        logger.exception(f"Toggle control failed: {e}")
-
-
-@app.post("/api/client/pause")
-async def pause_client():
-    """Pause observe/inference/control without releasing resources."""
-    vla_client, _ = _require_runtime('pause')
-
-    asyncio.create_task(_bg_pause_and_broadcast(vla_client))
-    return {"status": "ok", "message": "Pausing scheduled."}
-
-
-@app.post("/api/client/resume")
-async def resume_client():
-    """Resume observe/inference/control to the exact state before pause."""
-    vla_client, _ = _require_runtime('resume')
-
-    asyncio.create_task(_bg_resume_and_broadcast(vla_client))
-    return {"status": "ok", "message": "Resume scheduled."}
-
-
-@app.post("/api/client/observe/start")
-async def start_observe_only():
-    asyncio.create_task(_bg_toggle_observe_and_broadcast())
-    return {"status": "ok", "message": "Observe toggle scheduled."}
-
-
-@app.post("/api/client/infer/start")
-async def start_infer_only():
-    vla_client = client_state.vla_client
-    if vla_client is None or not client_state.running:
-        raise HTTPException(400, "Client is not running.")
-    if not bool(getattr(vla_client, "is_observe_thread_running", False)):
-        raise HTTPException(400, "Observe is not running. Start Observe first.")
-
-    asyncio.create_task(_bg_toggle_infer_and_broadcast(vla_client))
-    return {"status": "ok", "message": "Inference toggle scheduled."}
-
 
 @app.post("/api/client/control/start")
 async def start_control_only():
