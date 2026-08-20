@@ -467,7 +467,6 @@ def _apply_flat_patch_new(config, patch: dict):
         logger.debug(f"Ignored non-existing config keys in patch: {dropped}")
 
     logger.info(f"Applied config patch keys: {applied}/{len(patch)}")
-_cleanup_guard = threading.Lock()
 
 # def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
 #     if robot_config is None or not hasattr(robot_config, 'action_layout'):
@@ -1397,45 +1396,29 @@ async def _start_client():
             finally:
                 client_state.lock.release()
         else:
-            logger.error("Timeout acquiring lock in _start_client exception cleanup")
+            logger.error("Timeout acquiring client_state.lock in _start_client.")
         await _broadcast_to_web({"type": "error", "data": {"message": f"Failed to initialize client: {e}"}})
         return
 
-    def _run_in_thread():
-        try:
-            vla_client.start()
-            logger.info(f"vla_client start successfully.")
-            asyncio.run_coroutine_threadsafe(
-                _broadcast_to_web({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}}),
-                client_state.loop)
-
-            while client_state.running:
-                time.sleep(1.0)
-        except Exception as e:
-            # err = traceback.format_exc()
-            logger.exception(f"Client thread error: {e}")
-            with client_state.lock:
-                client_state.running = False
-            asyncio.run_coroutine_threadsafe(
-                _broadcast_to_web({"type": "error", "data": {"message": str(e)}}),
-                client_state.loop)
-        finally:
-            with client_state.lock:
-                if client_state.worker_thread is threading.current_thread():
-                    client_state.worker_thread = None
-
-    main_thread = threading.Thread(target=_run_in_thread, daemon=True, name="open-rail-client")
+    try:
+        vla_client.start()
+        await _broadcast_to_web({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}})
+    except Exception as e:
+        logger.exception(f"Client start error: {e}")
+        with client_state.lock:
+            client_state.running = False
+            _broadcast_to_web({"type": "error", "data": {"message": str(e)}})
+        return
     lock_acquired = client_state.lock.acquire(timeout=2.0)
     if lock_acquired:
         try:
-            client_state.worker_thread = main_thread
             client_state.running = True
             client_state.starting = False
         finally:
             client_state.lock.release()
     else:
-        raise RuntimeError("Timeout acquiring client_state.lock in _start_client (set worker_thread).")
-    main_thread.start()
+        raise RuntimeError("Timeout acquiring client_state.lock in _start_client.")
+    # main_thread.start()
 
 @app.post("/api/client/start")
 async def start_client():
@@ -1688,47 +1671,39 @@ async def start_control_only():
 async def stop_client():
     """Stop client quickly; release heavy native resources in background."""
     with client_state.lock:
-        is_active = client_state.running or (client_state.vla_client is not None) or client_state.starting
+        is_active = client_state.running
+        if not is_active:
+            raise HTTPException(400, "Client is not running.")
         client_state.running = False
-        client_state.paused = False
-        client_state.stopping = bool(is_active)
+        client_state.paused  = False
+        client_state.stopping = is_active
 
-    if not is_active:
-        raise HTTPException(400, "Client is not running.")
-
-    asyncio.create_task(_stop_cleanup_background())
+    asyncio.create_task(_stop_client())
     await _broadcast_to_web({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopping."}})
     return {"status": "ok"}
 
-async def _stop_cleanup_background():
+async def _stop_client():
     try:
-        await asyncio.to_thread(_join_worker_thread, 5.0)
-        await asyncio.to_thread(_cleanup)
-        await _broadcast_to_web({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped."}})
-    finally:
-        with client_state.lock:
+        lock_acquired = client_state.lock.acquire(timeout=2.0)
+        if not lock_acquired:
+            raise RuntimeError("Timeout acquiring client_state.lock in _stop_client.")
+        try:
+            vla_client = client_state.vla_client
+            client_state.running = False
+            client_state.paused = False
+            client_state.paused_thread_state = None
             client_state.stopping = False
+        finally:
+            client_state.lock.release()
 
-
-def _join_worker_thread(timeout_s: float = 5.0):
-    with client_state.lock:
-        worker = client_state.worker_thread
-
-    if worker is None:
-        return "no_worker"
-
-    if worker is threading.current_thread():
-        return "no_worker"
-
-    worker.join(timeout=max(0.1, float(timeout_s)))
-    if worker.is_alive():
-        logger.warning("VLA worker thread is still alive after join timeout.")
-        return "still_alive"
-    else:
-        with client_state.lock:
-            if client_state.worker_thread is worker:
-                client_state.worker_thread = None
-        return "joined_dead"
+        if vla_client is not None:
+            try:
+                vla_client.stop()
+            except Exception:
+                pass
+    finally:
+        pass
+        await _broadcast_to_web({"type": "status", "data": {"running": False, "paused": False, "message": "Client stopped."}})
 
 
 def _shutdown_stop_if_running():
@@ -1745,8 +1720,6 @@ def _shutdown_stop_if_running():
             _pause_vla_client(vla_client)
         except Exception as e:
             logger.exception(f"Failed to pause client during shutdown stop sequence: {e}")
-
-    _join_worker_thread(timeout_s=5.0)
 
 
 def _has_alive_vla_threads(vla_client) -> bool:
@@ -1767,9 +1740,6 @@ def _has_alive_vla_threads(vla_client) -> bool:
 
 
 def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_alive: bool = True):
-    if not _cleanup_guard.acquire(blocking=False):
-        return
-
     try:
         lock_acquired = client_state.lock.acquire(timeout=2.0)
         if not lock_acquired:
@@ -1808,8 +1778,7 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
             else:
                 logger.warning("Skip robot.close(): VLA worker threads are still alive during shutdown.")
     finally:
-        _cleanup_guard.release()
-
+        pass
 
 @app.get("/api/client/status")
 async def client_status():
