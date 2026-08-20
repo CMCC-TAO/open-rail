@@ -280,7 +280,7 @@ class DataRecordManager:
         try:
             if self.writer_process.is_alive():
                 self.writer_command_queue.put({"command": "shutdown"})
-                self.writer_process.join(timeout=5.0)
+                self.writer_process.join(timeout=2.0)
                 if self.writer_process.is_alive():
                     self.logger.warning("Writer process still alive after graceful shutdown, terminate it.")
                     self.writer_process.terminate()

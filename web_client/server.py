@@ -108,7 +108,7 @@ async def _lifespan(_: FastAPI):
     _shutdown_stop_if_running()
     # Avoid closing low-level robot SDK from a detached daemon cleanup thread,
     # which can crash (segfault) during interpreter shutdown.
-    _cleanup(force_release_robot=True, skip_robot_close_if_threads_alive=True)
+    _cleanup()
     _api_executor.shutdown(wait=False)
     _finalize_pyarrow_s3()
 
@@ -1721,7 +1721,7 @@ def _shutdown_stop_if_running():
         except Exception as e:
             logger.exception(f"Failed to pause client during shutdown stop sequence: {e}")
 
-def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_alive: bool = True):
+def _cleanup():
     try:
         lock_acquired = client_state.lock.acquire(timeout=2.0)
         if not lock_acquired:
@@ -1742,14 +1742,12 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
             try:
                 # During process shutdown (Ctrl-C), perform full close to ensure
                 # multiprocessing writer/sub-resources are released before os._exit.
-                if force_release_robot:
-                    vla_client.close()
-                else:
-                    vla_client.stop()
+                vla_client.close()
             except Exception:
                 pass
     finally:
-        pass
+        del vla_client
+        del robot
 
 @app.get("/api/client/status")
 async def client_status():
