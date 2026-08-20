@@ -1721,24 +1721,6 @@ def _shutdown_stop_if_running():
         except Exception as e:
             logger.exception(f"Failed to pause client during shutdown stop sequence: {e}")
 
-
-def _has_alive_vla_threads(vla_client) -> bool:
-    if vla_client is None:
-        return False
-
-    for name in ("observe_thread", "inference_thread", "data_write_thread"):
-        t = getattr(vla_client, name, None)
-        if t is not None and hasattr(t, "is_alive") and t.is_alive():
-            return True
-
-    for timer_name in ("control_thread_timer", "visualize_thread_timer"):
-        timer = getattr(vla_client, timer_name, None)
-        if timer is not None and hasattr(timer, "is_alive") and timer.is_alive():
-            return True
-
-    return False
-
-
 def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_alive: bool = True):
     try:
         lock_acquired = client_state.lock.acquire(timeout=2.0)
@@ -1766,17 +1748,6 @@ def _cleanup(force_release_robot: bool = False, skip_robot_close_if_threads_aliv
                     vla_client.stop()
             except Exception:
                 pass
-
-        threads_alive = _has_alive_vla_threads(vla_client)
-        if robot is not None:
-            should_close_robot = not (skip_robot_close_if_threads_alive and threads_alive)
-            if should_close_robot:
-                try:
-                    robot.close()
-                except Exception:
-                    pass
-            else:
-                logger.warning("Skip robot.close(): VLA worker threads are still alive during shutdown.")
     finally:
         pass
 
