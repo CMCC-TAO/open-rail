@@ -112,7 +112,7 @@ async def _lifespan(_: FastAPI):
     _api_executor.shutdown(wait=False)
     _finalize_pyarrow_s3()
 
-app = FastAPI(title="VLA Web Client", version="1.0.0", lifespan=_lifespan)
+app = FastAPI(title="Open-RAIL Web Client", version="1.0.0", lifespan=_lifespan)
 
 STATIC_DIR  = Path(__file__).parent / "static"
 VISUAL_DIR  = ROOT / "visual"
@@ -469,28 +469,11 @@ def _apply_flat_patch_new(config, patch: dict):
     logger.info(f"Applied config patch keys: {applied}/{len(patch)}")
 _cleanup_guard = threading.Lock()
 
-
-def _create_robot(robot_type, robot_config):
-    if robot_type == RobotType.A2D:
-        from client.robots.a2d.body_robot import RobotBody
-        return RobotBody(robot_config)
-    if robot_type == RobotType.NAVI_WA2:
-        from client.robots.navi_wa2.body_robot import RobotBody
-        return RobotBody(robot_config)
-    if robot_type == RobotType.MOCK:
-        from client.robots.mock.body_robot import RobotBody
-        return RobotBody(robot_config)
-    if robot_type == RobotType.TI5_T170C:
-        from client.robots.ti5_t170c.body_robot import RobotBody
-        return RobotBody(robot_config)
-    raise ValueError(f"Unsupported robot type: {robot_type}")
-
-
 def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
     if robot_config is None or not hasattr(robot_config, 'action_layout'):
         return
     layout = robot_config.action_layout
-    client_config.rdm.action_layout = layout
+    # client_config.rdm.action_layout = layout
     client_config.intra_chunk.action_layout = layout
     if vla_client is not None:
         changed = vla_client.intra_chunk_smoother.action_layout != dict(layout)
@@ -499,53 +482,6 @@ def _sync_robot_action_layout(client_config, robot_config, vla_client=None):
         smoother.action_dim, smoother.joint_indices, smoother.step_indices = parse_action_layout(layout)
         if changed:
             vla_client.realtime_data_manager.clear()
-
-
-def _ensure_config_robot_bound():
-    """Sync runtime robot/layout with current config without recreating robot."""
-    lock_acquired = client_state.lock.acquire(timeout=2.0)
-    if not lock_acquired:
-        raise RuntimeError("Timeout reading client state before robot bind (lock busy).")
-
-    try:
-        vla_client = client_state.vla_client
-        client_config = client_state.config
-        robot = client_state.robot
-    finally:
-        client_state.lock.release()
-
-    if vla_client is None:
-        return None
-
-    if client_config is None:
-        client_config = get_client_config()
-        lock_acquired = client_state.lock.acquire(timeout=2.0)
-        if not lock_acquired:
-            raise RuntimeError("Timeout writing config during robot sync (lock busy).")
-        try:
-            client_state.config = client_config
-        finally:
-            client_state.lock.release()
-
-    robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
-    _sync_robot_action_layout(client_config, robot_config, vla_client)
-
-    if robot is None:
-        robot = getattr(vla_client, "robot", None)
-    if robot is None:
-        return None
-
-    vla_client.robot = robot
-    lock_acquired = client_state.lock.acquire(timeout=2.0)
-    if not lock_acquired:
-        raise RuntimeError("Timeout writing robot sync to client state (lock busy).")
-    try:
-        if client_state.vla_client is vla_client:
-            client_state.robot = robot
-    finally:
-        client_state.lock.release()
-    return robot
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  WebSocket broadcast
@@ -1380,9 +1316,9 @@ def _ensure_vla_client_created():
             return client_state.vla_client
         client_config = client_state.config
 
-    print(f"DEBUG, robot = {client_config.robots}, type = {client_config.robots.type.value}")
+    # print(f"DEBUG, robot = {client_config.robots}, type = {client_config.robots.type.value}")
     robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
-    print(f"DEBUG = {robot_config}")
+    # print(f"DEBUG = {robot_config}")
     _sync_robot_action_layout(client_config, robot_config)
 
     vla_zmq_client = None
@@ -1423,6 +1359,20 @@ def _ensure_vla_client_created():
         client_state.robot = robot
     return vla_client
 
+def _create_robot(robot_type, robot_config):
+    if robot_type == RobotType.A2D:
+        from client.robots.a2d.body_robot import RobotBody
+        return RobotBody(robot_config)
+    if robot_type == RobotType.NAVI_WA2:
+        from client.robots.navi_wa2.body_robot import RobotBody
+        return RobotBody(robot_config)
+    if robot_type == RobotType.MOCK:
+        from client.robots.mock.body_robot import RobotBody
+        return RobotBody(robot_config)
+    if robot_type == RobotType.TI5_T170C:
+        from client.robots.ti5_t170c.body_robot import RobotBody
+        return RobotBody(robot_config)
+    raise ValueError(f"Unsupported robot type: {robot_type}")
 
 async def _start_client():
     try:
@@ -1651,22 +1601,9 @@ async def _bg_resume_and_broadcast(vla_client):
 async def _bg_toggle_observe_and_broadcast():
     try:
         await asyncio.to_thread(_ensure_vla_client_created)
-        vla_client = client_state.vla_client
-        if vla_client == None:
-            with client_state.lock:
-                client_state.running = False
-                client_state.paused = False
-            result = _status_abnormal(message='VLA Client instance is None.',
-                                    running=False,
-                                    paused=False,
-                                    observe_running=False,
-                                    inference_running=False,
-                                    control_running=False,
-                                    )
-            await _broadcast_to_web({"type": "status", "data": result})
-            raise HTTPException(400, "Client is none.")
         
         with client_state.lock:
+            vla_client = client_state.vla_client
             client_state.running = True
             client_state.paused = False
         # Stop
@@ -1677,9 +1614,6 @@ async def _bg_toggle_observe_and_broadcast():
             message = "Observe stopped."
         # Start
         else:
-            # TODO: check needed or not
-            await asyncio.to_thread(_ensure_config_robot_bound)
-            vla_client = client_state.vla_client
             await asyncio.to_thread(_start_observe, vla_client)
             message = "Observe started."
 
