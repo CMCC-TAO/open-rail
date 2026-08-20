@@ -308,12 +308,10 @@ class VLAClient():
             self.data_record_manager.close()
 
         self.vla_zmq.close()
+        self.robot.close()
         self.visualize_server.stop_server()
 
-        # if hasattr(self, '_img_executor') and self._img_executor is not None:
-        #     self._img_executor.shutdown(wait=False)
-
-        self.logger.info('Inference client closed.')
+        self.logger.info('VLA client closed.')
     def reset(self):
         self.image_process_time = 0.0
     
