@@ -431,6 +431,7 @@ async function wireEvents() {
       if (!selectedFile) return;
       
       try {
+        toast(`Loading ${selectedFile}.`, 'ok');
         const res = await apiFetch('/api/client/config/load', { 
           method: 'POST', 
           body: JSON.stringify({ path: selectedFile }) 
