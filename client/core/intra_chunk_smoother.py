@@ -19,8 +19,6 @@ class IntraChunkSmoother():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
-        self.action_layout = dict(getattr(config, 'action_layout', {}) or {})
-        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         # Create thread pools for parallel trajectory fitting
         # self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers,
         #                                                 thread_name_prefix="joint_fitting_thread")
@@ -36,6 +34,9 @@ class IntraChunkSmoother():
         # self.timestamps_fitted = None
         
         # self.frame = 0
+    def set_action_layout(self, action_layout: dict = {}):
+        self.action_layout = action_layout
+        self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(action_layout)
 
     def process(self, timestamps, action_chunk, time_step=3.75, task_progress=None, joint_indices=None, step_indices=None):
         """Perform trajectory fitting for robot actions.
