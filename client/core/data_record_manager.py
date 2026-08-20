@@ -10,7 +10,7 @@ from collections import deque
 from types import SimpleNamespace
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Process, Queue, Value, Event, shared_memory, resource_tracker
+from multiprocessing import Process, Queue, Value, Event, shared_memory
 from typing import Any, Dict, List, Optional, Union, Tuple
 from client.utils.util import run_time_decorator
 from client.core.lerobot_dataset_recorder import LeRobotDatasetRecorder
@@ -192,8 +192,38 @@ class DataRecordManager:
         self.writer_process.start()
         self.logger.info("Resident writer process started.")
 
+    @staticmethod
+    def _disable_shared_memory_tracking_in_process() -> None:
+        """Disable shared_memory tracker hooks in attach-only process.
+
+        Writer process only *attaches* producer-created shm blocks and never owns
+        their lifecycle. Avoid registering these blocks to local resource_tracker,
+        otherwise process-exit cleanup may warn when producer already unlinked them.
+        """
+        try:
+            from multiprocessing import resource_tracker
+
+            _orig_register = resource_tracker.register
+            _orig_unregister = resource_tracker.unregister
+
+            def _register(name, rtype):
+                if rtype == 'shared_memory':
+                    return
+                return _orig_register(name, rtype)
+
+            def _unregister(name, rtype):
+                if rtype == 'shared_memory':
+                    return
+                return _orig_unregister(name, rtype)
+
+            resource_tracker.register = _register
+            resource_tracker.unregister = _unregister
+        except Exception:
+            pass
+
     def _writer_process_loop(self) -> None:
         """Resident process loop: receives start/shutdown commands and dispatches write tasks in thread executor."""
+        self._disable_shared_memory_tracking_in_process()
         self.logger.info("Writer resident process loop started.")
         self.lerobot_recorder.start_episode_record_crud_listener()
         self.eval_recorder.start_eval_record_crud_listener()
@@ -426,13 +456,15 @@ class DataRecordManager:
         return f"vla_{os.getpid()}_{camera_name.replace('.', '_')}_{slot_idx}_{time.time_ns()}"
 
     def _unregister_shm_from_resource_tracker(self, shm_obj) -> None:
-        """Detach attached shared memory from local process resource_tracker to avoid false leak warnings."""
-        if shm_obj is None:
-            return
-        try:
-            resource_tracker.unregister(shm_obj._name, 'shared_memory')
-        except Exception:
-            pass
+        """No-op on Python 3.10 runtime.
+
+        In this project runtime, explicit `resource_tracker.unregister` may itself
+        trigger tracker-side KeyError (name format mismatch across internals).
+        We rely on explicit `close()`/`unlink()` lifecycle in producer process
+        and `close()` in consumer cache cleanup.
+        """
+        _ = shm_obj
+        return
 
     def _atexit_cleanup(self) -> None:
         """Best-effort cleanup for abnormal exits when close() is not called explicitly."""
