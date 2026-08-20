@@ -304,9 +304,7 @@ class VLAClient():
         if self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.stop(timeout=1.0)
         
-        if hasattr(self, 'data_record_manager') and self.data_record_manager is not None:
-            self.data_record_manager.close()
-
+        self.data_record_manager.close()
         self.vla_zmq.close()
         self.robot.close()
         self.visualize_server.stop_server()
