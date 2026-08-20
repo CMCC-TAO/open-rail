@@ -231,14 +231,17 @@ class VLAClient():
         self.logger.info('VLA client resumed.')
 
     def stop(self):
-        """Backward-compatible alias of pause()."""
-        self.pause()
+        self.stop_observe()
+        self.stop_inference()
+        self.stop_control()
+        self.stop_visualize()
         time.sleep(self.realtime_data_manager.avg_infer_time * 1.5) # make sure inference thread is stopped.
         self.image_process_time = 0.0
         self.task_language_manager.reset()
         self.realtime_data_manager.clear()
         with self.show_thread_lock:
             self.current_prob_progress = 0.0
+        self.logger.info('VLA client stopped.')
         # TODO: Robot reset
 
     def start_recording(self) -> str:
