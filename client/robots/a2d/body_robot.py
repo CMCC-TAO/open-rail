@@ -3,6 +3,7 @@ import cv2
 import logging
 import numpy as np
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
 from ..base_robot import RobotBase
@@ -24,6 +25,9 @@ class RobotBody(RobotBase):
         self._non_ref_cameras = [
             (key, value) for key, value in self._cam_names.items() if key != self._cam_ref
         ]
+        workers_config = int(self.config['camera'].get('non_ref_fetch_workers', 2))
+        self._non_ref_fetch_workers = workers_config if workers_config > 0 else 2
+        self._non_ref_fetch_pool = None
 
         self.camera = Camera(list(self._cam_names.values()))
         self.robot = Robot()
@@ -42,6 +46,13 @@ class RobotBody(RobotBase):
         self.gripper_count = 0
         self.gripper_cmd = [0.0, 0.0]
         self.head_count = 0
+
+        if self._non_ref_cameras and self._non_ref_fetch_workers > 0:
+            self._non_ref_fetch_pool = ThreadPoolExecutor(
+                max_workers=self._non_ref_fetch_workers,
+                thread_name_prefix='a2d-nonref-fetch'
+            )
+
         time.sleep(1)
 
     def control_robot(self, action):
@@ -112,6 +123,10 @@ class RobotBody(RobotBase):
         if 'hand' in data:
             self.robot.move_hand(data['hand'])
     
+    def _fetch_nearest_camera(self, camera_key, camera_name, ref_timestamp):
+        image, _ = self.camera.get_image_nearest(camera_name, ref_timestamp)
+        return camera_key, image
+
     def retrieve_observation(self):
         """Retrieve current observation data including camera images and joint states.
 
@@ -135,9 +150,15 @@ class RobotBody(RobotBase):
 
             result['ref_timestamp'] = ref_timestamp
             result[f'cam.{self._cam_ref}'] = image[:, :, ::-1]
-            for key, value in self._non_ref_cameras:
-                image, _ = self.camera.get_image_nearest(value, ref_timestamp)
-                result[f'cam.{key}'] = image[:, :, ::-1]
+
+            if self._non_ref_fetch_pool is not None:
+                future_to_key = {
+                    self._non_ref_fetch_pool.submit(self._fetch_nearest_camera, key, value, ref_timestamp): key
+                    for key, value in self._non_ref_cameras
+                }
+                for future in future_to_key:
+                    key, image = future.result()
+                    result[f'cam.{key}'] = image[:, :, ::-1]
 
             state_size = 0
             gripper_start = None
@@ -175,6 +196,10 @@ class RobotBody(RobotBase):
         
         This method properly releases all hardware resources.
         """
+        if self._non_ref_fetch_pool is not None:
+            self._non_ref_fetch_pool.shutdown(wait=True)
+            self._non_ref_fetch_pool = None
+
         self.camera.close()
         self.robot.shutdown()
         print('close robot')
