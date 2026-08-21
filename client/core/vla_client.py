@@ -4,9 +4,10 @@ import logging
 import threading
 import numpy as np
 
+from queue import Queue, Empty
 from typing import Optional
 from ml_collections import ConfigDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from client.utils import misc
 from client.utils.util import run_time_decorator
@@ -110,14 +111,18 @@ class VLAClient():
         self.update_preprocess_func()
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
+        self.process_observe_thread = threading.Thread(target=self._process_observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
         self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
-        
+
         self.show_thread_lock = threading.Lock()
 
+        # Raw observation queue: no frame dropping in VLA client pipeline.
+        self._raw_observe_queue = Queue()
+
         # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
-        # self._img_executor = ThreadPoolExecutor(max_workers=3*1, thread_name_prefix="img_enc")
+        self._img_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="img_enc")
 
         # Inference variables
         self.set_observe_period(speed=self.config.controller.speed)
@@ -145,6 +150,8 @@ class VLAClient():
         self.is_observe_thread_running = True
         if not self.observe_thread.is_alive():
             self.observe_thread.start()
+        if not self.process_observe_thread.is_alive():
+            self.process_observe_thread.start()
         self.logger.info('VLAClient observe thread started.')
 
     def stop_observe(self):
@@ -239,6 +246,7 @@ class VLAClient():
         self.image_process_time = 0.0
         self.task_language_manager.reset()
         self.realtime_data_manager.clear()
+        self._clear_raw_observe_queue()
         with self.show_thread_lock:
             self.current_prob_progress = 0.0
         self.logger.info('VLA client stopped.')
@@ -295,6 +303,8 @@ class VLAClient():
         
         if self.observe_thread.is_alive():
             self.observe_thread.join(timeout=1.0)
+        if self.process_observe_thread.is_alive():
+            self.process_observe_thread.join(timeout=1.0)
         if self.inference_thread.is_alive():
             self.inference_thread.join(timeout=1.0)
 
@@ -304,6 +314,9 @@ class VLAClient():
         if self.visualize_thread_timer.is_alive():
             self.visualize_thread_timer.stop(timeout=1.0)
         
+        self._clear_raw_observe_queue()
+        self._img_executor.shutdown(wait=False)
+
         self.data_record_manager.close()
         self.vla_zmq.close()
         self.robot.close()
@@ -351,35 +364,48 @@ class VLAClient():
     #     self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
     #     return self.camera_shape_dict
 
+    def _clear_raw_observe_queue(self):
+        while True:
+            try:
+                self._raw_observe_queue.get_nowait()
+                self._raw_observe_queue.task_done()
+            except Empty:
+                break
+
     def _observe_thread_fun(self):
-        """Observation thread function for continuous data collection from robot sensors.
-        
-        This method runs in a separate thread and continuously:
-        - Retrieves observations from the robot
-        - Processes the observation data
-        - Adds processed data to the real-time data manager
-        - Records data if recording is enabled
+        """Observation producer thread.
+
+        This thread only retrieves observations from robot and enqueues them,
+        so retrieval cadence is not blocked by image processing/encoding cost.
         """
         while self.is_running:
             if not self.is_observe_thread_running:
                 time.sleep(0.001)
                 continue
-            # timestamp_1 = time.time()
+
             observations = self.robot.retrieve_observation()
-            # timestamp_2 = time.time()
-            # self.logger.debug(f"Robot retrieve observation time: {(timestamp_2-timestamp_1) * 1000: .4f}ms, observations is {'None' if observations is None else 'dict'}")
-            # observations keys=dict_keys(['ref_timestamp', 'cam.hand_left', 'cam.hand_right', 'cam.head', 'obs.state', 'action'])
-            # print(f"Debug: observations keys={observations.keys()}")
-            # timestamp_1 = time.time()
-            # timestamp_2 = None
             if observations is not None:
-                # Decide whether to change language instruction based on the task progress predicted by the VLA model
+                self._raw_observe_queue.put(observations)
+
+    def _process_observe_thread_fun(self):
+        """Observation consumer thread.
+
+        This thread processes raw observations and pushes processed data to RDM/recorder.
+        No frame dropping is applied in this queue pipeline.
+        """
+        while self.is_running:
+            if not self.is_observe_thread_running:
+                time.sleep(0.001)
+                continue
+            try:
+                observations = self._raw_observe_queue.get(timeout=0.01)
+            except Empty:
+                continue
+
+            try:
                 data, record_data = self._process_data(observations)
-                # timestamp_3 = time.time()
-                # print(f"Debug: process time={((timestamp_3-timestamp_1) if timestamp_2 is None else (timestamp_3-timestamp_2)) * 1000} ms")
                 self.realtime_data_manager.add_observe_data(data)
-                # timestamp_4 = time.time()
-                # print(f"Debug: add time={(timestamp_4-timestamp_3)*1000} ms")
+
                 if self.config.record.switch:
                     runtime_config = {
                         'mode': self.config.rdm.mode,
@@ -395,12 +421,12 @@ class VLAClient():
                         'server_status': self.server_status,
                         'runtime_config': runtime_config
                     }
-                    self.data_record_manager.add_observation_async(observation=record_data, extra_info=extra_info, timestamp=time.perf_counter())
-                    # timestamp_3 = time.time()
-                    # self.logger.debug(f'Data recorder add observation time: {(timestamp_3-timestamp_2) * 1000: .4f}ms')
-                    # timestamp_2 = time.time()
-                    # print(f"Debug: record time={(timestamp_2-timestamp_1) * 1000} ms")
-            # time.sleep(0.001)
+                    self.data_record_manager.add_observation_async(
+                        observation=record_data,
+                        extra_info=extra_info,
+                        timestamp=time.perf_counter())
+            finally:
+                self._raw_observe_queue.task_done()
     
     def _inference_thread_fun(self):
         while self.is_running:
@@ -713,15 +739,18 @@ class VLAClient():
 
         encoded_imgs = {}
         raw_imgs = {}
-        for key, value in cam_items:
-            key, raw_img, encoded_img = self._process_image_thread_fun(key, value)
-            raw_imgs[key] = raw_img
-            encoded_imgs[key] = encoded_img
+        if cam_items:
+            futures = [self._img_executor.submit(self._process_image_thread_fun, key, value)
+                       for key, value in cam_items]
+            for future in as_completed(futures):
+                key, raw_img, encoded_img = future.result()
+                raw_imgs[key] = raw_img
+                encoded_imgs[key] = encoded_img
 
         if self.camera_shape_dict is None and raw_imgs:
             self.camera_shape_dict = {key: img.shape for key, img in raw_imgs.items()}
 
-        self.image_process_time = self.image_process_time * 0.8 +  (time.perf_counter() - start_time) * 1000 * 0.2
+        self.image_process_time = self.image_process_time * 0.8 + (time.perf_counter() - start_time) * 1000 * 0.2
         self.visualize_server.update_image_data(encoded_imgs)
         return encoded_imgs, raw_imgs
     def _parse_prob_progress(self, action_data):
