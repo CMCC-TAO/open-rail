@@ -896,6 +896,7 @@ async def patch_config(req: ConfigPatchRequest):
         prev_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
         _apply_flat_patch_new(client_conf, flat)
         next_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
+        client_conf = _config_to_dict(client_conf)
         is_running = bool(client_state.running)
 
         for k in flat.keys():
@@ -1015,6 +1016,7 @@ async def save_config_file(req: ConfigFileRequest):
         save_path.resolve().relative_to(ROOT.resolve())
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
+    client_conf = _config_to_dict(client_conf)
     if save_path.suffix in (".yaml", ".yml"):
         content = _dict_to_user_conf_yaml(client_conf)
     else:
