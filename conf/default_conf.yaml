@@ -21,111 +21,6 @@ inter_chunk:
     max_vel: 2.0
   sync: {}
 intra_chunk:
-  action_layout:
-    arm:
-      start: 0
-      end: 14
-      policy: gradual
-      presets:
-        left:
-          Default:
-          - -1.0748
-          - 0.6107
-          - 0.2816
-          - -1.2823
-          - 0.7292
-          - 1.4957
-          - -0.1869
-          Custom:
-          - -1.0748
-          - 0.6107
-          - 0.2816
-          - -1.2823
-          - 0.7292
-          - 1.4957
-          - -0.1869
-        right:
-          Default:
-          - 1.072
-          - -0.6103
-          - -0.278
-          - 1.2822
-          - -0.7299
-          - -1.4929
-          - 0.1873
-          Custom:
-          - 1.072
-          - -0.6103
-          - -0.278
-          - 1.2822
-          - -0.7299
-          - -1.4929
-          - 0.1873
-    gripper:
-      start: 14
-      end: 16
-      policy: stepwise
-      presets:
-        left:
-          Default:
-          - 0.0
-          Custom:
-          - 0.5
-          Open:
-          - 0.0
-          Close:
-          - 1.0
-        right:
-          Default:
-          - 0.0
-          Custom:
-          - 0.5
-          Open:
-          - 0.0
-          Close:
-          - 1.0
-    head:
-      start: 16
-      end: 18
-      policy: manual
-      presets:
-        Default:
-        - 0.0
-        - 0.4363
-        Custom:
-        - 0.0
-        - 0.4363
-    waist:
-      start: 18
-      end: 20
-      policy: manual
-      presets:
-        Default:
-        - 0.4012
-        - 27.0
-        Custom:
-        - 0.4012
-        - 27.0
-    wheel:
-      start: 20
-      end: 22
-      policy: manual
-      presets:
-        Default:
-        - 0
-        - 0
-        Forward:
-        - 0.1
-        - 0.0
-        Backward:
-        - -0.1
-        - 0
-        Left:
-        - 0
-        - 0.1
-        Right:
-        - 0
-        - -0.1
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -143,127 +38,22 @@ language:
   auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: make_coffee
+  task_id: tea_master
   task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
-  action_layout:
-    arm:
-      start: 0
-      end: 14
-      policy: gradual
-      presets:
-        left:
-          Default:
-          - -1.0748
-          - 0.6107
-          - 0.2816
-          - -1.2823
-          - 0.7292
-          - 1.4957
-          - -0.1869
-          Custom:
-          - -1.0748
-          - 0.6107
-          - 0.2816
-          - -1.2823
-          - 0.7292
-          - 1.4957
-          - -0.1869
-        right:
-          Default:
-          - 1.072
-          - -0.6103
-          - -0.278
-          - 1.2822
-          - -0.7299
-          - -1.4929
-          - 0.1873
-          Custom:
-          - 1.072
-          - -0.6103
-          - -0.278
-          - 1.2822
-          - -0.7299
-          - -1.4929
-          - 0.1873
-    gripper:
-      start: 14
-      end: 16
-      policy: stepwise
-      presets:
-        left:
-          Default:
-          - 0.0
-          Custom:
-          - 0.5
-          Open:
-          - 0.0
-          Close:
-          - 1.0
-        right:
-          Default:
-          - 0.0
-          Custom:
-          - 0.5
-          Open:
-          - 0.0
-          Close:
-          - 1.0
-    head:
-      start: 16
-      end: 18
-      policy: manual
-      presets:
-        Default:
-        - 0.0
-        - 0.4363
-        Custom:
-        - 0.0
-        - 0.4363
-    waist:
-      start: 18
-      end: 20
-      policy: manual
-      presets:
-        Default:
-        - 0.4012
-        - 27.0
-        Custom:
-        - 0.4012
-        - 27.0
-    wheel:
-      start: 20
-      end: 22
-      policy: manual
-      presets:
-        Default:
-        - 0
-        - 0
-        Forward:
-        - 0.1
-        - 0.0
-        Backward:
-        - -0.1
-        - 0
-        Left:
-        - 0
-        - 0.1
-        Right:
-        - 0
-        - -0.1
   max_len: 100
   mode: async
   observe_fps_window_size: 10
 record:
-  auto: false
+  auto: true
   evaluation:
     scores:
     - 0
     - 0.5
     - 1
-  is_record_episode: false
-  is_record_eval_log: false
+  is_record_episode: true
+  is_record_eval_log: true
   is_record_expe_data: false
   lerobot:
     action_shape: 22
@@ -423,6 +213,7 @@ robots:
         hand_left: hand_left
         hand_right: hand_right
         head: head
+      non_ref_fetch_workers: 2
       ref: head
     gripper_freq: 40
     hand_type: gripper
@@ -491,11 +282,11 @@ robots:
             - 0.0
     camera:
       names:
-        hand_left: observation.images.left_wrist_rgb
-        hand_right: observation.images.right_wrist_rgb
-        head: observation.images.head_rgb
+        hand_left: observation.images.hand_left
+        hand_right: observation.images.hand_right
+        head: observation.images.top_head
       ref: head
-    dataset_path: /home/robot/Music/task_39_only1
+    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -663,7 +454,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: a2d
+  type: mock
 vision:
   history_frame: false
   preprocess:
