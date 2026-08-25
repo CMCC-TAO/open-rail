@@ -489,7 +489,7 @@ async def _broadcast_to_web(message: dict):
 async def _stats_push_loop():
     """Background coroutine: push runtime stats to all WS clients every 250 ms."""
     while True:
-        await asyncio.sleep(0.25)
+        await asyncio.sleep(0.5)
         if not client_state.ws_clients:
             continue
         try:
