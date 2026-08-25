@@ -14,6 +14,7 @@ class ModelType(str, Enum):
     PI0 = 'pi0'
     PI05 = 'pi05'
     TAO = 'tao'
+    DM05 = 'dm05'
 
 def get_mock_config():
     """Generate configuration for MOCK model.
@@ -117,6 +118,27 @@ def get_tao_config():
 
     return config
 
+def get_dm05_config():
+    """Generate configuration for the DM0.5 (OpenDM) model.
+
+    Returns:
+        ConfigDict: Configuration dictionary for the DM05 in-process policy.
+    """
+    config = ConfigDict()
+    config.model_path = '/path/to/model'
+    config.repo_path = '/path/to/repo'
+    config.dataset_name = 'a2d_tidyup_generalist'
+    config.robot_type = 'A2D'
+    config.chunk_size = 50
+    config.action_dim = 22
+    config.state_pad_to = 32
+    config.backend = 'fast' # 'fast' or 'default'
+    config.vision_trt_engine_path = '/path/to/dm05_vision.engine'
+    config.diffusion_steps = 10
+    config.vision_attn_implementation = 'flash_attention_2'
+    return config
+
+
 def get_models_config():
     """Generate configuration for all available VLA models.
     
@@ -142,4 +164,5 @@ def get_models_config():
     config.pi0 = get_pi0_config()
     config.pi05 = get_pi05_config()
     config.tao = get_tao_config()
+    config.dm05 = get_dm05_config()
     return config

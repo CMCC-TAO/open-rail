@@ -38,7 +38,7 @@ language:
   auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
+  task_id: a2d_tidyup
   task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
@@ -159,7 +159,7 @@ robots:
             - 1.0
           right:
             Default:
-            - 0.0
+            - 0
             Custom:
             - 0.5
             Open:
@@ -186,8 +186,8 @@ robots:
           - 0.4012
           - 27.0
           Custom:
-          - 0.4012
-          - 27.0
+          - 0.7854
+          - 52
       wheel:
         start: 20
         end: 22
@@ -454,7 +454,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: a2d
 vision:
   history_frame: false
   preprocess:
@@ -475,6 +475,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
+    - 0
     - 7
     source:
     - ActionRaw

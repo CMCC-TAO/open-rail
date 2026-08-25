@@ -1764,7 +1764,7 @@ async def client_control_reset(req: Optional[ManualControlRequest] = Body(defaul
         else:
             robot.reset_robot(mode='default')
         wait_time = max(vla_client.realtime_data_manager.avg_infer_time * 1.5, 0.2)
-        await asyncio.sleep(wait_time)
+        await asyncio.sleep(wait_time * 2.0)
         vla_client.realtime_data_manager.clear()
         vla_client.reset()
         # _resume_vla_client(vla_client, paused_state)

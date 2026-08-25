@@ -160,12 +160,11 @@ const savePresets = async (selectId, action, side, items, selectedKey, verb) => 
     if (selected) select.value = selected.value;
     updateEditState(select, $(`${selectId}-edit`));
 
-    const display = $('conf-path-display');
-    const path = display?.dataset.fullPath || display?.textContent.trim() || '';
-    if (path) {
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
       await apiFetch('/api/client/config/save', {
         method: 'POST',
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ path: confRes.path }),
       });
     }
     toast(`Preset "${selectedKey}" ${verb}.`, 'ok');
