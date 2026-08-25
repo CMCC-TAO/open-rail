@@ -7,7 +7,7 @@ import numpy as np
 from queue import Queue, Empty
 from typing import Optional
 from ml_collections import ConfigDict
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 from client.utils import misc
 from client.utils.util import run_time_decorator
@@ -740,10 +740,11 @@ class VLAClient():
         encoded_imgs = {}
         raw_imgs = {}
         if cam_items:
-            futures = [self._img_executor.submit(self._process_image_thread_fun, key, value)
-                       for key, value in cam_items]
-            for future in as_completed(futures):
-                key, raw_img, encoded_img = future.result()
+            results_iter = self._img_executor.map(
+                lambda item: self._process_image_thread_fun(*item),
+                cam_items
+            )
+            for key, raw_img, encoded_img in results_iter:
                 raw_imgs[key] = raw_img
                 encoded_imgs[key] = encoded_img
 

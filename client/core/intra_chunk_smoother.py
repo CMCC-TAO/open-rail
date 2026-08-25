@@ -330,7 +330,7 @@ class IntraChunkSmoother():
         final_velocity_results = [None] * action_dim
         final_acceleration_results = [None] * action_dim
 
-        futures = []
+        # futures = []
         for name, seg in self.action_layout.items():
             if seg['policy'] == 'manual':
                 continue
@@ -379,14 +379,14 @@ class IntraChunkSmoother():
             #     else:
             #         raise ValueError(f"Unknown policy: {seg['policy']}")
 
-        results = [future.result() for future in futures]
+        # results = [future.result() for future in futures]
         
         # Parse results - joint_results represent joint angle data, velocity_results represent joint velocity data
         
-        for index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted in results:
-            final_joint_results[index] = joint_chunk_fitted
-            final_velocity_results[index] = velocity_chunk_fitted
-            final_acceleration_results[index] = acceleration_chunk_fitted
+        # for index, joint_chunk_fitted, velocity_chunk_fitted, acceleration_chunk_fitted in results:
+        #     final_joint_results[index] = joint_chunk_fitted
+        #     final_velocity_results[index] = velocity_chunk_fitted
+        #     final_acceleration_results[index] = acceleration_chunk_fitted
         # if self.traj_fitted is None:
         traj_fitted = np.array(final_joint_results)
         vel_fitted = np.array(final_velocity_results)
