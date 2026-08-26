@@ -15,6 +15,8 @@ Port layout:
 
 import argparse
 import os
+import signal
+import subprocess
 import sys
 import cv2
 import uvicorn
@@ -35,7 +37,19 @@ def parse_args():
     return p.parse_args()
 
 def kill_port(port):
-    os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
+    """Kill processes occupying the Web port, if any."""
+    try:
+        result = subprocess.run(
+            ['lsof', '-t', f'-i:{port}'],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return
+    for value in result.stdout.split():
+        if value.isdigit() and int(value) != os.getpid():
+            os.kill(int(value), signal.SIGKILL)
 
 if __name__ == '__main__':
     args = parse_args()

@@ -101,7 +101,6 @@ async def _lifespan(_: FastAPI):
     client_state.loop = loop
 
     asyncio.create_task(_stats_push_loop())
-    _ensure_vla_client_created()
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
     # ── shutdown ──

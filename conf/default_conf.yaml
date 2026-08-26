@@ -46,7 +46,7 @@ rdm:
   mode: async
   observe_fps_window_size: 10
 record:
-  auto: true
+  auto: false
   evaluation:
     scores:
     - 0
@@ -286,7 +286,7 @@ robots:
         hand_right: observation.images.hand_right
         head: observation.images.top_head
       ref: head
-    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
+    dataset_path: /home/zl/zl/mdata/task_1196
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -454,7 +454,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: a2d
+  type: mock
 vision:
   history_frame: false
   preprocess:
