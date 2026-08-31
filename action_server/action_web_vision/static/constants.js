@@ -10,7 +10,7 @@
  * VisualizeServer: ws://localhost:8765
  *   Receives (when task active):
  *     - Binary: camera_data_binary
- *     - JSON: { type: 'joint_data', data: { type:'action_fitted'|'action_raw'|'state', ... } }
+ *     - JSON: { type: 'joint_data_batch', data: [{ type:'action_fitted'|'action_raw'|'state', ... }, ...] }
  */
 'use strict';
 

@@ -230,7 +230,7 @@ class VLAContext:
 
         Returns:
             dict: {
-                'vla_client':           VLAClientAsync,
+                'vla_client':           VLAClient,
                 'vla_zmq':              ZMQClient,
                 'rdm':                  RealtimeDataManager,
                 'inter_chunk_fuser':    InterChunkFuser,
@@ -243,7 +243,7 @@ class VLAContext:
         from client.core.inter_chunk_fuser import InterChunkFuser
         from client.core.intra_chunk_smoother import IntraChunkSmoother
         from client.core.task_language_manager import TaskLanguageManager
-        from client.core.vla_client import VLAClientAsync
+        from client.core.vla_client import VLAClient
 
         # 使用共享的 ZMQ 客户端（避免 task 内首次 inference 超时）
         vla_zmq = self._shared_zmq
@@ -254,7 +254,7 @@ class VLAContext:
         intra_chunk_smoother = IntraChunkSmoother(config=self.config.intra_chunk)
         task_language_manager = TaskLanguageManager(config=self.config.language)
 
-        vla_client = VLAClientAsync(
+        vla_client = VLAClient(
             config=self.config,
             realtime_data_manager=rdm,
             inter_chunk_fuser=inter_chunk_fuser,

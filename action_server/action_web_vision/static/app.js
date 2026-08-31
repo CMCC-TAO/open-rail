@@ -194,15 +194,23 @@ function updateCamWSIndicator(alive) {
 }
 
 function handleCamWSMessage(msg) {
-  if (!msg || msg.type !== 'joint_data' || !msg.data) return;
-  const { tab, type, joints_y, timestamp } = msg.data;
-  if (tab !== 'position' || !Array.isArray(joints_y) || joints_y.length === 0) return;
-  if (type === 'action_fitted') {
-    ingestTrajData([], joints_y, [], timestamp);
-  } else if (type === 'action_raw' || type === 'origin') {
-    ingestTrajData([], [], joints_y, timestamp);
-  } else if (type === 'state') {
-    // ignore state from 8765 (already have from 9000)
+  if (!msg) return;
+  // Support both legacy joint_data (single) and batch (merge from master)
+  const packets = (msg.type === 'joint_data_batch' && Array.isArray(msg.data))
+    ? msg.data
+    : (msg.type === 'joint_data' && msg.data ? [msg.data] : null);
+  if (!packets) return;
+  for (const p of packets) {
+    if (!p) continue;
+    const { tab, type, joints_y, timestamp } = p;
+    if (tab !== 'position' || !Array.isArray(joints_y) || joints_y.length === 0) continue;
+    if (type === 'action_fitted') {
+      ingestTrajData([], joints_y, [], timestamp);
+    } else if (type === 'action_raw' || type === 'origin') {
+      ingestTrajData([], [], joints_y, timestamp);
+    } else if (type === 'state') {
+      // ignore state from 8765 (already have from 9000)
+    }
   }
 }
 

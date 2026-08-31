@@ -186,6 +186,7 @@ intra_chunk:
   min_gripper_action_threshold: 0.05
 language:
   auto_mode: false
+  auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
   sub_task_id: 0
   task_id: grasp
@@ -271,15 +272,14 @@ rdm:
   mode: async
   observe_fps_window_size: 10
 record:
-  auto: false
+  auto: true
   evaluation:
-    log_format: json
     scores:
     - 0
     - 0.5
     - 1
-  is_record_episode: false
-  is_record_eval_log: false
+  is_record_episode: true
+  is_record_eval_log: true
   is_record_expe_data: false
   lerobot:
     action_shape: 22
@@ -439,6 +439,7 @@ robots:
         hand_left: hand_left
         hand_right: hand_right
         head: head
+      non_ref_fetch_workers: 2
       ref: head
     gripper_freq: 40
     hand_type: gripper
@@ -511,7 +512,7 @@ robots:
         hand_right: observation.images.hand_right
         head: observation.images.top_head
       ref: head
-    dataset_path: /home/zl/zl/mdata/task_1196
+    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -804,13 +805,12 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
     - 7
     source:
-    - State
-    - ActionFitted
     - ActionRaw
-    window_span_sec: 10.0
+    - ActionFitted
+    - State
+    window_span_sec: 8.0
   updata_fps: 30
 vla_zmq:
   heartbeat_interval: 1000

@@ -31,6 +31,7 @@ class VisualizeServer:
 
         # Data send queue (deque gives O(1) append/popleft; bounded by maxlen)
         self.data_send_queue = deque(maxlen=1000)
+        self._trajectory_type = ['position'] # position, velocity, and acceleration， TODO: move this to config
 
         # Server instance
         self.server = None
@@ -42,7 +43,19 @@ class VisualizeServer:
         self.logger.info("Initializing server on %s:%d", self.config.host, self.config.port)
 
     def kill_port(self, port):
-        os.system(f'kill -9 $(lsof -t -i:{port})')
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['lsof', '-t', f'-i:{port}'],
+                capture_output=True, text=True, timeout=3
+            )
+            pids = result.stdout.strip().split()
+            for pid in pids:
+                if pid:
+                    os.system(f'kill -9 {pid}')
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            # lsof not available (e.g. docker container) or timed out — skip silently
+            pass
 
     def update_image_data(self, imgs: Dict):
         """Update image data.
@@ -112,6 +125,8 @@ class VisualizeServer:
 
             # TODO: use real velocity/acceleration
             # Velocity/acceleration for state (derived from state)
+            if 'velocity' not in self._trajectory_type and 'acceleration' not in self._trajectory_type:
+                return
             state_vel = None
             state_acc = None
             if current_state is not None:
@@ -256,7 +271,8 @@ class VisualizeServer:
         with self.data_lock:
             if not self.latest_imgs or self.latest_imgs_seq == self.sent_imgs_seq:
                 return
-            imgs = self.latest_imgs.copy()
+            # imgs = self.latest_imgs.copy()
+            imgs = self.latest_imgs
             img_seq = self.latest_imgs_seq
 
         camera_open = self._get_camera_open_map()
@@ -302,27 +318,34 @@ class VisualizeServer:
             await self.unregister_client(client)
 
     async def send_chart_data(self):
-        """Send chart (joint trajectory) data to all clients."""
+        """Send chart (joint trajectory) data to all clients in one batched message."""
         if not self.clients or not self.data_send_queue:
             return
 
         disconnected_clients = set()
 
         with self.data_lock:
-            data_to_send = self.data_send_queue.copy()
+            data_to_send = list(self.data_send_queue)
             self.data_send_queue.clear()
 
-        for data_packet in data_to_send:
-            message_json = json.dumps({'type': 'joint_data', 'data': data_packet})
+        if not data_to_send:
+            return
 
-            for client in self.clients.copy():
-                try:
-                    await client.send(message_json)
-                except websockets.exceptions.ConnectionClosed:
-                    disconnected_clients.add(client)
-                except Exception as e:
-                    self.logger.warning("Failed to send chart data to client: %s", e)
-                    disconnected_clients.add(client)
+        message_json = json.dumps({
+            'type': 'joint_data_batch',
+            'data': data_to_send,
+            'count': len(data_to_send),
+            'timestamp': time.time()
+        })
+
+        for client in self.clients.copy():
+            try:
+                await client.send(message_json)
+            except websockets.exceptions.ConnectionClosed:
+                disconnected_clients.add(client)
+            except Exception as e:
+                self.logger.warning("Failed to send chart data batch to client: %s", e)
+                disconnected_clients.add(client)
 
         for client in disconnected_clients:
             await self.unregister_client(client)
@@ -377,7 +400,19 @@ class VisualizeServer:
             await self.unregister_client(websocket)
 
     async def data_sender(self):
-        """Main data-sending loop: camera frames and chart data at up to 50 Hz."""
+        """
+        Main data-sending loop: camera frames and chart data at up to 50 Hz.
+
+        This asynchronous method continuously sends camera frames and chart data 
+        while the instance is running. The loop frequency is determined by the 
+        configured `updata_fps` setting. If an exception occurs during the 
+        sending process, it logs the error and waits for 1 second before 
+        retrying to prevent tight error loops.
+
+        Raises:
+            Exception: Catches and logs any exception that occurs within the 
+                    data sending loop, allowing the loop to continue running.
+        """
         while self.running:
             try:
                 await self.send_camera_data()
@@ -395,6 +430,7 @@ class VisualizeServer:
             self.client_handler,
             self.config.host,
             self.config.port,
+            compression=None,
             max_size=self.config.max_size,
             ping_interval=self.config.ping_interval,
             ping_timeout=self.config.ping_timeout
@@ -434,21 +470,25 @@ class VisualizeServer:
 
     def _main_thread_fun(self):
         """Run the Visualize Server in a dedicated asyncio event loop (background thread)."""
+        self.logger.info("_main_thread_fun started")
         try:
             asyncio.run(self._server_running_fun())
         except Exception as e:
-            self.logger.error("Server error: %s", e)
+            self.logger.error("Server error: %s", e, exc_info=True)
 
     def start_server(self):
         """Start the server in a background daemon thread (idempotent)."""
         if hasattr(self, 'main_thread') and self.main_thread and self.main_thread.is_alive():
+            self.logger.info("start_server: main_thread already alive, skipping")
             return
+        self.logger.info("start_server: creating new main_thread")
         # self._create_img_executor()
         self.main_thread = threading.Thread(
             target=self._main_thread_fun,
             daemon=True
         )
         self.main_thread.start()
+        self.logger.info("start_server: main_thread started")
 
 
 def main():

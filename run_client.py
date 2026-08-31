@@ -11,7 +11,7 @@ from ml_collections import ConfigDict
 from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
 from conf.logging_conf import setup_logging
-from client.core.vla_client import VLAClientAsync
+from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -258,7 +258,7 @@ if __name__ == "__main__":
     inter_chunk_fuser = InterChunkFuser(config=config.inter_chunk)
     intra_chunk_smoother = IntraChunkSmoother(config=config.intra_chunk)
     task_language_manager = TaskLanguageManager(config=config.language)
-    vla_client = VLAClientAsync(
+    vla_client = VLAClient(
         config=config,
         realtime_data_manager=realtime_data_manager,
         inter_chunk_fuser=inter_chunk_fuser,

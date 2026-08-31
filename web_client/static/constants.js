@@ -167,4 +167,5 @@ const App = {
   recordingEpisodeSnapshot: [],
   latestState: [],
   isRecording: false,
+  isRecordingPaused: false,
 };
