@@ -32,11 +32,12 @@ class ModelVLA:
         )
 
         # ============================================================
-        # FIX: unitree_g1 embodiment state/action indices are based on
-        # the original 41-DOF array (e.g. left_arm: [15:22]), but the
-        # model uses contiguous 0-based indices internally (concatenated
-        # left_arm at [0:7]). Correct to 0-based to match model output
-        # dimension (max_action_dim=32) and avoid out-of-bounds errors.
+        # FIX: unitree_g1 embodiment indices are based on the original
+        # 41-DOF array (e.g. left_arm: [15:22]), but the client sends a
+        # 26-dim state and the model outputs a compact action vector.
+        # hand_to_grasp branch: state 26D (arms 14 + hands 12), action
+        # 16D (arms 14 + gripper 2 via thumb_bend). Correct to matching
+        # layouts to avoid out-of-bounds errors.
         #
         # NOTE: decode_action() creates new instances via
         # EMBODIMENTS.get(tag)(), so the registry must also be fixed;
@@ -57,18 +58,21 @@ class ModelVLA:
             if needs_fix:
                 sub_keys = list(
                     indices['state']['sub_components'].keys())
-                # 0-based contiguous indices: arm(7)+arm(7)+eef(6)+eef(6)=26
-                offsets = [0, 7, 14, 20, 26]
+                # State: 0-based on 26-dim state: arm(7)+arm(7)+hand(6)+hand(6)
+                state_offsets = [0, 7, 14, 20, 26]
+                # Action: compact 16-dim output: arm(7)+arm(7)+gripper(1)+gripper(1)
+                action_offsets = [0, 7, 14, 15, 16]
                 new_state_subs = {}
                 new_action_subs = {}
                 for i, key in enumerate(sub_keys):
                     new_state_subs[key] = {
-                        "start": offsets[i], "end": offsets[i+1]}
+                        "start": state_offsets[i], "end": state_offsets[i+1]}
                     new_action_subs[key] = {
-                        "start": offsets[i], "end": offsets[i+1]}
+                        "start": action_offsets[i], "end": action_offsets[i+1]}
 
-                print(f'[TAO] Fix unitree_g1 indices: 41-DOF -> 0-based. '
-                      f'sub_components: {sub_keys}', flush=True)
+                print(f'[TAO] Fix unitree_g1 indices: state 41D->26D, '
+                      f'action 41D->16D(compact). sub_components: {sub_keys}',
+                      flush=True)
 
                 # Fix 1: fix current instance
                 indices['state']['sub_components'] = new_state_subs
@@ -125,5 +129,18 @@ class ModelVLA:
             ext_result['prob_progress'] = predicted_action['progress'][0, :, -1]
             del predicted_action['progress']
         predicted_action = np.concatenate([v.squeeze(0) for v in predicted_action['action'].values()], axis=1)
+        # hand_to_grasp: model outputs compact 16-dim action
+        # [left_arm(7), right_arm(7), left_gripper(1), right_gripper(1)] in 0~1000.
+        # Expand each gripper to 6 hand motors: [v,v,v,v,v,1000] — thumb_bend +
+        # 4 fingers follow model output, thumb_rotate held at 1000 (ready-to-grasp).
+        if self.cfg['embodiment_tag'] == 'unitree_g1' and predicted_action.shape[-1] == 16:
+            arm = predicted_action[:, :14]
+            left_hand = np.concatenate([
+                np.repeat(predicted_action[:, 14:15], 5, axis=1),
+                np.full((predicted_action.shape[0], 1), 1000.0)], axis=1)
+            right_hand = np.concatenate([
+                np.repeat(predicted_action[:, 15:16], 5, axis=1),
+                np.full((predicted_action.shape[0], 1), 1000.0)], axis=1)
+            predicted_action = np.concatenate([arm, left_hand, right_hand], axis=1)
         print(time.time() - time1, 'action shape:', predicted_action.shape)
         return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp'], 'ext': ext_result}
