@@ -122,6 +122,7 @@ class VLAClient():
 
         # Raw observation queue: no frame dropping in VLA client pipeline.
         self._raw_observe_queue = Queue()
+        self._raw_observe_shm_cache = {}
 
         # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
         self._img_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="img_enc")
@@ -318,6 +319,7 @@ class VLAClient():
         #     self.visualize_thread_timer.stop(timeout=1.0)
         
         self._clear_raw_observe_queue()
+        SharedMemoryManager.close_reader(self._raw_observe_shm_cache)
         self._img_executor.shutdown(wait=False)
 
         self.data_record_manager.close()
@@ -389,13 +391,13 @@ class VLAClient():
 
             observations = self.robot.retrieve_observation()
             if observations is not None:
-                self._raw_observe_queue.put(observations)
-
                 if self.camera_shape_dict is None:
                     cam_items = [(key, value) for key, value in observations.items() if 'cam.' in key]
-                    self.camera_shape_dict = {key: img.shape for key, img in cam_items}
-                    self.shared_memory_manager.init_pool(self.camera_shape_dict)
-                self.shared_memory_manager.encode_observation(observations)
+                    if cam_items:
+                        self.camera_shape_dict = {key: img.shape for key, img in cam_items}
+                        self.shared_memory_manager.init_pool(self.camera_shape_dict)
+                encoded_observations = self.shared_memory_manager.encode_observation(observations)
+                self._raw_observe_queue.put(encoded_observations)
 
     def _process_observe_thread_fun(self):
         """Observation consumer thread.
@@ -413,7 +415,10 @@ class VLAClient():
                 continue
 
             try:
-                data, record_data = self._process_data(observations)
+                decoded_observations = SharedMemoryManager.decode_observation(observations, self._raw_observe_shm_cache)
+                if decoded_observations is None:
+                    continue
+                data, record_data = self._process_data(decoded_observations)
                 self.realtime_data_manager.add_observe_data(data)
                 # record_data = self.shared_memory_manager.encode_observation(record_data)
 

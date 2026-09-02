@@ -94,7 +94,8 @@ class SharedMemoryManager:
         """Copy camera arrays into producer slots and return transport descriptors."""
         if not isinstance(observation, dict):
             return observation
-        obs = observation.get("obs", {})
+        nested = isinstance(observation.get("obs"), dict)
+        obs = observation["obs"] if nested else observation
         if not isinstance(obs, dict):
             return observation
 
@@ -129,19 +130,24 @@ class SharedMemoryManager:
         if not transformed:
             return observation
         encoded_observation = dict(observation)
-        encoded_observation["obs"] = encoded_obs
+        if nested:
+            encoded_observation["obs"] = encoded_obs
+        else:
+            encoded_observation.update(encoded_obs)
         return encoded_observation
 
     @staticmethod
     def decode_observation(
         step_state: Dict[str, Any],
         shm_cache: Dict[str, Any],
+        copy: bool = False
     ) -> Optional[Dict[str, Any]]:
         """Attach and copy frames using the cache owned by one reader."""
         logger = logging.getLogger(__name__)
         if not isinstance(step_state, dict):
             return step_state
-        obs = step_state.get("obs", {})
+        nested = isinstance(step_state.get("obs"), dict)
+        obs = step_state["obs"] if nested else step_state
         if not isinstance(obs, dict):
             return step_state
 
@@ -163,7 +169,7 @@ class SharedMemoryManager:
                     shm_obj = shared_memory.SharedMemory(name=shm_name)
                     shm_cache[shm_name] = shm_obj
                 frame_view = np.ndarray(tuple(shape), dtype=np.dtype(dtype_str), buffer=shm_obj.buf)
-                decoded_obs[camera_name] = frame_view.copy()
+                decoded_obs[camera_name] = frame_view.copy() if copy else frame_view
             except FileNotFoundError:
                 logger.warning("Shared memory block not found for %s: %s", camera_name, shm_name)
                 return None
@@ -172,7 +178,10 @@ class SharedMemoryManager:
                 return None
 
         decoded_state = dict(step_state)
-        decoded_state["obs"] = decoded_obs
+        if nested:
+            decoded_state["obs"] = decoded_obs
+        else:
+            decoded_state.update(decoded_obs)
         return decoded_state
 
     @staticmethod
