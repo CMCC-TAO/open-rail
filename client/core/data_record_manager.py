@@ -50,7 +50,7 @@ class DataRecordManager:
         self.writer_command_queue = Queue()
 
         # Action recording queues
-        self.action_lock = threading.Lock()
+        # self.action_lock = threading.Lock()
         self.action_frame_queue = deque(maxlen=10)
 
         # self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
@@ -436,12 +436,12 @@ class DataRecordManager:
 
         # When action_frame_queue is empty, discard the observation frame
         action = None
-        with self.action_lock:
-            if not self.action_frame_queue:
-                self.logger.warning("Action frame queue is empty, discarding observation frame.")
-                return
-            else:
-                action, _ = self.action_frame_queue.pop()
+        # with self.action_lock:
+        if not self.action_frame_queue:
+            self.logger.warning("Action frame queue is empty, discarding observation frame.")
+            return
+        else:
+            action, _ = self.action_frame_queue.pop()
         
         # observation['language_instruction'] = language_instruction
         # observation['language_instruction'] = 'Test'
@@ -645,16 +645,16 @@ class DataRecordManager:
                 pass
 
         # Clear in-process deque with lock
-        with self.action_lock:
-            try:
-                self.action_frame_queue.clear()
-            except Exception:
-                # Fallback: pop until empty
-                while self.action_frame_queue:
-                    try:
-                        self.action_frame_queue.pop()
-                    except IndexError:
-                        break
+        # with self.action_lock:
+        try:
+            self.action_frame_queue.clear()
+        except Exception:
+            # Fallback: pop until empty
+            while self.action_frame_queue:
+                try:
+                    self.action_frame_queue.pop()
+                except IndexError:
+                    break
 
         self.logger.info("All queues cleared.")
 
