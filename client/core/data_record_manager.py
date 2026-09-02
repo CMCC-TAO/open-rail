@@ -538,24 +538,24 @@ class DataRecordManager:
                     self.logger.warning(f"Invalid frame ndim for {camera_name}: {frame.ndim}, skip this camera.")
                     continue
 
-                frame_contig = np.ascontiguousarray(frame)
+                # frame_contig = np.ascontiguousarray(frame)
                 camera_entry = self._shm_slots.setdefault(camera_name, {"slots": [None] * self._shm_ring_size, "next_index": 0})
                 slot_idx = int(camera_entry["next_index"])
                 slot = self._create_or_resize_shm_slot(
                     camera_name=camera_name,
                     slot_idx=slot_idx,
-                    shape=tuple(frame_contig.shape),
-                    dtype=frame_contig.dtype,
+                    shape=tuple(frame.shape),
+                    dtype=frame.dtype,
                 )
 
                 shm_frame = np.ndarray(slot["shape"], dtype=slot["dtype"], buffer=slot["shm"].buf)
-                shm_frame[...] = frame_contig
+                shm_frame[...] = frame
 
                 obs_for_record[camera_name] = {
                     "transport": "shm",
                     "name": slot["name"],
-                    "shape": list(frame_contig.shape),
-                    "dtype": str(frame_contig.dtype),
+                    "shape": list(frame.shape),
+                    "dtype": str(frame.dtype),
                     "slot_index": slot_idx,
                     "timestamp_ns": time.time_ns(),
                 }
