@@ -2,10 +2,6 @@
 
 [English Version](troubleshooting.md)
 
-# 常见问题
-
-[English Version](troubleshooting.md)
-
 ## Web 客户端
 
 ### Web 客户端无法启动

@@ -2,8 +2,6 @@
 
 [中文版本](configuration.zh-CN.md)
 
-This page documents the public configuration interface defined under `conf/`. The Python configuration factories are the source of truth. `default_conf.yaml` is a persisted client configuration intended primarily for the Web client, not a replacement for server-side model configuration.
-
 ## Configuration sources and precedence
 
 | Entry point | Configuration load order |
@@ -48,11 +46,11 @@ All durations in the following tables are milliseconds unless another unit is sh
 | `filter_window_size` | non-negative integer | Half-window used to filter gripper actions; the effective window is $2n+1$. |
 | `min_gripper_action_threshold` | number | Gripper values below this threshold are treated as fully open (`0.0`). |
 | `max_gripper_action_threshold` | number | Gripper values above this threshold are treated as fully closed (`1.0`). |
-| `fitting_num_samples` | positive integer | Samples used when generating a fitted trajectory. |
+| `fitting_num_samples` | positive integer | Reserved trajectory-sampling setting; the current implementation uses the controller-period time grid instead. |
 | `fitting_deg` | non-negative integer | Polynomial degree for fitted trajectories. |
-| `max_joint_fitting_workers` | positive integer | Worker limit for arm-joint fitting. |
-| `max_gripper_fitting_workers` | positive integer | Worker limit for gripper fitting. |
-| `max_head_fitting_workers` | positive integer | Worker limit for head fitting. |
+| `max_joint_fitting_workers` | positive integer | Reserved worker setting; the current batch implementation does not create a joint-fitting executor. |
+| `max_gripper_fitting_workers` | positive integer | Reserved worker setting; the current batch implementation does not create a gripper-fitting executor. |
+| `max_head_fitting_workers` | positive integer | Reserved worker setting; the current batch implementation does not create a head-fitting executor. |
 | `joint_dim` | non-negative integer | Number of dual-arm action dimensions processed by this stage. |
 | `gripper_dim` | non-negative integer | Number of gripper action dimensions processed by this stage. |
 | `head_dim` | non-negative integer | Number of head action dimensions processed by this stage. |
@@ -88,7 +86,7 @@ These dimensions must match the selected robot's action layout and the model out
 | Key | Type / valid values | Meaning |
 | --- | --- | --- |
 | `history_frame` | boolean | Include a historical observation frame in addition to the current frame when the model input supports it. |
-| `preprocess.method` | `resize` or `none` | Image preprocessing method. |
+| `preprocess.method` | string | Name of the preprocessing function resolved from `client.utils.misc`; `none` disables preprocessing. |
 | `preprocess.keep_ratio` | boolean | Preserve aspect ratio while resizing. |
 | `preprocess.height` | positive integer, pixels | Target image height for preprocessing. |
 | `preprocess.width` | positive integer, pixels | Target image width for preprocessing. |
@@ -138,7 +136,7 @@ These dimensions must match the selected robot's action layout and the model out
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `switch` | boolean | Master recording switch. The `--record` option enables it. |
+| `switch` | boolean | Master recording switch. It is read from the client configuration; the current `run_web_client.py` entry point has no `--record` option. |
 | `auto` | boolean | Enable automatic recording behavior. |
 | `save_dir` | project-relative path | Root directory for recorded data. |
 | `is_record_episode` | runtime boolean | Whether episode recording is active. |

@@ -2,8 +2,6 @@
 
 [English Version](configuration.md)
 
-本文档释义 `conf/` 目录定义的公开配置接口。Python 配置工厂是配置的唯一事实来源；`default_conf.yaml` 是主要供 Web 客户端持久化和加载的客户端配置快照，并不替代服务端模型配置。
-
 ## 配置来源与优先级
 
 | 启动入口 | 配置加载顺序 |
@@ -48,11 +46,11 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `filter_window_size` | 非负整数 | 夹爪动作滤波半窗口，实际窗口长度为 $2n+1$。 |
 | `min_gripper_action_threshold` | 数值 | 小于此阈值的夹爪动作视为完全打开（`0.0`）。 |
 | `max_gripper_action_threshold` | 数值 | 大于此阈值的夹爪动作视为完全闭合（`1.0`）。 |
-| `fitting_num_samples` | 正整数 | 生成拟合轨迹时使用的采样数量。 |
+| `fitting_num_samples` | 正整数 | 预留的轨迹采样参数；当前实现实际使用由控制周期生成的时间网格。 |
 | `fitting_deg` | 非负整数 | 轨迹拟合的多项式阶数。 |
-| `max_joint_fitting_workers` | 正整数 | 双臂关节拟合的最大工作线程数。 |
-| `max_gripper_fitting_workers` | 正整数 | 夹爪拟合的最大工作线程数。 |
-| `max_head_fitting_workers` | 正整数 | 头部拟合的最大工作线程数。 |
+| `max_joint_fitting_workers` | 正整数 | 预留的工作线程参数；当前批量实现不会创建关节拟合执行器。 |
+| `max_gripper_fitting_workers` | 正整数 | 预留的工作线程参数；当前批量实现不会创建夹爪拟合执行器。 |
+| `max_head_fitting_workers` | 正整数 | 预留的工作线程参数；当前批量实现不会创建头部拟合执行器。 |
 | `joint_dim` | 非负整数 | 本阶段处理的双臂动作维度数。 |
 | `gripper_dim` | 非负整数 | 本阶段处理的夹爪动作维度数。 |
 | `head_dim` | 非负整数 | 本阶段处理的头部动作维度数。 |
@@ -88,7 +86,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | 字段 | 类型 / 可选值 | 含义 |
 | --- | --- | --- |
 | `history_frame` | 布尔值 | 模型输入支持时，除当前帧外再使用一帧历史观测。 |
-| `preprocess.method` | `resize` 或 `none` | 图像预处理方法。 |
+| `preprocess.method` | 字符串 | 从 `client.utils.misc` 动态解析的预处理函数名；`none` 表示关闭预处理。 |
 | `preprocess.keep_ratio` | 布尔值 | 缩放时是否保持原始宽高比。 |
 | `preprocess.height` | 正整数，像素 | 预处理后的目标图像高度。 |
 | `preprocess.width` | 正整数，像素 | 预处理后的目标图像宽度。 |
@@ -138,7 +136,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 
 | 字段 | 类型 | 含义 |
 | --- | --- | --- |
-| `switch` | 布尔值 | 记录总开关；`--record` 会将其开启。 |
+| `switch` | 布尔值 | 记录总开关，从客户端配置读取；当前 `run_web_client.py` 入口没有 `--record` 参数。 |
 | `auto` | 布尔值 | 是否启用自动记录行为。 |
 | `save_dir` | 相对项目根目录的路径 | 记录数据的根目录。 |
 | `is_record_episode` | 运行时布尔值 | 是否正在记录 episode。 |
