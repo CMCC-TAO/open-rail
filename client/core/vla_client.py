@@ -391,6 +391,12 @@ class VLAClient():
             if observations is not None:
                 self._raw_observe_queue.put(observations)
 
+                if self.camera_shape_dict is None:
+                    cam_items = [(key, value) for key, value in observations.items() if 'cam.' in key]
+                    self.camera_shape_dict = {key: img.shape for key, img in cam_items}
+                    self.shared_memory_manager.init_pool(self.camera_shape_dict)
+                self.shared_memory_manager.encode_observation(observations)
+
     def _process_observe_thread_fun(self):
         """Observation consumer thread.
 
@@ -409,7 +415,7 @@ class VLAClient():
             try:
                 data, record_data = self._process_data(observations)
                 self.realtime_data_manager.add_observe_data(data)
-                record_data = self.shared_memory_manager.encode_observation(record_data)
+                # record_data = self.shared_memory_manager.encode_observation(record_data)
 
                 if self.config.record.switch:
                     runtime_config = {
@@ -763,9 +769,9 @@ class VLAClient():
                 raw_imgs[key] = raw_img
                 encoded_imgs[key] = encoded_img
 
-        if self.camera_shape_dict is None and raw_imgs:
-            self.camera_shape_dict = {key: img.shape for key, img in raw_imgs.items()}
-            self.shared_memory_manager.init_pool(self.camera_shape_dict)
+        # if self.camera_shape_dict is None and raw_imgs:
+        #     self.camera_shape_dict = {key: img.shape for key, img in raw_imgs.items()}
+        #     self.shared_memory_manager.init_pool(self.camera_shape_dict)
 
         self.image_process_time = self.image_process_time * 0.8 + (time.perf_counter() - start_time) * 1000 * 0.2
         self.visualize_server.update_image_data(encoded_imgs)
