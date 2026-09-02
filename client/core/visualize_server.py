@@ -24,7 +24,7 @@ class VisualizeServer:
         self.running = False
 
         # Data storage
-        self.latest_imgs: Optional[Dict] = None
+        self.latest_imgs_snapshot: Optional[tuple] = None
         self.latest_imgs_seq = 0
         self.sent_imgs_seq = -1
         self.data_lock = threading.Lock()
@@ -52,9 +52,8 @@ class VisualizeServer:
         Args:
             imgs (Dict): Image data dict, key is camera identifier, value is image array.
         """
-        with self.data_lock:
-            self.latest_imgs = imgs.copy()
-            self.latest_imgs_seq += 1
+        self.latest_imgs_seq += 1
+        self.latest_imgs_snapshot = (self.latest_imgs_seq, imgs)
 
     # def update_chart_data(self, data: List[Dict]):
     #     """Update chart data.
@@ -257,12 +256,13 @@ class VisualizeServer:
         disconnected_clients = set()
 
         # Snapshot latest images; skip if no new frame since last send.
-        with self.data_lock:
-            if not self.latest_imgs or self.latest_imgs_seq == self.sent_imgs_seq:
-                return
-            # imgs = self.latest_imgs.copy()
-            imgs = self.latest_imgs
-            img_seq = self.latest_imgs_seq
+        if not self.latest_imgs_snapshot:
+            return
+        # imgs = self.latest_imgs.copy()
+        # imgs = self.latest_imgs
+        img_seq, imgs = self.latest_imgs_snapshot
+        if img_seq == self.sent_imgs_seq:
+            return
 
         camera_open = self._get_camera_open_map()
 
@@ -300,8 +300,7 @@ class VisualizeServer:
             except Exception as e:
                 self.logger.warning("Failed to process camera data for key '%s': %s", camera_key, e)
 
-        with self.data_lock:
-            self.sent_imgs_seq = max(self.sent_imgs_seq, img_seq)
+        self.sent_imgs_seq = img_seq
 
         for client in disconnected_clients:
             await self.unregister_client(client)
@@ -352,7 +351,7 @@ class VisualizeServer:
                     'type': 'status',
                     'data': {
                         'connected_clients': len(self.clients),
-                        'has_image_data': self.latest_imgs is not None,
+                        'has_image_data': self.latest_imgs_snapshot is not None,
                         'chart_queue_size': len(self.data_send_queue)
                     }
                 }
