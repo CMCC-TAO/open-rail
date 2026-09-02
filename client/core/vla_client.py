@@ -114,7 +114,7 @@ class VLAClient():
         self.process_observe_thread = threading.Thread(target=self._process_observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
-        self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
+        # self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
 
         self.show_thread_lock = threading.Lock()
 
@@ -134,6 +134,7 @@ class VLAClient():
         self.current_prob_progress = 0.0
         # self.info_obs, self.info_act = {}, {}
         self.camera_shape_dict = None
+        self.control_thread_timer.start()
         self.logger.info('VLAClient initialized.')
 
     ######################### VLAClient APIs #########################
@@ -182,7 +183,7 @@ class VLAClient():
     
     def set_control_period(self, period) -> None:
         self.control_thread_timer.set_interval(period)
-        self.visualize_thread_timer.set_interval(period)
+        # self.visualize_thread_timer.set_interval(period)
     
     def set_observe_period(self, speed) -> None:
         self.observe_period = 1.0 / speed / self.config.controller.raw_fps
@@ -195,12 +196,12 @@ class VLAClient():
 
     def start_visualize(self):
         self.visualize_server.start_server()
-        if not self.visualize_thread_timer.is_alive():
-            self.visualize_thread_timer.start()
+        # if not self.visualize_thread_timer.is_alive():
+        #     self.visualize_thread_timer.start()
     def stop_visualize(self):
         self.visualize_server.stop_server()
-        if self.visualize_thread_timer.is_alive():
-            self.visualize_thread_timer.stop(timeout=1.0)
+        # if self.visualize_thread_timer.is_alive():
+        #     self.visualize_thread_timer.stop(timeout=1.0)
 
     def start(self):
         """Start the VLA client and all associated threads.
@@ -311,8 +312,8 @@ class VLAClient():
         # Stop and join timer threads
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
-        if self.visualize_thread_timer.is_alive():
-            self.visualize_thread_timer.stop(timeout=1.0)
+        # if self.visualize_thread_timer.is_alive():
+        #     self.visualize_thread_timer.stop(timeout=1.0)
         
         self._clear_raw_observe_queue()
         self._img_executor.shutdown(wait=False)
@@ -447,46 +448,56 @@ class VLAClient():
             # symbol = '=' * 10
     def _control_thread_fun(self):
         if not self.is_control_thread_running:
-            return
+            current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
+            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
+            self.visualize_server.update_chart_data(
+                action_fitted=action_fitted,
+                vel_fitted=vel_fitted,
+                acc_fitted=acc_fitted,
+                action_raw=action_raw,
+                current_state=current_state,
+                observe_period=self.observe_period / 1000,
+                control_period=self.config.controller.period / 1000
+                )
+        else:
+            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
 
-        action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
+            if action_fitted is not None:
+                try:
+                    self.robot.control_robot(action_fitted)
+                except Exception as exc:
+                    self._stop_control_thread_on_error()
+                    self.logger.error("Robot control failed: %s", exc)
+                    raise
+                # with self.show_thread_lock:
+                    # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
+                
+                if self.config.record.switch:
+                    self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
+                
+                # with self.show_thread_lock:
+                #     self.info_act['action'] = action_fitted.shape
 
-        if action_fitted is not None:
-            try:
-                self.robot.control_robot(action_fitted)
-            except Exception as exc:
-                self._stop_control_thread_on_error()
-                self.logger.error("Robot control failed: %s", exc)
-                raise
-            # with self.show_thread_lock:
-                # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
-            
-            if self.config.record.switch:
-                self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
-            
-            # with self.show_thread_lock:
-            #     self.info_act['action'] = action_fitted.shape
-
-        # Only use alignment processing if prob_progress array length > 1
-        prob_progress = self.realtime_data_manager.get_prob_progress()
-        if prob_progress is not None:
-            with self.show_thread_lock:
-                self.current_prob_progress = prob_progress
-            # print(f"current prob_progress: {prob_progress}")
-            if self.config.language.auto_mode == True:
-                # Automatically switch language instruction based on prob_progress changes
-                self.task_language_manager.add_task_progress(progress=prob_progress)
-                self.task_language_manager.try_advance_subtask()
-        current_state = getattr(self.robot, 'current_state', None)
-        self.visualize_server.update_chart_data(
-            action_fitted=action_fitted,
-            vel_fitted=vel_fitted,
-            acc_fitted=acc_fitted,
-            action_raw=action_raw,
-            current_state=current_state,
-            observe_period=self.observe_period / 1000,
-            control_period=self.config.controller.period / 1000
-            )
+            # Only use alignment processing if prob_progress array length > 1
+            prob_progress = self.realtime_data_manager.get_prob_progress()
+            if prob_progress is not None:
+                with self.show_thread_lock:
+                    self.current_prob_progress = prob_progress
+                # print(f"current prob_progress: {prob_progress}")
+                if self.config.language.auto_mode == True:
+                    # Automatically switch language instruction based on prob_progress changes
+                    self.task_language_manager.add_task_progress(progress=prob_progress)
+                    self.task_language_manager.try_advance_subtask()
+            current_state = getattr(self.robot, 'current_state', None)
+            self.visualize_server.update_chart_data(
+                action_fitted=action_fitted,
+                vel_fitted=vel_fitted,
+                acc_fitted=acc_fitted,
+                action_raw=action_raw,
+                current_state=current_state,
+                observe_period=self.observe_period / 1000,
+                control_period=self.config.controller.period / 1000
+                )
 
     def _visualize_thread_fun(self):
         # Send state data to visualization server for live plotting when control thread is not running
