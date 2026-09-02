@@ -19,6 +19,7 @@ from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.core.visualize_server import VisualizeServer
 from client.core.data_record_manager import DataRecordManager
+from client.core.shared_memory_manager import SharedMemoryManager
 from client.robots.base_robot import RobotBase
 
 
@@ -99,6 +100,7 @@ class VLAClient():
         self.robot = robot
         self.intra_chunk_smoother.set_action_layout(action_layout=self.robot.config.action_layout)
         # Initialize the dataset writer with the provided recording configuration
+        self.shared_memory_manager = SharedMemoryManager()
         self.data_record_manager = DataRecordManager(record_config=self.config.record)
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
@@ -319,6 +321,7 @@ class VLAClient():
         self._img_executor.shutdown(wait=False)
 
         self.data_record_manager.close()
+        self.shared_memory_manager.close()
         self.vla_zmq.close()
         self.robot.close()
         self.visualize_server.stop_server()
@@ -406,6 +409,7 @@ class VLAClient():
             try:
                 data, record_data = self._process_data(observations)
                 self.realtime_data_manager.add_observe_data(data)
+                record_data = self.shared_memory_manager.encode_observation(record_data)
 
                 if self.config.record.switch:
                     runtime_config = {
@@ -761,6 +765,7 @@ class VLAClient():
 
         if self.camera_shape_dict is None and raw_imgs:
             self.camera_shape_dict = {key: img.shape for key, img in raw_imgs.items()}
+            self.shared_memory_manager.init_pool(self.camera_shape_dict)
 
         self.image_process_time = self.image_process_time * 0.8 + (time.perf_counter() - start_time) * 1000 * 0.2
         self.visualize_server.update_image_data(encoded_imgs)
