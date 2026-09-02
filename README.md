@@ -1,243 +1,264 @@
-# VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots
+<div align="center">
 
-## 1. Framework Overview
+# OPEN-RAIL
 
-This is a comprehensive Vision-Language-Action (VLA) inference framework designed for robotic manipulation tasks. The framework provides a client-server architecture that enables real-time robot control using various VLA models including ACT, GR00T, RDT, SmolVLA, and GO1.
+**A Universal Substrate for Asynchronously Linking VLA Model Inference and Robot Execution**
 
-### 1.1 Architecture
+[![Paper](https://img.shields.io/badge/Paper-arXiv-red)](https://arxiv.org/abs/2512.24673)
+[![License](https://img.shields.io/badge/License-Apache--2.0-green)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue)](pyproject.toml)
 
-The framework uses a client-server architecture with ZMQ for communication:
+[English](README.md) | [中文](README.zh-CN.md)
 
-![framework](data/media/framework.png)
+</div>
 
-### 1.2 Framework Structure
+<video controls width="100%" preload="metadata">
+  <source src="data/media/OPEN-RAIL_demo.mp4" type="video/mp4">
+  <a href="data/media/OPEN-RAIL_demo.mp4">Play the OPEN-RAIL demo video</a>
+</video>
 
-```
-.
-├── client/                 # Client-side components
-│   ├── core/              # Core client functionality
-│   ├── robots/            # Robot implementations
-│   └── utils/             # Utility functions
-├── conf/                  # Configuration files
-├── data/                  # Data storage
-├── scripts/               # Utility scripts
-├── server/                # Server-side components
-│   ├── core/              # Core server functionality
-│   └── models/            # VLA model implementations
-├── run_client.py          # Client entry point
-├── run_server.py          # Server entry point
-└── README.md              # This file
-```
+VLA models keep multiplying, and real-robot deployment has become the accepted answer in embodied AI. What remains unsolved is the engineering stretch between a model checkpoint and a robot: motion that stutters and jitters, long runs that drop data, execution data that never makes it back into model iteration.
 
-## 2. Framework Usage
-### 2.1 Requirements
-- Python: >= 3.10
-- Core Dependencies:
+**OPEN-RAIL is that stretch** — a lightweight server-client framework that connects any VLA model to any adapted robot, and closes the loop of **deploy** (run inference on the real robot) → **collect** (capture data as it runs) → **evaluate** (feed data back into iteration) inside every single run.
 
-| Package | Version | Description |
-|---------|---------|-------------|
-| diffusers | >=0.32.2 | Diffusion models for image and audio generation |
-| einops | >=0.8.2 | Flexible and powerful tensor operations |
-| evaluate | >=0.4.6 | Hugging Face library for evaluating models |
-| huggingface_hub | >=0.29.3 | Client library to interact with the Hugging Face Hub |
-| ipython | >=8.12.3 | Enhanced Python interactive shell |
-| lerobot | >=0.5.1 | Machine learning for robotics |
-| matplotlib | >=3.10.9 | Plotting and visualization |
-| ml_collections | >=1.1.0 | Configuration library for ML experiments |
-| numba | >=0.61.0 | JIT compiler for Python code |
-| numpy | >=2.4.4 | Numerical operations |
-| omegaconf | >=2.3.0 | Configuration system based on YAML |
-| opencv_python | >=4.11.0.86 | Computer vision library |
-| packaging | >=26.2 | Core utilities for Python packages |
-| pandas | >=3.0.2 | Data processing |
-| Pillow | >=12.2.0 | Python Imaging Library |
-| pyarrow | >=18.1.0 | Python library for Apache Arrow |
-| PyQt5 | >=5.15.11 | Python bindings for the Qt application framework |
-| PyQt5_sip | >=12.13.0 | SIP module for PyQt5 |
-| pyqtgraph | >=0.14.0 | Scientific graphics and GUI library |
-| PyYAML | >=6.0.2 / 6.0.3 | YAML parser and emitter |
-| rich | >=15.0.0 | Library for rich text and beautiful formatting |
-| ruckig | >=0.17.3 | Instantaneous motion generation for robots |
-| scipy | >=1.17.1 | Scientific computing and technical computing |
-| seaborn | >=0.13.2 | Statistical data visualization |
-| setuptools | >=69.0.2 | Library for packaging Python projects |
-| torch | >=2.2.2 | Model training & inference |
-| torchvision | >=0.17.2 | Computer vision models and datasets |
-| tyro | >=1.0.13 | CLI parsing library |
-| websockets | >=16.0 | Library for building WebSocket servers and clients |
-| zarr | >=3.1.6 | Cloud-optimized chunked array storage |
+Today it supports **3 heterogeneous robots** (plus a LeRobot simulation backend) and **10 mainstream VLA models**, with joint acceleration std dropping from **10+ to 0.1 rad/s²**.
 
-Install all dependencies via pip:
+- 🤖 **VLA researchers** — a ready-to-use real-robot deployment environment. Focus on model innovation, not on building pipelines
+- 🔧 **Robotics engineers** — a toolkit for fast algorithm validation, without reimplementing drivers and plumbing
+- 🎓 **Startups and university labs** — lower the cost of standing up real-robot experiments and shorten the path from simulation to hardware
+
+---
+
+## Features
+
+| Pain point | What OPEN-RAIL does | Effect |
+|---|---|---|
+| Inference can't keep up with the control cycle; motion stutters and jitters | Three-thread asynchronous pipeline (observation / inference / control) + two-level online smoothing (intra-/inter-chunk) | Joint acceleration std **10+ → 0.1 rad/s²**; a **30–50×** frequency gap eliminated |
+| Robot-side compute can't run large models | Server-client split with non-overlapping dependency trees | Embedded hardware can drive large models; switch device / edge / cloud with **zero code change** |
+| Every new robot means redoing the interface | Lightweight hardware abstraction layer `RobotBase` + unified `action_layout` indexing | **3 heterogeneous robots** adapted; new robot onboarding **from weeks to hours** |
+| Every new model means rewriting the pipeline | Unified model integration contract + automatic server-side routing | **10 models** supported; new models in **≤ 100 lines** |
+| Inference and collection are disjoint; data never reaches training | Collection built into every inference run; LeRobot-style Parquet with appendable episodes | Usable training data from every run, **at zero extra cost** |
+| When inference drifts, there's no way to correct it in time | Three modes (pure inference / pure teleop / hybrid) + pause–intervene–resume with state pre-alignment | Every human correction is a **high-quality demonstration**, no post-processing |
+
+Smoothing happens at the **framework level** — the model is never modified and no training augmentation is required, so diffusion, flow-matching, and autoregressive architectures are all supported.
+
+<!-- Note: the repository does not include a reproducible report for the robot, task, model, sample size, and hardware behind these smoothing figures. -->
+
+## Quick Start
+
+### 1. Install
+
 ```bash
-pip install -r requirements.txt
+git clone <repository-url>
+cd OPEN-RAIL
+conda create -y -n open-rail python=3.10 && conda activate open-rail
+pip install -e .
 ```
 
-### 2.2 Configuration
+For compatibility with older workflows, `pip install -r requirements.txt` also works. `pyproject.toml` is the authoritative source for runtime dependencies and console scripts; where the two conflict, it wins.
 
-All framework configuration items are defined in the `conf/` directory. Each component has its own configuration file:
+### 2. Start the server
 
-- `client_conf.py` - Client configuration
-- `server_conf.py` - Server configuration  
-- `models_conf.py` - Model configuration
-- `robots_conf.py` - Robot configuration
-- `zmq_conf.py` - ZMQ communication configuration
+The server hosts the VLA model runtime and exposes an inference endpoint over ZMQ.
 
-### 2.3 Client
-
-The client is responsible for:
-- Obtaining observation data and robot state from the robot
-- Sending data to the server
-- Receiving inference results from the server
-- Sending control commands to the robot
-
-#### Supported Robots
-
-Currently supported robots:
-
-- **A2D-Gripper Robot**: A2D humanoid robot - [Documentation](client/robots/a2d/README.md)
-- **A2D-Hand Robot**: A2D humanoid robot
-- **Ti5-DualArm Robot**: A2D humanoid robot
-- **Mock Robot**: Simulation robot for testing
-
-#### Running the Client
-
-1. **Run Client**
-   ```bash
-   python run_client.py
-   ```
-
-2. **Client Command Line Options**
-   ```bash
-   python run_client.py --help
-   ```
-
-### 2.4 Server
-
-The server handles VLA model inference and provides results to clients.
-
-#### Supported Models
-
-- **ACT**
-- **GR00T N1**
-- **GR00T N1.5** - [Documentation](server/models/gr00t/README.md)
-- **RDT**
-- **SmolVLA**
-- **GO1**
-- **DualArmVLA**
-
-#### Running the Server
-
-1. **Setup Model Environment**
-   ```bash
-   # For GR00T models
-   conda activate gr00t
-   
-   # For other models, use appropriate environment
-   ```
-
-2. **Run Server**
-   ```bash
-   python run_server.py
-   ```
-
-3. **Server Command Line Options**
-   ```bash
-   python run_server.py --help
-   ```
-   
-   Available options:
-   - `--model_type`: Specify model type (act, gr00t_n1, gr00t_n1_5, rdt, smolvla)
-   - `--model_path`: Path to model checkpoint
-
-
-### 2.5 Auxiliary Tools
-
-#### 2.5.1 Web-based visualization
-
-   When the following parameter is set as:
-
-   ```python
-   config.show_action_cams_qt = False  # Set this parameter in client_conf.py
-   ``` 
-   the web interface is used for visualization by default. You can directly access localhost:8080 to view the real-time data. The web interface is shown below:
-
-   ![vis_demo](data/media/vis_demo.gif)
-   <video src="data/media/vis_demo.mp4" controls></video>
-
-#### 2.5.2 QT-based visualization
- To enable action-camera visualization based on QT, first set:
-
-   ```python
-   config.show_action_cams = True  # Set this parameter in client_conf.py
-   ``` 
-
-   Then run the following components in order:
-   ```bash
-   # 1. Open a terminal, activate the virtual environment, and then run the following command to launch the VLA inference server:
-   python run_server.py [--mode_type] [--model_path]
-
-   # 2. Open a new terminal, activate the virtual environment, and then run the following command to launch the visualization server:
-   python client/utils/vis_action_camera.py
-
-   # 3. Open a new terminal, activate the virtual environment, activate robot service, and then run the following command to launch the VLA client:
-   python run_client.py
-   ```
-   After launching all components, you will see an action-camera real-time trajectory interface similar to the following:
-
-   ![vis_action_cams](data/media/vis_action_cams.png)
-
-In the action curves figure:
-- **[Blue]** and **[Red]** trajectories represent the raw joint actions generated by the large VLA model.
-- **[Yellow]** and **[Green]** trajectories represent the optimized joint actions produced by our VLA inference framework.
-
-**Note: There is **[a dropdown menu]** located above the action trajectory plot, which allows you to select the joint group (One joint for each of the left and right arms) to visualize.**
-
-### 2.6 Action Chunk Transition Strategy
-For asynchronous inference, we designed multiple action chunk transition methods to smoothly move from the $n$-th action chunk to the $(n+1)$-th action chunk. You can set the following parameter to select different strategies:
-``` python
-# Set this parameter in client_conf.py
-config.chunk_trans_mode = 'search_action'  # chunk transition mode, choices = ('search_action', 'smooth_velocity')
+```bash
+PYTHONPATH=<project-source-dir>:$PYTHONPATH python run_server.py \
+  --model_type <model_type> --model_path <checkpoint_path>
 ```
 
-#### 2.6.1 'search_action' mode
-This strategy searches the candidate action in the new action chunk that provides the smoothest transition from the current action, where “most suitable” means matching the current velocity directions across active joints. The resulting action trajectory exhibits significant gaps, as visualized below:
+### 3. Start the web client
 
-![search_action](data/media/search_action.png)
+```bash
+python run_web_client.py --host 0.0.0.0 --port 9000 --conf default_conf.yaml
+```
 
-#### 2.6.2 'poly' mode
-This strategy bridges the current action and the new action chunk using a 5-order polynomial, taking into account constraints on position, velocity, and angular velocity. The resulting action trajectory exhibits no obvious gaps, although some derivative values at the transition points show relatively large changes, as visualized below:
+### 4. Verify
 
-![poly](data/media/poly.png)
+Open http://localhost:9000 in your browser and drive the robot from the UI.
 
-#### 2.6.3 'smooth_velocity' mode
-This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence. The resulting action trajectory is very smooth, as visualized below:
+| Argument | Description | Default |
+| --- | --- | --- |
+| `--host` | Bind address | `0.0.0.0` |
+| `--port` | HTTP / UI port | `9000` |
+| `--conf` | Config file under `conf/` | `default_conf.yaml` |
+| `--model_type` | Registered model adapter, e.g. `tao` | — |
+| `--model_path` | Path to the model checkpoint directory | — |
 
-![smooth_velocity](data/media/smooth_velocity.png)
+<details>
+<summary><b>Full example</b></summary>
 
-**Note: Under the same parameter settings, the robot's operation speed using this strategy is slower than the previous two strategies. You can refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/manage/eyyw2n63gaugbk36) for acceleration, or contact the developers of this strategy directly for assistance.**
+```bash
+PYTHONPATH=/home/vlamaster2/workspace/projects/TAO/src:$PYTHONPATH \
+  python run_server.py --model_type tao \
+  --model_path /home/vlamaster2/workspace/checkpoints/porridge/tao_v0_20260616_163634_n8_b64_s30000/checkpoint-30000
+```
 
-## 3. Additional Resources
+</details>
 
-### 3.1 Scripts
+<!-- Additional demo media can be added after the test conditions are documented. -->
 
-Utility scripts are available in the `scripts/` directory:
+## Supported Robots
 
-- **Data Visualization**: [LeRobot Data Viewer](scripts/show_lerobot_data/README.md)
-- **Evaluation Tools**: [VLA Evaluation](scripts/vla_eval/README.md)
-- **Robot Reset**: [A2D Robot Reset](scripts/reset_robot/README.md)
+| Robot | Type | Status | Adapter |
+|---|---|---|---|
+| A2D | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/a2d/` |
+| Ti5 T170C | Bimanual wheeled robot (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
+| Navi WA2 (Zhejiang Humanoid) | Folding wheel-legged humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
+| Mock | LeRobot-based simulation backend | ✅ Adapted | `client/robots/mock/` |
+| _Your robot_ | — | 🔜 Planned | [Integration guide](docs/guides/add-new-robot.md) |
 
-## 4. Citation
+## Supported Models
 
-If you find this work useful in your research, please consider citing our paper:
+| Model family | Members | Status |
+|---|---|---|
+| ACT | ACT | ✅ Supported |
+| GR00T N1 series | GR00T N1, N1.5, N1.6 | ✅ Supported |
+| RDT | RDT-1B | ✅ Supported |
+| SmolVLA | SmolVLA | ✅ Supported |
+| GO1 | AgiBot GO-1 | ✅ Supported |
+| π series | Pi0, Pi0.5 | ✅ Supported |
+| TAO | TAO | ✅ Supported |
+| _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-vla-model.md) |
+
+**10 models** across 7 families are supported today; see `server/models/` for the full list.
+
+## Data Collection
+
+"Inference is collection" is the dividing line between OPEN-RAIL and approaches that separate inference from data capture — every run produces data that flows straight into the training pipeline, with no extra collection pass.
+
+- Data is written by the client-side data manager in parallel with the inference path, never affecting control frequency
+- **LeRobot-style Parquet** with appendable episodes, suited to long-horizon runs and incremental training
+- Segments produced by human intervention are equally high-quality demonstrations, with no post-processing
+
+```text
+data/
+└── recording/<task_name>_<YYYYMMDD>/
+  ├── data/chunk-000/episode_000000.parquet
+  ├── videos/chunk-000/<video_key>/episode_000000.mp4
+  ├── meta/episodes.jsonl
+  └── eval/
+    ├── eval_log.json
+    └── eval_log.csv
+```
+
+Evaluation logs preserve raw statistics in JSON and aggregate timing fields in CSV. Evaluation tooling lives in `scripts/`.
+
+![Data collection and teleoperation integration](data/media/data-teleop.png)
+
+The repository does not include a downloadable public dataset. Prepare your own LeRobot-format dataset for the Mock backend, and do not commit large checkpoints, raw recordings, or generated logs.
+
+## Architecture
+
+![OPEN-RAIL Architecture](data/media/architecture.png)
+
+OPEN-RAIL adopts a **server-client distributed architecture** in which the inference path and the visualization path are decoupled and never interfere with each other. The **Server** owns model inference. The **Client** sits on the robot side, owns observation collection, task execution, command dispatch, and data recording, and connects robot configuration to model inference in a single workflow.
+
+Because the Server owns the model environment and the Client owns the robot environment exclusively, the two dependency trees never collide — the CUDA/PyTorch versions the model wants no longer fight the ROS versions the robot drivers want. This is also what makes device/edge/cloud switching a zero-code-change operation: moving the deployment only changes the Server's network address.
+
+```text
+.
+├── client/                 # Client runtime, robot adapters, recording, and utilities
+│   ├── core/               # Observation, inference, control, transport, visualization, and recording
+│   ├── robots/             # RobotBase and robot/simulation adapters
+│   └── utils/              # Client utilities and visualization tools
+├── server/                 # Model runtime and inference service
+│   ├── core/               # VLAServer, ZMQServer, and visualization service
+│   ├── models/             # VLA model adapters and model-specific implementations
+│   └── utils/              # Server utilities
+├── conf/                   # Client, server, robot, and recording configuration
+├── web_client/             # Web UI, HTTP API, and WebSocket service
+├── visual/                 # Standalone visualization assets and data push service
+├── extra/                  # Dispatch and communication helpers
+├── scripts/                # CUDA, dataset display, and evaluation scripts
+├── docs/                   # Getting started, architecture, configuration, troubleshooting, and guides
+│   └── guides/             # Robot and VLA model integration guides
+├── data/                   # Local data, media assets, and recording output
+│   ├── media/              # Demo videos, architecture diagrams, and illustrations
+│   └── README.md           # Data directory notes
+├── test/                   # Tests and experiments
+├── run_server.py           # Server entry point
+├── run_web_client.py       # Web client entry point
+├── pyproject.toml          # Package metadata and runtime dependencies
+├── requirements.txt        # Compatibility dependency list
+├── README.md               # English documentation
+├── README.zh-CN.md         # Chinese documentation
+├── LICENSE                 # Apache License 2.0
+└── CITATION.cff            # Citation metadata
+```
+
+### Core mechanism: the asynchronous pipeline
+
+Asynchrony here is more than "spawn a thread." The frequency gap between VLA inference and control is orders of magnitude wide: a model needs hundreds of milliseconds to emit one action chunk, while the control loop runs at tens to hundreds of hertz. In a synchronous design, the control cycle's latency floor is the model latency — the root cause of stutter and jitter.
+
+OPEN-RAIL removes that gap with **three decoupled pipelines**:
+
+![Three-thread asynchronous pipeline](data/media/promo-thumb.png)
+
+Each thread runs at its own pace, and none of them wait:
+
+1. **Observation thread** captures camera and proprioceptive data at sensor frequency and streams it upstream to the server without waiting for inference to return
+2. **Inference thread** emits action chunks at the model's own pace; the result of one inference pass is reused across many subsequent control cycles
+3. **Control thread** executes at control frequency: it interpolates the chunk it already holds, folds in new chunks online as they arrive, and never idles
+
+Once the frequency gap is absorbed, the residual jitter comes from the action chunks themselves — a chunk may be discontinuous internally, and the seam between two chunks can jump. OPEN-RAIL handles this with two levels of online smoothing:
+
+- **Intra-chunk smoothing** — removes discrete jumps inside a single chunk
+- **Inter-chunk smoothing** — removes discontinuities at the seam between adjacent chunks
+
+Implementation details (smoothing algorithms and windows, chunk merge policy, degradation policy on inference timeout, buffer structure and capacity) are documented in [docs/architecture.md](docs/architecture.md).
+
+## Documentation
+
+| Document | Description |
+| --- | --- |
+| [docs/getting-started.md](docs/getting-started.md) | Installation and first run |
+| [docs/architecture.md](docs/architecture.md) | Architecture deep dive and async pipeline internals |
+| [docs/configuration.md](docs/configuration.md) | Full configuration reference |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues and fixes |
+| [docs/guides/add-new-robot.md](docs/guides/add-new-robot.md) | How to add a robot adapter |
+| [docs/guides/add-new-vla-model.md](docs/guides/add-new-vla-model.md) | How to add a VLA model adapter |
+
+<!-- TODO: Add ROADMAP.md and ROADMAP.zh-CN.md when the project roadmap is published. -->
+
+## Contributing
+
+Contributions of robot adapters, model adapters, smoothing strategies, and documentation are welcome. Before opening a PR:
+
+1. Open an issue to discuss the change first (especially for new robot/model adapters)
+2. Follow the adapter conventions in `docs/guides/`
+3. Make sure new code does not break existing robot/model backends
+
+Development setup and checks:
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+python -m compileall client server conf web_client
+git diff --check
+```
+
+The repository currently does not configure a dedicated lint or formatting tool. Keep changes scoped, avoid committing checkpoints, recordings, logs, local configuration, or secrets, and document hardware/model prerequisites for adapter changes.
+
+## Citation
+
+OPEN-RAIL is published under the name **VLA-RAIL** in the following preprint. If you use this project in your research or product prototype, please cite:
 
 ```bibtex
 @misc{zhao2025vlarailrealtimeasynchronousinference,
-      title={VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots}, 
-      author={Yongsheng Zhao and Lei Zhao and Baoping Cheng and Gongxin Yao and Xuanzhang Wen and Han Gao},
-      year={2025},
-      eprint={2512.24673},
-      archivePrefix={arXiv},
-      primaryClass={cs.RO},
-      url={https://arxiv.org/abs/2512.24673}, 
+  title={VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots},
+  author={Yongsheng Zhao and Lei Zhao and Baoping Cheng and Gongxin Yao and Xuanzhang Wen and Han Gao},
+  year={2025},
+  eprint={2512.24673},
+  archivePrefix={arXiv},
+  primaryClass={cs.RO},
+  url={https://arxiv.org/abs/2512.24673}
 }
 ```
+
+## License
+
+This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+
+---
+
+**Inference ends where the real robot begins.** Star OPEN-RAIL, join the community, and let models, hardware, and scenarios move together.

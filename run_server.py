@@ -109,7 +109,7 @@ def override_config_with_args(config, args):
     
     return config
 
-if __name__ == "__main__":
+def main():
     """Main entry point for VLA Server
     
     This script initializes and runs the VLA server with the specified
@@ -172,3 +172,8 @@ if __name__ == "__main__":
             live.stop()
         vla_server.close()
         print("Server shutdown complete")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
