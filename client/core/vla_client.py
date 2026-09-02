@@ -100,7 +100,7 @@ class VLAClient():
         self.robot = robot
         self.intra_chunk_smoother.set_action_layout(action_layout=self.robot.config.action_layout)
         # Initialize the dataset writer with the provided recording configuration
-        self.shared_memory_manager = SharedMemoryManager()
+        self.shared_memory_manager = SharedMemoryManager(ring_size=30)
         self.data_record_manager = DataRecordManager(record_config=self.config.record)
         # Create visualization WebSocket server for live image and trajectory updates
         self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
@@ -398,6 +398,7 @@ class VLAClient():
                         self.shared_memory_manager.init_pool(self.camera_shape_dict)
                 encoded_observations = self.shared_memory_manager.encode_observation(observations)
                 self._raw_observe_queue.put(encoded_observations)
+                time.sleep(0.02)
 
     def _process_observe_thread_fun(self):
         """Observation consumer thread.
