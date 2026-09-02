@@ -418,11 +418,23 @@ class VLAClient():
                 decoded_observations = SharedMemoryManager.decode_observation(observations, self._raw_observe_shm_cache)
                 if decoded_observations is None:
                     continue
-                data, record_data = self._process_data(decoded_observations)
-                self.realtime_data_manager.add_observe_data(data)
+                infer_data = self._process_data(decoded_observations)
+                self.realtime_data_manager.add_observe_data(infer_data)
                 # record_data = self.shared_memory_manager.encode_observation(record_data)
 
                 if self.config.record.switch:
+                    record_data = {
+                        **infer_data,
+                        'obs': {
+                            **{
+                                camera_name: payload
+                                for camera_name, payload in observations.items()
+                                if str(camera_name).startswith('cam.')
+                            },
+                            'state': infer_data['obs']['state'],
+                            'language': infer_data['obs']['language'],
+                        },
+                    }
                     runtime_config = {
                         'mode': self.config.rdm.mode,
                         'wait_time': self.config.controller.wait_time,
@@ -746,7 +758,7 @@ class VLAClient():
         encode_result, img_encoded = cv2.imencode(ext, img_for_infer)
         if not encode_result:
             self.logger.warning(f"Image encoding failed for {key}.")
-        return key, value, img_encoded
+        return key, img_encoded
 
     def _process_image(self, frame):
         """Process multiple images and produce both encoded and raw outputs.
@@ -764,14 +776,14 @@ class VLAClient():
         cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
 
         encoded_imgs = {}
-        raw_imgs = {}
+        # raw_imgs = {}
         if cam_items:
             results_iter = self._img_executor.map(
                 lambda item: self._process_image_thread_fun(*item),
                 cam_items
             )
-            for key, raw_img, encoded_img in results_iter:
-                raw_imgs[key] = raw_img
+            for key, encoded_img in results_iter:
+                # raw_imgs[key] = raw_img
                 encoded_imgs[key] = encoded_img
 
         # if self.camera_shape_dict is None and raw_imgs:
@@ -780,7 +792,7 @@ class VLAClient():
 
         self.image_process_time = self.image_process_time * 0.8 + (time.perf_counter() - start_time) * 1000 * 0.2
         self.visualize_server.update_image_data(encoded_imgs)
-        return encoded_imgs, raw_imgs
+        return encoded_imgs
     def _parse_prob_progress(self, action_data):
         prob_progress = None
         if 'ext' in action_data and 'prob_progress' in action_data['ext']:
@@ -802,7 +814,7 @@ class VLAClient():
             dict: The processed data by encoding images and adding local timestamp.
         """
         loc_timestamp = time.perf_counter()
-        encoded_imgs, raw_imgs = self._process_image(frame)
+        encoded_imgs = self._process_image(frame)
 
         language = [self.task_language_manager.get_current_language()]
         obs_state = frame['obs.state']
@@ -818,17 +830,17 @@ class VLAClient():
             },
         }
 
-        record_data = {
-            'type': 'vla_obs',
-            'ref_timestamp': frame['ref_timestamp'],
-            'loc_timestamp': loc_timestamp,
-            'obs': {
-                **raw_imgs,
-                'state': obs_state,
-                'language': language,
-            },
-        }
-        return infer_data, record_data
+        # record_data = {
+        #     'type': 'vla_obs',
+        #     'ref_timestamp': frame['ref_timestamp'],
+        #     'loc_timestamp': loc_timestamp,
+        #     'obs': {
+        #         **raw_imgs,
+        #         'state': obs_state,
+        #         'language': language,
+        #     },
+        # }
+        return infer_data
 
     # @run_time_decorator
     def _process_action_chunk(self, action_raw:dict):
