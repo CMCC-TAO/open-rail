@@ -423,8 +423,9 @@ class VLAClient():
                 decoded_observations = SharedMemoryManager.decode_observation(observations, self._raw_observe_shm_cache)
                 if decoded_observations is None:
                     continue
-                infer_data = self._process_data(decoded_observations)
+                infer_data, encoded_imgs = self._process_data(decoded_observations)
                 self.realtime_data_manager.add_observe_data(infer_data)
+                self.visualize_server.update_image_data(encoded_imgs)
                 # record_data = self.shared_memory_manager.encode_observation(record_data)
 
                 if self.config.record.switch:
@@ -803,7 +804,6 @@ class VLAClient():
         #     self.shared_memory_manager.init_pool(self.camera_shape_dict)
 
         self.image_process_time = self.image_process_time * 0.8 + (time.perf_counter() - start_time) * 1000 * 0.2
-        self.visualize_server.update_image_data(encoded_imgs)
         return encoded_imgs
     def _parse_prob_progress(self, action_data):
         prob_progress = None
@@ -852,7 +852,7 @@ class VLAClient():
         #         'language': language,
         #     },
         # }
-        return infer_data
+        return infer_data, encoded_imgs
 
     # @run_time_decorator
     def _process_action_chunk(self, action_raw:dict):
