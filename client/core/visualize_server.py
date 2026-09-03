@@ -316,7 +316,7 @@ class VisualizeServer:
 
         with self.data_lock:
             data_to_send = self.data_send_list
-            # self.data_send_list = []
+            self.data_send_list = []
 
         if not data_to_send:
             return
