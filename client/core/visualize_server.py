@@ -114,7 +114,7 @@ class VisualizeServer:
         # TODO: use real velocity/acceleration
         # Velocity/acceleration for state (derived from state)
         with self.data_lock:
-            self.data_send_list = data_list
+            self.data_send_list.extend(data_list)
             if 'velocity' not in self._trajectory_type and 'acceleration' not in self._trajectory_type:
                 return
             state_vel = None
@@ -406,7 +406,8 @@ class VisualizeServer:
         while self.running:
             try:
                 await self.send_camera_data()
-                await self.send_chart_data()
+                if len(self.data_send_list) > 5:
+                    await self.send_chart_data()
                 await asyncio.sleep(1/self.config.updata_fps)
             except Exception as e:
                 self.logger.error("Data sender loop error: %s", e)
