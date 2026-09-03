@@ -480,7 +480,7 @@ class VLAClient():
             # symbol = '=' * 10
     def _control_thread_fun(self):
         if not self.is_control_thread_running:
-            if self.visualize_server.vis_global_step % 5 == 0:
+            if self.visualize_server.vis_global_step % 10 == 0:
                 current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
                 action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
                 self.visualize_server.update_chart_data(
@@ -524,7 +524,7 @@ class VLAClient():
                     self.task_language_manager.add_task_progress(progress=prob_progress)
                     self.task_language_manager.try_advance_subtask()
 
-            if self.visualize_server.vis_global_step % 5 == 0:
+            if self.visualize_server.vis_global_step % 10 == 0:
                 current_state = getattr(self.robot, 'current_state', None)
                 self.visualize_server.update_chart_data(
                     action_fitted=action_fitted,
