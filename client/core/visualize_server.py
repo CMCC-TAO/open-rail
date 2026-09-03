@@ -7,7 +7,6 @@ import time
 import threading
 import os
 import numpy as np
-from collections import deque
 from typing import Dict, Set, Optional
 from ml_collections import ConfigDict
 
@@ -29,8 +28,8 @@ class VisualizeServer:
         self.sent_imgs_seq = -1
         self.data_lock = threading.Lock()
 
-        # Data send queue (deque gives O(1) append/popleft; bounded by maxlen)
-        self.data_send_queue = deque(maxlen=1000)
+        # Data send queue
+        self.data_send_list = []
         self._trajectory_type = ['position'] # position, velocity, and acceleration， TODO: move this to config
 
         # Server instance
@@ -68,7 +67,7 @@ class VisualizeServer:
     #         for dt in data:
     #             timestamp = time.time()
     #             dt_with_ts = {**dt, 'timestamp': timestamp}
-    #             self.data_send_queue.append(dt_with_ts)
+    #             self.data_send_list.append(dt_with_ts)
 
     #         # Bounded automatically by deque(maxlen=1000).
 
@@ -83,36 +82,39 @@ class VisualizeServer:
         """
         timestamp = time.time()
         self.vis_global_step += 1
-        with self.data_lock:
+        data_list = []
+        # with self.data_lock:
             # dt_ctrl = self.config.controller.period / 1000.0
             # Position data
-            if action_fitted is not None:
-                self.data_send_queue.append({
-                    'tab': 'position',
-                    'type': 'action_fitted',
-                    'x': self.vis_global_step,
-                    'timestamp': timestamp,
-                    'joints_y': action_fitted.tolist()
-                })
-            if current_state is not None:
-                self.data_send_queue.append({
-                    'tab': 'position',
-                    'type': 'state',
-                    'x': self.vis_global_step,
-                    'timestamp': timestamp,
-                    'joints_y': current_state.tolist()
-                })
-            if action_raw is not None:
-                self.data_send_queue.append({
-                    'tab': 'position',
-                    'type': 'action_raw',
-                    'x': self.vis_global_step,
-                    'timestamp': timestamp,
-                    'joints_y': action_raw.tolist()
-                })
+        if action_fitted is not None:
+            data_list.append({
+                'tab': 'position',
+                'type': 'action_fitted',
+                'x': self.vis_global_step,
+                'timestamp': timestamp,
+                'joints_y': action_fitted.tolist()
+            })
+        if current_state is not None:
+            data_list.append({
+                'tab': 'position',
+                'type': 'state',
+                'x': self.vis_global_step,
+                'timestamp': timestamp,
+                'joints_y': current_state.tolist()
+            })
+        if action_raw is not None:
+            data_list.append({
+                'tab': 'position',
+                'type': 'action_raw',
+                'x': self.vis_global_step,
+                'timestamp': timestamp,
+                'joints_y': action_raw.tolist()
+            })
 
-            # TODO: use real velocity/acceleration
-            # Velocity/acceleration for state (derived from state)
+        # TODO: use real velocity/acceleration
+        # Velocity/acceleration for state (derived from state)
+        with self.data_lock:
+            self.data_send_list = data_list
             if 'velocity' not in self._trajectory_type and 'acceleration' not in self._trajectory_type:
                 return
             state_vel = None
@@ -128,14 +130,14 @@ class VisualizeServer:
                     else:
                         state_acc = (state_vel - self.vis_prev_state_vel) / control_period
 
-                self.data_send_queue.append({
+                self.data_send_list.append({
                     'tab': 'velocity',
                     'type': 'state',
                     'x': self.vis_global_step,
                     'timestamp': timestamp,
                     'joints_y': state_vel.tolist()
                 })
-                self.data_send_queue.append({
+                self.data_send_list.append({
                     'tab': 'acceleration',
                     'type': 'state',
                     'x': self.vis_global_step,
@@ -145,7 +147,7 @@ class VisualizeServer:
 
             # Velocity/acceleration for action (direct input)
             if vel_fitted is not None:
-                self.data_send_queue.append({
+                self.data_send_list.append({
                     'tab': 'velocity',
                     'type': 'action_fitted',
                     'x': self.vis_global_step,
@@ -153,7 +155,7 @@ class VisualizeServer:
                     'joints_y': vel_fitted.tolist()
                 })
             if acc_fitted is not None:
-                self.data_send_queue.append({
+                self.data_send_list.append({
                     'tab': 'acceleration',
                     'type': 'action_fitted',
                     'x': self.vis_global_step,
@@ -173,14 +175,14 @@ class VisualizeServer:
                     else:
                         origin_acc = (origin_vel - self.vis_prev_origin_vel) / observe_period
 
-                self.data_send_queue.append({
+                self.data_send_list.append({
                     'tab': 'velocity',
                     'type': 'action_raw',
                     'x': self.vis_global_step,
                     'timestamp': timestamp,
                     'joints_y': origin_vel.tolist()
                 })
-                self.data_send_queue.append({
+                self.data_send_list.append({
                     'tab': 'acceleration',
                     'type': 'action_raw',
                     'x': self.vis_global_step,
@@ -307,14 +309,14 @@ class VisualizeServer:
 
     async def send_chart_data(self):
         """Send chart (joint trajectory) data to all clients in one batched message."""
-        if not self.clients or not self.data_send_queue:
+        if not self.clients or not self.data_send_list:
             return
 
         disconnected_clients = set()
 
         with self.data_lock:
-            data_to_send = list(self.data_send_queue)
-            self.data_send_queue.clear()
+            data_to_send = self.data_send_list
+            self.data_send_list = []
 
         if not data_to_send:
             return
@@ -352,7 +354,7 @@ class VisualizeServer:
                     'data': {
                         'connected_clients': len(self.clients),
                         'has_image_data': self.latest_imgs_snapshot is not None,
-                        'chart_queue_size': len(self.data_send_queue)
+                        'chart_queue_size': len(self.data_send_list)
                     }
                 }
                 await websocket.send(json.dumps(status))
