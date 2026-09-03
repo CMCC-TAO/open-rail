@@ -157,7 +157,8 @@ class RealtimeDataManager():
             if len(self.observe_add_timestamps) >= 2:
                 duration = self.observe_add_timestamps[-1] - self.observe_add_timestamps[0]
                 if duration > 1e-6:
-                    self.observe_fps = (len(self.observe_add_timestamps) - 1) / duration
+                    observe_fps_tmp = (len(self.observe_add_timestamps) - 1) / duration
+                    self.observe_fps = observe_fps_tmp * 0.8 + self.observe_fps * 0.2 if self.observe_fps > 0 else observe_fps_tmp
 
     def update_action_chunk_raw(self, action_chunk, timestamp_chunk):
         """Update the raw action chunk and timestamp chunk predicted by the VLA model.
