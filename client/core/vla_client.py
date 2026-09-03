@@ -384,10 +384,14 @@ class VLAClient():
         This thread only retrieves observations from robot and enqueues them,
         so retrieval cadence is not blocked by image processing/encoding cost.
         """
+        retrieve_try_num = 1.0
         while self.is_running:
             if not self.is_observe_thread_running:
-                time.sleep(0.001)
+                time.sleep(0.1)
                 continue
+            else:
+                time.sleep(0.02/retrieve_try_num)
+                retrieve_try_num = retrieve_try_num + 1.0
 
             observations = self.robot.retrieve_observation()
             if observations is not None:
@@ -398,7 +402,7 @@ class VLAClient():
                         self.shared_memory_manager.init_pool(self.camera_shape_dict)
                 encoded_observations = self.shared_memory_manager.encode_observation(observations)
                 self._raw_observe_queue.put(encoded_observations)
-                time.sleep(0.02)
+                retrieve_try_num = 1.0
 
     def _process_observe_thread_fun(self):
         """Observation consumer thread.
@@ -476,17 +480,20 @@ class VLAClient():
             # symbol = '=' * 10
     def _control_thread_fun(self):
         if not self.is_control_thread_running:
-            current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
-            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
-            self.visualize_server.update_chart_data(
-                action_fitted=action_fitted,
-                vel_fitted=vel_fitted,
-                acc_fitted=acc_fitted,
-                action_raw=action_raw,
-                current_state=current_state,
-                observe_period=self.observe_period / 1000,
-                control_period=self.config.controller.period / 1000
-                )
+            if self.visualize_server.vis_global_step % 5 == 0:
+                current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
+                action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
+                self.visualize_server.update_chart_data(
+                    action_fitted=action_fitted,
+                    vel_fitted=vel_fitted,
+                    acc_fitted=acc_fitted,
+                    action_raw=action_raw,
+                    current_state=current_state,
+                    observe_period=self.observe_period / 1000,
+                    control_period=self.config.controller.period / 1000
+                    )
+            else:
+                self.visualize_server.vis_global_step += 1
         else:
             action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
 
@@ -516,31 +523,35 @@ class VLAClient():
                     # Automatically switch language instruction based on prob_progress changes
                     self.task_language_manager.add_task_progress(progress=prob_progress)
                     self.task_language_manager.try_advance_subtask()
-            current_state = getattr(self.robot, 'current_state', None)
-            self.visualize_server.update_chart_data(
-                action_fitted=action_fitted,
-                vel_fitted=vel_fitted,
-                acc_fitted=acc_fitted,
-                action_raw=action_raw,
-                current_state=current_state,
-                observe_period=self.observe_period / 1000,
-                control_period=self.config.controller.period / 1000
-                )
 
-    def _visualize_thread_fun(self):
-        # Send state data to visualization server for live plotting when control thread is not running
-        if not self.is_control_thread_running:
-            current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
-            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
-            self.visualize_server.update_chart_data(
-                action_fitted=action_fitted,
-                vel_fitted=vel_fitted,
-                acc_fitted=acc_fitted,
-                action_raw=action_raw,
-                current_state=current_state,
-                observe_period=self.observe_period / 1000,
-                control_period=self.config.controller.period / 1000
-                )
+            if self.visualize_server.vis_global_step % 5 == 0:
+                current_state = getattr(self.robot, 'current_state', None)
+                self.visualize_server.update_chart_data(
+                    action_fitted=action_fitted,
+                    vel_fitted=vel_fitted,
+                    acc_fitted=acc_fitted,
+                    action_raw=action_raw,
+                    current_state=current_state,
+                    observe_period=self.observe_period / 1000,
+                    control_period=self.config.controller.period / 1000
+                    )
+            else:
+                self.visualize_server.vis_global_step += 1
+
+    # def _visualize_thread_fun(self):
+    #     # Send state data to visualization server for live plotting when control thread is not running
+    #     if not self.is_control_thread_running:
+    #         current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
+    #         action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
+    #         self.visualize_server.update_chart_data(
+    #             action_fitted=action_fitted,
+    #             vel_fitted=vel_fitted,
+    #             acc_fitted=acc_fitted,
+    #             action_raw=action_raw,
+    #             current_state=current_state,
+    #             observe_period=self.observe_period / 1000,
+    #             control_period=self.config.controller.period / 1000
+    #             )
     @run_time_decorator
     def _inference_first(self):
         """First inference step, which initializes the control pipeline.
