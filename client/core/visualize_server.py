@@ -277,7 +277,7 @@ class VisualizeServer:
                 if not camera_open.get(camera_id, True):
                     continue
 
-                frame_bytes = img.tobytes()
+                frame_bytes = img if isinstance(img, (bytes, memoryview)) else memoryview(img)
 
                 header = {
                     'type': 'camera_data_binary',
@@ -287,7 +287,8 @@ class VisualizeServer:
                 }
                 header_bytes = json.dumps(header).encode('utf-8')
                 header_length = len(header_bytes)
-                message = header_length.to_bytes(4, byteorder='big') + header_bytes + frame_bytes
+                header_prefix = header_length.to_bytes(4, byteorder='big')
+                message = [header_prefix, header_bytes, frame_bytes]
 
                 for client in self.clients.copy():
                     try:
