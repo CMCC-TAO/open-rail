@@ -309,10 +309,11 @@ class IntraChunkSmoother():
         return gripper_chunk_fitted, zero_like, zero_like  # Gripper velocity and acceleration are not considered
 
     def _hand_traj_fitting(self, timestamps, hand_chunk, index, start_time, end_time, time_step=0.001):
-        """Fit a dexterous hand trajectory using mean filtering only (no threshold clamping).
+        """Linear-interpolate the hand trajectory to the fitted time grid (no smoothing).
 
-        Hand values (0-1000 range) are smoothed via sliding window mean without
-        the 0-1 threshold clamping used for grippers, preserving the full range.
+        Hand dims skip the sliding-window mean filter: smoothing adds latency
+        that outweighs its benefit for the hand channels. Raw chunk values are
+        linearly interpolated onto the fitted timestamps (endpoint-clamped).
 
         Args:
             timestamps (np.array): The timestamps of the hand trajectory in seconds.
@@ -325,30 +326,8 @@ class IntraChunkSmoother():
         Returns:
             tuple(int, np.array, np.array, np.array): index, fitted, velocity, acceleration.
         """
-        # Smooth using sliding window mean (no threshold clamping)
-        length = len(hand_chunk)
-        window_size_half = self.config.filter_window_size
-        for currt_index in range(length):
-            if currt_index < window_size_half:
-                window_min = 0
-                window_max = min(length, window_size_half * 2 + 1)
-            elif currt_index >= length - window_size_half:
-                window_min = max(0, length - window_size_half * 2 - 1)
-                window_max = length
-            else:
-                window_min = currt_index - window_size_half
-                window_max = currt_index + window_size_half + 1
-            hand_chunk[currt_index] = np.mean(hand_chunk[window_min:window_max])
-
-        # Linear interpolation to target timestamps
         timestamp_fitted = np.arange(start_time, end_time, time_step)
-        hand_chunk_fitted = []
-        currt_index = 0
-        for timestamp in timestamp_fitted:
-            if timestamp > timestamps[currt_index]:
-                currt_index = min(length, currt_index + 1)
-            hand_chunk_fitted.append((hand_chunk[max(currt_index - 1, 0)] + hand_chunk[min(currt_index, length - 1)]) / 2.0)
-
+        hand_chunk_fitted = np.interp(timestamp_fitted, np.asarray(timestamps), hand_chunk)
         return index, hand_chunk_fitted, np.zeros_like(hand_chunk_fitted), np.zeros_like(hand_chunk_fitted)
 
     @run_time_decorator
