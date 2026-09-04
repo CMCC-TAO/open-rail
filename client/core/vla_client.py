@@ -4,7 +4,7 @@ import logging
 import threading
 import numpy as np
 
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 from typing import Optional
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
@@ -121,7 +121,7 @@ class VLAClient():
         self.show_thread_lock = threading.Lock()
 
         # Raw observation queue: no frame dropping in VLA client pipeline.
-        self._raw_observe_queue = Queue()
+        self._raw_observe_queue = Queue(maxsize=2)
         self._raw_observe_shm_cache = {}
 
         # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
@@ -399,9 +399,21 @@ class VLAClient():
                     cam_items = [(key, value) for key, value in observations.items() if 'cam.' in key]
                     if cam_items:
                         self.camera_shape_dict = {key: img.shape for key, img in cam_items}
-                        self.shared_memory_manager.init_pool(self.camera_shape_dict)
+                        camera_dtype_dict = {key: img.dtype for key, img in cam_items}
+                        self.shared_memory_manager.init_pool(
+                            self.camera_shape_dict,
+                            camera_dtypes=camera_dtype_dict,
+                        )
                 encoded_observations = self.shared_memory_manager.encode_observation(observations)
-                self._raw_observe_queue.put(encoded_observations)
+                try:
+                    self._raw_observe_queue.put_nowait(encoded_observations)
+                except Full:
+                    try:
+                        self._raw_observe_queue.get_nowait()
+                        self._raw_observe_queue.task_done()
+                    except Empty:
+                        pass
+                    self._raw_observe_queue.put_nowait(encoded_observations)
                 retrieve_try_num = 1.0
 
     def _process_observe_thread_fun(self):
@@ -429,12 +441,13 @@ class VLAClient():
                 # record_data = self.shared_memory_manager.encode_observation(record_data)
 
                 if self.config.record.switch:
+                    packet_descriptors = observations.to_observation_descriptors()
                     record_data = {
                         **infer_data,
                         'obs': {
                             **{
                                 camera_name: payload
-                                for camera_name, payload in observations.items()
+                                for camera_name, payload in packet_descriptors.items()
                                 if str(camera_name).startswith('cam.')
                             },
                             'state': infer_data['obs']['state'],
@@ -768,10 +781,11 @@ class VLAClient():
         """
         ext = '.png' if 'depth.' in key else '.jpg'
         img_for_infer = self._preprocess_func(value) if self._preprocess_func else value
-        encode_result, img_encoded = cv2.imencode(ext, img_for_infer)
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80] if ext == '.jpg' else []
+        encode_result, img_encoded = cv2.imencode(ext, img_for_infer, encode_params)
         if not encode_result:
             self.logger.warning(f"Image encoding failed for {key}.")
-        return key, img_encoded
+        return key, memoryview(img_encoded) if encode_result else None
 
     def _process_image(self, frame):
         """Process multiple images and produce both encoded and raw outputs.
@@ -797,7 +811,8 @@ class VLAClient():
             )
             for key, encoded_img in results_iter:
                 # raw_imgs[key] = raw_img
-                encoded_imgs[key] = encoded_img
+                if encoded_img is not None:
+                    encoded_imgs[key] = encoded_img
 
         # if self.camera_shape_dict is None and raw_imgs:
         #     self.camera_shape_dict = {key: img.shape for key, img in raw_imgs.items()}
