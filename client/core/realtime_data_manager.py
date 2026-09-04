@@ -4,7 +4,7 @@ import numpy as np
 import logging
 from collections import deque
 from ml_collections import ConfigDict
-from client.utils.util import run_time_decorator, action_chunk_2_joint_chunk, get_closest_index
+from client.utils.util import run_time_decorator, get_closest_index
 
 
 class RealtimeDataManager():
@@ -26,8 +26,10 @@ class RealtimeDataManager():
         self.observe_buffer = deque(maxlen=max(10, rdm_config.max_len))
         self.observe_add_timestamps = deque(maxlen=max(2, rdm_config.observe_fps_window_size))
         self.observe_fps = 0.0
-        self.action_chunks = []
-        self.timestamp_chunks = []
+        # Raw actions are stored as [dof, chunk] float32 arrays from receipt.
+        self.action_chunks = np.empty((0, 0), dtype=np.float32)
+        self.timestamp_chunks = np.empty(0, dtype=np.float32)
+        self.raw_action_count = 0
         self.action_thread_lock = threading.Lock()
         self.observe_thread_lock = threading.Lock()
         self.polynomial_thread_lock = threading.Lock()
@@ -167,15 +169,29 @@ class RealtimeDataManager():
             action_chunk (list): The action chunk predicted by the VLA model. It is a list of actions, each action is an np array of joint angles.
             timestamp_chunk (list): The timestamp chunk corresponding to the action chunk. It is a list of timestamps, each timestamp is a float. The unit is second.
         """
-        # Ensure thread safety when updating action chunks
+        action_array = np.asarray(action_chunk, dtype=np.float32)
+        if action_array.ndim != 2:
+            raise ValueError(f'action_chunk must be 2D, got shape {action_array.shape}')
+        action_array = np.ascontiguousarray(action_array.T)
+
+        timestamp_array = np.array(timestamp_chunk, dtype=np.float32, copy=True)
+        if timestamp_array.ndim != 1 or timestamp_array.size != action_array.shape[1]:
+            raise ValueError(
+                'timestamp_chunk must be 1D with one timestamp per action '
+                f'(got shape {timestamp_array.shape}, actions {action_array.shape})'
+            )
+        if timestamp_array.size == 0:
+            raise ValueError('action_chunk must not be empty')
+
+        # Preserve the existing behavior: only the first timestamp is reset;
+        # subsequent timestamps remain relative to the original chunk input.
+        timestamp_array[0] = 0.0
+
+        # Ensure thread safety when updating action chunks.
         with self.action_thread_lock:
-            # Align action chunk timestamps with observation data timestamps
-            # First frame starts at 0.0, subsequent frames are relative to the first frame
-            timestamp_chunk[0] = 0.0
-            for index in range(1, len(timestamp_chunk)):
-                timestamp_chunk[index] = timestamp_chunk[index] + timestamp_chunk[0]
-            self.action_chunks = action_chunk
-            self.timestamp_chunks = timestamp_chunk
+            self.action_chunks = action_array
+            self.timestamp_chunks = timestamp_array
+            self.raw_action_count = action_array.shape[1]
 
     def pop_action_chunk(self, time_offset = 0.0):
         """Returns the action chunk and timestamp chunk with the given time offset and number of samples for trajectory fitting.
@@ -192,24 +208,26 @@ class RealtimeDataManager():
         target_time = currt_time + time_offset
         self.logger.debug(f'currt_time: {currt_time}, target_time: {target_time}')
         
-        # Find the first valid data frame index
-        valid_index = None
-        for index, timestamp in enumerate(self.timestamp_chunks):
-            if timestamp > target_time:
-                valid_index = index
-                break
-        if valid_index is None:
+        if self.raw_action_count == 0:
+            self.logger.error("No valid data in action chunk, please check time_offset.")
+            return None, None
+
+        # Equivalent to the previous Python loop: find the first timestamp
+        # strictly greater than target_time.
+        valid_index = int(np.searchsorted(self.timestamp_chunks, target_time, side='right'))
+        if valid_index >= self.raw_action_count:
             self.logger.error("No valid data in action chunk, please check time_offset.")
             return None, None
         
         # Data fitting needs to look back a few frames to prevent non-smooth fitting results
         start_index = max(0, valid_index-1)
-        end_index = len(self.action_chunks)
+        end_index = self.raw_action_count
         # end_index = min(len(self.action_chunks), start_index + num_samples)
         
-        timestamp_chunks_np = np.array(self.timestamp_chunks[start_index:end_index])
-        action_chunks_np = np.array(action_chunk_2_joint_chunk(self.action_chunks[start_index:end_index]))
-        return timestamp_chunks_np, action_chunks_np
+        return (
+            self.timestamp_chunks[start_index:end_index],
+            self.action_chunks[:, start_index:end_index],
+        )
 
     @staticmethod
     def _apply_gripper_offset(action_chunk, step_indices, gripper_offset):
@@ -289,7 +307,7 @@ class RealtimeDataManager():
         with self.polynomial_thread_lock:
             if self.action_chunk_index is None:
                 return None, None, None, None
-            if len(self.action_chunks) == 0:
+            if self.raw_action_count == 0:
                 return None, None, None, None
             if self.action_chunk_fitted.shape[1] == 0:
                 return None, None, None, None
@@ -301,10 +319,13 @@ class RealtimeDataManager():
             # notify any waiter that the action index advanced
             self.polynomial_cond.notify_all()
             # print(self.action_chunk_fitted.shape, len(self.action_chunks), self.action_chunks[0].shape, "!"*50)
-            action_raw_index = int(self.action_chunk_index/(self.action_chunk_fitted.shape[1]/len(self.action_chunks)))
-            action_raw_index = min(action_raw_index, len(self.action_chunks)-1)
+            action_raw_index = int(
+                self.action_chunk_index
+                / (self.action_chunk_fitted.shape[1] / self.raw_action_count)
+            )
+            action_raw_index = min(action_raw_index, self.raw_action_count - 1)
             # print(action_raw_index)
-            action_raw = self.action_chunks[action_raw_index]
+            action_raw = self.action_chunks[:, action_raw_index]
             action_fitted = self.action_chunk_fitted[:, self.action_chunk_index]
             vel_fitted = self.vel_chunk_fitted[:, self.action_chunk_index]
             acc_fitted = self.acc_chunk_fitted[:, self.action_chunk_index]
@@ -346,8 +367,9 @@ class RealtimeDataManager():
         to ensure that subsequent get_action_fitted() calls return the most recent actions.
         """
         with self.action_thread_lock:
-            self.action_chunks = []
-            self.timestamp_chunks = []
+            self.action_chunks = np.empty((0, 0), dtype=np.float32)
+            self.timestamp_chunks = np.empty(0, dtype=np.float32)
+            self.raw_action_count = 0
             self.infer_count = 0
             self.start_infer_marker = 0.0
             self.start_intra_traj_marker = 0.0
