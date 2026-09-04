@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy
 import cv2
 import os
 import threading
@@ -49,10 +50,18 @@ class UnitreeG1Camera(Node):
         self.queue_left = deque(maxlen=queue_size)
         self.queue_right = deque(maxlen=queue_size)
 
+        # QoS profile matching robot driver (BEST_EFFORT + VOLATILE),
+        # otherwise "incompatible QoS" — no messages received from publisher
+        qos_profile = QoSProfile(
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
+
         # Subscriptions
-        self.create_subscription(CompressedImage, self.topic_head, self._cb_head, 1)
-        self.create_subscription(CompressedImage, self.topic_left, self._cb_left, 1)
-        self.create_subscription(CompressedImage, self.topic_right, self._cb_right, 1)
+        self.create_subscription(CompressedImage, self.topic_head, self._cb_head, qos_profile)
+        self.create_subscription(CompressedImage, self.topic_left, self._cb_left, qos_profile)
+        self.create_subscription(CompressedImage, self.topic_right, self._cb_right, qos_profile)
 
         self.get_logger().info("UnitreeG1Camera ready (no internal spin)")
 
