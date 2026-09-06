@@ -2,6 +2,7 @@
 import asyncio
 import websockets
 import json
+import orjson
 import logging
 import time
 import threading
@@ -54,6 +55,11 @@ class VisualizeServer:
         self.latest_imgs_seq += 1
         self.latest_imgs_snapshot = (self.latest_imgs_seq, imgs)
 
+    @staticmethod
+    def _chart_array(value):
+        """Create a detached contiguous float32 snapshot for chart output."""
+        return np.array(value, dtype=np.float32, copy=True, order='C')
+
     # def update_chart_data(self, data: List[Dict]):
     #     """Update chart data.
 
@@ -92,7 +98,7 @@ class VisualizeServer:
                 'type': 'action_fitted',
                 'x': self.vis_global_step,
                 'timestamp': timestamp,
-                'joints_y': action_fitted.tolist()
+                'joints_y': self._chart_array(action_fitted)
             })
         if current_state is not None:
             data_list.append({
@@ -100,7 +106,7 @@ class VisualizeServer:
                 'type': 'state',
                 'x': self.vis_global_step,
                 'timestamp': timestamp,
-                'joints_y': current_state.tolist()
+                'joints_y': self._chart_array(current_state)
             })
         if action_raw is not None:
             data_list.append({
@@ -108,7 +114,7 @@ class VisualizeServer:
                 'type': 'action_raw',
                 'x': self.vis_global_step,
                 'timestamp': timestamp,
-                'joints_y': action_raw.tolist()
+                'joints_y': self._chart_array(action_raw)
             })
 
         # TODO: use real velocity/acceleration
@@ -135,14 +141,14 @@ class VisualizeServer:
                     'type': 'state',
                     'x': self.vis_global_step,
                     'timestamp': timestamp,
-                    'joints_y': state_vel.tolist()
+                    'joints_y': self._chart_array(state_vel)
                 })
                 self.data_send_list.append({
                     'tab': 'acceleration',
                     'type': 'state',
                     'x': self.vis_global_step,
                     'timestamp': timestamp,
-                    'joints_y': state_acc.tolist()
+                    'joints_y': self._chart_array(state_acc)
                 })
 
             # Velocity/acceleration for action (direct input)
@@ -152,7 +158,7 @@ class VisualizeServer:
                     'type': 'action_fitted',
                     'x': self.vis_global_step,
                     'timestamp': timestamp,
-                    'joints_y': vel_fitted.tolist()
+                    'joints_y': self._chart_array(vel_fitted)
                 })
             if acc_fitted is not None:
                 self.data_send_list.append({
@@ -160,7 +166,7 @@ class VisualizeServer:
                     'type': 'action_fitted',
                     'x': self.vis_global_step,
                     'timestamp': timestamp,
-                    'joints_y': acc_fitted.tolist()
+                    'joints_y': self._chart_array(acc_fitted)
                 })
 
             # Origin (raw action) series
@@ -180,14 +186,14 @@ class VisualizeServer:
                     'type': 'action_raw',
                     'x': self.vis_global_step,
                     'timestamp': timestamp,
-                    'joints_y': origin_vel.tolist()
+                    'joints_y': self._chart_array(origin_vel)
                 })
                 self.data_send_list.append({
                     'tab': 'acceleration',
                     'type': 'action_raw',
                     'x': self.vis_global_step,
                     'timestamp': timestamp,
-                    'joints_y': origin_acc.tolist()
+                    'joints_y': self._chart_array(origin_acc)
                 })
                 self.vis_prev_origin = action_raw
                 self.vis_prev_origin_vel = origin_vel
@@ -322,12 +328,15 @@ class VisualizeServer:
         if not data_to_send:
             return
 
-        message_json = json.dumps({
-            'type': 'joint_data_batch',
-            'data': data_to_send,
-            'count': len(data_to_send),
-            'timestamp': time.time()
-        })
+        message_json = orjson.dumps(
+            {
+                'type': 'joint_data_batch',
+                'data': data_to_send,
+                'count': len(data_to_send),
+                'timestamp': time.time()
+            },
+            option=orjson.OPT_SERIALIZE_NUMPY,
+        ).decode('utf-8')
 
         for client in self.clients.copy():
             try:
