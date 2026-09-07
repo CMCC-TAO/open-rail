@@ -294,16 +294,14 @@ class IntraChunkSmoother():
         if timestamps_fitted.size == 0:
             return np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0))
 
-        num_fitted = timestamps_fitted.size
-        gripper_chunk_fitted = np.zeros((num_grippers, num_fitted), dtype=filtered.dtype)
-
-        currt_index = 0
-        for i, timestamp in enumerate(timestamps_fitted):
-            if timestamp > timestamps[currt_index]:
-                currt_index = min(length, currt_index + 1)
-            left_index = max(currt_index - 1, 0)
-            right_index = min(currt_index, length - 1)
-            gripper_chunk_fitted[:, i] = (filtered[:, left_index] + filtered[:, right_index]) / 2.0
+        # Bracket each fitted timestamp with its neighbouring raw timestamps.
+        # Replaces the previous incremental scan; equivalent as long as raw
+        # timestamp spacing >= time_step (holds for the configured control period).
+        right_index = np.searchsorted(timestamps, timestamps_fitted, side='left')
+        left_index = np.maximum(right_index - 1, 0)
+        gripper_chunk_fitted = (
+            filtered[:, left_index] + filtered[:, np.minimum(right_index, length - 1)]
+        ) / 2.0
 
         zero_like = np.zeros_like(gripper_chunk_fitted)
         return gripper_chunk_fitted, zero_like, zero_like  # Gripper velocity and acceleration are not considered

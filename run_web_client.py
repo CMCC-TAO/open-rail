@@ -16,9 +16,12 @@ Port layout:
 import argparse
 import os
 import sys
+import cv2
 import uvicorn
 from conf.logging_conf import setup_logging
 os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+sys.setswitchinterval(0.0005)
+cv2.setNumThreads(1)
 # os.environ.setdefault('MKL_NUM_THREADS', '1')
 # os.environ.setdefault('OMP_NUM_THREADS', '1')
 

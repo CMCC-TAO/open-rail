@@ -1,5 +1,4 @@
 import os
-import atexit
 import time
 import logging
 import threading
@@ -10,11 +9,12 @@ from collections import deque
 from types import SimpleNamespace
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Process, Queue, Value, Event, shared_memory
+from multiprocessing import Process, Queue, Value, Event
 from typing import Any, Dict, List, Optional, Union, Tuple
 from client.utils.util import run_time_decorator
 from client.core.lerobot_dataset_recorder import LeRobotDatasetRecorder
 from client.core.evaluation_result_recorder import EvaluationResultRecorder
+from client.core.shared_memory_manager import SharedMemoryManager
 
 class DataRecordManager:
     """
@@ -50,14 +50,8 @@ class DataRecordManager:
         self.writer_command_queue = Queue()
 
         # Action recording queues
-        self.action_lock = threading.Lock()
+        # self.action_lock = threading.Lock()
         self.action_frame_queue = deque(maxlen=10)
-
-        # Shared-memory frame transport (main process producer -> writer process consumer)
-        self._shm_lock = threading.Lock()
-        self._shm_ring_size = 3
-        self._shm_slots: Dict[str, Dict[str, Any]] = {}
-        self._shm_stale_blocks: List[Any] = []
 
         # self.record_obs_executor = ThreadPoolExecutor(max_workers=2)
         # self.record_action_executor = ThreadPoolExecutor(max_workers=4)
@@ -66,7 +60,6 @@ class DataRecordManager:
         self.writer_process = None
         self._ensure_writer_process()
         self._closed = False
-        atexit.register(self._atexit_cleanup)
 
         # Session id used to drop stale async tasks across stop/start cycles.
         self._session_lock = threading.Lock()
@@ -192,38 +185,9 @@ class DataRecordManager:
         self.writer_process.start()
         self.logger.info("Resident writer process started.")
 
-    @staticmethod
-    def _disable_shared_memory_tracking_in_process() -> None:
-        """Disable shared_memory tracker hooks in attach-only process.
-
-        Writer process only *attaches* producer-created shm blocks and never owns
-        their lifecycle. Avoid registering these blocks to local resource_tracker,
-        otherwise process-exit cleanup may warn when producer already unlinked them.
-        """
-        try:
-            from multiprocessing import resource_tracker
-
-            _orig_register = resource_tracker.register
-            _orig_unregister = resource_tracker.unregister
-
-            def _register(name, rtype):
-                if rtype == 'shared_memory':
-                    return
-                return _orig_register(name, rtype)
-
-            def _unregister(name, rtype):
-                if rtype == 'shared_memory':
-                    return
-                return _orig_unregister(name, rtype)
-
-            resource_tracker.register = _register
-            resource_tracker.unregister = _unregister
-        except Exception:
-            pass
-
     def _writer_process_loop(self) -> None:
         """Resident process loop: receives start/shutdown commands and dispatches write tasks in thread executor."""
-        self._disable_shared_memory_tracking_in_process()
+        SharedMemoryManager.disable_shared_memory_tracking_in_process()
         self.logger.info("Writer resident process loop started.")
         self.lerobot_recorder.start_episode_record_crud_listener()
         self.eval_recorder.start_eval_record_crud_listener()
@@ -356,9 +320,6 @@ class DataRecordManager:
         try:
             session_id = self._bump_recording_session_id()
             self._clear_queues()
-            self._release_shm_pool()
-            self._init_shm_pool(camera_shape=camera_shape)
-
             self.shared_data.writer_idle.clear()
             self.shared_data.running.set()
             task_dir = self._sanitize_task_name(task_id) + '_' + datetime.now().strftime("%Y%m%d")
@@ -402,7 +363,6 @@ class DataRecordManager:
             self.logger.warning("Writer did not become idle within timeout during stop_recording, force releasing shm pool.")
 
         self._clear_queues()
-        self._release_shm_pool()
 
 
     def pause_recording(self):
@@ -452,203 +412,6 @@ class DataRecordManager:
         except Exception:
             return -1
 
-    def _safe_shm_name(self, camera_name: str, slot_idx: int) -> str:
-        return f"vla_{os.getpid()}_{camera_name.replace('.', '_')}_{slot_idx}_{time.time_ns()}"
-
-    def _unregister_shm_from_resource_tracker(self, shm_obj) -> None:
-        """No-op on Python 3.10 runtime.
-
-        In this project runtime, explicit `resource_tracker.unregister` may itself
-        trigger tracker-side KeyError (name format mismatch across internals).
-        We rely on explicit `close()`/`unlink()` lifecycle in producer process
-        and `close()` in consumer cache cleanup.
-        """
-        _ = shm_obj
-        return
-
-    def _atexit_cleanup(self) -> None:
-        """Best-effort cleanup for abnormal exits when close() is not called explicitly."""
-        if getattr(self, "_closed", False):
-            return
-        try:
-            self._release_shm_pool()
-        except Exception:
-            pass
-
-    def _create_or_resize_shm_slot(self, camera_name: str, slot_idx: int, shape: tuple, dtype: np.dtype):
-        """Create one shm slot or resize it if shape/dtype changed (main process only)."""
-        camera_entry = self._shm_slots.setdefault(camera_name, {"slots": [None] * self._shm_ring_size, "next_index": 0})
-        slot = camera_entry["slots"][slot_idx]
-        required_nbytes = int(np.prod(shape, dtype=np.int64)) * int(np.dtype(dtype).itemsize)
-
-        if slot is not None:
-            same_shape = tuple(slot["shape"]) == tuple(shape)
-            same_dtype = np.dtype(slot["dtype"]) == np.dtype(dtype)
-            if same_shape and same_dtype:
-                return slot
-
-            old_shm = slot.get("shm")
-            if old_shm is not None:
-                self._shm_stale_blocks.append(old_shm)
-
-        shm_obj = shared_memory.SharedMemory(create=True, size=required_nbytes, name=self._safe_shm_name(camera_name, slot_idx))
-        new_slot = {
-            "shm": shm_obj,
-            "name": shm_obj.name,
-            "shape": tuple(shape),
-            "dtype": np.dtype(dtype),
-        }
-        camera_entry["slots"][slot_idx] = new_slot
-        return new_slot
-
-    def _init_shm_pool(self, camera_shape: Dict[str, Union[tuple[int, int, int], list[int]]]) -> None:
-        """Initialize shm ring buffer slots from runtime camera shape when recording starts."""
-        if not isinstance(camera_shape, dict):
-            return
-        with self._shm_lock:
-            for camera_name, shape_value in camera_shape.items():
-                if (not str(camera_name).startswith("cam.")) or shape_value is None:
-                    continue
-                shape = tuple(int(v) for v in shape_value)
-                if len(shape) < 2:
-                    continue
-                if len(shape) == 2:
-                    shape = (shape[0], shape[1], 1)
-                dtype = np.uint8
-                for slot_idx in range(self._shm_ring_size):
-                    self._create_or_resize_shm_slot(camera_name=camera_name, slot_idx=slot_idx, shape=shape, dtype=dtype)
-
-    def _encode_obs_to_shm(self, observation: Dict[str, Any]) -> Dict[str, Any]:
-        """Copy camera ndarray into shm ring buffer and replace camera payload with descriptors."""
-        if not isinstance(observation, dict):
-            return observation
-
-        obs = observation.get("obs", {})
-        if not isinstance(obs, dict):
-            return observation
-
-        obs_for_record = dict(obs)
-        transformed = False
-
-        with self._shm_lock:
-            for camera_name, frame in obs.items():
-                if (not str(camera_name).startswith("cam.")) or (not isinstance(frame, np.ndarray)):
-                    continue
-                if frame.ndim < 2:
-                    self.logger.warning(f"Invalid frame ndim for {camera_name}: {frame.ndim}, skip this camera.")
-                    continue
-
-                frame_contig = np.ascontiguousarray(frame)
-                camera_entry = self._shm_slots.setdefault(camera_name, {"slots": [None] * self._shm_ring_size, "next_index": 0})
-                slot_idx = int(camera_entry["next_index"])
-                slot = self._create_or_resize_shm_slot(
-                    camera_name=camera_name,
-                    slot_idx=slot_idx,
-                    shape=tuple(frame_contig.shape),
-                    dtype=frame_contig.dtype,
-                )
-
-                shm_frame = np.ndarray(slot["shape"], dtype=slot["dtype"], buffer=slot["shm"].buf)
-                shm_frame[...] = frame_contig
-
-                obs_for_record[camera_name] = {
-                    "transport": "shm",
-                    "name": slot["name"],
-                    "shape": list(frame_contig.shape),
-                    "dtype": str(frame_contig.dtype),
-                    "slot_index": slot_idx,
-                    "timestamp_ns": time.time_ns(),
-                }
-                camera_entry["next_index"] = (slot_idx + 1) % self._shm_ring_size
-                transformed = True
-
-        if not transformed:
-            return observation
-
-        observation_for_record = dict(observation)
-        observation_for_record["obs"] = obs_for_record
-        return observation_for_record
-
-    def _decode_obs_from_shm(self, step_state: Dict[str, Any], shm_cache: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Attach shm by descriptor and copy frames to local ndarray for safe downstream usage."""
-        if not isinstance(step_state, dict):
-            return step_state
-
-        obs = step_state.get("obs", {})
-        if not isinstance(obs, dict):
-            return step_state
-
-        decoded_obs = dict(obs)
-        for camera_name, payload in obs.items():
-            if not str(camera_name).startswith("cam."):
-                continue
-            if not (isinstance(payload, dict) and payload.get("transport") == "shm"):
-                continue
-
-            shm_name = payload.get("name")
-            shape = payload.get("shape")
-            dtype_str = payload.get("dtype")
-            if (not shm_name) or (shape is None) or (dtype_str is None):
-                self.logger.warning(f"Invalid shm descriptor for {camera_name}, skip frame.")
-                return None
-
-            try:
-                shm_obj = shm_cache.get(shm_name)
-                if shm_obj is None:
-                    shm_obj = shared_memory.SharedMemory(name=shm_name)
-                    self._unregister_shm_from_resource_tracker(shm_obj)
-                    shm_cache[shm_name] = shm_obj
-                frame_view = np.ndarray(tuple(shape), dtype=np.dtype(dtype_str), buffer=shm_obj.buf)
-                decoded_obs[camera_name] = frame_view.copy()
-            except FileNotFoundError:
-                self.logger.warning(f"Shared memory block not found for {camera_name}: {shm_name}")
-                return None
-            except Exception as e:
-                self.logger.exception(f"Failed to decode shm frame for {camera_name}: {e}")
-                return None
-
-        decoded_state = dict(step_state)
-        decoded_state["obs"] = decoded_obs
-        return decoded_state
-
-    def _release_shm_pool(self) -> None:
-        """Release all shm blocks created by main process."""
-        with self._shm_lock:
-            for camera_entry in self._shm_slots.values():
-                for slot in camera_entry.get("slots", []):
-                    if not slot:
-                        continue
-                    shm_obj = slot.get("shm")
-                    if shm_obj is None:
-                        continue
-                    try:
-                        shm_obj.close()
-                    except Exception:
-                        pass
-                    try:
-                        shm_obj.unlink()
-                    except FileNotFoundError:
-                        pass
-                    except Exception as e:
-                        self.logger.warning(f"Failed to unlink shm block {getattr(shm_obj, 'name', '')}: {e}")
-
-            for shm_obj in self._shm_stale_blocks:
-                if shm_obj is None:
-                    continue
-                try:
-                    shm_obj.close()
-                except Exception:
-                    pass
-                try:
-                    shm_obj.unlink()
-                except FileNotFoundError:
-                    pass
-                except Exception as e:
-                    self.logger.warning(f"Failed to unlink stale shm block {getattr(shm_obj, 'name', '')}: {e}")
-
-            self._shm_stale_blocks.clear()
-            self._shm_slots.clear()
-
     def _add_observation_fun(self, observation: Dict[str, Any], extra_info: Dict[str, Any], timestamp: int | float, session_id: int) -> None:
         """
         Process and store observation data including camera images, robot state, and time frame.
@@ -673,19 +436,18 @@ class DataRecordManager:
 
         # When action_frame_queue is empty, discard the observation frame
         action = None
-        with self.action_lock:
-            if not self.action_frame_queue:
-                self.logger.warning("Action frame queue is empty, discarding observation frame.")
-                return
-            else:
-                action, _ = self.action_frame_queue.pop()
+        # with self.action_lock:
+        if not self.action_frame_queue:
+            self.logger.warning("Action frame queue is empty, discarding observation frame.")
+            return
+        else:
+            action, _ = self.action_frame_queue.pop()
         
         # observation['language_instruction'] = language_instruction
         # observation['language_instruction'] = 'Test'
         # check state shape 
 
-        observation_for_record = self._encode_obs_to_shm(observation)
-        self.record_queue.put((observation_for_record, action, extra_info))
+        self.record_queue.put((observation, action, extra_info))
 
         # elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         # queue_size = self._safe_queue_size(self.record_queue)
@@ -736,7 +498,6 @@ class DataRecordManager:
         """
         self.logger.info("Starting recording process loop...")
         shm_cache: Dict[str, Any] = {}
-
         try:
             # prepare recording for all recorders
             if self.config.get('is_record_eval_log', False):
@@ -764,7 +525,7 @@ class DataRecordManager:
                     # if queue_size > 10:
                     #     self.logger.warning(f"_write_process_fun: record_queue backlog before processing={queue_size}")
                     if self.config.get('is_record_episode', False):
-                        decoded_state = self._decode_obs_from_shm(step_state, shm_cache=shm_cache)
+                        decoded_state = SharedMemoryManager.decode_observation(step_state, shm_cache)
                         if decoded_state is None:
                             self.logger.warning("Skip one frame because shm decode failed.")
                             continue
@@ -802,11 +563,7 @@ class DataRecordManager:
             self.logger.exception(f"Writing thread exited with exception: {e}")
             # self.release_writers()
         finally:
-            for shm_obj in shm_cache.values():
-                try:
-                    shm_obj.close()
-                except Exception:
-                    pass
+            SharedMemoryManager.close_reader(shm_cache)
             self.shared_data.writer_idle.set()
             # if self.config.get('is_record_eval_log', False):
             #     try:
@@ -832,11 +589,6 @@ class DataRecordManager:
             self._shutdown_writer_process()
         except Exception:
             self.logger.debug("shutdown writer process failed during close", exc_info=True)
-
-        try:
-            self._release_shm_pool()
-        except Exception:
-            self.logger.debug("release shm pool failed during close", exc_info=True)
 
         # try:
         #     if getattr(self, "record_obs_executor", None) is not None:
@@ -893,16 +645,16 @@ class DataRecordManager:
                 pass
 
         # Clear in-process deque with lock
-        with self.action_lock:
-            try:
-                self.action_frame_queue.clear()
-            except Exception:
-                # Fallback: pop until empty
-                while self.action_frame_queue:
-                    try:
-                        self.action_frame_queue.pop()
-                    except IndexError:
-                        break
+        # with self.action_lock:
+        try:
+            self.action_frame_queue.clear()
+        except Exception:
+            # Fallback: pop until empty
+            while self.action_frame_queue:
+                try:
+                    self.action_frame_queue.pop()
+                except IndexError:
+                    break
 
         self.logger.info("All queues cleared.")
 
