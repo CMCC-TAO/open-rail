@@ -25,32 +25,33 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-`pyproject.toml` is the authoritative source for dependencies and CLI entry points. Model-specific dependencies should be installed in the server-side model environment, while robot SDK or ROS dependencies should be installed in the client-side environment to avoid binding the two environments together unnecessarily.
+`pyproject.toml` defines OPEN-RAIL’s own dependencies and CLI entry points. Launching a OPEN-RAIL server also requires the dependencies of the model it serves, which should be installed in the server-side environment. Running a OPEN-RAIL client requires the relevant robot SDK or ROS dependencies, which should be installed in the client-side environment. Keeping these dependencies separate avoids unnecessarily coupling and dependency conflicts.
 
-## Branches and commits
+## How to contribute
 
-- Create a feature branch from the latest main branch instead of committing directly to main.
+- Fork the repository and create a feature branch from the latest main branch instead of committing directly to main.
 - Keep each commit focused on one clear issue and avoid mixing unrelated formatting or generated-file changes.
 - Use concise commit messages that explain the purpose of the change, for example `docs: update architecture guide` or `feat: add robot adapter`.
 - Do not commit model checkpoints, raw recorded videos, runtime logs, cache directories, or local configuration secrets.
 - Before committing, check `git diff` and verify that no personal paths, device addresses, access tokens, or other sensitive information are included.
+- Submit a Pull Request to this repository and describe the change scope, motivation, and any relevant validation results. If the change is large or complex, consider opening an issue first to discuss the design.
 
 ## Module boundaries
 
 Please keep the dependency direction as follows:
 
 ```text
-Robot adapter -> Client control loop -> message contract -> Server inference -> model adapter
+Robot adapter -> Client control loop -> Message contract -> Server inference -> Model adapter
 ```
 
-- Robot hardware and SDK calls belong in `client/robots/`.
-- Observation collection, local state management, action scheduling, smoothing, and command dispatch belong on the client side.
-- Model loading and `infer()` implementations belong in `server/models/`.
+- Robot adapters and related integration code, such as hardware access and SDK calls, live in `client/robots/`.
+- Observation processing, local state management, action scheduling, smoothing, and command dispatch belong in `client/core`.
+- Model loading and `infer()` implementations resides in `server/models/`.
 - `server/core/vla_server.py` handles the inference workflow and must not call the robot SDK or execute hardware actions.
-- `client/core/zmq_client.py` and `server/core/zmq_server.py` are responsible only for transport, routing, heartbeat, and request correlation; they should not carry business logic.
+- `client/core/zmq_client.py` and `server/core/zmq_server.py` handle communication between the client and server, including sending and receiving messages and monitoring connection status. Model inference and robot control logic should remain outside these modules.
 - Data recording, evaluation, and visualization should be integrated through separate interfaces or queues so they do not block the real-time inference and control path.
 
-When adding new modules, prefer reusing existing configuration, adapters, and queue interfaces instead of copying the same business logic across boundaries.
+When adding new modules, reuse existing configuration, adapters, and queues where possible.
 
 ## Adding a robot adapter
 
@@ -81,35 +82,17 @@ Create a model directory under `server/models/` and implement `ModelVLA` with in
 
 Model code should not directly operate the ZMQ socket, robot SDK, or client API. See the [VLA model integration guide](docs/guides/add-new-vla-model.md) for the detailed contract.
 
-## Testing and checks
+## Testing and style checks
 
-The repository currently does not include a separate automated test suite, but `.pre-commit-config.yaml` is already configured for code formatting and linting. Before submitting, complete at least the checks relevant to your change scope:
+The repository does not yet have a dedicated test suite. Formatting and linting checks are, however, configured in `.pre-commit-config.yaml`.
 
-```bash
-python -m pytest
-python -m compileall client server conf
-```
+For document modifications, also check Markdown fences, relative links, and `git diff --check`:
 
-If you only modify documentation, also check Markdown fences, relative links, and `git diff --check`:
-
-```bash
-git diff --check
-```
-
-When modifying the model, robot, or communication layers, record:
-
-- the Python environment and key dependency versions
-- whether GPU, CUDA, ROS, or vendor SDK support is required
-- the model checkpoint, dataset, or simulation input used
-- startup commands, expected results, and actual validation results
-
-## Documentation requirements
-
-- Use the Chinese version for Chinese docs and the English version for English docs.
-- New commands must match the actual entry-point arguments and paths; do not invent nonexistent parameters or locations.
-- Describe default values, config file locations, and runtime environment assumptions, especially cross-platform differences.
-- If a behavior has not been validated, write “requires verification” or “depends on the specific model/hardware,” and do not present speculation as a guarantee.
-- When changing directory structure, entry commands, or configuration fields, also check the related instructions in README and `docs/`.
+For all code changes, include enough information in your pull request for reviewers to run and verify your changes, as applicable:
+- Python environment setup and key dependency versions
+- Any GPU, CUDA, ROS, or vendor SDK requirements
+- The model checkpoint, dataset, or simulation input used and how to obtain it
+- Commands to run the code, expected behavior, and your validation results
 
 ## Pull request checklist
 
@@ -117,10 +100,10 @@ Before submitting a Pull Request, confirm that:
 
 - [ ] The change scope and motivation are explained.
 - [ ] New or modified modules respect the Client, Server, and communication boundaries.
-- [ ] Relevant tests or checks have been run and any non-running items are recorded.
+- [ ] Relevant tests or checks have been run and reproducible.
 - [ ] No checkpoints, recorded data, logs, personal configuration, or sensitive information are included.
-- [ ] Related Chinese/English documents and links are synchronized.
-- [ ] Hardware safety verification is stated when robot control is involved.
+- [ ] Links in the documents are consistent with the page's language.
+- [ ] For robot control changes, state whether they were tested on real hardware and describe any safety checks performed.
 
 ## License
 
