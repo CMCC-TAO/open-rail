@@ -272,7 +272,7 @@ data/
     └── eval_log.csv
 ```
 
-Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。评测 JSON 保留原始统计数组，CSV 将推理、轨迹和通信耗时聚合为平均值，具体字段见 [docs/vla_rail_learning_notes.md](docs/vla_rail_learning_notes.md)。
+Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。评测 JSON 保留原始统计数组，CSV 将推理、轨迹和通信耗时聚合为平均值。
 
 
 ## 📚 文档

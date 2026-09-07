@@ -17,15 +17,15 @@
   <a href="data/media/OPEN-RAIL_demo.mp4">Play the OPEN-RAIL demo video</a>
 </video>
 
-VLA models keep multiplying, and real-robot deployment has become the accepted answer in embodied AI. What remains unsolved is the engineering stretch between a model checkpoint and a robot: motion that stutters and jitters, long runs that drop data, execution data that never makes it back into model iteration.
+VLA models are rapidly multiplying, and real-robot deployment is now the accepted path in embodied AI. What remains unresolved is the engineering gap between a model checkpoint and a robot: jerky motion, long-running data loss, and execution data that never feeds back into model iteration.
 
-**OPEN-RAIL is that stretch** — a lightweight server-client framework that connects any VLA model to any adapted robot, and closes the loop of **deploy** (run inference on the real robot) → **collect** (capture data as it runs) → **evaluate** (feed data back into iteration) inside every single run.
+**OPEN-RAIL is that missing link** — a lightweight server-client framework that connects any VLA model to any adapted robot and closes the loop of **deploy** (run inference on the real robot) → **collect** (capture data as it runs) → **evaluate** (feed data back into iteration) within every single run.
 
-Today it supports **3 heterogeneous robots** (plus a LeRobot simulation backend) and **10 mainstream VLA models**, with joint acceleration std dropping from **10+ to 0.1 rad/s²**.
+It currently supports **3 heterogeneous robots** (plus a LeRobot simulation backend) and **10 mainstream VLA models**, with joint acceleration standard deviation reduced from **10+ to 0.1 rad/s²**.
 
-- 🤖 **VLA researchers** — a ready-to-use real-robot deployment environment. Focus on model innovation, not on building pipelines
-- 🔧 **Robotics engineers** — a toolkit for fast algorithm validation, without reimplementing drivers and plumbing
-- 🎓 **Startups and university labs** — lower the cost of standing up real-robot experiments and shorten the path from simulation to hardware
+- 🤖 **VLA researchers** — a ready-to-use real-robot deployment environment for model innovation without building the pipeline from scratch
+- 🔧 **Robotics engineers** — a toolkit for fast algorithm validation without reimplementing drivers and plumbing
+- 🎓 **Startups and university labs** — reduce the cost of real-robot experiments and shorten the path from simulation to hardware
 
 ---
 
@@ -33,12 +33,12 @@ Today it supports **3 heterogeneous robots** (plus a LeRobot simulation backend)
 
 | Pain point | What OPEN-RAIL does | Effect |
 |---|---|---|
-| Inference can't keep up with the control cycle; motion stutters and jitters | Three-thread asynchronous pipeline (observation / inference / control) + two-level online smoothing (intra-/inter-chunk) | Joint acceleration std **10+ → 0.1 rad/s²**; a **30–50×** frequency gap eliminated |
-| Robot-side compute can't run large models | Server-client split with non-overlapping dependency trees | Embedded hardware can drive large models; switch device / edge / cloud with **zero code change** |
-| Every new robot means redoing the interface | Lightweight hardware abstraction layer `RobotBase` + unified `action_layout` indexing | **3 heterogeneous robots** adapted; new robot onboarding **from weeks to hours** |
-| Every new model means rewriting the pipeline | Unified model integration contract + automatic server-side routing | **10 models** supported; new models in **≤ 100 lines** |
-| Inference and collection are disjoint; data never reaches training | Collection built into every inference run; LeRobot-style Parquet with appendable episodes | Usable training data from every run, **at zero extra cost** |
-| When inference drifts, there's no way to correct it in time | Three modes (pure inference / pure teleop / hybrid) + pause–intervene–resume with state pre-alignment | Every human correction is a **high-quality demonstration**, no post-processing |
+| Inference cannot keep up with the control cycle; motion stutters and jitters | Three-thread asynchronous pipeline (observation / inference / control) + two-level online smoothing (intra-/inter-chunk) | Joint acceleration std **10+ → 0.1 rad/s²**; a **30–50×** frequency gap is eliminated |
+| Robot-side compute cannot run large models | Server-client split with non-overlapping dependency trees | Embedded hardware can drive large models; device / edge / cloud switching requires **zero code changes** |
+| Every new robot requires a new interface | Lightweight hardware abstraction layer `RobotBase` + unified `action_layout` indexing | **3 heterogeneous robots** adapted; onboarding a new robot from **weeks to hours** |
+| Every new model requires rewriting the pipeline | Unified model integration contract + automatic server-side routing | **10 models** supported; new models can be added in **≤ 100 lines** |
+| Inference and collection are disjoint; data never reaches training | Collection is built into every inference run; LeRobot-style Parquet with appendable episodes | Usable training data is produced from each run, **at zero extra cost** |
+| When inference drifts, there is no way to correct it in time | Three modes (pure inference / pure teleop / hybrid) + pause–intervene–resume with state pre-alignment | Every human correction becomes a **high-quality demonstration** without post-processing |
 
 Smoothing happens at the **framework level** — the model is never modified and no training augmentation is required, so diffusion, flow-matching, and autoregressive architectures are all supported.
 
@@ -55,7 +55,7 @@ conda create -y -n open-rail python=3.10 && conda activate open-rail
 pip install -e .
 ```
 
-For compatibility with older workflows, `pip install -r requirements.txt` also works. `pyproject.toml` is the authoritative source for runtime dependencies and console scripts; where the two conflict, it wins.
+For compatibility with older workflows, `pip install -r requirements.txt` also works. `pyproject.toml` is the authoritative source for runtime dependencies and console scripts; when the two conflict, it takes precedence.
 
 ### 2. Start the server
 
@@ -74,7 +74,7 @@ python run_web_client.py --host 0.0.0.0 --port 9000 --conf default_conf.yaml
 
 ### 4. Verify
 
-Open http://localhost:9000 in your browser and drive the robot from the UI.
+Open http://localhost:9000 in your browser and operate the robot from the UI.
 
 | Argument | Description | Default |
 | --- | --- | --- |
@@ -124,11 +124,11 @@ PYTHONPATH=/home/vlamaster2/workspace/projects/TAO/src:$PYTHONPATH \
 
 ## Data Collection
 
-"Inference is collection" is the dividing line between OPEN-RAIL and approaches that separate inference from data capture — every run produces data that flows straight into the training pipeline, with no extra collection pass.
+"Inference is collection" is the dividing line between OPEN-RAIL and approaches that separate inference from data capture — every run produces data that flows directly into the training pipeline, with no extra collection pass.
 
-- Data is written by the client-side data manager in parallel with the inference path, never affecting control frequency
+- Data is written by the client-side data manager in parallel with the inference path and does not affect control frequency
 - **LeRobot-style Parquet** with appendable episodes, suited to long-horizon runs and incremental training
-- Segments produced by human intervention are equally high-quality demonstrations, with no post-processing
+- Segments produced by human intervention are equally high-quality demonstrations without post-processing
 
 ```text
 data/
@@ -151,9 +151,9 @@ The repository does not include a downloadable public dataset. Prepare your own 
 
 ![OPEN-RAIL Architecture](data/media/architecture.png)
 
-OPEN-RAIL adopts a **server-client distributed architecture** in which the inference path and the visualization path are decoupled and never interfere with each other. The **Server** owns model inference. The **Client** sits on the robot side, owns observation collection, task execution, command dispatch, and data recording, and connects robot configuration to model inference in a single workflow.
+OPEN-RAIL adopts a **server-client distributed architecture** in which the inference path and the visualization path are decoupled and never interfere with each other. The **Server** owns model inference. The **Client** runs on the robot side and is responsible for observation collection, task execution, command dispatch, and data recording, connecting robot configuration to model inference in a single workflow.
 
-Because the Server owns the model environment and the Client owns the robot environment exclusively, the two dependency trees never collide — the CUDA/PyTorch versions the model wants no longer fight the ROS versions the robot drivers want. This is also what makes device/edge/cloud switching a zero-code-change operation: moving the deployment only changes the Server's network address.
+Because the Server owns the model environment and the Client owns the robot environment exclusively, the two dependency trees never collide — the CUDA/PyTorch versions the model requires no longer fight the ROS versions the robot drivers require. This is also what makes device/edge/cloud switching a zero-code-change operation: moving the deployment only changes the Server's network address.
 
 ```text
 .
@@ -233,7 +233,7 @@ Development setup and checks:
 ```bash
 python -m pip install -e ".[dev]"
 python -m pytest
-python -m compileall client server conf web_client
+python -m compileall client server conf
 git diff --check
 ```
 
