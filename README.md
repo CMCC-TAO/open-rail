@@ -237,7 +237,7 @@ python -m compileall client server conf web_client
 git diff --check
 ```
 
-The repository currently does not configure a dedicated lint or formatting tool. Keep changes scoped, avoid committing checkpoints, recordings, logs, local configuration, or secrets, and document hardware/model prerequisites for adapter changes.
+The repository currently does not configure a dedicated lint or formatting tool. Keep changes scoped and document hardware/model prerequisites for adapter changes.
 
 ## Citation
 

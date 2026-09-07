@@ -194,7 +194,7 @@ Mock 模型只返回随机动作，不能替代真实模型评测。
 
 ## 🏗️ 系统架构
 
-![OPEN-RAIL 架构图](data/media/architecture.png)
+![OPEN-RAIL 架构图](data/media/architecture.zh-CN.png)
 
 OPEN-RAIL 采用 **服务端-客户端分布式架构**，推理主链路与可视化链路独立解耦、互不干扰。**服务端**负责模型推理；**客户端**部署于机器人侧，负责状态采集、任务执行、指令下发和数据记录，将机器人配置与模型推理整合为统一工作流。
 
@@ -292,7 +292,7 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。�
 
 - [x] 三线程异步流水 + 两级在线平滑——关节加速度标准差 **10+ → 0.1 rad/s²**
 - [x] **3 款异构机器人 + 10 个 VLA 模型**（7 系列）适配，端 / 边 / 云零改动切换
-- [x] 推理即采集（LeRobot 风格 Parquet）+ 三模式运行与实时遥操纠偏
+- [x] 推理即采集（LeRobot 风格 Parquet）
 - [ ] 🚧 评估工具集——量化每次运行的平滑质量、延迟与数据产出
 - [ ] 🚧 容器镜像——服务端与客户端 Docker 预置镜像
 - [ ] 🔜 仿真器对接——Isaac Sim / MuJoCo / Genesis 共用同一套适配器接口
@@ -316,7 +316,7 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。�
 python -m pip install -e ".[dev]"
 ```
 
-代码规范与测试约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+代码规范与测试约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。如需提交代码，请注意保持改动聚焦，并遵守贡献指南中对 checkpoint、录制数据、日志和本地配置的提交限制。
 
 
 ## 📖 引用

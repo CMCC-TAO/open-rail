@@ -1,22 +1,22 @@
-# 贡献指南
+# Contributing Guide
 
-感谢你为 OPEN-RAIL 贡献代码、模型适配器、机器人适配器、平滑策略、测试或文档。
+Thank you for contributing code, model adapters, robot adapters, smoothing strategies, tests, or documentation to OPEN-RAIL.
 
-## 开始之前
+## Before you start
 
-请先阅读：
+Please read the following first:
 
-- [项目中文 README](README.zh-CN.md)
-- [中文架构说明](docs/architecture.zh-CN.md)
-- [中文配置说明](docs/configuration.zh-CN.md)
-- [机器人接入指南](docs/guides/add-new-robot.zh-CN.md)
-- [VLA 模型接入指南](docs/guides/add-new-vla-model.zh-CN.md)
+- [Project README](README.md)
+- [Architecture guide](docs/architecture.md)
+- [Configuration guide](docs/configuration.md)
+- [Robot integration guide](docs/guides/add-new-robot.md)
+- [VLA model integration guide](docs/guides/add-new-vla-model.md)
 
-涉及新增机器人或模型适配器时，建议先提交 issue，说明使用场景、依赖、输入输出契约和验证方式。
+For new robots or model adapters, it is recommended to open an issue first and describe the use case, dependencies, input/output contract, and validation method.
 
-## 开发环境
+## Development environment
 
-项目要求 Python 3.10 或更高版本。建议使用独立的 Conda 或虚拟环境：
+The project requires Python 3.10 or newer. It is recommended to use an isolated Conda or virtual environment:
 
 ```bash
 conda create -n open-rail-dev python=3.10 -y
@@ -25,105 +25,103 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-`pyproject.toml` 是依赖和命令行入口的权威来源。模型专属依赖应安装在服务端模型环境中，机器人 SDK 或 ROS 依赖应安装在客户端环境中，避免把两类环境强行绑定。
+`pyproject.toml` is the authoritative source for dependencies and CLI entry points. Model-specific dependencies should be installed in the server-side model environment, while robot SDK or ROS dependencies should be installed in the client-side environment to avoid binding the two environments together unnecessarily.
 
-## 分支与提交
+## Branches and commits
 
-- 从最新主分支创建主题分支，不要直接在主分支上开发。
-- 每个提交只解决一个明确问题，避免混入无关格式化或生成文件。
-- 提交信息应简洁说明变更目的，例如 `docs: update architecture guide` 或 `feat: add robot adapter`。
-- 不要提交模型 checkpoint、原始录制视频、运行日志、缓存目录或本地配置密钥。
-- 提交前检查 `git diff`，确认没有包含个人路径、设备地址、访问令牌或其他敏感信息。
+- Create a feature branch from the latest main branch instead of committing directly to main.
+- Keep each commit focused on one clear issue and avoid mixing unrelated formatting or generated-file changes.
+- Use concise commit messages that explain the purpose of the change, for example `docs: update architecture guide` or `feat: add robot adapter`.
+- Do not commit model checkpoints, raw recorded videos, runtime logs, cache directories, or local configuration secrets.
+- Before committing, check `git diff` and verify that no personal paths, device addresses, access tokens, or other sensitive information are included.
 
-## 模块边界
+## Module boundaries
 
-请保持以下依赖方向：
+Please keep the dependency direction as follows:
 
 ```text
 Robot adapter -> Client control loop -> message contract -> Server inference -> model adapter
 ```
 
-- 机器人硬件和 SDK 调用放在 `client/robots/`。
-- 观测采集、本地状态、动作调度、平滑和指令下发放在 Client 侧。
-- 模型加载和 `infer()` 实现放在 `server/models/`。
-- `server/core/vla_server.py` 负责推理流程，不调用机器人 SDK 或执行机器人动作。
-- `client/core/zmq_client.py` 和 `server/core/zmq_server.py` 只负责传输、路由、心跳和请求关联，不承载业务策略。
-- 数据记录、评测和可视化通过独立接口或队列接入，不应阻塞实时推理和控制链路。
+- Robot hardware and SDK calls belong in `client/robots/`.
+- Observation collection, local state management, action scheduling, smoothing, and command dispatch belong on the client side.
+- Model loading and `infer()` implementations belong in `server/models/`.
+- `server/core/vla_server.py` handles the inference workflow and must not call the robot SDK or execute hardware actions.
+- `client/core/zmq_client.py` and `server/core/zmq_server.py` are responsible only for transport, routing, heartbeat, and request correlation; they should not carry business logic.
+- Data recording, evaluation, and visualization should be integrated through separate interfaces or queues so they do not block the real-time inference and control path.
 
-新增模块时，请优先复用现有配置、适配器和队列接口，不要在多个边界之间复制同一份业务逻辑。
+When adding new modules, prefer reusing existing configuration, adapters, and queue interfaces instead of copying the same business logic across boundaries.
 
-## 新增机器人适配器
+## Adding a robot adapter
 
-在 `client/robots/` 下创建机器人目录，继承 `RobotBase`，至少实现：
+Create a robot directory under `client/robots/` and inherit from `RobotBase`; at minimum, implement:
 
-- `retrieve_observation()`：返回相机、本体状态和必要的时间戳。
-- `execute_action()`：接收客户端动作并转换为机器人指令。
+- `retrieve_observation()`: return camera data, robot state, and required timestamps.
+- `execute_action()`: convert client actions into robot commands.
 
-同时完成以下内容：
+Also complete the following:
 
-- 在 `conf/robots_conf.py` 注册机器人类型和配置。
-- 明确相机名称、动作维度和 `action_layout`。
-- 将厂商 SDK、ROS 话题和设备通信代码限制在机器人适配器内。
-- 在没有模型服务端时先验证观测读取和动作转换。
-- 说明真实硬件、SDK、ROS 版本和安全前提。
+- Register the robot type and configuration in `conf/robots_conf.py`.
+- Define the camera names, action dimensions, and `action_layout` clearly.
+- Keep vendor SDK, ROS topic, and device communication code inside the robot adapter.
+- Validate observation reading and action conversion before connecting to a model server.
+- Document the physical device, SDK, ROS version, and safety assumptions.
 
-详细接口要求见 [机器人接入指南](docs/guides/add-new-robot.zh-CN.md)。
+See the [robot integration guide](docs/guides/add-new-robot.md) for the detailed interface requirements.
 
-## 新增 VLA 模型适配器
+## Adding a VLA model adapter
 
-在 `server/models/` 下创建模型目录并实现 `ModelVLA`，提供初始化和 `infer(sequence)` 接口：
+Create a model directory under `server/models/` and implement `ModelVLA` with initialization and `infer(sequence)` interfaces:
 
-- 从输入序列读取观测和元数据。
-- 将相机、状态和语言输入转换为模型需要的格式。
-- 返回符合现有客户端协议的 `pred_action` 和必要元数据。
-- 在 `run_server.py:get_model()` 和 `conf/models_conf.py` 注册模型类型。
-- 在模型环境中记录 checkpoint、外部源码和专属依赖要求。
+- Read observations and metadata from the incoming sequence.
+- Convert camera, state, and language inputs into the format expected by the model.
+- Return `pred_action` and required metadata using the current client protocol.
+- Register the model type in `run_server.py:get_model()` and `conf/models_conf.py`.
+- Record the checkpoint, upstream source, and model-specific dependency requirements in the model environment.
 
-模型代码不应直接操作 ZMQ socket、机器人 SDK 或 Client API。详细格式见 [VLA 模型接入指南](docs/guides/add-new-vla-model.zh-CN.md)。
+Model code should not directly operate the ZMQ socket, robot SDK, or client API. See the [VLA model integration guide](docs/guides/add-new-vla-model.md) for the detailed contract.
 
-## 测试与检查
+## Testing and checks
 
-当前仓库没有独立的自动化测试文件，也没有统一的 lint 或 format 配置。提交前至少完成与改动范围匹配的检查：
+The repository currently does not include a separate automated test suite, but `.pre-commit-config.yaml` is already configured for code formatting and linting. Before submitting, complete at least the checks relevant to your change scope:
 
 ```bash
 python -m pytest
-python -m compileall client server conf web_client
+python -m compileall client server conf
 ```
 
-如果只修改文档，可检查 Markdown 代码围栏、相对链接和 `git diff --check`：
+If you only modify documentation, also check Markdown fences, relative links, and `git diff --check`:
 
 ```bash
 git diff --check
 ```
 
-涉及模型、机器人或通信层时，还应记录：
+When modifying the model, robot, or communication layers, record:
 
-- 使用的 Python 环境和关键依赖版本。
-- 是否需要 GPU、CUDA、ROS 或厂商 SDK。
-- 使用的模型 checkpoint、数据集或模拟输入。
-- 启动命令、预期结果和实际验证结果。
+- the Python environment and key dependency versions
+- whether GPU, CUDA, ROS, or vendor SDK support is required
+- the model checkpoint, dataset, or simulation input used
+- startup commands, expected results, and actual validation results
 
-不要把大型 checkpoint、原始视频或本地数据集提交到仓库；请在说明中记录获取方式或使用约束。
+## Documentation requirements
 
-## 文档要求
+- Use the Chinese version for Chinese docs and the English version for English docs.
+- New commands must match the actual entry-point arguments and paths; do not invent nonexistent parameters or locations.
+- Describe default values, config file locations, and runtime environment assumptions, especially cross-platform differences.
+- If a behavior has not been validated, write “requires verification” or “depends on the specific model/hardware,” and do not present speculation as a guarantee.
+- When changing directory structure, entry commands, or configuration fields, also check the related instructions in README and `docs/`.
 
-- 中文文档链接中文版本，英文文档链接英文版本。
-- 新增命令必须与实际入口参数一致，不要使用不存在的参数或路径。
-- 说明默认值、配置文件位置和运行环境，尤其是跨平台差异。
-- 代码行为尚未实测时，使用“需要验证”或“以具体模型/硬件为准”，不要把推测写成保证。
-- 更新目录结构、入口命令或配置字段时，同步检查 README 和 `docs/` 中的相关说明。
+## Pull request checklist
 
-## Pull Request 清单
+Before submitting a Pull Request, confirm that:
 
-提交 Pull Request 前，请确认：
+- [ ] The change scope and motivation are explained.
+- [ ] New or modified modules respect the Client, Server, and communication boundaries.
+- [ ] Relevant tests or checks have been run and any non-running items are recorded.
+- [ ] No checkpoints, recorded data, logs, personal configuration, or sensitive information are included.
+- [ ] Related Chinese/English documents and links are synchronized.
+- [ ] Hardware safety verification is stated when robot control is involved.
 
-- [ ] 变更范围和动机已说明。
-- [ ] 新增或修改的模块遵守 Client、Server 和通信层边界。
-- [ ] 已运行与改动相关的测试或检查，并记录未能运行的项目。
-- [ ] 没有提交 checkpoint、录制数据、日志、个人配置或敏感信息。
-- [ ] 相关中文/英文文档和链接已同步。
-- [ ] 涉及机器人控制时，已说明硬件安全验证范围。
+## License
 
-## 许可证
-
-本项目使用 Apache License 2.0。提交代码和文档即表示你有权按该许可证贡献相应内容，并同意其按项目许可证发布。
+This project is licensed under Apache License 2.0. By submitting code or documentation, you confirm that you have the right to contribute the relevant content under that license and agree to have it published under the project license.
