@@ -316,8 +316,8 @@ class RealtimeDataManager():
 
     def get_start_chunk_index(self, next_timestamps):
         start_chunk_index = 0
-        time_offset = self.start_ctrl_marker - self.observe_marker
-        self.logger.debug(f'total inference time: {time_offset:.3f}s')
+        time_offset = self.start_inter_traj_marker - self.observe_marker
+        self.logger.info(f'total inference time: {time_offset:.3f}s')
         
         for index in range(len(next_timestamps)):
             if next_timestamps[index] > time_offset:
