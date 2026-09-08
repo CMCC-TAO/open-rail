@@ -149,7 +149,7 @@ class RobotBody(RobotBase):
             self.current_timestamp = ref_timestamp
 
             result['ref_timestamp'] = ref_timestamp
-            result[f'cam.{self._cam_ref}'] = image[:, :, ::-1].copy()
+            result[f'cam.{self._cam_ref}'] = image[:, :, ::-1]
 
             if self._non_ref_fetch_pool is not None:
                 future_to_key = {
@@ -158,7 +158,7 @@ class RobotBody(RobotBase):
                 }
                 for future in future_to_key:
                     key, image = future.result()
-                    result[f'cam.{key}'] = image[:, :, ::-1].copy()
+                    result[f'cam.{key}'] = image[:, :, ::-1]
 
             state_size = 0
             gripper_start = None
