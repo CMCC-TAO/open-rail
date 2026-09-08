@@ -390,7 +390,7 @@ class VLAClient():
                 time.sleep(0.1)
                 continue
             else:
-                time.sleep(0.005/retrieve_try_num)
+                time.sleep(0.01/retrieve_try_num)
                 retrieve_try_num = retrieve_try_num + 1.0
 
             observations = self.robot.retrieve_observation()
