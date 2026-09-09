@@ -70,6 +70,11 @@ class FramePacket:
             obs = nested
         else:
             obs = result
+            # Flat observations (no "obs" key) must keep their non-camera fields
+            # too, otherwise values such as ref_timestamp / obs.state would be
+            # dropped when the packet crosses a process boundary.
+            for index in range(self.field_count):
+                obs[self.field_keys[index]] = self.field_values[index]
 
         for index in range(self.camera_count):
             camera = self.camera_metadata[index]
