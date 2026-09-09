@@ -28,6 +28,7 @@ import queue
 import signal
 import threading
 import time
+from multiprocessing import shared_memory
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -193,7 +194,8 @@ class _RobotWorker:
                 else:
                     time.sleep(_IDLE_SLEEP_S)
         except (KeyboardInterrupt, SystemExit):
-            logger.info('Robot worker interrupted, shutting down gracefully')
+            # Covers both Ctrl-C and the SystemExit raised by the SIGTERM handler.
+            logger.info('Robot worker received a shutdown signal, cleaning up')
 
     def _drain_commands(self) -> None:
         """Execute every queued command so control latency is not frame-bound."""
@@ -291,6 +293,24 @@ def _ignore_interrupt_signals() -> None:
         logger.debug('Could not ignore SIGINT in the robot worker', exc_info=True)
 
 
+def _install_worker_signal_handlers() -> None:
+    """Turn SIGTERM (``Process.terminate``) into a graceful shutdown.
+
+    ``terminate()`` sends SIGTERM, whose default action kills the worker before
+    its ``finally`` block runs, so the shared memory blocks it created stay
+    unlinked and resource_tracker reports them as leaked. Raising SystemExit from
+    the handler makes it propagate through ``_loop()`` so the cleanup still runs.
+    """
+    def _graceful_exit(signum, frame):  # noqa: ARG001 - signal handler signature
+        raise SystemExit(0)
+
+    try:
+        signal.signal(signal.SIGTERM, _graceful_exit)
+    except Exception:  # pragma: no cover - restricted environments
+        logger.debug('Could not install SIGTERM handler in the robot worker',
+                     exc_info=True)
+
+
 def _robot_worker_entry(robot_type, config, obs_queue, cmd_queue, resp_queue,
                         ready_queue, shm_ring_size, robot_module=None) -> None:
     """Subprocess entry point (must stay importable/picklable for spawn)."""
@@ -299,6 +319,7 @@ def _robot_worker_entry(robot_type, config, obs_queue, cmd_queue, resp_queue,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
     )
     _ignore_interrupt_signals()
+    _install_worker_signal_handlers()
     _RobotWorker(
         robot_type=robot_type,
         config=config,
@@ -346,6 +367,9 @@ class RobotProxy:
         self._cmd_id = 0
         self._closed = False
         self._shm_cache: Dict[str, Any] = {}
+        # Names of the worker-owned shared memory blocks seen in observations;
+        # used to unlink any survivor if the worker was killed before cleaning up.
+        self._remote_shm_names = set()
 
         # The worker owns the shared memory blocks; attaching here must not make
         # this process try to unlink them on exit.
@@ -443,6 +467,7 @@ class RobotProxy:
             self.current_state = state
 
         observation = payload.get('observation')
+        self._track_remote_shm(observation)
         decoded = SharedMemoryManager.decode_observation(
             observation, self._shm_cache, copy=False
         )
@@ -559,8 +584,47 @@ class RobotProxy:
         finally:
             # Always detach from the worker-owned blocks, even if we are interrupted.
             SharedMemoryManager.close_reader(self._shm_cache)
+            self._unlink_remote_shm()
             self._close_queues()
             self.logger.info('Robot worker stopped (type=%s)', self._robot_type)
+
+    def _track_remote_shm(self, observation) -> None:
+        """Remember the worker-owned block names carried by an observation."""
+        if not isinstance(observation, dict):
+            return
+        for key, value in observation.items():
+            if str(key).startswith('cam.') and isinstance(value, dict):
+                name = value.get('name')
+                if name:
+                    self._remote_shm_names.add(name)
+
+    def _unlink_remote_shm(self) -> None:
+        """Last resort: unlink worker-owned blocks that survived shutdown.
+
+        If the worker was killed before its own cleanup ran, the blocks it
+        created are still registered with resource_tracker and get reported as
+        leaked shared_memory objects at exit.
+        """
+        if not self._remote_shm_names:
+            return
+        for name in list(self._remote_shm_names):
+            block = None
+            try:
+                block = shared_memory.SharedMemory(name=name)
+                block.close()
+                block.unlink()
+            except FileNotFoundError:
+                pass
+            except Exception:
+                self.logger.debug('Could not unlink shared memory block %s', name,
+                                  exc_info=True)
+            finally:
+                if block is not None:
+                    try:
+                        block.close()
+                    except Exception:
+                        pass
+                self._remote_shm_names.discard(name)
 
     def _close_queues(self) -> None:
         """Close the IPC queues so their semaphores are unregistered.
