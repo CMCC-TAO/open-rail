@@ -8,14 +8,101 @@ from typing import Any, Dict, Optional, Union
 import numpy as np
 
 
+class _CameraMetadata:
+    """Immutable camera metadata and producer-owned ring buffers."""
+
+    __slots__ = ("name", "shape", "dtype", "shm", "buffers", "next_index")
+
+    def __init__(self, name, shape, dtype, shm, buffers):
+        self.name = name
+        self.shape = shape
+        self.dtype = dtype
+        self.shm = shm
+        self.buffers = buffers
+        self.next_index = 0
+
+
+class FramePacket:
+    """Fixed-capacity observation packet for the local producer/consumer queue."""
+
+    __slots__ = (
+        "camera_metadata", "camera_slots", "camera_timestamps",
+        "camera_count", "field_keys", "field_values", "field_count", "nested",
+        "outer_keys", "outer_values", "outer_count"
+    )
+
+    def __init__(self, camera_metadata, field_capacity):
+        self.camera_metadata = camera_metadata
+        self.camera_slots = [0] * len(camera_metadata)
+        self.camera_timestamps = [0] * len(camera_metadata)
+        self.camera_count = 0
+        self.field_keys = [None] * field_capacity
+        self.field_values = [None] * field_capacity
+        self.field_count = 0
+        self.nested = False
+        self.outer_keys = [None] * field_capacity
+        self.outer_values = [None] * field_capacity
+        self.outer_count = 0
+
+    def reset(self, nested, outer_items=()):
+        self.camera_count = 0
+        self.field_count = 0
+        self.nested = nested
+        self.outer_count = 0
+        for key, value in outer_items:
+            if self.outer_count >= len(self.outer_keys):
+                break
+            self.outer_keys[self.outer_count] = key
+            self.outer_values[self.outer_count] = value
+            self.outer_count += 1
+
+    def to_observation_descriptors(self):
+        """Build the legacy descriptor mapping only for recording/IPC."""
+        result = {
+            self.outer_keys[index]: self.outer_values[index]
+            for index in range(self.outer_count)
+        }
+        if self.nested:
+            nested = {}
+            for index in range(self.field_count):
+                nested[self.field_keys[index]] = self.field_values[index]
+            result["obs"] = nested
+            obs = nested
+        else:
+            obs = result
+            # Flat observations (no "obs" key) must keep their non-camera fields
+            # too, otherwise values such as ref_timestamp / obs.state would be
+            # dropped when the packet crosses a process boundary.
+            for index in range(self.field_count):
+                obs[self.field_keys[index]] = self.field_values[index]
+
+        for index in range(self.camera_count):
+            camera = self.camera_metadata[index]
+            slot_index = self.camera_slots[index]
+            obs[camera.name] = {
+                "transport": "shm",
+                "name": camera.shm[slot_index].name,
+                "shape": list(camera.shape),
+                "dtype": str(camera.dtype),
+                "slot_index": slot_index,
+                "timestamp_ns": self.camera_timestamps[index],
+            }
+        return result
+
+
 class SharedMemoryManager:
     """Own producer shared-memory slots and provide isolated reader caches."""
 
     def __init__(self, ring_size: int = 3) -> None:
         self.logger = logging.getLogger(__name__)
         self._ring_size = ring_size
-        self._lock = threading.Lock()
-        self._slots: Dict[str, Dict[str, Any]] = {}
+        # Initialization may be called by setup code, but the runtime producer
+        # is single-threaded and must not contend on a global lock per frame.
+        self._init_lock = threading.Lock()
+        self._camera_metadata: tuple[_CameraMetadata, ...] = ()
+        self._camera_by_name: Dict[str, _CameraMetadata] = {}
+        self._field_capacity = 16
+        self._packet_template = None
         self._stale_blocks = []
         self._closed = False
 
@@ -46,52 +133,54 @@ class SharedMemoryManager:
     def _safe_shm_name(self, camera_name: str, slot_index: int) -> str:
         return f"vla_{os.getpid()}_{camera_name.replace('.', '_')}_{slot_index}_{time.time_ns()}"
 
-    def _create_or_resize_slot(self, camera_name: str, slot_index: int, shape: tuple, dtype: np.dtype):
-        camera_entry = self._slots.setdefault(
-            camera_name, {"slots": [None] * self._ring_size, "next_index": 0}
-        )
-        slot = camera_entry["slots"][slot_index]
+    def _create_slot(self, camera_name: str, slot_index: int, shape: tuple, dtype: np.dtype):
         required_nbytes = int(np.prod(shape, dtype=np.int64)) * int(np.dtype(dtype).itemsize)
-
-        if slot is not None:
-            if tuple(slot["shape"]) == tuple(shape) and np.dtype(slot["dtype"]) == np.dtype(dtype):
-                return slot
-            old_shm = slot.get("shm")
-            if old_shm is not None:
-                self._stale_blocks.append(old_shm)
 
         shm_obj = shared_memory.SharedMemory(
             create=True,
             size=required_nbytes,
             name=self._safe_shm_name(camera_name, slot_index),
         )
-        new_slot = {
-            "shm": shm_obj,
-            "name": shm_obj.name,
-            "shape": tuple(shape),
-            "dtype": np.dtype(dtype),
-        }
-        camera_entry["slots"][slot_index] = new_slot
-        return new_slot
+        return shm_obj
 
-    def init_pool(self, camera_shape: Dict[str, Union[tuple, list]]) -> None:
+    def init_pool(
+        self,
+        camera_shape: Dict[str, Union[tuple, list]],
+        camera_dtypes: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Create producer slots using shapes obtained from real camera frames."""
         if not isinstance(camera_shape, dict):
             return
-        with self._lock:
+        with self._init_lock:
+            if self._camera_metadata:
+                return
+            metadata = []
             for camera_name, shape_value in camera_shape.items():
                 if not str(camera_name).startswith("cam.") or shape_value is None:
                     continue
                 shape = tuple(int(value) for value in shape_value)
                 if len(shape) < 2:
                     continue
-                if len(shape) == 2:
-                    shape = (shape[0], shape[1], 1)
+                dtype = np.dtype(
+                    (camera_dtypes or {}).get(camera_name, np.uint8)
+                )
+                shm_slots = []
+                buffers = []
                 for slot_index in range(self._ring_size):
-                    self._create_or_resize_slot(camera_name, slot_index, shape, np.uint8)
+                    shm_obj = self._create_slot(camera_name, slot_index, shape, dtype)
+                    shm_slots.append(shm_obj)
+                    buffers.append(np.ndarray(shape, dtype=dtype, buffer=shm_obj.buf))
+                camera_metadata = _CameraMetadata(
+                    camera_name, shape, dtype, shm_slots, buffers
+                )
+                metadata.append(camera_metadata)
 
-    def encode_observation(self, observation: Dict[str, Any]) -> Dict[str, Any]:
-        """Copy camera arrays into producer slots and return transport descriptors."""
+            self._camera_metadata = tuple(metadata)
+            self._camera_by_name = {item.name: item for item in metadata}
+            self._packet_template = FramePacket(self._camera_metadata, self._field_capacity)
+
+    def encode_observation(self, observation: Dict[str, Any]) -> Dict[str, Any] | FramePacket:
+        """Copy frames into preallocated slots and return a fixed-capacity packet."""
         if not isinstance(observation, dict):
             return observation
         nested = isinstance(observation.get("obs"), dict)
@@ -99,42 +188,29 @@ class SharedMemoryManager:
         if not isinstance(obs, dict):
             return observation
 
-        encoded_obs = dict(obs)
-        transformed = False
-        with self._lock:
-            for camera_name, frame in obs.items():
-                if not str(camera_name).startswith("cam.") or not isinstance(frame, np.ndarray):
-                    continue
-                if frame.ndim < 2:
-                    self.logger.warning("Invalid frame ndim for %s: %s", camera_name, frame.ndim)
-                    continue
-
-                camera_entry = self._slots.setdefault(
-                    camera_name, {"slots": [None] * self._ring_size, "next_index": 0}
-                )
-                slot_index = int(camera_entry["next_index"])
-                slot = self._create_or_resize_slot(camera_name, slot_index, tuple(frame.shape), frame.dtype)
-                shm_frame = np.ndarray(slot["shape"], dtype=slot["dtype"], buffer=slot["shm"].buf)
-                shm_frame[...] = frame
-                encoded_obs[camera_name] = {
-                    "transport": "shm",
-                    "name": slot["name"],
-                    "shape": list(frame.shape),
-                    "dtype": str(frame.dtype),
-                    "slot_index": slot_index,
-                    "timestamp_ns": time.time_ns(),
-                }
-                camera_entry["next_index"] = (slot_index + 1) % self._ring_size
-                transformed = True
-
-        if not transformed:
+        if not self._camera_metadata:
             return observation
-        encoded_observation = dict(observation)
-        if nested:
-            encoded_observation["obs"] = encoded_obs
-        else:
-            encoded_observation.update(encoded_obs)
-        return encoded_observation
+
+        packet = FramePacket(self._camera_metadata, self._field_capacity)
+        outer_items = ((key, value) for key, value in observation.items() if key != "obs") if nested else ()
+        packet.reset(nested, outer_items)
+        for key, value in obs.items():
+            camera = self._camera_by_name.get(str(key))
+            if camera is not None and isinstance(value, np.ndarray):
+                if tuple(value.shape) != camera.shape or np.dtype(value.dtype) != camera.dtype:
+                    self.logger.warning("Camera shape/dtype changed for %s; frame skipped", key)
+                    continue
+                slot_index = camera.next_index
+                camera.buffers[slot_index][...] = value
+                packet.camera_slots[packet.camera_count] = slot_index
+                packet.camera_timestamps[packet.camera_count] = time.time_ns()
+                packet.camera_count += 1
+                camera.next_index = (slot_index + 1) % self._ring_size
+            elif packet.field_count < len(packet.field_keys):
+                packet.field_keys[packet.field_count] = key
+                packet.field_values[packet.field_count] = value
+                packet.field_count += 1
+        return packet
 
     @staticmethod
     def decode_observation(
@@ -144,6 +220,22 @@ class SharedMemoryManager:
     ) -> Optional[Dict[str, Any]]:
         """Attach and copy frames using the cache owned by one reader."""
         logger = logging.getLogger(__name__)
+        if isinstance(step_state, FramePacket):
+            decoded_obs = {}
+            for index in range(step_state.camera_count):
+                camera = step_state.camera_metadata[index]
+                slot_index = step_state.camera_slots[index]
+                decoded_obs[camera.name] = camera.buffers[slot_index]
+            for index in range(step_state.field_count):
+                decoded_obs[step_state.field_keys[index]] = step_state.field_values[index]
+            result = {
+                step_state.outer_keys[index]: step_state.outer_values[index]
+                for index in range(step_state.outer_count)
+            }
+            if step_state.nested:
+                result["obs"] = decoded_obs
+                return result
+            return decoded_obs
         if not isinstance(step_state, dict):
             return step_state
         nested = isinstance(step_state.get("obs"), dict)
@@ -196,11 +288,10 @@ class SharedMemoryManager:
 
     def release(self) -> None:
         """Close and unlink producer-owned blocks; reader caches are independent."""
-        with self._lock:
-            slots = [slot for entry in self._slots.values() for slot in entry.get("slots", []) if slot]
+        with self._init_lock:
+            slots = [shm_obj for item in self._camera_metadata for shm_obj in item.shm]
             slots.extend(self._stale_blocks)
-            for slot in slots:
-                shm_obj = slot.get("shm") if isinstance(slot, dict) else slot
+            for shm_obj in slots:
                 if shm_obj is None:
                     continue
                 try:
@@ -214,7 +305,9 @@ class SharedMemoryManager:
                 except Exception:
                     self.logger.exception("Failed to unlink shared memory block")
             self._stale_blocks.clear()
-            self._slots.clear()
+            self._camera_metadata = ()
+            self._camera_by_name.clear()
+            self._packet_template = None
 
     def close(self) -> None:
         if self._closed:

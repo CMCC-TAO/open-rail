@@ -51,7 +51,6 @@ sys.path.insert(0, str(ROOT))
 
 from conf.logging_conf import setup_logging
 from conf.client_conf import get_client_config
-from conf.robots_conf import RobotType
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -1318,27 +1317,18 @@ def _ensure_vla_client_created():
     return vla_client
 
 def _create_robot(robot_type, robot_config):
-    robot = None
+    """Create the robot proxy that owns a dedicated worker subprocess.
+
+    The concrete ``RobotBody`` (and its vendor SDK) is instantiated inside that
+    subprocess, see ``client/robots/robot_proxy.py``. Running it out of process
+    removes the GIL contention between observation/control and the VLA client.
+    """
     try:
-        if robot_type == RobotType.A2D:
-            from client.robots.a2d.body_robot import RobotBody
-            robot = RobotBody(robot_config)
-        elif robot_type == RobotType.NAVI_WA2:
-            from client.robots.navi_wa2.body_robot import RobotBody
-            robot = RobotBody(robot_config)
-        elif robot_type == RobotType.MOCK:
-            from client.robots.mock.body_robot import RobotBody
-            robot = RobotBody(robot_config)
-        elif robot_type == RobotType.TI5_T170C:
-            from client.robots.ti5_t170c.body_robot import RobotBody
-            robot = RobotBody(robot_config)
-        else:
-            logger.error(f"Unsupported robot type: {robot_type}")
-            raise ValueError(f"Unsupported robot type: {robot_type}")
+        from client.robots.robot_proxy import RobotProxy
+        return RobotProxy(robot_type, robot_config)
     except Exception as e:
         logger.exception(f"Robot creation failed: {e}")
         raise ValueError(f"Create robot failed, type: {robot_type}")
-    return robot
 
 async def _start_client():
     try:

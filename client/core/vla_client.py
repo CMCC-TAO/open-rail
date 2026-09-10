@@ -4,7 +4,7 @@ import logging
 import threading
 import numpy as np
 
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 from typing import Optional
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
@@ -121,7 +121,7 @@ class VLAClient():
         self.show_thread_lock = threading.Lock()
 
         # Raw observation queue: no frame dropping in VLA client pipeline.
-        self._raw_observe_queue = Queue()
+        self._raw_observe_queue = Queue(maxsize=2)
         self._raw_observe_shm_cache = {}
 
         # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
@@ -390,7 +390,7 @@ class VLAClient():
                 time.sleep(0.1)
                 continue
             else:
-                time.sleep(0.02/retrieve_try_num)
+                time.sleep(0.01/retrieve_try_num)
                 retrieve_try_num = retrieve_try_num + 1.0
 
             observations = self.robot.retrieve_observation()
@@ -399,9 +399,21 @@ class VLAClient():
                     cam_items = [(key, value) for key, value in observations.items() if 'cam.' in key]
                     if cam_items:
                         self.camera_shape_dict = {key: img.shape for key, img in cam_items}
-                        self.shared_memory_manager.init_pool(self.camera_shape_dict)
+                        camera_dtype_dict = {key: img.dtype for key, img in cam_items}
+                        self.shared_memory_manager.init_pool(
+                            self.camera_shape_dict,
+                            camera_dtypes=camera_dtype_dict,
+                        )
                 encoded_observations = self.shared_memory_manager.encode_observation(observations)
-                self._raw_observe_queue.put(encoded_observations)
+                try:
+                    self._raw_observe_queue.put_nowait(encoded_observations)
+                except Full:
+                    try:
+                        self._raw_observe_queue.get_nowait()
+                        self._raw_observe_queue.task_done()
+                    except Empty:
+                        pass
+                    self._raw_observe_queue.put_nowait(encoded_observations)
                 retrieve_try_num = 1.0
 
     def _process_observe_thread_fun(self):
@@ -423,17 +435,19 @@ class VLAClient():
                 decoded_observations = SharedMemoryManager.decode_observation(observations, self._raw_observe_shm_cache)
                 if decoded_observations is None:
                     continue
-                infer_data = self._process_data(decoded_observations)
+                infer_data, encoded_imgs = self._process_data(decoded_observations)
                 self.realtime_data_manager.add_observe_data(infer_data)
+                self.visualize_server.update_image_data(encoded_imgs)
                 # record_data = self.shared_memory_manager.encode_observation(record_data)
 
                 if self.config.record.switch:
+                    packet_descriptors = observations.to_observation_descriptors()
                     record_data = {
                         **infer_data,
                         'obs': {
                             **{
                                 camera_name: payload
-                                for camera_name, payload in observations.items()
+                                for camera_name, payload in packet_descriptors.items()
                                 if str(camera_name).startswith('cam.')
                             },
                             'state': infer_data['obs']['state'],
@@ -480,7 +494,7 @@ class VLAClient():
             # symbol = '=' * 10
     def _control_thread_fun(self):
         if not self.is_control_thread_running:
-            if self.visualize_server.vis_global_step % 10 == 0:
+            if self.visualize_server.vis_global_step % 5 == 0:
                 current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
                 action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
                 self.visualize_server.update_chart_data(
@@ -524,7 +538,7 @@ class VLAClient():
                     self.task_language_manager.add_task_progress(progress=prob_progress)
                     self.task_language_manager.try_advance_subtask()
 
-            if self.visualize_server.vis_global_step % 10 == 0:
+            if self.visualize_server.vis_global_step % 5 == 0:
                 current_state = getattr(self.robot, 'current_state', None)
                 self.visualize_server.update_chart_data(
                     action_fitted=action_fitted,
@@ -767,10 +781,11 @@ class VLAClient():
         """
         ext = '.png' if 'depth.' in key else '.jpg'
         img_for_infer = self._preprocess_func(value) if self._preprocess_func else value
-        encode_result, img_encoded = cv2.imencode(ext, img_for_infer)
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80] if ext == '.jpg' else []
+        encode_result, img_encoded = cv2.imencode(ext, img_for_infer, encode_params)
         if not encode_result:
             self.logger.warning(f"Image encoding failed for {key}.")
-        return key, img_encoded
+        return key, memoryview(img_encoded) if encode_result else None
 
     def _process_image(self, frame):
         """Process multiple images and produce both encoded and raw outputs.
@@ -796,14 +811,14 @@ class VLAClient():
             )
             for key, encoded_img in results_iter:
                 # raw_imgs[key] = raw_img
-                encoded_imgs[key] = encoded_img
+                if encoded_img is not None:
+                    encoded_imgs[key] = encoded_img
 
         # if self.camera_shape_dict is None and raw_imgs:
         #     self.camera_shape_dict = {key: img.shape for key, img in raw_imgs.items()}
         #     self.shared_memory_manager.init_pool(self.camera_shape_dict)
 
         self.image_process_time = self.image_process_time * 0.8 + (time.perf_counter() - start_time) * 1000 * 0.2
-        self.visualize_server.update_image_data(encoded_imgs)
         return encoded_imgs
     def _parse_prob_progress(self, action_data):
         prob_progress = None
@@ -852,7 +867,7 @@ class VLAClient():
         #         'language': language,
         #     },
         # }
-        return infer_data
+        return infer_data, encoded_imgs
 
     # @run_time_decorator
     def _process_action_chunk(self, action_raw:dict):

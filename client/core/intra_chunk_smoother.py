@@ -265,29 +265,38 @@ class IntraChunkSmoother():
         if length == 0:
             return np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0))
 
-        # Keep the same filtering behavior as legacy implementation,
-        # while processing all gripper dimensions in numpy batch.
+        # Sliding-window mean + threshold snap, vectorised over every output
+        # index at once via a cumulative sum.
+        #
+        # BEHAVIOUR CHANGE: the loop this replaces wrote each result back into
+        # the array it was also reading from, so a window averaged values that
+        # had already been filtered -- an accidental IIR,
+        #     f[i] = clamp(mean(f[i-h .. i-1], x[i .. i+h])).
+        # This now averages the raw input only, which is what the config names
+        # describe (`filter_window_size`, and the 0.05 / 0.95 thresholds that
+        # snap the smoothed command to fully open / fully closed).
+        #
+        # Window bounds are preserved exactly: every window has the same width
+        # w = 2h+1 (clamped to `length`), and at the edges the window slides as
+        # a whole instead of shrinking. That matches the previous three-branch
+        # logic branch by branch, including the case where length < 2h+1 and
+        # the left/right branches overlap (the left branch won).
         window_size_half = int(self.config.filter_window_size)
-        filtered = gripper_chunks.copy()
+        w = min(2 * window_size_half + 1, length)
 
-        for currt_index in range(length):
-            if currt_index < window_size_half:
-                window_min = 0
-                window_max = min(length, window_size_half * 2 + 1)
-            elif currt_index >= length - window_size_half:
-                window_min = max(0, length - window_size_half * 2 - 1)
-                window_max = length
-            else:
-                window_min = currt_index - window_size_half
-                window_max = currt_index + window_size_half + 1
+        # prefix[i] = sum of columns [0, i); window [a, a+w) -> prefix[a+w]-prefix[a]
+        prefix = np.cumsum(
+            np.concatenate([np.zeros((num_grippers, 1)), gripper_chunks], axis=1),
+            axis=1,
+        )
+        window_min = np.clip(np.arange(length) - window_size_half, 0, length - w)
+        mean_all = (prefix[:, window_min + w] - prefix[:, window_min]) / w
 
-            mean_vec = np.mean(filtered[:, window_min:window_max], axis=1)
-            mean_vec = np.where(
-                mean_vec > self.config.max_gripper_action_threshold,
-                1.0,
-                np.where(mean_vec < self.config.min_gripper_action_threshold, 0.0, mean_vec)
-            )
-            filtered[:, currt_index] = mean_vec
+        filtered = np.where(
+            mean_all > self.config.max_gripper_action_threshold,
+            1.0,
+            np.where(mean_all < self.config.min_gripper_action_threshold, 0.0, mean_all)
+        )
 
         # Keep interpolation behavior consistent with legacy implementation.
         timestamps_fitted = np.arange(start_time, end_time, time_step)

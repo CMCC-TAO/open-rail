@@ -64,3 +64,9 @@ The Client and Server are separate processes. Check:
 - Use a Mock dataset to validate the Client, Server, and transport path before checking vendor SDKs, ROS topics/nodes, camera streams, and robot networking.
 - Confirm that the robot type, camera configuration, and `action_layout` are registered correctly in `conf/robots_conf.py`.
 - A robot adapter should implement `retrieve_observation()` and `execute_action()`; the Server must not call robot SDKs directly.
+
+## Data recording
+
+### Data recording is enabled, but the recording shows zero
+
+If **Runtime Monitor Control** is not selected while **Data Recording Lerobot** is enabled, recording may start but the recorded result can show zero. The **Control** option must be selected for LeRobot data to be recorded.

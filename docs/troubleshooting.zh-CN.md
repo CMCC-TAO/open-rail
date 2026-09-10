@@ -64,3 +64,9 @@ Client 和 Server 是两个独立进程。检查：
 - 先用 Mock 数据集验证 Client、Server 和通信链路，再检查厂商 SDK、ROS 话题/节点、相机流和机器人网络。
 - 确认机器人类型、相机配置和 `action_layout` 已在 `conf/robots_conf.py` 中正确注册。
 - 机器人适配器应实现 `retrieve_observation()` 和 `execute_action()`；不要在 Server 中直接调用机器人 SDK。
+
+## Data Recording
+
+### 不选中Runtime Monitor Control，勾选Data Recording Lerobot，可以录制，但录制显示为0
+
+必须选中Control，才能实际录制lerobot数据。
