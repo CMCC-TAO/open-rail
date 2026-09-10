@@ -416,8 +416,8 @@ class VisualizeServer:
         while self.running:
             try:
                 await self.send_camera_data()
-                if len(self.data_send_list) > 5:
-                    await self.send_chart_data()
+                # if len(self.data_send_list) > 5:
+                await self.send_chart_data()
                 await asyncio.sleep(1/self.config.updata_fps)
             except Exception as e:
                 self.logger.error("Data sender loop error: %s", e)
