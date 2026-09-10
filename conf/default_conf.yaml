@@ -5,7 +5,7 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.0
+  speed: 1.5
   wait_time: 10
 inter_chunk:
   inter_chunk_mode: min_jerk
@@ -35,10 +35,10 @@ intra_chunk:
   min_gripper_action_threshold: 0.05
 language:
   auto_mode: false
-  auto_mode_start_sub_task_id: 0
+  auto_mode_start_sub_task_id: 3
   file_path: language_cmd.json
-  sub_task_id: 0
-  task_id: a2d_tidyup
+  sub_task_id: 3
+  task_id: tea_master
   task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
@@ -184,7 +184,7 @@ robots:
         presets:
           Default:
           - 0.4012
-          - 27.0
+          - 27
           Custom:
           - 0.7854
           - 52
@@ -454,7 +454,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: a2d
 vision:
   history_frame: false
   preprocess:
@@ -476,7 +476,6 @@ visualize:
     play: true
     selected_joints:
     - 0
-    - 7
     source:
     - ActionRaw
     - ActionFitted
@@ -486,6 +485,6 @@ visualize:
 vla_zmq:
   heartbeat_interval: 1000
   heartbeat_timeout: 30000
-  infer_timeout: 500
-  ip: 127.0.0.1
-  port: '5566'
+  infer_timeout: 5000
+  ip: 111.0.18.170
+  port: '5567'

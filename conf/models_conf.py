@@ -127,15 +127,12 @@ def get_dm05_config():
     config = ConfigDict()
     config.model_path = '/path/to/model'
     config.repo_path = '/path/to/repo'
-    config.dataset_name = 'a2d_tidyup_generalist'
-    config.robot_type = 'A2D'
-    config.chunk_size = 50
-    config.action_dim = 22
-    config.state_pad_to = 32
-    config.backend = 'fast' # 'fast' or 'default'
+    config.action_mode = 'absolute' # relative | absolute
+    config.backend = 'fast'  # 'fast' | 'default' | 'compile'
     config.vision_trt_engine_path = '/path/to/dm05_vision.engine'
     config.diffusion_steps = 10
     config.vision_attn_implementation = 'flash_attention_2'
+    config.execute_horizon = 16  # steps actually sent to the robot per cycle
     return config
 
 
