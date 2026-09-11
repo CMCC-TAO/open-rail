@@ -110,6 +110,12 @@ class VLAServer:
             key: The observation key (e.g., 'cam.head')
             data: np.array, the encoded image
         """
+        if isinstance(encoded_img, (bytes, bytearray, memoryview)):
+            encoded_img = np.frombuffer(encoded_img, dtype=np.uint8)
+        elif not isinstance(encoded_img, np.ndarray):
+            encoded_img = np.asarray(encoded_img, dtype=np.uint8)
+        if encoded_img.dtype != np.uint8 or not encoded_img.flags.c_contiguous:
+            encoded_img = np.ascontiguousarray(encoded_img, dtype=np.uint8)
         decoded_img = cv2.imdecode(encoded_img, cv2.IMREAD_ANYDEPTH if 'depth.' in key else cv2.IMREAD_COLOR)
         padded_img = self._pad_and_resize(decoded_img)
         return key, padded_img[:, :, ::-1] # RGB to BGR

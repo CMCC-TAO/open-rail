@@ -145,7 +145,7 @@ class RobotBody(RobotBase):
                 time.sleep(0.01)
                 return None
 
-            self.logger.debug(f'Retrieve image time: {(ref_timestamp - self.current_timestamp) / 1e6: .3f}ms')
+            # self.logger.debug(f'Retrieve image time: {(ref_timestamp - self.current_timestamp) / 1e6: .3f}ms')
             self.current_timestamp = ref_timestamp
 
             result['ref_timestamp'] = ref_timestamp

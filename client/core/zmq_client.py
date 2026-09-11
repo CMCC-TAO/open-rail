@@ -262,7 +262,10 @@ class ZMQClient():
             meta = {}
 
         try:
-            data = pickle.dumps(data)
+            # memoryview is zero-copy for WebSocket consumers but is not
+            # pickleable on all supported Python versions. Convert only at
+            # the ZMQ serialization boundary.
+            data = pickle.dumps(self._pickle_safe(data))
             meta = json.dumps(meta).encode('utf8')
             self.dealer.send_multipart([data, meta], flags=zmq.NOBLOCK)
             # print(f"DEBUG: sending data")
@@ -282,6 +285,18 @@ class ZMQClient():
             # traceback.print_exc()
             self.is_connected = False
             return False
+
+    @classmethod
+    def _pickle_safe(cls, value):
+        if isinstance(value, memoryview):
+            return value.tobytes()
+        if isinstance(value, dict):
+            return {key: cls._pickle_safe(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [cls._pickle_safe(item) for item in value]
+        if isinstance(value, tuple):
+            return tuple(cls._pickle_safe(item) for item in value)
+        return value
 
     @property
     def status(self):

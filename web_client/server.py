@@ -1356,36 +1356,25 @@ def _ensure_vla_client_created():
     return vla_client
 
 def _create_robot(robot_type, robot_config, client_config=None):
-    robot = None
+    """Create the robot proxy that owns a dedicated worker subprocess.
+
+    The concrete ``RobotBody`` (and its vendor SDK) is instantiated inside that
+    subprocess, see ``client/robots/robot_proxy.py``. Running it out of process
+    removes the GIL contention between observation/control and the VLA client.
+
+    unitree_g1's ``RobotBody`` reads ``config["robots"]["unitree_g1"]`` from
+    the full client config, so it is given ``client_config`` instead of the
+    robot sub-config; its ``ros_context`` is self-created inside the worker
+    subprocess (an independent ``rclpy.Context`` when none is passed).
+    """
     try:
-        if robot_type == RobotType.A2D:
-            from client.robots.a2d.body_robot import RobotBody
-            robot = RobotBody(robot_config)
-        elif robot_type == RobotType.NAVI_WA2:
-            from client.robots.navi_wa2.body_robot import RobotBody
-            robot = RobotBody(robot_config)
-        elif robot_type == RobotType.MOCK:
-            from client.robots.mock.body_robot import RobotBody
-            robot = RobotBody(robot_config)
-        elif robot_type == RobotType.TI5_T170C:
-            from client.robots.ti5_t170c.body_robot import RobotBody
-            robot = RobotBody(robot_config)
-        elif robot_type == RobotType.UNITREE_G1:
-            import rclpy as _rclpy
-            if not _rclpy.ok():
-                _rclpy.init(args=[])
-            _ros_context = _rclpy.Context()
-            if not _ros_context.ok():
-                _ros_context.init(args=[])
-            from client.robots.unitree_g1.body_robot import RobotBody
-            robot = RobotBody(client_config or robot_config, ros_context=_ros_context)
-        else:
-            logger.error(f"Unsupported robot type: {robot_type}")
-            raise ValueError(f"Unsupported robot type: {robot_type}")
+        from client.robots.robot_proxy import RobotProxy
+        if robot_type == RobotType.UNITREE_G1:
+            return RobotProxy(robot_type, client_config or robot_config)
+        return RobotProxy(robot_type, robot_config)
     except Exception as e:
         logger.exception(f"Robot creation failed: {e}")
         raise ValueError(f"Create robot failed, type: {robot_type}")
-    return robot
 
 async def _start_client():
     try:
