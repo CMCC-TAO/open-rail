@@ -202,9 +202,36 @@ class VLAClient():
             self._reset_teleop_policy_handoff()
             self._last_selected_source = None
 
+    def _resolve_teleop_device_config(self) -> bool:
+        """Resolve the Quest3 YAML from the selected robot type when enabled."""
+        teleop_cfg = self._teleop_bridge_config()
+        device = str(self._config_get(teleop_cfg, 'control_device', '') or '').lower()
+        if device != 'quest3':
+            return True
+        device_cfg = self._config_get(self._config_get(teleop_cfg, 'devices', None), 'quest3', None)
+        if device_cfg is None or not bool(self._config_get(device_cfg, 'auto_config_path', True)):
+            return True
+        robot_type = self._config_get(getattr(self.config, 'robots', None), 'type', '')
+        if hasattr(robot_type, 'value'):
+            robot_type = robot_type.value
+        robot_type = str(robot_type or '').lower()
+        mapping = self._config_get(device_cfg, 'config_path_by_robot', None) or {}
+        config_path = self._config_get(mapping, robot_type, None)
+        if not config_path:
+            self.logger.warning(
+                "No Quest3 teleop config mapped for robot type %r; teleop bridge will not start.",
+                robot_type,
+            )
+            return False
+        device_cfg.config_path = str(config_path)
+        self.logger.info("Resolved Quest3 teleop config for robot type %s: %s", robot_type, config_path)
+        return True
+
     def start_teleop_bridge(self):
         """Create and start the configured teleop bridge."""
         if not self._use_teleop_enabled():
+            return
+        if not self._resolve_teleop_device_config():
             return
         if self.teleop_bridge is None:
             action_dim = int(getattr(self.robot, 'action_dim', 0) or 16)

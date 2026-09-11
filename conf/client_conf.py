@@ -224,6 +224,12 @@ def get_teleop_config() -> ConfigDict:
     config.devices = ConfigDict()
     config.devices.quest3 = ConfigDict()
     config.devices.quest3.config_path = 'teleop/quest3/config/a2d.yaml'
+    config.devices.quest3.auto_config_path = True
+    config.devices.quest3.config_path_by_robot = {
+        'a2d': 'teleop/quest3/config/a2d.yaml',
+        'mock': 'teleop/quest3/config/a2d.yaml',
+        'ti5_t170c': 'teleop/quest3/config/ti5_t170c.yaml',
+    }
     config.devices.quest3.no_adb_reverse = False
     config.devices.quest3.reset_mode = 'joint_command'
     return config
