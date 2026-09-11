@@ -76,7 +76,6 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'vision.preprocess.width',
   'rdm.mode',
   'use_teleop',
-  'teleop.use_teleop',
   'teleop.devices.quest3.config_path',
   'teleop.devices.quest3.auto_config_path',
 ]);
