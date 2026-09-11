@@ -7,6 +7,8 @@ const CONFIG_EXCLUDED_GROUP_KEYS = new Set(['language', 'record', 'controller'])
 
 // Sub-sub conf groups to exclude from Configuration panel (dot-path)
 const CONFIG_EXCLUDED_SUB_GROUP_KEYS = new Set([
+  'teleop.devices',
+  'teleop.ros2',
   'teleop.devices.quest3.config_path_by_robot',
   'intra_chunk.action_layout',
   'rdm.action_layout',
@@ -74,6 +76,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'vision.preprocess.width',
   'rdm.mode',
   'use_teleop',
+  'teleop.use_teleop',
   'teleop.devices.quest3.config_path',
   'teleop.devices.quest3.auto_config_path',
 ]);
