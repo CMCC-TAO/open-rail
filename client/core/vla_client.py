@@ -209,8 +209,12 @@ class VLAClient():
         if device != 'quest3':
             return True
         device_cfg = self._config_get(self._config_get(teleop_cfg, 'devices', None), 'quest3', None)
-        if device_cfg is None or not bool(self._config_get(device_cfg, 'auto_config_path', True)):
-            return True
+        if device_cfg is None:
+            self.logger.warning("Quest3 teleop device config is missing; teleop bridge will not start.")
+            return False
+        # This is an internal, non-user-editable setting. Keep it forced on for
+        # every bridge start so a persisted path can never override the mapping.
+        device_cfg.auto_config_path = True
         robot_type = self._config_get(getattr(self.config, 'robots', None), 'type', '')
         if hasattr(robot_type, 'value'):
             robot_type = robot_type.value

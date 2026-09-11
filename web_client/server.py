@@ -875,6 +875,16 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
+    protected_teleop_keys = [
+        key for key in flat
+        if key in ('teleop.devices.quest3.config_path', 'teleop.devices.quest3.auto_config_path')
+        or key.startswith('teleop.devices.quest3.config_path_by_robot')
+    ]
+    if protected_teleop_keys:
+        raise HTTPException(
+            400,
+            "Quest3 teleop config_path is managed automatically by robots.type and cannot be patched.",
+        )
     vision_preprocess_keys = []
     dataset_path_changed = False
     robot_type_changed = False
@@ -1040,6 +1050,7 @@ async def save_config_file(req: ConfigFileRequest):
     except ValueError:
         raise HTTPException(400, "Path is outside the allowed project directory.")
     client_conf = _config_to_dict(client_conf)
+    _strip_internal_teleop_config(client_conf)
     if save_path.suffix in (".yaml", ".yml"):
         content = _dict_to_user_conf_yaml(client_conf)
     else:
@@ -1158,6 +1169,10 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
                 if v and not v.startswith('#'):
                     patch[k] = v
         _apply_flat_patch_new(config, patch)
+        try:
+            config.teleop.devices.quest3.auto_config_path = True
+        except Exception:
+            pass
         _sanitize_language_sub_task_id(getattr(config, 'language', None), None)
         logger.info(f"Load and apply yaml config overrides from {yaml_conf_path} (fallback parser)")
         return
@@ -1183,6 +1198,10 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
     # print(f"config before flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config before flat patch: {cam_head}")
     _apply_flat_patch_new(config, flat)
+    try:
+        config.teleop.devices.quest3.auto_config_path = True
+    except Exception:
+        pass
     # print(f"config after flat patch: {config}")
     # print(f"config after flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config after flat patch: {cam_head}")
@@ -1204,6 +1223,17 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
         logger.info(f"Reset language.sub_task_id to {sanitized_sub_task_id} after config load.")
 
     logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
+
+
+def _strip_internal_teleop_config(config: dict) -> None:
+    """Remove teleop fields that are derived internally and must not be persisted."""
+    try:
+        quest3_cfg = config['teleop']['devices']['quest3']
+    except (KeyError, TypeError):
+        return
+    quest3_cfg.pop('config_path', None)
+    quest3_cfg.pop('auto_config_path', None)
+    quest3_cfg.pop('config_path_by_robot', None)
 
 
 def _dict_to_user_conf_py(d: dict, indent=0) -> str:

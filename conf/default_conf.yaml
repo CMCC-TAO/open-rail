@@ -469,7 +469,6 @@ teleop:
   control_device: quest3
   devices:
     quest3:
-      config_path: teleop/quest3/config/a2d.yaml
       no_adb_reverse: false
       reset_mode: joint_command
   ros2:

@@ -223,7 +223,6 @@ def get_teleop_config() -> ConfigDict:
     config.ros2.node_name = 'vla_infer_teleop_bridge'
     config.devices = ConfigDict()
     config.devices.quest3 = ConfigDict()
-    config.devices.quest3.config_path = 'teleop/quest3/config/a2d.yaml'
     config.devices.quest3.auto_config_path = True
     config.devices.quest3.config_path_by_robot = {
         'a2d': 'teleop/quest3/config/a2d.yaml',
