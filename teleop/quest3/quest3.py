@@ -1128,6 +1128,9 @@ class VRWholeBodyBridgeNode:
             raise ValueError("gripper_command_min must be less than or equal to gripper_command_max.")
         self.gripper_speed = max(float(config.get("gripper_speed", math.inf)), 0.0)
         self.trigger_threshold = float(config.get("trigger_threshold", 0.9))
+        release_default = max(0.0, self.trigger_threshold - 0.1)
+        self.trigger_release_threshold = float(config.get("trigger_release_threshold", release_default))
+        self.trigger_release_threshold = min(max(self.trigger_release_threshold, 0.0), self.trigger_threshold)
         self.reset_mode = _normalize_reset_mode(config.get("reset_mode", "joint_command"))
         self.reset_press_value = float(config.get("reset_press_value", 1.0))
         self.reset_release_value = float(config.get("reset_release_value", 0.0))
@@ -1396,7 +1399,19 @@ class VRWholeBodyBridgeNode:
             self._warn_invalid_joint_state("non-finite joint positions")
             return
         with self.state.lock:
-            self.state.reference_action[:] = values
+            # Do not let delayed joint feedback perturb an arm that is already
+            # under open-loop manual control. Its anchor and IK seed come from
+            # the command stream until the side returns to AUTO.
+            reference_values = values.copy()
+            for side, arm_slice, gripper_index in (
+                (self.state.left, slice(0, 7), 14),
+                (self.state.right, slice(7, 14), 15),
+            ):
+                if side.control_state in (ARM_CONTROL_MANUAL, ARM_CONTROL_TRANSITION_EXIT):
+                    reference_values[arm_slice] = self.state.reference_action[arm_slice]
+                if side.gripper_control_active:
+                    reference_values[gripper_index] = self.state.reference_action[gripper_index]
+            self.state.reference_action[:] = reference_values
             self.state.joint_state_ready = True
 
     def _warn_invalid_joint_state(self, reason: str, period_s: float = 1.0) -> None:
@@ -1486,7 +1501,11 @@ class VRWholeBodyBridgeNode:
             arm_slice: slice(0,7) for left arm, slice(7,14) for right arm.
         """
         side_name = "left" if arm_slice.start == 0 else "right"
-        trigger_active = side.pose_valid and side.trigger > self.trigger_threshold
+        # Schmitt-trigger threshold: use a lower release threshold once an arm
+        # has left AUTO. This prevents tiny grip-button noise around the press
+        # threshold from repeatedly re-capturing the joint-state anchor.
+        trigger_on = self.trigger_threshold if side.control_state == ARM_CONTROL_AUTO else self.trigger_release_threshold
+        trigger_active = side.pose_valid and side.trigger > trigger_on
         if not trigger_active and side.control_state == ARM_CONTROL_AUTO:
             side.was_trigger_active = False
             return

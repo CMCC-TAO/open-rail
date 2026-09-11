@@ -77,6 +77,8 @@ gripper_speed: 2.0
 
 # Controller trigger input threshold for enabling arm teleoperation. Range is 0.0 to 1.0.
 trigger_threshold: 0.9
+# Lower threshold used after an arm has entered manual control (trigger hysteresis).
+trigger_release_threshold: 0.75
 
 # Smooth enter/exit duration for dynamic-anchor teleop handoff.
 teleop_transition_duration_sec: 0.2

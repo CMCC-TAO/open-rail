@@ -1010,7 +1010,11 @@ class VLAClient():
                 self.logger.error("Robot control failed: %s", exc)
                 raise
             self._set_last_executed_action(action_np)
-            if self._teleop_bridge_running and self.teleop_bridge is not None:
+            if (
+                self._teleop_bridge_running
+                and self.teleop_bridge is not None
+                and not self.is_teleop_human_active()
+            ):
                 try:
                     self.teleop_bridge.publish_joint_state()
                 except Exception:
