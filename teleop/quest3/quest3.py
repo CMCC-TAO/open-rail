@@ -1376,10 +1376,9 @@ class VRWholeBodyBridgeNode:
         """Receive /joint_states messages and update the reference action vector.
 
         This is the robot feedback path. Valid joint states set ``joint_state_ready = True``
-        and populate ``reference_action``, which is used as:
-          - The IK seed for arm control.
-          - The FK reference for anchor blending.
-          - The fallback for arms/grippers not under human control.
+        and populate ``reference_action`` for activation anchors and inactive-side
+        fallback. During MANUAL/TRANSITION_EXIT, the active arm command remains
+        open-loop and is never overwritten by this feedback.
         """
         positions = dict(zip(msg.name, msg.position))
         if not positions:
@@ -1521,6 +1520,8 @@ class VRWholeBodyBridgeNode:
 
         exit_finished = self._advance_arm_transition_locked(side)
 
+        # Open-loop manual control: seed IK with the last command produced by
+        # this controller, not with delayed robot joint-state feedback.
         q_solution = self.ik.solve(
             side_name,
             side,

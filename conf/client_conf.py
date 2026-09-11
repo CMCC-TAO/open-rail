@@ -134,7 +134,7 @@ def get_controller_config() -> ConfigDict:
     config.speed = 1.0     # The execution speed with respect to tele-operation speed
     config.raw_fps = 30    # The FPS of the dataset used to train vla/wam model
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
-    config.teleop_timeout_s = 0.5  # Freshness window for teleop bridge actions before falling back to policy/hold.
+    config.teleop_timeout_s = 0.15  # Freshness window for teleop bridge actions before falling back to policy/hold.
     config.policy_timeout_s = 0.5  # Freshness window for policy actions before holding the last selected action.
     config.action_transition_steps = 64  # Blend window when switching between policy/teleop/hold action sources.
     config.action_transition_max_delta_per_step = None  # Optional per-control-tick action delta clamp.

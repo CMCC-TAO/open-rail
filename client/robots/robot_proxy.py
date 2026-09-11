@@ -53,7 +53,7 @@ _IDLE_SLEEP_S = 0.0005
 
 # Queues owned by the proxy; each one holds three semaphores that must be
 # released on shutdown (see RobotProxy._close_queues).
-_QUEUE_ATTRS = ('_obs_queue', '_cmd_queue', '_resp_queue', '_ready_queue')
+_QUEUE_ATTRS = ('_obs_queue', '_cmd_queue', '_resp_queue', '_ready_queue', '_fast_cmd_queue')
 
 
 def _normalize_robot_type(robot_type) -> str:
@@ -87,7 +87,7 @@ class _RobotWorker:
     """Subprocess side: owns the real robot and serves commands/observations."""
 
     def __init__(self, robot_type, config, obs_queue, cmd_queue, resp_queue,
-                 ready_queue, shm_ring_size, robot_module=None):
+                 ready_queue, fast_cmd_queue, shm_ring_size, robot_module=None):
         self._robot_type = robot_type
         self._config = config
         self._robot_module = robot_module
@@ -95,6 +95,7 @@ class _RobotWorker:
         self._cmd_queue = cmd_queue
         self._resp_queue = resp_queue
         self._ready_queue = ready_queue
+        self._fast_cmd_queue = fast_cmd_queue
         self._shm_ring_size = shm_ring_size
 
         self._robot = None
@@ -180,6 +181,7 @@ class _RobotWorker:
         """
         try:
             while not self._stop:
+                self._drain_fast_commands()
                 self._drain_commands()
                 if self._stop:
                     break
@@ -205,6 +207,26 @@ class _RobotWorker:
             except queue.Empty:
                 return
             self._handle_command(command)
+
+    def _drain_fast_commands(self) -> None:
+        """Execute only the newest open-loop teleop command.
+
+        Human teleoperation does not need an acknowledgement. Coalescing the
+        one-slot queue prevents the synchronous RPC command queue from building
+        up when the worker is briefly blocked collecting observations.
+        """
+        latest_action = None
+        while True:
+            try:
+                latest_action = self._fast_cmd_queue.get_nowait()
+            except queue.Empty:
+                break
+        if latest_action is None or self._robot is None:
+            return
+        try:
+            self._robot.control_robot(latest_action)
+        except BaseException as exc:  # noqa: BLE001 - teleop must not kill the worker
+            logger.warning('Open-loop teleop command failed in worker: %s', exc, exc_info=True)
 
     def _handle_command(self, command: Tuple) -> None:
         kind = command[0]
@@ -312,7 +334,7 @@ def _install_worker_signal_handlers() -> None:
 
 
 def _robot_worker_entry(robot_type, config, obs_queue, cmd_queue, resp_queue,
-                        ready_queue, shm_ring_size, robot_module=None) -> None:
+                        ready_queue, fast_cmd_queue, shm_ring_size, robot_module=None) -> None:
     """Subprocess entry point (must stay importable/picklable for spawn)."""
     logging.basicConfig(
         level=logging.INFO,
@@ -327,6 +349,7 @@ def _robot_worker_entry(robot_type, config, obs_queue, cmd_queue, resp_queue,
         cmd_queue=cmd_queue,
         resp_queue=resp_queue,
         ready_queue=ready_queue,
+        fast_cmd_queue=fast_cmd_queue,
         shm_ring_size=shm_ring_size,
         robot_module=robot_module,
     ).run()
@@ -340,6 +363,7 @@ class RobotProxy:
         * ``retrieve_observation()``      -> newest frame from the worker queue
         * ``control_robot`` / ``execute_action`` / ``_control_robot`` / ``reset_robot``
           and any other public robot method -> synchronous RPC to the worker
+        * ``control_robot_open_loop`` -> latest-wins, no-ack teleop command
         * ``config`` / ``action_layout`` / ``*_dim`` / ``*_indices`` -> captured once
           at startup (no per-frame IPC)
         * ``current_state`` -> refreshed from the observation stream
@@ -361,8 +385,10 @@ class RobotProxy:
         self._cmd_queue = self._ctx.Queue(maxsize=cmd_queue_size)
         self._resp_queue = self._ctx.Queue()
         self._ready_queue = self._ctx.Queue(maxsize=1)
+        self._fast_cmd_queue = self._ctx.Queue(maxsize=1)
 
         self._rpc_lock = threading.Lock()
+        self._fast_cmd_lock = threading.Lock()
         self._rpc_timeout = rpc_timeout
         self._cmd_id = 0
         self._closed = False
@@ -378,8 +404,8 @@ class RobotProxy:
         self._process = self._ctx.Process(
             target=_robot_worker_entry,
             args=(self._robot_type, config, self._obs_queue, self._cmd_queue,
-                  self._resp_queue, self._ready_queue, shm_ring_size,
-                  self._robot_module),
+                  self._resp_queue, self._ready_queue, self._fast_cmd_queue,
+                  shm_ring_size, self._robot_module),
             name=f'robot-worker-{self._robot_type}',
             daemon=True,
         )
@@ -513,6 +539,30 @@ class RobotProxy:
     def control_robot(self, action):
         """Send an action to the robot (mirrors RobotBody.control_robot)."""
         return self._rpc('control_robot', action)
+
+    def control_robot_open_loop(self, action):
+        """Queue the newest teleop action without waiting for execution.
+
+        This is intentionally fire-and-forget. It keeps the control timer
+        independent from SDK/observation latency and preserves open-loop
+        teleoperation semantics: the robot consumes the most recent human
+        command, and stale intermediate commands are discarded.
+        """
+        if self._closed:
+            raise RuntimeError('Robot proxy is closed; cannot queue teleop command')
+        action = np.asarray(action, dtype=float).reshape(-1).copy()
+        with self._fast_cmd_lock:
+            try:
+                self._fast_cmd_queue.put_nowait(action)
+            except queue.Full:
+                try:
+                    self._fast_cmd_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                try:
+                    self._fast_cmd_queue.put_nowait(action)
+                except queue.Full:
+                    pass
 
     def execute_action(self, data):
         """Send a raw action command to the robot."""

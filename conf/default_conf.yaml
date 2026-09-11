@@ -15,7 +15,7 @@ controller:
   teleop_outlier_max_arm_norm_delta: 1.2
   teleop_outlier_max_gripper_delta: 1.0
   teleop_outlier_reanchor_after_rejects: 5
-  teleop_timeout_s: 0.5
+  teleop_timeout_s: 0.15
   wait_time: 10
 inter_chunk:
   inter_chunk_mode: min_jerk

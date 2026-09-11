@@ -10,7 +10,7 @@ control_frequency: 200.0
 # Output JointState topic consumed by the VLA teleop bridge or downstream robot command adapter.
 joint_command_topic: /target_robot/joint_commands
 
-# Input JointState topic used to seed the current arm and gripper command before solving IK.
+# Input JointState topic used for activation anchors and inactive-side fallback. Manual arm control stays open-loop.
 joint_states_topic: /client_robot/joint_states
 
 # Reset behavior for Quest primary button presses:
@@ -78,7 +78,7 @@ gripper_speed: 100.0
 trigger_threshold: 0.9
 
 # Smooth enter/exit duration for dynamic-anchor teleop handoff.
-teleop_transition_duration_sec: 0.25
+teleop_transition_duration_sec: 0.1
 
 # Multiplier applied to controller position deltas before adding them to the IK target pose.
 position_scale: 1.0

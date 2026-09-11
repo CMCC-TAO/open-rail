@@ -996,7 +996,15 @@ class VLAClient():
         if action_to_execute is not None:
             action_np = np.asarray(action_to_execute)
             try:
-                self.robot.control_robot(action_np)
+                if (
+                    selected_source in (ActionSource.TELEOP, ActionSource.HOLD)
+                    and hasattr(self.robot, 'control_robot_open_loop')
+                ):
+                    # Human control is open-loop: forward the latest command
+                    # without waiting for the robot worker acknowledgement.
+                    self.robot.control_robot_open_loop(action_np)
+                else:
+                    self.robot.control_robot(action_np)
             except Exception as exc:
                 self._stop_control_thread_on_error()
                 self.logger.error("Robot control failed: %s", exc)
