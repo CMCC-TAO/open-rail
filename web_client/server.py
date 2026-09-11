@@ -909,7 +909,10 @@ async def patch_config(req: ConfigPatchRequest):
         _apply_flat_patch_new(client_conf, flat)
         next_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
         teleop_cfg = getattr(client_conf, 'teleop', None)
-        next_teleop_enabled = bool(getattr(teleop_cfg, 'use_teleop', False) or getattr(client_conf, 'use_teleop', False))
+        if teleop_cfg is not None and getattr(teleop_cfg, 'use_teleop', None) is not None:
+            next_teleop_enabled = bool(getattr(teleop_cfg, 'use_teleop'))
+        else:
+            next_teleop_enabled = bool(getattr(client_conf, 'use_teleop', False))
         teleop_switch_changed = any(k in ('teleop.use_teleop', 'use_teleop') for k in flat)
         teleop_bridge_config_changed = any(
             k == 'teleop.control_device'

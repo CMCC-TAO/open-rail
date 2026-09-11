@@ -181,11 +181,16 @@ class VLAClient():
         return getattr(self.config, 'teleop', None)
 
     def _use_teleop_enabled(self) -> bool:
-        """Return whether bridge-based human teleoperation is enabled."""
+        """Return whether bridge-based human teleoperation is enabled.
+
+        ``teleop.use_teleop`` is authoritative when present. The root-level
+        ``use_teleop`` field is kept only for loading older configurations that
+        predate the grouped teleop config.
+        """
         teleop_cfg = self._teleop_bridge_config()
-        grouped_enabled = bool(self._config_get(teleop_cfg, 'use_teleop', False))
-        legacy_enabled = bool(getattr(self.config, 'use_teleop', False))
-        return grouped_enabled or legacy_enabled
+        if teleop_cfg is not None and self._config_get(teleop_cfg, 'use_teleop', None) is not None:
+            return bool(self._config_get(teleop_cfg, 'use_teleop'))
+        return bool(getattr(self.config, 'use_teleop', False))
 
     def set_teleop_enabled(self, enabled: bool):
         """Enable or disable the teleop bridge at runtime."""
