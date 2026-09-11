@@ -18,6 +18,8 @@ from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.core.visualize_server import VisualizeServer
+from client.core.action_arbiter import ActionArbiter, ActionSource, ActionTransitionFilter, SelectedAction
+from client.core.teleop_bridge import create_teleop_bridge
 from client.core.data_record_manager import DataRecordManager
 from client.core.shared_memory_manager import SharedMemoryManager
 from client.robots.base_robot import RobotBase
@@ -108,7 +110,26 @@ class VLAClient():
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
         self.is_control_thread_running = False
-        
+
+        # Human teleoperation can override model actions while its input is fresh.
+        self.action_arbiter = ActionArbiter(
+            action_timeout_s=float(getattr(self.config.controller, 'teleop_timeout_s', 0.5)),
+            policy_timeout_s=float(getattr(self.config.controller, 'policy_timeout_s', 0.5)),
+        )
+        self.action_transition_filter = ActionTransitionFilter(
+            transition_steps=int(getattr(self.config.controller, 'action_transition_steps', 64)),
+            max_delta_per_step=getattr(self.config.controller, 'action_transition_max_delta_per_step', None),
+        )
+        self.teleop_bridge = None
+        self._teleop_bridge_running = False
+        self._last_teleop_action_s = None
+        self._last_valid_teleop_action = None
+        self._teleop_outlier_reject_count = 0
+        self._teleop_outlier_last_log_s = 0.0
+        self._last_selected_source = None
+        self._last_executed_action = None
+        self._last_executed_action_lock = threading.Lock()
+
         # Define image preprocess function
         self.update_preprocess_func()
 
@@ -139,6 +160,285 @@ class VLAClient():
         self.camera_shape_dict = None
         self.control_thread_timer.start()
         self.logger.info('VLAClient initialized.')
+
+    @staticmethod
+    def _config_get(config, key, default=None):
+        if config is None:
+            return default
+        if isinstance(config, dict):
+            return config.get(key, default)
+        return getattr(config, key, default)
+
+    def _teleop_bridge_config(self):
+        """Return the grouped teleop config, if present."""
+        return getattr(self.config, 'teleop', None)
+
+    def _use_teleop_enabled(self) -> bool:
+        """Return whether bridge-based human teleoperation is enabled."""
+        teleop_cfg = self._teleop_bridge_config()
+        grouped_enabled = bool(self._config_get(teleop_cfg, 'use_teleop', False))
+        legacy_enabled = bool(getattr(self.config, 'use_teleop', False))
+        return grouped_enabled or legacy_enabled
+
+    def set_teleop_enabled(self, enabled: bool):
+        """Enable or disable the teleop bridge at runtime."""
+        teleop_cfg = self._teleop_bridge_config()
+        if teleop_cfg is not None:
+            teleop_cfg.use_teleop = bool(enabled)
+        self.config.use_teleop = bool(enabled)
+        if bool(enabled) and self.is_running:
+            self.start_teleop_bridge()
+        else:
+            self.stop_teleop_bridge()
+            self.action_arbiter.clear()
+            self.action_transition_filter.reset()
+            self._last_selected_source = None
+
+    def start_teleop_bridge(self):
+        """Create and start the configured teleop bridge."""
+        if not self._use_teleop_enabled():
+            return
+        if self.teleop_bridge is None:
+            action_dim = int(getattr(self.robot, 'action_dim', 0) or 16)
+            self.teleop_bridge = create_teleop_bridge(
+                self._teleop_bridge_config(),
+                submit_action=self.submit_teleop_bridge_action,
+                action_dim=action_dim,
+                reset_handler=self.reset_robot,
+                joint_state_provider=self.get_teleop_joint_state,
+                joint_state_names=self._teleop_joint_state_names(),
+            )
+        self.teleop_bridge.start()
+        self._teleop_bridge_running = True
+
+    def stop_teleop_bridge(self):
+        """Stop the bridge and clear fresh-human-action state."""
+        if self.teleop_bridge is not None:
+            self.teleop_bridge.stop()
+        self._teleop_bridge_running = False
+        self.action_arbiter.clear_source(ActionSource.TELEOP)
+        self._last_teleop_action_s = None
+        self._last_selected_source = None
+        self._reset_teleop_outlier_guard()
+
+    def restart_teleop_bridge(self):
+        """Recreate the bridge after device/topic/joint-name config changes."""
+        was_running = self._teleop_bridge_running
+        self.stop_teleop_bridge()
+        self.teleop_bridge = None
+        self.action_arbiter.clear()
+        self.action_transition_filter.reset()
+        if was_running or (self.is_running and self._use_teleop_enabled()):
+            self.start_teleop_bridge()
+
+    def submit_teleop_bridge_action(self, action, timestamp=None):
+        """Receive one teleop action from the bridge and submit it to arbitration."""
+        if timestamp is None:
+            timestamp = time.perf_counter()
+        action_arr = self._validate_teleop_bridge_action(action)
+        if action_arr is None:
+            self._hold_teleop_after_rejected_action(timestamp)
+            return
+        self.action_arbiter.submit(ActionSource.TELEOP, action_arr, timestamp)
+        self._last_valid_teleop_action = action_arr.copy()
+        self._teleop_outlier_reject_count = 0
+        self._last_teleop_action_s = time.perf_counter()
+
+    def _validate_teleop_bridge_action(self, action) -> Optional[np.ndarray]:
+        """Reject malformed or implausibly large teleop jumps before arbitration."""
+        try:
+            action_arr = np.asarray(action, dtype=float).reshape(-1)
+        except (TypeError, ValueError):
+            self._log_teleop_outlier('non-numeric teleop action')
+            return None
+        if action_arr.size == 0:
+            self._log_teleop_outlier('empty teleop action')
+            return None
+        if not np.all(np.isfinite(action_arr)):
+            self._log_teleop_outlier('non-finite teleop action')
+            return None
+        if not bool(getattr(self.config.controller, 'teleop_outlier_guard_enabled', True)):
+            return action_arr
+
+        baseline = self._teleop_outlier_baseline(action_arr.shape[0])
+        if baseline is None:
+            return action_arr
+        if baseline.shape != action_arr.shape:
+            self._log_teleop_outlier(
+                f'teleop baseline shape mismatch action={action_arr.shape} baseline={baseline.shape}'
+            )
+            return None
+
+        delta = np.abs(action_arr - baseline)
+        arm_count = min(14, delta.shape[0])
+        if arm_count:
+            max_arm_joint_delta = getattr(self.config.controller, 'teleop_outlier_max_arm_joint_delta', 0.5)
+            if max_arm_joint_delta is not None and np.max(delta[:arm_count]) > float(max_arm_joint_delta):
+                self._teleop_outlier_reject_count += 1
+                self._log_teleop_outlier(
+                    'arm joint jump %.4f exceeds %.4f; reject_count=%d'
+                    % (float(np.max(delta[:arm_count])), float(max_arm_joint_delta), self._teleop_outlier_reject_count)
+                )
+                return None
+            max_arm_norm_delta = getattr(self.config.controller, 'teleop_outlier_max_arm_norm_delta', 1.2)
+            if max_arm_norm_delta is not None and np.linalg.norm(delta[:arm_count]) > float(max_arm_norm_delta):
+                self._teleop_outlier_reject_count += 1
+                self._log_teleop_outlier(
+                    'arm norm jump %.4f exceeds %.4f; reject_count=%d'
+                    % (float(np.linalg.norm(delta[:arm_count])), float(max_arm_norm_delta), self._teleop_outlier_reject_count)
+                )
+                return None
+        if delta.shape[0] > 14:
+            max_gripper_delta = getattr(self.config.controller, 'teleop_outlier_max_gripper_delta', 1.0)
+            if max_gripper_delta is not None and np.max(delta[14:]) > float(max_gripper_delta):
+                self._teleop_outlier_reject_count += 1
+                self._log_teleop_outlier(
+                    'gripper jump %.4f exceeds %.4f; reject_count=%d'
+                    % (float(np.max(delta[14:])), float(max_gripper_delta), self._teleop_outlier_reject_count)
+                )
+                return None
+        return action_arr
+
+    def _teleop_outlier_baseline(self, action_dim: int) -> Optional[np.ndarray]:
+        """Return the latest trusted teleop action, then the last robot command/state."""
+        if self._last_valid_teleop_action is not None:
+            return np.asarray(self._last_valid_teleop_action, dtype=float).copy()
+        baseline = self._coerce_state_to_action_shape(self._get_last_executed_action(), action_dim)
+        if baseline is not None:
+            return baseline
+        return self._coerce_state_to_action_shape(getattr(self.robot, 'current_state', None), action_dim)
+
+    @staticmethod
+    def _coerce_state_to_action_shape(values, action_dim: int) -> Optional[np.ndarray]:
+        """Map a robot state/action vector into the flat teleop action layout."""
+        if values is None:
+            return None
+        try:
+            arr = np.asarray(values, dtype=float).reshape(-1)
+        except (TypeError, ValueError):
+            return None
+        if arr.shape[0] == action_dim:
+            return arr.copy()
+        if action_dim == 16 and arr.shape[0] >= 21:
+            action = np.zeros(action_dim, dtype=float)
+            action[:14] = arr[:14]
+            action[14] = arr[14]
+            action[15] = arr[20]
+            return action
+        if arr.shape[0] >= action_dim:
+            return arr[:action_dim].copy()
+        return None
+
+    def _hold_teleop_after_rejected_action(self, timestamp: float) -> None:
+        """Keep teleop ownership alive with the last safe action after a rejected packet."""
+        hold_action = self._last_valid_teleop_action
+        if hold_action is None:
+            hold_action = self._get_last_executed_action()
+        if hold_action is None:
+            hold_action = self._coerce_state_to_action_shape(
+                getattr(self.robot, 'current_state', None),
+                int(getattr(self.robot, 'action_dim', 0) or 16),
+            )
+        if hold_action is None:
+            if self._teleop_outlier_reject_count >= int(getattr(
+                self.config.controller, 'teleop_outlier_reanchor_after_rejects', 5
+            )):
+                self.action_arbiter.clear_source(ActionSource.TELEOP)
+                self._last_teleop_action_s = None
+            return
+        hold_action = np.asarray(hold_action, dtype=float).copy()
+        self.action_arbiter.submit(ActionSource.TELEOP, hold_action, timestamp)
+        self._last_valid_teleop_action = hold_action
+        self._last_teleop_action_s = time.perf_counter()
+
+    def _reset_teleop_outlier_guard(self) -> None:
+        self._last_valid_teleop_action = None
+        self._teleop_outlier_reject_count = 0
+
+    def _log_teleop_outlier(self, reason: str) -> None:
+        now = time.perf_counter()
+        interval_s = float(getattr(self.config.controller, 'teleop_outlier_log_interval_s', 1.0))
+        if now - self._teleop_outlier_last_log_s < interval_s:
+            return
+        self._teleop_outlier_last_log_s = now
+        self.logger.warning('Drop teleop outlier action: %s', reason)
+
+    def get_teleop_joint_state(self):
+        """Return command-biased robot state for Quest3 IK feedback."""
+        state = getattr(self.robot, 'current_state', None)
+        state = None if state is None else np.asarray(state, dtype=float).reshape(-1).copy()
+        last_action = self._get_last_executed_action()
+        if last_action is None:
+            return state
+        if state is None:
+            return last_action
+        merged = state.copy()
+        if merged.shape[0] < last_action.shape[0]:
+            merged = np.pad(merged, (0, last_action.shape[0] - merged.shape[0]))
+        command_dim = min(merged.shape[0], last_action.shape[0])
+        merged[:command_dim] = last_action[:command_dim]
+        return merged
+
+    def _get_last_executed_action(self):
+        with self._last_executed_action_lock:
+            return None if self._last_executed_action is None else self._last_executed_action.copy()
+
+    def _set_last_executed_action(self, action) -> None:
+        value = None if action is None else np.asarray(action, dtype=float).reshape(-1).copy()
+        with self._last_executed_action_lock:
+            self._last_executed_action = value
+
+    def _teleop_joint_state_names(self):
+        """Return joint names matching the state/action vector published to Quest3."""
+        teleop_cfg = self._teleop_bridge_config()
+        ros_cfg = self._config_get(teleop_cfg, 'ros2', None)
+        configured_names = self._config_get(ros_cfg, 'joint_state_names', None)
+        if configured_names:
+            return [str(name) for name in configured_names]
+        robot_type = self._config_get(getattr(self.config, 'robots', None), 'type', '')
+        if hasattr(robot_type, 'value'):
+            robot_type = robot_type.value
+        if str(robot_type) == 'a2d':
+            return [
+                *(f'left_arm_joint{i}' for i in range(1, 8)),
+                *(f'right_arm_joint{i}' for i in range(1, 8)),
+                'left_hand_joint1',
+                'right_hand_joint1',
+                'joint_head_yaw',
+                'joint_head_pitch',
+                'joint_lift_body',
+                'joint_body_pitch',
+            ]
+        state = getattr(self.robot, 'current_state', None)
+        state_dim = int(np.asarray(state).reshape(-1).shape[0]) if state is not None else int(getattr(self.robot, 'action_dim', 0) or 16)
+        return [f'{robot_type or "robot"}_joint{i + 1}' for i in range(state_dim)]
+
+    def is_teleop_human_active(self) -> bool:
+        """Return whether fresh teleop input is currently controlling the robot."""
+        if not self._teleop_bridge_running or self._last_teleop_action_s is None:
+            return False
+        timeout_s = float(getattr(self.config.controller, 'teleop_timeout_s', 0.5))
+        return time.perf_counter() - self._last_teleop_action_s <= timeout_s
+
+    @property
+    def teleop_human_connected(self) -> bool:
+        return bool(self._teleop_bridge_running)
+
+    def _action_for_selected_source(self, selected: SelectedAction) -> np.ndarray:
+        if selected.source == ActionSource.TELEOP:
+            action = np.asarray(selected.action, dtype=float).copy()
+            # Keep the transition filter seeded with the exact human command so a
+            # later policy handoff starts from the robot's actual last command.
+            self.action_transition_filter.reset(last_output=action)
+            return action
+        return self.action_transition_filter.filter(selected)
+
+    def reset_robot(self, mode='default'):
+        """Handle a reset request coming from the external teleop device."""
+        self.action_arbiter.clear()
+        self.action_transition_filter.reset()
+        self._last_selected_source = None
+        return self.robot.reset_robot(mode=mode)
 
     ######################### VLAClient APIs #########################
     def start_observe(self):
@@ -217,6 +517,7 @@ class VLAClient():
 
         self.start_observe()
         self.start_inference()
+        self.start_teleop_bridge()
         self.start_control()
         self.start_visualize()
 
@@ -224,6 +525,7 @@ class VLAClient():
 
     def pause(self):
         """Pause observation, inference and control without releasing resources."""
+        self.stop_teleop_bridge()
         self.stop_observe()
         self.stop_inference()
         self.stop_control()
@@ -237,11 +539,13 @@ class VLAClient():
         # self._inference_first()
         self.start_observe()
         self.start_inference()
+        self.start_teleop_bridge()
         self.start_control()
         self.start_visualize()
         self.logger.info('VLA client resumed.')
 
     def stop(self):
+        self.stop_teleop_bridge()
         self.stop_observe()
         self.stop_inference()
         self.stop_control()
@@ -249,6 +553,10 @@ class VLAClient():
         time.sleep(self.realtime_data_manager.avg_infer_time * 1.5) # make sure inference thread is stopped.
         self.image_process_time = 0.0
         self.task_language_manager.reset()
+        self.action_arbiter.clear()
+        self.action_transition_filter.reset()
+        self._last_selected_source = None
+        self._set_last_executed_action(None)
         self.realtime_data_manager.clear()
         self._clear_raw_observe_queue()
         with self.show_thread_lock:
@@ -300,6 +608,7 @@ class VLAClient():
         - Stopping visualization components
         - Cleaning up all allocated resources
         """
+        self.stop_teleop_bridge()
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
         self.is_control_thread_running = False
@@ -344,7 +653,11 @@ class VLAClient():
     def runtime_status(self):
         status = {
             "img_proc_time": self.image_process_time,
-            "current_prob_progress": self.current_prob_progress
+            "current_prob_progress": self.current_prob_progress,
+            "teleop_enabled": self._use_teleop_enabled(),
+            "teleop_human_connected": self.teleop_human_connected,
+            "teleop_human_active": self.is_teleop_human_active(),
+            "last_selected_source": self._last_selected_source.value if self._last_selected_source is not None else None,
         }
         status.update(self.realtime_data_manager.runtime_status)
         return status
@@ -508,49 +821,71 @@ class VLAClient():
                     )
             else:
                 self.visualize_server.vis_global_step += 1
-        else:
-            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
+            return
 
+        teleop_enabled = self._use_teleop_enabled()
+        action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
+        action_to_execute = action_fitted
+        selected_source = ActionSource.POLICY if action_fitted is not None else None
+        action_np = None
+
+        if teleop_enabled:
+            now = time.perf_counter()
+            # Policy actions are refreshed every control tick. Teleop actions are
+            # refreshed by ROS callbacks and therefore naturally take priority
+            # while their freshness window is valid.
             if action_fitted is not None:
+                self.action_arbiter.submit(ActionSource.POLICY, action_fitted, now)
+            selected = self.action_arbiter.select(now=now)
+            if selected is not None:
+                action_to_execute = self._action_for_selected_source(selected)
+                selected_source = selected.source
+                self._last_selected_source = selected_source
+
+        if action_to_execute is not None:
+            action_np = np.asarray(action_to_execute)
+            try:
+                self.robot.control_robot(action_np)
+            except Exception as exc:
+                self._stop_control_thread_on_error()
+                self.logger.error("Robot control failed: %s", exc)
+                raise
+            self._set_last_executed_action(action_np)
+            if self._teleop_bridge_running and self.teleop_bridge is not None:
                 try:
-                    self.robot.control_robot(action_fitted)
-                except Exception as exc:
-                    self._stop_control_thread_on_error()
-                    self.logger.error("Robot control failed: %s", exc)
-                    raise
-                # with self.show_thread_lock:
-                    # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
-                
-                if self.config.record.switch:
-                    self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
-                
-                # with self.show_thread_lock:
-                #     self.info_act['action'] = action_fitted.shape
+                    self.teleop_bridge.publish_joint_state()
+                except Exception:
+                    self.logger.warning("Failed to publish teleop anchor state", exc_info=True)
 
-            # Only use alignment processing if prob_progress array length > 1
-            prob_progress = self.realtime_data_manager.get_prob_progress()
-            if prob_progress is not None:
-                with self.show_thread_lock:
-                    self.current_prob_progress = prob_progress
-                # print(f"current prob_progress: {prob_progress}")
-                if self.config.language.auto_mode == True:
-                    # Automatically switch language instruction based on prob_progress changes
-                    self.task_language_manager.add_task_progress(progress=prob_progress)
-                    self.task_language_manager.try_advance_subtask()
+            # Data recording is intentionally unchanged in this branch: keep the
+            # existing policy-action recording path untouched.
+            if self.config.record.switch and action_fitted is not None:
+                self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
 
-            if self.visualize_server.vis_global_step % 5 == 0:
-                current_state = getattr(self.robot, 'current_state', None)
-                self.visualize_server.update_chart_data(
-                    action_fitted=action_fitted,
-                    vel_fitted=vel_fitted,
-                    acc_fitted=acc_fitted,
-                    action_raw=action_raw,
-                    current_state=current_state,
-                    observe_period=self.observe_period / 1000,
-                    control_period=self.config.controller.period / 1000
-                    )
-            else:
-                self.visualize_server.vis_global_step += 1
+        # Only use alignment processing if prob_progress array length > 1
+        prob_progress = self.realtime_data_manager.get_prob_progress()
+        if prob_progress is not None:
+            with self.show_thread_lock:
+                self.current_prob_progress = prob_progress
+            # print(f"current prob_progress: {prob_progress}")
+            if self.config.language.auto_mode == True:
+                # Automatically switch language instruction based on prob_progress changes
+                self.task_language_manager.add_task_progress(progress=prob_progress)
+                self.task_language_manager.try_advance_subtask()
+
+        if self.visualize_server.vis_global_step % 5 == 0:
+            current_state = getattr(self.robot, 'current_state', None)
+            self.visualize_server.update_chart_data(
+                action_fitted=action_np if action_np is not None else action_fitted,
+                vel_fitted=vel_fitted,
+                acc_fitted=acc_fitted,
+                action_raw=action_raw,
+                current_state=current_state,
+                observe_period=self.observe_period / 1000,
+                control_period=self.config.controller.period / 1000
+                )
+        else:
+            self.visualize_server.vis_global_step += 1
 
     # def _visualize_thread_fun(self):
     #     # Send state data to visualization server for live plotting when control thread is not running

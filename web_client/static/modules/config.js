@@ -28,6 +28,7 @@ const CONFIG_SELECT_OPTIONS = {
   method: ['resize', 'none'],
   type: ['a2d', 'mock', 'ti5_t170c', 'navi_wa2'],
   mode: ['async', 'sync'],
+  control_device: ['quest3'],
   codec: ['mp4v', 'avc1'],
   eval_log_format: ['json', 'csv', 'both'],
   speed: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0],
@@ -71,6 +72,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'vision.preprocess.method',
   'vision.preprocess.width',
   'rdm.mode',
+  'use_teleop',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)

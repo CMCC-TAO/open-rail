@@ -1,0 +1,192 @@
+# Robot identifier used in the ROS node name: quest3_<robot>_bridge.
+robot: a2d
+
+# TCP port where the Quest3 Unity client connects to stream controller packets.
+listen_port: 8002
+
+# Main control loop frequency in Hz. It also defines the IK timestep as 1 / control_frequency.
+control_frequency: 100.0
+
+# Output JointState topic consumed by the VLA teleop bridge or downstream robot command adapter.
+joint_command_topic: /target_robot/joint_commands
+
+# Input JointState topic used to seed the current arm and gripper command before solving IK.
+joint_states_topic: /client_robot/joint_states
+
+# Reset behavior for Quest primary button presses:
+# - joint_command: interpolate from the latest joint state to reset_action and publish JointState commands.
+# - topic: publish Float64 reset button edges to reset_topic.
+# - none: clear teleop references but do not command a reset.
+reset_mode: joint_command
+
+# Float64 topic used only when reset_mode is topic.
+reset_topic: /custom/custom_a
+
+# Value published to reset_topic when the Quest primary button transitions to pressed.
+reset_press_value: 1.0
+
+# Value published to reset_topic when the Quest primary button transitions to released, or immediately after a reset pulse.
+reset_release_value: 0.0
+
+# If true, a primary-button press publishes press then release immediately, producing a one-shot reset pulse.
+reset_pulse_on_press: true
+
+# Target for reset_mode: joint_command.
+# Order: left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
+reset_action:
+  - -1.0748
+  - 0.6107
+  - 0.2816
+  - -1.2823
+  - 0.7292
+  - 1.4957
+  - -0.1869
+  - 1.0720
+  - -0.6103
+  - -0.2780
+  - 1.2822
+  - -0.7299
+  - -1.4929
+  - 0.1873
+  - 0.0
+  - 0.0
+
+# Reset interpolation timing for reset_mode: joint_command.
+reset_interp_duration_sec: 2.0
+reset_start_hold_sec: 0.1
+
+# Gripper control mode:
+# - incremental: grip past grip_threshold closes toward gripper_command_max; secondary button opens toward gripper_command_min.
+# - proportional: gripper command follows the analog gripper input directly.
+gripper_control_mode: incremental
+
+# Controller gripper analog input range. In proportional mode, 0.0 maps to open and 1.0 maps to closed.
+gripper_input_min: 0.0
+gripper_input_max: 1.0
+
+# Gripper command range. For A2D, 0.0 is open and 1.0 is closed.
+gripper_command_min: 0.0
+gripper_command_max: 1.0
+
+# Controller grip input threshold for closing a gripper command in incremental mode. Range is 0.0 to 1.0.
+grip_threshold: 0.9
+
+# Gripper command speed in normalized units per second for incremental mode.
+# For example, 2.0 moves from 0.0 to 1.0 in 0.5 seconds.
+gripper_speed: 2.0
+
+# Controller trigger input threshold for enabling arm teleoperation. Range is 0.0 to 1.0.
+trigger_threshold: 0.9
+
+# Smooth enter/exit duration for dynamic-anchor teleop handoff.
+teleop_transition_duration_sec: 0.6
+
+# Multiplier applied to controller position deltas before adding them to the IK target pose.
+position_scale: 1.5
+
+# Multiplier applied to controller relative rotation angle before adding it to the IK target pose.
+orientation_scale: 1.3
+
+# Fixed local Y-axis rotation, in degrees, applied to each controller orientation before relative motion is computed.
+controller_y_rotation_deg: 35.0
+
+# Shared controller relative rotation conversion from VR coordinates to the A2D URDF end-effector convention.
+# The runtime applies this to relative rotations as: R_urdf = rotation_mat @ R_vr @ rotation_mat.T.
+rot_arm_from_vr_to_urdf:
+  # 3x3 orthonormal rotation matrix. Rows are URDF axes expressed in the VR basis.
+  rotation_mat:
+    - [0.0, 0.0, 1.0]
+    - [0.0, -1.0, 0.0]
+    - [1.0, 0.0, 0.0]
+
+# Inverse-kinematics solver configuration for the two A2D arms.
+ik:
+  # Enables IK solving. If false, the node will not produce new arm joint targets from controller motion.
+  enabled: true
+
+  # IK backend implementation. A2D uses the Pinocchio + CasADi + IPOPT backend.
+  solver_backend: casadi
+
+  # URDF model used by the IK solver. Relative paths are resolved from this YAML file's directory.
+  urdf_path: ../urdf/a2d_vla_zero_state.urdf
+
+  # Reference frame name passed to the IK/FK solver.
+  ref_frame: world
+
+  # Orientation representation expected by the solver for poses. Current bridge code sends quaternions.
+  rotation_type: quat
+
+  # Optimization weight for end-effector position error. Larger values prioritize position accuracy.
+  pos_weight: 50.0
+
+  # Optimization weight for end-effector orientation error. Larger values prioritize orientation accuracy.
+  ori_weight: 10.0
+
+  # Optimization weight that discourages large joint changes between consecutive IK solutions.
+  smooth_weight: 30.0
+
+  # Optimization weight that discourages acceleration-like changes across the joint trajectory.
+  accel_weight: 1.0
+
+  # Optimization weight that softly pulls the solution toward a rest posture.
+  rest_weight: 0.0
+
+  # Maximum IPOPT iterations per IK solve.
+  ipopt_max_iter: 200
+
+  # Left-arm IK chain definition.
+  left:
+    # Root link for the left-arm IK chain in the URDF.
+    base_link: base_link_l
+
+    # End-effector link for the left-arm IK target pose.
+    tip_link: gripper_center
+
+  # Right-arm IK chain definition.
+  right:
+    # Root link for the right-arm IK chain in the URDF.
+    base_link: base_link_r
+
+    # End-effector link for the right-arm IK target pose.
+    tip_link: right_gripper_center
+
+# Lower clamp for each value in the 16-element command vector.
+# Order: left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
+# Arm joints are radians; gripper joints are normalized commands in [0.0, 1.0].
+min_action:
+  - -2.967
+  - -1.91986
+  - -2.967
+  - -1.8326
+  - -2.967
+  - -1.7453
+  - -2.967
+  - -2.967
+  - -1.91986
+  - -2.967
+  - -1.4835
+  - -2.967
+  - -1.7453
+  - -2.967
+  - 0.0
+  - 0.0
+
+# Upper clamp for each value in the 16-element command vector.
+# The order is identical to min_action.
+max_action:
+  - 2.967
+  - 1.91986
+  - 2.967
+  - 1.4835
+  - 2.967
+  - 1.7453
+  - 2.967
+  - 2.967
+  - 1.91986
+  - 2.967
+  - 1.8326
+  - 2.967
+  - 1.7453
+  - 2.967
+  - 1.0
+  - 1.0

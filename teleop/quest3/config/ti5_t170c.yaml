@@ -1,0 +1,208 @@
+# Robot identifier used in the ROS node name: quest3_<robot>_bridge.
+robot: ti5_t170c
+
+# TCP port where the Quest3 Unity client connects to stream controller packets.
+listen_port: 8002
+
+# Main control loop frequency in Hz. It also defines the IK timestep as 1 / control_frequency.
+control_frequency: 200.0
+
+# Output JointState topic consumed by the VLA teleop bridge or downstream robot command adapter.
+joint_command_topic: /target_robot/joint_commands
+
+# Input JointState topic used to seed the current arm and gripper command before solving IK.
+joint_states_topic: /client_robot/joint_states
+
+# Reset behavior for Quest primary button presses:
+# - joint_command: interpolate from the latest joint state to reset_action and publish JointState commands.
+# - topic: publish Float64 reset button edges to reset_topic.
+# - none: clear teleop references but do not command a reset.
+reset_mode: joint_command
+
+# Float64 topic used only when reset_mode is topic.
+reset_topic: /custom/custom_a
+
+# Value published to reset_topic when the Quest primary button transitions to pressed.
+reset_press_value: 1.0
+
+# Value published to reset_topic when the Quest primary button transitions to released, or immediately after a reset pulse.
+reset_release_value: 0.0
+
+# If true, a primary-button press publishes press then release immediately, producing a one-shot reset pulse.
+reset_pulse_on_press: true
+
+# Target for reset_mode: joint_command.
+# Order: left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
+reset_action:
+  - -1.681951211214541
+  - 1.5263110171042418
+  - 2.2737134617553534
+  - -0.23620356347006893
+  - -0.5204031154482495
+  - 0.1292378813793631
+  - 0.19059726269759902
+  - 1.3119088393316176
+  - 1.4473110065281325
+  - -1.6156086726673602
+  - -1.665472635653567
+  - 0.4101313352460489
+  - -0.2251850174207321
+  - 0.3232027944991513
+  - 1.0
+  - 1.0
+
+# Reset interpolation timing for reset_mode: joint_command.
+reset_interp_duration_sec: 2.0
+reset_start_hold_sec: 0.1
+
+# Gripper control mode:
+# - incremental: grip past grip_threshold closes toward gripper_command_max; secondary button opens toward gripper_command_min.
+# - proportional: gripper command follows the analog gripper input directly.
+gripper_control_mode: incremental
+
+# Controller gripper analog input range used by proportional mode.
+gripper_input_min: 0.0
+gripper_input_max: 1.0
+
+# Gripper command range. For TI5, 0.0 is open and 1.0 is closed.
+gripper_command_min: 0.0
+gripper_command_max: 1.0
+
+# Controller grip input threshold for closing a gripper command in incremental mode. Range is 0.0 to 1.0.
+grip_threshold: 0.9
+
+# Gripper command speed in normalized units per second for incremental mode. 100.0 is effectively immediate at 200 Hz.
+gripper_speed: 100.0
+
+# Controller trigger input threshold for enabling arm teleoperation. Range is 0.0 to 1.0.
+trigger_threshold: 0.9
+
+# Smooth enter/exit duration for dynamic-anchor teleop handoff.
+teleop_transition_duration_sec: 0.25
+
+# Multiplier applied to controller position deltas before adding them to the IK target pose.
+position_scale: 1.0
+
+# Multiplier applied to controller relative rotation angle before adding it to the IK target pose.
+orientation_scale: 1.0
+
+# Fixed local Y-axis rotation, in degrees, applied to each controller orientation before relative motion is computed.
+controller_y_rotation_deg: 35.0
+
+# Coordinate transforms from the VR frame to the TI5 URDF frame.
+# The runtime applies arm relative rotations as: R_urdf = rotation_mat @ R_vr @ rotation_mat.T.
+rot_left_arm_from_vr_to_urdf:
+  # Left-arm controller-to-URDF rotation conversion.
+  rotation_mat:
+    - [1.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+    - [0.0, 0.0, 1.0]
+
+rot_right_arm_from_vr_to_urdf:
+  # Right-arm controller-to-URDF rotation conversion.
+  rotation_mat:
+    - [-1.0, 0.0, 0.0]
+    - [0.0, 1.0, 0.0]
+    - [0.0, 0.0, -1.0]
+
+rot_base_from_vr_to_urdf:
+  # Base-frame conversion kept for compatibility with the original TI5 teleop config.
+  rotation_mat:
+    - [0.0, 1.0, 0.0]
+    - [-1.0, 0.0, 0.0]
+    - [0.0, 0.0, 1.0]
+
+# Inverse-kinematics solver configuration for the two TI5 arms.
+ik:
+  # Enables IK solving. If false, the node will not produce new arm joint targets from controller motion.
+  enabled: true
+
+  # IK backend implementation. TI5 uses the legacy C++ kine_solver_py backend.
+  solver_backend: cpp
+
+  # URDF/xacro model used by the IK solver.
+  urdf_path: ../urdf/ti5_t170c_robot.urdf.xacro
+
+  # Reference frame name passed to the IK/FK solver.
+  ref_frame: world
+
+  # Orientation representation expected by the solver for poses. Current bridge code sends quaternions.
+  rotation_type: quat
+
+  # Left-arm IK chain definition.
+  left:
+    # Root link for the left-arm IK chain in the URDF.
+    base_link: WAIST_Y_LINK
+
+    # End-effector link for the left-arm IK target pose.
+    tip_link: L_WRIST_P_LINK
+
+  # Right-arm IK chain definition.
+  right:
+    # Root link for the right-arm IK chain in the URDF.
+    base_link: WAIST_Y_LINK
+
+    # End-effector link for the right-arm IK target pose.
+    tip_link: R_WRIST_P_LINK
+
+# Feedback joint names, ordered to match the fixed output command vector:
+# left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
+# TI5 publishes hardware-specific names, so this mapping is required.
+joint_state_names:
+  - L_SHOULDER_P_JOINT
+  - L_SHOULDER_R_JOINT
+  - L_SHOULDER_Y_JOINT
+  - L_ELBOW_JOINT
+  - L_WRIST_Y_JOINT
+  - L_WRIST_R_JOINT
+  - L_WRIST_P_JOINT
+  - R_SHOULDER_P_JOINT
+  - R_SHOULDER_R_JOINT
+  - R_SHOULDER_Y_JOINT
+  - R_ELBOW_JOINT
+  - R_WRIST_Y_JOINT
+  - R_WRIST_R_JOINT
+  - R_WRIST_P_JOINT
+  - left_hand_joint1
+  - right_hand_joint1
+
+# Lower clamp for each value in the 16-element command vector.
+# Order: left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
+# Arm joints are radians; gripper joints are normalized commands in [0.0, 1.0].
+min_action:
+  - -3.106
+  - -2.094
+  - -3.106
+  - -2.53
+  - -3.106
+  - -1.047
+  - -1.57
+  - -3.106
+  - -2.094
+  - -3.106
+  - -2.53
+  - -3.106
+  - -1.047
+  - -1.57
+  - 0.0
+  - 0.0
+
+# Upper clamp for each value in the 16-element command vector.
+# The order is identical to min_action.
+max_action:
+  - 3.106
+  - 2.094
+  - 3.106
+  - 1.047
+  - 3.106
+  - 1.047
+  - 1.57
+  - 3.106
+  - 2.094
+  - 3.106
+  - 1.047
+  - 3.106
+  - 1.047
+  - 1.57
+  - 1.0
+  - 1.0

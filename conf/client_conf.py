@@ -34,6 +34,9 @@ def get_client_config():
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
     config.language = get_language_config()
+    # Teleop runtime settings are grouped under config.teleop for the web UI.
+    config.use_teleop = False
+    config.teleop = get_teleop_config()
     return config
 
 def get_rdm_config() -> ConfigDict:
@@ -131,6 +134,16 @@ def get_controller_config() -> ConfigDict:
     config.speed = 1.0     # The execution speed with respect to tele-operation speed
     config.raw_fps = 30    # The FPS of the dataset used to train vla/wam model
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
+    config.teleop_timeout_s = 0.5  # Freshness window for teleop bridge actions before falling back to policy/hold.
+    config.policy_timeout_s = 0.5  # Freshness window for policy actions before holding the last selected action.
+    config.action_transition_steps = 64  # Blend window when switching between policy/teleop/hold action sources.
+    config.action_transition_max_delta_per_step = None  # Optional per-control-tick action delta clamp.
+    config.teleop_outlier_guard_enabled = True  # Reject malformed or implausibly large VR teleop jumps before arbitration.
+    config.teleop_outlier_max_arm_joint_delta = 0.5  # Max accepted absolute jump for any arm joint in one teleop packet.
+    config.teleop_outlier_max_arm_norm_delta = 1.2  # Max accepted L2 jump across arm joints in one teleop packet.
+    config.teleop_outlier_max_gripper_delta = 1.0  # Max accepted gripper jump in one teleop packet.
+    config.teleop_outlier_reanchor_after_rejects = 5  # Clear stale teleop source after repeated rejects only when no safe hold action exists.
+    config.teleop_outlier_log_interval_s = 1.0  # Rate-limit outlier warning logs.
     return config
 
 def get_observer_config() -> ConfigDict:
@@ -192,4 +205,25 @@ def get_vision_config() -> ConfigDict:
     config.preprocess.keep_ratio = True 
     config.preprocess.height = 480
     config.preprocess.width = 640
+    return config
+
+
+def get_teleop_config() -> ConfigDict:
+    """Build the bridge-based teleop configuration used by the web client runtime."""
+    config = ConfigDict()
+    config.use_teleop = False
+    config.control_device = 'quest3'  # choices: quest3
+    config.ros2 = ConfigDict()
+    config.ros2.topic = '/target_robot/joint_commands'
+    config.ros2.reset_topic = '/custom/custom_a'
+    config.ros2.joint_state_topic = '/client_robot/joint_states'
+    config.ros2.joint_state_publish_rate = 30.0
+    config.ros2.reset_mode = 'joint_command'
+    config.ros2.reset_threshold = 0.5
+    config.ros2.node_name = 'vla_infer_teleop_bridge'
+    config.devices = ConfigDict()
+    config.devices.quest3 = ConfigDict()
+    config.devices.quest3.config_path = 'teleop/quest3/config/a2d.yaml'
+    config.devices.quest3.no_adb_reverse = False
+    config.devices.quest3.reset_mode = 'joint_command'
     return config

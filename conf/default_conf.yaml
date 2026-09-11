@@ -2,10 +2,20 @@
 # Auto-generated — edit values as needed
 
 controller:
+  action_transition_max_delta_per_step: null
+  action_transition_steps: 64
   gripper_offset: 5
   period: 3.75
+  policy_timeout_s: 0.5
   raw_fps: 30
   speed: 1.0
+  teleop_outlier_guard_enabled: true
+  teleop_outlier_log_interval_s: 1.0
+  teleop_outlier_max_arm_joint_delta: 0.5
+  teleop_outlier_max_arm_norm_delta: 1.2
+  teleop_outlier_max_gripper_delta: 1.0
+  teleop_outlier_reanchor_after_rejects: 5
+  teleop_timeout_s: 0.5
   wait_time: 10
 inter_chunk:
   inter_chunk_mode: min_jerk
@@ -455,6 +465,23 @@ robots:
     - 1000.0
     - 1000.0
   type: mock
+teleop:
+  control_device: quest3
+  devices:
+    quest3:
+      config_path: teleop/quest3/config/a2d.yaml
+      no_adb_reverse: false
+      reset_mode: joint_command
+  ros2:
+    joint_state_publish_rate: 30.0
+    joint_state_topic: /client_robot/joint_states
+    node_name: vla_infer_teleop_bridge
+    reset_mode: joint_command
+    reset_threshold: 0.5
+    reset_topic: /custom/custom_a
+    topic: /target_robot/joint_commands
+  use_teleop: false
+use_teleop: false
 vision:
   history_frame: false
   preprocess:

@@ -1,0 +1,811 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="ti5_t170c_robot">
+
+  <link name="world"/>
+
+  <joint name="fixed_base_joint" type="fixed">
+    <parent link="world"/>
+    <child link="BASE_LINK"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="BASE_LINK">
+    <inertial>
+      <origin xyz="-0.00913240319029941 -0.000207932082817885 0.0453363470149633" rpy="0 0 0" />
+      <mass value="2.66985723634551" />
+      <inertia ixx="0.00901240266510807" ixy="-2.15567481831179E-06" ixz="-0.000682036053656446" iyy="0.00754586431138064" iyz="7.31461847994578E-06" izz="0.00889772422192649" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/BASE_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/BASE_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="LEG_P1_LINK">
+    <inertial>
+      <origin xyz="-0.170159800598388 0.0957826784380446 -0.00017740534046648" rpy="0 0 0" />
+      <mass value="29.2326464364378" />
+      <inertia ixx="0.103317813393697" ixy="-0.0389018929570925" ixz="-0.0234449666479392" iyy="0.582065913546772" iyz="-0.0047383923651643" izz="0.54216222155601" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/LEG_P1_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/LEG_P1_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="LEG_P1_JOINT" type="revolute">
+    <origin xyz="-0.00907481800067099 -0.000167047008878818 0.085" rpy="1.5707963267949 0 -1.5707963267949" />
+    <parent link="BASE_LINK" />
+    <child link="LEG_P1_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="0" upper="1.57" effort="100" velocity="2.0" />
+  </joint>
+
+  <link name="LEG_P2_LINK">
+    <inertial>
+      <origin xyz="0.169999435461839 0.0301580487085946 -2.65136914580355E-06" rpy="0 0 0" />
+      <mass value="5.4247528629055" />
+      <inertia ixx="0.0120364272676564" ixy="-0.0164497197467597" ixz="0.000800773594274948" iyy="0.133558948033637" iyz="0.00014322024740441" izz="0.138404813466648" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/LEG_P2_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/LEG_P2_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="LEG_P2_JOINT" type="revolute">
+    <origin xyz="-0.38 0.068 0" rpy="0 0 0" />
+    <parent link="LEG_P1_LINK" />
+    <child link="LEG_P2_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="0" upper="3.141" effort="100" velocity="2.0" />
+  </joint>
+
+  <link name="WAIST_P_LINK">
+    <inertial>
+      <origin xyz="0.00337268519233169 0.058032840953496 -0.00362632261468515" rpy="0 0 0" />
+      <mass value="1.95005930134836" />
+      <inertia ixx="0.0077660528625219" ixy="-0.000143742214131627" ixz="-0.000106711407126029" iyy="0.00476984874774449" iyz="-0.000276114740306841" izz="0.00778943470380469" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/WAIST_P_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/WAIST_P_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="WAIST_P_JOINT" type="revolute">
+    <origin xyz="0.40795280966232 0.0836642449642892 0" rpy="0 0 0" />
+    <parent link="LEG_P2_LINK" />
+    <child link="WAIST_P_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-0.523" upper="1.57" effort="32" velocity="6.39" />
+  </joint>
+
+  <link name="WAIST_R_LINK">
+    <inertial>
+      <origin xyz="-2.39169765213626E-05 0.0362353530183855 -0.00569603385083428" rpy="0 0 0" />
+      <mass value="0.253307050877214" />
+      <inertia ixx="0.000787675852345115" ixy="1.60962035294058E-07" ixz="-1.13383580316617E-07" iyy="0.000681804912975485" iyz="3.97232404688378E-05" izz="0.000340506837824851" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/WAIST_R_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/WAIST_R_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="WAIST_R_JOINT" type="revolute">
+    <origin xyz="0 0.105 0" rpy="0 1.5707963267949 0" />
+    <parent link="WAIST_P_LINK" />
+    <child link="WAIST_R_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.523" upper="0.523" effort="32" velocity="6.39" />
+  </joint>
+
+  <link name="WAIST_Y_LINK">
+    <inertial>
+      <origin xyz="1.16762002689355E-05 -0.000615832282686801 -0.236298733751915" rpy="0 0 0" />
+      <mass value="3.79622863842437" />
+      <inertia ixx="0.0060487680892989" ixy="-5.20177204138977E-07" ixz="-7.77616710244281E-06" iyy="0.00588248245545087" iyz="-1.7108100697011E-05" izz="0.00540710351086427" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/WAIST_Y_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.792156862745098 0.819607843137255 0.933333333333333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/WAIST_Y_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="WAIST_Y_JOINT" type="revolute">
+    <origin xyz="0 0.066 -0.000750316173931065" rpy="-1.5707963267949 0 3.14159265358979" />
+    <parent link="WAIST_R_LINK" />
+    <child link="WAIST_Y_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-3.001" upper="3.001" effort="32" velocity="6.39" />
+  </joint>
+
+  <link name="NECK_Y_LINK">
+    <inertial>
+      <origin xyz="0.00109590562331431 8.08213738388019E-05 0.0338420923121516" rpy="0 0 0" />
+      <mass value="0.243514594151757" />
+      <inertia ixx="0.000139657453143673" ixy="1.7861105558274E-07" ixz="-1.76456260696129E-06" iyy="0.00012155112247667" iyz="6.77608224678026E-08" izz="0.00012311272360832" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/NECK_Y_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.776470588235294 0.756862745098039 0.737254901960784 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/NECK_Y_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="NECK_Y_JOINT" type="revolute">
+    <origin xyz="0 0 -0.2965" rpy="-3.14159265358979 0 -3.14159265358979" />
+    <parent link="WAIST_Y_LINK" />
+    <child link="NECK_Y_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-2.967" upper="2.967" effort="6.5" velocity="4.19" />
+  </joint>
+
+  <link name="NECK_P_LINK">
+    <inertial>
+      <origin xyz="0.000694795512896862 0.0440728588863319 0.0160919693474614" rpy="0 0 0" />
+      <mass value="0.133722445564139" />
+      <inertia ixx="8.07386431318698E-05" ixy="-9.50180873189821E-07" ixz="-1.30358044885178E-06" iyy="5.49073954887779E-05" iyz="-8.08373228227449E-06" izz="6.37124534994454E-05" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/NECK_P_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/NECK_P_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="NECK_P_JOINT" type="revolute">
+    <origin xyz="0.0289999999999998 0 0.0559999999895129" rpy="1.5707963267949 0 -1.5707963267949" />
+    <parent link="NECK_Y_LINK" />
+    <child link="NECK_P_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-0.523" upper="0.523" effort="2.8" velocity="4.71" />
+  </joint>
+
+  <link name="NECK_R_LINK">
+    <inertial>
+      <origin xyz="1.48971112917673E-07 0.0193366303778633 -0.00303126129516618" rpy="0 0 0" />
+      <mass value="0.0223091696176733" />
+      <inertia ixx="7.24100779051646E-06" ixy="1.98360531770127E-11" ixz="-1.30042119554704E-11" iyy="3.16048968655402E-06" iyz="1.38410161987569E-06" izz="8.1804265399699E-06" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/NECK_R_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/NECK_R_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="NECK_R_JOINT" type="revolute">
+    <origin xyz="0.0219999999999998 0.052 0.029" rpy="0 1.5707963267949 0" />
+    <parent link="NECK_P_LINK" />
+    <child link="NECK_R_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-0.523" upper="0.523" effort="2.8" velocity="4.71" />
+  </joint>
+
+  <link name="R_SHOULDER_P_LINK">
+    <inertial>
+      <origin xyz="1.6271720792993E-06 1.58299208630197E-07 0.0745134115417347" rpy="0 0 0" />
+      <mass value="1.87962163665869" />
+      <inertia ixx="0.00474964555441524" ixy="3.05852197159672E-08" ixz="-3.34166920879343E-08" iyy="0.00523973139936973" iyz="-2.35884126557118E-08" izz="0.00153277822765943" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_SHOULDER_P_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.866666666666667 0.866666666666667 0.890196078431372 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_SHOULDER_P_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="R_SHOULDER_P_JOINT" type="revolute">
+    <origin xyz="0.104000007037822 0 -0.26550000000001" rpy="1.5707963267949 0 1.5707963267949" />
+    <parent link="WAIST_Y_LINK" />
+    <child link="R_SHOULDER_P_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.106" upper="3.106" effort="30" velocity="3.56" />
+  </joint>
+
+  <link name="R_SHOULDER_R_LINK">
+    <inertial>
+      <origin xyz="0.0385496371059041 -1.04850650672894E-06 -1.15284663260162E-07" rpy="0 0 0" />
+      <mass value="2.18125990119115" />
+      <inertia ixx="0.00272517895657435" ixy="3.2697024833002E-08" ixz="-4.0453340962125E-08" iyy="0.00679687686087432" iyz="1.17363468750279E-07" izz="0.00625873495266797" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_SHOULDER_R_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_SHOULDER_R_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="R_SHOULDER_R_JOINT" type="revolute">
+    <origin xyz="0 0 0.119" rpy="1.57079632679488 -1.5707963267949 0" />
+    <parent link="R_SHOULDER_P_LINK" />
+    <child link="R_SHOULDER_R_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-2.094" upper="2.094" effort="30" velocity="3.56" />
+  </joint>
+
+  <link name="R_SHOULDER_Y_LINK">
+    <inertial>
+      <origin xyz="0.00431258478712504 -0.000115291353016134 0.0780847783859098" rpy="0 0 0" />
+      <mass value="2.06696980417714" />
+      <inertia ixx="0.00279255898978887" ixy="2.92930544423179E-09" ixz="-0.000393598540391767" iyy="0.00322426455464534" iyz="-3.58767593914708E-08" izz="0.00164013794301497" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_SHOULDER_Y_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_SHOULDER_Y_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="R_SHOULDER_Y_JOINT" type="revolute">
+    <origin xyz="0.1305 0 -0.000118446625147206" rpy="-1.5707963267949 0 -1.5707963267949" />
+    <parent link="R_SHOULDER_R_LINK" />
+    <child link="R_SHOULDER_Y_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.106" upper="3.106" effort="9.6" velocity="3.87" />
+  </joint>
+
+  <link name="R_ELBOW_LINK">
+    <inertial>
+      <origin xyz="0.0251732036876253 0.0066167905577148 -9.5502494434907E-07" rpy="0 0 0" />
+      <mass value="1.50231206334347" />
+      <inertia ixx="0.00174860807938138" ixy="-0.000381568144250958" ixz="-8.57111145653919E-08" iyy="0.00306341953233867" iyz="4.53321882586188E-08" izz="0.00277667853381611" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_ELBOW_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_ELBOW_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="R_ELBOW_JOINT" type="revolute">
+    <origin xyz="0.0180055682365108 -0.00011844662514704 0.1415" rpy="1.57079632679488 -1.5707963267949 0" />
+    <parent link="R_SHOULDER_Y_LINK" />
+    <child link="R_ELBOW_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-2.53" upper="1.047" effort="9.6" velocity="3.87" />
+  </joint>
+
+  <link name="R_WRIST_Y_LINK">
+    <inertial>
+      <origin xyz="-4.33504465435774E-07 0.000386640128118398 0.0654524830743081" rpy="0 0 0" />
+      <mass value="1.7987810161606" />
+      <inertia ixx="0.00268955258293502" ixy="3.43054473664038E-08" ixz="1.30905624646802E-07" iyy="0.00219728921211191" iyz="8.27421676482194E-06" izz="0.00170483364779622" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_WRIST_Y_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_WRIST_Y_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="R_WRIST_Y_JOINT" type="revolute">
+    <origin xyz="0.0975000000000001 0.0179998248741968 0" rpy="-1.5707963267949 0 -1.5707963267949" />
+    <parent link="R_ELBOW_LINK" />
+    <child link="R_WRIST_Y_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.106" upper="3.106" effort="6.5" velocity="4.19" />
+  </joint>
+
+  <link name="R_WRIST_R_LINK">
+    <inertial>
+      <origin xyz="1.99950800916504E-07 0.0040979051254344 -0.000152410415495019" rpy="0 0 0" />
+      <mass value="0.385757216022381" />
+      <inertia ixx="0.000173477668858602" ixy="-1.36650500788613E-09" ixz="-1.96021617498325E-09" iyy="0.000180563936153559" iyz="-1.41123589831096E-06" izz="0.000161463641076162" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_WRIST_R_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.866666666666667 0.866666666666667 0.890196078431372 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_WRIST_R_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="R_WRIST_R_JOINT" type="revolute">
+    <origin xyz="0 -0.00150008344375596 0.1585" rpy="1.57079632679488 -1.5707963267949 0" />
+    <parent link="R_WRIST_Y_LINK" />
+    <child link="R_WRIST_R_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-1.047" upper="1.047" effort="2.8" velocity="4.71" />
+  </joint>
+
+  <link name="R_WRIST_P_LINK">
+    <inertial>
+      <origin xyz="-0.0456032062084851 -0.000633248010028398 0.00286049691652446" rpy="0 0 0" />
+      <mass value="0.674298513858256" />
+      <inertia ixx="0.000554823456404255" ixy="2.42264302770727E-06" ixz="-1.90378665581021E-05" iyy="0.000720396775163409" iyz="-2.061070541193E-08" izz="0.00053061486742328" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_WRIST_P_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/R_WRIST_P_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="R_WRIST_P_JOINT" type="revolute">
+    <origin xyz="0 0 0" rpy="-1.57079632679488 0 -3.14159265358979" />
+    <parent link="R_WRIST_R_LINK" />
+    <child link="R_WRIST_P_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-1.57" upper="1.57" effort="2.8" velocity="4.71" />
+  </joint>
+
+  <link name="L_SHOULDER_P_LINK">
+    <inertial>
+      <origin xyz="-1.62722330809828E-06 -1.5803722513974E-07 0.0745134116269203" rpy="0 0 0" />
+      <mass value="1.87962161754617" />
+      <inertia ixx="0.00474964552952659" ixy="3.05788305495563E-08" ixz="3.34157069765246E-08" iyy="0.00523973139691502" iyz="2.35928661248731E-08" izz="0.00153277820428523" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_SHOULDER_P_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.866666666666667 0.866666666666667 0.890196078431372 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_SHOULDER_P_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="L_SHOULDER_P_JOINT" type="revolute">
+    <origin xyz="-0.103999992962178 0 -0.265500000000003" rpy="-1.5707963267949 0 1.5707963267949" />
+    <parent link="WAIST_Y_LINK" />
+    <child link="L_SHOULDER_P_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.106" upper="3.106" effort="30" velocity="3.56" />
+  </joint>
+
+  <link name="L_SHOULDER_R_LINK">
+    <inertial>
+      <origin xyz="-0.0385496284376503 -1.04533188594047E-06 1.08968453760294E-07" rpy="0 0 0" />
+      <mass value="2.18125958337827" />
+      <inertia ixx="0.00272517693263777" ixy="-3.6118500128573E-08" ixz="-4.24897568168872E-08" iyy="0.00679687155159653" iyz="-1.16119766952945E-07" izz="0.0062587293230567" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_SHOULDER_R_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_SHOULDER_R_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="L_SHOULDER_R_JOINT" type="revolute">
+    <origin xyz="0 0 0.119" rpy="1.5707963267949 1.5707963267949 0" />
+    <parent link="L_SHOULDER_P_LINK" />
+    <child link="L_SHOULDER_R_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-2.094" upper="2.094" effort="30" velocity="3.56" />
+  </joint>
+
+  <link name="L_SHOULDER_Y_LINK">
+    <inertial>
+      <origin xyz="-0.00431258476647112 0.000115291671288376 0.078084778441456" rpy="0 0 0" />
+      <mass value="2.06696980630471" />
+      <inertia ixx="0.00279255899772462" ixy="2.93303522904758E-09" ixz="0.000393598542563922" iyy="0.00322426455074109" iyz="3.58850507316564E-08" izz="0.00164013795130702" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_SHOULDER_Y_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_SHOULDER_Y_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="L_SHOULDER_Y_JOINT" type="revolute">
+    <origin xyz="-0.1305 0 0.000118446625147095" rpy="-1.5707963267949 0 1.5707963267949" />
+    <parent link="L_SHOULDER_R_LINK" />
+    <child link="L_SHOULDER_Y_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.106" upper="3.106" effort="9.6" velocity="3.87" />
+  </joint>
+
+  <link name="L_ELBOW_LINK">
+    <inertial>
+      <origin xyz="-0.0251732264962028 0.00661679248153924 9.48093150487939E-07" rpy="0 0 0" />
+      <mass value="1.50231140386829" />
+      <inertia ixx="0.0017486083049222" ixy="0.000381568539528837" ixz="-8.57776381535435E-08" iyy="0.00306342046591337" iyz="-4.53096501468027E-08" izz="0.00277667975512003" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_ELBOW_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_ELBOW_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="L_ELBOW_JOINT" type="revolute">
+    <origin xyz="-0.0180055682365108 0.000118446625161417 0.1415" rpy="1.5707963267949 1.5707963267949 0" />
+    <parent link="L_SHOULDER_Y_LINK" />
+    <child link="L_ELBOW_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-2.53" upper="1.047" effort="9.6" velocity="3.87" />
+  </joint>
+
+  <link name="L_WRIST_Y_LINK">
+    <inertial>
+      <origin xyz="-5.81211038630514E-07 0.000387801841542634 0.0654551889653701" rpy="0 0 0" />
+      <mass value="1.79883224246466" />
+      <inertia ixx="0.00268972253316655" ixy="-8.1321526674285E-09" ixz="-9.68421067140474E-08" iyy="0.00219745293832681" iyz="8.21292735105705E-06" izz="0.00170487484362056" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_WRIST_Y_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_WRIST_Y_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="L_WRIST_Y_JOINT" type="revolute">
+    <origin xyz="-0.0975 0.0180000813978063 0" rpy="-1.5707963267949 0 1.5707963267949" />
+    <parent link="L_ELBOW_LINK" />
+    <child link="L_WRIST_Y_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.106" upper="3.106" effort="6.5" velocity="4.19" />
+  </joint>
+
+  <link name="L_WRIST_R_LINK">
+    <inertial>
+      <origin xyz="1.9995080025037E-07 0.00409790512543418 -0.000152410415495297" rpy="0 0 0" />
+      <mass value="0.385757216022381" />
+      <inertia ixx="0.000173477668858602" ixy="-1.36650500796369E-09" ixz="-1.96021617500403E-09" iyy="0.000180563936153559" iyz="-1.41123589831064E-06" izz="0.000161463641076161" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_WRIST_R_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.866666666666667 0.866666666666667 0.890196078431372 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_WRIST_R_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="L_WRIST_R_JOINT" type="revolute">
+    <origin xyz="0 0 0.1585" rpy="1.5707963267949 1.5707963267949 0" />
+    <parent link="L_WRIST_Y_LINK" />
+    <child link="L_WRIST_R_LINK" />
+    <axis xyz="0 0 -1" />
+    <limit lower="-1.047" upper="1.047" effort="2.8" velocity="4.71" />
+  </joint>
+
+  <link name="L_WRIST_P_LINK">
+    <inertial>
+      <origin xyz="0.0456071898830416 -0.000633168786942584 0.0029318965930738" rpy="0 0 0" />
+      <mass value="0.674399804726611" />
+      <inertia ixx="0.000554925067765549" ixy="-2.48906189493038E-06" ixz="1.90875535632312E-05" iyy="0.000720490390510822" iyz="1.7270889903613E-08" izz="0.000530687227365475" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_WRIST_P_LINK.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_t170c_description/meshes/L_WRIST_P_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint name="L_WRIST_P_JOINT" type="revolute">
+    <origin xyz="0 0 0" rpy="-1.5707963267949 0 -3.14159265358979" />
+    <parent link="L_WRIST_R_LINK" />
+    <child link="L_WRIST_P_LINK" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.57" upper="1.57" effort="2.8" velocity="4.71" />
+  </joint>
+
+  <gazebo reference="BASE_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="LEG_P1_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="LEG_P2_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="WAIST_P_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="WAIST_R_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="WAIST_Y_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="NECK_Y_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="NECK_P_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="NECK_R_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="R_SHOULDER_P_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="R_SHOULDER_R_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="R_SHOULDER_Y_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="R_ELBOW_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="R_WRIST_Y_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="R_WRIST_R_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="R_WRIST_P_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="L_SHOULDER_P_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="L_SHOULDER_R_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="L_SHOULDER_Y_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="L_ELBOW_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="L_WRIST_Y_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="L_WRIST_R_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+  <gazebo reference="L_WRIST_P_LINK">
+    <mu1>0.2</mu1>
+    <mu2>0.2</mu2>
+    <material>Gazebo/Grey</material>
+  </gazebo>
+
+</robot>

@@ -879,6 +879,9 @@ async def patch_config(req: ConfigPatchRequest):
     dataset_path_changed = False
     robot_type_changed = False
     language_patch_changed = False
+    teleop_switch_changed = False
+    teleop_bridge_config_changed = False
+    next_teleop_enabled = False
     current_vla_client = None
     current_robot = None
     is_running = False
@@ -895,6 +898,16 @@ async def patch_config(req: ConfigPatchRequest):
         prev_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
         _apply_flat_patch_new(client_conf, flat)
         next_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
+        teleop_cfg = getattr(client_conf, 'teleop', None)
+        next_teleop_enabled = bool(getattr(teleop_cfg, 'use_teleop', False) or getattr(client_conf, 'use_teleop', False))
+        teleop_switch_changed = any(k in ('teleop.use_teleop', 'use_teleop') for k in flat)
+        teleop_bridge_config_changed = any(
+            k == 'teleop.control_device'
+            or k.startswith('teleop.devices.')
+            or k in ('teleop.ros2.topic', 'teleop.ros2.reset_topic', 'teleop.ros2.joint_state_topic')
+            or k.startswith('teleop.ros2.joint_state')
+            for k in flat
+        )
         client_conf = _config_to_dict(client_conf)
         is_running = bool(client_state.running)
 
@@ -930,6 +943,17 @@ async def patch_config(req: ConfigPatchRequest):
                 logger.error(f"Failed to update preprocess function: {e}")
     finally:
         client_state.lock.release()
+
+    if current_vla_client is not None and (teleop_switch_changed or (teleop_bridge_config_changed and next_teleop_enabled)):
+        try:
+            if teleop_switch_changed:
+                await asyncio.to_thread(current_vla_client.set_teleop_enabled, next_teleop_enabled)
+            elif next_teleop_enabled:
+                await asyncio.to_thread(current_vla_client.restart_teleop_bridge)
+        except Exception as e:
+            logger.error(f"Failed to apply teleop runtime config: {e}", exc_info=True)
+            raise HTTPException(500, f"Failed to apply teleop runtime config: {e}")
+
     if language_patch_changed and current_vla_client is not None:
         try:
             await asyncio.wait_for(asyncio.to_thread(_sync_runtime_language_state, current_vla_client, flat), timeout=3.0)
