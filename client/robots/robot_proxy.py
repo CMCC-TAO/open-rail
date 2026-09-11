@@ -101,6 +101,9 @@ class _RobotWorker:
         self._robot = None
         self._shm: Optional[SharedMemoryManager] = None
         self._stop = False
+        self._fast_stop = threading.Event()
+        self._fast_thread: Optional[threading.Thread] = None
+        self._control_lock = threading.RLock()
 
     # ------------------------------------------------------------------
     # lifecycle
@@ -122,9 +125,11 @@ class _RobotWorker:
             self._ready_queue.put(('error', exc))
             return
 
+        self._start_fast_control()
         try:
             self._loop()
         finally:
+            self._stop_fast_control()
             self._cleanup()
 
     def _collect_metadata(self) -> Dict[str, Any]:
@@ -181,7 +186,6 @@ class _RobotWorker:
         """
         try:
             while not self._stop:
-                self._drain_fast_commands()
                 self._drain_commands()
                 if self._stop:
                     break
@@ -208,25 +212,49 @@ class _RobotWorker:
                 return
             self._handle_command(command)
 
-    def _drain_fast_commands(self) -> None:
-        """Execute only the newest open-loop teleop command.
+    def _start_fast_control(self) -> None:
+        """Start the independent latest-wins teleop/reset command thread."""
+        self._fast_stop.clear()
+        self._fast_thread = threading.Thread(
+            target=self._fast_control_loop,
+            name='robot-open-loop-control',
+            daemon=True,
+        )
+        self._fast_thread.start()
 
-        Human teleoperation does not need an acknowledgement. Coalescing the
-        one-slot queue prevents the synchronous RPC command queue from building
-        up when the worker is briefly blocked collecting observations.
+    def _stop_fast_control(self) -> None:
+        self._fast_stop.set()
+        thread = self._fast_thread
+        self._fast_thread = None
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=1.0)
+
+    def _fast_control_loop(self) -> None:
+        """Execute the newest open-loop command independently of observations.
+
+        Quest3 reset sequences and manual interventions publish a complete
+        command stream at 100-200 Hz. Running that stream on the observation
+        loop drops frames whenever ``retrieve_observation()`` blocks, which
+        produces visible jitter. This dedicated thread preserves command-rate
+        execution while the one-slot queue still discards stale backlog.
         """
-        latest_action = None
-        while True:
+        while not self._fast_stop.is_set():
             try:
-                latest_action = self._fast_cmd_queue.get_nowait()
+                latest_action = self._fast_cmd_queue.get(timeout=0.001)
             except queue.Empty:
-                break
-        if latest_action is None or self._robot is None:
-            return
-        try:
-            self._robot.control_robot(latest_action)
-        except BaseException as exc:  # noqa: BLE001 - teleop must not kill the worker
-            logger.warning('Open-loop teleop command failed in worker: %s', exc, exc_info=True)
+                continue
+            while True:
+                try:
+                    latest_action = self._fast_cmd_queue.get_nowait()
+                except queue.Empty:
+                    break
+            if self._robot is None:
+                continue
+            try:
+                with self._control_lock:
+                    self._robot.control_robot(latest_action)
+            except BaseException as exc:  # noqa: BLE001 - teleop must not kill worker
+                logger.warning('Open-loop teleop command failed in worker: %s', exc, exc_info=True)
 
     def _handle_command(self, command: Tuple) -> None:
         kind = command[0]
@@ -236,7 +264,11 @@ class _RobotWorker:
         _, cmd_id, method, args, kwargs = command
         try:
             target = getattr(self._robot, method)
-            result = target(*args, **kwargs)
+            if method in ('control_robot', 'execute_action', '_control_robot', 'reset_robot'):
+                with self._control_lock:
+                    result = target(*args, **kwargs)
+            else:
+                result = target(*args, **kwargs)
         except (KeyboardInterrupt, SystemExit):
             # Never convert an interrupt into a command error; let _loop shut down.
             raise
