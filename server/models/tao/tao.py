@@ -137,10 +137,10 @@ class ModelVLA:
             arm = predicted_action[:, :14]
             left_hand = np.concatenate([
                 np.repeat(predicted_action[:, 14:15], 5, axis=1),
-                np.full((predicted_action.shape[0], 1), 1000.0)], axis=1)
+                np.full((predicted_action.shape[0], 1), 750.0)], axis=1)
             right_hand = np.concatenate([
                 np.repeat(predicted_action[:, 15:16], 5, axis=1),
-                np.full((predicted_action.shape[0], 1), 1000.0)], axis=1)
+                np.full((predicted_action.shape[0], 1), 750.0)], axis=1)
             predicted_action = np.concatenate([arm, left_hand, right_hand], axis=1)
         print(time.time() - time1, 'action shape:', predicted_action.shape)
         return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp'], 'ext': ext_result}
