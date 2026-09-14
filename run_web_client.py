@@ -37,11 +37,12 @@ def parse_args():
 def kill_port(port):
     os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
 
-if __name__ == '__main__':
+def main():
     args = parse_args()
     kill_port(port=args.port)
 
     exit_code = 0
+    logger = None
     try:
         logger = setup_logging("client.log", "run_web_client")
         os.environ['conf_file'] = args.conf
@@ -55,7 +56,10 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         exit_code = 0
     except Exception as e:
-        logger.exception(f"Exception: {e}")
+        if logger is not None:
+            logger.exception(f"Exception: {e}")
+        else:
+            print(f"Exception: {e}")
         exit_code = 1
         raise
     finally:
@@ -68,3 +72,9 @@ if __name__ == '__main__':
             except Exception:
                 pass
             os._exit(exit_code)
+
+        return exit_code
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
