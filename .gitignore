@@ -153,3 +153,6 @@ site/.astro/
 .netlify/
 # Keep the site's own static assets even though `*.svg` is ignored above.
 !site/public/**/*.svg
+# `data/` above also matches the website's source module directory — keep it tracked.
+!site/src/data/
+!site/src/data/**
