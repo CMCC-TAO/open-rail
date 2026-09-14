@@ -1,6 +1,7 @@
 ---
 import { getUI } from '../i18n';
 import { site } from '../data/site';
+import { platformIcons as icons } from '../data/icons';
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
 ---
@@ -24,9 +25,12 @@ const t = getUI(locale);
 
     <div class="mt-8 rounded-2xl border border-ink-border bg-gradient-to-r from-brand/10 to-accent/10 p-6">
       <p class="text-sm font-semibold text-slate-200">{t.eco.entryLabel}</p>
-      <div class="mt-3 flex flex-wrap gap-3">
+      <div class="mt-3 flex flex-wrap items-center justify-center gap-3">
         {site.platforms.map((p) => (
-          <a class="btn-ghost" href={p.href}>{p.label}</a>
+          <a class="btn-ghost px-3 py-2" href={p.href} title={p.label} aria-label={p.label}>
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><Fragment set:html={icons[p.icon]} /></svg>
+            <span>{p.label}</span>
+          </a>
         ))}
         <a class="btn-ghost" href={site.whitepaper}>{t.eco.paperLabel}</a>
       </div>

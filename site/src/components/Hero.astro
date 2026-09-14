@@ -1,5 +1,6 @@
 ---
 import { site } from '../data/site';
+import { platformIcons as icons } from '../data/icons';
 import { getUI } from '../i18n';
 const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
@@ -22,9 +23,14 @@ const t = getUI(locale);
     <p class="mx-auto mt-4 max-w-3xl text-sm text-slate-400">{t.hero.pain}</p>
 
     <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
-      <a class="btn-primary" href={`${BASE}#quickstart`}>{t.hero.btnStart}</a>
-      <a class="btn-ghost" href={site.platforms[0].href}>{t.hero.btnGithub}</a>
+      {site.platforms.map((p) => (
+        <a class="btn-ghost px-3 py-2" href={p.href} title={p.label} aria-label={p.label}>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><Fragment set:html={icons[p.icon]} /></svg>
+          <span>{p.label}</span>
+        </a>
+      ))}
       <a class="btn-ghost" href={site.whitepaper}>{t.hero.btnPaper}</a>
+      <a class="btn-primary" href={`${BASE}#quickstart`}>{t.hero.btnStart}</a>
     </div>
 
     <p class="mt-10 text-xs text-slate-500">{t.footer.org}{t.hero.presented}{t.footer.author}</p>

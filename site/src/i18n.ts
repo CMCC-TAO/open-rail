@@ -24,8 +24,7 @@ export const ui = {
       pain:
         'Three mountains block embodied-AI deployment: jerky motions, redundant hardware/software adaptation, and hard-to-accumulate high-quality real-robot data. Models think, robots act, and Open-RAIL handles real-time async scheduling, motion smoothing, edge-cloud coordination, and real-robot data feedback loops.',
       btnStart: 'Quick Start',
-      btnGithub: 'View GitHub Repository',
-      btnPaper: 'View Technical Whitepaper (PDF)',
+      btnPaper: 'Technical Paper',
       presented: 'Presented by ',
     },
     pos: {
@@ -112,7 +111,7 @@ export const ui = {
         { title: 'Deployment Template', body: 'End-edge-cloud distributed deployment examples.' },
       ],
       entryLabel: 'Open-source entry',
-      paperLabel: 'Technical Whitepaper',
+      paperLabel: 'Technical Paper',
       resourcesLabel: 'Resources: full docs · hands-on video tutorials · API manual · troubleshooting guide',
       values: [
         { who: 'Model teams', value: 'Skip real-robot deployment dev, focus on algorithm innovation' },
