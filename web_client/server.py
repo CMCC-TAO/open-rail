@@ -1366,11 +1366,24 @@ def _create_robot(robot_type, robot_config, client_config=None):
     the full client config, so it is given ``client_config`` instead of the
     robot sub-config; its ``ros_context`` is self-created inside the worker
     subprocess (an independent ``rclpy.Context`` when none is passed).
+
+    The ``record`` subtree is temporarily stripped before crossing the
+    process boundary: it carries dotted keys (``record.lerobot['cam.head']``
+    etc.) which ``ConfigDict`` cannot pickle-roundtrip (``__setstate__``
+    revalidates field names before restoring ``allow_dotted_keys``, so even
+    ``copy.deepcopy`` fails). The worker never reads ``record``; the original
+    main-process config is restored right after the proxy has pickled its
+    spawn args (inside ``RobotProxy.__init__``).
     """
     try:
         from client.robots.robot_proxy import RobotProxy
         if robot_type == RobotType.UNITREE_G1:
-            return RobotProxy(robot_type, client_config or robot_config)
+            saved_record = client_config.record
+            client_config.record = None
+            try:
+                return RobotProxy(robot_type, client_config)
+            finally:
+                client_config.record = saved_record
         return RobotProxy(robot_type, robot_config)
     except Exception as e:
         logger.exception(f"Robot creation failed: {e}")
