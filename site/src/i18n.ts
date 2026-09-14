@@ -10,7 +10,7 @@ export const ui = {
       models: 'Models',
       robots: 'Robots',
       showcase: 'Showcase',
-      ecosystem: 'Ecosystem',
+      getInvolved: 'Get Involved',
       quickstart: 'QuickStart',
       docs: 'Docs',
       themeLabel: 'Toggle theme',
@@ -99,9 +99,9 @@ export const ui = {
         },
       ],
     },
-    eco: {
-      eyebrow: 'OPEN ECOSYSTEM',
-      title: 'Open and Collaborative Open-Source Ecosystem',
+    community: {
+      eyebrow: 'OPEN COMMUNITY',
+      title: 'Open and Collaborative Open-Source Community',
       vision:
         'Open-sourcing the proven model-to-robot engineering pipeline so developers focus on model innovation, robot bodies, and scenarios instead of rebuilding deployment plumbing.',
       templates: [

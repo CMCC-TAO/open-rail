@@ -10,7 +10,7 @@ export default defineConfig({
   integrations: [
     tailwind({ applyBaseStyles: false }),
     starlight({
-      title: 'VLA-RAIL',
+      title: 'Open-RAIL',
       description: 'A Real-Time Asynchronous Inference Linker for VLA Models and Robots',
       // Single, unprefixed English locale (avoids Starlight probing a non-existent `/en/` path).
       defaultLocale: 'root',
@@ -18,6 +18,9 @@ export default defineConfig({
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/zhaoyongsheng/vla_infer' },
       ],
+      components: {
+        SiteTitle: './src/components/starlight/SiteTitle.astro',
+      },
       sidebar: [
         { label: 'Getting Started', link: '/getting-started/' },
         { label: 'Architecture', link: '/architecture/' },
