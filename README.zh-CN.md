@@ -8,45 +8,61 @@
 [![Paper](https://img.shields.io/badge/论文-arXiv-2512.24673-red)](https://arxiv.org/abs/2512.24673)
 [![License](https://img.shields.io/badge/许可证-Apache--2.0-green)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue)](pyproject.toml)
+[![Gitee](https://img.shields.io/badge/代码仓库-Gitee-c71d23)](https://gitee.com/cmcc-tao/open-rail)
+[![GitHub](https://img.shields.io/badge/代码仓库-GitHub-181717)](https://github.com/CMCC-TAO/open-rail)
+[![焕新社区](https://img.shields.io/badge/代码仓库-焕新社区-6f42c1)](https://aihuanxin.cn/#/embodiedAi/embodiedBrandDetail/106)
+[![Docs](https://img.shields.io/badge/文档主页-online-2496ed)](https://cmcc-tao.github.io/open-rail/)
 
-<!-- TODO:暂不添加 Stars/Issues 动态徽章：当前 README 未绑定公开仓库地址。 -->
+<!-- TODO:补充 CI 状态与版本号徽章；Stars / Issues 动态徽章待公开仓库地址确定后添加。 -->
 
 [English](README.md) | [中文](README.zh-CN.md)
 
 </div>
 
 <video controls width="100%" preload="metadata">
-  <source src="data/media/%E5%AE%A3%E4%BC%A0%E8%A7%86%E9%A2%91%EF%BC%88%E4%B8%AD%E6%96%87%E7%89%88%EF%BC%89.mp4" type="video/mp4">
-  <a href="data/media/%E5%AE%A3%E4%BC%A0%E8%A7%86%E9%A2%91%EF%BC%88%E4%B8%AD%E6%96%87%E7%89%88%EF%BC%89.mp4">播放 OPEN-RAIL 中文宣传视频</a>
+  <source src="data/media/OPEN-RAIL_demo.mp4" type="video/mp4">
+  <a href="data/media/OPEN-RAIL_demo.mp4">播放 OPEN-RAIL 演示视频</a>
 </video>
 
 VLA 模型越来越多，真机已是当下具身智能的版本答案。但真正没解决的，是模型 checkpoint 与机器人之间的那段工程链路：动作卡顿抖动、长时运行断流、执行数据回不到模型迭代。
 
 **OPEN-RAIL 就是这段链路**：一套轻量级服务端-客户端框架，把任意 VLA 模型接到任意已适配机器人上，并把「**推**（真机推理执行）→ **采**（运行即采集）→ **评**（数据驱动迭代）」的闭环端到端接进每一次运行。
 
-目前已适配 **3 款异构机器人**（另含 LeRobot 仿真后端）、支持 **10 个主流 VLA 模型**（7 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
+目前已适配 **4 款异构机器人**（含 LeRobot 仿真后端）、支持 **10 个主流 VLA 模型**（7 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
 
 - 🤖 **VLA 研究者** — 开箱即用的真机部署环境，专注模型创新，不搭工程管线
 - 🔧 **机器人工程师** — 快速验证算法的工具集，无需重复实现驱动与管线
 - 🎓 **初创团队与高校实验室** — 降低真机实验启动成本，缩短从仿真到实物的周期
+
 ---
 <details>
 <summary><b>目录</b></summary>
 
+- [📰 更新日志](#-更新日志)
 - [✨ 功能特性](#-功能特性)
+- [🤖 支持的机器人与模型](#-支持的机器人与模型)
 - [🚀 快速开始](#-快速开始)
 - [🎛️ 使用方式](#️-使用方式)
-- [🤖 支持的机器人与模型](#-支持的机器人与模型)
 - [🏗️ 系统架构](#️-系统架构)
-- [📊 数据采集](#-数据采集)
+- [📊 数据与评估](#-数据与评估)
 - [📚 文档](#-文档)
-- [🗺️ 路线图](#️-路线图)
+- [📅 TODO List](#todolist)
 - [🤝 参与贡献](#-参与贡献)
+- [💬 社区与交流](#-社区与交流)
 - [📖 引用](#-引用)
 - [⚖️ 许可证](#️-许可证)
+- [🙏 致谢](#-致谢)
 
 </details>
+
 ---
+
+## 📰 更新日志
+
+- **2026-09 · 首次开源** — 项目更名为 **OPEN-RAIL**（原 VLA-RAIL），首次开放 **推 / 采 / 评 / 兼容** 四层：三线程异步流水与两级在线平滑、推理即采集、评估数据随每次运行落盘、4 款异构机器人与 10 个 VLA 模型适配
+- **2025-12 · 预印本发布** — [VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots](https://arxiv.org/abs/2512.24673)：异步推理与块内 / 块间两级在线平滑
+
+<!-- TODO：确认首次开源的具体日期与版本号；此后每次发版在本节顶部补一条，并注明拓宽了哪条轴（模型 / 硬件 / 场景）。 -->
 
 ## ✨ 功能特性
 
@@ -54,41 +70,69 @@ VLA 模型越来越多，真机已是当下具身智能的版本答案。但真�
 | --- | --- | --- |
 | ⚡ 推理跟不上控制周期，动作又卡又抖 | 三线程异步流水（观测 / 推理 / 控制）+ 块内/块间两级在线平滑 | 关节加速度标准差 **10+ → 0.1 rad/s²**，消除 **30–50 倍**频率差 |
 | ☁️ 机器人端算力跑不动大模型 | 服务端-客户端分离，两侧依赖树互不干涉 | 嵌入式设备也能驱动大模型；端 / 边 / 云**代码零改动**切换 |
-| 🔌 换一台机器人就要重做接口 | 轻量硬件抽象层 `RobotBase` + 统一 `action_layout` 索引 | 已适配 **3 款异构机器人**；新机器人接入**从周级降到小时级** |
+| 🔌 换一台机器人就要重做接口 | 轻量硬件抽象层 `RobotBase` + 统一 `action_layout` 索引 | 已适配 **4 款异构机器人**；新机器人接入**从周级降到小时级** |
 | 🧩 每接一个新模型都要重写工程管线 | 统一模型接入约定 + 服务端自动路由 | 已支持 **10 个模型**；新模型接入 **≤ 100 行** |
 | 📊 推理与数采割裂，数据进不了训练管线 | 采集内置于每次推理，LeRobot 风格 Parquet，episode 可追加 | 每次运行产出可用训练数据，**零额外成本** |
-| 🎮 模型推理跑偏，没法及时纠正 | 三模式（纯推理 / 纯遥操 / 混合）+ 暂停-介入-恢复与状态预对齐 | 每次人工纠偏即**高质量教学样本**，无需后处理 |
+| 🎮 模型推理跑偏，没法及时纠正 | 三模式（纯推理 / 纯遥操 / 混合）+ 暂停-介入-恢复与状态预对齐（10 月开源） | 每次人工纠偏即**高质量教学样本**，无需后处理 |
 
 平滑在**框架层**完成，不改动模型，也不要求训练增强，扩散、流匹配、自回归架构通吃。
 
+## 🤖 支持的机器人与模型
+
+### 机器人
+
+| 机器人 | 类型 | 状态 | 适配器 |
+| --- | --- | --- | --- |
+| A2D | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/a2d/` |
+| Ti5 T170C | 双臂轮式机器人（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
+| Navi WA2（浙江人形） | 折叠轮臂人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
+| Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
+| _你的机器人_ | — | 🔜 计划中 | [接入指南](docs/guides/add-new-robot.zh-CN.md) |
+
+### 模型
+
+| 模型系列 | 成员 | 状态 |
+| --- | --- | --- |
+| ACT | ACT | ✅ 已支持 |
+| GR00T N1 系列 | GR00T N1、N1.5、N1.6 | ✅ 已支持 |
+| RDT | RDT-1B | ✅ 已支持 |
+| SmolVLA | SmolVLA | ✅ 已支持 |
+| GO1 | 智元 GO-1 | ✅ 已支持 |
+| π 系列 | Pi0、Pi0.5 | ✅ 已支持 |
+| TAO | TAO | ✅ 已支持 |
+| _你的模型_ | — | 🔜 [接入指南](docs/guides/add-new-vla-model.zh-CN.md) |
+
 ## 🚀 快速开始
+
+以下命令均在仓库根目录执行。
 
 ### 1. 环境要求
 
 - **Python ≥ 3.10**
-- **服务端**：按所选模型配备对应的 NVIDIA GPU、CUDA、PyTorch 和模型专属依赖。仓库没有统一的最低显存或 CUDA 版本；请以具体模型目录 README 和模型官方要求为准
+- **服务端**：NVIDIA GPU、CUDA、PyTorch 与模型专属依赖按所选模型配置，版本要求以各模型官方说明为准
 - **客户端**：随机器人而定——A2D 需厂商 SDK，Ti5 T170C 需 ROS 2，Navi WA2 需 ROS 1；使用 Mock 仿真后端则无额外硬件门槛
 - **网络**：两侧通过 ZMQ 通信，同一局域网或互相可达即可
 - **操作系统**：Linux 是当前主要运行环境
 
 ### 2. 安装
 
+代码在 GitHub、Gitee 与焕新社区同步开源，以 Gitee 为例，其他平台替换为对应仓库地址即可。
+
 ```bash
-git clone <仓库地址>
-cd OPEN-RAIL
+git clone https://gitee.com/cmcc-tao/open-rail.git
+cd open-rail
 conda create -y -n open-rail python=3.10 && conda activate open-rail
 pip install -e .
 ```
 
-兼容旧工作流时也可用 `pip install -r requirements.txt`。`pyproject.toml` 是运行时依赖与命令行脚本的权威来源，两者冲突时以它为准。
+`pip install -e .` 同时注册 `vla-server` 与 `vla-web-client` 两个命令行入口，与下面的启动脚本等价。旧工作流也可用 `pip install -r requirements.txt`，依赖以 `pyproject.toml` 为准。
 
 ### 3. 启动服务端
 
 服务端承载 VLA 模型运行时，通过 ZMQ 暴露推理端点。
 
 ```bash
-PYTHONPATH=<项目源码目录>:$PYTHONPATH python run_server.py \
-  --model_type <模型类型> --model_path <权重路径>
+python run_server.py --model_type <模型类型> --model_path <权重路径>
 ```
 
 | 参数 | 说明 | 默认值 |
@@ -100,8 +144,7 @@ PYTHONPATH=<项目源码目录>:$PYTHONPATH python run_server.py \
 <summary><b>完整示例</b></summary>
 
 ```bash
-PYTHONPATH=/path/to/open-rail:$PYTHONPATH \
-  python run_server.py --model_type tao \
+python run_server.py --model_type tao \
   --model_path /path/to/checkpoints/tao_v0/checkpoint-30000
 ```
 
@@ -142,7 +185,7 @@ python run_web_client.py --conf custom_conf.yaml
 
 ### 仿真闭环（无真机起步）
 
-不需要真实机器人硬件时，可以用 Mock 后端回放已有的 LeRobot 数据集。但它不是零配置流程：需要在 `conf/robots_conf.py` 的 Mock 配置中设置 `dataset_path`，并准备对应的 Parquet episode 与相机视频。服务端可以使用 `--model_type mock` 生成随机动作验证服务链路，但要验证真实模型效果，仍必须提供自己的 checkpoint 和模型专属环境。
+不需要真实机器人硬件时，可以用 Mock 后端回放已有的 LeRobot 数据集：在 `conf/robots_conf.py` 的 Mock 配置中设置 `dataset_path`，并准备对应的 Parquet episode 与相机视频。服务端可用 `--model_type mock` 生成随机动作验证服务链路；验证真实模型效果仍需提供自己的 checkpoint 和模型专属环境。
 
 Mock 数据集的最小目录结构如下：
 
@@ -161,40 +204,17 @@ Mock 模型只返回随机动作，不能替代真实模型评测。
 
 修改 `conf/*.yaml` 中的 `robots.type` 为目标机器人适配器（`a2d` / `ti5_t170c` / `navi_wa2`），并按 [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md) 配置相机话题、`action_layout` 与本体感知参数，然后同样用两条命令启动。
 
-### 混合模式：推理 + 实时遥操纠偏
+### 混合模式：推理 + 实时遥操纠偏（10 月开源）
+
+> 🚧 10 月开源，当前版本尚未包含。
 
 在客户端中切换三种运行模式——纯推理 / 纯遥操 / 混合。混合模式下可随时**暂停 → 介入纠偏 → 恢复**，状态预对齐保证接管瞬间无跳变；纠偏轨迹与推理轨迹按时间戳对齐、并行保存，每一段人工纠偏都是可直接进训练管线的教学样本。
 
-![数据沉淀与遥操接入示意](data/media/teleop.zh-CN.png)
-
-## 🤖 支持的机器人与模型
-
-### 机器人
-
-| 机器人 | 类型 | 状态 | 适配器 |
-| --- | --- | --- | --- |
-| A2D | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/a2d/` |
-| Ti5 T170C | 双臂轮式机器人（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
-| Navi WA2（浙江人形） | 折叠轮臂人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
-| Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
-| _你的机器人_ | — | 🔜 计划中 | [接入指南](docs/guides/add-new-robot.zh-CN.md) |
-
-### 模型
-
-| 模型系列 | 成员 | 状态 |
-| --- | --- | --- |
-| ACT | ACT | ✅ 已支持 |
-| GR00T N1 系列 | GR00T N1、N1.5、N1.6 | ✅ 已支持 |
-| RDT | RDT-1B | ✅ 已支持 |
-| SmolVLA | SmolVLA | ✅ 已支持 |
-| GO1 | 智元 GO-1 | ✅ 已支持 |
-| π 系列 | Pi0、Pi0.5 | ✅ 已支持 |
-| TAO | TAO | ✅ 已支持 |
-| _你的模型_ | — | 🔜 [接入指南](docs/guides/add-new-vla-model.zh-CN.md) |
+![数据沉淀与遥操接入示意](data/media/data-teleop.png)
 
 ## 🏗️ 系统架构
 
-![OPEN-RAIL 架构图](data/media/architecture.zh-CN.png)
+![OPEN-RAIL 架构图](data/media/framework.png)
 
 OPEN-RAIL 采用 **服务端-客户端分布式架构**，推理主链路与可视化链路各自独立、互不干扰。**服务端**负责模型推理；**客户端**部署在机器人一侧，负责状态采集、任务执行、指令下发和数据记录，把机器人配置与模型推理整合成一条完整的工作流。
 
@@ -219,7 +239,7 @@ OPEN-RAIL 采用 **服务端-客户端分布式架构**，推理主链路与可�
 ├── docs/                   # 快速开始、架构、配置、排障和接入指南
 │   └── guides/             # 机器人与 VLA 模型接入指南
 ├── data/                   # 本地数据、媒体资源和录制输出
-│   ├── media/              # 宣传视频、架构图和可视化示意图
+│   ├── media/              # 演示视频、架构图和可视化示意图
 │   └── README.md           # 数据目录说明
 ├── test/                   # 测试/实验
 ├── run_server.py           # Server 启动入口
@@ -232,13 +252,14 @@ OPEN-RAIL 采用 **服务端-客户端分布式架构**，推理主链路与可�
 └── CITATION.cff            # 引用元数据
 ```
 
-### 核心机制：异步流水线
+### 执行链路：异步流水 + 两级在线平滑
 
 VLA 推理与控制之间存在数量级的频率差：模型出一次 action chunk 要几百毫秒，机器人控制回路却跑在几十到几百赫兹。同步方案里，控制周期的延迟下界就是模型延迟——动作卡顿与抖动正是从这里来的。
 
-OPEN-RAIL 用**三条互相解耦的流水线**消除这个差距：
+OPEN-RAIL 用**三条互相解耦的线程**消除这个差距：
 
-![OPEN-RAIL 三线程异步流水线](data/media/promo-thumb.zh-CN.png)
+![OPEN-RAIL 三线程异步流水线](data/media/async-pipeline.png)
+<!-- 🖼️ 占位符：三线程异步流水线示意图——观测 / 推理 / 控制三条线程各按自身节奏运行，建议 1600×900、<1MB，路径 data/media/async-pipeline.png -->
 
 三条线程各按自己的节奏跑，互不等待：
 
@@ -253,13 +274,15 @@ OPEN-RAIL 用**三条互相解耦的流水线**消除这个差距：
 
 实现细节（平滑算法与窗口、chunk 并入策略、推理超时降级策略、缓冲区结构与容量）见 [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md)。
 
-## 📊 数据采集
+## 📊 数据与评估
 
-推理和数采通常是两套分开的流程，OPEN-RAIL 把采集内置进每一次推理：每次运行产出的都是可直接进训练管线的数据，不需要再单独跑一遍采集。
+推理、数采与评估通常是三套分开的流程，OPEN-RAIL 把它们都接进每一次运行。
+
+### 采：运行即采集
 
 - 📡 数据由客户端数据管理器写入，与推理主链路并行，不影响控制频率
 - 🗂️ **LeRobot 风格 Parquet**，数据片段支持追加，适配长周期运行与增量训练
-- 🎮 人工纠偏产生的片段可以直接当教学样本用，不需要额外处理
+- 🎮 人工纠偏产生的片段可以直接当教学样本用，不需要额外处理（10 月开源）
 
 ```text
 data/
@@ -272,8 +295,24 @@ data/
     └── eval_log.csv
 ```
 
-Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。评测 JSON 保留原始统计数组，CSV 将推理、轨迹和通信耗时聚合为平均值。
+Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 
+### 评：运行即评估
+
+每次运行在 `eval/` 下落地两份评估日志：`eval_log.json` 保留原始统计数组，`eval_log.csv` 将各项耗时聚合为平均值，两者按统一时间基准对齐。
+
+| 指标 | 字段 | 说明 |
+| --- | --- | --- |
+| 推理耗时 | `avg_infer_time` | 每轮推理的平均调用时延 |
+| 图像预处理耗时 | `img_proc_time` | 观测图像预处理耗时 |
+| 块内轨迹耗时 | `avg_intra_traj_time` | 单个动作块内部的处理耗时 |
+| 块间轨迹耗时 | `avg_inter_traj_time` | 相邻动作块衔接的处理耗时 |
+| 通信耗时 | `avg_comm_time` | 观测上行与指令下行的链路时延 |
+| 观测帧率 | `obv_fps` | 实际帧率，用于确认观测链路没有掉帧 |
+
+- 🧾 **运行配置随结果一并记录**——模型、控制周期、平滑模式与 chunk 配置，保证结果可复现、可跨运行对照
+- 🚨 **异常同样留痕**——推理超时、数据缺失或人为中断都计入日志，记录不只保留顺利那次
+- 📈 **运行即可视化**——动作原始值与平滑后结果的对照曲线、关节状态轨迹在线展示，问题不必等复盘才暴露
 
 ## 📚 文档
 
@@ -285,26 +324,52 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。�
 | 🔧 [docs/troubleshooting.zh-CN.md](docs/troubleshooting.zh-CN.md)         | 常见问题与排查               |
 | 🤖 [docs/guides/add-new-robot.zh-CN.md](docs/guides/add-new-robot.zh-CN.md)     | 如何新增机器人适配器         |
 | 🧠 [docs/guides/add-new-vla-model.zh-CN.md](docs/guides/add-new-vla-model.zh-CN.md) | 如何新增 VLA 模型适配器      |
+| 📦 [docs/demo-running-on-dataset.zh-CN.md](docs/demo-running-on-dataset.zh-CN.md) | 端到端实例：在 AgiBotWorld 2026 数据集上运行 GR00T-N1.5 |
 
-路线图见 [ROADMAP.md](ROADMAP.md) · [中文](ROADMAP.zh-CN.md)。
+## TODO List 📅 <a name="todolist"></a>
 
-## 🗺️ 路线图
+**推——模型到机器人执行**
 
 - [x] 三线程异步流水 + 两级在线平滑——关节加速度标准差 **10+ → 0.1 rad/s²**
-- [x] **3 款异构机器人 + 10 个 VLA 模型**（7 系列）适配，端 / 边 / 云零改动切换
-- [x] 推理即采集（LeRobot 风格 Parquet）
-- [ ] 🚧 评估工具集——量化每次运行的平滑质量、延迟与数据产出
-- [ ] 🚧 容器镜像——服务端与客户端 Docker 预置镜像
-- [ ] 🔜 仿真器对接——Isaac Sim / MuJoCo / Genesis 共用同一套适配器接口
-- [ ] 🔜 多机器人编排——一个 Server 调度多个 Client
-- [ ] 🔜 数据集与基准约定、社区模型适配器注册表
+- [x] async / sync 两种推理模式；心跳检测与自动重连
+- [x] 服务端-客户端分离——端 / 边 / 云零改动切换
+- [ ] 三模式运行 + 实时遥操纠偏（10 月）
+  - [ ] 纯推理 / 纯遥操 / 混合三种运行模式
+  - [ ] 暂停 → 介入 → 恢复，状态预对齐
 
-完整路线图（含中长期规划与治理方式）见 [ROADMAP.zh-CN.md](ROADMAP.zh-CN.md)。
-<!-- TODO：补充 ROADMAP.md 与 ROADMAP.zh-CN.md 文件，并在功能、模型、机器人和发布计划发生变化时同步更新。 -->
+**采——推理即采集（LeRobot 风格 Parquet）**
+
+- [x] 采集内置于每次推理，episode 可追加
+- [ ] 纠偏轨迹与推理轨迹按时间戳对齐、并行保存
+
+**评——运行即评估**
+
+- [x] 评估日志（JSON / CSV）覆盖推理、轨迹与通信耗时
+- [x] 运行配置留痕可复现；运行即可视化
+- [ ] 发布基于原子技能的真机评测基准
+- [ ] 场景库与评分口径——任务场景、评分规范与结果提交方式
+
+**训——训练框架**
+
+- [ ] 发布自研训练框架
+- [ ] 数据集约定——训练数据的统一格式与组织规范
+
+**兼容——多模型与多机器人控制**
+
+- [x] 4 款异构机器人（A2D / Ti5 T170C / Navi WA2 + 一套 LeRobot 仿真后端）
+- [x] 10 个 VLA 模型（7 系列）
+- [x] 可视化抽象为独立层——面向非开发人员的控制入口
+- [ ] WAM 模型接入（10 月）
+  - [ ] dreamzero
+  - [ ] cosmos
+- [ ] 多机器人编排——一个服务端调度多个客户端
+- [ ] 仿真器对接
+
+图例：✅ 已发布；（10 月）为 10 月放出。
 
 ## 🤝 参与贡献
 
-欢迎贡献机器人适配器、模型适配器、平滑策略、测试用例与文档改进。提交 PR 前：
+欢迎贡献机器人适配器、模型适配器、平滑策略、测试用例与文档改进，社区驱动的条目尤其欢迎机器人与模型适配器。提交 PR 前：
 
 1. 先开 issue 讨论变更（尤其是新增机器人 / 模型适配器）
 2. 遵循 `docs/guides/` 中的适配器约定
@@ -318,10 +383,35 @@ python -m pip install -e ".[dev]"
 
 代码规范与测试约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。如需提交代码，请注意保持改动聚焦，并遵守贡献指南中对 checkpoint、录制数据、日志和本地配置的提交限制。
 
+## 💬 社区与交流
+
+代码在 GitHub、Gitee 与焕新社区同步开源，三处内容一致。
+
+| 入口 | 地址 |
+| --- | --- |
+| 代码仓库（Gitee） | [gitee.com/cmcc-tao/open-rail](https://gitee.com/cmcc-tao/open-rail) |
+| 代码仓库（GitHub） | [github.com/CMCC-TAO/open-rail](https://github.com/CMCC-TAO/open-rail) |
+| 代码仓库（焕新社区） | [aihuanxin.cn/#/embodiedAi/embodiedBrandDetail/106](https://aihuanxin.cn/#/embodiedAi/embodiedBrandDetail/106) |
+| 文档主页 | [cmcc-tao.github.io/open-rail](https://cmcc-tao.github.io/open-rail/) |
+| 问题与需求 | 仓库 Issues——缺陷、文档问题与新功能需求；新增机器人 / 模型适配器建议先开 issue 讨论 |
+
+<!-- TODO：补充交流群 / 讨论区入口。 -->
 
 ## 📖 引用
 
-OPEN-RAIL 在以下预印本中以 **VLA-RAIL** 为名发表。若在研究或产品原型中使用本项目，请引用：
+引用本仓库（OPEN-RAIL，代码与文档）：
+
+```bibtex
+@misc{openrail2026,
+  title        = {OPEN-RAIL},
+  author       = {Zhao, Yongsheng and Zhao, Lei and Cheng, Baoping and Yao, Gongxin and Wen, Xuanzhang and Gao, Han},
+  year         = {2026},
+  howpublished = {\url{https://github.com/CMCC-TAO/open-rail}},
+  note         = {Open-source framework connecting VLA model inference with robot execution}
+}
+```
+
+引用论文（本仓库在以下预印本中以 **VLA-RAIL** 为名发表）：
 
 ```bibtex
 @misc{zhao2025vlarailrealtimeasynchronousinference,
@@ -338,6 +428,13 @@ OPEN-RAIL 在以下预印本中以 **VLA-RAIL** 为名发表。若在研究或�
 ## ⚖️ 许可证
 
 Apache License 2.0，详见 [LICENSE](LICENSE)。
+
+## 🙏 致谢
+
+- 数据集格式与工具链借鉴 [LeRobot](https://github.com/huggingface/lerobot) 的 Parquet 与视频组织约定
+- 模型适配基于各模型官方实现：GR00T（[NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)）、RDT（[thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)）、ACT、SmolVLA、GO1、π 系列、TAO
+- ACT 适配中的 DETR 部分修改自 [facebookresearch/detr](https://github.com/facebookresearch/detr)（Apache 2.0），扩散策略相关实现参考 [real-stanford/diffusion_policy](https://github.com/real-stanford/diffusion_policy)
+- 机器人适配依赖各厂商 SDK 与驱动：A2D、Ti5 T170C、Navi WA2（浙江人形）
 
 ---
 

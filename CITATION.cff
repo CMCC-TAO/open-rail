@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: VLA-RAIL
+title: OPEN-RAIL
 message: "If you use this software, please cite it as follows."
 type: software
 authors:
@@ -15,7 +15,7 @@ authors:
     given-names: Xuanzhang
   - family-names: Gao
     given-names: Han
-repository-code: "https://github.com/<org>/<repo>"
+repository-code: "https://github.com/CMCC-TAO/open-rail"
 url: "https://arxiv.org/abs/2512.24673"
 license: Apache-2.0
 preferred-citation:
