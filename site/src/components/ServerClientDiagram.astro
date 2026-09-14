@@ -1,0 +1,42 @@
+---
+import { getUI } from '../i18n';
+const { locale = 'en' } = Astro.props;
+const d = getUI(locale).diagrams.serverClient;
+---
+
+<svg viewBox="0 0 820 420" class="w-full" role="img" aria-label="RAIL Server-Client architecture">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#4d94ff" />
+    </marker>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2478FF" />
+      <stop offset="100%" stop-color="#9254FF" />
+    </linearGradient>
+  </defs>
+
+  <rect x="40" y="90" width="240" height="150" rx="14" fill="#1b1e27" stroke="#262a36" />
+  <rect x="40" y="90" width="240" height="34" rx="14" fill="#2478FF" />
+  <text x="160" y="112" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">{d.server}</text>
+  <text x="60" y="150" fill="#cbd5e1" font-size="13">· {d.serverItems[0]}</text>
+  <text x="60" y="174" fill="#cbd5e1" font-size="13">· {d.serverItems[1]}</text>
+  <text x="60" y="198" fill="#cbd5e1" font-size="13">· {d.serverItems[2]}</text>
+
+  <rect x="540" y="90" width="240" height="150" rx="14" fill="#1b1e27" stroke="#262a36" />
+  <rect x="540" y="90" width="240" height="34" rx="14" fill="#9254FF" />
+  <text x="660" y="112" text-anchor="middle" fill="#fff" font-size="16" font-weight="700">{d.client}</text>
+  <text x="560" y="150" fill="#cbd5e1" font-size="13">· {d.clientItems[0]}</text>
+  <text x="560" y="174" fill="#cbd5e1" font-size="13">· {d.clientItems[1]}</text>
+  <text x="560" y="198" fill="#cbd5e1" font-size="13">· {d.clientItems[2]}</text>
+
+  <line x1="280" y1="140" x2="540" y2="140" stroke="#4d94ff" stroke-width="2" marker-end="url(#arrow)" />
+  <line x1="540" y1="190" x2="280" y2="190" stroke="#a874ff" stroke-width="2" marker-end="url(#arrow)" />
+  <text x="410" y="132" text-anchor="middle" fill="#4d94ff" font-size="12">{d.action}</text>
+  <text x="410" y="210" text-anchor="middle" fill="#a874ff" font-size="12">{d.obs}</text>
+
+  <rect x="250" y="300" width="320" height="80" rx="14" fill="#1b1e27" stroke="url(#g1)" stroke-width="1.5" stroke-dasharray="5 4" />
+  <text x="410" y="328" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="600">{d.web}</text>
+  <text x="410" y="350" text-anchor="middle" fill="#94a3b8" font-size="12">{d.webItems}</text>
+  <line x1="160" y1="240" x2="380" y2="300" stroke="#3a3f4d" stroke-width="1.5" stroke-dasharray="4 4" />
+  <line x1="660" y1="240" x2="440" y2="300" stroke="#3a3f4d" stroke-width="1.5" stroke-dasharray="4 4" />
+</svg>

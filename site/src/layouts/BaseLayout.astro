@@ -1,0 +1,81 @@
+---
+import '../styles/global.css';
+import Nav from '../components/Nav.astro';
+import { site } from '../data/site';
+
+const BASE = import.meta.env.BASE_URL;
+const { locale = 'en' } = Astro.props;
+const { title = `${site.name} — ${site.tagline}`, description = site.heroDesc } = Astro.props;
+const ogImage = `${site.site ?? 'https://zhaoyongsheng.github.io'}/vla_infer/og.png`;
+---
+
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" href={`${BASE}favicon.svg`} />
+    <script is:inline>
+      // Respect saved theme; default to dark.
+      const t = localStorage.getItem('theme');
+      const dark = t ? t === 'dark' : true;
+      document.documentElement.classList.toggle('dark', dark);
+    </script>
+  </head>
+  <body class="bg-white text-slate-800 dark:bg-ink dark:text-slate-200">
+    <Nav locale={locale} />
+    <main>
+      <slot />
+    </main>
+
+    <!-- Lightbox for zoomable diagrams -->
+    <div id="lightbox" aria-hidden="true">
+      <div class="lb-inner" id="lb-inner"></div>
+    </div>
+
+    <script>
+      const lb = document.getElementById('lightbox') as HTMLElement | null;
+      const lbInner = document.getElementById('lb-inner') as HTMLElement | null;
+      document.querySelectorAll('[data-zoom]').forEach((el) => {
+        el.addEventListener('click', () => {
+          if (!lb || !lbInner) return;
+          lbInner.innerHTML = (el as HTMLElement).dataset.content ?? el.innerHTML;
+          lb.classList.add('is-open');
+          lb.setAttribute('aria-hidden', 'false');
+        });
+      });
+      lb?.addEventListener('click', (e) => {
+        if (e.target === lb) {
+          lb.classList.remove('is-open');
+          lb.setAttribute('aria-hidden', 'true');
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && lb?.classList.contains('is-open')) {
+          lb.classList.remove('is-open');
+          lb.setAttribute('aria-hidden', 'true');
+        }
+      });
+    </script>
+    <script>
+      const io = new IntersectionObserver(
+        (entries) =>
+          entries.forEach((e) => {
+            if (e.isIntersecting) {
+              e.target.classList.add('is-visible');
+              io.unobserve(e.target);
+            }
+          }),
+        { threshold: 0.12 }
+      );
+      document.querySelectorAll('.reveal').forEach((el) => io.observe(el));
+    </script>
+  </body>
+</html>

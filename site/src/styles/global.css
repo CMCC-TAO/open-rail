@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans antialiased;
+  }
+}
+
+@layer components {
+  .container-prose {
+    @apply mx-auto w-full max-w-prose px-5;
+  }
+  .container-wide {
+    @apply mx-auto w-full max-w-6xl px-5;
+  }
+  .section {
+    @apply py-16 sm:py-24;
+  }
+  .eyebrow {
+    @apply mb-3 inline-block rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200;
+  }
+  .btn-primary {
+    @apply btn bg-gradient-to-r from-brand to-accent text-white shadow-lg shadow-brand/20 hover:shadow-xl hover:shadow-brand/40 hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply btn border border-ink-border bg-white/5 text-slate-200 hover:border-brand/60 hover:text-white;
+  }
+  .card {
+    @apply rounded-2xl border border-ink-border bg-ink-card p-6 transition-all duration-200;
+  }
+  .lift {
+    @apply transition-transform duration-200 hover:-translate-y-1;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-brand to-accent bg-clip-text text-transparent;
+  }
+  .stat {
+    @apply text-3xl font-extrabold gradient-text sm:text-4xl;
+  }
+  .hairline {
+    @apply border-ink-border;
+  }
+}
+
+/* Scroll reveal (progressive enhancement, no external dep) */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+}
+
+/* Lightbox */
+#lightbox[open],
+#lightbox.is-open {
+  display: flex;
+}
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(8, 9, 12, 0.88);
+  backdrop-filter: blur(4px);
+}
+#lightbox .lb-inner {
+  max-width: 72rem;
+  max-height: 90vh;
+  overflow: auto;
+  width: 100%;
+}
+#lightbox svg,
+#lightbox img {
+  width: 100%;
+  height: auto;
+}

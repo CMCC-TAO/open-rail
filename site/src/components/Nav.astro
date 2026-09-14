@@ -1,0 +1,64 @@
+---
+import { site } from '../data/site';
+import { getUI } from '../i18n';
+const BASE = import.meta.env.BASE_URL;
+const { locale = 'en' } = Astro.props;
+const t = getUI(locale);
+const links = [
+  { href: `${BASE}#overview`, label: t.nav.overview },
+  { href: `${BASE}#capabilities`, label: t.nav.capabilities },
+  { href: `${BASE}#architecture`, label: t.nav.architecture },
+  { href: `${BASE}#models`, label: t.nav.models },
+  { href: `${BASE}#showcase`, label: t.nav.showcase },
+  { href: `${BASE}#case`, label: t.nav.case },
+  { href: `${BASE}#ecosystem`, label: t.nav.ecosystem },
+  { href: `${BASE}#quickstart`, label: t.nav.quickstart },
+];
+const icons: Record<string, string> = {
+  github:
+    '<path d="M12 2C6.48 2 2 6.58 2 12.25c0 4.53 2.87 8.37 6.84 9.73.5.1.68-.22.68-.49v-1.7c-2.78.62-3.37-1.21-3.37-1.21-.46-1.18-1.11-1.5-1.11-1.5-.91-.64.07-.62.07-.62 1 .07 1.53 1.05 1.53 1.05.9 1.57 2.36 1.12 2.94.86.09-.66.35-1.12.63-1.38-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.3.1-2.7 0 0 .84-.27 2.75 1.05a9.4 9.4 0 0 1 5 0c1.91-1.32 2.75-1.05 2.75-1.05.55 1.4.2 2.44.1 2.7.64.72 1.03 1.63 1.03 2.75 0 3.94-2.34 4.81-4.57 5.06.36.32.68.94.68 1.9v2.82c0 .27.18.6.69.49A10.26 10.26 0 0 0 22 12.25C22 6.58 17.52 2 12 2z"/>',
+  gitee:
+    '<path d="M11.3 3.2A9.8 9.8 0 0 0 3.5 11.4l.6 3.4 2.9.9v3.1l2.6.2.9-2.3h2.6l.9 2.3 2.6-.2v-3.1l2.9-.9.6-3.4A9.8 9.8 0 0 0 11.3 3.2z"/>',
+  hf:
+    '<circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v10M7.5 9.5v5M16.5 9.5v5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+};
+---
+
+<header class="sticky top-0 z-50 border-b border-ink-border bg-white/80 backdrop-blur dark:bg-ink/80">
+  <nav class="container-wide flex h-16 items-center justify-between gap-4">
+    <a href={BASE} class="flex flex-col leading-tight">
+      <span class="text-base font-extrabold tracking-tight gradient-text">{site.name}</span>
+      <span class="text-[11px] text-slate-500">{t.nav.tagline}</span>
+    </a>
+
+    <div class="hidden items-center gap-6 text-sm font-medium xl:flex">
+      {links.map((l) => <a class="hover:text-brand" href={l.href}>{l.label}</a>)}
+    </div>
+
+    <div class="flex items-center gap-2">
+      {site.platforms.map((p) => (
+        <a class="btn-ghost hidden px-3 py-2 sm:inline-flex" href={p.href} title={p.label} aria-label={p.label}>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><Fragment set:html={icons[p.icon]} /></svg>
+          <span class="hidden md:inline">{p.label}</span>
+        </a>
+      ))}
+      <button id="theme-toggle" class="btn-ghost px-2" aria-label={t.nav.themeLabel}>
+        <svg class="h-5 w-5 dark:hidden" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+        </svg>
+        <svg class="hidden h-5 w-5 dark:block" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="4" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41" />
+        </svg>
+      </button>
+    </div>
+  </nav>
+</header>
+
+<script>
+  const btn = document.getElementById('theme-toggle');
+  btn?.addEventListener('click', () => {
+    const isDark = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  });
+</script>

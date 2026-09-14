@@ -1,0 +1,38 @@
+---
+import { getUI } from '../i18n';
+const { locale = 'en' } = Astro.props;
+const d = getUI(locale).diagrams.flywheel;
+---
+
+<svg viewBox="0 0 420 420" class="w-full" role="img" aria-label="Train-collect-evaluate evolution flywheel">
+  <defs>
+    <marker id="arrow3" markerWidth="12" markerHeight="12" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#a874ff" />
+    </marker>
+  </defs>
+  <circle cx="210" cy="210" r="150" fill="none" stroke="#262a36" stroke-width="2" />
+  <text x="210" y="205" text-anchor="middle" fill="#e2e8f0" font-size="15" font-weight="700">{d.title}</text>
+  <text x="210" y="226" text-anchor="middle" fill="#4d94ff" font-size="13">{d.sub}</text>
+
+  <path d="M 350 210 A 140 140 0 0 1 337 280" fill="none" stroke="#4d94ff" stroke-width="3" marker-end="url(#arrow3)" />
+  <path d="M 83 280 A 140 140 0 0 1 70 210" fill="none" stroke="#7c5cff" stroke-width="3" marker-end="url(#arrow3)" />
+  <path d="M 83 140 A 140 140 0 0 1 337 140" fill="none" stroke="#9254FF" stroke-width="3" marker-end="url(#arrow3)" transform="rotate(180 210 210)" />
+
+  <g font-size="13" font-weight="600" text-anchor="middle">
+    <circle cx="210" cy="60" r="30" fill="#1b1e27" stroke="#2478FF" />
+    <text x="210" y="58" fill="#fff">{d.deploy}</text>
+    <text x="210" y="74" fill="#94a3b8" font-size="10">{d.deployNote}</text>
+
+    <circle cx="358" cy="210" r="30" fill="#1b1e27" stroke="#5b8bff" />
+    <text x="358" y="208" fill="#fff">{d.collect}</text>
+    <text x="358" y="224" fill="#94a3b8" font-size="10">{d.collectNote}</text>
+
+    <circle cx="210" cy="360" r="30" fill="#1b1e27" stroke="#7c5cff" />
+    <text x="210" y="358" fill="#fff">{d.evaluate}</text>
+    <text x="210" y="374" fill="#94a3b8" font-size="10">{d.evaluateNote}</text>
+
+    <circle cx="62" cy="210" r="30" fill="#1b1e27" stroke="#9254FF" />
+    <text x="62" y="208" fill="#fff">{d.retrain}</text>
+    <text x="62" y="224" fill="#94a3b8" font-size="10">{d.retrainNote}</text>
+  </g>
+</svg>

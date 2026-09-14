@@ -1,0 +1,32 @@
+---
+import { site } from '../data/site';
+import { getUI } from '../i18n';
+const BASE = import.meta.env.BASE_URL;
+const { locale = 'en' } = Astro.props;
+const t = getUI(locale);
+---
+
+<section id="overview" class="relative overflow-hidden">
+  <div class="pointer-events-none absolute inset-0 bg-ink"></div>
+  <div class="pointer-events-none absolute -top-32 left-1/4 h-96 w-96 rounded-full bg-brand/20 blur-3xl"></div>
+  <div class="pointer-events-none absolute -bottom-32 right-1/4 h-96 w-96 rounded-full bg-accent/20 blur-3xl"></div>
+  <div class="pointer-events-none absolute inset-0 opacity-[0.06]" style="background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);background-size:40px 40px;"></div>
+
+  <div class="container-wide relative py-24 text-center sm:py-32">
+    <p class="eyebrow">{t.hero.eyebrow}</p>
+    <h1 class="mx-auto max-w-4xl text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-6xl">
+      OPEN-RAIL 2026：构建 <span class="gradient-text">{t.hero.titleHighlight}</span> 的高速公路
+    </h1>
+    <p class="mt-5 text-lg font-semibold text-brand-light">{t.hero.sub}</p>
+    <p class="mx-auto mt-4 max-w-3xl text-base text-slate-300">{t.hero.desc}</p>
+    <p class="mx-auto mt-4 max-w-3xl text-sm text-slate-400">{t.hero.pain}</p>
+
+    <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+      <a class="btn-primary" href={`${BASE}#quickstart`}>{t.hero.btnStart}</a>
+      <a class="btn-ghost" href={site.platforms[0].href}>{t.hero.btnGithub}</a>
+      <a class="btn-ghost" href={site.whitepaper}>{t.hero.btnPaper}</a>
+    </div>
+
+    <p class="mt-10 text-xs text-slate-500">{t.footer.org}{t.hero.presented}{t.footer.author}</p>
+  </div>
+</section>

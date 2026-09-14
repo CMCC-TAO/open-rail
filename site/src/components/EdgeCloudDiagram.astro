@@ -1,0 +1,33 @@
+---
+import { getUI } from '../i18n';
+const { locale = 'en' } = Astro.props;
+const d = getUI(locale).diagrams.edgeCloud;
+---
+
+<svg viewBox="0 0 820 360" class="w-full" role="img" aria-label="End-edge-cloud deployment architecture">
+  <defs>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#4d94ff" />
+    </marker>
+  </defs>
+
+  <rect x="40" y="40" width="220" height="90" rx="14" fill="#1b1e27" stroke="#2478FF" />
+  <text x="150" y="70" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">{d.cloud}</text>
+  <text x="150" y="94" text-anchor="middle" fill="#94a3b8" font-size="12">{d.cloudNote}</text>
+
+  <rect x="300" y="40" width="220" height="90" rx="14" fill="#1b1e27" stroke="#7c5cff" />
+  <text x="410" y="70" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">{d.edge}</text>
+  <text x="410" y="94" text-anchor="middle" fill="#94a3b8" font-size="12">{d.edgeNote}</text>
+
+  <rect x="560" y="40" width="220" height="90" rx="14" fill="#1b1e27" stroke="#9254FF" />
+  <text x="670" y="70" text-anchor="middle" fill="#fff" font-size="15" font-weight="700">{d.robot}</text>
+  <text x="670" y="94" text-anchor="middle" fill="#94a3b8" font-size="12">{d.robotNote}</text>
+
+  <line x1="150" y1="130" x2="150" y2="230" stroke="#4d94ff" stroke-width="2" marker-end="url(#arrow2)" />
+  <line x1="410" y1="130" x2="410" y2="230" stroke="#4d94ff" stroke-width="2" marker-end="url(#arrow2)" />
+  <line x1="670" y1="130" x2="670" y2="230" stroke="#4d94ff" stroke-width="2" marker-end="url(#arrow2)" />
+
+  <rect x="80" y="230" width="660" height="90" rx="14" fill="#14161d" stroke="#262a36" />
+  <text x="410" y="262" text-anchor="middle" fill="#e2e8f0" font-size="14" font-weight="600">{d.unified}</text>
+  <text x="410" y="288" text-anchor="middle" fill="#94a3b8" font-size="12">{d.unifiedNote}</text>
+</svg>

@@ -78,8 +78,6 @@ __pycache__
 # documentation build artifacts
 
 docs/build
-site/
-
 # The following ignores are from vila repository
 *.whl
 *_dev

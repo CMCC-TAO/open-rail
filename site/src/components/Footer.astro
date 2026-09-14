@@ -1,0 +1,41 @@
+---
+import { site } from '../data/site';
+import { getUI } from '../i18n';
+const BASE = import.meta.env.BASE_URL;
+const { locale = 'en' } = Astro.props;
+const t = getUI(locale);
+---
+
+<footer class="border-t border-ink-border bg-ink py-12 text-center">
+  <div class="container-wide flex flex-col items-center gap-8">
+    <div>
+      <p class="text-lg font-extrabold gradient-text">{site.name}</p>
+      <p class="mt-2 text-sm text-slate-400">{t.footer.tagline}</p>
+    </div>
+
+    <div class="grid w-full max-w-3xl gap-8 sm:grid-cols-3">
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.repoLabel}</p>
+        <ul class="mt-3 space-y-2 text-sm text-slate-400">
+          {site.platforms.map((p) => (
+            <li><a class="hover:text-brand" href={p.href}>{p.label}</a></li>
+          ))}
+          <li><a class="hover:text-brand" href={site.whitepaper}>{t.footer.paperLabel}</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.contactLabel}</p>
+        <p class="mt-3 text-sm text-slate-400">{site.email}</p>
+        <p class="mt-3 text-xs text-slate-500">{t.footer.emailNote}</p>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.org}</p>
+        <p class="mt-3 text-sm text-slate-400">{t.footer.author}</p>
+      </div>
+    </div>
+
+    <div class="border-t border-ink-border pt-6 text-xs text-slate-500">
+      <p>© 2026 {t.footer.org} · {t.footer.author} · {t.footer.copyright}</p>
+    </div>
+  </div>
+</footer>
