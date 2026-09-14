@@ -1,6 +1,10 @@
+---
+title: "Add a New VLA Model"
+description: "Step-by-step guide to integrate a new VLA model into the server."
+---
+
 # Quick‑Start for Adding New VLA Model
 
-[中文版本](add-new-vla-model.zh-CN.md)
 
 > Assume the target VLA model to be integrated is named `your_model`
 

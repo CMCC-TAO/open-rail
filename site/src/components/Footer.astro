@@ -1,19 +1,54 @@
 ---
-import { site } from '../data/site';
+import { site, paper, contributors } from '../data/site';
 import { getUI } from '../i18n';
 const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
 ---
 
-<footer class="border-t border-ink-border bg-ink py-12 text-center">
-  <div class="container-wide flex flex-col items-center gap-8">
+<footer class="border-t border-ink-border bg-ink py-12">
+  <div class="container-wide flex flex-col gap-12">
+    <!-- Brand -->
     <div>
-      <p class="text-lg font-extrabold gradient-text">{site.name}</p>
+      <p class="text-lg font-extrabold gradient-text">RAIL</p>
       <p class="mt-2 text-sm text-slate-400">{t.footer.tagline}</p>
     </div>
 
-    <div class="grid w-full max-w-3xl gap-8 sm:grid-cols-3">
+    <!-- Paper & Citation -->
+    <div class="grid gap-8 lg:grid-cols-2">
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.paperLabel}</p>
+        <a class="mt-3 block text-base font-semibold text-white hover:text-brand" href={paper.url}>
+          {paper.title}
+        </a>
+        <p class="mt-2 text-sm text-slate-400">{paper.authors} · {paper.venue}</p>
+      </div>
+      <div>
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold text-slate-300">BibTeX</p>
+          <button id="copy-bibtex" class="btn-ghost px-2 py-1 text-xs" type="button">Copy</button>
+        </div>
+        <pre id="bibtex" class="mt-2 overflow-x-auto rounded-xl border border-ink-border bg-white/5 p-3 text-xs leading-relaxed text-slate-300"><code>{paper.bibtex}</code></pre>
+      </div>
+    </div>
+
+    <!-- Contributors -->
+    <div>
+      <p class="text-sm font-semibold text-slate-300">Contributors</p>
+      <div class="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {contributors.map((group) => (
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-brand-light">{group.role}</p>
+            <ul class="mt-2 space-y-1 text-sm text-slate-400">
+              {group.members.map((m) => <li>{m}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <!-- Links & contact -->
+    <div class="grid gap-8 border-t border-ink-border pt-8 sm:grid-cols-3">
       <div>
         <p class="text-sm font-semibold text-slate-300">{t.footer.repoLabel}</p>
         <ul class="mt-3 space-y-2 text-sm text-slate-400">
@@ -39,3 +74,18 @@ const t = getUI(locale);
     </div>
   </div>
 </footer>
+
+<script>
+  const btn = document.getElementById('copy-bibtex');
+  const code = document.querySelector('#bibtex code')?.textContent ?? '';
+  btn?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      const old = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => (btn.textContent = old), 1500);
+    } catch {
+      /* clipboard not available */
+    }
+  });
+</script>

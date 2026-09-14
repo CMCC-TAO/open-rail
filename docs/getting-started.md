@@ -1,10 +1,13 @@
-# Getting Started
+---
+title: "Getting Started"
+description: "Complete environment setup and feature integration for VLA-RAIL."
+---
 
-**English Version** | [中文版](getting-started.zh-CN.md)
+# Getting Started
 
 > 📌 This document is for **complete environment setup and feature integration**.  
 > If you just want to verify the Web service is accessible, you can **only execute Step 2**; Server is not required, but client business status, robot status, and inference results may be unavailable.  
-> For a 30-second quick experience, return to the [README Quick Start](../README.md#quick-start).
+> For a 30-second quick experience, return to the [README Quick Start](https://github.com/zhaoyongsheng/vla_infer#quick-start).
 
 ---
 

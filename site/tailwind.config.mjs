@@ -7,7 +7,7 @@ export default {
       colors: {
         brand: {
           DEFAULT: '#2478FF',
-          light: '#4d94ff',
+          light: 'rgb(var(--brand-light) / <alpha-value>)',
           dark: '#1a5fd0',
         },
         accent: {
@@ -15,9 +15,9 @@ export default {
           light: '#a874ff',
         },
         ink: {
-          DEFAULT: '#111318',
-          card: '#1b1e27',
-          border: '#262a36',
+          DEFAULT: 'rgb(var(--ink) / <alpha-value>)',
+          card: 'rgb(var(--ink-card) / <alpha-value>)',
+          border: 'rgb(var(--ink-border) / <alpha-value>)',
         },
       },
       fontFamily: {

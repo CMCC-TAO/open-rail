@@ -1,5 +1,6 @@
 ---
 import { getUI } from '../i18n';
+const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
 const icons: Record<string, string> = {
@@ -30,6 +31,15 @@ const iconKeys = ['flask', 'robot', 'wrench'];
           <p class="mt-2 text-sm text-slate-400">{q.body}</p>
         </div>
       ))}
+    </div>
+
+    <div class="mt-12">
+      <p class="text-center text-sm font-semibold text-slate-300">{t.quick.docsLabel}</p>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {t.quick.docs.map((d) => (
+          <a class="btn-ghost justify-center" href={`${BASE}${d.href}`}>{d.label}</a>
+        ))}
+      </div>
     </div>
 
     <p class="mt-10 text-center text-sm text-slate-400">{t.quick.resourcesLabel}</p>

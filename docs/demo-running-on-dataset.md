@@ -1,3 +1,8 @@
+---
+title: "Dataset Demo: GR00T-N1.5 on AgiBotWorld"
+description: "Run the GR00T-N1.5 pretrained model on the AgiBotWorld 2026 dataset with RAIL."
+---
+
 # Running the GR00T‑N1.5 Pretrained Model on the AgiBotWorld 2026 Dataset with RAIL
 
 > 

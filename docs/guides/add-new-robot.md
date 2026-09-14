@@ -1,6 +1,10 @@
+---
+title: "Add a New Robot"
+description: "Step-by-step guide to integrate a new robot into VLA-RAIL."
+---
+
 # New Robot Integration Guide
 
-[中文版本](add-new-robot.zh-CN.md)
 
 ## Quick Start
 

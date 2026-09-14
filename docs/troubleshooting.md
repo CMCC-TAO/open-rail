@@ -1,6 +1,10 @@
+---
+title: "Troubleshooting"
+description: "Common issues with the web client, server, and robots and how to resolve them."
+---
+
 # Troubleshooting
 
-[中文版本](troubleshooting.zh-CN.md)
 
 ## Web client
 

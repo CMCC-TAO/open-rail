@@ -19,10 +19,18 @@ export default defineConfig({
         { icon: 'github', label: 'GitHub', href: 'https://github.com/zhaoyongsheng/vla_infer' },
       ],
       sidebar: [
-        { label: 'Introduction', link: '/docs/' },
-        { label: 'Installation', link: '/docs/installation/' },
-        { label: 'Configuration', link: '/docs/configuration/' },
-        { label: 'Models & Robots', link: '/docs/models-robots/' },
+        { label: 'Getting Started', link: '/getting-started/' },
+        { label: 'Architecture', link: '/architecture/' },
+        { label: 'Configuration', link: '/configuration/' },
+        { label: 'Troubleshooting', link: '/troubleshooting/' },
+        { label: 'Dataset Demo', link: '/demo-running-on-dataset/' },
+        {
+          label: 'Guides',
+          items: [
+            { label: 'Add a VLA Model', link: '/guides/add-new-vla-model/' },
+            { label: 'Add a Robot', link: '/guides/add-new-robot/' },
+          ],
+        },
       ],
     }),
   ],

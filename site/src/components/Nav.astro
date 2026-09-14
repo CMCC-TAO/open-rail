@@ -9,8 +9,9 @@ const links = [
   { href: `${BASE}#capabilities`, label: t.nav.capabilities },
   { href: `${BASE}#architecture`, label: t.nav.architecture },
   { href: `${BASE}#models`, label: t.nav.models },
+  { href: `${BASE}#robots`, label: t.nav.robots },
   { href: `${BASE}#showcase`, label: t.nav.showcase },
-  { href: `${BASE}#case`, label: t.nav.case },
+  { href: `${BASE}getting-started/`, label: t.nav.docs },
   { href: `${BASE}#ecosystem`, label: t.nav.ecosystem },
   { href: `${BASE}#quickstart`, label: t.nav.quickstart },
 ];
@@ -26,9 +27,8 @@ const icons: Record<string, string> = {
 
 <header class="sticky top-0 z-50 border-b border-ink-border bg-white/80 backdrop-blur dark:bg-ink/80">
   <nav class="container-wide flex h-16 items-center justify-between gap-4">
-    <a href={BASE} class="flex flex-col leading-tight">
-      <span class="text-base font-extrabold tracking-tight gradient-text">{site.name}</span>
-      <span class="text-[11px] text-slate-500">{t.nav.tagline}</span>
+    <a href={BASE} class="flex items-center leading-tight">
+      <span class="text-lg font-extrabold tracking-tight gradient-text">RAIL</span>
     </a>
 
     <div class="hidden items-center gap-6 text-sm font-medium xl:flex">

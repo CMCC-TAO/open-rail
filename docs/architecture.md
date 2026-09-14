@@ -1,6 +1,10 @@
+---
+title: "Architecture"
+description: "How VLA-RAIL’s robot VLA system is structured and the core control loop."
+---
+
 # Architecture
 
-[中文版本](architecture.zh-CN.md)
 
 ## 1. First Principles
 

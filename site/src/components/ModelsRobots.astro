@@ -1,8 +1,12 @@
 ---
 import { supportedModels, supportedRobots } from '../data/site';
+const BASE = import.meta.env.BASE_URL;
+// Robot icon image path: drop a logo at public/media/robots/<slug>.png
+const robotIcon = (name: string) =>
+  `${BASE}media/robots/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.png`;
 ---
 
-<section id="models" class="section">
+<section class="section">
   <div class="container-wide">
     <div class="text-center">
       <p class="eyebrow">SUPPORTED MODELS &amp; ROBOTS</p>
@@ -14,35 +18,47 @@ import { supportedModels, supportedRobots } from '../data/site';
       </p>
     </div>
 
-    <div class="mt-12 grid gap-8 lg:grid-cols-2">
-      <div class="card reveal">
-        <div class="flex items-baseline justify-between">
-          <h3 class="text-xl font-bold text-white">VLA Models</h3>
-          <span class="text-sm font-semibold text-brand-light">{supportedModels.length}+ supported</span>
-        </div>
-        <div class="mt-5 grid gap-3 sm:grid-cols-2">
-          {supportedModels.map((m) => (
-            <div class="rounded-xl border border-ink-border bg-white/5 p-3">
-              <p class="text-sm font-semibold text-slate-100">{m.name}</p>
-              <p class="mt-1 text-xs text-slate-400">{m.note}</p>
-            </div>
-          ))}
-        </div>
+    <!-- VLA Models -->
+    <div id="models" class="mt-12 scroll-mt-24">
+      <div class="flex items-baseline justify-between">
+        <h3 class="text-xl font-bold text-white">Supported VLA Models</h3>
+        <span class="text-sm font-semibold text-brand-light">{supportedModels.length}+ supported</span>
       </div>
+      <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {supportedModels.map((m) => (
+          <div class="card reveal p-4">
+            <p class="text-sm font-semibold text-slate-100">{m.name}</p>
+            <p class="mt-1 text-xs text-slate-400">{m.note}</p>
+          </div>
+        ))}
+      </div>
+    </div>
 
-      <div class="card reveal">
-        <div class="flex items-baseline justify-between">
-          <h3 class="text-xl font-bold text-white">Robots</h3>
-          <span class="text-sm font-semibold text-brand-light">{supportedRobots.length} heterogeneous humanoids</span>
-        </div>
-        <div class="mt-5 grid gap-3 sm:grid-cols-2">
-          {supportedRobots.map((r) => (
-            <div class="rounded-xl border border-ink-border bg-white/5 p-3">
+    <!-- Robots -->
+    <div id="robots" class="mt-12 scroll-mt-24">
+      <div class="flex items-baseline justify-between">
+        <h3 class="text-xl font-bold text-white">Supported Robots</h3>
+        <span class="text-sm font-semibold text-brand-light">{supportedRobots.length} heterogeneous humanoids</span>
+      </div>
+      <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {supportedRobots.map((r) => (
+          <div class="card reveal flex items-center gap-3 p-3">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-ink-border bg-white/5">
+              <!-- Icon image placeholder: place a logo at the src below; the fallback glyph shows until then. -->
+              <img src={robotIcon(r.name)} alt={r.name} class="h-full w-full object-contain" onerror={'this.style.display="none";this.nextElementSibling.style.display="flex";'} />
+              <span class="hidden h-full w-full items-center justify-center text-slate-500">
+                <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+                  <rect x="5" y="8" width="14" height="10" rx="2" />
+                  <path d="M12 8V4M9 2h6M9 13h.01M15 13h.01" stroke-linecap="round" />
+                </svg>
+              </span>
+            </div>
+            <div>
               <p class="text-sm font-semibold text-slate-100">{r.name}</p>
               <p class="mt-1 text-xs text-slate-400">{r.note}</p>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   </div>

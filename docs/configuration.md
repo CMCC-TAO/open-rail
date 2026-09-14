@@ -1,6 +1,10 @@
+---
+title: "Configuration Reference"
+description: "Configuration sources, precedence, and reference tables for VLA-RAIL."
+---
+
 # Configuration Reference
 
-[中文版本](configuration.zh-CN.md)
 
 ## Configuration sources and precedence
 
