@@ -7,7 +7,7 @@ description: "Complete environment setup and feature integration for VLA-RAIL."
 
 > 📌 This document is for **complete environment setup and feature integration**.  
 > If you just want to verify the Web service is accessible, you can **only execute Step 2**; Server is not required, but client business status, robot status, and inference results may be unavailable.  
-> For a 30-second quick experience, return to the [README Quick Start](https://github.com/zhaoyongsheng/vla_infer#quick-start).
+> For a 30-second quick experience, return to the [README Quick Start](https://github.com/CMCC-TAO/open-rail#quick-start).
 
 ---
 
@@ -35,7 +35,7 @@ description: "Complete environment setup and feature integration for VLA-RAIL."
 
 ```bash
 git clone <repository_url>
-cd vla_infer
+cd open-rail
 ```
 
 If the code is already on your local machine, navigate directly to the project root directory. All commands below should be executed in the directory containing `pyproject.toml`.

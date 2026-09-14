@@ -2,8 +2,11 @@ name: Deploy site to GitHub Pages
 
 on:
   push:
-    branches: [main]          # TODO: change to your deploy source branch (e.g. yongsheng)
+    branches: [main]
     paths:
+      # Docs live in the repository-root `docs/` folder (loaded by
+      # site/src/content/config.ts), so they must trigger a rebuild too.
+      - 'docs/**'
       - 'site/**'
       - '.github/workflows/deploy-site.yml'
   workflow_dispatch:

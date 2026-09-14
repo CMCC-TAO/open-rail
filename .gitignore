@@ -140,3 +140,16 @@ log
 conf/*.yaml
 !config/default_conf.yaml
 *.svg
+
+# Website (site/, Astro + Starlight) build intermediates
+
+node_modules/
+.astro/
+site/dist/
+site/.astro/
+*.tsbuildinfo
+.npm
+.vercel/
+.netlify/
+# Keep the site's own static assets even though `*.svg` is ignored above.
+!site/public/**/*.svg

@@ -30,7 +30,7 @@
 
 ```bash
 git clone <仓库地址>
-cd vla_infer
+cd open-rail
 ```
 
 如果代码已经位于本地，直接进入项目根目录即可。以下命令都应在包含 `pyproject.toml` 的目录执行。

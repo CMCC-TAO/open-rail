@@ -6,7 +6,7 @@ import { site } from '../data/site';
 const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
 const { title = `${site.name} — ${site.tagline}`, description = site.heroDesc } = Astro.props;
-const ogImage = `${site.site ?? 'https://zhaoyongsheng.github.io'}/vla_infer/og.png`;
+const ogImage = `${site.site ?? 'https://cmcc-tao.github.io'}${BASE}og.png`;
 ---
 
 <!doctype html>

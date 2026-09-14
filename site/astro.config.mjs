@@ -2,11 +2,11 @@ import { defineConfig } from 'astro/config';
 import tailwind from '@astrojs/tailwind';
 import starlight from '@astrojs/starlight';
 
-// GitHub Pages project site is served from /vla_infer/.
+// GitHub Pages project site is served from /open-rail/.
 // If you bind a custom domain later, change base to '/'.
 export default defineConfig({
-  base: '/vla_infer/',
-  site: 'https://zhaoyongsheng.github.io',
+  base: '/open-rail/',
+  site: 'https://cmcc-tao.github.io',
   integrations: [
     tailwind({ applyBaseStyles: false }),
     starlight({
@@ -16,7 +16,7 @@ export default defineConfig({
       defaultLocale: 'root',
       locales: { root: { label: 'English', lang: 'en-US' } },
       social: [
-        { icon: 'github', label: 'GitHub', href: 'https://github.com/zhaoyongsheng/vla_infer' },
+        { icon: 'github', label: 'GitHub', href: 'https://github.com/CMCC-TAO/open-rail' },
       ],
       components: {
         SiteTitle: './src/components/starlight/SiteTitle.astro',

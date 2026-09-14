@@ -3,6 +3,11 @@ node_modules/
 
 # build output
 dist/
+.astro/
+
+# astro / typescript generated files
+*.tsbuildinfo
+.content-collections/
 
 # logs
 npm-debug.log*

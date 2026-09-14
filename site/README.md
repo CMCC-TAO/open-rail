@@ -1,6 +1,6 @@
-# VLA-RAIL Website
+# Open-RAIL Website
 
-Project site for [VLA-RAIL](https://github.com/zhaoyongsheng/vla_infer), built with
+Project site for [Open-RAIL](https://github.com/CMCC-TAO/open-rail), built with
 **Astro + Tailwind CSS**, with documentation powered by **Starlight**.
 
 ## Structure
@@ -8,7 +8,8 @@ Project site for [VLA-RAIL](https://github.com/zhaoyongsheng/vla_infer), built w
 - `src/pages/index.astro` — landing page (Hero, Teaser, Features, Framework,
   Chunk Transition, Results, Quickstart, Models & Robots, Citation).
 - `src/components/*` — landing page sections.
-- `src/content/docs/*` — Starlight documentation.
+- `src/content/config.ts` — loads Starlight docs from the repository-root
+  `docs/` folder (markdown does **not** live under `site/`).
 - `public/media/*` — images and demo video (copied from `../data/media`).
 - `.github/workflows/deploy-site.yml` — builds and publishes to the
   `gh-pages` branch.
@@ -17,7 +18,7 @@ Project site for [VLA-RAIL](https://github.com/zhaoyongsheng/vla_infer), built w
 
 ```bash
 npm install
-npm run dev      # http://localhost:4321/vla_infer/
+npm run dev      # http://localhost:4321/open-rail/
 npm run build    # outputs to dist/
 ```
 
@@ -28,7 +29,7 @@ Pushing to the deploy branch (`main` by default — adjust in
 via GitHub Pages. Set **Settings → Pages → Source = Deploy from a branch /
 gh-pages** and enable Actions write permission.
 
-> The site is served from `/vla_infer/`. If you bind a custom domain, change
+> The site is served from `/open-rail/`. If you bind a custom domain, change
 > `base` in `astro.config.mjs` to `'/'`.
 
 ## TODO (awaiting assets)
