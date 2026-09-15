@@ -36,15 +36,15 @@ export const ui = {
       presented: 'Presented by ',
     },
     pos: {
-      eyebrow: 'POSITIONING',
+      eyebrow: 'RAIL ARCHITECTURE',
       title: 'Open-RAIL: The Highway Connecting the VLA Brain and the Robot Body',
       body: 'VLA model = brain, understanding instructions and generating action intent; robot body = body, perceiving the environment and executing physical actions; Open-RAIL is the middleware that handles model onboarding, task scheduling, motion buffering & smoothing, real-robot execution, state feedback, and data logging.',
       roles: [
-        { name: 'RAIL Server', desc: 'Task Scheduling · Model Inference · Data Management' },
-        { name: 'RAIL Client', desc: 'Local Execution · Perception Collection' },
-        { name: 'Web Panel', desc: 'Execution Monitoring · Parameter Tuning · Data Review' },
+        { name: 'RAIL Server', desc: 'Task Scheduling · Model Inference' },
+        { name: 'RAIL Client', desc: 'Perception Collection · Realtime Data Manager · Motion Smoothing · Robot Execution · Human-in-the-loop Tele-operation' },
+        { name: 'Web Panel', desc: 'Execution Monitoring · Parameter Tuning · Camera & Trajectory Visualization · Evaluation & Data Recording · Robot Manual Control' },
       ],
-      diagramCaption: 'Server-Client distributed roles (click to enlarge)',
+      diagramCaption: 'Open-RAIL RAIL Architecture overview (click to enlarge)',
     },
     cap: {
       eyebrow: 'CORE CAPABILITIES',

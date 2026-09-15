@@ -9,6 +9,7 @@ python3.10.INFO
 !/data/media/
 !/data/media/robots/
 !/data/media/robots/**
+!/data/media/*.png
 # The website copies these into site/public/media/robots at build time — don't track the generated copy.
 site/public/media/robots/
 .conda/
