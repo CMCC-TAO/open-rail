@@ -78,15 +78,20 @@ action_layout:
         - 50.0
 controller:
   gripper_offset: 5
-  period: 3.75
+  period: 20.0
   raw_fps: 30
   speed: 1.5
   wait_time: 50
 inter_chunk:
   inter_chunk_mode: min_jerk
   min_jerk:
-    adaptive_factor: -1.0
     blend_threshold: 0.7
+    arm_transition_ratio: -1.0
+    hand_transition_ratio: 0.15
+    arm_adapt_scale: 1.0
+    hand_adapt_scale: 1000.0
+    adapt_factor_min: 0.1
+    adapt_gain_vel: 0.0
   search_action:
     search_length: 100
   smooth_velocity:

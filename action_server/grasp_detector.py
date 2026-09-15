@@ -75,7 +75,6 @@ TOUCH_GRASP_HOLD_SEC = 0.5           # 条件持续满足多久才判定抓取�
 # 这样"用哪种方案"在启动后就固定下来，不会在运行中来回切换。
 # ════════════════════════════════════════════════════════════════
 TOUCH_PROBE_TIMEOUT_SEC = 5.0        # 启动后等待触觉消息的最长时间（秒）
-ANGLE_DEBUG_PRINT = True             # 关节角度方案下每秒打印 set/get 差值（调试建议开启）
 
 
 class GraspDetector:
@@ -213,31 +212,20 @@ class GraspDetector:
         self._verbose = enabled
 
     def _print_loop(self):
-        """每秒打印一次状态（调试用）。
-
-        - 力传感器方案的侧：verbose=True 时打印 nf/tf/cnt/fingers（沿用原行为）
-        - 关节角度方案的侧：ANGLE_DEBUG_PRINT 时打印 set/get 差值，便于核对阈值是否命中
-        """
+        """每秒打印抓取状态（仅 verbose=True 时）"""
         while self._print_running:
             time.sleep(1.0)
-            now = time.time()
+            if not self._verbose:
+                continue
             with self._lock:
                 state = list(self._grasp_state)
-                use_touch = {side: self._use_touch(side, now)
-                             for side in ('left', 'right')}
                 l_info = (self._left_nf_sum, self._left_tf_sum, self._left_contact,
                           list(self._left_nf_per_finger))
                 r_info = (self._right_nf_sum, self._right_tf_sum, self._right_contact,
                           list(self._right_nf_per_finger))
-                verbose = self._verbose
 
-            for tag, side, idx, info in (('L', 'left', 0, l_info),
-                                         ('R', 'right', 1, r_info)):
-                if use_touch.get(side):
-                    if verbose:
-                        self._print_hand(tag, state[idx], info)
-                elif ANGLE_DEBUG_PRINT:
-                    self._print_angle(tag, state[idx], side)
+            self._print_hand('L', state[0], l_info)
+            self._print_hand('R', state[1], r_info)
 
     @staticmethod
     def _print_hand(tag, grasped, info):
@@ -255,22 +243,6 @@ class GraspDetector:
             f"nf={nf_sum:4d} tf={tf_sum:4d} cnt={contact} "
             f"fingers=[{finger_s}]"
         )
-
-    def _print_angle(self, tag, grasped, side):
-        """打印关节角度方案的 set/get 差值（ANGLE_DEBUG_PRINT 控制）"""
-        with self._lock:
-            thumb = self._compute_diff(f'{side}_set', f'{side}_get', self.THUMB_BEND_INDEX)
-            mid = self._compute_diff(f'{side}_set', f'{side}_get', self.MIDDLE_FINGER_INDEX)
-        state_mark = "*" if grasped else " "
-        print(
-            f"[GraspDetector] [{state_mark}] {tag}: use=angle "
-            f"thumb={self._fmt_diff(thumb)} mid={self._fmt_diff(mid)} "
-            f"thr>({GRASP_ANGLE_DIFF_THRESHOLD:.0f}/{GRASP_MIDDLE_DIFF_THRESHOLD:.0f})"
-        )
-
-    @staticmethod
-    def _fmt_diff(value):
-        return '   None' if value is None else f'{value:7.1f}'
 
     # ── 触觉回调（力传感器模式）───────────────────────────────────
 

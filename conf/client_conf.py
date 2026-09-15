@@ -106,9 +106,36 @@ def get_smooth_velocity_config() -> ConfigDict:
     return config
 
 def get_min_jerk_config() -> ConfigDict:
+    """Transition length configuration for min_jerk.
+
+    Naming rule: `<group>_*` is specific to that group, `adapt_*` holds the adaptive formula
+    parameters shared by both groups.
+    The two groups are determined by the policy of action_layout (see
+    client/utils/util.py:parse_action_layout):
+      arm  group = policy gradual / joint          -> continuous joints, using joint_indices
+      hand group = policy hand / stepwise / gripper -> discrete DOFs such as hands/grippers,
+                                                       using step_indices
+
+    Order used to pick the transition ratio of each group:
+      1) that group's `*_transition_ratio` is configured (>= 0) -> use that fixed ratio
+                                                                  (x number of chunk columns)
+      2) otherwise (< 0 or not configured)                     -> use adaptive:
+             e_pos  = max_i |Δpos_i| / that group's `*_adapt_scale`
+             factor = adapt_factor_min
+                      + (1 - adapt_factor_min) * min(1.0, max(e_pos, adapt_gain_vel * e_vel))
+    """
     config = ConfigDict()
     config.blend_threshold = 0.7
-    config.adaptive_factor = -1.0
+
+    # ── Transition ratio of each group (fixed value; < 0 or not configured = adaptive) ──
+    config.arm_transition_ratio = -1.0    # arm group: -1 -> adaptive (transition time scales with mismatch)
+    config.hand_transition_ratio = 0.15   # hand group: fixed short transition (~0.2s), so open/close is not stretched over the whole chunk
+
+    # ── Adaptive formula parameters: `*_adapt_scale` is per group, `adapt_*` is shared by both ──
+    config.arm_adapt_scale = 1.0          # rad: normalization range of the arm group (1.0 = a mismatch of about 1 rad counts as full range)
+    config.hand_adapt_scale = 1000.0      # counts: normalization range of the hand group (one full open/close is about 750 counts)
+    config.adapt_factor_min = 0.1         # shared: lower bound of factor (ratio), replaces the hard-coded 0.25 of the old formula
+    config.adapt_gain_vel = 0.0           # shared: weight of the velocity term (0 = decided by position mismatch only)
     return config
 
 def get_sync_inter_chunk_config() -> ConfigDict:

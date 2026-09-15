@@ -39,8 +39,14 @@ const CONFIG_INT_KEYS = new Set([
   'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
 
+// 键名规范：<组>_* 为该组专用（arm / hand），adapt_* 为两组共用 → 见 conf/client_conf.py
 const CONFIG_NUMBER_RANGES = {
-  adaptive_factor: { min: -1, max: 1, step: 0.01, manualMin: 0 },
+  arm_transition_ratio: { min: -1, max: 1, step: 0.01, manualMin: 0 },
+  hand_transition_ratio: { min: -1, max: 1, step: 0.01, manualMin: 0 },
+  arm_adapt_scale: { min: 0.1, max: 10, step: 0.1 },
+  hand_adapt_scale: { min: 10, max: 2000, step: 10 },
+  adapt_factor_min: { min: 0, max: 1, step: 0.01 },
+  adapt_gain_vel: { min: 0, max: 5, step: 0.1 },
 };
 
 const CONFIG_HIDDEN_DOT_KEYS = new Set([

@@ -614,14 +614,10 @@ def main(args=None):
                 try:
                     robot = dispatcher._context.robot_body
                     if not robot.has_force_sensor():
-                        print('[ERROR] ============================================================')
-                        print('[ERROR] force_sensor_enabled=True 但未收到触觉传感器消息！')
-                        print('[ERROR] 请检查：')
-                        print('[ERROR]   1. 手掌是否支持触觉传感器（TouchStatus）')
-                        print('[ERROR]   2. 触觉话题 /left_hand/touch_status, /right_hand/touch_status 是否正确发布')
-                        print('[ERROR]   3. 如需关闭力传感器模式，请将 action_dispatcher.py 中的')
-                        print('[ERROR]      FORCE_SENSOR_ENABLED 设为 False（第 11 行附近）')
-                        print('[ERROR] ============================================================')
+                        # 正常回退路径：GraspDetector 会在探测期内自动切到关节角度方案，
+                        # 不需要手动改 FORCE_SENSOR_ENABLED
+                        print('[WARN] 未收到触觉传感器消息 → GraspDetector 已回退到关节角度方案'
+                              '（无需手动关闭 FORCE_SENSOR_ENABLED）')
                 except Exception:
                     pass
             import threading as _threading

@@ -19,6 +19,48 @@ class InterChunkFuser:
     def _cfg_value(self, cfg, key, default):
         return getattr(cfg, key, getattr(self.config, key, default))
 
+    # ── Transition length decision: per-group separation + per-dimension normalization within a group
+    # (replaces the old "all joints mixed into a single norm") ──
+
+    def _group_adaptive_factor(self, indices, scale, next_action_chunk, next_vel_chunk,
+                               target_chunk_index, currt_action, currt_vel,
+                               factor_min=0.1, gain_vel=0.0):
+        """Compute the transition length ratio (dimensionless) of a group from the position mismatch
+        normalized per dimension within the group.
+
+        e_pos = max_i |Δpos_i| / scale     # 1.0 means the hardest dimension uses a full range (scale)
+        factor = factor_min + (1 - factor_min) * min(1.0, max(e_pos, gain_vel * e_vel))
+        Difference from the old formula: each group is computed independently (no more arm/hand
+        coupling), and normalization by range is applied first, then max within the group
+        (rad and counts no longer mix units, and the result is not affected by how many dimensions
+        the group has). Returns None when there is no data.
+        """
+        if not indices or currt_action is None or currt_vel is None:
+            return None
+        d = np.asarray(indices, dtype=int)
+        scale = float(scale) if scale else 1.0
+        tgt_pos = np.asarray(next_action_chunk)[:, target_chunk_index]
+        cur_pos = np.asarray(currt_action, dtype=float)
+        e_pos = float(np.max(np.abs(cur_pos[d] - tgt_pos[d]))) / scale
+        e_vel = 0.0
+        if gain_vel > 0:
+            tgt_vel = np.asarray(next_vel_chunk)[:, target_chunk_index]
+            cur_vel = np.asarray(currt_vel, dtype=float)
+            e_vel = float(np.max(np.abs(cur_vel[d] - tgt_vel[d]))) / scale
+        raw = factor_min + (1.0 - factor_min) * min(1.0, max(e_pos, gain_vel * e_vel))
+        return float(min(1.0, max(factor_min, raw)))
+
+    def _resolve_group_factor(self, indices, scale, fixed_cfg, factor_min, gain_vel,
+                              next_action_chunk, next_vel_chunk, target_chunk_index,
+                              currt_action, currt_vel):
+        """Transition ratio of a group: use the configured fixed value when it is non-negative,
+        otherwise use the normalized adaptive computation."""
+        if fixed_cfg is not None and float(fixed_cfg) >= 0:
+            return float(min(1.0, max(0.0, float(fixed_cfg))))
+        return self._group_adaptive_factor(
+            indices, scale, next_action_chunk, next_vel_chunk, target_chunk_index,
+            currt_action, currt_vel, factor_min=factor_min, gain_vel=gain_vel)
+
     def process(self, 
             next_action_chunk,
             next_vel_chunk,
@@ -37,7 +79,8 @@ class InterChunkFuser:
         # process first inference
         if joint_indices is None:
             joint_indices = list(range(next_action_chunk.shape[0]))
-        # 把 step_indices（如 gripper/hand）也纳入 blend，否则 chunk 切换时这些关节会跳变
+        # Include step_indices (e.g. gripper/hand) in the blend as well, otherwise these joints
+        # will jump when the chunk switches
         if step_indices is not None:
             joint_indices = sorted(set(joint_indices) | set(step_indices))
         if currt_action is None and currt_vel is None and currt_acc is None:
@@ -78,19 +121,76 @@ class InterChunkFuser:
             # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
             # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
         elif mode == 'min_jerk':
-            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition_numpy(
-                next_action_chunk,
-                next_vel_chunk,
-                next_acc_chunk,
-                next_timestamps,
-                target_chunk_index,
-                currt_action,
-                currt_vel,
-                currt_acc,
-                joint_indices=joint_indices,
-                blend_threshold=self._cfg_value(mode_cfg, 'blend_threshold', 0.7),
-                adaptive_factor=self._cfg_value(mode_cfg, 'adaptive_factor', -1)
-            )
+            # Config key naming: <group>_* is specific to that group, adapt_* holds the adaptive
+            # formula parameters shared by both groups.
+            # The two groups are determined by the policy of action_layout:
+            #   arm  group = gradual/joint (continuous joints, joint_indices)
+            #   hand group = hand/stepwise/gripper (discrete DOFs such as hands/grippers, step_indices)
+            # Order used to pick the transition ratio of each group: if that group's
+            #   *_transition_ratio (>= 0) is configured -> use the fixed ratio;
+            #   otherwise (< 0 or not configured)      -> use adaptive (normalized by *_adapt_scale)
+            arm_ratio_cfg = self._cfg_value(
+                mode_cfg, 'arm_transition_ratio',
+                self._cfg_value(mode_cfg, 'adaptive_factor', -1))        # legacy key fallback
+            hand_ratio_cfg = self._cfg_value(
+                mode_cfg, 'hand_transition_ratio',
+                self._cfg_value(mode_cfg, 'stepwise_transition_ratio', None))
+            factor_min = float(self._cfg_value(mode_cfg, 'adapt_factor_min', 0.1))
+            gain_vel = float(self._cfg_value(mode_cfg, 'adapt_gain_vel', 0.0))
+            blend_threshold = self._cfg_value(mode_cfg, 'blend_threshold', 0.7)
+
+            hand_idx = sorted(set(int(i) for i in step_indices)) if step_indices else []
+            arm_idx = [i for i in joint_indices if i not in set(hand_idx)]
+
+            # ── Each group decides its own transition length independently ──
+            # The old approach mixed arm and hand into a single norm (rad together with 0~1000);
+            # the hand would blow the norm up, forcing even the arm to always transition over the
+            # whole chunk. Now groups are separated and normalized per dimension within a group.
+            f_arm = self._resolve_group_factor(
+                arm_idx, self._cfg_value(mode_cfg, 'arm_adapt_scale', 1.0), arm_ratio_cfg,
+                factor_min, gain_vel, next_action_chunk, next_vel_chunk,
+                target_chunk_index, currt_action, currt_vel)
+            f_hand = self._resolve_group_factor(
+                hand_idx, self._cfg_value(mode_cfg, 'hand_adapt_scale', 1000.0), hand_ratio_cfg,
+                factor_min, gain_vel, next_action_chunk, next_vel_chunk,
+                target_chunk_index, currt_action, currt_vel)
+
+            action_chunk_smoothed = None
+            if arm_idx and f_arm is not None:
+                action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition_numpy(
+                    next_action_chunk,
+                    next_vel_chunk,
+                    next_acc_chunk,
+                    next_timestamps,
+                    target_chunk_index,
+                    currt_action,
+                    currt_vel,
+                    currt_acc,
+                    joint_indices=arm_idx,
+                    blend_threshold=blend_threshold,
+                    transition_ratio=f_arm,
+                )
+            if hand_idx and f_hand is not None:
+                hand_chunk, _ = self._min_jerk_chunk_transition_numpy(
+                    next_action_chunk,
+                    next_vel_chunk,
+                    next_acc_chunk,
+                    next_timestamps,
+                    target_chunk_index,
+                    currt_action,
+                    currt_vel,
+                    currt_acc,
+                    joint_indices=hand_idx,
+                    blend_threshold=blend_threshold,
+                    transition_ratio=f_hand,
+                )
+                if action_chunk_smoothed is None or action_chunk_smoothed is next_action_chunk:
+                    # The previous group produced no new array (when transition length <= 1 the
+                    # function returns its input directly) -> copy first, then overwrite
+                    action_chunk_smoothed = next_action_chunk.copy()
+                action_chunk_smoothed[hand_idx, :] = hand_chunk[hand_idx, :]
+            if action_chunk_smoothed is None:
+                action_chunk_smoothed = next_action_chunk.copy()
         elif mode == 'sync':
             action_chunk_smoothed = next_action_chunk.copy()
         else:
@@ -329,7 +429,7 @@ class InterChunkFuser:
         current_acc,
         joint_indices,
         blend_threshold = 0.7,
-        adaptive_factor = -1,
+        adaptive_factor = -1.0,
     ):
         """
         Smooths the transition to a new action chunk using a minimum-jerk trajectory.
@@ -457,12 +557,16 @@ class InterChunkFuser:
         current_acc,
         joint_indices,
         blend_threshold=0.7,
-        adaptive_factor=-1,
+        transition_ratio=1.0,
     ):
         """
         Vectorized NumPy version of minimum-jerk chunk transition.
         Keeps `_min_jerk_chunk_transition` unchanged and computes
         joint/time dimensions in parallel for better performance.
+
+        transition_ratio: already resolved transition ratio (multiplied by the number of chunk
+                          columns), computed per group by the caller and clamped to [0, 1];
+                          1.0 means the whole chunk is used for the transition.
         """
         if current_pos is None or current_vel is None:
             return next_action_chunk, target_chunk_index
@@ -471,16 +575,10 @@ class InterChunkFuser:
         target_vel = next_vel_chunk[:, target_chunk_index].copy()
         target_acc = next_acc_chunk[:, target_chunk_index].copy() if next_acc_chunk is not None else np.zeros_like(target_vel)
 
-        pos_diff = np.linalg.norm(current_pos[joint_indices] - target_pos[joint_indices])
-        vel_diff = np.linalg.norm(current_vel[joint_indices] - target_vel[joint_indices])
-        acc_diff = np.linalg.norm(current_acc[joint_indices] - target_acc[joint_indices])
-
         base_transition = next_action_chunk.shape[1]
-        if adaptive_factor < 0:
-            adaptive_factor = min(1.0, 0.25 + pos_diff * 1.0 + vel_diff * 0.75 + acc_diff * 0.15)
-        else:
-            adaptive_factor = min(1.0, max(0.0, float(adaptive_factor)))
-        transition_length = min(int(base_transition * adaptive_factor), next_action_chunk.shape[1] - target_chunk_index)
+        transition_ratio = min(1.0, max(0.0, float(transition_ratio)))
+        transition_length = min(int(base_transition * transition_ratio),
+                                next_action_chunk.shape[1] - target_chunk_index)
 
         if transition_length <= 1:
             return next_action_chunk, target_chunk_index
