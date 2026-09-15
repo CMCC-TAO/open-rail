@@ -1,6 +1,7 @@
 ---
 import { site, paper, contributors } from '../data/site';
 import { getUI } from '../i18n';
+import Highlight from './Highlight.astro';
 const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
@@ -11,7 +12,7 @@ const t = getUI(locale);
     <!-- Brand -->
     <div>
       <p class="text-lg font-extrabold gradient-text">Open-RAIL</p>
-      <p class="mt-2 text-sm text-slate-400">{t.footer.tagline}</p>
+      <p class="mt-2 text-sm text-slate-400"><Highlight text={t.footer.tagline} /></p>
     </div>
 
     <!-- Paper & Citation -->
@@ -19,9 +20,9 @@ const t = getUI(locale);
       <div>
         <p class="text-sm font-semibold text-slate-300">{t.footer.paperLabel}</p>
         <a class="mt-3 block text-base font-semibold text-white hover:text-brand" href={paper.url}>
-          {paper.title}
+          <Highlight text={paper.title} />
         </a>
-        <p class="mt-2 text-sm text-slate-400">{paper.authors} · {paper.venue}</p>
+        <p class="mt-2 text-sm text-slate-400"><Highlight text={`${paper.authors} · ${paper.venue}`} /></p>
       </div>
       <div>
         <div class="flex items-center justify-between">
@@ -38,9 +39,9 @@ const t = getUI(locale);
       <div class="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {contributors.map((group) => (
           <div>
-            <p class="text-xs font-semibold uppercase tracking-wide text-brand-light">{group.role}</p>
+            <p class="text-xs font-semibold uppercase tracking-wide text-brand-light"><Highlight text={group.role} /></p>
             <ul class="mt-2 space-y-1 text-sm text-slate-400">
-              {group.members.map((m) => <li>{m}</li>)}
+              {group.members.map((m) => <li><Highlight text={m} /></li>)}
             </ul>
           </div>
         ))}
@@ -61,16 +62,16 @@ const t = getUI(locale);
       <div>
         <p class="text-sm font-semibold text-slate-300">{t.footer.contactLabel}</p>
         <p class="mt-3 text-sm text-slate-400">{site.email}</p>
-        <p class="mt-3 text-xs text-slate-500">{t.footer.emailNote}</p>
+        <p class="mt-3 text-xs text-slate-500"><Highlight text={t.footer.emailNote} /></p>
       </div>
       <div>
-        <p class="text-sm font-semibold text-slate-300">{t.footer.org}</p>
-        <p class="mt-3 text-sm text-slate-400">{t.footer.author}</p>
+        <p class="text-sm font-semibold text-slate-300"><Highlight text={t.footer.org} /></p>
+        <p class="mt-3 text-sm text-slate-400"><Highlight text={t.footer.author} /></p>
       </div>
     </div>
 
     <div class="border-t border-ink-border pt-6 text-xs text-slate-500">
-      <p>© 2026 {t.footer.org} · {t.footer.author} · {t.footer.copyright}</p>
+      <p>© 2026 <Highlight text={t.footer.org} /> · <Highlight text={t.footer.author} /> · <Highlight text={t.footer.copyright} /></p>
     </div>
   </div>
 </footer>

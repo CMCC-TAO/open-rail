@@ -1,6 +1,7 @@
 ---
 import { getUI } from '../i18n';
 import EdgeCloudDiagram from './EdgeCloudDiagram.astro';
+import Highlight from './Highlight.astro';
 import FlywheelDiagram from './FlywheelDiagram.astro';
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
@@ -19,16 +20,16 @@ const kindByIndex = ['threads', 'edge', 'flywheel'] as const;
       {t.cap.items.map((c, i) => (
         <div class="card reveal grid gap-8 lg:grid-cols-2">
           <div>
-            <p class="text-xs font-semibold uppercase tracking-wider text-brand">{c.tag}</p>
-            <h3 class="mt-1 text-2xl font-bold text-white">{c.title}</h3>
-            <p class="text-sm font-medium text-brand-light">{c.subtitle}</p>
-            <p class="mt-3 text-sm leading-relaxed text-slate-400">{c.summary}</p>
+            <p class="text-xs font-semibold uppercase tracking-wider text-brand"><Highlight text={c.tag} /></p>
+            <h3 class="mt-1 text-2xl font-bold text-white"><Highlight text={c.title} /></h3>
+            <p class="text-sm font-medium text-brand-light"><Highlight text={c.subtitle} /></p>
+            <p class="mt-3 text-sm leading-relaxed text-slate-400"><Highlight text={c.summary} /></p>
 
             <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {c.metrics.map((m) => (
                 <div class="rounded-xl border border-ink-border bg-white/5 p-3 text-center">
-                  <div class="stat !text-2xl">{m.value}</div>
-                  <div class="mt-1 text-[11px] text-slate-400">{m.label}</div>
+                  <div class="stat !text-2xl"><Highlight text={m.value} /></div>
+                  <div class="mt-1 text-[11px] text-slate-400"><Highlight text={m.label} /></div>
                 </div>
               ))}
             </div>
@@ -40,7 +41,7 @@ const kindByIndex = ['threads', 'edge', 'flywheel'] as const;
               </summary>
               <ul class="mt-3 space-y-2 text-sm text-slate-400">
                 {c.details.map((dt) => (
-                  <li class="flex gap-2"><span class="text-brand">•</span><span>{dt}</span></li>
+                  <li class="flex gap-2"><span class="text-brand">•</span><span><Highlight text={dt} /></span></li>
                 ))}
               </ul>
             </details>

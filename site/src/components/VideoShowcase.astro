@@ -1,5 +1,6 @@
 ---
 import { tutorials } from '../data/site';
+import Highlight from './Highlight.astro';
 
 // Accept a YouTube watch URL, embed URL, or the bare 11-char video id.
 function toEmbedUrl(src: string): string | null {
@@ -27,8 +28,8 @@ const items = tutorials.map((t) => ({ ...t, embed: toEmbedUrl(t.youtube) }));
           {items.map((it, i) => (
             <div class="tutorial-slide" data-index={i} class:list={[i === 0 ? 'block' : 'hidden']}>
               <div class="mb-4 text-center">
-                <h3 class="text-xl font-bold text-white">{it.title}</h3>
-                {it.subtitle && <p class="mt-1 text-sm text-slate-400">{it.subtitle}</p>}
+                <h3 class="text-xl font-bold text-white"><Highlight text={it.title} /></h3>
+                {it.subtitle && <p class="mt-1 text-sm text-slate-400"><Highlight text={it.subtitle} /></p>}
               </div>
               <div class="card overflow-hidden p-0 reveal">
                 <div class="relative aspect-video w-full bg-gradient-to-br from-ink-card to-ink">
@@ -46,7 +47,7 @@ const items = tutorials.map((t) => ({ ...t, embed: toEmbedUrl(t.youtube) }));
                       <span class="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand to-accent text-white shadow-lg">
                         <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                       </span>
-                      <p class="mt-4 px-4 text-sm font-medium text-slate-300">{it.title}</p>
+                      <p class="mt-4 px-4 text-sm font-medium text-slate-300"><Highlight text={it.title} /></p>
                       <p class="mt-1 text-xs text-slate-500">Set a YouTube link in <code>site.tutorials</code></p>
                     </div>
                   )}

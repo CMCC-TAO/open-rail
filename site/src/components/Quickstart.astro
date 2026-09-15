@@ -1,5 +1,6 @@
 ---
 import { getUI } from '../i18n';
+import Highlight from './Highlight.astro';
 const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
@@ -27,14 +28,14 @@ const iconKeys = ['flask', 'robot', 'wrench'];
             </span>
             <span class="text-2xl font-extrabold gradient-text">{i + 1}</span>
           </div>
-          <h3 class="mt-4 text-lg font-bold text-white">{q.title}</h3>
-          <p class="mt-2 text-sm text-slate-400">{q.body}</p>
+          <h3 class="mt-4 text-lg font-bold text-white"><Highlight text={q.title} /></h3>
+          <p class="mt-2 text-sm text-slate-400"><Highlight text={q.body} /></p>
         </div>
       ))}
     </div>
 
     <div class="mt-12">
-      <p class="text-center text-sm font-semibold text-slate-300">{t.quick.docsLabel}</p>
+      <p class="text-center text-sm font-semibold text-slate-300"><Highlight text={t.quick.docsLabel} /></p>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {t.quick.docs.map((d) => (
           <a class="btn-ghost justify-center" href={`${BASE}${d.href}`}>{d.label}</a>
@@ -42,7 +43,7 @@ const iconKeys = ['flask', 'robot', 'wrench'];
       </div>
     </div>
 
-    <p class="mt-10 text-center text-sm text-slate-400">{t.quick.resourcesLabel}</p>
+    <p class="mt-10 text-center text-sm text-slate-400"><Highlight text={t.quick.resourcesLabel} /></p>
     <div class="mt-5 flex justify-center">
       <a class="btn-primary" href="#overview">{t.quick.start}</a>
     </div>

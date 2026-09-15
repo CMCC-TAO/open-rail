@@ -52,7 +52,7 @@ function highlight(text: string) {
     </h1>
     <p class="mt-5 text-lg font-semibold text-brand-light">{t.hero.sub}</p>
     <HeroVideo />
-    <p class="mx-auto mt-4 max-w-3xl text-base text-slate-300">
+    <p class="mx-auto mt-4 max-w-[54rem] text-base text-slate-300">
       {highlight(t.hero.desc).map((s) =>
         s.style === 'bold'
           ? <strong class="font-semibold">{s.text}</strong>
@@ -63,8 +63,8 @@ function highlight(text: string) {
               : s.text
       )}
     </p>
-    <h3 class="mx-auto mt-8 max-w-3xl text-left text-xl font-bold tracking-tight text-white sm:text-2xl">{t.hero.featuresTitle}</h3>
-    <ul class="mx-auto mt-4 max-w-3xl list-disc space-y-1 pl-5 text-left text-sm text-slate-300">
+    <h3 class="mx-auto mt-8 max-w-[54rem] text-left text-xl font-bold tracking-tight text-white sm:text-2xl">{t.hero.featuresTitle}</h3>
+    <ul class="mx-auto mt-4 max-w-[54rem] list-disc space-y-1 pl-5 text-left text-sm text-slate-300">
       {t.hero.features.map((f) => (
         <li>
           {highlight(f).map((s) =>

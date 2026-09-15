@@ -15,7 +15,7 @@ const embed = toEmbedUrl(site.heroVideo ?? '');
 
 {
   embed ? (
-    <div class="mx-auto my-12 max-w-4xl">
+    <div class="mx-auto my-12 max-w-5xl">
       <div class="relative aspect-video w-full overflow-hidden rounded-2xl border border-ink-border bg-white/5 shadow-lg shadow-brand/10">
         <iframe
           class="absolute inset-0 h-full w-full"
@@ -28,7 +28,7 @@ const embed = toEmbedUrl(site.heroVideo ?? '');
       </div>
     </div>
   ) : (
-    <div class="mx-auto my-12 flex max-w-4xl items-center justify-center rounded-2xl border border-dashed border-ink-border bg-white/5 py-16 text-center text-sm text-slate-400">
+    <div class="mx-auto my-12 flex max-w-5xl items-center justify-center rounded-2xl border border-dashed border-ink-border bg-white/5 py-16 text-center text-sm text-slate-400">
       Project overview video coming soon — set <code class="mx-1 rounded bg-black/20 px-1.5 py-0.5">site.heroVideo</code> to a YouTube link.
     </div>
   )
