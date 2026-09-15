@@ -20,7 +20,7 @@
     @apply mx-auto w-full max-w-6xl px-5;
   }
   .section {
-    @apply py-16 sm:py-24;
+    @apply py-12 sm:py-16;
   }
   .eyebrow {
     @apply mb-3 inline-block rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand;

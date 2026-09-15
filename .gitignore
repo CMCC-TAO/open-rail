@@ -3,8 +3,14 @@
 python3.10.INFO
 .codebuddy/
 .marscode/
-data/
-data/recording
+# Keep the canonical robot images (uploaded as site assets, copied into site/public/media at build).
+# Ignore the *contents* of data/ (not the dir itself) so the negations below can be consulted.
+/data/*
+!/data/media/
+!/data/media/robots/
+!/data/media/robots/**
+# The website copies these into site/public/media/robots at build time — don't track the generated copy.
+site/public/media/robots/
 .conda/
 
 # Distribution / packaging

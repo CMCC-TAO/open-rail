@@ -1,0 +1,35 @@
+---
+import { site } from '../data/site';
+
+// Accept a YouTube watch URL, embed URL, or the bare 11-char video id.
+function toEmbedUrl(src: string): string | null {
+  if (!src) return null;
+  const m = src.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
+  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  if (/^[\w-]{11}$/.test(src)) return `https://www.youtube.com/embed/${src}`;
+  return src; // already a full embed URL
+}
+
+const embed = toEmbedUrl(site.heroVideo ?? '');
+---
+
+{
+  embed ? (
+    <div class="mx-auto mt-12 max-w-4xl">
+      <div class="relative aspect-video w-full overflow-hidden rounded-2xl border border-ink-border bg-white/5 shadow-lg shadow-brand/10">
+        <iframe
+          class="absolute inset-0 h-full w-full"
+          src={embed}
+          title="Open-RAIL overview video"
+          frameborder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowfullscreen
+        ></iframe>
+      </div>
+    </div>
+  ) : (
+    <div class="mx-auto mt-12 flex max-w-4xl items-center justify-center rounded-2xl border border-dashed border-ink-border bg-white/5 py-16 text-center text-sm text-slate-400">
+      Project overview video coming soon — set <code class="mx-1 rounded bg-black/20 px-1.5 py-0.5">site.heroVideo</code> to a YouTube link.
+    </div>
+  )
+}

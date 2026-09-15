@@ -1,41 +1,101 @@
 ---
-import { showcase } from '../data/site';
-const BASE = import.meta.env.BASE_URL;
-const src = `${BASE}media/showcase.mp4`;
+import { tutorials } from '../data/site';
+
+// Accept a YouTube watch URL, embed URL, or the bare 11-char video id.
+function toEmbedUrl(src: string): string | null {
+  if (!src) return null;
+  const m = src.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
+  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  if (/^[\w-]{11}$/.test(src)) return `https://www.youtube.com/embed/${src}`;
+  return src; // already a full embed URL
+}
+
+const items = tutorials.map((t) => ({ ...t, embed: toEmbedUrl(t.youtube) }));
 ---
 
-<section id="showcase" class="section bg-white/5">
+<section id="tutorials" class="section bg-white/5">
   <div class="container-wide">
     <div class="text-center">
-      <p class="eyebrow">SHOWCASE VIDEO</p>
+      <p class="eyebrow">Tutorials Video</p>
       <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">See Open-RAIL run on real robots</h2>
     </div>
 
     <div class="mt-10">
-      <!--
-        Drop your demo clip at: site/public/media/showcase.mp4
-        Then uncomment the <video> below and remove the placeholder.
-      -->
-      <div class="card overflow-hidden p-0 reveal">
-        <div class="relative flex aspect-video items-center justify-center bg-gradient-to-br from-ink-card to-ink">
-          <div class="flex flex-col items-center text-center">
-            <span class="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand to-accent text-white shadow-lg">
-              <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
-            </span>
-            <p class="mt-4 text-sm font-medium text-slate-300">{showcase.caption}</p>
-            <p class="mt-1 text-xs text-slate-500">{showcase.note}</p>
-          </div>
+      <div class="relative">
+        <!-- Slides -->
+        <div id="tutorials-track">
+          {items.map((it, i) => (
+            <div class="tutorial-slide" data-index={i} class:list={[i === 0 ? 'block' : 'hidden']}>
+              <div class="mb-4 text-center">
+                <h3 class="text-xl font-bold text-white">{it.title}</h3>
+                {it.subtitle && <p class="mt-1 text-sm text-slate-400">{it.subtitle}</p>}
+              </div>
+              <div class="card overflow-hidden p-0 reveal">
+                <div class="relative aspect-video w-full bg-gradient-to-br from-ink-card to-ink">
+                  {it.embed ? (
+                    <iframe
+                      class="absolute inset-0 h-full w-full"
+                      data-src={it.embed}
+                      title={it.title}
+                      frameborder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowfullscreen
+                    ></iframe>
+                  ) : (
+                    <div class="flex h-full w-full flex-col items-center justify-center text-center">
+                      <span class="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-brand to-accent text-white shadow-lg">
+                        <svg class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                      </span>
+                      <p class="mt-4 px-4 text-sm font-medium text-slate-300">{it.title}</p>
+                      <p class="mt-1 text-xs text-slate-500">Set a YouTube link in <code>site.tutorials</code></p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
+
+        <!-- Prev / Next -->
+        <button id="tut-prev" class="absolute -left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-ink-border bg-ink-card text-2xl text-slate-200 shadow-lg transition hover:border-brand/60 hover:text-white sm:-left-5" aria-label="Previous video">&#8249;</button>
+        <button id="tut-next" class="absolute -right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full border border-ink-border bg-ink-card text-2xl text-slate-200 shadow-lg transition hover:border-brand/60 hover:text-white sm:-right-5" aria-label="Next video">&#8250;</button>
       </div>
 
-      {/*
-      <div class="card overflow-hidden p-0 reveal">
-        <video class="aspect-video w-full" controls preload="metadata" poster={`${BASE}media/showcase-poster.png`}>
-          <source src={src} type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
+      <!-- Dots -->
+      <div id="tut-dots" class="mt-5 flex items-center justify-center gap-2">
+        {items.map((_, i) => (
+          <button class="tut-dot h-2.5 w-2.5 rounded-full bg-slate-600 transition" data-index={i} aria-label={`Go to video ${i + 1}`}></button>
+        ))}
       </div>
-      */}
     </div>
   </div>
 </section>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.tutorial-slide'));
+  const dots = Array.from(document.querySelectorAll('.tut-dot'));
+  if (slides.length) {
+    let cur = 0;
+    const show = (n: number) => {
+      cur = (n + slides.length) % slides.length;
+      slides.forEach((s, i) => s.classList.toggle('hidden', i !== cur));
+      slides.forEach((s, i) => {
+        const f = s.querySelector('iframe[data-src]') as HTMLIFrameElement | null;
+        if (!f) return;
+        if (i === cur) {
+          if (!f.src) f.src = (f.dataset.src as string);
+        } else {
+          f.src = ''; // stop playback of off-screen videos
+        }
+      });
+      dots.forEach((d, i) => {
+        d.classList.toggle('bg-brand', i === cur);
+        d.classList.toggle('bg-slate-600', i !== cur);
+      });
+    };
+    document.getElementById('tut-prev')?.addEventListener('click', () => show(cur - 1));
+    document.getElementById('tut-next')?.addEventListener('click', () => show(cur + 1));
+    dots.forEach((d) => d.addEventListener('click', () => show(Number((d as HTMLElement).dataset.index))));
+    show(0);
+  }
+</script>

@@ -6,14 +6,14 @@ const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
 const links = [
   { href: `${BASE}#overview`, label: t.nav.overview },
-  { href: `${BASE}#capabilities`, label: t.nav.capabilities },
   { href: `${BASE}#architecture`, label: t.nav.architecture },
+  { href: `${BASE}#capabilities`, label: t.nav.capabilities },
   { href: `${BASE}#models`, label: t.nav.models },
   { href: `${BASE}#robots`, label: t.nav.robots },
-  { href: `${BASE}#showcase`, label: t.nav.showcase },
-  { href: `${BASE}getting-started/`, label: t.nav.docs },
-  { href: `${BASE}#community`, label: t.nav.getInvolved },
+  { href: `${BASE}#get-involved`, label: t.nav.getInvolved },
   { href: `${BASE}#quickstart`, label: t.nav.quickstart },
+  { href: `${BASE}#tutorials`, label: t.nav.showcase },
+  { href: `${BASE}getting-started/`, label: t.nav.docs },
 ];
 
 ---

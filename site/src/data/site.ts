@@ -7,9 +7,12 @@ export const site = {
   platforms: [
     { label: 'GitHub', href: 'https://github.com/CMCC-TAO/open-rail', icon: 'github' },
     { label: 'Gitee', href: 'https://gitee.com/cmcc-tao/open-rail', icon: 'gitee' },
-    { label: 'HuggingFace', href: '#', icon: 'hf' },
+    { label: 'AI.Huanxin', href: '#', icon: 'hf' },
   ],
   whitepaper: '#',
+  // Optional hero overview video. Set to a YouTube watch URL, embed URL,
+  // or 11-char video id; leave '' to show a placeholder.
+  heroVideo: 'https://www.youtube.com/watch?v=1cllCVK-9lo',
 };
 
 // VLA models already adapted / supported by Open-RAIL.
@@ -34,11 +37,26 @@ export const supportedRobots = [
   { name: 'Zhejiang Humanoid', note: 'Research humanoid' },
 ];
 
-// Reserved showcase video section (placeholder until the clip is provided).
-export const showcase = {
-  caption: 'Robot Tea House — 17-step Chinese tea ceremony',
-  note: 'Demo video coming soon. Place your file at public/media/showcase.mp4 and it will render here.',
-};
+// Tutorials: a series of YouTube-embedded walkthrough videos.
+// Set `youtube` to a YouTube watch URL, embed URL, or an 11-char video id.
+// Leave it '' to show a placeholder for that slot.
+export const tutorials = [
+  {
+    title: 'Robot Tea House — 17-step Chinese tea ceremony',
+    subtitle: 'Open-RAIL orchestrates a full tea-serving routine on a humanoid robot.',
+    youtube: '',
+  },
+  {
+    title: 'Demo: Running on a dataset',
+    subtitle: 'Replay recorded episodes and visualize real-time inference end to end.',
+    youtube: '',
+  },
+  {
+    title: 'Add a new VLA model in 5 minutes',
+    subtitle: 'Plug a checkpoint into Open-RAIL without touching upper-layer logic.',
+    youtube: '',
+  },
+];
 
 // Paper / citation info.
 export const paper = {

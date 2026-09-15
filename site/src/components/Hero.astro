@@ -2,6 +2,7 @@
 import { site } from '../data/site';
 import { platformIcons as icons } from '../data/icons';
 import { getUI } from '../i18n';
+import HeroVideo from './HeroVideo.astro';
 const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
@@ -13,7 +14,7 @@ const t = getUI(locale);
   <div class="pointer-events-none absolute -bottom-32 right-1/4 h-96 w-96 rounded-full bg-accent/20 blur-3xl"></div>
   <div class="pointer-events-none absolute inset-0 opacity-[0.06]" style="background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);background-size:40px 40px;"></div>
 
-  <div class="container-wide relative py-24 text-center sm:py-32">
+  <div class="container-wide relative pt-8 text-center sm:pt-11 pb-12 sm:pb-16">
     <p class="eyebrow">{t.hero.eyebrow}</p>
     <h1 class="mx-auto max-w-4xl text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-6xl">
       {t.hero.titlePrefix} <span class="gradient-text">{t.hero.titleHighlight}</span>
@@ -34,5 +35,7 @@ const t = getUI(locale);
     </div>
 
     <p class="mt-10 text-xs text-slate-500">{t.footer.org}{t.hero.presented}{t.footer.author}</p>
+
+    <HeroVideo />
   </div>
 </section>

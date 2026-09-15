@@ -4,7 +4,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "mkdir -p public/media && cp -rf ../data/media/robots public/media/",
     "dev": "astro dev",
+    "prebuild": "mkdir -p public/media && cp -rf ../data/media/robots public/media/",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
