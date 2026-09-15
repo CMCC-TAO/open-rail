@@ -136,3 +136,17 @@ html:not(.dark) .card { box-shadow: 0 1px 3px rgb(15 23 42 / 0.08); }
 
 /* Keep ghost-button hover legible in light mode */
 html:not(.dark) .btn-ghost:hover { color: rgb(var(--fg)); }
+
+/* ============================================================
+   Capability diagrams — make SVG text/strokes adapt to light & dark
+   Default values assume the dark theme; light overrides flip them.
+   ============================================================ */
+.cap-figure { color: #e2e8f0; }
+.cap-figure .cap-muted { fill: #94a3b8; }
+.cap-figure .cap-stroke { stroke: currentColor; }
+.cap-figure .cap-stroke-muted { stroke: #94a3b8; }
+.cap-figure .cap-accent { fill: #f9a8d4; }
+html:not(.dark) .cap-figure { color: #0f172a; }
+html:not(.dark) .cap-figure .cap-muted { fill: #475569; }
+html:not(.dark) .cap-figure .cap-stroke-muted { stroke: #475569; }
+html:not(.dark) .cap-figure .cap-accent { fill: #be185d; }

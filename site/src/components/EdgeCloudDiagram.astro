@@ -18,7 +18,7 @@ const robots = [
 ];
 ---
 
-<svg viewBox="0 0 560 600" class="w-full" role="img" aria-label="RAIL Server-Client architecture with unified model and robot interfaces">
+<svg viewBox="0 0 560 600" class="w-full cap-figure" role="img" aria-label="RAIL Server-Client architecture with unified model and robot interfaces">
   <defs>
     {[
       ['ec-teal', '#2dd4bf'],
@@ -30,7 +30,7 @@ const robots = [
       ['ec-gray', '#94a3b8'],
     ].map(([id, color]) => (
       <marker id={id} markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
-        <path d="M0,0 L8,3 L0,6 Z" fill={color} />
+        <path d="M0,0 L8,3 L0,6 Z" fill={color} class={id === 'ec-gray' ? 'cap-muted' : undefined} />
       </marker>
     ))}
   </defs>
@@ -43,32 +43,32 @@ const robots = [
       <line x1={c.x + c.w / 2} y1="56" x2={c.x + c.w / 2} y2="102" stroke={c.c} stroke-width="1.5" marker-end={`url(#${c.m})`} />
     </g>
   ))}
-  <text x="260" y="39" text-anchor="middle" fill="#94a3b8" font-size="14">···</text>
+  <text x="260" y="39" text-anchor="middle" class="cap-muted" font-size="14">···</text>
 
   <!-- RAIL-Server -->
-  <rect x="30" y="78" width="500" height="170" rx="12" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6 4" />
-  <text x="46" y="100" fill="#e2e8f0" font-size="13" font-weight="700">{d.server}</text>
+  <rect x="30" y="78" width="500" height="170" rx="12" fill="none" class="cap-stroke-muted" stroke-width="1.5" stroke-dasharray="6 4" />
+  <text x="46" y="100" fill="currentColor" font-size="13" font-weight="700">{d.server}</text>
 
   <rect x="60" y="108" width="440" height="44" rx="10" fill="#f472b6" fill-opacity="0.15" stroke="#f472b6" stroke-width="2" />
-  <text x="280" y="136" text-anchor="middle" fill="#fda4af" font-size="16" font-weight="700">{d.umi}</text>
+  <text x="280" y="136" text-anchor="middle" class="cap-accent" font-size="16" font-weight="700">{d.umi}</text>
 
   <rect x="150" y="168" width="260" height="60" rx="8" fill="#1b1e27" stroke="#f59e0b" stroke-width="1.5" />
   <text x="280" y="192" text-anchor="middle" fill="#fbbf24" font-size="13" font-weight="600">{d.pool}</text>
   <text x="280" y="212" text-anchor="middle" fill="#94a3b8" font-size="10">{d.poolNote}</text>
 
-  <line x1="268" y1="153" x2="268" y2="166" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ec-gray)" />
-  <line x1="292" y1="167" x2="292" y2="154" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ec-gray)" />
+  <line x1="268" y1="153" x2="268" y2="166" class="cap-stroke-muted" stroke-width="1.5" marker-end="url(#ec-gray)" />
+  <line x1="292" y1="167" x2="292" y2="154" class="cap-stroke-muted" stroke-width="1.5" marker-end="url(#ec-gray)" />
 
   <!-- ZMQ Communication -->
-  <line x1="190" y1="250" x2="190" y2="302" stroke="#e2e8f0" stroke-width="3" marker-end="url(#ec-gray)" />
-  <text x="178" y="280" text-anchor="end" fill="#94a3b8" font-size="9">{d.action}</text>
-  <line x1="370" y1="302" x2="370" y2="250" stroke="#e2e8f0" stroke-width="3" marker-end="url(#ec-gray)" />
-  <text x="382" y="280" text-anchor="start" fill="#94a3b8" font-size="9">{d.obsUp}</text>
+  <line x1="190" y1="250" x2="190" y2="302" class="cap-stroke-muted" stroke-width="3" marker-end="url(#ec-gray)" />
+  <text x="178" y="280" text-anchor="end" class="cap-muted" font-size="9">{d.action}</text>
+  <line x1="370" y1="302" x2="370" y2="250" class="cap-stroke-muted" stroke-width="3" marker-end="url(#ec-gray)" />
+  <text x="382" y="280" text-anchor="start" class="cap-muted" font-size="9">{d.obsUp}</text>
   <text x="280" y="284" text-anchor="middle" fill="#4d94ff" font-size="13" font-weight="700">{d.zmq}</text>
 
   <!-- RAIL-Client -->
-  <rect x="30" y="310" width="500" height="225" rx="12" fill="none" stroke="#64748b" stroke-width="1.5" stroke-dasharray="6 4" />
-  <text x="46" y="332" fill="#e2e8f0" font-size="13" font-weight="700">{d.client}</text>
+  <rect x="30" y="310" width="500" height="225" rx="12" fill="none" class="cap-stroke-muted" stroke-width="1.5" stroke-dasharray="6 4" />
+  <text x="46" y="332" fill="currentColor" font-size="13" font-weight="700">{d.client}</text>
 
   <rect x="55" y="348" width="140" height="58" rx="8" fill="#1b1e27" stroke="#3b82f6" stroke-width="1.5" />
   <text x="125" y="370" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="600">{d.ctrl}</text>
@@ -85,12 +85,12 @@ const robots = [
   <text x="435" y="386" text-anchor="middle" fill="#94a3b8" font-size="9">{d.obsNote}</text>
   <text x="435" y="400" text-anchor="middle" fill="#94a3b8" font-size="9">{d.obsNote2}</text>
 
-  <line x1="208" y1="377" x2="199" y2="377" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ec-gray)" />
-  <line x1="125" y1="408" x2="125" y2="451" stroke="#94a3b8" stroke-width="2" marker-end="url(#ec-gray)" />
-  <line x1="435" y1="451" x2="435" y2="408" stroke="#94a3b8" stroke-width="2" marker-end="url(#ec-gray)" />
+  <line x1="208" y1="377" x2="199" y2="377" class="cap-stroke-muted" stroke-width="1.5" marker-end="url(#ec-gray)" />
+  <line x1="125" y1="408" x2="125" y2="451" class="cap-stroke-muted" stroke-width="2" marker-end="url(#ec-gray)" />
+  <line x1="435" y1="451" x2="435" y2="408" class="cap-stroke-muted" stroke-width="2" marker-end="url(#ec-gray)" />
 
   <rect x="60" y="455" width="440" height="44" rx="10" fill="#f472b6" fill-opacity="0.15" stroke="#f472b6" stroke-width="2" />
-  <text x="280" y="483" text-anchor="middle" fill="#fda4af" font-size="16" font-weight="700">{d.uri}</text>
+  <text x="280" y="483" text-anchor="middle" class="cap-accent" font-size="16" font-weight="700">{d.uri}</text>
 
   <!-- Robots -->
   {robots.map((r) => (

@@ -13,10 +13,10 @@ const cmdAX = (k: number) => 220 + k * 16; // CMD Buffer: Action Chunk i (aligne
 const cmdBX = (k: number) => 340 + k * 16; // CMD Buffer: Action Chunk i+1 (aligned to post-process right guide)
 ---
 
-<svg viewBox="0 0 500 455" class="w-full" role="img" aria-label={d.title}>
+<svg viewBox="0 0 500 455" class="w-full cap-figure" role="img" aria-label={d.title}>
   <defs>
     <marker id="td-axis" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L7,3 L0,6 Z" fill="#94a3b8" />
+      <path d="M0,0 L7,3 L0,6 Z" class="cap-muted" />
     </marker>
     <marker id="td-obs" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto" markerUnits="strokeWidth">
       <path d="M0,0 L7,3 L0,6 Z" fill="#22c55e" />
@@ -25,17 +25,17 @@ const cmdBX = (k: number) => 340 + k * 16; // CMD Buffer: Action Chunk i+1 (alig
       <path d="M0,0 L7,3 L0,6 Z" fill="#3b82f6" />
     </marker>
     <marker id="td-small" markerWidth="9" markerHeight="9" refX="6" refY="2.5" orient="auto" markerUnits="strokeWidth">
-      <path d="M0,0 L6,2.5 L0,5 Z" fill="#94a3b8" />
+      <path d="M0,0 L6,2.5 L0,5 Z" class="cap-muted" />
     </marker>
   </defs>
 
-  <text x="260" y="14" text-anchor="middle" fill="#e2e8f0" font-size="13" font-weight="700">{d.title}</text>
+  <text x="260" y="14" text-anchor="middle" fill="currentColor" font-size="13" font-weight="700">{d.title}</text>
 
   <!-- Time axis -->
-  <text x="8" y="32" fill="#e2e8f0" font-size="12" font-weight="600">{d.time}</text>
-  <line x1="115" y1="28" x2="443" y2="28" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#td-axis)" />
-  <text x="110" y="20" fill="#94a3b8" font-size="10">0</text>
-  <text x="440" y="20" fill="#94a3b8" font-size="11">∞</text>
+  <text x="8" y="32" fill="currentColor" font-size="12" font-weight="600">{d.time}</text>
+  <line x1="115" y1="28" x2="443" y2="28" class="cap-stroke-muted" stroke-width="1.5" marker-end="url(#td-axis)" />
+  <text x="110" y="20" class="cap-muted" font-size="10">0</text>
+  <text x="440" y="20" class="cap-muted" font-size="11">∞</text>
 
   <!-- Vertical chunk-boundary guides -->
   {[115, 180, 220, 300, 340, 400, 420].map((x) => (
@@ -43,25 +43,25 @@ const cmdBX = (k: number) => 340 + k * 16; // CMD Buffer: Action Chunk i+1 (alig
   ))}
 
   <!-- Observation thread (30 Hz, continuous) -->
-  <text x="8" y="77" fill="#e2e8f0" font-size="11" font-weight="600">{d.obs}</text>
-  <text x="8" y="91" fill="#94a3b8" font-size="10">{d.obsFreq}</text>
+  <text x="8" y="77" fill="currentColor" font-size="11" font-weight="600">{d.obs}</text>
+  <text x="8" y="91" class="cap-muted" font-size="10">{d.obsFreq}</text>
   <line x1="115" y1="80" x2="438" y2="80" stroke="#22c55e" stroke-width="2.5" marker-end="url(#td-obs)" />
-  <text x="115" y="94" fill="#94a3b8" font-size="9">{d.obsBuffer}</text>
+  <text x="115" y="94" class="cap-muted" font-size="9">{d.obsBuffer}</text>
   {Array.from({ length: OBS_BLOCKS }).map((_, k) => (
     <rect x={obsX(k)} y="98" width="12" height="12" rx="2" fill="#bbf7d0" stroke="#22c55e" stroke-width="1" />
   ))}
 
   <!-- Latency (Model Inference) braces on top, spanning the solid inference segments -->
-  <text x="147.5" y="44" text-anchor="middle" fill="#94a3b8" font-size="8">{d.latencyInfer}</text>
+  <text x="147.5" y="44" text-anchor="middle" class="cap-muted" font-size="8">{d.latencyInfer}</text>
   <path d="M 115 58 L 115 52 L 180 52 L 180 58" fill="none" stroke="#a874ff" stroke-width="1.2" />
-  <text x="260" y="44" text-anchor="middle" fill="#94a3b8" font-size="8">{d.latencyInfer}</text>
+  <text x="260" y="44" text-anchor="middle" class="cap-muted" font-size="8">{d.latencyInfer}</text>
   <path d="M 220 58 L 220 52 L 300 52 L 300 58" fill="none" stroke="#a874ff" stroke-width="1.2" />
-  <text x="370" y="44" text-anchor="middle" fill="#94a3b8" font-size="8">{d.latencyInfer}</text>
+  <text x="370" y="44" text-anchor="middle" class="cap-muted" font-size="8">{d.latencyInfer}</text>
   <path d="M 340 58 L 340 52 L 400 52 L 400 58" fill="none" stroke="#a874ff" stroke-width="1.2" />
 
   <!-- Inference thread (5-10 Hz, intermittent) -->
-  <text x="8" y="172" fill="#e2e8f0" font-size="11" font-weight="600">{d.infer}</text>
-  <text x="8" y="186" fill="#94a3b8" font-size="10">{d.inferFreq}</text>
+  <text x="8" y="172" fill="currentColor" font-size="11" font-weight="600">{d.infer}</text>
+  <text x="8" y="186" class="cap-muted" font-size="10">{d.inferFreq}</text>
   <line x1="115" y1="175" x2="180" y2="175" stroke="#f59e0b" stroke-width="2.5" />
   <line x1="180" y1="175" x2="220" y2="175" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 4" />
   <line x1="220" y1="175" x2="300" y2="175" stroke="#f59e0b" stroke-width="2.5" />
@@ -69,41 +69,41 @@ const cmdBX = (k: number) => 340 + k * 16; // CMD Buffer: Action Chunk i+1 (alig
   <line x1="340" y1="175" x2="400" y2="175" stroke="#f59e0b" stroke-width="2.5" />
   <line x1="400" y1="175" x2="420" y2="175" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="4 4" />
   <line x1="420" y1="175" x2="438" y2="175" stroke="#f59e0b" stroke-width="2.5" marker-end="url(#td-small)" />
-  <path d="M 205 182 L 222 212" fill="none" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#td-small)" />
+  <path d="M 205 182 L 222 212" fill="none" class="cap-stroke-muted" stroke-width="1.2" marker-end="url(#td-small)" />
 
   <!-- VLA Out Buffer: action chunks (pink) -->
-  <text x="8" y="212" fill="#94a3b8" font-size="10">{d.vlaBuffer}</text>
+  <text x="8" y="212" class="cap-muted" font-size="10">{d.vlaBuffer}</text>
   {Array.from({ length: CHUNK_BLOCKS }).map((_, k) => (
     <rect x={chunkAX(k)} y="215" width="12" height="14" rx="2" fill="#fbcfe8" stroke="#f472b6" stroke-width="1" />
   ))}
-  <text x="178" y="243" fill="#e2e8f0" font-size="10" font-style="italic">{d.chunk} i</text>
+  <text x="178" y="243" fill="currentColor" font-size="10" font-style="italic">{d.chunk} i</text>
   {Array.from({ length: CHUNK_BLOCKS }).map((_, k) => (
     <rect x={chunkBX(k)} y="247" width="12" height="14" rx="2" fill="#fbcfe8" stroke="#f472b6" stroke-width="1" />
   ))}
-  <text x="268" y="275" fill="#e2e8f0" font-size="10" font-style="italic">{d.chunk} i+1</text>
+  <text x="268" y="275" fill="currentColor" font-size="10" font-style="italic">{d.chunk} i+1</text>
 
   <!-- Control thread (200-1000 Hz, continuous) -->
-  <text x="8" y="312" fill="#e2e8f0" font-size="11" font-weight="600">{d.control}</text>
-  <text x="8" y="326" fill="#94a3b8" font-size="10">{d.controlFreq}</text>
+  <text x="8" y="312" fill="currentColor" font-size="11" font-weight="600">{d.control}</text>
+  <text x="8" y="326" class="cap-muted" font-size="10">{d.controlFreq}</text>
   <line x1="115" y1="315" x2="438" y2="315" stroke="#3b82f6" stroke-width="2.5" marker-end="url(#td-ctl)" />
 
   <!-- CMD Buffer: consumed action chunks (blue) -->
-  <text x="8" y="352" fill="#94a3b8" font-size="10">{d.cmdBuffer}</text>
+  <text x="8" y="352" class="cap-muted" font-size="10">{d.cmdBuffer}</text>
   {Array.from({ length: CHUNK_BLOCKS }).map((_, k) => (
     <rect x={cmdAX(k)} y="355" width="12" height="14" rx="2" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
   ))}
-  <text x="223" y="383" fill="#e2e8f0" font-size="10" font-style="italic">{d.chunk} i</text>
+  <text x="223" y="383" fill="currentColor" font-size="10" font-style="italic">{d.chunk} i</text>
   {Array.from({ length: CHUNK_BLOCKS }).map((_, k) => (
     <rect x={cmdBX(k)} y="385" width="12" height="14" rx="2" fill="#bfdbfe" stroke="#3b82f6" stroke-width="1" />
   ))}
-  <text x="343" y="380" fill="#e2e8f0" font-size="10" font-style="italic">{d.chunk} i+1</text>
+  <text x="343" y="380" fill="currentColor" font-size="10" font-style="italic">{d.chunk} i+1</text>
   <path d="M 330 372 Q 342 374 340 384" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#td-ctl)" />
 
   <!-- Latency (Post Process) braces on bottom -->
   <path d="M 180 404 L 180 410 L 220 410 L 220 404" fill="none" stroke="#a874ff" stroke-width="1.2" />
-  <text x="200" y="422" text-anchor="middle" fill="#94a3b8" font-size="8">{d.latencyPost}</text>
+  <text x="200" y="422" text-anchor="middle" class="cap-muted" font-size="8">{d.latencyPost}</text>
   <path d="M 300 404 L 300 410 L 340 410 L 340 404" fill="none" stroke="#a874ff" stroke-width="1.2" />
-  <text x="320" y="422" text-anchor="middle" fill="#94a3b8" font-size="8">{d.latencyPost}</text>
+  <text x="320" y="422" text-anchor="middle" class="cap-muted" font-size="8">{d.latencyPost}</text>
   <path d="M 400 404 L 400 410 L 420 410 L 420 404" fill="none" stroke="#a874ff" stroke-width="1.2" />
-  <text x="410" y="422" text-anchor="middle" fill="#94a3b8" font-size="8">{d.latencyPost}</text>
+  <text x="410" y="422" text-anchor="middle" class="cap-muted" font-size="8">{d.latencyPost}</text>
 </svg>
