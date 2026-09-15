@@ -9,16 +9,19 @@ Then open http://localhost:9000 in your browser.
 
 Port layout:
     9000  — This web server (REST API + WebSocket /ws)
-    8080  — visual/ HTTP static server  (started by VLAClientAsync.run())
-    8765  — visual/ WebSocket data push (started by VLAClientAsync.run())
+    8080  — visual/ HTTP static server  (started by VLAClient.run())
+    8765  — visual/ WebSocket data push (started by VLAClient.run())
 """
 
 import argparse
 import os
 import sys
+import cv2
 import uvicorn
 from conf.logging_conf import setup_logging
 os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+sys.setswitchinterval(0.001)
+cv2.setNumThreads(1)
 # os.environ.setdefault('MKL_NUM_THREADS', '1')
 # os.environ.setdefault('OMP_NUM_THREADS', '1')
 

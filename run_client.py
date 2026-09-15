@@ -11,7 +11,7 @@ from ml_collections import ConfigDict
 from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
 from conf.logging_conf import setup_logging
-from client.core.vla_client import VLAClientAsync
+from client.core.vla_client import VLAClient
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -41,36 +41,25 @@ def safely_release_visualize_port(self, port):
 VisualizeServer.kill_port = safely_release_visualize_port
 
 def get_robot(config: ConfigDict):
-    """Create and return a robot instance based on configuration
+    """Create the robot proxy that owns a dedicated worker subprocess.
+    
+    The concrete ``RobotBody`` (and its vendor SDK) is instantiated inside that
+    subprocess, see ``client/robots/robot_proxy.py``. Running it out of process
+    removes the GIL contention between observation/control and the VLA client.
     
     Args:
         config: Configuration object containing robot type and settings
         
     Returns:
-        RobotBody: Robot instance for the specified type
-        
-    Raises:
-        ValueError: If robot type is not supported
+        RobotProxy: Proxy forwarding calls to the robot running in the subprocess
     """
     robot_type = RobotType(config.robots.type)
     robot_config = getattr(config.robots, robot_type.value, None)
     if robot_config is None:
         raise ValueError(f'Configuration for robot type {robot_type.value} is missing')
 
-    if robot_type == RobotType.A2D:
-        from client.robots.a2d.body_robot import RobotBody
-        return RobotBody(robot_config)
-    elif robot_type == RobotType.MOCK:
-        from client.robots.mock.body_robot import RobotBody
-        return RobotBody(robot_config)
-    elif robot_type == RobotType.NAVI_WA2:
-        from client.robots.navi_wa2.body_robot import RobotBody
-        return RobotBody(robot_config)
-    elif robot_type == RobotType.TI5_T170C:
-        from client.robots.ti5_t170c.body_robot import RobotBody
-        return RobotBody(robot_config)
-    else:
-        raise ValueError(f'Invalid Robot Type: {robot_type}')
+    from client.robots.robot_proxy import RobotProxy
+    return RobotProxy(robot_type.value, robot_config)
 
 def parse_args():
     """Parse command line arguments for VLA-RAIL Client
@@ -261,7 +250,7 @@ if __name__ == "__main__":
     inter_chunk_fuser = InterChunkFuser(config=config.inter_chunk)
     intra_chunk_smoother = IntraChunkSmoother(config=config.intra_chunk)
     task_language_manager = TaskLanguageManager(config=config.language)
-    vla_client = VLAClientAsync(
+    vla_client = VLAClient(
         config=config,
         realtime_data_manager=realtime_data_manager,
         inter_chunk_fuser=inter_chunk_fuser,

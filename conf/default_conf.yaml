@@ -21,61 +21,6 @@ inter_chunk:
     max_vel: 2.0
   sync: {}
 intra_chunk:
-  action_layout:
-    arm:
-      start: 0
-      end: 14
-      policy: gradual
-      presets:
-        left:
-          Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-        right:
-          Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-    gripper:
-      start: 14
-      end: 16
-      policy: stepwise
-      presets:
-        left:
-          Default:
-          - 0.0
-          Custom:
-          - 0.0
-        right:
-          Default:
-          - 0.0
-          Custom:
-          - 0.0
   filter_window_size: 4
   fitting_deg: 4
   fitting_num_samples: 64
@@ -90,80 +35,25 @@ intra_chunk:
   min_gripper_action_threshold: 0.05
 language:
   auto_mode: false
+  auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: make_coffee
+  task_id: tea_master
   task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
-  action_layout:
-    arm:
-      start: 0
-      end: 14
-      policy: gradual
-      presets:
-        left:
-          Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-        right:
-          Default:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          Custom:
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-          - 0.0
-    gripper:
-      start: 14
-      end: 16
-      policy: stepwise
-      presets:
-        left:
-          Default:
-          - 0.0
-          Custom:
-          - 0.0
-        right:
-          Default:
-          - 0.0
-          Custom:
-          - 0.0
   max_len: 100
   mode: async
   observe_fps_window_size: 10
 record:
-  auto: false
+  auto: true
   evaluation:
-    log_format: json
     scores:
     - 0
     - 0.5
     - 1
-  is_record_episode: false
-  is_record_eval_log: false
+  is_record_episode: true
+  is_record_eval_log: true
   is_record_expe_data: false
   lerobot:
     action_shape: 22
@@ -323,6 +213,7 @@ robots:
         hand_left: hand_left
         hand_right: hand_right
         head: head
+      non_ref_fetch_workers: 2
       ref: head
     gripper_freq: 40
     hand_type: gripper
@@ -395,7 +286,7 @@ robots:
         hand_right: observation.images.hand_right
         head: observation.images.top_head
       ref: head
-    dataset_path: /home/zl/zl/mdata/task_1196
+    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -558,20 +449,20 @@ robots:
     - arm
     - hand
     reset_robot_pos:
-    - -1.3119088393316176
-    - 1.4473110065281325
-    - 1.6156086726673602
-    - -1.665472635653567
-    - -0.4101313352460489
-    - -0.21850174207321
-    - -0.3232027944991513
-    - 1.3119088393316176
-    - 1.4473110065281325
-    - -1.6156086726673602
-    - -1.665472635653567
-    - 0.4101313352460489
-    - -0.2251850174207321
-    - 0.3232027944991513
+    - 2.135607
+    - -1.506890
+    - -1.575035
+    - -1.839900
+    - -0.377856
+    - -0.194309
+    - -0.382639
+    - -2.135409
+    - -1.479260
+    - 1.552336
+    - -1.839900
+    - 0.393200
+    - -0.211972
+    - 0.355065
     - 1000.0
     - 1000.0
     - 1000.0
@@ -620,10 +511,10 @@ visualize:
     - 12
     - 13
     source:
-    - State
     - ActionRaw
     - ActionFitted
-    window_span_sec: 10.0
+    - State
+    window_span_sec: 8.0
   updata_fps: 30
 vla_zmq:
   heartbeat_interval: 1000
