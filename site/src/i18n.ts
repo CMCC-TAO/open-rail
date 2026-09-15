@@ -16,9 +16,9 @@ export const ui = {
       themeLabel: 'Toggle theme',
     },
     hero: {
-      eyebrow: 'OPEN-RAIL 2026 · OPEN-SOURCE EMBODIED AI INFRASTRUCTURE',
-      titlePrefix: 'The Highway from VLA Models to',
-      titleHighlight: 'Real Robots',
+      eyebrow: 'INFRA FOR EMBODIED AI · LAY THE RAIL BETWEEN ACTION MODELS AND PHYSICAL ROBOTS',
+      titleSuffix: 'A Real-time Asynchronous Inference Linker for VLA/WAM Models and Robots',
+      titleHighlight: 'Open-RAIL: ',
       sub: 'Open Base · Physical Deployment · Co-Evolution',
       desc: 'For embodied AI: bridging VLA (Vision-Language-Action) models and physical robots to achieve stable operation, compatibility, and continuous self-evolution — a globally open-source infrastructure.',
       pain:

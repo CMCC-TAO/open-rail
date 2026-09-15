@@ -6,6 +6,13 @@ import HeroVideo from './HeroVideo.astro';
 const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
+// Color the first letter of each word in the suffix (except the leading
+// article) with the gradient style — spells out RAIL (Real-time Asynchronous
+// Inference Linker) matching the titleHighlight style.
+const suffixWords = (t.hero.titleSuffix || '').split(' ');
+// Color the first letter of the RAIL acronym words (Real-time Asynchronous
+// Inference Linker) with the gradient style, matching titleHighlight.
+const railWords = new Set(['real-time', 'asynchronous', 'inference', 'linker']);
 ---
 
 <section id="overview" class="relative overflow-hidden">
@@ -17,7 +24,14 @@ const t = getUI(locale);
   <div class="container-wide relative pt-8 text-center sm:pt-11 pb-12 sm:pb-16">
     <p class="eyebrow">{t.hero.eyebrow}</p>
     <h1 class="mx-auto max-w-4xl text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-6xl">
-      {t.hero.titlePrefix} <span class="gradient-text">{t.hero.titleHighlight}</span>
+      <span class="gradient-text">{t.hero.titleHighlight}</span>{' '}
+      {suffixWords.map((w, i) => (
+        <span>
+          {railWords.has(w.toLowerCase())
+            ? <><span class="gradient-text">{w.charAt(0)}</span>{w.slice(1)}</>
+            : w}{i < suffixWords.length - 1 ? ' ' : ''}
+        </span>
+      ))}
     </h1>
     <p class="mt-5 text-lg font-semibold text-brand-light">{t.hero.sub}</p>
     <p class="mx-auto mt-4 max-w-3xl text-base text-slate-300">{t.hero.desc}</p>
