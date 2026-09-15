@@ -3,9 +3,9 @@ import { getUI } from '../i18n';
 import EdgeCloudDiagram from './EdgeCloudDiagram.astro';
 import Highlight from './Highlight.astro';
 import FlywheelDiagram from './FlywheelDiagram.astro';
+import ThreadsDiagram from './ThreadsDiagram.astro';
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
-const d = getUI(locale).diagrams.threads;
 const kindByIndex = ['threads', 'edge', 'flywheel'] as const;
 ---
 
@@ -55,21 +55,7 @@ const kindByIndex = ['threads', 'edge', 'flywheel'] as const;
               <div class="w-full max-w-sm cursor-zoom-in" data-zoom><FlywheelDiagram locale={locale} /></div>
             )}
             {kindByIndex[i] === 'threads' && (
-              <svg viewBox="0 0 420 260" class="w-full cursor-zoom-in" data-zoom role="img" aria-label={d.title}>
-                <text x="10" y="20" fill="#94a3b8" font-size="12">{d.title}</text>
-                {[
-                  { y: 60, c: '#2478FF', t: d.obs },
-                  { y: 120, c: '#7c5cff', t: d.infer },
-                  { y: 180, c: '#9254FF', t: d.control },
-                ].map((l) => (
-                  <g>
-                    <rect x="10" y={l.y - 14} width="400" height="22" rx="6" fill="#1b1e27" stroke={l.c} />
-                    <text x="20" y={l.y + 2} fill="#e2e8f0" font-size="12">{l.t}</text>
-                  </g>
-                ))}
-                <line x1="120" y1="74" x2="120" y2="180" stroke="#3a3f4d" stroke-width="1.5" stroke-dasharray="4 4" />
-                <text x="128" y="130" fill="#4d94ff" font-size="11">{d.buffer}</text>
-              </svg>
+              <div class="w-full cursor-zoom-in" data-zoom><ThreadsDiagram locale={locale} /></div>
             )}
           </div>
         </div>
