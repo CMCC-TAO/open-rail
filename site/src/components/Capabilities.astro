@@ -28,7 +28,7 @@ const kindByIndex = ['threads', 'edge', 'flywheel'] as const;
             <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {c.metrics.map((m) => (
                 <div class="rounded-xl border border-ink-border bg-white/5 p-3 text-center">
-                  <div class="stat !text-2xl"><Highlight text={m.value} /></div>
+                  <div class="stat !text-xl"><Highlight text={m.value} /></div>
                   <div class="mt-1 text-[11px] text-slate-400"><Highlight text={m.label} /></div>
                 </div>
               ))}

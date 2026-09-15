@@ -55,19 +55,20 @@ export const ui = {
         {
           tag: 'Capability 1',
           title: 'Stable',
-          subtitle: 'Async pipeline + two-stage online trajectory smoothing',
+          subtitle: 'Asynchronous inference pipeline + Intra-Chunk Smoother & Inter-Chunk Fuser',
           summary:
-            'A three-thread async pipeline eliminates the 10x+ frequency gap between inference and control; two-stage online smoothing removes intra-segment jitter and inter-segment jumps, cutting joint acceleration std-dev by two orders of magnitude.',
+            'A three-thread asynchronous pipeline (observation 30 Hz, inference 5-10 Hz, control frequency 200–1K Hz) decouples robot execution from VLA model inference. The control thread reads pre-filled action buffers, reducing idle-wait latency from full inference time to near-zero. Two-stage trajectory post-processing composed of Intra-Chunk Smoother and Inter-Chunk Fuser suppresses in-chunk jitter and cross-chunk discontinuities, dropping joint acceleration std-dev from 10+ down to 0.1 rad/s², meanwhile achieving up to 2.09× task-execution speedup versus raw VLA baseline.',
           metrics: [
-            { value: '30Hz', label: 'Observation thread' },
-            { value: '5–10Hz', label: 'Inference thread' },
-            { value: '267Hz', label: 'Control thread' },
-            { value: '↓ 0.1 rad/s²', label: 'Accel. std-dev (was 10+)' },
+            { value: '>200 Hz', label: 'Control frequency' },
+            { value: '10+ → 0.1', label: 'Joint accel. std-dev (rad/s²)' },
+            { value: '~0 ms', label: 'Idle wait latency' },
+            { value: '2.09×', label: 'Max task-execution speedup' },
           ],
           details: [
-            'Three-thread async pipeline: observation 30Hz, inference 5–10Hz, control 267Hz; supports async / sync dual modes.',
-            'Two-stage online smoothing: intra-chunk smoothing (cubic spline / polynomial fitting removes single-segment jitter); inter-chunk fusion (concatenation + PD clamping, min-jerk removes inter-segment jumps).',
-            'Result: joint acceleration std-dev drops from 10+ to 0.1 rad/s² — two orders of magnitude lower — eliminating hardware shock.',
+            'Asynchronous pipeline: Three independent threads (observation / inference / control) communicate via queues. The control thread runs at configurable 200–1K Hz and consumes pre-filled action buffers and never blocks for model inference. Idle waiting latency is decoupled from inference latency (near zero), absorbing the large frequency gap between low-rate VLA inference and high-frequency robot motor control.',
+            'Intra-Chunk Smoother — eliminates jitter inside individual action chunks. Supported modes: raw baseline, CubicSpline interpolation for joint trajectories + zero-order-hold for grippers, least-squares polynomial fitting (configurable polynomial degree, default 4). Polynomial fitting derives velocity and acceleration from trajectory derivatives; gripper commands adopt local threshold filtering. Output yields continuously-differentiable trajectories to suppress intra-chunk oscillation.',
+            'Inter-Chunk Fuser — eliminates abrupt jumps between successive action chunks. Supported modes: search-action motion resync, PD-tracking smooth-velocity with velocity-acceleration clamping, default quintic min-jerk blending with adaptive segment length, direct sync pass-through. It enforces smooth state transition across chunk boundaries and avoids discontinuity spikes.',
+            'Overall effect: Joint acceleration standard deviation drops two orders of magnitude (10+ → 0.1 rad/s²), mitigating mechanical shock to robot hardware. The framework enables faster-than-teleoperation task execution with up to 2.09× speedup compared against unprocessed raw VLA outputs.',
           ],
         },
         {
@@ -77,9 +78,9 @@ export const ui = {
           summary:
             'RobotBase unified hardware interface, standardized inference interface, and Server-Client distributed architecture collapse robot swaps, VLA-model swaps, and deployment swaps into low-level configuration.',
           metrics: [
-            { value: '4', label: 'Heterogeneous humanoid robots adapted' },
-            { value: '20', label: 'Mainstream VLA models supported' },
-            { value: '50–100', label: 'Lines of code to integrate a new model' },
+            { value: '4+', label: 'Heterogeneous humanoid robots adapted' },
+            { value: '20+', label: 'Mainstream VLA models supported' },
+            { value: '<100', label: 'Lines of code to integrate a new model' },
           ],
           details: [
             'Swap robots: RobotBase unified hardware interface, action_layout unified action mapping; already adapted Unitree G1, AgiBot G1, China Mobile Lingxi, Zhejiang humanoid.',
@@ -94,9 +95,9 @@ export const ui = {
           summary:
             'Automatic real-robot recording, online scoring, and human teleop correction form the train-collect-evaluate loop: inference execution → runtime collection → task evaluation → model retraining.',
           metrics: [
-            { value: 'Parquet', label: 'Standard Episode format' },
-            { value: 'sub_task', label: 'Online scoring granularity' },
-            { value: 'VR', label: 'Teleop human correction' },
+            { value: 'LeRobot', label: 'Standard episode format data recording' },
+            { value: 'Score', label: 'Success rate and task progress recording' },
+            { value: 'Teleop', label: 'Human-in-the-loop intervention and correction' },
           ],
           details: [
             'Collect by running: real-robot runs auto-record images, joints, model outputs, and control commands into standard Parquet Episode data with incremental appends.',
@@ -131,9 +132,9 @@ export const ui = {
       eyebrow: 'GET STARTED',
       title: 'Get Started: Run Open-RAIL in Three Steps',
       steps: [
-        { title: 'Simulation', body: 'Docker virtual environment; validate algorithms and orchestrate tasks without a real robot.' },
-        { title: 'Hardware Access', body: 'Load drivers and connect robot hardware with one click.' },
-        { title: 'Debug & Iterate', body: 'Web visualization panel, online tuning, hot model update, fast iteration.' },
+        { title: 'Set Up', body: 'Set up the environment and verify the pipeline with the Mock backend before connecting a real robot.' },
+        { title: 'Connect', body: 'Configure the VLA model and robot backend, then connect the inference server to the robot client.' },
+        { title: 'Run & Iterate', body: 'Run inference, monitor execution in the Web UI, collect data, and iterate on models and configurations.' },
       ],
       resourcesLabel: 'Developer resources: hands-on video library ｜ full technical docs ｜ developer community',
       start: 'Get Started',
