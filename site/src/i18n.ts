@@ -28,6 +28,7 @@ export const ui = {
         'Edge-cloud coordination — flexible deployment across edge devices and the cloud.',
         'Closed-loop evolution — real-robot data recording and human-in-the-loop for continuous self-evolution.',
       ],
+      featuresTitle: 'Key Features',
       btnStart: 'Quick Start',
       btnPaper: 'Technical Paper',
       presented: 'Presented by ',
