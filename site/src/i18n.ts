@@ -28,7 +28,7 @@ export const ui = {
         '**Cloud‑Edge‑End Deployment** — Server‑Client architecture supports robot‑local, edge and cloud execution over **wired/Wi‑Fi/5G** with respective latency of end‑side **3‑5** ms, edge **35‑45** ms, cloud **80‑120** ms, requiring zero upper‑level code modification.',
         '**Enhanced Execution Throughput** — achieves up to **2.09×** speedup against raw policy output, outperforming tele‑operation speed with no need for recollecting training data.',
         '**Universal Task Success Boost** — lifts model success rate up to **0.95**, with absolute gain Δ from **+0.10 to +0.725** (evaluated on *π₀.₅* and *GR00T‑N1.5*).',
-        '**Closed‑loop Evolution** — auto Parquet‑formatted real‑robot **episode recording** plus time‑aligned **human‑in‑the‑loop tele‑correction** to enable continuous iterative improvement.'
+        '**Closed‑loop Evolution** — auto LeRobot‑formatted real‑robot **episode recording** plus time‑aligned **human‑in‑the‑loop tele‑correction** to enable continuous iterative improvement.'
       ],
       featuresTitle: 'Key Features',
       btnStart: 'Quick Start',
