@@ -150,3 +150,28 @@ html:not(.dark) .cap-figure { color: #0f172a; }
 html:not(.dark) .cap-figure .cap-muted { fill: #475569; }
 html:not(.dark) .cap-figure .cap-stroke-muted { stroke: #475569; }
 html:not(.dark) .cap-figure .cap-accent { fill: #be185d; }
+
+/* ============================================================
+   Top navigation — active / scroll-spy state
+   ============================================================ */
+.nav-link {
+  position: relative;
+  color: rgb(var(--muted));
+  transition: color 0.2s ease;
+}
+.nav-link:hover { color: rgb(var(--brand-light)); }
+.nav-link.is-active { color: rgb(var(--brand-light)); }
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.4rem;
+  height: 2px;
+  border-radius: 2px;
+  background: rgb(var(--brand-light));
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+.nav-link.is-active::after { transform: scaleX(1); }

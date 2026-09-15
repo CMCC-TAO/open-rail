@@ -5,14 +5,14 @@ const BASE = import.meta.env.BASE_URL;
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
 const links = [
-  { href: `${BASE}#overview`, label: t.nav.overview },
-  { href: `${BASE}#architecture`, label: t.nav.architecture },
-  { href: `${BASE}#capabilities`, label: t.nav.capabilities },
-  { href: `${BASE}#models`, label: t.nav.models },
-  { href: `${BASE}#robots`, label: t.nav.robots },
-  { href: `${BASE}#get-involved`, label: t.nav.getInvolved },
-  { href: `${BASE}#quickstart`, label: t.nav.quickstart },
-  { href: `${BASE}#tutorials`, label: t.nav.showcase },
+  { href: `${BASE}#overview`, label: t.nav.overview, target: 'overview' },
+  { href: `${BASE}#architecture`, label: t.nav.architecture, target: 'architecture' },
+  { href: `${BASE}#capabilities`, label: t.nav.capabilities, target: 'capabilities' },
+  { href: `${BASE}#models`, label: t.nav.models, target: 'models' },
+  { href: `${BASE}#robots`, label: t.nav.robots, target: 'robots' },
+  { href: `${BASE}#get-involved`, label: t.nav.getInvolved, target: 'get-involved' },
+  { href: `${BASE}#quickstart`, label: t.nav.quickstart, target: 'quickstart' },
+  { href: `${BASE}#tutorials`, label: t.nav.showcase, target: 'tutorials' },
   { href: `${BASE}getting-started/`, label: t.nav.docs },
 ];
 
@@ -25,7 +25,7 @@ const links = [
     </a>
 
     <div class="hidden items-center gap-6 text-base font-semibold xl:flex">
-      {links.map((l) => <a class="hover:text-brand" href={l.href}>{l.label}</a>)}
+      {links.map((l) => <a class="nav-link" href={l.href} data-target={l.target}>{l.label}</a>)}
     </div>
 
     <div class="flex items-center gap-2">
@@ -48,4 +48,32 @@ const links = [
     const isDark = document.documentElement.classList.toggle('dark');
     localStorage.setItem('theme', isDark ? 'dark' : 'light');
   });
+
+  // Scroll-spy: highlight the nav item for the section currently in view.
+  const navLinks = [...document.querySelectorAll('.nav-link[data-target]')] as HTMLAnchorElement[];
+  const sections = navLinks
+    .map((a) => document.getElementById(a.dataset.target as string))
+    .filter((el): el is HTMLElement => !!el);
+
+  function updateActiveNav() {
+    if (!sections.length) return;
+    const pos = window.scrollY + window.innerHeight * 0.35;
+    const headerH = 80;
+    let current = sections[0].id;
+    for (const s of sections) {
+      const top = s.getBoundingClientRect().top + window.scrollY;
+      if (top - headerH <= pos) current = s.id;
+    }
+    // Pin the last section when scrolled to the very bottom.
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) {
+      current = sections[sections.length - 1].id;
+    }
+    for (const a of navLinks) {
+      a.classList.toggle('is-active', a.dataset.target === current);
+    }
+  }
+
+  window.addEventListener('scroll', updateActiveNav, { passive: true });
+  window.addEventListener('resize', updateActiveNav);
+  updateActiveNav();
 </script>
