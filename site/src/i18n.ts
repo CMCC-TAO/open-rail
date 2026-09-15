@@ -23,7 +23,7 @@ export const ui = {
       desc: 'Open‑RAIL is a **plug‑and‑play** open‑source asynchronous inference middleware for diverse **VLA/WAM** models and heterogeneous robots. Using **two‑stage trajectory smoothing** and fusing, it resolves **inference‑control mismatch** and **motion jitter** to boost **execution speed**, motion smoothness and **task success rates** while preserving original action policies. It supports runtime **real‑robot data recording** and **human‑in‑the‑loop** intervention for **closed‑loop reinforcement learning**.',
       features: [
         '**Asynchronous Pipeline** — decouples **5‑10 Hz** VLA inference from **200‑500 Hz** motor control, removes inference‑control waiting latency.',
-        '**Two‑stage Trajectory Smoothing** — achieves near *C²* continuity and motion jitter drastically suppressed with *acceleration std* reduces **~71×** *( 3.91 → 0.055 rad/s²)*.',
+        '**Two‑stage Trajectory Smoothing** — achieves near *C²* continuity and motion jitter drastically suppressed with *acceleration std* reduces **~100×** *( 10+ → 0.1 rad/s²)*.',
         '**Drop‑in Compatibility** — supports more than **20 VLA/WAM models** & **4 heterogeneous robots**; new model adaptation needs only **50‑100 lines** of code without retraining.',
         '**Cloud‑Edge‑End Deployment** — Server‑Client architecture supports robot‑local, edge and cloud execution over **wired/Wi‑Fi/5G** with respective latency of end‑side **3‑5** ms, edge **35‑45** ms, cloud **80‑120** ms, requiring zero upper‑level code modification.',
         '**Enhanced Execution Throughput** — achieves up to **2.09×** speedup against raw policy output, outperforming tele‑operation speed with no need for recollecting training data.',
@@ -33,7 +33,7 @@ export const ui = {
       featuresTitle: 'Key Features',
       btnStart: 'Quick Start',
       btnPaper: 'Technical Paper',
-      presented: 'Presented by ',
+      presented: ' Presented by ',
     },
     pos: {
       eyebrow: 'RAIL ARCHITECTURE',
@@ -82,7 +82,7 @@ export const ui = {
             { value: '50–100', label: 'Lines of code to integrate a new model' },
           ],
           details: [
-            'Swap robots: RobotBase unified hardware interface, action_layout unified action mapping; already adapted Unitree G1, AgileX Spirit G1, China Mobile Lingxi, Zhejiang humanoid.',
+            'Swap robots: RobotBase unified hardware interface, action_layout unified action mapping; already adapted Unitree G1, AgiBot G1, China Mobile Lingxi, Zhejiang humanoid.',
             'Swap VLA models: standardized input/output inference interface; already supports 10 models including GR00T, TAO, RDT, DreamZero, PI, ACT; integrating a new model needs only 50–100 lines of business code.',
             'Swap deployments: Server-Client end-edge-cloud distributed architecture; Server can run on local body / edge / cloud, Client on the robot; switch deployment by changing only the comms address with zero upper-logic changes and auto-reconnect heartbeat.',
           ],
@@ -148,11 +148,11 @@ export const ui = {
     footer: {
       tagline: 'Where inference ends, real robots begin',
       repoLabel: 'Open-source Repos',
-      paperLabel: 'Technical Whitepaper PDF',
+      paperLabel: 'Technical PDF',
       contactLabel: 'Contact & Collaboration',
       emailNote: 'Partnership inquiries · technical proposals · community contribution portal',
-      copyright: 'Open-source release pending',
-      org: 'China Mobile Embodied AI Industry Innovation Center, Open-RAIL Team',
+      copyright: '© 2026 China Mobile Embodied Intelligence Industry Innovation Center. All Rights Reserved',
+      org: 'China Mobile Embodied Intelligence Industry Innovation Center',
       author: 'Embodied Model Team (TAO Team)',
     },
     diagrams: {
