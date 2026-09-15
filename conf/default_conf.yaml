@@ -788,10 +788,10 @@ robots:
 vision:
   history_frame: false
   preprocess:
-    height: 480
+    height: 240
     keep_ratio: true
     method: resize
-    width: 640
+    width: 320
 visualize:
   camera:
     open_head: true
@@ -816,5 +816,5 @@ vla_zmq:
   heartbeat_interval: 1000
   heartbeat_timeout: 30000
   infer_timeout: 5000
-  ip: 127.0.0.1
+  ip: 117.147.181.179
   port: '5566'
