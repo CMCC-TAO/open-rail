@@ -35,7 +35,10 @@ const railWords = new Set(['real-time', 'asynchronous', 'inference', 'linker']);
     </h1>
     <p class="mt-5 text-lg font-semibold text-brand-light">{t.hero.sub}</p>
     <p class="mx-auto mt-4 max-w-3xl text-base text-slate-300">{t.hero.desc}</p>
-    <p class="mx-auto mt-4 max-w-3xl text-sm text-slate-400">{t.hero.pain}</p>
+    <HeroVideo />
+    <ul class="mx-auto mt-4 max-w-3xl list-disc space-y-1 pl-5 text-left text-sm text-slate-300">
+      {t.hero.features.map((f) => <li>{f}</li>)}
+    </ul>
 
     <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
       {site.platforms.map((p) => (
@@ -49,7 +52,5 @@ const railWords = new Set(['real-time', 'asynchronous', 'inference', 'linker']);
     </div>
 
     <p class="mt-10 text-xs text-slate-500">{t.footer.org}{t.hero.presented}{t.footer.author}</p>
-
-    <HeroVideo />
   </div>
 </section>
