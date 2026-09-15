@@ -151,27 +151,37 @@ class VLAContext:
 
     @property
     def robot_body(self):
-        """获取 RobotBody 实例（懒加载，首次访问时创建）"""
+        """获取机器人对象（懒加载，首次访问时创建）。
+
+        走 master 的进程化框架：真实 ``RobotBody`` 与厂商 SDK 跑在 spawn
+        子进程里，父进程只持有 ``RobotProxy``（消除与 VLA 客户端之间的 GIL
+        争抢，并隔离 SDK 崩溃 / rclpy executor 冲突）。
+
+        子进程里实例化的类由 ``robot_module`` 指定为 action_server 自己的
+        子类（``robot_body_ext.RobotBody``，见该文件说明），因此状态查询方法
+        在代理上可用，同时 client/ 下没有任何改动。
+        """
         if self._robot_body is None:
-            import rclpy
-            from client.robots.unitree_g1.body_robot import RobotBody
+            from client.robots.robot_proxy import RobotProxy
 
-            # 先确保全局 rclpy 初始化（幂等保护），传 args=[] 避免
-            # sys.argv（如 --port）干扰 rcl 参数解析
-            if not rclpy.ok():
-                rclpy.init(args=[])
-
-            # 创建独立 ROS2 context，与 dispatcher 隔离 wait set
-            self._robot_context = rclpy.Context()
-            if not self._robot_context.ok():
-                self._robot_context.init(args=[])
-
-            self._robot_body = RobotBody(self.config, ros_context=self._robot_context)
+            # 跨进程前必须摘掉 record 子树：它带点号键（record.lerobot['cam.head']），
+            # ConfigDict 无法 pickle 往返（__setstate__ 会在恢复 allow_dotted_keys
+            # 之前按字段名重新校验，连 deepcopy 都失败），而 worker 根本不读它。
+            # 与 web_client/server.py:_create_robot 的处理保持一致。
+            _saved_record = self.config.record
+            self.config.record = None
+            try:
+                self._robot_body = RobotProxy(
+                    self.config.robots.type.value,
+                    self.config,
+                    robot_module='action_server.robot_body_ext',
+                )
+            finally:
+                self.config.record = _saved_record
 
             # 仿真模式：禁用相对限幅和绝对限幅，允许大幅轨迹规划
             if self._sim_mode:
-                self._robot_body.robot.enable_relative_clamp = False
-                self._robot_body.robot.enable_absolute_clamp = False
+                self._robot_body.set_clamp_enabled(relative=False, absolute=False)
                 print('[VLAContext] SIM MODE: Relative & absolute limits disabled')
         return self._robot_body
 
@@ -329,12 +339,19 @@ class VLAContext:
 
             if vla_client.observe_thread.is_alive():
                 vla_client.observe_thread.join(timeout=1.0)
+            # process_observe_thread 也要 join：它是 _raw_observe_queue 的消费端，
+            # 还在解码共享内存帧时就去关 shm 会与它竞争（对照 VLAClient.close()）
+            if vla_client.process_observe_thread.is_alive():
+                vla_client.process_observe_thread.join(timeout=1.0)
             if vla_client.inference_thread.is_alive():
                 vla_client.inference_thread.join(timeout=1.0)
             if vla_client.control_thread_timer.is_alive():
                 vla_client.control_thread_timer.stop(timeout=1.0)
-            if vla_client.visualize_thread_timer.is_alive():
-                vla_client.visualize_thread_timer.stop(timeout=1.0)
+            # 注意：旧版 VLAClient 的 visualize_thread_timer 已被移除
+            # （client/core/vla_client.py 中该属性全部为注释，从未赋值）。
+            # 这里一旦访问它就抛 AttributeError，会被下面的 except Exception 吞掉，
+            # 导致其后所有清理步骤（录制器 / 可视化 / 线程池 / 共享内存）全部被跳过。
+            # 可视化服务停在下方的 visualize_server.stop_server() 里。
 
             if hasattr(vla_client, 'data_record_manager') and vla_client.data_record_manager is not None:
                 vla_client.data_record_manager.close()
@@ -344,6 +361,22 @@ class VLAContext:
 
             if hasattr(vla_client, '_img_executor') and vla_client._img_executor is not None:
                 vla_client._img_executor.shutdown(wait=False)
+
+            # ── 共享内存（SharedMemoryManager）释放 ──
+            # VLAClient.close() 会执行以下两步，手工复刻时曾漏掉，
+            # 导致 ring_size(30) × 相机数 个 shm 块永久残留在 /dev/shm。
+            from client.core.shared_memory_manager import SharedMemoryManager
+
+            if hasattr(vla_client, '_clear_raw_observe_queue'):
+                vla_client._clear_raw_observe_queue()
+            _shm_cache = getattr(vla_client, '_raw_observe_shm_cache', None)
+            if _shm_cache:
+                # reader 侧：只解除映射，不影响生产端
+                SharedMemoryManager.close_reader(_shm_cache)
+            _shm_mgr = getattr(vla_client, 'shared_memory_manager', None)
+            if _shm_mgr is not None:
+                # producer 侧：本客户端自己的池，需要 close + unlink
+                _shm_mgr.close()
 
             # 清空共享 ZMQ 上的残留响应
             # 上一个 task 销毁时，可能在 ZMQ dealer socket 上留有未消费的

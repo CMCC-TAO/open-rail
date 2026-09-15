@@ -57,17 +57,10 @@ def _get_current_hands(context) -> np.ndarray:
     """获取当前 12 维手掌状态（最新下发量），保持抓取物体不松手"""
     robot_body = context.robot_body
     try:
-        robot = robot_body.robot
-        lh = robot.latest_left_hand_action
-        rh = robot.latest_right_hand_action
-        if all(x is not None for x in (lh, rh)):
-            lh_msg, _ = lh
-            rh_msg, _ = rh
-            if lh_msg and rh_msg and lh_msg.position and rh_msg.position:
-                return np.array(
-                    list(lh_msg.position) + list(rh_msg.position),
-                    dtype=float,
-                )
+        left = robot_body.get_latest_hand_action('left')
+        right = robot_body.get_latest_hand_action('right')
+        if left is not None and right is not None:
+            return np.concatenate([left, right]).astype(float)
     except Exception:
         pass
     # 兜底：全开（安全值，松开任何意外抓取）
@@ -147,9 +140,8 @@ class FinishHandler(AbstractTaskHandler):
 
             # ===== 检查手掌数据是否可用 =====
             self.send_feedback(goal_handle, 15, "正在检查机器人手掌数据...")
-            robot = robot_body.robot
-            lh = robot.latest_left_hand_action
-            rh = robot.latest_right_hand_action
+            lh = robot_body.get_latest_hand_action('left')
+            rh = robot_body.get_latest_hand_action('right')
             if lh is None or rh is None:
                 err_msg = f"{ERR_MSG[err_code]}: 未收到机器人手掌数据"
                 self.send_feedback(goal_handle, 0, err_msg)
@@ -162,7 +154,7 @@ class FinishHandler(AbstractTaskHandler):
                 self.send_feedback(goal_handle, progress,
                                    f"正在过渡到点位[{idx + 1}/{total}] ({pose_name})...")
                 pose = POSE_BUILDERS[pose_name](context)
-                robot_body.reset_robot(target_pose=pose,
+                robot_body.reset_robot_with_motion(target_pose=pose,
                                        max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
             # ===== 步骤 3: 清理 VLA 组件（init 创建，finish 统一销毁）=====

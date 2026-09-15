@@ -162,9 +162,8 @@ class InitHandler(AbstractTaskHandler):
 
             # ===== 检查手掌数据是否可用 =====
             self.send_feedback(goal_handle, 15, "正在检查机器人手掌数据...")
-            robot = robot_body.robot
-            lh = robot.latest_left_hand_action
-            rh = robot.latest_right_hand_action
+            lh = robot_body.get_latest_hand_action('left')
+            rh = robot_body.get_latest_hand_action('right')
             if lh is None or rh is None:
                 err_msg = f"{ERR_MSG[err_code]}: 未收到机器人手掌数据"
                 self.send_feedback(goal_handle, 0, err_msg)
@@ -177,7 +176,7 @@ class InitHandler(AbstractTaskHandler):
                 self.send_feedback(goal_handle, progress,
                                    f"正在过渡到点位[{idx + 1}/{total}] ({pose_name})...")
                 pose = POSE_BUILDERS[pose_name](context)
-                robot_body.reset_robot(target_pose=pose,
+                robot_body.reset_robot_with_motion(target_pose=pose,
                                        max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
             # ===== 步骤 3: 创建 VLA 组件并启动 obs+infer =====

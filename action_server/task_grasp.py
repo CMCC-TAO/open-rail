@@ -84,8 +84,8 @@ def _reset_arms_to_default(robot_body, context, duration=2.0):
 
     # 获取当前手掌控制量（保持手掌不变）
     # 优先从 robot 的缓存状态中读取（由 VLA 推理过程中更新）
-    left_hand = getattr(robot_body.robot, 'current_left_hand_state', None)
-    right_hand = getattr(robot_body.robot, 'current_right_hand_state', None)
+    left_hand = robot_body.get_current_hand_state('left')
+    right_hand = robot_body.get_current_hand_state('right')
 
     # 如果缓存中无手掌状态，从当前状态中取
     if left_hand is None and len(current_state) >= 20:
@@ -119,7 +119,7 @@ def _reset_arms_to_default(robot_body, context, duration=2.0):
         action[:14] = current_arm + t * (target_arm - current_arm)
         action[14:20] = left_hand
         action[20:26] = right_hand
-        robot_body.robot.send_robot_action(action)
+        robot_body.send_robot_action(action)
         time.sleep(0.02)
 
     print('[GraspHandler] 双臂回归默认位置完成')

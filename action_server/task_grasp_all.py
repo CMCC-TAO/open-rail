@@ -109,9 +109,8 @@ def _do_init_grasp(goal_handle, context, sequence_key: str, send_feedback_fn) ->
         sequence = INIT_POSE_SEQUENCES[sequence_key]
 
         # 检查手掌数据
-        robot = robot_body.robot
-        lh = robot.latest_left_hand_action
-        rh = robot.latest_right_hand_action
+        lh = robot_body.get_latest_hand_action('left')
+        rh = robot_body.get_latest_hand_action('right')
         if lh is None or rh is None:
             send_feedback_fn(goal_handle, 0, "未收到机器人手掌数据")
             return False
@@ -123,7 +122,7 @@ def _do_init_grasp(goal_handle, context, sequence_key: str, send_feedback_fn) ->
             send_feedback_fn(goal_handle, progress,
                              f"正在过渡到点位[{idx + 1}/{total}] ({pose_name})...")
             pose = INIT_POSE_BUILDERS[pose_name](context)
-            robot_body.reset_robot(target_pose=pose,
+            robot_body.reset_robot_with_motion(target_pose=pose,
                                    max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
 
         return True
@@ -150,7 +149,7 @@ def _do_single_grasp(goal_handle, context, instruction: str, hand_type: str,
     if attempt > 1:
         send_feedback_fn(goal_handle, 20, f"第 {attempt} 次重试：复位到默认位置...")
         init_grasp_pose = INIT_POSE_BUILDERS["init"](context)
-        robot_body.reset_robot(target_pose=init_grasp_pose,
+        robot_body.reset_robot_with_motion(target_pose=init_grasp_pose,
                                max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
         time.sleep(0.5)
 
@@ -269,9 +268,8 @@ def _do_finish_grasp(goal_handle, context, sequence_key: str, send_feedback_fn) 
         sequence = FINISH_POSE_SEQUENCES[sequence_key]
 
         # 检查手掌数据
-        robot = robot_body.robot
-        lh = robot.latest_left_hand_action
-        rh = robot.latest_right_hand_action
+        lh = robot_body.get_latest_hand_action('left')
+        rh = robot_body.get_latest_hand_action('right')
         if lh is None or rh is None:
             send_feedback_fn(goal_handle, 0, "未收到机器人手掌数据")
             return False
@@ -283,7 +281,7 @@ def _do_finish_grasp(goal_handle, context, sequence_key: str, send_feedback_fn) 
             send_feedback_fn(goal_handle, progress,
                              f"正在过渡到点位[{idx + 1}/{total}] ({pose_name})...")
             pose = FINISH_POSE_BUILDERS[pose_name](context)
-            robot_body.reset_robot(target_pose=pose,
+            robot_body.reset_robot_with_motion(target_pose=pose,
                                    max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0)
             _wait_for_movement(robot_body, pose)  # 等待机器人物理到位
 

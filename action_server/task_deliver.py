@@ -117,7 +117,7 @@ class DeliverHandler(AbstractTaskHandler):
         WRIST_IDXS = [0]  # shoulder_pitch（第一个关节，人拽动时受力最直接）
         threshold = math.radians(TUG_DETECTION_THRESHOLD_DEG)
 
-        robot = robot_body.robot
+        robot = robot_body
 
         # --- Step 1: 到位后持续下发保持位姿，等待 state 稳定 ---
         robot.send_robot_action(base_state)
@@ -131,15 +131,13 @@ class DeliverHandler(AbstractTaskHandler):
         left_samples, right_samples = [], []
         for _ in range(5):
             if hand_side in ('left', 'both'):
-                arm = robot.latest_left_arm
+                arm = robot_body.get_latest_arm_positions('left')
                 if arm is not None:
-                    msg, _ = arm
-                    left_samples.append(np.array([msg.position[i] for i in WRIST_IDXS]))
+                    left_samples.append(np.array([arm[i] for i in WRIST_IDXS]))
             if hand_side in ('right', 'both'):
-                arm = robot.latest_right_arm
+                arm = robot_body.get_latest_arm_positions('right')
                 if arm is not None:
-                    msg, _ = arm
-                    right_samples.append(np.array([msg.position[i] for i in WRIST_IDXS]))
+                    right_samples.append(np.array([arm[i] for i in WRIST_IDXS]))
             robot.send_robot_action(base_state)
             time.sleep(0.05)
 
@@ -159,10 +157,9 @@ class DeliverHandler(AbstractTaskHandler):
             tug_detected = False
 
             if baseline_left is not None:
-                arm = robot.latest_left_arm
+                arm = robot_body.get_latest_arm_positions('left')
                 if arm is not None:
-                    msg, _ = arm
-                    wrist = np.array([msg.position[i] for i in WRIST_IDXS])
+                    wrist = np.array([arm[i] for i in WRIST_IDXS])
                     diff = np.abs(wrist - baseline_left)
                     if np.any(diff > threshold):
                         diff_deg = np.rad2deg(diff).round(2)
@@ -170,10 +167,9 @@ class DeliverHandler(AbstractTaskHandler):
                         tug_detected = True
 
             if not tug_detected and baseline_right is not None:
-                arm = robot.latest_right_arm
+                arm = robot_body.get_latest_arm_positions('right')
                 if arm is not None:
-                    msg, _ = arm
-                    wrist = np.array([msg.position[i] for i in WRIST_IDXS])
+                    wrist = np.array([arm[i] for i in WRIST_IDXS])
                     diff = np.abs(wrist - baseline_right)
                     if np.any(diff > threshold):
                         diff_deg = np.rad2deg(diff).round(2)

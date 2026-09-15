@@ -109,11 +109,10 @@ class ForceDeliverHandler(AbstractTaskHandler):
         Returns:
             True = 拖拽触发后松手, False = 超时后强制松手
         """
-        robot = robot_body.robot
+        robot = robot_body
 
         # ── 验证触觉传感器可用 ──
-        touch_available = (hasattr(robot, 'latest_left_touch')
-                           and hasattr(robot, 'latest_right_touch'))
+        touch_available = robot_body.has_force_sensor()
         if not touch_available:
             print('[ForceDeliver] 错误：力传感器不可用，force传感器模式需要 TouchStatus 数据！')
             print('[ForceDeliver] 回退到直接松手...')
@@ -148,29 +147,21 @@ class ForceDeliverHandler(AbstractTaskHandler):
         _BASELINE_SAMPLES = 10
         for _ in range(_BASELINE_SAMPLES):
             if hand_side in ('left', 'both'):
-                touch = robot.latest_left_touch
-                if touch is not None:
-                    msg, _ = touch
-                    tf = robot.get_touch_tf_sum(msg)
-                    if tf > 0:
-                        left_samples.append(tf)
+                tf = robot_body.get_latest_touch_tf_sum('left')
+                if tf is not None and tf > 0:
+                    left_samples.append(tf)
             if hand_side in ('right', 'both'):
-                touch = robot.latest_right_touch
-                if touch is not None:
-                    msg, _ = touch
-                    tf = robot.get_touch_tf_sum(msg)
-                    if tf > 0:
-                        right_samples.append(tf)
+                tf = robot_body.get_latest_touch_tf_sum('right')
+                if tf is not None and tf > 0:
+                    right_samples.append(tf)
             if hand_side in ('left', 'both'):
-                arm = robot.latest_left_arm
+                arm = robot_body.get_latest_arm_positions('left')
                 if arm is not None:
-                    msg, _ = arm
-                    left_joint_samples.append(np.array([msg.position[i] for i in wrist_idxs]))
+                    left_joint_samples.append(np.array([arm[i] for i in wrist_idxs]))
             if hand_side in ('right', 'both'):
-                arm = robot.latest_right_arm
+                arm = robot_body.get_latest_arm_positions('right')
                 if arm is not None:
-                    msg, _ = arm
-                    right_joint_samples.append(np.array([msg.position[i] for i in wrist_idxs]))
+                    right_joint_samples.append(np.array([arm[i] for i in wrist_idxs]))
             robot.send_robot_action(base_state)
             time.sleep(0.05)
 
@@ -221,10 +212,8 @@ class ForceDeliverHandler(AbstractTaskHandler):
 
             # ── 触觉检测（连续 2 帧确认 + 滚动基线） ──
             if rolling_bl_left is not None:
-                touch = robot.latest_left_touch
-                if touch is not None:
-                    msg, _ = touch
-                    tf = robot.get_touch_tf_sum(msg)
+                tf = robot_body.get_latest_touch_tf_sum('left')
+                if tf is not None:
                     if tf > 0:
                         left_rolling.append(tf)
                     if len(left_rolling) >= _TOUCH_ROLLING_SIZE:
@@ -244,10 +233,8 @@ class ForceDeliverHandler(AbstractTaskHandler):
                         left_t_counter = 0
 
             if not tug_detected and rolling_bl_right is not None:
-                touch = robot.latest_right_touch
-                if touch is not None:
-                    msg, _ = touch
-                    tf = robot.get_touch_tf_sum(msg)
+                tf = robot_body.get_latest_touch_tf_sum('right')
+                if tf is not None:
                     if tf > 0:
                         right_rolling.append(tf)
                     if len(right_rolling) >= _TOUCH_ROLLING_SIZE:
@@ -268,10 +255,9 @@ class ForceDeliverHandler(AbstractTaskHandler):
 
             # ── 手腕关节检测：与普通递物任务使用相同的偏差条件 ──
             if not tug_detected and joint_bl_left is not None:
-                arm = robot.latest_left_arm
+                arm = robot_body.get_latest_arm_positions('left')
                 if arm is not None:
-                    msg, _ = arm
-                    wrist = np.array([msg.position[i] for i in wrist_idxs])
+                    wrist = np.array([arm[i] for i in wrist_idxs])
                     diff = np.abs(wrist - joint_bl_left)
                     if np.any(diff > joint_threshold):
                         diff_deg = np.rad2deg(diff).round(2)
@@ -280,10 +266,9 @@ class ForceDeliverHandler(AbstractTaskHandler):
                         trigger_source = '左手关节变化'
 
             if not tug_detected and joint_bl_right is not None:
-                arm = robot.latest_right_arm
+                arm = robot_body.get_latest_arm_positions('right')
                 if arm is not None:
-                    msg, _ = arm
-                    wrist = np.array([msg.position[i] for i in wrist_idxs])
+                    wrist = np.array([arm[i] for i in wrist_idxs])
                     diff = np.abs(wrist - joint_bl_right)
                     if np.any(diff > joint_threshold):
                         diff_deg = np.rad2deg(diff).round(2)

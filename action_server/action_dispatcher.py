@@ -169,8 +169,6 @@ class ObsDataBridge:
     # ── 数据推送线程 ──
     def _push_loop(self):
         """持续读取 robot_body 观测，写入共享队列"""
-        import cv2
-
         # 等待 robot_body 就绪
         robot_body = None
         for _ in range(120):  # 最多等 60s
@@ -189,67 +187,19 @@ class ObsDataBridge:
 
         print("[ObsBridge] robot_body ready, starting data push")
 
-        camera_id_map = {
-            "cam.head": 0,
-            "cam.hand_left": 1,
-            "cam.hand_right": 2,
-        }
-        last_push_time = 0.0   # 上次推送的 wall clock 时间（用于限流）
-        last_ros_ts = 0.0      # 上次推送的 ROS 时间戳（用于去重）
         last_state_ts = 0.0
         last_grasp_ts = 0.0
 
         while self._running:
             try:
-                cam = robot_body.camera
-                robot = robot_body.robot
                 now = time.time()
 
-                # ── 相机帧 ──
-                #   root cause: 原代码用 last_cam_ts = head_ts（ROS 时间戳）
-                #   同时作为去重和限流的基准，但 now - ROS_timestamp 可正可负
-                #   （ROS 时钟与系统时钟不同步），导致条件永远无法满足。
-                #   修复：去重用 ROS 时间戳，限流用 wall clock，各自独立
-                if cam is not None:
-                    cam_data = cam.get_latest_image()
-                    if cam_data is not None:
-                        head_img, head_ts, left_img, left_ts, right_img, right_ts = cam_data
-
-                        # 条件1：ROS 时间戳变化（新帧去重）
-                        # 条件2：距离上次推送 >= 33ms（wall clock 限流）
-                        if head_ts != last_ros_ts and now - last_push_time >= 0.033:
-                            last_push_time = now
-                            last_ros_ts = head_ts
-                            for cam_key, cam_id in camera_id_map.items():
-                                img = None
-                                if cam_key == "cam.head" and head_img is not None:
-                                    img = head_img
-                                elif cam_key == "cam.hand_left" and left_img is not None:
-                                    img = left_img
-                                elif cam_key == "cam.hand_right" and right_img is not None:
-                                    img = right_img
-                                if img is None:
-                                    continue
-                                try:
-                                    _, jpeg_bytes = cv2.imencode(
-                                        ".jpg", img, [cv2.IMWRITE_JPEG_QUALITY, 70]
-                                    )
-                                    header = {
-                                        "type": "camera_data_binary",
-                                        "camera_id": cam_id,
-                                        "timestamp": now,
-                                        "data_size": len(jpeg_bytes),
-                                    }
-                                    header_bytes = json.dumps(header).encode("utf-8")
-                                    header_len = len(header_bytes)
-                                    message = (
-                                        header_len.to_bytes(4, byteorder="big")
-                                        + header_bytes
-                                        + jpeg_bytes.tobytes()
-                                    )
-                                    self._enqueue(message)
-                                except Exception:
-                                    pass
+                # 注：相机帧不在这里推送。
+                # 画面改由 VisualizeServer(8765) 直供浏览器（与 web_client 完全一致），
+                # 本桥接器只负责 9001 上的关节状态 / 抓取状态 / VLA 进度。
+                # 历史上这里做过同步 cv2.imencode（3 相机 × ~30Hz = 90 次/秒），
+                # 会拖慢循环、推迟关节状态入队，表现为显示抖动；把这条路径整体
+                # 移出到 VisualizeServer 之后，该类问题从根上消失。
 
                 # ── 抓取状态推送（独立于关节限流，与话题频率对齐）──
                 if self._grasp_detector is not None and now - last_grasp_ts >= 0.033:
@@ -261,20 +211,18 @@ class ObsDataBridge:
                     last_grasp_ts = now
 
                 # ── 关节状态 ──
-                if robot is not None and now - last_state_ts >= 0.033:
-                    arm_state = robot._get_current_arm_state()
-                    lh = robot.latest_left_hand
-                    rh = robot.latest_right_hand
+                if now - last_state_ts >= 0.033:
+                    arm_state = robot_body.get_current_arm_state()
+                    lh = robot_body.get_latest_hand_positions('left')
+                    rh = robot_body.get_latest_hand_positions('right')
                     if arm_state is not None:
-                        state_list = arm_state.tolist()
-                        if lh is not None and lh[0] is not None and lh[0].position:
-                            state_list.extend([float(x) for x in lh[0].position[:6]])
-                        else:
-                            state_list.extend([0.0] * 6)
-                        if rh is not None and rh[0] is not None and rh[0].position:
-                            state_list.extend([float(x) for x in rh[0].position[:6]])
-                        else:
-                            state_list.extend([0.0] * 6)
+                        state_list = [float(x) for x in arm_state]
+                        state_list.extend(
+                            [float(x) for x in lh[:6]] if lh is not None else [0.0] * 6
+                        )
+                        state_list.extend(
+                            [float(x) for x in rh[:6]] if rh is not None else [0.0] * 6
+                        )
 
                         msg = json.dumps({
                             "type": "joint_data",
@@ -664,8 +612,8 @@ def main(args=None):
                 import time as _time
                 _time.sleep(3.0)
                 try:
-                    robot = dispatcher._context.robot_body.robot
-                    if hasattr(robot, 'has_force_sensor') and not robot.has_force_sensor:
+                    robot = dispatcher._context.robot_body
+                    if not robot.has_force_sensor():
                         print('[ERROR] ============================================================')
                         print('[ERROR] force_sensor_enabled=True 但未收到触觉传感器消息！')
                         print('[ERROR] 请检查：')

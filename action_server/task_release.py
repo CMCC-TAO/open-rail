@@ -84,28 +84,14 @@ class ReleaseHandler(AbstractTaskHandler):
         """
         # 优先级 1: 从 action 订阅缓存读取（最新下发量，消除执行滞后）
         try:
-            robot = robot_body.robot
-            la = robot.latest_left_arm_action
-            ra = robot.latest_right_arm_action
-            lh = robot.latest_left_hand_action
-            rh = robot.latest_right_hand_action
+            la = robot_body.get_latest_arm_action('left')
+            ra = robot_body.get_latest_arm_action('right')
+            lh = robot_body.get_latest_hand_action('left')
+            rh = robot_body.get_latest_hand_action('right')
             if all(x is not None for x in (la, ra, lh, rh)):
-                la_msg, _ = la
-                ra_msg, _ = ra
-                lh_msg, _ = lh
-                rh_msg, _ = rh
-                if (la_msg and ra_msg and lh_msg and rh_msg
-                        and la_msg.position and ra_msg.position
-                        and lh_msg.position and rh_msg.position):
-                    state = np.array(
-                        list(la_msg.position)
-                        + list(ra_msg.position)
-                        + list(lh_msg.position)
-                        + list(rh_msg.position),
-                        dtype=float,
-                    )
-                    robot_body.current_state = state.copy()
-                    return state
+                state = np.concatenate([la, ra, lh, rh]).astype(float)
+                robot_body.current_state = state.copy()
+                return state
         except Exception:
             pass
 

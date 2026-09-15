@@ -172,7 +172,13 @@ function connectCamWS() {
   };
 
   App.camWs.onmessage = (ev) => {
-    if (ev.data instanceof ArrayBuffer || ev.data instanceof Blob) return; // ignore cam binary from 8765
+    if (ev.data instanceof ArrayBuffer || ev.data instanceof Blob) {
+      // 相机帧改由 VisualizeServer(8765) 提供，与 web_client 完全一致：
+      // 不再走 ObsDataBridge(9001) 的转发，因此这里必须真正渲染，
+      // 而不是像以前那样忽略掉。
+      handleCameraBinary(ev.data);
+      return;
+    }
     try {
       handleCamWSMessage(JSON.parse(ev.data));
     } catch (e) { /* ignore */ }

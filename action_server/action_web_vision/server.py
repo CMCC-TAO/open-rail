@@ -8,14 +8,14 @@ Action Web Vision Server — 纯转发 Web 可视化服务
 
 数据流：
     action_dispatcher (ObsDataBridge:9001)
-        ↓ camera binary + joint_data JSON
+        ↓ joint_data / grasp_state JSON
     server.py (FastAPI:9000)
         ↓ 转发
     浏览器 WebSocket 客户端
 
     action_dispatcher (VisualizeServer:8765)
-        ↓ action_raw / action_fitted
-    浏览器 WebSocket 客户端（直连）
+        ↓ camera_data_binary（相机画面）+ joint_data_batch（曲线）
+    浏览器 WebSocket 客户端（直连，与 web_client 完全一致）
 
 访问：http://localhost:9000
 """
@@ -206,9 +206,6 @@ ws_lock = asyncio.Lock()
 _bridge_ws = None  # websockets.WebSocketClientProtocol
 _bridge_connected = False
 
-# 推理状态跟踪：从 ObsDataBridge 的 joint_data 消息中解析
-_inference_running = False
-
 
 async def _connect_bridge():
     """连接到 ObsDataBridge (ws://127.0.0.1:9001)"""
@@ -232,24 +229,17 @@ async def _connect_bridge():
 
 
 async def _bridge_reader():
-    """从 ObsDataBridge 读取数据并转发给所有浏览器客户端
-    
-    相机帧过滤策略（与 web_client 行为保持一致）：
-        - inference 未运行时：实时转发所有数据，图像 30Hz 刷新
-        - inference 运行时：每个推理步只放行一批相机帧（head/left/right 三帧），
-          其余丢弃，图像按推理频率刷新（如推理 1Hz → 图像 1Hz）
-    
-    消息顺序（每个~33ms 周期）：
-        cam_head → cam_left → cam_right → [grasp_state] → joint_state
-    
-    状态机：
-        infer_count 步进 → _need_release = True（等待放行下一批）
-        文本消息到达     → _need_release = False（通知本批结束）
+    """从 ObsDataBridge 读取数据并转发给所有浏览器客户端。
+
+    相机帧**不再经过这里**：画面由 VisualizeServer(8765) 直供浏览器
+    （与 web_client 完全一致），本服务只转发 9001 上的 JSON 消息
+    （关节状态 / 抓取状态 / VLA 进度）。
+
+    移除历史实现的原因：旧版在推理运行时会"每个推理步只放行一批相机帧"，
+    把画面刷新率压到推理频率（几 Hz），表现为显示卡顿；而 web_client 的
+    相机走 8765、从不做这种门控。改为直连 8765 后，该门控与卡顿一并消失。
     """
-    global _bridge_ws, _bridge_connected, _inference_running
-    _last_infer_count = 0          # 上次看到的 infer_count
-    _need_release = False          # True = 等待放行相机帧
-    _opened_this_iter = False      # 当前迭代是否刚打开闸门
+    global _bridge_ws, _bridge_connected
 
     while True:
         if _bridge_ws is None or not _bridge_connected:
@@ -268,45 +258,15 @@ async def _bridge_reader():
         if not ws_clients:
             continue
 
-        # ── 更新推理状态（从 joint_data 消息中解析） ──
-        if isinstance(message, str):
-            try:
-                parsed = json.loads(message)
-                if (parsed.get("type") == "joint_data"
-                        and isinstance(parsed.get("data"), dict)):
-                    data = parsed["data"]
-                    if "inference_running" in data:
-                        _inference_running = bool(data["inference_running"])
-                    if "infer_count" in data:
-                        new_count = int(data["infer_count"])
-                        if new_count != _last_infer_count:
-                            _last_infer_count = new_count
-                            if _inference_running:
-                                _need_release = True
-                                _opened_this_iter = True
-            except (json.JSONDecodeError, KeyError, ValueError):
-                pass
-            # 文本消息到达 → 关闭批次（除非本消息刚打开了闸门）
-            if _inference_running:
-                if not _opened_this_iter:
-                    _need_release = False
-                _opened_this_iter = False
+        # 桥接器只发 JSON；若出现二进制帧（旧版行为）直接忽略
+        if isinstance(message, bytes):
+            continue
 
-        # ── 相机帧过滤：inference 运行时每步只放行一批 ──
-        if isinstance(message, bytes) and _inference_running:
-            if not _need_release:
-                continue  # 不在放行窗口内，丢弃
-            # 放行本帧，同 batch 的 head/left/right 全部自然通过
-
-        # 转发给所有浏览器客户端
         dead = set()
         async with ws_lock:
             for ws in list(ws_clients):
                 try:
-                    if isinstance(message, bytes):
-                        await ws.send_bytes(message)
-                    else:
-                        await ws.send_text(message)
+                    await ws.send_text(message)
                 except Exception:
                     dead.add(ws)
         if dead:
