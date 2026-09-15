@@ -16,17 +16,30 @@ export const site = {
 };
 
 // VLA models already adapted / supported by Open-RAIL.
-export const supportedModels = [
-  { name: 'NVIDIA GR00T', note: 'Foundation model for humanoid manipulation' },
+// `soon: true` = adapted but not yet merged into master (shown as "Release soon").
+export const supportedModels: { name: string; note: string; soon?: boolean }[] = [
+  // Merged into master.
+  { name: 'GROOT N1', note: 'NVIDIA GR00T humanoid foundation' },
+  { name: 'GROOT N1.5', note: 'NVIDIA GR00T humanoid foundation' },
+  { name: 'GROOT N1.6', note: 'NVIDIA GR00T humanoid foundation' },
+  { name: 'PI0', note: 'Physical Intelligence VLA' },
+  { name: 'PI0.5', note: 'Physical Intelligence VLA' },
   { name: 'TAO', note: 'Lingxi Shutao VLA base' },
-  { name: 'RDT', note: 'Robotic Diffusion Transformer' },
-  { name: 'DreamZero', note: 'Zero-shot visuomotor policy' },
-  { name: 'π₀ (PI)', note: 'Physical Intelligence vision-action model' },
+  { name: 'GO1', note: 'Generalist VLA policy' },
+  { name: 'SmoIVLA', note: 'SmoIVLA VLA policy' },
   { name: 'ACT', note: 'Action Chunking Transformer' },
-  { name: 'OpenVLA', note: 'Open vision-language-action model' },
-  { name: 'RT-2', note: 'Vision-language-action robot model' },
-  { name: 'Octo', note: 'Open generalist robot policy' },
-  { name: 'Diffusion Policy', note: 'Denoising action model' },
+  { name: 'RDT', note: 'Robotics Diffusion Transformer' },
+  // Adapted, pending merge into master.
+  { name: 'DM0.5', note: 'Diffusion policy', soon: true },
+  { name: 'Wall-oss', note: 'Wall-OSS open model', soon: true },
+  { name: 'T-Rex', note: 'Visual-prompt VLA', soon: true },
+  { name: 'DeCAL', note: 'DeCAL adaptation', soon: true },
+  { name: 'DreamZero', note: 'Zero-shot visuomotor policy', soon: true },
+  { name: 'GigaWorld-Policy-0.5', note: 'GigaWorld world-model policy', soon: true },
+  { name: 'LingBot-VA', note: 'LingBot VLA model', soon: true },
+  { name: 'GROOT N1.7', note: 'NVIDIA GR00T humanoid foundation', soon: true },
+  { name: 'GROOT N1.7 EEF', note: 'GROOT N1.7 end-effector variant', soon: true },
+  { name: 'XVLA EEF', note: 'XVLA end-effector variant', soon: true },
 ];
 
 // Heterogeneous humanoid robots already adapted.

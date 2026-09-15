@@ -20,13 +20,15 @@ export const ui = {
       titleSuffix: 'A Real-time Asynchronous Inference Linker for VLA/WAM Models and Robots',
       titleHighlight: 'Open-RAIL: ',
       sub: 'Asynchronous Inference · Motion Smoothing & Speed Scaling · Closed-Loop Evolution',
-      desc: 'Open‑RAIL is a plug‑and‑play open‑source asynchronous inference middleware for diverse VLA/WAM models and heterogeneous robots. Using two‑stage trajectory smoothing and fusing, it resolves inference‑control mismatch, motion jitter to boost execution speed, motion smoothness and task success rates while preserving original action policies. It supports runtime real‑robot data recording and human‑in‑the‑loop intervention for closed‑loop reinforcement learning.',
+      desc: 'Open‑RAIL is a **plug‑and‑play** open‑source asynchronous inference middleware for diverse **VLA/WAM** models and heterogeneous robots. Using **two‑stage trajectory smoothing** and fusing, it resolves **inference‑control mismatch** and **motion jitter** to boost **execution speed**, motion smoothness and **task success rates** while preserving original action policies. It supports runtime **real‑robot data recording** and **human‑in‑the‑loop** intervention for **closed‑loop reinforcement learning**.',
       features: [
-        'Real-time asynchronous scheduling — bridges VLA/WAM inference and physical robot actuation.',
-        'Motion smoothing & speed scaling — eliminates jitter and boosts execution speed and success rate.',
-        'Drop-in compatibility — plug mainstream VLA models and heterogeneous humanoids into one pipeline.',
-        'Edge-cloud coordination — flexible deployment across edge devices and the cloud.',
-        'Closed-loop evolution — real-robot data recording and human-in-the-loop for continuous self-evolution.',
+        '**Asynchronous Pipeline** — decouples **5‑10 Hz** VLA inference from **200‑500 Hz** motor control, removes inference‑control waiting latency.',
+        '**Two‑stage Trajectory Smoothing** — achieves near *C²* continuity and motion jitter drastically suppressed with *acceleration std* reduces **~71×** *( 3.91 → 0.055 rad/s²)*.',
+        '**Drop‑in Compatibility** — supports more than **20 VLA/WAM models** & **4 heterogeneous robots**; new model adaptation needs only **50‑100 lines** of code without retraining.',
+        '**Cloud‑Edge‑End Deployment** — Server‑Client architecture supports robot‑local, edge and cloud execution over **wired/Wi‑Fi/5G** with respective latency of end‑side **3‑5** ms, edge **35‑45** ms, cloud **80‑120** ms, requiring zero upper‑level code modification.',
+        '**Enhanced Execution Throughput** — achieves up to **2.09×** speedup against raw policy output, outperforming tele‑operation speed with no need for recollecting training data.',
+        '**Universal Task Success Boost** — lifts model success rate up to **0.95**, with absolute gain Δ from **+0.10 to +0.725** (evaluated on *π₀.₅* and *GR00T‑N1.5*).',
+        '**Closed‑loop Evolution** — auto Parquet‑formatted real‑robot **episode recording** plus time‑aligned **human‑in‑the‑loop tele‑correction** to enable continuous iterative improvement.'
       ],
       featuresTitle: 'Key Features',
       btnStart: 'Quick Start',
@@ -76,7 +78,7 @@ export const ui = {
             'RobotBase unified hardware interface, standardized inference interface, and Server-Client distributed architecture collapse robot swaps, VLA-model swaps, and deployment swaps into low-level configuration.',
           metrics: [
             { value: '4', label: 'Heterogeneous humanoid robots adapted' },
-            { value: '10', label: 'Mainstream VLA models supported' },
+            { value: '20', label: 'Mainstream VLA models supported' },
             { value: '50–100', label: 'Lines of code to integrate a new model' },
           ],
           details: [
@@ -111,7 +113,7 @@ export const ui = {
       vision:
         'Open-sourcing the proven model-to-robot engineering pipeline so developers focus on model innovation, robot bodies, and scenarios instead of rebuilding deployment plumbing.',
       templates: [
-        { title: 'Model Template', body: 'Observation input, inference interface, action output specs; 10 VLA models adapted.' },
+        { title: 'Model Template', body: 'Observation input, inference interface, action output specs; 20 VLA models adapted.' },
         { title: 'Robot Template', body: 'Body parameters, action layout, comms adaptation templates; 4 heterogeneous robots referenced.' },
         { title: 'Evaluation Template', body: 'Scoring rules, metric logging, analysis export scripts.' },
         { title: 'Deployment Template', body: 'End-edge-cloud distributed deployment examples.' },

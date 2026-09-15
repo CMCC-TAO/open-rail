@@ -13,6 +13,23 @@ const suffixWords = (t.hero.titleSuffix || '').split(' ');
 // Color the first letter of the RAIL acronym words (Real-time Asynchronous
 // Inference Linker) with the gradient style, matching titleHighlight.
 const railWords = new Set(['real-time', 'asynchronous', 'inference', 'linker']);
+// Highlight markers:
+//   **text** → bold, *text* → italic, ==text== → red highlight.
+function highlight(text: string) {
+  const re = /(\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==)/g;
+  return text
+    .split(re)
+    .filter((p) => p !== '')
+    .map((p) => {
+      let m = p.match(/^\*\*([^*]+)\*\*$/);
+      if (m) return { text: m[1], style: 'bold' as const };
+      m = p.match(/^\*([^*]+)\*$/);
+      if (m) return { text: m[1], style: 'italic' as const };
+      m = p.match(/^==([^=]+)==$/);
+      if (m) return { text: m[1], style: 'red' as const };
+      return { text: p, style: 'normal' as const };
+    });
+}
 ---
 
 <section id="overview" class="relative overflow-hidden">
@@ -34,11 +51,33 @@ const railWords = new Set(['real-time', 'asynchronous', 'inference', 'linker']);
       ))}
     </h1>
     <p class="mt-5 text-lg font-semibold text-brand-light">{t.hero.sub}</p>
-    <p class="mx-auto mt-4 max-w-3xl text-base text-slate-300">{t.hero.desc}</p>
+    <p class="mx-auto mt-4 max-w-3xl text-base text-slate-300">
+      {highlight(t.hero.desc).map((s) =>
+        s.style === 'bold'
+          ? <strong class="font-semibold">{s.text}</strong>
+          : s.style === 'italic'
+            ? <em class="italic">{s.text}</em>
+            : s.style === 'red'
+              ? <span class="text-red-400">{s.text}</span>
+              : s.text
+      )}
+    </p>
     <HeroVideo />
     <h3 class="mx-auto mt-8 max-w-3xl text-left text-xl font-bold tracking-tight text-white sm:text-2xl">{t.hero.featuresTitle}</h3>
     <ul class="mx-auto mt-4 max-w-3xl list-disc space-y-1 pl-5 text-left text-sm text-slate-300">
-      {t.hero.features.map((f) => <li>{f}</li>)}
+      {t.hero.features.map((f) => (
+        <li>
+          {highlight(f).map((s) =>
+            s.style === 'bold'
+              ? <strong class="font-semibold">{s.text}</strong>
+              : s.style === 'italic'
+                ? <em class="italic">{s.text}</em>
+                : s.style === 'red'
+                  ? <span class="text-red-400">{s.text}</span>
+                  : s.text
+          )}
+        </li>
+      ))}
     </ul>
 
     <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
