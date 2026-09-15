@@ -40,7 +40,7 @@ function highlight(text: string) {
 
   <div class="container-wide relative pt-8 text-center sm:pt-11 pb-12 sm:pb-16">
     <p class="eyebrow">{t.hero.eyebrow}</p>
-    <h1 class="mx-auto max-w-4xl text-4xl font-extrabold leading-tight tracking-tight text-white sm:text-6xl">
+    <h1 class="mx-auto max-w-4xl text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl">
       <span class="gradient-text">{t.hero.titleHighlight}</span>{' '}
       {suffixWords.map((w, i) => (
         <span>
@@ -51,6 +51,7 @@ function highlight(text: string) {
       ))}
     </h1>
     <p class="mt-5 text-lg font-semibold text-brand-light">{t.hero.sub}</p>
+    <HeroVideo />
     <p class="mx-auto mt-4 max-w-3xl text-base text-slate-300">
       {highlight(t.hero.desc).map((s) =>
         s.style === 'bold'
@@ -62,7 +63,6 @@ function highlight(text: string) {
               : s.text
       )}
     </p>
-    <HeroVideo />
     <h3 class="mx-auto mt-8 max-w-3xl text-left text-xl font-bold tracking-tight text-white sm:text-2xl">{t.hero.featuresTitle}</h3>
     <ul class="mx-auto mt-4 max-w-3xl list-disc space-y-1 pl-5 text-left text-sm text-slate-300">
       {t.hero.features.map((f) => (
