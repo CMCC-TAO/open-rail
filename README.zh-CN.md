@@ -5,7 +5,7 @@
 
 **一套异步连接 VLA 模型推理与机器人执行的通用底座**
 
-[![Paper](https://img.shields.io/badge/论文-arXiv-2512.24673-red)](https://arxiv.org/abs/2512.24673)
+[![Paper](https://img.shields.io/badge/arXiv-2512.24673-b31b1b)](https://arxiv.org/abs/2512.24673)
 [![License](https://img.shields.io/badge/许可证-Apache--2.0-green)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue)](pyproject.toml)
 [![Gitee](https://img.shields.io/badge/代码仓库-Gitee-c71d23)](https://gitee.com/cmcc-tao/open-rail)

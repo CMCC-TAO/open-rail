@@ -5,7 +5,7 @@
 
 **A Universal Substrate for Asynchronously Linking VLA Model Inference and Robot Execution**
 
-[![Paper](https://img.shields.io/badge/Paper-arXiv-2512.24673-red)](https://arxiv.org/abs/2512.24673)
+[![Paper](https://img.shields.io/badge/arXiv-2512.24673-b31b1b)](https://arxiv.org/abs/2512.24673)
 [![License](https://img.shields.io/badge/License-Apache--2.0-green)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue)](pyproject.toml)
 [![Gitee](https://img.shields.io/badge/Repository-Gitee-c71d23)](https://gitee.com/cmcc-tao/open-rail)

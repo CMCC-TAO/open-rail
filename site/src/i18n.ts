@@ -74,18 +74,18 @@ export const ui = {
         {
           tag: 'Capability 2',
           title: 'Compatible',
-          subtitle: 'Swap models, bodies, or deployments without rewriting upper logic',
+          subtitle: 'Switch models, robots, or deployments without rewriting upper logic',
           summary:
             'RobotBase unified hardware interface, standardized inference interface, and Server-Client distributed architecture collapse robot swaps, VLA-model swaps, and deployment swaps into low-level configuration.',
           metrics: [
             { value: '4+', label: 'Heterogeneous humanoid robots adapted' },
-            { value: '20+', label: 'Mainstream VLA models supported' },
+            { value: '20+', label: 'Mainstream VLA/WAM models supported' },
             { value: '<100', label: 'Lines of code to integrate a new model' },
           ],
           details: [
-            'Swap robots: RobotBase unified hardware interface, action_layout unified action mapping; already adapted Unitree G1, AgiBot G1, China Mobile Lingxi, Zhejiang humanoid.',
-            'Swap VLA models: standardized input/output inference interface; already supports 10 models including GR00T, TAO, RDT, DreamZero, PI, ACT; integrating a new model needs only 50–100 lines of business code.',
-            'Swap deployments: Server-Client end-edge-cloud distributed architecture; Server can run on local body / edge / cloud, Client on the robot; switch deployment by changing only the comms address with zero upper-logic changes and auto-reconnect heartbeat.',
+            'Switch robots: RobotBase unified hardware interface, action_layout unified action mapping; already adapted Unitree G1, AgiBot G1, China Mobile Lingxi, Zhejiang humanoid.',
+            'Switch VLA models: standardized input/output inference interface; already supports more than 20 models including GR00T, TAO, RDT, DreamZero, PI, ACT; integrating a new model needs only 50–100 lines of business code.',
+            'Switch deployments: Server-Client end-edge-cloud distributed architecture; Server can run on local body / edge / cloud, Client on the robot; switch deployment by changing only the comms address with zero upper-logic changes and auto-reconnect heartbeat.',
           ],
         },
         {
@@ -130,7 +130,7 @@ export const ui = {
     },
     quick: {
       eyebrow: 'GET STARTED',
-      title: 'Get Started: Run Open-RAIL in Three Steps',
+      title: 'Three-Step Workflow: Run VLA/WAM Models for Robot Manipulation Using Open‑RAIL',
       steps: [
         { title: 'Set Up', body: 'Set up the environment and verify the pipeline with the Mock backend before connecting a real robot.' },
         { title: 'Connect', body: 'Configure the VLA model and robot backend, then connect the inference server to the robot client.' },
