@@ -23,13 +23,22 @@ const iconKeys = ['flask', 'robot', 'wrench'];
       {t.quick.steps.map((q, i) => (
         <div class="card lift reveal">
           <div class="flex items-center gap-3">
-            <span class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-accent text-white">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand to-accent text-white">
               <svg class="h-5 w-5" viewBox="0 0 24 24"><Fragment set:html={icons[iconKeys[i]]} /></svg>
             </span>
-            <span class="text-2xl font-extrabold gradient-text">{i + 1}</span>
+            <div class="flex flex-wrap items-baseline gap-x-2">
+              <span class="text-2xl font-extrabold gradient-text">Step {i + 1}</span>
+              <h3 class="text-lg font-bold text-white"><Highlight text={q.title} /></h3>
+            </div>
           </div>
-          <h3 class="mt-4 text-lg font-bold text-white"><Highlight text={q.title} /></h3>
-          <p class="mt-2 text-sm text-slate-400"><Highlight text={q.body} /></p>
+          <ol class="mt-3 space-y-3">
+            {q.substeps.map((s) => (
+              <li class="text-sm">
+                <p class="font-semibold text-slate-200"><Highlight text={s.title} /></p>
+                <p class="mt-1 text-slate-400"><Highlight text={s.body} /></p>
+              </li>
+            ))}
+          </ol>
         </div>
       ))}
     </div>

@@ -132,9 +132,30 @@ export const ui = {
       eyebrow: 'GET STARTED',
       title: 'Three-Step Workflow: Run VLA/WAM Models for Robot Manipulation Using Open‑RAIL',
       steps: [
-        { title: 'Set Up', body: 'Set up the environment and verify the pipeline with the Mock backend before connecting a real robot.' },
-        { title: 'Connect', body: 'Configure the VLA model and robot backend, then connect the inference server to the robot client.' },
-        { title: 'Run & Iterate', body: 'Run inference, monitor execution in the Web UI, collect data, and iterate on models and configurations.' },
+        {
+          title: 'Set Up',
+          substeps: [
+            { title: 'Prepare the Environment', body: 'Install the required dependencies and set up the Open-RAIL runtime environment.' },
+            { title: 'Start the Model Server', body: 'Select the VLA/WAM model and checkpoint, then launch the inference server.' },
+            { title: 'Launch the Web Client｜启动 Web Client', body: 'Start the Web Client and open the Open-RAIL interface in your browser.' },
+          ],
+        },
+        {
+          title: 'Connect',
+          substeps: [
+            { title: 'Load the Robot Configuration', body: 'Select the target robot and load its corresponding configuration.' },
+            { title: 'Review and Apply Settings', body: 'Check camera inputs, robot states, action mappings, control parameters, and communication settings, then apply the configuration.' },
+            { title: 'Verify Robot Observation', body: 'Start observation and confirm that camera feeds and robot states are received correctly.' },
+          ],
+        },
+        {
+          title: 'Run & Iterate',
+          substeps: [
+            { title: 'Set the Task', body: 'Select the task and language instruction for the current execution.' },
+            { title: 'Run Inference and Control', body: 'Start inference, check the model outputs and processed action trajectories, then enable control to execute the processed actions on the robot.' },
+            { title: 'Monitor, Intervene and Record', body: 'Monitor camera feeds, action trajectories, robot states, and runtime metrics. Pause and intervene through teleoperation when needed, while recording execution and correction trajectories for evaluation and further training.' },
+          ],
+        },
       ],
       resourcesLabel: 'Developer resources: hands-on video library ｜ full technical docs ｜ developer community',
       start: 'Get Started',
