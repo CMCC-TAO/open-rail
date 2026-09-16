@@ -12,7 +12,7 @@ export const site = {
   whitepaper: 'https://arxiv.org/abs/2512.24673',
   // Optional hero overview video. Set to a YouTube watch URL, embed URL,
   // or 11-char video id; leave '' to show a placeholder.
-  heroVideo: 'https://www.youtube.com/watch?v=1cllCVK-9lo',
+  heroVideo: 'https://www.youtube.com/watch?v=1dpdDsb8Trg',
 };
 
 // VLA models already adapted / supported by Open-RAIL.
