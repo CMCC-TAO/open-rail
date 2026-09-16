@@ -92,6 +92,6 @@ export const paper = {
 export const contributors = [
   { role: 'Project Leader', members: ['Yongsheng Zhao'] },
   { role: 'Core Developers', members: ['Lei Zhao', 'Gongxin Yao', 'Jiayin Deng', 'Xuanzhang Wen', 'Han Gao', 'Zean Liu', 'Wen Li', 'Taotao Tian'] },
-  { role: 'Testing', members: ['Yingying Yan'] },
-  { role: 'Product', members: ['Jiahui Zheng', 'Chaohua Lin', 'Yafei Peng'] },
+  { role: 'Test Engineers', members: ['Yingying Yan'] },
+  { role: 'Product Managers', members: ['Jiahui Zheng', 'Chaohua Lin', 'Yafei Peng'] },
 ];
