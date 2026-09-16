@@ -7,7 +7,7 @@ export const site = {
   platforms: [
     { label: 'GitHub', href: 'https://github.com/CMCC-TAO/open-rail', icon: 'github' },
     { label: 'Gitee', href: 'https://gitee.com/cmcc-tao/open-rail', icon: 'gitee' },
-    { label: 'AI.Huanxin', href: '#', icon: 'hf' },
+    { label: 'AI.Huanxin', href: 'https://aihuanxin.cn/project/detail/CMHI_EAI/open-rail/type=org', icon: 'hf' },
   ],
   whitepaper: 'https://arxiv.org/abs/2512.24673',
   // Optional hero overview video. Set to a YouTube watch URL, embed URL,
