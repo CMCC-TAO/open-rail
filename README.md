@@ -3,7 +3,7 @@
 
 # OPEN-RAIL
 
-**A Universal Substrate for Asynchronously Linking VLA Model Inference and Robot Execution**
+**A Universal Substrate for Asynchronously Linking VLA/WAM Model Inference and Robot Execution**
 
 [![Paper](https://img.shields.io/badge/arXiv-2512.24673-b31b1b)](https://arxiv.org/abs/2512.24673)
 [![License](https://img.shields.io/badge/License-Apache--2.0-green)](LICENSE)
@@ -12,8 +12,11 @@
 [![GitHub](https://img.shields.io/badge/Repository-GitHub-181717)](https://github.com/CMCC-TAO/open-rail)
 [![Huanxin Community](https://img.shields.io/badge/Repository-Huanxin_Community-6f42c1)](https://aihuanxin.cn/#/embodiedAi/embodiedBrandDetail/106)
 [![Docs](https://img.shields.io/badge/Docs-online-2496ed)](https://cmcc-tao.github.io/open-rail/)
+[![Deploy site](https://github.com/CMCC-TAO/open-rail/actions/workflows/deploy-site.yml/badge.svg)](https://github.com/CMCC-TAO/open-rail/actions/workflows/deploy-site.yml)
+[![GitHub Stars](https://img.shields.io/github/stars/CMCC-TAO/open-rail)](https://github.com/CMCC-TAO/open-rail/stargazers)
+[![GitHub Issues](https://img.shields.io/github/issues/CMCC-TAO/open-rail)](https://github.com/CMCC-TAO/open-rail/issues)
 
-<!-- TODO: add CI status and version badges; Stars / Issues dynamic badges once the public repository is bound. -->
+<!-- This project does not use a formal software version; release notes track public milestones instead. -->
 
 [English](README.md) | [中文](README.zh-CN.md)
 
@@ -24,11 +27,11 @@
   <a href="data/media/OPEN-RAIL_demo.mp4">Play the OPEN-RAIL demo video</a>
 </video>
 
-VLA models keep multiplying, and real-robot deployment is now the accepted answer in embodied AI. What remains unsolved is the stretch of engineering between a model checkpoint and the robot: jerky, jittery motion, stream dropouts over long runs, and execution data that never flows back into model iteration.
+VLA/WAM models keep multiplying, and real-robot deployment is now the accepted answer in embodied AI. What remains unsolved is the stretch of engineering between a model checkpoint and the robot: jerky, jittery motion, stream dropouts over long runs, and execution data that never flows back into model iteration.
 
-**OPEN-RAIL is exactly that link** — a lightweight server-client framework that connects any VLA model to any adapted robot and wires the closed loop of **infer** (real-robot inference and execution) → **collect** (capture data as it runs) → **evaluate** (data-driven iteration) end-to-end into every run.
+**OPEN-RAIL is exactly that link** — a lightweight server-client framework that connects any VLA/WAM model to any adapted robot and wires the closed loop of **infer** (real-robot inference and execution) → **collect** (capture data as it runs) → **evaluate** (data-driven iteration) end-to-end into every run.
 
-It currently adapts **4 heterogeneous robots** (including a LeRobot simulation backend) and supports **10 mainstream VLA models** (7 families), with joint acceleration standard deviation reduced from **10+ to 0.1 rad/s²**.
+It currently adapts **4 heterogeneous robots** (including a LeRobot simulation backend) and supports **10 mainstream VLA/WAM models** (7 families), with joint acceleration standard deviation reduced from **10+ to 0.1 rad/s²**.
 
 - 🤖 **VLA researchers** — a ready-to-use real-robot deployment environment; focus on model innovation, not on building the pipeline
 - 🔧 **Robotics engineers** — a toolkit for fast algorithm validation, without reimplementing drivers and plumbing
@@ -59,10 +62,10 @@ It currently adapts **4 heterogeneous robots** (including a LeRobot simulation b
 
 ## 📰 Changelog
 
-- **2026-09 · First open-source release** — Renamed to **OPEN-RAIL** (formerly VLA-RAIL), opening four layers — **infer / collect / evaluate / adapt**: three-thread asynchronous pipeline with two-level online smoothing, inference-as-collection, evaluation data written on every run, and adaptation for 4 heterogeneous robots and 10 VLA models
+- **2026-09-16 · First public release** — Renamed to **OPEN-RAIL** (formerly VLA-RAIL), opening four layers — **infer / collect / evaluate / adapt**: three-thread asynchronous pipeline with two-level online smoothing, inference-as-collection, evaluation data written on every run, and adaptation for 4 heterogeneous robots and 10 VLA/WAM models
 - **2025-12 · Preprint release** — [VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots](https://arxiv.org/abs/2512.24673): asynchronous inference with intra-/inter-chunk two-level online smoothing
 
-<!-- TODO: confirm the exact date and version number of the first open-source release; add a new entry at the top of this section for each subsequent release, noting which axis (models / hardware / scenarios) it widened. -->
+<!-- TODO: assign and record a formal version number for the first public release; add a new entry at the top of this section for each subsequent release, noting which axis (models / hardware / scenarios) it widened. -->
 
 ## ✨ Features
 
@@ -83,7 +86,7 @@ Smoothing happens at the **framework level** — no model changes, no training a
 
 | Robot | Type | Status | Adapter |
 | --- | --- | --- | --- |
-| A2D | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/a2d/` |
+| Agibot G1 | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/agibot_g1/` |
 | Ti5 T170C | Bimanual wheeled robot (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
 | Navi WA2 (Zhejiang Humanoid) | Folding wheel-legged humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
 | Mock | LeRobot-based simulation backend | ✅ Adapted | `client/robots/mock/` |
@@ -98,7 +101,7 @@ Smoothing happens at the **framework level** — no model changes, no training a
 | RDT | RDT-1B | ✅ Supported |
 | SmolVLA | SmolVLA | ✅ Supported |
 | GO1 | AgiBot GO-1 | ✅ Supported |
-| π series | Pi0, Pi0.5 | ✅ Supported |
+| π series | π0, π0.5 | ✅ Supported |
 | TAO | TAO | ✅ Supported |
 | _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-vla-model.md) |
 
@@ -110,7 +113,7 @@ All commands below are run from the repository root.
 
 - **Python ≥ 3.10**
 - **Server**: the NVIDIA GPU, CUDA, PyTorch, and model-specific dependencies required by the chosen model; version requirements follow each model's official documentation
-- **Client**: depends on the robot — A2D needs the vendor SDK, Ti5 T170C needs ROS 2, Navi WA2 needs ROS 1; the Mock simulation backend has no extra hardware requirements
+- **Client**: depends on the robot — Agibot G1 needs the vendor SDK, Ti5 T170C needs ROS 2, Navi WA2 needs ROS 1; the Mock simulation backend has no extra hardware requirements
 - **Network**: the two sides communicate over ZMQ; being on the same LAN or mutually reachable is enough
 - **OS**: Linux is the primary runtime environment today
 
@@ -129,7 +132,7 @@ pip install -e .
 
 ### 3. Start the server
 
-The server hosts the VLA model runtime and exposes an inference endpoint over ZMQ.
+The server hosts the VLA/WAM model runtime and exposes an inference endpoint over ZMQ.
 
 ```bash
 python run_server.py --model_type <model_type> --model_path <checkpoint_path>
@@ -202,7 +205,7 @@ The mock model only returns random actions and cannot stand in for real model ev
 
 ### Real-robot execution
 
-Set `robots.type` in `conf/*.yaml` to the target robot adapter (`a2d` / `ti5_t170c` / `navi_wa2`), configure camera topics, `action_layout`, and proprioception parameters per [docs/configuration.md](docs/configuration.md), then start with the same two commands.
+Set `robots.type` in `conf/*.yaml` to the target robot adapter (`agibot_g1` / `ti5_t170c` / `navi_wa2`), configure camera topics, `action_layout`, and proprioception parameters per [docs/configuration.md](docs/configuration.md), then start with the same two commands.
 
 ### Hybrid mode: inference + live teleoperation correction (opening in October)
 
@@ -229,7 +232,7 @@ The server owns the model environment and the client owns the robot environment,
 │   └── utils/              # Client utilities and visualization tools
 ├── server/                 # Model runtime and inference service
 │   ├── core/               # VLAServer, ZMQServer, and visualization service
-│   ├── models/             # VLA model adapters and model-specific implementations
+│   ├── models/             # VLA/WAM model adapters and model-specific implementations
 │   └── utils/              # Server utilities
 ├── conf/                   # Client, server, robot, and recording configuration
 ├── web_client/             # Web UI, HTTP API, and WebSocket service
@@ -237,7 +240,7 @@ The server owns the model environment and the client owns the robot environment,
 ├── extra/                  # Dispatch and communication helpers
 ├── scripts/                # CUDA, dataset display, and evaluation scripts
 ├── docs/                   # Getting started, architecture, configuration, troubleshooting, and guides
-│   └── guides/             # Robot and VLA model integration guides
+│   └── guides/             # Robot and VLA/WAM model integration guides
 ├── data/                   # Local data, media assets, and recording output
 │   ├── media/              # Demo videos, architecture diagrams, and illustrations
 │   └── README.md           # Data directory notes
@@ -323,7 +326,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 | ⚙️ [docs/configuration.md](docs/configuration.md) | Full configuration reference |
 | 🔧 [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues and fixes |
 | 🤖 [docs/guides/add-new-robot.md](docs/guides/add-new-robot.md) | How to add a robot adapter |
-| 🧠 [docs/guides/add-new-vla-model.md](docs/guides/add-new-vla-model.md) | How to add a VLA model adapter |
+| 🧠 [docs/guides/add-new-vla-model.md](docs/guides/add-new-vla-model.md) | How to add a VLA/WAM model adapter |
 | 📦 [docs/demo-running-on-dataset.md](docs/demo-running-on-dataset.md) | End-to-end example: running GR00T-N1.5 on the AgiBotWorld 2026 dataset |
 
 ## TODO List 📅 <a name="todolist"></a>
@@ -356,8 +359,8 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 
 **Adapt — multi-model and multi-robot control**
 
-- [x] 4 heterogeneous robots (A2D / Ti5 T170C / Navi WA2 + a LeRobot simulation backend)
-- [x] 10 VLA models across 7 families
+- [x] 4 heterogeneous robots (Agibot G1 / Ti5 T170C / Navi WA2 + a LeRobot simulation backend)
+- [x] 10 VLA/WAM models across 7 families
 - [x] Visualization abstracted as its own layer — a control entry for non-developers
 - [ ] WAM integration (October)
   - [ ] dreamzero
@@ -407,7 +410,7 @@ Cite this repository (OPEN-RAIL, code and documentation):
   author       = {Zhao, Yongsheng and Zhao, Lei and Cheng, Baoping and Yao, Gongxin and Wen, Xuanzhang and Gao, Han},
   year         = {2026},
   howpublished = {\url{https://github.com/CMCC-TAO/open-rail}},
-  note         = {Open-source framework connecting VLA model inference with robot execution}
+  note         = {Open-source framework connecting VLA/WAM model inference with robot execution}
 }
 ```
 
@@ -434,7 +437,7 @@ Apache License 2.0. See [LICENSE](LICENSE).
 - Dataset format and tooling follow [LeRobot](https://github.com/huggingface/lerobot)'s Parquet and video organization conventions
 - Model adapters are based on each model's official implementation: GR00T ([NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)), RDT ([thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)), ACT, SmolVLA, GO1, π series, TAO
 - The DETR portion of the ACT adapter is adapted from [facebookresearch/detr](https://github.com/facebookresearch/detr) (Apache 2.0), and the diffusion-policy implementations reference [real-stanford/diffusion_policy](https://github.com/real-stanford/diffusion_policy)
-- Robot adapters rely on each vendor's SDK and drivers: A2D, Ti5 T170C, Navi WA2 (Zhejiang Humanoid)
+- Robot adapters rely on each vendor's SDK and drivers: Agibot G1, Ti5 T170C, Navi WA2 (Zhejiang Humanoid)
 
 ---
 
