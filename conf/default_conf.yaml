@@ -78,9 +78,9 @@ action_layout:
         - 50.0
 controller:
   gripper_offset: 5
-  period: 20.0
+  period: 5.0
   raw_fps: 30
-  speed: 1.5
+  speed: 1.0
   wait_time: 50
 inter_chunk:
   inter_chunk_mode: min_jerk

@@ -17,6 +17,14 @@ except ImportError:
     _HAS_TOUCH_STATUS = False
 
 
+# Publish the hand every HAND_PUBLISH_EVERY calls of send_robot_action (200 Hz / 4 = 50 Hz).
+HAND_PUBLISH_EVERY = 4
+
+# 启动后等待多久再检查"必需话题是否真有数据"（秒）。
+# 必需 = 本节点订阅的全部话题，**不含**力传感器（touch_status 可有可无）。
+REQUIRED_TOPIC_CHECK_DELAY_SEC = 5.0
+
+
 # ==============================================
 # Arm joint **relative** limits (radians/control step)
 # Meaning: maximum allowed deviation between single-step action and current state
@@ -170,6 +178,8 @@ class UnitreeG1Robot(Node):
         self.latest_left_touch = None   # (TouchStatus_msg, timestamp) or None
         self.latest_right_touch = None
 
+        self._hand_tick = 0                     # hand publish rate limit (see HAND_PUBLISH_EVERY)
+
         # ===== Action cache (from /joint_action, /left_hand/set_angle, /right_hand/set_angle) =====
         self.latest_left_arm_action = None
         self.latest_right_arm_action = None
@@ -272,6 +282,36 @@ class UnitreeG1Robot(Node):
 
         self.get_logger().info("UnitreeG1Robot ready")
 
+        # 启动体检：必需话题在 5s 内必须收到数据，否则报警（一次性）
+        threading.Thread(target=self._check_required_topics, daemon=True).start()
+
+    def _check_required_topics(self):
+        """启动 5s 后检查必需话题是否收到数据，缺失则报警。
+
+        判据用回调已维护的 latest_* 缓存，不额外埋点。
+        力传感器（/left_hand|/right_hand/touch_status）为可选项，不参与检查。
+        """
+        time.sleep(REQUIRED_TOPIC_CHECK_DELAY_SEC)
+        required = (
+            (self.topic_joint_states, '手臂状态', self.latest_left_arm is not None or self.latest_right_arm is not None),
+            (self.topic_joint_action, '手臂指令', self.latest_left_arm_action is not None or self.latest_right_arm_action is not None),
+            (self.topic_left_hand, '左手状态', self.latest_left_hand is not None),
+            (self.topic_right_hand, '右手状态', self.latest_right_hand is not None),
+            (self.topic_left_hand_action, '左手指令', self.latest_left_hand_action is not None),
+            (self.topic_right_hand_action, '右手指令', self.latest_right_hand_action is not None),
+        )
+        missing = [(topic, desc) for topic, desc, ok in required if not ok]
+        if missing:
+            lines = '\n'.join(f'    - {topic:<24} ({desc})' for topic, desc in missing)
+            self.get_logger().error(
+                f'启动 {REQUIRED_TOPIC_CHECK_DELAY_SEC:.0f}s 内未收到 {len(missing)}/{len(required)} 个必需话题的数据：\n'
+                f'{lines}\n'
+                f'  请检查驱动是否发布这些话题、回放是否包含它们；'
+                f'力传感器话题为可选项，不参与检查。'
+            )
+        else:
+            self.get_logger().info(f'必需话题检查通过 ({len(required)}/{len(required)})')
+
     def _get_current_arm_state(self) -> np.ndarray:
         """Get current 14-dim arm joint positions [left_arm7, right_arm7] from ROS2 callback cache
 
@@ -330,8 +370,12 @@ class UnitreeG1Robot(Node):
             msg.dof = 7
             self.pub_right_arm.publish(msg)
 
+        # Hand: publish every HAND_PUBLISH_EVERY-th call (arm above: every call)
+        publish_hand = (self._hand_tick % HAND_PUBLISH_EVERY == 0)
+        self._hand_tick += 1
+
         # Left hand (with debounce: send only if difference > 50)
-        if left_hand_act[-1] > -100:
+        if publish_hand and left_hand_act[-1] > -100:
             if self.current_left_hand_state is not None:
                 left_diff = np.abs(left_hand_act - self.current_left_hand_state).sum()
             else:
@@ -344,7 +388,7 @@ class UnitreeG1Robot(Node):
                 self.current_left_hand_state = left_hand_act
 
         # Right hand (with debounce: send only if difference > 50)
-        if right_hand_act[-1] > -100:
+        if publish_hand and right_hand_act[-1] > -100:
             if self.current_right_hand_state is not None:
                 right_diff = np.abs(right_hand_act - self.current_right_hand_state).sum()
             else:
