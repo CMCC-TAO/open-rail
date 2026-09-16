@@ -24,7 +24,7 @@ export const supportedModels: { name: string; note: string; soon?: boolean }[] =
   { name: 'GR00T N1.6', note: 'NVIDIA GR00T humanoid foundation' },
   { name: 'π0', note: 'Physical Intelligence VLA' },
   { name: 'π0.5', note: 'Physical Intelligence VLA' },
-  { name: 'TAO', note: 'Lingxi Shutao VLA base' },
+  { name: 'TAO', note: 'China Mobile TAO Team VLA base model' },
   { name: 'GO1', note: 'Generalist VLA policy' },
   { name: 'SmoLVLA', note: 'SmoLVLA VLA policy' },
   { name: 'ACT', note: 'Action Chunking Transformer' },
@@ -44,10 +44,10 @@ export const supportedModels: { name: string; note: string; soon?: boolean }[] =
 
 // Heterogeneous humanoid robots already adapted.
 export const supportedRobots = [
-  { name: 'Unitree G1', note: 'Bipedal humanoid' },
-  { name: 'AgiBot G1', note: 'Bipedal humanoid' },
-  { name: 'China Mobile Lingxi', note: 'Embodied humanoid' },
-  { name: 'Zhejiang Humanoid', note: 'Research humanoid' },
+  { name: 'Unitree G1', note: 'Dual-arm bipedal humanoid', tags: ['Hand'] },
+  { name: 'AgiBot G1', note: 'Dual-arm wheeled humanoid', tags: ['Gripper', 'Hand'] },
+  { name: 'China Mobile Lingxi', note: 'Dual-arm wheeled humanoid', tags: ['Gripper', 'Hand'] },
+  { name: 'NAVIAI-WA2', note: 'Dual-arm wheeled humanoid', tags: ['Hand'] },
 ];
 
 // Tutorials: a series of YouTube-embedded walkthrough videos.

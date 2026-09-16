@@ -50,7 +50,7 @@ const robotIcon = (name: string) =>
       </div>
       <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {supportedRobots.map((r) => (
-          <div class="card reveal flex items-center gap-3 p-3">
+          <div class={`card reveal relative flex items-center gap-3 p-3${r.tags?.length ? ' pr-16' : ''}`}>
             <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-ink-border bg-white/5">
               <!-- Icon image placeholder: place a logo at the src below; the fallback glyph shows until then. -->
               <img src={robotIcon(r.name)} alt={r.name} class="h-full w-full object-contain" onerror={'this.style.display="none";this.nextElementSibling.style.display="flex";'} />
@@ -65,6 +65,13 @@ const robotIcon = (name: string) =>
               <p class="text-sm font-semibold text-slate-100"><Highlight text={r.name} /></p>
               <p class="mt-1 text-xs text-slate-400"><Highlight text={r.note} /></p>
             </div>
+            {r.tags?.length > 0 && (
+              <div class="absolute right-2 top-2 flex flex-col items-end gap-1">
+                {r.tags.map((tag) => (
+                  <span class="whitespace-nowrap rounded-full border border-brand/40 bg-brand/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-light">{tag}</span>
+                ))}
+              </div>
+            )}
           </div>
         ))}
       </div>
