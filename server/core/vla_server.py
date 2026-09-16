@@ -117,8 +117,8 @@ class VLAServer:
         if encoded_img.dtype != np.uint8 or not encoded_img.flags.c_contiguous:
             encoded_img = np.ascontiguousarray(encoded_img, dtype=np.uint8)
         decoded_img = cv2.imdecode(encoded_img, cv2.IMREAD_ANYDEPTH if 'depth.' in key else cv2.IMREAD_COLOR)
-        padded_img = self._pad_and_resize(decoded_img)
-        return key, padded_img[:, :, ::-1] # RGB to BGR
+        # padded_img = self._pad_and_resize(decoded_img)
+        return key, decoded_img[:, :, ::-1] # RGB to BGR
     
     def _process_image(self, frame):
         # futures = [self.image_decode_executor.submit(self._image_decode_thread_func, key, value) for key, value in frame if 'cam.' in key]
