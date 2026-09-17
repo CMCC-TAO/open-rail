@@ -7,8 +7,7 @@ export const ui = {
       overview: 'Overview',
       capabilities: 'Capabilities',
       architecture: 'Architecture',
-      models: 'Models',
-      robots: 'Robots',
+      compatibility: 'Compatibility',
       showcase: 'Tutorials',
       getInvolved: 'Get Involved',
       quickstart: 'Quick Start',
@@ -59,10 +58,10 @@ export const ui = {
           summary:
             'Open-RAIL ships with a browser-based Web Panel that turns the pipeline into something anyone can operate without writing code — live stats and camera streams, 40+ runtime parameters tunable on the fly, and one-click run control, all from a single console.',
           metrics: [
-            { value: '40+', label: 'Real-time tunable parameters' },
-            { value: '20+', label: 'Real-time monitored metrics' },
+            { value: '40+', label: 'Real-time tunable parameters, e.g., speed, smoothing mode.' },
+            { value: '20+', label: 'Monitored runtime status, e.g., fps, latencies.' },
             { value: '4 Hz', label: 'Live stats refresh rate' },
-            { value: '3', label: 'Independently controllable threads' },
+            { value: '3', label: 'Independent toggling of perception, inference and control pipelines' },
           ],
           details: [
             'Live monitoring: WebSocket pushes runtime stats every 250 ms — FPS, latencies, buffer occupancy, CPU / GPU / memory, bandwidth, and ZMQ connection state.',

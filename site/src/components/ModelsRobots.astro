@@ -7,7 +7,7 @@ const robotIcon = (name: string) =>
   `${BASE}media/robots/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}.png`;
 ---
 
-<section class="section">
+<section id="compatibility" class="section scroll-mt-24">
   <div class="container-wide">
     <div class="text-center">
       <p class="eyebrow">SUPPORTED MODELS &amp; ROBOTS</p>
@@ -20,13 +20,16 @@ const robotIcon = (name: string) =>
     </div>
 
     <!-- VLA Models -->
-    <div id="models" class="mt-12 scroll-mt-24">
+    <div class="mt-12">
       <div class="flex items-baseline justify-between">
-        <h3 class="text-xl font-bold text-white">Supported VLA Models</h3>
+        <h3 class="text-xl font-bold text-white">Supported VLA/WAM Models</h3>
         <span class="text-sm font-semibold text-brand-light">
           {supportedModels.filter((m) => !m.soon).length} supported · {supportedModels.filter((m) => m.soon).length} release soon
         </span>
       </div>
+      <p class="mt-3 text-sm leading-relaxed text-slate-400">
+        We define the <strong class="font-semibold text-slate-200">Unified Model Interface (UMI)</strong>, a standard interface for model inference that specifies input/output data formats and preprocessing methods. It currently supports major open-source VLA models, and we welcome community contributions to integrate additional models.
+      </p>
       <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {supportedModels.map((m) => (
           <div class="card reveal p-4">
@@ -43,11 +46,14 @@ const robotIcon = (name: string) =>
     </div>
 
     <!-- Robots -->
-    <div id="robots" class="mt-12 scroll-mt-24">
+    <div class="mt-12">
       <div class="flex items-baseline justify-between">
         <h3 class="text-xl font-bold text-white">Supported Robots</h3>
         <span class="text-sm font-semibold text-brand-light">{supportedRobots.length} heterogeneous humanoids</span>
       </div>
+      <p class="mt-3 text-sm leading-relaxed text-slate-400">
+        We define the <strong class="font-semibold text-slate-200">Unified Robot Interface (URI)</strong>, a standard hardware interface that unifies robot control commands and state feedback. It supports heterogeneous dual-arm humanoid platforms, and we welcome community contributions to integrate more robot hardware.
+      </p>
       <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {supportedRobots.map((r) => (
           <div class={`card reveal relative flex items-center gap-3 p-3${r.tags?.length ? ' pr-16' : ''}`}>
