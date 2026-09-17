@@ -2,23 +2,27 @@
 import { tutorials } from '../data/site';
 import Highlight from './Highlight.astro';
 
-// Accept a YouTube watch URL, embed URL, or the bare 11-char video id.
+// Accept a YouTube watch URL, embed URL, or 11-char id,
+// or a Bilibili video URL (bilibili.com/video/BV...).
 function toEmbedUrl(src: string): string | null {
   if (!src) return null;
-  const m = src.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
-  if (m) return `https://www.youtube.com/embed/${m[1]}`;
+  const yt = src.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([\w-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+  const bili = src.match(/bilibili\.com\/video\/(BV[\w]+)/);
+  if (bili) return `https://player.bilibili.com/player.html?bvid=${bili[1]}&page=1`;
   if (/^[\w-]{11}$/.test(src)) return `https://www.youtube.com/embed/${src}`;
   return src; // already a full embed URL
 }
 
-const items = tutorials.map((t) => ({ ...t, embed: toEmbedUrl(t.youtube) }));
+const items = tutorials.map((t) => ({ ...t, embed: toEmbedUrl(t.youtube || t.bilibili || '') }));
 ---
 
 <section id="tutorials" class="section bg-white/5">
   <div class="container-wide">
     <div class="text-center">
       <p class="eyebrow">Tutorials Video</p>
-      <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">Get Started with Open-RAIL</h2>
+      <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">Hands-on tutorial for Open-RAIL</h2>
+      <p class="mx-auto mt-2 max-w-[40rem] text-sm text-slate-400">All tutorial videos are narrated in Chinese. Please feel free to contact us if you need assistance and do not understand Chinese.</p>
     </div>
 
     <div class="mt-10">
@@ -73,20 +77,24 @@ const items = tutorials.map((t) => ({ ...t, embed: toEmbedUrl(t.youtube) }));
 </section>
 
 <script>
-  const slides = Array.from(document.querySelectorAll('.tutorial-slide'));
-  const dots = Array.from(document.querySelectorAll('.tut-dot'));
-  if (slides.length) {
+  function initTutorials() {
+    const slides = Array.from(document.querySelectorAll('.tutorial-slide'));
+    const dots = Array.from(document.querySelectorAll('.tut-dot'));
+    if (!slides.length) return;
     let cur = 0;
-    const show = (n: number) => {
+    const show = (n) => {
       cur = (n + slides.length) % slides.length;
-      slides.forEach((s, i) => s.classList.toggle('hidden', i !== cur));
       slides.forEach((s, i) => {
-        const f = s.querySelector('iframe[data-src]') as HTMLIFrameElement | null;
-        if (!f) return;
-        if (i === cur) {
-          if (!f.src) f.src = (f.dataset.src as string);
-        } else {
-          f.src = ''; // stop playback of off-screen videos
+        const active = i === cur;
+        s.classList.toggle('hidden', !active);
+        const f = s.querySelector('iframe[data-src]');
+        if (!f || !f.dataset.src) return;
+        if (active) {
+          // Load only when the iframe isn't already showing this video.
+          if (f.getAttribute('src') !== f.dataset.src) f.src = f.dataset.src;
+        } else if (f.getAttribute('src') !== 'about:blank') {
+          // Stop off-screen playback with a reliable blank document.
+          f.src = 'about:blank';
         }
       });
       dots.forEach((d, i) => {
@@ -96,7 +104,15 @@ const items = tutorials.map((t) => ({ ...t, embed: toEmbedUrl(t.youtube) }));
     };
     document.getElementById('tut-prev')?.addEventListener('click', () => show(cur - 1));
     document.getElementById('tut-next')?.addEventListener('click', () => show(cur + 1));
-    dots.forEach((d) => d.addEventListener('click', () => show(Number((d as HTMLElement).dataset.index))));
+    dots.forEach((d) => d.addEventListener('click', () => show(Number(d.dataset.index))));
     show(0);
   }
+
+  // Run after the DOM is parsed, and re-run on Astro view-transition navigations.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTutorials);
+  } else {
+    initTutorials();
+  }
+  document.addEventListener('astro:page-load', initTutorials);
 </script>

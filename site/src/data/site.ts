@@ -50,10 +50,21 @@ export const supportedRobots = [
   { name: 'NAVIAI-WA2', note: 'Dual-arm wheeled humanoid', tags: ['Hand'] },
 ];
 
-// Tutorials: a series of YouTube-embedded walkthrough videos.
-// Set `youtube` to a YouTube watch URL, embed URL, or an 11-char video id.
-// Leave it '' to show a placeholder for that slot.
+// Tutorials: a series of walkthrough videos (YouTube or Bilibili).
+// For YouTube set `youtube` to a watch/embed URL or 11-char id.
+// For Bilibili set `bilibili` to a bilibili.com/video/BV... URL.
+// Leave both empty to show a placeholder for that slot.
 export const tutorials = [
+  {
+    title: 'Quick Start: Get Familiar with Open-RAIL',
+    subtitle: 'Walk through the Quick Start video and learn the basic workflow, core controls, and key features of Open-RAIL.',
+    bilibili: 'https://www.bilibili.com/video/BV1awe36gEqF/',
+  },
+  {
+    title: 'Run Open-RAIL on a Real Robot',
+    subtitle: 'See how to connect a real robot, use the Web Client for configuration and control, monitor execution, and debug the VLA&WAM pipeline in real time.',
+    bilibili: 'https://www.bilibili.com/video/BV1Ywe36gEMM/',
+  },
   {
     title: 'Robot Tea House — 17-step Chinese tea ceremony',
     subtitle: 'Open-RAIL orchestrates a full tea-serving routine on a humanoid robot.',
