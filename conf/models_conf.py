@@ -69,7 +69,7 @@ def get_smolvla_config():
     """
     config = ConfigDict()
     config.model_path = '/path/to/model'
-    config.root_path = '/home/rm/wxz/EmbodiedAI/vla_infer_remote/vla_infer/model/checkpoint_5w5/055000/data'
+    config.root_path = '/path/to/root'
     return config
 
 def get_go1_config():
