@@ -4,9 +4,10 @@ import EdgeCloudDiagram from './EdgeCloudDiagram.astro';
 import Highlight from './Highlight.astro';
 import FlywheelDiagram from './FlywheelDiagram.astro';
 import ThreadsDiagram from './ThreadsDiagram.astro';
+import WebPanelDiagram from './WebPanelDiagram.astro';
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
-const kindByIndex = ['threads', 'edge', 'flywheel'] as const;
+const kindByIndex = ['web', 'threads', 'edge', 'flywheel'] as const;
 ---
 
 <section id="capabilities" class="section">
@@ -56,6 +57,9 @@ const kindByIndex = ['threads', 'edge', 'flywheel'] as const;
             )}
             {kindByIndex[i] === 'threads' && (
               <div class="w-full cursor-zoom-in" data-zoom><ThreadsDiagram locale={locale} /></div>
+            )}
+            {kindByIndex[i] === 'web' && (
+              <div class="w-full cursor-zoom-in" data-zoom><WebPanelDiagram locale={locale} /></div>
             )}
           </div>
         </div>
