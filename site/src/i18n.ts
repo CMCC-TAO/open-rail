@@ -48,12 +48,33 @@ export const ui = {
     },
     cap: {
       eyebrow: 'CORE CAPABILITIES',
-      title: 'Three Core Capabilities: Stable ｜ Compatible ｜ Evolvable',
+      title: 'Operable ｜ Stable ｜ Compatible ｜ Evolvable',
       expand: 'Expand technical details',
       collapse: 'Collapse technical details',
       items: [
         {
           tag: 'Capability 1',
+          title: 'Operable',
+          subtitle: 'Zero-code operation — Monitor runtime status, tune parameters / instructions, and visualize trajectories / cameras through an user-friendly Web Panel.',
+          summary:
+            'Open-RAIL ships with a browser-based Web Panel that turns the pipeline into something anyone can operate without writing code — live stats and camera streams, 40+ runtime parameters tunable on the fly, and one-click run control, all from a single console.',
+          metrics: [
+            { value: '40+', label: 'Real-time tunable parameters' },
+            { value: '20+', label: 'Real-time monitored metrics' },
+            { value: '4 Hz', label: 'Live stats refresh rate' },
+            { value: '3', label: 'Independently controllable threads' },
+          ],
+          details: [
+            'Live monitoring: WebSocket pushes runtime stats every 250 ms — FPS, latencies, buffer occupancy, CPU / GPU / memory, bandwidth, and ZMQ connection state.',
+            'Live visual: camera and scene video streamed over the visual WebSocket (port 8765) for real-time situational awareness.',
+            'Config & instruction tuning: hot-patch YAML config (40+ runtime parameters) and natural-language task instructions at runtime — no restart required.',
+            'Independent run control: observe, infer, and control threads can be started and stopped independently — e.g. pause inference while keeping observation live, or stop control without dropping the data stream.',
+            'Manual robot control: take over via teleoperation to directly drive the robot and correct actions in real time when the model misbehaves.',
+            'Episode review: browse, replay, and delete LeRobot-format episode and evaluation records for offline analysis and further training.',
+          ],
+        },
+        {
+          tag: 'Capability 2',
           title: 'Stable',
           subtitle: 'Asynchronous inference pipeline + Intra-Chunk Smoother & Inter-Chunk Fuser',
           summary:
@@ -72,7 +93,7 @@ export const ui = {
           ],
         },
         {
-          tag: 'Capability 2',
+          tag: 'Capability 3',
           title: 'Compatible',
           subtitle: 'Switch models, robots, or deployments without rewriting upper logic',
           summary:
@@ -89,7 +110,7 @@ export const ui = {
           ],
         },
         {
-          tag: 'Capability 3',
+          tag: 'Capability 4',
           title: 'Evolve',
           subtitle: 'Running is data, intervention is teaching — the train-collect-evaluate flywheel',
           summary:
@@ -237,6 +258,22 @@ export const ui = {
         controlFreq: '200–1000 Hz',
         cmdBuffer: 'CMD Buffer',
         latencyPost: 'Latency (Post Process)',
+      },
+      webPanel: {
+        panel: 'Web Panel',
+        console: 'Operator Console',
+        pipeline: 'RAIL Pipeline',
+        inference: 'Inference',
+        robotBody: 'Robot Body',
+        dataMgmt: 'Data Mgmt',
+        monitor: 'Monitor',
+        tune: 'Tune',
+        control: 'Control',
+        review: 'Review',
+        statsVideo: 'Stats / Video',
+        configInstr: 'Config / Instruction',
+        runControl: 'Start / Pause / Stop',
+        episodes: 'Episode Records',
       },
     },
   },
