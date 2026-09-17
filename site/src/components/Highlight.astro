@@ -1,0 +1,34 @@
+---
+// Renders text with inline highlight markers:
+//   **text** → bold, *text* → italic, ==text== → red highlight.
+interface Props {
+  text?: string;
+}
+const { text = '' } = Astro.props;
+const re = /(\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==)/g;
+const parts = text
+  .split(re)
+  .filter((p) => p !== '')
+  .map((p: string) => {
+    let m = p.match(/^\*\*([^*]+)\*\*$/);
+    if (m) return { text: m[1], style: 'bold' as const };
+    m = p.match(/^\*([^*]+)\*$/);
+    if (m) return { text: m[1], style: 'italic' as const };
+    m = p.match(/^==([^=]+)==$/);
+    if (m) return { text: m[1], style: 'red' as const };
+    return { text: p, style: 'normal' as const };
+  });
+---
+<Fragment>
+  {parts.map((s) =>
+    s.style === 'bold' ? (
+      <strong class="font-semibold">{s.text}</strong>
+    ) : s.style === 'italic' ? (
+      <em class="italic">{s.text}</em>
+    ) : s.style === 'red' ? (
+      <span class="text-red-400">{s.text}</span>
+    ) : (
+      s.text
+    )
+  )}
+</Fragment>

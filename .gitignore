@@ -3,8 +3,15 @@
 python3.10.INFO
 .codebuddy/
 .marscode/
-data/
-data/recording
+# Keep the canonical robot images (uploaded as site assets, copied into site/public/media at build).
+# Ignore the *contents* of data/ (not the dir itself) so the negations below can be consulted.
+/data/*
+!/data/media/
+!/data/media/robots/
+!/data/media/robots/**
+!/data/media/*.png
+# The website copies these into site/public/media/robots at build time — don't track the generated copy.
+site/public/media/robots/
 .conda/
 
 # Distribution / packaging
@@ -78,8 +85,6 @@ __pycache__
 # documentation build artifacts
 
 docs/build
-site/
-
 # The following ignores are from vila repository
 *.whl
 *_dev
@@ -142,3 +147,19 @@ log
 conf/*.yaml
 !config/default_conf.yaml
 *.svg
+
+# Website (site/, Astro + Starlight) build intermediates
+
+node_modules/
+.astro/
+site/dist/
+site/.astro/
+*.tsbuildinfo
+.npm
+.vercel/
+.netlify/
+# Keep the site's own static assets even though `*.svg` is ignored above.
+!site/public/**/*.svg
+# `data/` above also matches the website's source module directory — keep it tracked.
+!site/src/data/
+!site/src/data/**
