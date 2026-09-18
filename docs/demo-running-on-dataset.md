@@ -237,13 +237,13 @@ Access in a browser: `http://localhost:9000`
 Click `Browse`, and change `robots-mock-dataset_path` on the left side to the actual dataset path:
 `Path/To/Dataset/509995_510027/data`
 
-![选择mock模式的数据集路径](../data/media/select_dataset_path.png)
+![Select the dataset path for mock mode](../data/media/select_dataset_path.png)
 
 ## 12. Start Inference
 
 Click the `Start` button on the top bar of the page to run inference on the AgiBotWorld2026 subset.
 
-![mock模式demo](../data/media/mock_demo.png)
+![Mock mode demo](../data/media/mock_demo.png)
 
 ### Key Notes
 

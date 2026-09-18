@@ -117,7 +117,7 @@ PYTHONPATH=/path/to/TAO/src:$PYTHONPATH python run_server.py --model_type tao --
 ```
 
 > **Model Types**: See the registered model list in `conf/server_conf.py`.  
-> **Adding New Models**: Refer to the [Add New VLA Model Guide](guides/add-new-vla-model.md).
+> **Adding New Models**: Refer to the [Add New Model Guide](guides/add-new-model.md).
 
 ---
 
@@ -164,7 +164,7 @@ See the [Robot Adaptation Guide](guides/add-new-robot.md) for the complete inter
 
 - [Project Architecture](../README.md#project-architecture): Understand the responsibilities of Client, Server, and the ZMQ communication layer.
 - [Configuration Guide](configuration.md): Complete configuration options for Client, Server, robots, and recording.
-- [Add New VLA Model Guide](guides/add-new-vla-model.md): Integrate new checkpoints/model implementations.
+- [Add New Model Guide](guides/add-new-model.md): Integrate new checkpoints/model implementations.
 - [Robot Adaptation Guide](guides/add-new-robot.md): Integrate physical robots.
 - [Troubleshooting](troubleshooting.md): Common runtime issues.
 - [Mock Robot Documentation](../client/robots/mock/README.md): Configure offline dataset replay.

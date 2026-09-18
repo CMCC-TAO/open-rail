@@ -1,6 +1,6 @@
-# VLA模型快速接入指南
+# VLA/WAM 模型快速接入指南
 
-[English Version](add-new-vla-model.md)
+[English Version](../docs/guides/add-new-model.md)
 
 > 假设待接入VLA模型命名为`your_model`
 
@@ -96,10 +96,10 @@ def get_your_model_config():
 ### 4.3 将模型配置加入全局配置接口
 ```python
 def get_models_config():
-    """Generate configuration for all available VLA models.
+    """Generate configuration for all available VLA/WAM models.
     
     This function creates a comprehensive configuration dictionary that includes
-    settings for all supported VLA models (GR00T, ...) and specifies
+    settings for all supported VLA/WAM models (GR00T, ...) and specifies
     which model type to use by default.
     
     Returns:
@@ -121,13 +121,13 @@ def get_models_config():
 ### 5.1 get_model：新增模型实例化分支
 ```python
 def get_model(config):
-    """Create and return a VLA model instance based on configuration
+    """Create and return a VLA/WAM model instance based on configuration
     
     Args:
         config: Configuration object containing model type and settings
         
     Returns:
-        ModelVLA: VLA model instance for the specified type
+        ModelVLA: VLA/WAM model instance for the specified type
         
     Raises:
         ValueError: If model type is not supported
@@ -190,4 +190,3 @@ your_model对应的虚拟环境下执行启动命令：
 ```bash
 python run_server.py --model_type your_model --model_path /path/to/your_model
 ```
-

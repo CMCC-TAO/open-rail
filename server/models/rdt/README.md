@@ -53,4 +53,4 @@ class ModelVLA:
 # ...
 ```
 
-3.完成以上修改，即可使用RDT模型进行真机推理。
+3. After making these changes, you can use the RDT model for real-robot inference.

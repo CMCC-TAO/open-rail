@@ -1,12 +1,12 @@
 ---
-title: "Add a New VLA Model"
-description: "Step-by-step guide to integrate a new VLA model into the server."
+title: "Add a New VLA/WAM Model"
+description: "Step-by-step guide to integrate a new VLA/WAM model into the server."
 ---
 
-# Quick‑Start for Adding New VLA Model
+# Quick‑Start for Adding New VLA/WAM Model
 
 
-> Assume the target VLA model to be integrated is named `your_model`
+> Assume the target VLA/WAM model to be integrated is named `your_model`
 
 ## 1. Create Model Directory
 Create a new model folder under path `server/models/`
@@ -19,7 +19,7 @@ Create file: `server/models/your_model/your_model.py`
 
 Define the `ModelVLA` class inside `your_model.py`, which contains `__init__` and `infer` functions.
 
-- `__init__`: Initialize configurations related to the VLA model, instantiate the model as `self.policy`
+- `__init__`: Initialize configurations related to the VLA/WAM model, instantiate the model as `self.policy`
 - `infer`: Execute model inference
   - Input: `sequence`, a list containing observation data and metadata
   - Fetch observation data from `sequence[0]`
@@ -31,8 +31,8 @@ Define the `ModelVLA` class inside `your_model.py`, which contains `__init__` an
 # Core logic skeleton for your_model.py
 class ModelVLA:
     def __init__(self, cfg):
-        # Initialize configurations for the target VLA model
-        # Instantiate the target VLA model
+        # Initialize configurations for the target VLA/WAM model
+        # Instantiate the target VLA/WAM model
         self.policy = None
 
     def infer(self, sequence):
@@ -101,10 +101,10 @@ def get_your_model_config():
 ### 4.3 Register model config into global configuration interface
 ```python
 def get_models_config():
-    """Generate configuration for all available VLA models.
+    """Generate configuration for all available VLA/WAM models.
     
     This function creates a comprehensive configuration dictionary that includes
-    settings for all supported VLA models (GR00T, ...) and specifies
+    settings for all supported VLA/WAM models (GR00T, ...) and specifies
     which model type to use by default.
     
     Returns:
@@ -126,13 +126,13 @@ def get_models_config():
 ### 5.1 get_model: Add branch for new model instantiation
 ```python
 def get_model(config):
-    """Create and return a VLA model instance based on configuration
+    """Create and return a VLA/WAM model instance based on configuration
     
     Args:
         config: Configuration object containing model type and settings
         
     Returns:
-        ModelVLA: VLA model instance for the specified type
+        ModelVLA: VLA/WAM model instance for the specified type
         
     Raises:
         ValueError: If model type is not supported

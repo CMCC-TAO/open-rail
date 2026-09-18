@@ -106,7 +106,7 @@ python run_server.py --model_type <模型类型> --model_path <检查点路径>
 PYTHONPATH=/path/to/TAO/src:$PYTHONPATH python run_server.py --model_type tao --model_path /path/to/checkpoint
 ```
 > **模型类型**：已支持的模型列表参见 `conf/server_conf.py` 中的注册信息。  
-> **新增模型**：如需接入新 VLA 模型，参见 [新增 VLA 模型指南](guides/add-new-vla-model.zh-CN.md)。
+> **新增模型**：如需接入新 VLA 模型，参见 [新增模型指南](add-new-model.zh-CN.md)。
 
 ## 🎬 第四步：Mock 机器人（可选，用于无真机场景）
 
@@ -160,7 +160,7 @@ Mock 机器人会从 LeRobot 格式的数据集中回放历史观测，适合演
 
 - [项目架构](../README.zh-CN.md#项目架构)：理解 Client、Server 和 ZMQ 通信层的职责边界。
 - [配置说明](configuration.zh-CN.md)：查看客户端、Server、机器人和记录配置。
-- [新增 VLA 模型指南](guides/add-new-vla-model.zh-CN.md)：接入新的 checkpoint/模型实现。
+- [新增模型指南](add-new-model.zh-CN.md)：接入新的 checkpoint/模型实现。
 - [机器人适配指南](guides/add-new-robot.zh-CN.md)：接入真实机器人。
 - [故障排查](troubleshooting.zh-CN.md)：查看运行期间的常见问题。
 - [Mock Robot 说明](../client/robots/mock/README.md)：配置离线数据集回放。

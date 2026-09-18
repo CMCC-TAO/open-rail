@@ -33,7 +33,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 目前已适配 **4 款异构机器人**（含 LeRobot 仿真后端）、支持 **10 个主流 VLA/WAM 模型**（7 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
 
-- 🤖 **VLA 研究者** — 开箱即用的真机部署环境，专注模型创新，不搭工程管线
+- 🤖 **VLA/WAM 模型研究人员** — 开箱即用的真机部署环境，专注模型创新，不搭工程管线
 - 🔧 **机器人工程师** — 快速验证算法的工具集，无需重复实现驱动与管线
 - 🎓 **初创团队与高校实验室** — 降低真机实验启动成本，缩短从仿真到实物的周期
 
@@ -49,7 +49,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 - [🏗️ 系统架构](#️-系统架构)
 - [📊 数据与评估](#-数据与评估)
 - [📚 文档](#-文档)
-- [📅 TODO List](#todolist)
+- [📅 待办清单](#todolist)
 - [🤝 参与贡献](#-参与贡献)
 - [💬 社区与交流](#-社区与交流)
 - [📖 引用](#-引用)
@@ -103,7 +103,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | GO1 | 智元 GO-1 | ✅ 已支持 |
 | π 系列 | π0、π0.5 | ✅ 已支持 |
 | TAO | TAO | ✅ 已支持 |
-| _你的模型_ | — | 🔜 [接入指南](docs/guides/add-new-vla-model.zh-CN.md) |
+| _你的模型_ | — | 🔜 [接入指南](docs-cn-backup/add-new-model.zh-CN.md) |
 
 ## 🚀 快速开始
 
@@ -112,23 +112,23 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 ### 1. 环境要求
 
 - **Python ≥ 3.10**
-- **服务端**：NVIDIA GPU、CUDA、PyTorch 与模型专属依赖按所选模型配置，版本要求以各模型官方说明为准
-- **客户端**：随机器人而定——Agibot G1 需厂商 SDK，Ti5 T170C 需 ROS 2，Navi WA2 需 ROS 1；使用 Mock 仿真后端则无额外硬件门槛
-- **网络**：两侧通过 ZMQ 通信，同一局域网或互相可达即可
-- **操作系统**：Linux 是当前主要运行环境
+- **服务端（Server）**：所选模型所需的 NVIDIA 显卡、CUDA、PyTorch，以及该模型特有的依赖；各组件的版本要求以对应模型的官方文档为准。
+- **客户端（Client）**：取决于所接入的机器人：AgiBot G1 需安装厂商 SDK；中国移动灵犀（ti5_t170c）需 ROS 2；NAVIAI-WA2 需 ROS 1；若使用Mock 仿真机器人，则无需额外硬件。
+- **网络**：服务端与客户端通过 ZMQ 通信，两者处于同一局域网或网络互通即可。
+- **操作系统**：目前仅支持 Ubuntu（暂不支持 macOS）。
 
 ### 2. 安装
 
-代码在 GitHub、Gitee 与焕新社区同步开源，以 Gitee 为例，其他平台替换为对应仓库地址即可。
+代码在 GitHub、Gitee 与焕新社区同步开源，以下以 GitHub 为例，其他平台替换为对应仓库地址即可。
 
 ```bash
-git clone https://gitee.com/cmcc-tao/open-rail.git
+git clone https://github.com/CMCC-TAO/open-rail.git
 cd open-rail
 conda create -y -n open-rail python=3.10 && conda activate open-rail
 pip install -e .
 ```
 
-`pip install -e .` 同时注册 `vla-server` 与 `vla-web-client` 两个命令行入口，与下面的启动脚本等价。旧工作流也可用 `pip install -r requirements.txt`，依赖以 `pyproject.toml` 为准。
+旧工作流也可用 `pip install -r requirements.txt`，依赖以 `pyproject.toml` 为准。
 
 ### 3. 启动服务端
 
@@ -207,9 +207,9 @@ Mock 模型只返回随机动作，不能替代真实模型评测。
 
 修改 `conf/*.yaml` 中的 `robots.type` 为目标机器人适配器（`agibot_g1` / `ti5_t170c` / `navi_wa2`），并按 [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md) 配置相机话题、`action_layout` 与本体感知参数，然后同样用两条命令启动。
 
-### 混合模式：推理 + 实时遥操纠偏（10 月开源）
+### 混合模式：推理 + 实时遥操纠偏
 
-> 🚧 10 月开源，当前版本尚未包含。
+> 🚧 10 月开源
 
 在客户端中切换三种运行模式——纯推理 / 纯遥操 / 混合。混合模式下可随时**暂停 → 介入纠偏 → 恢复**，状态预对齐保证接管瞬间无跳变；纠偏轨迹与推理轨迹按时间戳对齐、并行保存，每一段人工纠偏都是可直接进训练管线的教学样本。
 
@@ -217,7 +217,7 @@ Mock 模型只返回随机动作，不能替代真实模型评测。
 
 ## 🏗️ 系统架构
 
-![OPEN-RAIL 架构图](data/media/framework.png)
+![OPEN-RAIL 架构图](data/media/architecture.zh-CN.png)
 
 OPEN-RAIL 采用 **服务端-客户端分布式架构**，推理主链路与可视化链路各自独立、互不干扰。**服务端**负责模型推理；**客户端**部署在机器人一侧，负责状态采集、任务执行、指令下发和数据记录，把机器人配置与模型推理整合成一条完整的工作流。
 
@@ -261,8 +261,7 @@ VLA 推理与控制之间存在数量级的频率差：模型出一次 action ch
 
 OPEN-RAIL 用**三条互相解耦的线程**消除这个差距：
 
-![OPEN-RAIL 三线程异步流水线](data/media/async-pipeline.png)
-<!-- 🖼️ 占位符：三线程异步流水线示意图——观测 / 推理 / 控制三条线程各按自身节奏运行，建议 1600×900、<1MB，路径 data/media/async-pipeline.png -->
+![OPEN-RAIL 三线程异步流水线](data/media/async-pipeline.zh-CN.png)
 
 三条线程各按自己的节奏跑，互不等待：
 
@@ -326,10 +325,10 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 | ⚙️ [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md)             | 完整配置项参考               |
 | 🔧 [docs/troubleshooting.zh-CN.md](docs/troubleshooting.zh-CN.md)         | 常见问题与排查               |
 | 🤖 [docs/guides/add-new-robot.zh-CN.md](docs/guides/add-new-robot.zh-CN.md)     | 如何新增机器人适配器         |
-| 🧠 [docs/guides/add-new-vla-model.zh-CN.md](docs/guides/add-new-vla-model.zh-CN.md) | 如何新增 VLA/WAM 模型适配器      |
+| 🧠 [docs-cn-backup/add-new-model.zh-CN.md](docs-cn-backup/add-new-model.zh-CN.md) | 如何新增 VLA/WAM 模型适配器      |
 | 📦 [docs/demo-running-on-dataset.zh-CN.md](docs/demo-running-on-dataset.zh-CN.md) | 端到端实例：在 AgiBotWorld 2026 数据集上运行 GR00T-N1.5 |
 
-## TODO List 📅 <a name="todolist"></a>
+## 待办清单 📅 <a name="todolist"></a>
 
 **推——模型到机器人执行**
 
@@ -437,7 +436,7 @@ Apache License 2.0，详见 [LICENSE](LICENSE)。
 - 数据集格式与工具链借鉴 [LeRobot](https://github.com/huggingface/lerobot) 的 Parquet 与视频组织约定
 - 模型适配基于各模型官方实现：GR00T（[NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)）、RDT（[thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)）、ACT、SmolVLA、GO1、π 系列、TAO
 - ACT 适配中的 DETR 部分修改自 [facebookresearch/detr](https://github.com/facebookresearch/detr)（Apache 2.0），扩散策略相关实现参考 [real-stanford/diffusion_policy](https://github.com/real-stanford/diffusion_policy)
-- 机器人适配依赖各厂商 SDK 与驱动：Agibot G1、Ti5 T170C、Navi WA2（浙江人形）
+- 机器人适配依赖各厂商 SDK 与驱动：Agibot G1、Navi WA2（浙江人形）、中国移动
 
 ---
 

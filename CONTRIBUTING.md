@@ -10,7 +10,7 @@ Please read the following first:
 - [Architecture guide](docs/architecture.md)
 - [Configuration guide](docs/configuration.md)
 - [Robot integration guide](docs/guides/add-new-robot.md)
-- [VLA model integration guide](docs/guides/add-new-vla-model.md)
+- [VLA/WAM model integration guide](docs/guides/add-new-model.md)
 
 For new robots or model adapters, it is recommended to open an issue first and describe the use case, dependencies, input/output contract, and validation method.
 
@@ -70,7 +70,7 @@ Also complete the following:
 
 See the [robot integration guide](docs/guides/add-new-robot.md) for the detailed interface requirements.
 
-## Adding a VLA model adapter
+## Adding a VLA/WAM model adapter
 
 Create a model directory under `server/models/` and implement `ModelVLA` with initialization and `infer(sequence)` interfaces:
 
@@ -80,7 +80,7 @@ Create a model directory under `server/models/` and implement `ModelVLA` with in
 - Register the model type in `run_server.py:get_model()` and `conf/models_conf.py`.
 - Record the checkpoint, upstream source, and model-specific dependency requirements in the model environment.
 
-Model code should not directly operate the ZMQ socket, robot SDK, or client API. See the [VLA model integration guide](docs/guides/add-new-vla-model.md) for the detailed contract.
+Model code should not directly operate the ZMQ socket, robot SDK, or client API. See the [VLA/WAM model integration guide](docs/guides/add-new-model.md) for the detailed contract.
 
 ## Testing and style checks
 

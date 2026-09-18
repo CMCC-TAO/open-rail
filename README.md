@@ -103,7 +103,7 @@ Smoothing happens at the **framework level** — no model changes, no training a
 | GO1 | AgiBot GO-1 | ✅ Supported |
 | π series | π0, π0.5 | ✅ Supported |
 | TAO | TAO | ✅ Supported |
-| _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-vla-model.md) |
+| _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-model.md) |
 
 ## 🚀 Quick Start
 
@@ -112,23 +112,23 @@ All commands below are run from the repository root.
 ### 1. Prerequisites
 
 - **Python ≥ 3.10**
-- **Server**: the NVIDIA GPU, CUDA, PyTorch, and model-specific dependencies required by the chosen model; version requirements follow each model's official documentation
-- **Client**: depends on the robot — Agibot G1 needs the vendor SDK, Ti5 T170C needs ROS 2, Navi WA2 needs ROS 1; the Mock simulation backend has no extra hardware requirements
-- **Network**: the two sides communicate over ZMQ; being on the same LAN or mutually reachable is enough
-- **OS**: Linux is the primary runtime environment today
+- **Server**: the NVIDIA GPU, CUDA, PyTorch, and any model-specific dependencies required by your chosen model; For version requirements, refer to that model's official documentation.
+- **Client**: Depends on the robot: AgiBot G1 requires the vendor SDK; ChinaMobile Lingxi(ti5_t170c) requires ROS 2; NAVIAI-WA2 requires ROS 1.;The Mock simulation backend requires no additional hardware.
+- **Network**: The server and client communicate over ZMQ; a shared LAN or mutual network reachability is sufficient.
+- **OS**: Ubuntu (macOS is not currently supported)
 
 ### 2. Install
 
-The code is open-source in sync on GitHub, Gitee, and the Huanxin Community. The example below uses Gitee; substitute the matching repository URL for the others.
+The code is open-source in sync on GitHub, Gitee, and the Huanxin Community. The example below uses GitHub; substitute the matching repository URL for the others.
 
 ```bash
-git clone https://gitee.com/cmcc-tao/open-rail.git
+git clone https://github.com/CMCC-TAO/open-rail.git
 cd open-rail
 conda create -y -n open-rail python=3.10 && conda activate open-rail
 pip install -e .
 ```
 
-`pip install -e .` registers two console entry points, `vla-server` and `vla-web-client`, equivalent to the launch scripts below. Older workflows can still use `pip install -r requirements.txt`; dependencies follow `pyproject.toml`.
+Older workflows can still use `pip install -r requirements.txt`; dependencies follow `pyproject.toml`.
 
 ### 3. Start the server
 
@@ -262,7 +262,6 @@ VLA inference and control are separated by an order-of-magnitude frequency gap: 
 OPEN-RAIL closes that gap with **three decoupled threads**:
 
 ![OPEN-RAIL three-thread asynchronous pipeline](data/media/async-pipeline.png)
-<!-- 🖼️ Placeholder: three-thread asynchronous pipeline diagram — the observation / inference / control threads each run at their own pace; recommended 1600×900, <1MB, path data/media/async-pipeline.png -->
 
 Each thread runs at its own pace, and none of them wait:
 
@@ -326,7 +325,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 | ⚙️ [docs/configuration.md](docs/configuration.md) | Full configuration reference |
 | 🔧 [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues and fixes |
 | 🤖 [docs/guides/add-new-robot.md](docs/guides/add-new-robot.md) | How to add a robot adapter |
-| 🧠 [docs/guides/add-new-vla-model.md](docs/guides/add-new-vla-model.md) | How to add a VLA/WAM model adapter |
+| 🧠 [docs/guides/add-new-model.md](docs/guides/add-new-model.md) | How to add a VLA/WAM model adapter |
 | 📦 [docs/demo-running-on-dataset.md](docs/demo-running-on-dataset.md) | End-to-end example: running GR00T-N1.5 on the AgiBotWorld 2026 dataset |
 
 ## TODO List 📅 <a name="todolist"></a>
@@ -418,7 +417,7 @@ Cite the paper (this repository is published under the name **VLA-RAIL** in the 
 
 ```bibtex
 @misc{zhao2025vlarailrealtimeasynchronousinference,
-  title={VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots},
+  title={VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA/WAM Models and Robots},
   author={Yongsheng Zhao and Lei Zhao and Baoping Cheng and Gongxin Yao and Xuanzhang Wen and Han Gao},
   year={2025},
   eprint={2512.24673},

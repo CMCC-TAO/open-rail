@@ -1,6 +1,6 @@
-# VLA Model Offline Evaluation Tool
+# VLA/WAM Model Offline Evaluation Tool
 
-This tool is used for offline evaluation of VLA models, helping analyze model prediction accuracy by visualizing comparisons between model-predicted action data and ground truth data.
+This tool is used for offline evaluation of VLA/WAM models, helping analyze model prediction accuracy by visualizing comparisons between model-predicted action data and ground truth data.
 
 ## Features
 
