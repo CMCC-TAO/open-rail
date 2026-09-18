@@ -90,8 +90,13 @@ const items = tutorials.map((t) => ({ ...t, embed: toEmbedUrl(t.youtube || t.bil
         const f = s.querySelector('iframe[data-src]');
         if (!f || !f.dataset.src) return;
         if (active) {
-          // Load only when the iframe isn't already showing this video.
-          if (f.getAttribute('src') !== f.dataset.src) f.src = f.dataset.src;
+          // Load and autoplay silently when shown. Bilibili uses `muted=1`,
+          // YouTube uses `mute=1` — required so playback starts without sound.
+          const base = f.dataset.src;
+          const sep = base.includes('?') ? '&' : '?';
+          const muteParam = base.includes('player.bilibili.com') ? 'muted=0' : 'mute=0';
+          const playUrl = base + sep + 'autoplay=0&' + muteParam;
+          if (f.getAttribute('src') !== playUrl) f.src = playUrl;
         } else if (f.getAttribute('src') !== 'about:blank') {
           // Stop off-screen playback with a reliable blank document.
           f.src = 'about:blank';
