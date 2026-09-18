@@ -304,8 +304,8 @@ class VLAVisualizationApp {
             case 'config':
                 this.handleConfig(data.data);
                 break;
-            case 'joint_data':
-                this.handleJointData(data.data);
+            case 'joint_data_batch':
+                this.handleJointDataBatch(data.data);
                 break;
             case 'pong':
                 // 心跳响应
@@ -322,46 +322,56 @@ class VLAVisualizationApp {
         // 这里可以根据配置动态调整界面
     }
 
-    handleJointData(jointData) {
+    handleJointDataBatch(batchData) {
         if (this.isPaused) return;
+        if (!Array.isArray(batchData) || batchData.length === 0) return;
 
-        // 新的数据格式：每次接收一个数据包，包含tab、type、x、joints_y
-        const { tab, type, x, joints_y } = jointData;
+        const touchedTabs = new Set();
 
-        // 初始化数据缓存结构
-        if (!this.chartDataBuffer[tab]) {
-            this.chartDataBuffer[tab] = {};
+        for (const jointData of batchData) {
+            if (!jointData) continue;
+            const { tab, type, x, joints_y } = jointData;
+            if (!tab || !type || !Array.isArray(joints_y)) continue;
+
+            // 初始化数据缓存结构
+            if (!this.chartDataBuffer[tab]) {
+                this.chartDataBuffer[tab] = {};
+            }
+            if (!this.chartDataBuffer[tab][type]) {
+                this.chartDataBuffer[tab][type] = [];
+            }
+
+            // 添加新数据点
+            const dataPoint = {
+                x: x,
+                joints_y: joints_y,
+                timestamp: Date.now()
+            };
+
+            this.chartDataBuffer[tab][type].push(dataPoint);
+            this.chartDataBuffer[tab][type] = this.chartDataBuffer[tab][type].slice(-this.maxChartPoints);
+            touchedTabs.add(tab);
         }
-        if (!this.chartDataBuffer[tab][type]) {
-            this.chartDataBuffer[tab][type] = [];
-        }
-
-        // 添加新数据点
-        const dataPoint = {
-            x: x,
-            joints_y: joints_y,
-            timestamp: Date.now()
-        };
-
-        this.chartDataBuffer[tab][type].push(dataPoint);
-
-        this.chartDataBuffer[tab][type] = this.chartDataBuffer[tab][type].slice(-this.maxChartPoints);
-
-        const tbuf = this.chartDataBuffer[tab];
-        const actionBuf = tbuf['action'];
-        const stateBuf = tbuf['state'];
-        const originBuf = tbuf['origin'];
 
         const spanOf = (buf) => (buf && buf.length >= 2) ? (buf[buf.length - 1].x - buf[0].x) : 0;
         const rightOf = (buf) => (buf && buf.length) ? buf[buf.length - 1].x : -Infinity;
 
-        const span = Math.max(spanOf(actionBuf), spanOf(stateBuf));
-        const right = Math.max(rightOf(actionBuf), rightOf(stateBuf), rightOf(originBuf));
+        for (const tab of touchedTabs) {
+            const tbuf = this.chartDataBuffer[tab];
+            if (!tbuf) continue;
 
-        if (Number.isFinite(right)) {
-            this.xRightBound = right;
-            if (span > 0) {
-                this.xLeftBound = right - span;
+            const actionBuf = tbuf['action'];
+            const stateBuf = tbuf['state'];
+            const originBuf = tbuf['origin'];
+
+            const span = Math.max(spanOf(actionBuf), spanOf(stateBuf));
+            const right = Math.max(rightOf(actionBuf), rightOf(stateBuf), rightOf(originBuf));
+
+            if (Number.isFinite(right)) {
+                this.xRightBound = Math.max(this.xRightBound, right);
+                if (span > 0) {
+                    this.xLeftBound = this.xRightBound - span;
+                }
             }
         }
 

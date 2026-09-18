@@ -34,6 +34,8 @@ def get_a2d_config():
     config.camera.names = {'head': 'head',
                         'hand_left': 'hand_left_fisheye' if 'hand' in config.hand_type else 'hand_left',
                         'hand_right': 'hand_right_fisheye' if 'hand' in config.hand_type else 'hand_right'}
+    # non-ref cameras are fetched with a persistent thread pool
+    config.camera.non_ref_fetch_workers = 2
     config.proprio_names = ['arm', 'hand' if 'hand' in config.hand_type else 'gripper', 'head', 'waist']
     config.gripper_freq = 40
     config.head_freq = 40

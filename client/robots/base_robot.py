@@ -10,6 +10,12 @@ try:
 except ImportError:
     ruckig = None
 
+# Lightweight FPS stats: number of warmup frames to discard and target FPS
+# used to estimate the theoretical frame count
+FPS_STATS_WARMUP_FRAMES = 5
+FPS_STATS_TARGET_FPS = 30.0
+
+
 class RobotBase():
     def __init__(self, config):
         self.robot = None
@@ -22,6 +28,14 @@ class RobotBase():
         self.action_dim, self.joint_indices, self.step_indices = parse_action_layout(self.action_layout)
         self.state_dim = max((v['end'] for v in self.action_layout.values()), default=0)
         self.current_state = np.zeros(self.state_dim)
+
+        # Lightweight FPS stats: counters plus two timestamps only, no per-frame data
+        self._fps_warmup_left = FPS_STATS_WARMUP_FRAMES
+        self._fps_stats_start = None
+        self._fps_last_frame_time = None
+        self._fps_actual_frames = 0
+        self._fps_stats_logged = False
+        self._install_fps_stats()
 
     def control_robot(self, data):
         """
@@ -57,6 +71,7 @@ class RobotBase():
 
         cfg = getattr(self, 'cfg', {})
         interval = float(cfg.get('manual_arm_interval', 0.01)) if hasattr(cfg, 'get') else 0.01
+
         for action in ('arm', 'gripper', 'hand', 'hand_as_gripper'):
             left, right = data.get(f'l_{action}'), data.get(f'r_{action}')
             if left is None and right is None:
@@ -83,7 +98,7 @@ class RobotBase():
                 command = cfg.get('hand_type', action) if action == 'gripper' else action
                 self.execute_action({command: target_pose.tolist()})
 
-        for action in ('head', 'waist', 'body', 'wheel', 'leg'):
+        for action in ('head', 'waist', 'body'):
             if action not in data:
                 continue
             current_pose = self._current_pose(action)
@@ -92,16 +107,19 @@ class RobotBase():
                     action: self._target_pose(current_pose, data[action]).tolist()
                 })
 
+        for action in ('wheel', 'leg'):
+            if action in data and action in self.action_layout:
+                self.execute_action({action: list(data[action])})
+
     def _current_pose(self, action):
         layout = self.action_layout.get(action)
         if layout is None:
             return None
-        current_obs=None
-        while current_obs==None:
-            current_obs = self.retrieve_observation() # update current_state
+        deadline = time.monotonic() + 0.5
+        while self.retrieve_observation() is None:  # update current_state
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Timed out waiting for current robot state')
             time.sleep(0.01)
-        if current_obs is None:
-            return None
         if self.current_state is None:
             raise RuntimeError('current robot state is unavailable')
         return np.asarray(self.current_state, dtype=float)[layout['start']:layout['end']].copy()
@@ -219,4 +237,73 @@ class RobotBase():
         return trajs
 
     def close(self):
+        """Release robot resources.
+
+        ``close`` is wrapped at construction time, so the FPS stats are logged
+        automatically once shutdown finishes; subclasses need not care about it.
+        """
         pass
+
+    # ------------------------------------------------------------------
+    # Lightweight FPS stats
+    # ------------------------------------------------------------------
+    def _install_fps_stats(self):
+        """Wrap ``retrieve_observation`` / ``close`` to collect FPS stats.
+
+        One-shot wrapping on the instance, subclass implementations untouched:
+        - retrieve_observation: one integer increment plus one timestamp per frame;
+        - close: emits the stats log on shutdown (``finally`` keeps it on errors).
+        """
+        original_retrieve = self.retrieve_observation
+        original_close = self.close
+
+        def retrieve_observation(*args, **kwargs):
+            obs = original_retrieve(*args, **kwargs)
+            if obs is not None:
+                self._record_observation_frame()
+            return obs
+
+        def close(*args, **kwargs):
+            try:
+                return original_close(*args, **kwargs)
+            finally:
+                self._log_fps_stats()
+
+        self.retrieve_observation = retrieve_observation
+        self.close = close
+
+    def _record_observation_frame(self):
+        """Record one observation frame: start timing once the first N frames are discarded."""
+        if self._fps_warmup_left > 0:
+            self._fps_warmup_left -= 1
+            if self._fps_warmup_left == 0:
+                self._fps_stats_start = time.perf_counter()
+            return
+        self._fps_actual_frames += 1
+        self._fps_last_frame_time = time.perf_counter()
+
+    def _log_fps_stats(self):
+        """Log runtime, theoretical frames, actual frames and drop rate on close."""
+        if self._fps_stats_logged:
+            return
+        self._fps_stats_logged = True
+
+        if self._fps_stats_start is None:
+            self.logger.info('[FPS stats] fewer than %d observation frames collected '
+                             '(warmup frames not fully discarded), no stats available',
+                             FPS_STATS_WARMUP_FRAMES)
+            return
+
+        elapsed = (self._fps_last_frame_time or time.perf_counter()) - self._fps_stats_start
+        actual_frames = self._fps_actual_frames
+        theoretical_frames = elapsed * FPS_STATS_TARGET_FPS
+        # Clamped at 0: a negative value would only mean the observation rate is
+        # above the target FPS, which is not a frame drop.
+        dropped_frames = max(theoretical_frames - actual_frames, 0.0)
+        drop_rate = (dropped_frames / theoretical_frames * 100.0) if theoretical_frames > 0 else 0.0
+        self.logger.info(
+            '[FPS stats] after discarding first %d frames: runtime=%.3fs | '
+            'theoretical_frames=%.1f (%g FPS) | actual_frames=%d | drop_rate=%.2f%%',
+            FPS_STATS_WARMUP_FRAMES, elapsed, theoretical_frames,
+            FPS_STATS_TARGET_FPS, actual_frames, drop_rate,
+        )

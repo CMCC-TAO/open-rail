@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VLA-RAIL Web Client</title>
+  <title>Open-RAIL Web Client</title>
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
@@ -17,8 +17,9 @@
       <div id="status-badge" class="status-badge stopped">STOPPED</div>
     </div>
     <div class="topbar-center">
-      <span class="logo">VLA-RAIL</span>
-      <span class="subtitle">Web Client Dashboard</span>
+      <a class="logo" id="topbar-logo" href="https://arxiv.org/abs/2512.24673" target="_blank" rel="noopener noreferrer" title="Open-RAIL — Paper: arXiv:2512.24673 (opens in new tab)" aria-label="Open-RAIL — arXiv:2512.24673 (opens in new tab)">Open-RAIL</a>
+
+      <span class="subtitle">VLA/WAM Client Dashboard</span>
     </div>
     <div class="topbar-right">
       <!-- Resource monitoring pills moved to topbar-right, positioned before WS indicator -->
@@ -143,8 +144,16 @@
           <div class="recording-controls">
             <!-- <div class="recording-control-column"> -->
               <button class="btn btn-sm btn-success" id="btn-recording-startstop"><i class="fas fa-play"></i> Start</button>
-              <button class="btn btn-sm btn-danger" id="btn-recording-pauseresume"><i class="fas fa-pause"></i> Pause</button>
+              <!-- <button class="btn btn-sm btn-danger" id="btn-recording-pauseresume"><i class="fas fa-pause"></i> Pause</button> -->
             <!-- </div> -->
+            <div class="recording-controls-sep"></div>
+            <div id="recording-timer" class="recording-timer recording-timer-stopped" aria-live="polite" title="Recording timer">
+              <!-- <i class="fas fa-stopwatch recording-timer-icon" aria-hidden="true"></i> -->
+              <div class="recording-timer-content">
+                <div id="recording-timer-time" class="recording-timer-time">00:00</div>
+                <div id="recording-timer-status" class="recording-timer-status">stopped</div>
+              </div>
+            </div>
             <div class="recording-controls-sep"></div>
             <!-- <div class="recording-control-column"> -->
               <label class="recording-option-item"><input type="checkbox" id="chk-record-auto" />Auto</label>
@@ -180,17 +189,18 @@
               </div>
               <div class="recording-file-row">
                 <span class="recording-file-label">Counts: <span id="eval-log-count" class="eval-count-badge">0</span></span>
-                <button class="btn btn-xs" id="btn-log-clear" title="Clear all current records and start a new session">New Session</button>
+                <!-- <button class="btn btn-xs" id="btn-log-clear" title="Clear all current records and start a new session">New Session</button> -->
               </div>
               <div class="eval-log-table-wrap">
                 <table class="eval-log-table">
                   <thead>
                     <tr>
                       <th class="col-id" title="Record ID">ID</th>
-                      <th class="col-task" title="Task Index and Sub-Task Index">Task</th>
-                      <th class="col-dur" title="Duration in seconds (hover a row for start time)">Dur[s]</th>
+                      <th class="col-task" title="Sub-Task Index">ST</th>
+                      <!-- <th class="col-dur" title="Duration in seconds (hover a row for start time)">Dur[s]</th> -->
+                      <th class="col-dur" title="Sub-task execute duration in seconds">Dur</th>
                       <th class="col-score" title="Evaluation score (select to score)">Score</th>
-                      <th class="col-note" title="Notes for this record">Note</th>
+                      <th class="col-note" title="Note for evaluation record">Note</th>
                       <th class="col-del"></th>
                     </tr>
                   </thead>
@@ -406,11 +416,15 @@
               <input id="chk-lang-auto-mode" type="checkbox" />
               <span>Auto Mode</span>
             </label>
+            <label class="lang-auto-start-wrap" title="Start SubTask id when Auto Mode starts">
+              <span class="lang-threshold-label">Start</span>
+              <select id="sel-lang-auto-start-subtask" class="input-text"></select>
+            </label>
             <label class="lang-threshold-wrap" title="Task progress threshold for auto mode">
               <span class="lang-threshold-label">Thresh</span>
               <input id="inp-lang-threshold" class="input-text" type="number" step="0.01" disabled />
             </label>
-            <label class="lang-threshold-wrap" title="Sliding window size for task progress average">
+            <label class="lang-win-size-wrap" title="Sliding window size for task progress average">
               <span class="lang-threshold-label">Win-Size</span>
               <input id="inp-lang-win-size" class="input-text" type="number" min="1" step="1" disabled />
             </label>
@@ -443,7 +457,7 @@
             <!-- Current instruction + send -->
             <div class="lang-cmd-col lang-cmd-col-send">
               <div class="section-title">Instruction</div>
-              <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…"></textarea>
+              <textarea id="lang-cmd-text" class="lang-cmd-textarea" rows="3" placeholder="Select or type instruction…" disabled></textarea>
               <div class="lang-cmd-btn-row">
                 <button class="btn btn-sm" id="btn-lang-edit" title="Update the selected sub-task instruction"><i class="fas fa-rotate"></i> Upd</button>
                 <button class="btn btn-sm" id="btn-lang-add" title="Add a new sub-task to the current task"><i class="fas fa-plus"></i> Add</button>
@@ -601,7 +615,7 @@
 
   <!-- ═══════════════════ FOOTER ═══════════════════ -->
   <footer class="footer-bar">
-    © 2025-2026 VLA-RAIL. All rights reserved.
+    © 2025-2026 Open-RAIL. China Mobile (Hangzhou) Information Technology Co., Ltd. All rights reserved.
   </footer>
 
   <!-- ═══════════════════ TOAST ═══════════════════ -->

@@ -3,6 +3,9 @@ import time
 import logging
 import threading
 import numpy as np
+
+from queue import Queue, Empty, Full
+from typing import Optional
 from ml_collections import ConfigDict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,10 +19,11 @@ from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.core.visualize_server import VisualizeServer
 from client.core.data_record_manager import DataRecordManager
+from client.core.shared_memory_manager import SharedMemoryManager
 from client.robots.base_robot import RobotBase
 
 
-class VLAClientAsync():
+class VLAClient():
     """VLA (Vision-Language-Action) Client for real-time robot control.
     
     This class manages the complete pipeline for VLA-based robot control, including:
@@ -28,6 +32,44 @@ class VLAClientAsync():
     - Trajectory generation and fitting
     - Real-time robot control
     - Data recording for dataset creation
+
+    Core functionalities and key methods include:
+    - Pipeline Management: `start()`, `pause()`, `resume()`, and `close()` to control the lifecycle of observation, inference, control, and visualization threads.
+    - Data Recording: `start_recording()`, `stop_recording()`, and `pause_recording()` for capturing observation and action data to build datasets.
+    - Task Management: `reset_task()` and `reset_sub_task()` to handle language instructions and task progression.
+    - Status Monitoring: Properties like `thread_status`, `runtime_status`, and `server_status` to monitor the real-time state of the system.
+
+    Example:
+        >>> config = load_config("config.yaml")
+        >>> robot = MyRobot()
+        >>> client = VLAClient(
+        ...     config=config,
+        ...     realtime_data_manager=rdm,
+        ...     inter_chunk_fuser=fuser,
+        ...     intra_chunk_smoother=smoother,
+        ...     task_language_manager=task_mgr,
+        ...     vla_zmq_client=zmq_client,
+        ...     robot=robot
+        ... )
+        >>> client.start()
+        >>> client.start_recording()
+        >>> # ... perform robot tasks ...
+        >>> client.stop_recording()
+        >>> client.close()
+
+    Args:
+        config (ConfigDict): Configuration dictionary containing all system parameters.
+        realtime_data_manager (RealtimeDataManager): Real-time data manager for handling observation and action data.
+        inter_chunk_fuser (InterChunkFuser): Inter-chunk fuser for blending consecutive action chunks smoothly.
+        intra_chunk_smoother (IntraChunkSmoother): Intra-chunk smoother for action smoothing and fitting within a single chunk.
+        task_language_manager (TaskLanguageManager): Manager for handling task language instructions and sub-task progression.
+        vla_zmq_client (ZMQClient): ZMQ client for communication with the VLA inference server.
+        robot (RobotBase): Robot interface for observation collection and action execution.
+
+    Notes:
+        - Threading: This class internally manages multiple threads (observation, inference, control, and visualization). Ensure thread-safe operations when accessing shared resources externally.
+        - Resource Cleanup: It is crucial to call `close()` to properly stop all running threads, close ZMQ connections, and release system resources before the object is destroyed to prevent zombie threads and memory leaks.
+        - Network Dependency: Real-time inference heavily depends on the connection quality with the VLA server. Network latency or timeouts may cause the control loop to drop frames or pause temporarily.
     """
     def __init__(self, config: ConfigDict,
                 realtime_data_manager: RealtimeDataManager,
@@ -36,15 +78,17 @@ class VLAClientAsync():
                 task_language_manager: TaskLanguageManager,
                 vla_zmq_client: ZMQClient,
                 robot: RobotBase):
-        """Initialize the VLA Client.
-        
+        """
+        Initialize the controller/manager instance with required configurations and components.
+
         Args:
-            config (ConfigDict): Configuration dictionary containing all system parameters
-            realtime_data_manager (RealtimeDataManager): Real-time data manager for handling observation and action data
-            intra_chunk_smoother (IntraChunkSmoother): Intra-chunk smoother for action smoothing and fitting
-            zmq_client (ZMQClient): ZMQ client for communication with VLA inference server
-            vis_action_cams_zmq_client (ZMQClient): ZMQ client for communication with camera-action visualization server
-            robot: Robot interface for observation collection and action execution
+            config (ConfigDict): The main configuration dictionary for the system.
+            realtime_data_manager (RealtimeDataManager): Manager for handling real-time data streams.
+            inter_chunk_fuser (InterChunkFuser): Fuser for integrating data across different chunks.
+            intra_chunk_smoother (IntraChunkSmoother): Smoother for processing data within a single chunk.
+            task_language_manager (TaskLanguageManager): Manager for handling task-level language instructions.
+            vla_zmq_client (ZMQClient): ZeroMQ client for Vision-Language-Action (VLA) model communication.
+            robot (RobotBase): The base robot instance to be controlled.
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
@@ -54,6 +98,12 @@ class VLAClientAsync():
         self.task_language_manager = task_language_manager
         self.vla_zmq = vla_zmq_client
         self.robot = robot
+        self.intra_chunk_smoother.set_action_layout(action_layout=self.robot.config.action_layout)
+        # Initialize the dataset writer with the provided recording configuration
+        self.shared_memory_manager = SharedMemoryManager(ring_size=30)
+        self.data_record_manager = DataRecordManager(record_config=self.config.record)
+        # Create visualization WebSocket server for live image and trajectory updates
+        self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
         self.is_running = False
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
@@ -61,73 +111,82 @@ class VLAClientAsync():
         
         # Define image preprocess function
         self.update_preprocess_func()
-        # if self.config.vision.preprocess.method != 'none':
-        #     preprocess_func = getattr(misc, self.config.vision.preprocess.method)
-        #     self._preprocess_func = lambda img: preprocess_func(
-        #         img,
-        #         target_height=self.config.vision.preprocess.height,
-        #         target_width=self.config.vision.preprocess.width,
-        #         keep_ratio=self.config.vision.preprocess.keep_ratio)
-        # else:
-        #     self._preprocess_func = None
 
         self.observe_thread = threading.Thread(target=self._observe_thread_fun, daemon=True)
+        self.process_observe_thread = threading.Thread(target=self._process_observe_thread_fun, daemon=True)
         self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
         self.control_thread_timer = MultiThreadTimer(self.config.controller.period, self._control_thread_fun)
-        self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
-        
+        # self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
+
         self.show_thread_lock = threading.Lock()
 
+        # Raw observation queue: no frame dropping in VLA client pipeline.
+        self._raw_observe_queue = Queue(maxsize=2)
+        self._raw_observe_shm_cache = {}
+
         # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
-        self._img_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="img_enc")
+        self._img_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="img_enc")
 
         # Inference variables
         self.set_observe_period(speed=self.config.controller.speed)
         self._request_id = 0
 
-        # Initialize the dataset writer with the provided recording configuration
-        self.data_record_manager = DataRecordManager(record_config=self.config.record)
-
-        # Create visualization WebSocket server for live image and trajectory updates
-        self.visualize_server = VisualizeServer(visualize_config=self.config.visualize)
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.image_process_time = 0.0
         self.current_prob_progress = 0.0
         # self.info_obs, self.info_act = {}, {}
         self.camera_shape_dict = None
-        # self.debug_info = 'The debug information or trace information will be displayed here. \nPress "Enter" for more commands.'
-    #################### VLA Client APIs ####################
+        self.control_thread_timer.start()
+        self.logger.info('VLAClient initialized.')
+
+    ######################### VLAClient APIs #########################
     def start_observe(self):
+        """
+        Starts the observation process by activating the observation thread.
+
+        This method sets the running and observation thread flags to True, and starts the observation thread if it is not currently alive.
+
+        Returns:
+            None
+        """
         self.is_running = True
         self.is_observe_thread_running = True
         if not self.observe_thread.is_alive():
             self.observe_thread.start()
+        if not self.process_observe_thread.is_alive():
+            self.process_observe_thread.start()
+        self.logger.info('VLAClient observe thread started.')
 
     def stop_observe(self):
         self.is_observe_thread_running = False
+        self.logger.info('VLAClient observe thread stopped.')
 
     def start_inference(self):
         self.is_running = True
         self.is_inference_thread_running = True
         if not self.inference_thread.is_alive():
             self.inference_thread.start()
+        self.logger.info('VLAClient inference thread started.')
 
     def stop_inference(self):
         self.is_inference_thread_running = False
+        self.logger.info('VLAClient inference thread stopped.')
 
     def start_control(self):
         self.is_running = True
         self.is_control_thread_running = True
         if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
+        # start new task in task_language manager for auto mode
+        self.task_language_manager.new_task()
 
     def stop_control(self):
         self.is_control_thread_running = False
     
     def set_control_period(self, period) -> None:
         self.control_thread_timer.set_interval(period)
-        self.visualize_thread_timer.set_interval(period)
+        # self.visualize_thread_timer.set_interval(period)
     
     def set_observe_period(self, speed) -> None:
         self.observe_period = 1.0 / speed / self.config.controller.raw_fps
@@ -138,25 +197,14 @@ class VLAClientAsync():
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
 
-    def update_camera_shape(self) -> dict:
-        """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
-        if not hasattr(self, "data_record_manager") or self.data_record_manager is None:
-            self.logger.warning("data_record_manager is not initialized, skip update_camera_shape.")
-            return {}
-
-        # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
-        self.data_record_manager.update_camera_shape_dict(self.camera_shape_dict)
-        self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
-        return self.camera_shape_dict
-
     def start_visualize(self):
         self.visualize_server.start_server()
-        if not self.visualize_thread_timer.is_alive():
-            self.visualize_thread_timer.start()
+        # if not self.visualize_thread_timer.is_alive():
+        #     self.visualize_thread_timer.start()
     def stop_visualize(self):
         self.visualize_server.stop_server()
-        if self.visualize_thread_timer.is_alive():
-            self.visualize_thread_timer.stop(timeout=1.0)
+        # if self.visualize_thread_timer.is_alive():
+        #     self.visualize_thread_timer.stop(timeout=1.0)
 
     def start(self):
         """Start the VLA client and all associated threads.
@@ -194,15 +242,53 @@ class VLAClientAsync():
         self.logger.info('VLA client resumed.')
 
     def stop(self):
-        """Backward-compatible alias of pause()."""
-        self.pause()
+        self.stop_observe()
+        self.stop_inference()
+        self.stop_control()
+        self.stop_visualize()
         time.sleep(self.realtime_data_manager.avg_infer_time * 1.5) # make sure inference thread is stopped.
         self.image_process_time = 0.0
         self.task_language_manager.reset()
         self.realtime_data_manager.clear()
+        self._clear_raw_observe_queue()
         with self.show_thread_lock:
             self.current_prob_progress = 0.0
+        self.logger.info('VLA client stopped.')
         # TODO: Robot reset
+
+    def start_recording(self) -> str:
+        # self._update_camera_shape()
+        self.config.record.switch = True
+        while self.camera_shape_dict is None:
+            time.sleep(0.01)
+        task_dir = self.data_record_manager.start_recording(task_id=self.config.language.task_id, 
+                                                        sub_task_id=self.config.language.sub_task_id,
+                                                        camera_shape=self.camera_shape_dict)
+        return task_dir
+
+    def stop_recording(self):
+        self.config.record.switch = False
+        self.data_record_manager.stop_recording()
+
+    def pause_recording(self):
+        if self.config.record.switch:
+            self.data_record_manager.pause_recording()
+
+    def resume_recording(self):
+        if self.config.record.switch:
+            self.data_record_manager.resume_recording()
+    
+    def reset_sub_task(self):
+        self.task_language_manager.reset_sub_task()
+
+    def reset_task(self):
+        self.task_language_manager.new_task()
+
+    def delete_recording_item(self, episode_id: Optional[str] = None, record_id: Optional[int] = None):
+        if episode_id is not None:
+            return self.data_record_manager.lerobot_recorder.delete_episode(episode_id=episode_id)
+        if record_id is not None:
+            return self.data_record_manager.eval_recorder.delete_record(record_id=record_id)
 
     def close(self):
         """Close the VLA client and clean up all resources.
@@ -221,59 +307,173 @@ class VLAClientAsync():
         
         if self.observe_thread.is_alive():
             self.observe_thread.join(timeout=1.0)
+        if self.process_observe_thread.is_alive():
+            self.process_observe_thread.join(timeout=1.0)
         if self.inference_thread.is_alive():
             self.inference_thread.join(timeout=1.0)
 
         # Stop and join timer threads
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
-        if self.visualize_thread_timer.is_alive():
-            self.visualize_thread_timer.stop(timeout=1.0)
+        # if self.visualize_thread_timer.is_alive():
+        #     self.visualize_thread_timer.stop(timeout=1.0)
         
-        if hasattr(self, 'data_record_manager') and self.data_record_manager is not None:
-            self.data_record_manager.close()
+        self._clear_raw_observe_queue()
+        SharedMemoryManager.close_reader(self._raw_observe_shm_cache)
+        self._img_executor.shutdown(wait=False)
 
+        self.data_record_manager.close()
+        self.shared_memory_manager.close()
         self.vla_zmq.close()
+        self.robot.close()
         self.visualize_server.stop_server()
 
-        if hasattr(self, '_img_executor') and self._img_executor is not None:
-            self._img_executor.shutdown(wait=False)
-
-        self.logger.info('Inference client closed.')
+        self.logger.info('VLA client closed.')
     def reset(self):
         self.image_process_time = 0.0
-    #################### VLA Client Inline functions ####################
+    
+    @property
+    def thread_status(self):
+        return {
+        "observe_running": self.is_observe_thread_running,
+        "inference_running": self.is_inference_thread_running,
+        "control_running": self.is_control_thread_running
+        }
+
+    @property
+    def runtime_status(self):
+        status = {
+            "img_proc_time": self.image_process_time,
+            "current_prob_progress": self.current_prob_progress
+        }
+        status.update(self.realtime_data_manager.runtime_status)
+        return status
+
+    @property
+    def language_status(self):
+        return self.task_language_manager.status
+    
+    @property
+    def server_status(self):
+        return self.vla_zmq.status
+
+    ####################========== VLA Client Inline functions ==========####################
+
+    # def _update_camera_shape(self) -> dict:
+    #     """Pop one observation from RDM and update recorder camera shapes by runtime image size."""
+    #     if not hasattr(self, "data_record_manager") or self.data_record_manager is None:
+    #         self.logger.warning("data_record_manager is not initialized, skip update_camera_shape.")
+    #         return {}
+
+    #     # print(f"Debug: camera_shape_dict: {camera_shape_dict}")
+    #     self.data_record_manager.update_camera_shape_dict(self.camera_shape_dict)
+    #     self.logger.info(f"Update camera shape from runtime observation: {self.camera_shape_dict}")
+    #     return self.camera_shape_dict
+
+    def _clear_raw_observe_queue(self):
+        while True:
+            try:
+                self._raw_observe_queue.get_nowait()
+                self._raw_observe_queue.task_done()
+            except Empty:
+                break
+
     def _observe_thread_fun(self):
-        """Observation thread function for continuous data collection from robot sensors.
-        
-        This method runs in a separate thread and continuously:
-        - Retrieves observations from the robot
-        - Processes the observation data
-        - Adds processed data to the real-time data manager
-        - Records data if recording is enabled
+        """Observation producer thread.
+
+        This thread only retrieves observations from robot and enqueues them,
+        so retrieval cadence is not blocked by image processing/encoding cost.
+        """
+        retrieve_try_num = 1.0
+        while self.is_running:
+            if not self.is_observe_thread_running:
+                time.sleep(0.1)
+                continue
+            else:
+                time.sleep(0.01/retrieve_try_num)
+                retrieve_try_num = retrieve_try_num + 1.0
+
+            observations = self.robot.retrieve_observation()
+            if observations is not None:
+                if self.camera_shape_dict is None:
+                    cam_items = [(key, value) for key, value in observations.items() if 'cam.' in key]
+                    if cam_items:
+                        self.camera_shape_dict = {key: img.shape for key, img in cam_items}
+                        camera_dtype_dict = {key: img.dtype for key, img in cam_items}
+                        self.shared_memory_manager.init_pool(
+                            self.camera_shape_dict,
+                            camera_dtypes=camera_dtype_dict,
+                        )
+                encoded_observations = self.shared_memory_manager.encode_observation(observations)
+                try:
+                    self._raw_observe_queue.put_nowait(encoded_observations)
+                except Full:
+                    try:
+                        self._raw_observe_queue.get_nowait()
+                        self._raw_observe_queue.task_done()
+                    except Empty:
+                        pass
+                    self._raw_observe_queue.put_nowait(encoded_observations)
+                retrieve_try_num = 1.0
+
+    def _process_observe_thread_fun(self):
+        """Observation consumer thread.
+
+        This thread processes raw observations and pushes processed data to RDM/recorder.
+        No frame dropping is applied in this queue pipeline.
         """
         while self.is_running:
             if not self.is_observe_thread_running:
                 time.sleep(0.001)
                 continue
-            observations = self.robot.retrieve_observation()
-            # observations keys=dict_keys(['ref_timestamp', 'cam.hand_left', 'cam.hand_right', 'cam.head', 'obs.state', 'action'])
-            # print(f"Debug: observations keys={observations.keys()}")
-            # timestamp_1 = time.time()
-            # timestamp_2 = None
-            if observations is not None:
-                if self.config.record.switch :
-                    self.data_record_manager.add_observation_async(observations, self.task_language_manager.get_current_language(), time.perf_counter())
-                    # timestamp_2 = time.time()
-                    # print(f"Debug: record time={(timestamp_2-timestamp_1) * 1000} ms")
-                # Decide whether to change language instruction based on the task progress predicted by the VLA model
-                data = self._process_data(observations)
-                # timestamp_3 = time.time()
-                # print(f"Debug: process time={((timestamp_3-timestamp_1) if timestamp_2 is None else (timestamp_3-timestamp_2)) * 1000} ms")
-                self.realtime_data_manager.add_observe_data(data)
-                # timestamp_4 = time.time()
-                # print(f"Debug: add time={(timestamp_4-timestamp_3)*1000} ms")
-            # time.sleep(0.001)
+            try:
+                observations = self._raw_observe_queue.get(timeout=0.01)
+            except Empty:
+                continue
+
+            try:
+                decoded_observations = SharedMemoryManager.decode_observation(observations, self._raw_observe_shm_cache)
+                if decoded_observations is None:
+                    continue
+                infer_data, encoded_imgs = self._process_data(decoded_observations)
+                self.realtime_data_manager.add_observe_data(infer_data)
+                self.visualize_server.update_image_data(encoded_imgs)
+                # record_data = self.shared_memory_manager.encode_observation(record_data)
+
+                if self.config.record.switch:
+                    packet_descriptors = observations.to_observation_descriptors()
+                    record_data = {
+                        **infer_data,
+                        'obs': {
+                            **{
+                                camera_name: payload
+                                for camera_name, payload in packet_descriptors.items()
+                                if str(camera_name).startswith('cam.')
+                            },
+                            'state': infer_data['obs']['state'],
+                            'language': infer_data['obs']['language'],
+                        },
+                    }
+                    runtime_config = {
+                        'mode': self.config.rdm.mode,
+                        'wait_time': self.config.controller.wait_time,
+                        'control_period': self.config.controller.period,
+                        'control_speed': self.config.controller.speed,
+                        'inter_chunk_mode': self.config.inter_chunk.inter_chunk_mode,
+                        'intra_chunk_mode': self.config.intra_chunk.intra_chunk_mode,
+                    }
+                    extra_info = {
+                        'runtime_status': self.runtime_status,
+                        'language_status': self.language_status,
+                        'server_status': self.server_status,
+                        'runtime_config': runtime_config
+                    }
+                    self.data_record_manager.add_observation_async(
+                        observation=record_data,
+                        extra_info=extra_info,
+                        timestamp=time.perf_counter())
+            finally:
+                self._raw_observe_queue.task_done()
     
     def _inference_thread_fun(self):
         while self.is_running:
@@ -293,71 +493,79 @@ class VLAClientAsync():
             # print(f'\rInference count: {self.realtime_data_manager.infer_count}, current infer time: {self.realtime_data_manager.start_intra_traj_marker-self.realtime_data_manager.start_infer_marker:.4f}s, current traj time: {self.realtime_data_manager.start_ctrl_marker-self.realtime_data_manager.start_intra_traj_marker:.4f}s', end='', flush=True)
             # symbol = '=' * 10
     def _control_thread_fun(self):
-        """Control thread function for real-time robot action execution.
-        
-        This method runs periodically to:
-        - Retrieve fitted actions from the data manager
-        - Send actions to the robot for execution
-        - Record actions if recording is enabled
-        - Update visualization if enabled
-        - Update monitoring information
-        """
         if not self.is_control_thread_running:
-            return
+            if self.visualize_server.vis_global_step % 5 == 0:
+                current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
+                action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
+                self.visualize_server.update_chart_data(
+                    action_fitted=action_fitted,
+                    vel_fitted=vel_fitted,
+                    acc_fitted=acc_fitted,
+                    action_raw=action_raw,
+                    current_state=current_state,
+                    observe_period=self.observe_period / 1000,
+                    control_period=self.config.controller.period / 1000
+                    )
+            else:
+                self.visualize_server.vis_global_step += 1
+        else:
+            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
 
-        action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
+            if action_fitted is not None:
+                try:
+                    self.robot.control_robot(action_fitted)
+                except Exception as exc:
+                    self._stop_control_thread_on_error()
+                    self.logger.error("Robot control failed: %s", exc)
+                    raise
+                # with self.show_thread_lock:
+                    # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
+                
+                if self.config.record.switch:
+                    self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
+                
+                # with self.show_thread_lock:
+                #     self.info_act['action'] = action_fitted.shape
 
-        if action_fitted is not None:
-            try:
-                self.robot.control_robot(action_fitted)
-            except Exception as exc:
-                self._stop_control_thread_on_error()
-                self.logger.error("Robot control failed: %s", exc)
-                raise
-            # with self.show_thread_lock:
-                # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
-            
-            if self.config.record.switch:
-                self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
-            
-            # with self.show_thread_lock:
-            #     self.info_act['action'] = action_fitted.shape
+            # Only use alignment processing if prob_progress array length > 1
+            prob_progress = self.realtime_data_manager.get_prob_progress()
+            if prob_progress is not None:
+                with self.show_thread_lock:
+                    self.current_prob_progress = prob_progress
+                # print(f"current prob_progress: {prob_progress}")
+                if self.config.language.auto_mode == True:
+                    # Automatically switch language instruction based on prob_progress changes
+                    self.task_language_manager.add_task_progress(progress=prob_progress)
+                    self.task_language_manager.try_advance_subtask()
 
-        # Only use alignment processing if prob_progress array length > 1
-        prob_progress = self.realtime_data_manager.get_prob_progress()
-        if prob_progress is not None:
-            with self.show_thread_lock:
-                self.current_prob_progress = prob_progress
-            # print(f"current prob_progress: {prob_progress}")
-            if self.config.language.auto_mode == True:
-                # Automatically switch language instruction based on prob_progress changes
-                self.task_language_manager.add_task_progress(progress=prob_progress)
-                self.task_language_manager.advance_subtask()
-        current_state = getattr(self.robot, 'current_state', None)
-        self.visualize_server.update_chart_data(
-            action_fitted=action_fitted,
-            vel_fitted=vel_fitted,
-            acc_fitted=acc_fitted,
-            action_raw=action_raw,
-            current_state=current_state,
-            observe_period=self.observe_period / 1000,
-            control_period=self.config.controller.period / 1000
-            )
+            if self.visualize_server.vis_global_step % 5 == 0:
+                current_state = getattr(self.robot, 'current_state', None)
+                self.visualize_server.update_chart_data(
+                    action_fitted=action_fitted,
+                    vel_fitted=vel_fitted,
+                    acc_fitted=acc_fitted,
+                    action_raw=action_raw,
+                    current_state=current_state,
+                    observe_period=self.observe_period / 1000,
+                    control_period=self.config.controller.period / 1000
+                    )
+            else:
+                self.visualize_server.vis_global_step += 1
 
-    def _visualize_thread_fun(self):
-        # Send state data to visualization server for live plotting when control thread is not running
-        if not self.is_control_thread_running:
-            current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
-            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
-            self.visualize_server.update_chart_data(
-                action_fitted=action_fitted,
-                vel_fitted=vel_fitted,
-                acc_fitted=acc_fitted,
-                action_raw=action_raw,
-                current_state=current_state,
-                observe_period=self.observe_period / 1000,
-                control_period=self.config.controller.period / 1000
-                )
+    # def _visualize_thread_fun(self):
+    #     # Send state data to visualization server for live plotting when control thread is not running
+    #     if not self.is_control_thread_running:
+    #         current_state = getattr(self.robot, 'current_state', None) if self.is_observe_thread_running else None
+    #         action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted(mode='visualize') if self.is_inference_thread_running else (None, None, None, None)
+    #         self.visualize_server.update_chart_data(
+    #             action_fitted=action_fitted,
+    #             vel_fitted=vel_fitted,
+    #             acc_fitted=acc_fitted,
+    #             action_raw=action_raw,
+    #             current_state=current_state,
+    #             observe_period=self.observe_period / 1000,
+    #             control_period=self.config.controller.period / 1000
+    #             )
     @run_time_decorator
     def _inference_first(self):
         """First inference step, which initializes the control pipeline.
@@ -551,7 +759,7 @@ class VLAClientAsync():
             self.realtime_data_manager.compute_avg_inter_traj_time()
             self.realtime_data_manager.compute_avg_comm_time(avg_infer_time=avg_infer_time)
             if self.config.language.auto_mode == True:
-                self.task_language_manager.reset_task_progress(
+                self.task_language_manager.confirm_advance_subtask(
                     language_instruction=currt_language_instruction,
                     task_progress_next=task_progress_fitted
                 )
@@ -559,7 +767,7 @@ class VLAClientAsync():
             self.logger.warning("No observe data, skip inference.")
 
     def _process_image_thread_fun(self, key, value):
-        """Process image data by padding, resize and encoding.
+        """Process image data for inference transport while preserving raw frame for recorder.
 
         Args:
             key (str): Image key identifier.
@@ -568,53 +776,49 @@ class VLAClientAsync():
         Returns:
             tuple: A tuple containing:
                 - key (str): Original image key
-                - img_encoded (np.ndarray): Encoded image data for transmission
+                - img_raw (np.ndarray): Unmodified raw image from robot
+                - img_encoded (np.ndarray): Encoded image data for network transmission
         """
         ext = '.png' if 'depth.' in key else '.jpg'
-        # print(f"Debug: raw image shape: {value.shape}")
-        # print(f"Debug: preprocess_fun={self._preprocess_func}")
-        img_processed = self._preprocess_func(value) if self._preprocess_func else value
-        # print(f"Debug: processed image shape: {value.shape}")
-        # encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80]
-        # img_encoded = cv2.imencode(ext, img_processed, encode_params)[1]
-        # image is encoded in BGR space, default for OpenCV
-        encode_result, img_encoded = cv2.imencode(ext, img_processed)
+        img_for_infer = self._preprocess_func(value) if self._preprocess_func else value
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80] if ext == '.jpg' else []
+        encode_result, img_encoded = cv2.imencode(ext, img_for_infer, encode_params)
         if not encode_result:
             self.logger.warning(f"Image encoding failed for {key}.")
-        return key, img_encoded
+        return key, memoryview(img_encoded) if encode_result else None
 
     def _process_image(self, frame):
-        """Process multiple images in threads.
+        """Process multiple images and produce both encoded and raw outputs.
 
         Args:
             frame (dict): A dictionary containing observation data, including image data, proprioception state data.
 
         Returns:
-            dict: The encoded images with key and values.
+            tuple[dict, dict]:
+                - encoded images (for inference and visualization)
+                - raw images from robot (for recording)
         """
         start_time = time.perf_counter()
-        
-        cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
-        if self.camera_shape_dict is None:
-            self.camera_shape_dict = {key: value.shape for key, value in cam_items}
-            # print(f"Debug: camera shape dict={self.camera_shape_dict}")
-        # Use shared thread pool to parallel process all cameras (avoid per-frame pool creation)
-        futures = [self._img_executor.submit(self._process_image_thread_fun, key, value) for key, value in cam_items]
-        results = [future.result() for future in futures]  # Wait for all tasks to complete
-        encoded_imgs = {}
-        for key, encoded_img in results:
-            encoded_imgs[key] = encoded_img
-            # Print the size of encoded_img in MB
-            # Encoded image size for cam.hand_left: 66376 bytes (0.0633 MB)
-            # Encoded image size for cam.hand_right: 69349 bytes (0.0661 MB)
-            # Encoded image size for cam.head: 94484 bytes (0.0901 MB)
-            # encoded_img_size_mb = len(encoded_img) / (1024 * 1024)
-            # print(f"Encoded image size for {key}: {len(encoded_img)} bytes ({encoded_img_size_mb:.4f} MB)")
 
-        # Calculate processing time in milliseconds
-        self.image_process_time = self.image_process_time * 0.8 +  (time.perf_counter() - start_time) * 1000 * 0.2
-        # Send images to visualization interface
-        self.visualize_server.update_image_data(encoded_imgs)
+        cam_items = [(key, value) for key, value in frame.items() if 'cam.' in key]
+
+        encoded_imgs = {}
+        # raw_imgs = {}
+        if cam_items:
+            results_iter = self._img_executor.map(
+                lambda item: self._process_image_thread_fun(*item),
+                cam_items
+            )
+            for key, encoded_img in results_iter:
+                # raw_imgs[key] = raw_img
+                if encoded_img is not None:
+                    encoded_imgs[key] = encoded_img
+
+        # if self.camera_shape_dict is None and raw_imgs:
+        #     self.camera_shape_dict = {key: img.shape for key, img in raw_imgs.items()}
+        #     self.shared_memory_manager.init_pool(self.camera_shape_dict)
+
+        self.image_process_time = self.image_process_time * 0.8 + (time.perf_counter() - start_time) * 1000 * 0.2
         return encoded_imgs
     def _parse_prob_progress(self, action_data):
         prob_progress = None
@@ -638,26 +842,34 @@ class VLAClientAsync():
         """
         loc_timestamp = time.perf_counter()
         encoded_imgs = self._process_image(frame)
-        
-        # with self.show_thread_lock:
-            # if 'obs.state' in frame and frame['obs.state'] is not None:
-            #     self.info_current_state = frame['obs.state'].tolist() if hasattr(frame['obs.state'], 'tolist') else list(frame['obs.state'])
-            # self.info_obs['state'] = frame['obs.state'].shape
-        data = {
+
+        language = [self.task_language_manager.get_current_language()]
+        obs_state = frame['obs.state']
+
+        infer_data = {
             'type': 'vla_obs',
             'ref_timestamp': frame['ref_timestamp'],
             'loc_timestamp': loc_timestamp,
             'obs': {
                 **encoded_imgs,
-                'state': frame['obs.state'],
-                'language': [self.task_language_manager.get_current_language()],
+                'state': obs_state,
+                'language': language,
             },
         }
-        # data['obs'] keys = dict_keys(['cam.hand_left', 'cam.hand_right', 'cam.head', 'state', 'language'])
-        # print(f"Debug: {data['obs'].keys()}")
-        return data
 
-    @run_time_decorator
+        # record_data = {
+        #     'type': 'vla_obs',
+        #     'ref_timestamp': frame['ref_timestamp'],
+        #     'loc_timestamp': loc_timestamp,
+        #     'obs': {
+        #         **raw_imgs,
+        #         'state': obs_state,
+        #         'language': language,
+        #     },
+        # }
+        return infer_data, encoded_imgs
+
+    # @run_time_decorator
     def _process_action_chunk(self, action_raw:dict):
         """Process an action chunk by generating reference timestamp chunk and passing local timestamp.
 

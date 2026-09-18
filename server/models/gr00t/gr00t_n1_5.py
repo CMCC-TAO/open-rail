@@ -26,7 +26,7 @@ class ModelVLA:
         meta_data_path = os.path.join(model_path, 'experiment_cfg/metadata.json') 
         with open(meta_data_path, "r", encoding="utf-8") as f:
             meta_data = json.load(f)
-        data_config_key = list(meta_data.keys())[0]
+        data_config_key = self.cfg['data_config_key'] 
         meta_data_state = meta_data[data_config_key]['modalities']['state']
     
         # configure state of observations

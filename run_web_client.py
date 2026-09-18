@@ -9,16 +9,21 @@ Then open http://localhost:9000 in your browser.
 
 Port layout:
     9000  — This web server (REST API + WebSocket /ws)
-    8080  — visual/ HTTP static server  (started by VLAClientAsync.run())
-    8765  — visual/ WebSocket data push (started by VLAClientAsync.run())
+    8080  — visual/ HTTP static server  (started by VLAClient.run())
+    8765  — visual/ WebSocket data push (started by VLAClient.run())
 """
 
 import argparse
 import os
+import signal
+import subprocess
 import sys
+import cv2
 import uvicorn
 from conf.logging_conf import setup_logging
 os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+sys.setswitchinterval(0.001)
+cv2.setNumThreads(1)
 # os.environ.setdefault('MKL_NUM_THREADS', '1')
 # os.environ.setdefault('OMP_NUM_THREADS', '1')
 
@@ -32,13 +37,26 @@ def parse_args():
     return p.parse_args()
 
 def kill_port(port):
-    os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
+    """Kill processes occupying the Web port, if any."""
+    try:
+        result = subprocess.run(
+            ['lsof', '-t', f'-i:{port}'],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return
+    for value in result.stdout.split():
+        if value.isdigit() and int(value) != os.getpid():
+            os.kill(int(value), signal.SIGKILL)
 
-if __name__ == '__main__':
+def main():
     args = parse_args()
     kill_port(port=args.port)
 
     exit_code = 0
+    logger = None
     try:
         logger = setup_logging("client.log", "run_web_client")
         os.environ['conf_file'] = args.conf
@@ -52,7 +70,10 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         exit_code = 0
     except Exception as e:
-        logger.exception(f"Exception: {e}")
+        if logger is not None:
+            logger.exception(f"Exception: {e}")
+        else:
+            print(f"Exception: {e}")
         exit_code = 1
         raise
     finally:
@@ -65,3 +86,9 @@ if __name__ == '__main__':
             except Exception:
                 pass
             os._exit(exit_code)
+
+        return exit_code
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

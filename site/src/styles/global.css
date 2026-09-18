@@ -1,0 +1,177 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+  body {
+    @apply font-sans antialiased;
+  }
+}
+
+@layer components {
+  .container-prose {
+    @apply mx-auto w-full max-w-prose px-5;
+  }
+  .container-wide {
+    @apply mx-auto w-full max-w-6xl px-5;
+  }
+  .section {
+    @apply py-12 sm:py-16;
+  }
+  .eyebrow {
+    @apply mb-3 inline-block rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-all duration-200;
+  }
+  .btn-primary {
+    @apply btn bg-gradient-to-r from-brand to-accent text-white shadow-lg shadow-brand/20 hover:shadow-xl hover:shadow-brand/40 hover:brightness-110;
+  }
+  .btn-ghost {
+    @apply btn border border-ink-border bg-white/5 text-slate-200 hover:border-brand/60 hover:text-white;
+  }
+  .card {
+    @apply rounded-2xl border border-ink-border bg-ink-card p-6 transition-all duration-200;
+  }
+  .lift {
+    @apply transition-transform duration-200 hover:-translate-y-1;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-brand to-accent bg-clip-text text-transparent;
+  }
+  .stat {
+    @apply text-3xl font-extrabold gradient-text sm:text-4xl;
+  }
+  .hairline {
+    @apply border-ink-border;
+  }
+}
+
+/* Scroll reveal (progressive enhancement, no external dep) */
+.reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+}
+
+/* Lightbox */
+#lightbox[open],
+#lightbox.is-open {
+  display: flex;
+}
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(8, 9, 12, 0.88);
+  backdrop-filter: blur(4px);
+}
+#lightbox .lb-inner {
+  max-width: 72rem;
+  max-height: 90vh;
+  overflow: auto;
+  width: 100%;
+}
+#lightbox svg,
+#lightbox img {
+  width: 100%;
+  height: auto;
+}
+
+/* ============================================================
+   Theme tokens — light is the default, dark is opt-in via .dark
+   ============================================================ */
+:root {
+  --ink: 255 255 255;        /* page background (light) */
+  --ink-card: 248 250 252;   /* slate-50 card background (light) */
+  --ink-border: 226 232 240; /* slate-200 (light) */
+  --fg: 15 23 42;            /* slate-900 primary text (light) */
+  --muted: 71 85 105;        /* slate-600 secondary text (light) */
+  --brand-light: 37 99 235;  /* blue-600 (light) */
+}
+.dark {
+  --ink: 17 19 24;
+  --ink-card: 27 30 39;
+  --ink-border: 38 42 54;
+  --fg: 226 232 240;
+  --muted: 148 163 184;
+  --brand-light: 77 148 255;
+}
+
+/* Light mode: dark text on a white / near-white surface */
+html:not(.dark) .text-white:not(.btn-primary) { color: rgb(var(--fg)); }
+html:not(.dark) .text-slate-100,
+html:not(.dark) .text-slate-200,
+html:not(.dark) .text-slate-700,
+html:not(.dark) .text-slate-800,
+html:not(.dark) .text-slate-900 { color: rgb(var(--fg)); }
+html:not(.dark) .text-slate-300,
+html:not(.dark) .text-slate-400,
+html:not(.dark) .text-slate-500,
+html:not(.dark) .text-slate-600 { color: rgb(var(--muted)); }
+html:not(.dark) .text-brand-light { color: rgb(var(--brand-light)); }
+
+/* Subtle surfaces that were transparent-on-dark become visible on light */
+html:not(.dark) .bg-white\/5 { background-color: rgb(241 245 249 / 0.7); }
+html:not(.dark) .bg-white\/10 { background-color: rgb(241 245 249 / 0.9); }
+html:not(.dark) .border-white\/10 { border-color: rgb(226 232 240); }
+
+/* Light card separation (shadows are invisible on dark, fine to keep) */
+html:not(.dark) .card { box-shadow: 0 1px 3px rgb(15 23 42 / 0.08); }
+
+/* Keep ghost-button hover legible in light mode */
+html:not(.dark) .btn-ghost:hover { color: rgb(var(--fg)); }
+
+/* ============================================================
+   Capability diagrams — make SVG text/strokes adapt to light & dark
+   Default values assume the dark theme; light overrides flip them.
+   ============================================================ */
+.cap-figure { color: #e2e8f0; }
+.cap-figure .cap-muted { fill: #94a3b8; }
+.cap-figure .cap-stroke { stroke: currentColor; }
+.cap-figure .cap-stroke-muted { stroke: #94a3b8; }
+.cap-figure .cap-accent { fill: #f9a8d4; }
+html:not(.dark) .cap-figure { color: #0f172a; }
+html:not(.dark) .cap-figure .cap-muted { fill: #475569; }
+html:not(.dark) .cap-figure .cap-stroke-muted { stroke: #475569; }
+html:not(.dark) .cap-figure .cap-accent { fill: #be185d; }
+
+/* ============================================================
+   Top navigation — active / scroll-spy state
+   ============================================================ */
+.nav-link {
+  position: relative;
+  color: rgb(var(--muted));
+  transition: color 0.2s ease;
+}
+.nav-link:hover { color: rgb(var(--brand-light)); }
+.nav-link.is-active { color: rgb(var(--brand-light)); }
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.4rem;
+  height: 2px;
+  border-radius: 2px;
+  background: rgb(var(--brand-light));
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+.nav-link.is-active::after { transform: scaleX(1); }

@@ -3,6 +3,7 @@ import cv2
 import logging
 import numpy as np
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
 from a2d_sdk.robot import RobotDds as Robot
 from a2d_sdk.robot import CosineCamera as Camera
 from ..base_robot import RobotBase
@@ -18,13 +19,40 @@ class RobotBody(RobotBase):
         """
         super().__init__(config)
         self.logger = logging.getLogger(__name__) # required for correct logging output
-        self.camera= Camera(list(self.config['camera']['names'].values()))
+        self._cam_names = self.config['camera']['names']
+        self._cam_ref = self.config['camera']['ref']
+        self._cam_ref_name = self._cam_names[self._cam_ref]
+        self._non_ref_cameras = [
+            (key, value) for key, value in self._cam_names.items() if key != self._cam_ref
+        ]
+        workers_config = int(self.config['camera'].get('non_ref_fetch_workers', 2))
+        self._non_ref_fetch_workers = workers_config if workers_config > 0 else 2
+        self._non_ref_fetch_pool = None
+
+        self.camera = Camera(list(self._cam_names.values()))
         self.robot = Robot()
-        self.current_state = np.zeros(self.action_dim)
+        self._proprio_funs = [
+            (proprio, getattr(self.robot, f'{proprio}_joint_states_nearest'))
+            for proprio in self.config['proprio_names']
+        ]
+
+        self.current_state = np.zeros(self.action_dim, dtype=np.float32)
+        self._obs_state_buffer = np.empty(0, dtype=np.float32)
         self.current_timestamp = 0
+
+        self._gripper_vmin = 35.0
+        self._gripper_vmax = 120.0
+
         self.gripper_count = 0
         self.gripper_cmd = [0.0, 0.0]
         self.head_count = 0
+
+        if self._non_ref_cameras and self._non_ref_fetch_workers > 0:
+            self._non_ref_fetch_pool = ThreadPoolExecutor(
+                max_workers=self._non_ref_fetch_workers,
+                thread_name_prefix='a2d-nonref-fetch'
+            )
+
         time.sleep(1)
 
     def control_robot(self, action):
@@ -95,51 +123,72 @@ class RobotBody(RobotBase):
         if 'hand' in data:
             self.robot.move_hand(data['hand'])
     
+    def _fetch_nearest_camera(self, camera_key, camera_name, ref_timestamp):
+        image, _ = self.camera.get_image_nearest(camera_name, ref_timestamp)
+        return camera_key, image
+
     def retrieve_observation(self):
         """Retrieve current observation data including camera images and joint states.
-        
+
         Returns:
-            dict or None: Dictionary containing camera images, joint states, and timestamp.
-                         Returns None if no new data is available.
+            dict or None: Dictionary containing camera images, joint states, and timestamp. Returns None if no new data is available.
         """
         try:
-            result = {}
-            cam_names, cam_ref = self.config['camera']['names'], self.config['camera']['ref']
-            image, ref_timestamp = self.camera.get_latest_image(cam_names[cam_ref])
+            result = {'ref_timestamp': None, 'obs.state': None}
+            result[f'cam.{self._cam_ref}'] = None
+            for key, _ in self._non_ref_cameras:
+                result[f'cam.{key}'] = None
+
+            image, ref_timestamp = self.camera.get_latest_image(self._cam_ref_name)
             if self.current_timestamp == ref_timestamp:
+                self.logger.debug("Retrieve image, return None.")
+                time.sleep(0.01)
                 return None
-            else:
-                self.current_timestamp = ref_timestamp
+
+            # self.logger.debug(f'Retrieve image time: {(ref_timestamp - self.current_timestamp) / 1e6: .3f}ms')
+            self.current_timestamp = ref_timestamp
 
             result['ref_timestamp'] = ref_timestamp
-            result[f'cam.{cam_ref}'] = image[:, :, ::-1].copy() # RGB -> BGR, cam_ref = head
-            # print(f"Debug:cam.cam_ref={cam_ref}")
-            for key, value in cam_names.items():
-                if key == cam_ref:
-                    continue
-                image, timestamp = self.camera.get_image_nearest(value, ref_timestamp)
-                # if key == 'depth_head':
-                #     key = 'depth.head'
-                result[f'cam.{key}'] = image[:, :, ::-1].copy() # BGR -> RGB, key=hand_left/hand_right
-                # print(f"Debug:cam.{key}={key}")
+            result[f'cam.{self._cam_ref}'] = image[:, :, ::-1]
 
-            joint_states, gripper_start = [], 0
-            for proprio in self.config['proprio_names']:
-                joint_states_nearest_fun = getattr(self.robot, f'{proprio}_joint_states_nearest')
-                currt_joint_states, timestamp = joint_states_nearest_fun(ref_timestamp)
+            if self._non_ref_fetch_pool is not None:
+                future_to_key = {
+                    self._non_ref_fetch_pool.submit(self._fetch_nearest_camera, key, value, ref_timestamp): key
+                    for key, value in self._non_ref_cameras
+                }
+                for future in future_to_key:
+                    key, image = future.result()
+                    result[f'cam.{key}'] = image[:, :, ::-1]
+
+            state_size = 0
+            gripper_start = None
+            for proprio, joint_states_nearest_fun in self._proprio_funs:
+                currt_joint_states, _ = joint_states_nearest_fun(ref_timestamp)
+                curr_states = np.asarray(currt_joint_states, dtype=np.float32).ravel()
+
                 if proprio == 'gripper':
-                    gripper_start = len(joint_states)
-                joint_states.extend(currt_joint_states)
-            result['obs.state'] = np.array(joint_states)
-            if self.current_state.size < result['obs.state'].size:
-                self.current_state = np.zeros(result['obs.state'].size)
-            self.current_state[:result['obs.state'].size] = result['obs.state']
-            vmin, vmax = 35, 120
-            self.current_state[gripper_start:gripper_start + 2] = (self.current_state[gripper_start:gripper_start + 2] - vmin) / (vmax - vmin) # norm
-            # currt_joint_states = np.array(list(currt_joint_states)) * (vmax - vmin) + vmin # re-norm
+                    gripper_start = state_size
+
+                need = state_size + curr_states.size
+                if self._obs_state_buffer.size < need:
+                    self._obs_state_buffer = np.empty(need, dtype=np.float32)
+
+                self._obs_state_buffer[state_size:need] = curr_states
+                state_size = need
+
+            result['obs.state'] = self._obs_state_buffer[:state_size].copy()
+            if self.current_state.size < state_size:
+                self.current_state = np.zeros(state_size, dtype=np.float32)
+
+            self.current_state[:state_size] = result['obs.state']
+            if gripper_start is not None and gripper_start + 2 <= state_size:
+                gs = slice(gripper_start, gripper_start + 2)
+                self.current_state[gs] -= self._gripper_vmin
+                self.current_state[gs] /= (self._gripper_vmax - self._gripper_vmin)
+
             return result
         except Exception as e:
-            print(e)
+            self.logger.warning("retrieve_observation failed: %s", e, exc_info=True)
             return None
 
     def close(self):
@@ -147,6 +196,10 @@ class RobotBody(RobotBase):
         
         This method properly releases all hardware resources.
         """
+        if self._non_ref_fetch_pool is not None:
+            self._non_ref_fetch_pool.shutdown(wait=True)
+            self._non_ref_fetch_pool = None
+
         self.camera.close()
         self.robot.shutdown()
         print('close robot')

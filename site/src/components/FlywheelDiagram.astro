@@ -1,0 +1,52 @@
+---
+import { getUI } from '../i18n';
+const { locale = 'en' } = Astro.props;
+const d = getUI(locale).diagrams.flywheel;
+---
+
+<svg viewBox="0 0 420 420" class="w-full cap-figure" role="img" aria-label="Train-collect-evaluate evolution flywheel">
+  <defs>
+    <marker id="arrow3" markerWidth="12" markerHeight="12" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#a874ff" />
+    </marker>
+    <marker id="arrow3-blue" markerWidth="12" markerHeight="12" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#4d94ff" />
+    </marker>
+    <marker id="arrow3-purple" markerWidth="12" markerHeight="12" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#7c5cff" />
+    </marker>
+    <marker id="arrow3-violet" markerWidth="12" markerHeight="12" refX="6" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L6,3 L0,6 Z" fill="#9254FF" />
+    </marker>
+  </defs>
+
+  <!-- Full flywheel circle -->
+  <circle cx="210" cy="210" r="140" fill="none" stroke="#7c5cff" stroke-opacity="0.45" stroke-width="3" />
+
+  <text x="210" y="205" text-anchor="middle" fill="currentColor" font-size="15" font-weight="700">{d.title}</text>
+  <text x="210" y="226" text-anchor="middle" fill="#4d94ff" font-size="13">{d.sub}</text>
+
+  <!-- Directional arrows midway between nodes (clockwise) -->
+  <path d="M 298.1 101.2 A 140 140 0 0 1 318.8 121.9" fill="none" stroke="#4d94ff" stroke-width="3" marker-end="url(#arrow3-blue)" />
+  <path d="M 318.8 298.1 A 140 140 0 0 1 298.1 318.8" fill="none" stroke="#7c5cff" stroke-width="3" marker-end="url(#arrow3-purple)" />
+  <path d="M 121.9 318.8 A 140 140 0 0 1 101.2 298.1" fill="none" stroke="#9254FF" stroke-width="3" marker-end="url(#arrow3-violet)" />
+  <path d="M 101.2 121.9 A 140 140 0 0 1 121.9 101.2" fill="none" stroke="#2478FF" stroke-width="3" marker-end="url(#arrow3-blue)" />
+
+  <g font-size="13" font-weight="600" text-anchor="middle">
+    <circle cx="210" cy="70" r="46" fill="#1b1e27" stroke="#2478FF" />
+    <text x="210" y="68" fill="#fff">{d.deploy}</text>
+    <text x="210" y="86" fill="#94a3b8" font-size="10">{d.deployNote}</text>
+
+    <circle cx="350" cy="210" r="46" fill="#1b1e27" stroke="#5b8bff" />
+    <text x="350" y="208" fill="#fff">{d.collect}</text>
+    <text x="350" y="226" fill="#94a3b8" font-size="10">{d.collectNote}</text>
+
+    <circle cx="210" cy="350" r="46" fill="#1b1e27" stroke="#7c5cff" />
+    <text x="210" y="348" fill="#fff">{d.evaluate}</text>
+    <text x="210" y="366" fill="#94a3b8" font-size="10">{d.evaluateNote}</text>
+
+    <circle cx="70" cy="210" r="46" fill="#1b1e27" stroke="#9254FF" />
+    <text x="70" y="208" fill="#fff">{d.retrain}</text>
+    <text x="70" y="226" fill="#94a3b8" font-size="10">{d.retrainNote}</text>
+  </g>
+</svg>

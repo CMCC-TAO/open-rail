@@ -44,20 +44,25 @@ function formatLangTaskOptionLabel(taskName, index) {
   return `${index + 1}.${taskName}`;
 }
 
-function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
-  const width = subtaskSelectEl && subtaskSelectEl.clientWidth ? subtaskSelectEl.clientWidth : 0;
-  if (!Number.isFinite(width) || width <= 0) return 36;
-  // Reserve width for index/prefix + right check icon area + select paddings.
-  const reservedPx = 81;
-  const avgCharPx = 7.4;
-  const estimated = Math.floor((width - reservedPx) / avgCharPx);
-  return Math.max(14, estimated);
+// function getLangSubtaskMaxCharsByWidth(subtaskSelectEl) {
+//   const width = subtaskSelectEl && subtaskSelectEl.clientWidth ? subtaskSelectEl.clientWidth : 0;
+//   if (!Number.isFinite(width) || width <= 0) return 36;
+//   // Reserve width for index/prefix + right check icon area + select paddings.
+//   const reservedPx = 81;
+//   const avgCharPx = 7.4;
+//   const estimated = Math.floor((width - reservedPx) / avgCharPx);
+//   return Math.max(14, estimated);
+// }
+
+function formatLangSubtaskOptionLabel(text, index) {
+  // const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
+  return `${index + 1}.${text}`;
 }
 
-function formatLangSubtaskOptionLabel(taskName, text, index, maxChars = 36) {
-  const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
-  return `${index + 1}.${clipped}`;
-}
+// function formatLangSubtaskOptionLabelOld(taskName, text, index, maxChars = 36) {
+//   const clipped = text.length > maxChars ? `${text.substring(0, maxChars)}…` : text;
+//   return `${index + 1}.${clipped}`;
+// }
 
 function refreshLangAppliedMarkers(taskId, subTaskId) {
   const taskSel = $('lang-task-select');
@@ -123,13 +128,15 @@ function renderLangSubtaskSelect() {
   subtaskSel.innerHTML = '';
   const taskName = taskSel ? taskSel.value : null;
   const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  const maxChars = getLangSubtaskMaxCharsByWidth(subtaskSel);
+  syncAutoModeStartSubtaskOptions(taskName);
+  // const maxChars = getLangSubtaskMaxCharsByWidth(subtaskSel);
 
   const { taskId: appliedTaskId, subTaskId: appliedSubTaskId } = getAppliedLangSelection();
   subtasks.forEach((text, i) => {
     const opt = document.createElement('option');
     opt.value = i;
-    opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i, maxChars);
+    // opt.textContent = formatLangSubtaskOptionLabel(taskName, text, i, maxChars);
+    opt.textContent = formatLangSubtaskOptionLabel(text, i);
     setAppliedOptionMarker(opt, taskName === appliedTaskId && i === appliedSubTaskId);
     opt.title = text;
     subtaskSel.appendChild(opt);
@@ -138,77 +145,178 @@ function renderLangSubtaskSelect() {
   syncLangIndexOptions(taskName);
 }
 
-// Keep old renderLangPresets as compatibility alias (called on config load)
-function renderLangPresets(presets) {
-  App.langPresets = presets || [];
-  // config.language (flat array) → put into LangCmd only if no JSON loaded yet
-  if (Object.keys(LangCmd.tasks).length === 0) {
-    buildLangTasksFromData(presets);
-    renderLangTaskSelect();
+async function persistLanguagePatch (patch) {
+  if (!App.config || typeof App.config !== 'object') App.config = {};
+  if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
+
+  try {
+    const res = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    });
+    App.config = res.config || App.config;
+
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
+      await apiFetch('/api/client/config/save', {
+        method: 'POST',
+        body: JSON.stringify({ path: confRes.path }),
+      });
+    }
+    return true;
+  } catch (_) {
+    return false;
   }
+};
+function syncAutoModeStartSubtaskOptions(taskName, selectedId) {
+  const startSel = $('sel-lang-auto-start-subtask');
+  if (!startSel) return;
+
+  const activeTask = taskName || $('lang-task-select')?.value;
+  const subtasks = (activeTask && LangCmd.tasks[activeTask]) ? LangCmd.tasks[activeTask] : [];
+  startSel.innerHTML = '';
+
+  subtasks.forEach((text, i) => {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    // display as 1-based index to match SubTask list UI
+    opt.textContent = String(i + 1);
+    opt.title = text;
+    startSel.appendChild(opt);
+  });
+
+  if (!subtasks.length) {
+    startSel.value = '';
+    return;
+  }
+
+  const parsedSelected = Number(selectedId);
+  const fallback = Number(App.config?.language?.auto_mode_start_sub_task_id);
+  const candidate = Number.isFinite(parsedSelected)
+    ? parsedSelected
+    : (Number.isFinite(fallback) ? fallback : 0);
+  const safe = Math.max(0, Math.min(candidate, subtasks.length - 1));
+  startSel.value = String(safe);
+}
+
+function applyConfigAutoStartSubtask(rawSubTaskId) {
+  syncAutoModeStartSubtaskOptions($('lang-task-select')?.value, rawSubTaskId);
+}
+
+function setAutoModeEditable(checked) {
+  const thresholdInput = $('inp-lang-threshold');
+  if (thresholdInput) thresholdInput.disabled = !checked;
+
+  const winSizeInput = $('inp-lang-win-size');
+  if (winSizeInput) winSizeInput.disabled = !checked;
+
+  const startSel = $('sel-lang-auto-start-subtask');
+  if (startSel) startSel.disabled = !checked;
+
+  const taskSel = $('lang-task-select');
+  if (taskSel) taskSel.disabled = checked;
+
+  const subtaskSel = $('lang-subtask-select');
+  if (subtaskSel) subtaskSel.disabled = checked;
+
+  const textEditArea = $('lang-cmd-text');
+  if (textEditArea) textEditArea.disabled = checked;
+
+  ['btn-lang-edit', 'btn-lang-add', 'btn-lang-del', 'btn-lang-send'].forEach(id => {
+    const btn = $(id);
+    if (btn) btn.disabled = checked;
+  });
+}
+
+function applyConfigAutoMode(autoMode) {
+  const autoCheckLangMode = $('chk-lang-auto-mode');
+  if (autoCheckLangMode) autoCheckLangMode.checked = !!autoMode;
+  setAutoModeEditable(!!autoMode);
+}
+
+function applyConfigThreshold(threshold) {
+  const thresholdInput = $('inp-lang-threshold');
+  if (!thresholdInput) return;
+  const displayThreshold = Number.isFinite(threshold) ? threshold : 0.95;
+  thresholdInput.value = String(displayThreshold);
+  thresholdInput.style.borderColor = '';
+}
+
+function applyConfigWinSize(winSize) {
+  const winSizeInput = $('inp-lang-win-size');
+  if (!winSizeInput) return;
+  const displayWinSize = Number.isInteger(winSize) && winSize > 0 ? winSize : 10;
+  winSizeInput.value = String(displayWinSize);
+  winSizeInput.style.borderColor = '';
+}
+
+function applyConfigTaskSelection(task) {
+  const taskSel = $('lang-task-select');
+  if (!taskSel) return;
+
+  if (task && LangCmd.tasks[task]) {
+    taskSel.value = task;
+  } else if (!taskSel.value && taskSel.options.length > 0) {
+    taskSel.selectedIndex = 0;
+  }
+
+  renderLangSubtaskSelect();
+}
+
+function applyConfigSubtaskSelection(rawIndex, autoMode, forceFirstSubtask) {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  const textEl = $('lang-cmd-text');
+  if (!taskSel || !subtaskSel || !textEl) return;
+
+  let index = Number(rawIndex);
+  if (!Number.isFinite(index)) index = 0;
+  if (forceFirstSubtask || autoMode) index = 0;
+
+  const taskName = taskSel.value;
+  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+  const safeIndex = subtasks.length > 0 ? Math.max(0, Math.min(index, subtasks.length - 1)) : -1;
+
+  if (safeIndex >= 0) {
+    subtaskSel.value = String(safeIndex);
+    textEl.value = subtasks[safeIndex] ?? '';
+  } else {
+    subtaskSel.value = '';
+    textEl.value = '';
+  }
+
+  if (App.config && App.config.language && safeIndex >= 0) {
+    App.config.language.task_id = taskName || App.config.language.task_id;
+    App.config.language.sub_task_id = safeIndex;
+  }
+
+  syncLangTaskOptions(taskName || taskSel.value, safeIndex >= 0 ? safeIndex : 0);
+  refreshLangAppliedMarkers(taskName || taskSel.value, safeIndex >= 0 ? safeIndex : null);
+}
+
+function applyLangConfigSelection(forceFirstSubtask = false) {
+  const languageConfig = App.config && App.config.language ? App.config.language : {};
+  const autoMode = !!languageConfig.auto_mode;
+  const threshold = Number(languageConfig.task_progress_threshold);
+  const winSize = Number(languageConfig.task_progress_win_size);
+
+  applyConfigAutoMode(autoMode);
+  applyConfigThreshold(threshold);
+  applyConfigWinSize(winSize);
+  applyConfigTaskSelection(languageConfig.task_id);
+  applyConfigAutoStartSubtask(languageConfig.auto_mode_start_sub_task_id);
+  applyConfigSubtaskSelection(languageConfig.sub_task_id, autoMode, forceFirstSubtask);
 }
 
 function setupLangPanel() {
   const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
-  const autoChk = $('chk-lang-auto-mode');
+  const autoCheckLangMode = $('chk-lang-auto-mode');
   const thresholdInput = $('inp-lang-threshold');
   const winSizeInput = $('inp-lang-win-size');
+  const autoStartSel = $('sel-lang-auto-start-subtask');
   let thresholdSaveTimer = null;
   let winSizeSaveTimer = null;
-
-  const setAutoModeEditable = (enabled) => {
-    if (thresholdInput) thresholdInput.disabled = !enabled;
-    if (winSizeInput) winSizeInput.disabled = !enabled;
-    if (taskSel) taskSel.disabled = enabled;
-    if (subtaskSel) subtaskSel.disabled = enabled;
-    const sendBtn = $('btn-lang-send');
-    if (sendBtn) sendBtn.disabled = enabled;
-    ['btn-lang-edit', 'btn-lang-add', 'btn-lang-del'].forEach(id => {
-      const btn = $(id);
-      if (btn) btn.disabled = enabled;
-    });
-  };
-
-  const persistLanguagePatch = async (patch) => {
-    if (!App.config || typeof App.config !== 'object') App.config = {};
-    if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
-
-    Object.entries(patch).forEach(([dotKey, value]) => {
-      App.pendingPatch[dotKey] = value;
-      if (dotKey.startsWith('language.')) {
-        const key = dotKey.slice('language.'.length);
-        App.config.language[key] = value;
-      }
-    });
-    markPending();
-
-    try {
-      const res = await apiFetch('/api/client/config/patch', {
-        method: 'POST',
-        body: JSON.stringify({ patch }),
-      });
-      App.config = res.config || App.config;
-
-      Object.keys(patch).forEach((dotKey) => delete App.pendingPatch[dotKey]);
-      if (!Object.keys(App.pendingPatch).length) clearPending();
-
-      const confRes = await apiFetch('/api/client/config/path');
-      if (confRes.path) {
-        await apiFetch('/api/client/config/save', {
-          method: 'POST',
-          body: JSON.stringify({ path: confRes.path }),
-        });
-      }
-      return true;
-    } catch (_) {
-      Object.entries(patch).forEach(([dotKey, value]) => {
-        App.pendingPatch[dotKey] = value;
-      });
-      markPending();
-      return false;
-    }
-  };
 
   const commitThreshold = async () => {
     if (!thresholdInput || thresholdInput.disabled) return;
@@ -220,6 +328,7 @@ function setupLangPanel() {
     }
     thresholdInput.style.borderColor = '';
     await persistLanguagePatch({ 'language.task_progress_threshold': value });
+    applyConfigThreshold(value);
   };
 
   const commitWinSize = async () => {
@@ -232,13 +341,13 @@ function setupLangPanel() {
     }
     winSizeInput.style.borderColor = '';
     await persistLanguagePatch({ 'language.task_progress_win_size': value });
+    applyConfigWinSize(value);
   };
 
   // Task select → rebuild subtask list and default to first sub-task.
   if (taskSel) {
     taskSel.addEventListener('change', () => {
       renderLangSubtaskSelect();
-      // App.langAuto.lastProgress = null;
 
       // Default select first sub-task after task switch.
       const taskName = taskSel.value;
@@ -251,6 +360,7 @@ function setupLangPanel() {
           subtaskSel.value = '';
         }
       }
+      syncAutoModeStartSubtaskOptions(taskName);
       $('lang-cmd-text').value = subtasks[0] ?? '';
 
       // Sync Config panel selects to task + first sub-task.
@@ -260,6 +370,7 @@ function setupLangPanel() {
       const cfgIdxSel = $('cfg-language-index');
       if (cfgIdxSel) cfgIdxSel.value = '0';
       refreshLangAppliedMarkers();
+      // applyConfigTaskSelection(taskName);
     });
   }
 
@@ -276,41 +387,78 @@ function setupLangPanel() {
       if (cfgIdxSel && cfgIdxSel.value !== subtaskSel.value) {
         cfgIdxSel.value = subtaskSel.value;
       }
+      // applyConfigSubtaskSelection(idx, false, false);
     });
   }
 
-  if (autoChk) {
-    autoChk.addEventListener('change', async () => {
-      // App.langAuto.lastProgress = null;
-      const enabled = !!autoChk.checked;
-      setAutoModeEditable(enabled);
+  if (autoStartSel) {
+    autoStartSel.addEventListener('change', async () => {
+      const taskName = taskSel ? taskSel.value : null;
+      const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+      let startSubTaskId = Number(autoStartSel.value);
+      if (!Number.isFinite(startSubTaskId)) startSubTaskId = 0;
+      startSubTaskId = subtasks.length > 0 ? Math.max(0, Math.min(startSubTaskId, subtasks.length - 1)) : 0;
 
-      if (enabled) {
+
+      const patch = {
+        'language.auto_mode_start_sub_task_id': startSubTaskId,
+      };
+
+      // If auto-mode is enabled, also apply the start subtask to the visible SubTask select
+      if (autoCheckLangMode && autoCheckLangMode.checked && subtaskSel && subtaskSel.options.length > 0) {
+        autoStartSel.value = String(startSubTaskId);
+        subtaskSel.value = String(startSubTaskId);
+        subtaskSel.selectedIndex = startSubTaskId;
+        subtaskSel.dispatchEvent(new Event('change'));
+        patch['language.sub_task_id'] = startSubTaskId;
+      }
+
+      await persistLanguagePatch(patch);
+      refreshLangAppliedMarkers(taskName || (taskSel ? taskSel.value : null), startSubTaskId);
+    });
+  }
+
+  if (autoCheckLangMode) {
+    autoCheckLangMode.addEventListener('change', async () => {
+      setAutoModeEditable(autoCheckLangMode.checked);
+
+      if (autoCheckLangMode.checked) {
         const taskName = taskSel ? taskSel.value : null;
         const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
+        const startRaw = autoStartSel ? autoStartSel.value : null;
+        let startSubTaskId = Number(startRaw);
+        if (!Number.isFinite(startSubTaskId)) {
+          startSubTaskId = Number(App.config?.language?.auto_mode_start_sub_task_id);
+        }
+        if (!Number.isFinite(startSubTaskId)) startSubTaskId = 0;
+        startSubTaskId = subtasks.length > 0 ? Math.max(0, Math.min(startSubTaskId, subtasks.length - 1)) : 0;
 
         if (subtaskSel) {
           if (subtaskSel.options.length > 0) {
-            subtaskSel.selectedIndex = 0;
-            subtaskSel.value = '0';
+            subtaskSel.selectedIndex = startSubTaskId;
+            subtaskSel.value = String(startSubTaskId);
             subtaskSel.dispatchEvent(new Event('change'));
+            applyConfigSubtaskSelection(startSubTaskId, false, false);
           } else {
             subtaskSel.value = '';
           }
         }
 
-        if (subtasks[0] !== undefined) {
-          $('lang-cmd-text').value = subtasks[0];
+        if (subtasks[startSubTaskId] !== undefined) {
+          $('lang-cmd-text').value = subtasks[startSubTaskId];
         }
 
         await persistLanguagePatch({
-          'language.auto_mode': true,
-          'language.sub_task_id': 0,
+          'language.auto_mode': autoCheckLangMode.checked,
+          'language.auto_mode_start_sub_task_id': startSubTaskId,
+          'language.sub_task_id': startSubTaskId,
         });
+        applyConfigAutoStartSubtask(startSubTaskId);
         return;
       }
-
-      await persistLanguagePatch({ 'language.auto_mode': false });
+      else {
+        await persistLanguagePatch({ 'language.auto_mode': autoCheckLangMode.checked });
+      }
     });
   }
 
@@ -373,8 +521,6 @@ function setupLangPanel() {
       await commitWinSize();
     });
   }
-
-  setAutoModeEditable(!!(autoChk && autoChk.checked));
 }
 
 /** Load language command JSON from App.config.language.file_path (fallback to default endpoint). */
@@ -402,21 +548,26 @@ async function editLangSubtask() {
   if (!taskName || !LangCmd.tasks[taskName]) { toast('Select a task first.', 'warn'); return; }
   if (!Number.isFinite(idx) || idx < 0 || idx >= LangCmd.tasks[taskName].length) { toast('Select a sub-task first.', 'warn'); return; }
   if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
-
+  if (LangCmd.tasks[taskName][idx] == lang) { toast('Nothing changed.', 'warn'); return; }
+  
   LangCmd.tasks[taskName][idx] = lang;
-  App.currentInstruction = lang;
   await saveLangFile();
   renderLangSubtaskSelect();
   subtaskSel.value = String(idx);
-  App._langSwitching = true;
   try {
-    await sendLanguageSet(lang);
+    if (idx == App.config.language.sub_task_id) {
+      await sendLanguageSet(lang);
+    } 
   } finally {
-    App._langSwitching = false;
   }
   toast('Sub-task instruction updated.', 'ok');
 }
 
+async function sendLanguageSet(language = '') {
+  try {
+    await apiFetch('/api/client/language/set', { method: 'POST', body: JSON.stringify({ language }) });
+  } catch (e) { /* toasted */ }
+}
 /** Add a new sub-task after the current list using the textarea content. */
 async function addLangSubtask() {
   const taskSel = $('lang-task-select');
@@ -429,17 +580,12 @@ async function addLangSubtask() {
 
   LangCmd.tasks[taskName].push(lang);
   const newIdx = LangCmd.tasks[taskName].length - 1;
-  App.currentInstruction = lang;
   await saveLangFile();
   renderLangSubtaskSelect();
   const subtaskSel = $('lang-subtask-select');
-  if (subtaskSel) subtaskSel.value = String(newIdx);
-  applyLangConfigSelection();
-  App._langSwitching = true;
-  try {
-    await sendLanguageSet(lang);
-  } finally {
-    App._langSwitching = false;
+  if (subtaskSel) {
+    subtaskSel.value = String(newIdx);
+    subtaskSel.dispatchEvent(new Event('change'));
   }
   toast('Sub-task added.', 'ok');
 }
@@ -452,6 +598,7 @@ async function deleteLangSubtask() {
   const taskName = taskSel.value;
   const idx = Number(subtaskSel.value);
   if (!taskName || !LangCmd.tasks[taskName]) { toast('Select a task first.', 'warn'); return; }
+  if (LangCmd.tasks[taskName].length == 1) { toast('Sub-task at least one.', 'warn'); return; }
   if (!Number.isFinite(idx) || idx < 0 || idx >= LangCmd.tasks[taskName].length) { toast('Select a sub-task first.', 'warn'); return; }
   if (!confirm('Delete this sub-task?')) return;
 
@@ -461,19 +608,70 @@ async function deleteLangSubtask() {
   const newIdx = Math.max(0, Math.min(idx, LangCmd.tasks[taskName].length - 1));
   if (LangCmd.tasks[taskName].length > 0) {
     subtaskSel.value = String(newIdx);
-    applyLangConfigSelection();
-    const textEl = $('lang-cmd-text');
-    const lang = textEl ? textEl.value.trim() : '';
-    if (lang) {
-      App._langSwitching = true;
-      try { await sendLanguageSet(lang); } finally { App._langSwitching = false; }
-    }
+    $('lang-cmd-text').value = LangCmd.tasks[taskName][newIdx];
   } else {
     $('lang-cmd-text').value = '';
   }
   toast('Sub-task deleted.', 'ok');
 }
 
+async function sendLanguageCommand() {
+  const taskSel = $('lang-task-select');
+  const subtaskSel = $('lang-subtask-select');
+  const task = taskSel ? taskSel.value : null;
+  if (task == null) { toast('Select a valid task.', 'warn'); return; }
+  let lang = $('lang-cmd-text').value.trim();
+  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
+
+  const subtasks = LangCmd.tasks[task] ? LangCmd.tasks[task] : [];
+  let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
+  if (!Number.isFinite(idx) || idx < 0) idx = 0;
+  if (App.config.language.task_id == task && App.config.language.sub_task_id == idx) {
+    if (subtasks[idx] != lang) {
+      editLangSubtask()
+    }
+    else {
+      toast('Language command not changed.', 'info');
+    }
+    return;
+  }
+  if (App.config.record.switch && App.config.language.task_id != task) {
+    toast('Can not change task when recording.', 'warn');
+    return;
+  }
+  // console.info('old task: ', App.config.language.task_id, 'new task: ', task);
+  // console.info('old sub_task: ', App.config.language.sub_task_id, 'new sub_task: ', idx);
+  // console.info('recording: ', App.config.record.switch);
+  // 1. persistLanguagePatch
+  const patch = {
+    'language.task_id': task,
+    'language.sub_task_id': idx,
+  };
+  // If not in auto mode, keep auto start id in sync with manual selection
+  const isAutoMode = !!(App.config && App.config.language && App.config.language.auto_mode);
+  if (!isAutoMode) {
+    patch['language.auto_mode_start_sub_task_id'] = idx;
+  }
+  await persistLanguagePatch(patch);
+  // applyConfigTaskSelection(task);
+  applyConfigSubtaskSelection(idx, false, false);
+
+  if (!isAutoMode) {
+    // ensure auto-start selector reflects the manual selection
+    try { applyConfigAutoStartSubtask(idx); } catch (e) { /* best-effort */ }
+  }
+
+  // 2. Send language command to robot
+  try {
+    await sendLanguageSet(lang);
+  }
+  finally {
+    if (App.config.record.switch) {
+      handleSubTaskRecordingRefresh(true);
+    }
+  }
+  toast('Language command updated.', 'info');
+}
 async function loadDefaultLangFile() {
   try {
     const langPath = App.config && App.config.language && App.config.language.file_path;
@@ -495,102 +693,6 @@ async function loadDefaultLangFile() {
       applyLangConfigSelection();
     }
   } catch (_) { /* non-fatal: lang panel stays empty */ }
-}
-
-/**
- * After lang data is loaded (or config reloaded), synchronize the Language Command panel
- * and Config panel selects to reflect App.config.task_id / sub_task_id.
- * Also fills lang-cmd-text with the corresponding instruction.
- */
-function applyLangConfigSelection(forceFirstSubtask = false) {
-  const task = App.config && App.config.language && App.config.language.task_id;
-  const rawIndex = (App.config && App.config.language && App.config.language.sub_task_id != null) ? App.config.language.sub_task_id : 0;
-  let index = Number(rawIndex);
-  if (!Number.isFinite(index)) index = 0;
-
-  const autoModeRaw = App.config && App.config.language && App.config.language.auto_mode;
-  const autoMode = (autoModeRaw === true || autoModeRaw === 'true' || autoModeRaw === 1 || autoModeRaw === '1');
-  if (forceFirstSubtask || autoMode) index = 0;
-  const thresholdRaw = App.config && App.config.language && App.config.language.task_progress_threshold;
-  const threshold = Number(thresholdRaw);
-  const winSizeRaw = App.config && App.config.language && App.config.language.task_progress_win_size;
-  const winSize = Number(winSizeRaw);
-
-  const autoChk = $('chk-lang-auto-mode');
-  if (autoChk) autoChk.checked = autoMode;
-
-  const editable = !!(autoChk ? autoChk.checked : autoMode);
-
-  const thresholdInput = $('inp-lang-threshold');
-  if (thresholdInput) {
-    const fallback = Number(thresholdInput.value);
-    const displayThreshold = Number.isFinite(threshold)
-      ? threshold
-      : (Number.isFinite(fallback) ? fallback : 0.95);
-    thresholdInput.value = String(displayThreshold);
-    thresholdInput.disabled = !editable;
-    thresholdInput.style.borderColor = '';
-  }
-
-  const winSizeInput = $('inp-lang-win-size');
-  if (winSizeInput) {
-    const fallback = Number(winSizeInput.value);
-    const displayWinSize = (Number.isInteger(winSize) && winSize > 0)
-      ? winSize
-      : ((Number.isInteger(fallback) && fallback > 0) ? fallback : 10);
-    winSizeInput.value = String(displayWinSize);
-    winSizeInput.disabled = !editable;
-    winSizeInput.style.borderColor = '';
-  }
-
-  // Sync Lang Panel Task select
-  const taskSel = $('lang-task-select');
-  if (taskSel) taskSel.disabled = editable;
-  const subtaskSel = $('lang-subtask-select');
-  if (subtaskSel) subtaskSel.disabled = editable;
-  const sendBtn = $('btn-lang-send');
-  if (sendBtn) sendBtn.disabled = editable;
-  if (taskSel && task && LangCmd.tasks[task]) {
-    taskSel.value = task;
-  } else if (taskSel && taskSel.options.length > 0 && !taskSel.value) {
-    taskSel.selectedIndex = 0;
-  }
-
-  // Rebuild subtask list for the selected task
-  renderLangSubtaskSelect();
-
-  // Sync Lang Panel Sub-task select
-  const taskName = taskSel ? taskSel.value : null;
-  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  const safeIndex = subtasks.length > 0
-    ? Math.max(0, Math.min(index, subtasks.length - 1))
-    : -1;
-
-  if (subtaskSel) {
-    if (safeIndex >= 0) {
-      subtaskSel.value = String(safeIndex);
-      const appliedTask = App.config && App.config.language ? App.config.language.task_id : null;
-      const appliedIdx = App.config && App.config.language ? App.config.language.sub_task_id : null;
-      const useCurrentInstruction = (
-        App.currentInstruction &&
-        appliedTask === taskName &&
-        appliedIdx === safeIndex
-      );
-      $('lang-cmd-text').value = useCurrentInstruction ? App.currentInstruction : (subtasks[safeIndex] ?? '');
-    } else {
-      subtaskSel.value = '';
-      $('lang-cmd-text').value = '';
-    }
-  }
-
-  if (App.config && App.config.language && safeIndex >= 0) {
-    App.config.language.task_id = taskName || App.config.language.task_id;
-    App.config.language.sub_task_id = safeIndex;
-  }
-
-  // Sync Config panel selects
-  syncLangTaskOptions(taskName || task, safeIndex >= 0 ? safeIndex : 0);
-  refreshLangAppliedMarkers(taskName || task, safeIndex >= 0 ? safeIndex : null);
 }
 
 function setupLanguageEvents() {
@@ -670,95 +772,9 @@ function setupLanguageShortcuts() {
 }
 
 setupLanguageShortcuts();
-// Language Command panel — JSON file picker
-// $('lang-file-input').addEventListener('change', async (e) => {
-//   const file = e.target.files[0];
-//   if (!file) return;
-//   const path = file.path || file.name;
-//   try {
-//     const res = await apiFetch('/api/client/language/load', { method: 'POST', body: JSON.stringify({ path }) });
-//     buildLangTasksFromData(res.data);
-//     renderLangTaskSelect();
-//
-//     if (!App.config || typeof App.config !== 'object') App.config = {};
-//     if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
-//     App.config.language.file_path = path;
-//
-//     App.pendingPatch['language.file_path'] = path;
-//     markPending();
-//
-//     try {
-//       const patchRes = await apiFetch('/api/client/config/patch', {
-//         method: 'POST',
-//         body: JSON.stringify({ patch: { 'language.file_path': path } }),
-//       });
-//       App.config = patchRes.config || App.config;
-//       delete App.pendingPatch['language.file_path'];
-//       if (!Object.keys(App.pendingPatch).length) clearPending();
-//
-//       const confRes = await apiFetch('/api/client/config/path');
-//       if (confRes.path) {
-//         await apiFetch('/api/client/config/save', {
-//           method: 'POST',
-//           body: JSON.stringify({ path: confRes.path }),
-//         });
-//       }
-//     } catch (_) {
-//       App.pendingPatch['language.file_path'] = path;
-//       markPending();
-//     }
-//
-//     toast('Language file loaded.', 'ok', 2000);
-//   } catch (_) { /* toasted */ }
-//   e.target.value = '';
-// });
-
 // Language Command panel — send
-$('btn-lang-send').addEventListener('click', async () => {
-  const taskSel = $('lang-task-select');
-  const subtaskSel = $('lang-subtask-select');
-  const autoChk = $('chk-lang-auto-mode');
-  const task = taskSel ? taskSel.value : null;
-  const subtasks = (task && LangCmd.tasks[task]) ? LangCmd.tasks[task] : [];
+$('btn-lang-send').addEventListener('click', sendLanguageCommand); 
 
-  let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
-  if (!Number.isFinite(idx) || idx < 0) idx = 0;
-
-  // Auto mode should always start from first sub-task.
-  if (autoChk && autoChk.checked) {
-    idx = 0;
-    if (subtaskSel && subtaskSel.value !== '0') {
-      subtaskSel.value = '0';
-      subtaskSel.dispatchEvent(new Event('change'));
-    }
-  }
-
-  let lang = $('lang-cmd-text').value.trim();
-  if (autoChk && autoChk.checked && subtasks[0] !== undefined) {
-    lang = String(subtasks[0]).trim();
-    $('lang-cmd-text').value = lang;
-  }
-
-  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
-
-  // 1. Write current Task / SubTask selection into pendingPatch
-  if (task != null) {
-    App.pendingPatch['language.task_id'] = task;
-    App.pendingPatch['language.sub_task_id'] = idx;
-    markPending();
-  }
-
-  // 2. Trigger Config Apply (patch + save) — reuse the same handler
-  $('btn-apply-config').click();
-
-  // 3. Send language command to robot
-  try {
-    await sendLanguageSet(lang);
-  } finally {
-  }
-  toast('Language command updated.', 'info');
-
-});
 $('lang-cmd-text').addEventListener('keydown', e => { if (e.key === 'Enter' && e.ctrlKey) $('btn-lang-send').click(); });
 
 $('btn-lang-edit').addEventListener('click', editLangSubtask);
