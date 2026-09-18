@@ -157,7 +157,7 @@ export const ui = {
           substeps: [
             { title: 'Prepare the Environment', body: 'Install the required dependencies and set up the Open-RAIL runtime environment.' },
             { title: 'Start the Model Server', body: 'Select the VLA/WAM model and checkpoint, then launch the inference server.' },
-            { title: 'Launch the Web Client｜启动 Web Client', body: 'Start the Web Client and open the Open-RAIL interface in your browser.' },
+            { title: 'Launch the Web Client', body: 'Start the Web Client and open the Open-RAIL interface in your browser.' },
           ],
         },
         {
