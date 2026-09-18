@@ -221,7 +221,7 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `gain` | Servo gain. |
 | `camera.topic_dict` | Compressed ROS image topics keyed by `head`, `hand_left`, and `hand_right`. |
 | `action_layout` | Continuous arm and stepwise hand action ranges. |
-| `reset_position` | Full reset pose vector; ordering must match the Navi WA2 driver. |
+| `reset_position` | Full reset pose vector; ordering must match the NAVIAI-WA2 driver. |
 
 ## Server and model dictionary
 

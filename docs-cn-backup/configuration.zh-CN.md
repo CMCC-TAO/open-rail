@@ -217,7 +217,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `gain` | 舵机增益。 |
 | `camera.topic_dict` | 以 `head`、`hand_left`、`hand_right` 为键的压缩 ROS 图像话题。 |
 | `action_layout` | 连续手臂与步进式手部动作范围。 |
-| `reset_position` | 完整复位姿态向量，顺序必须与 Navi WA2 驱动一致。 |
+| `reset_position` | 完整复位姿态向量，顺序必须与 NAVIAI-WA2 驱动一致。 |
 
 ## 服务端与模型参数字典
 

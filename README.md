@@ -1,7 +1,7 @@
 <div align="center">
 
 
-# OPEN-RAIL
+# Open-RAIL
 
 **A Universal Substrate for Asynchronously Linking VLA/WAM Model Inference and Robot Execution**
 
@@ -24,12 +24,12 @@
 
 <video controls width="100%" preload="metadata">
   <source src="data/media/OPEN-RAIL_demo.mp4" type="video/mp4">
-  <a href="data/media/OPEN-RAIL_demo.mp4">Play the OPEN-RAIL demo video</a>
+  <a href="data/media/OPEN-RAIL_demo.mp4">Play the Open-RAIL demo video</a>
 </video>
 
 VLA/WAM models keep multiplying, and real-robot deployment is now the accepted answer in embodied AI. What remains unsolved is the stretch of engineering between a model checkpoint and the robot: jerky, jittery motion, stream dropouts over long runs, and execution data that never flows back into model iteration.
 
-**OPEN-RAIL is exactly that link** — a lightweight server-client framework that connects any VLA/WAM model to any adapted robot and wires the closed loop of **infer** (real-robot inference and execution) → **collect** (capture data as it runs) → **evaluate** (data-driven iteration) end-to-end into every run.
+**Open-RAIL is exactly that link** — a lightweight server-client framework that connects any VLA/WAM model to any adapted robot and wires the closed loop of **infer** (real-robot inference and execution) → **collect** (capture data as it runs) → **evaluate** (data-driven iteration) end-to-end into every run.
 
 It currently adapts **4 heterogeneous robots** (including a LeRobot simulation backend) and supports **10 mainstream VLA/WAM models** (7 families), with joint acceleration standard deviation reduced from **10+ to 0.1 rad/s²**.
 
@@ -62,14 +62,14 @@ It currently adapts **4 heterogeneous robots** (including a LeRobot simulation b
 
 ## 📰 Changelog
 
-- **2026-09-16 · First public release** — Renamed to **OPEN-RAIL** (formerly VLA-RAIL), opening four layers — **infer / collect / evaluate / adapt**: three-thread asynchronous pipeline with two-level online smoothing, inference-as-collection, evaluation data written on every run, and adaptation for 4 heterogeneous robots and 10 VLA/WAM models
+- **2026-09-16 · First public release** — Renamed to **Open-RAIL** (formerly VLA-RAIL), opening four layers — **infer / collect / evaluate / adapt**: three-thread asynchronous pipeline with two-level online smoothing, inference-as-collection, evaluation data written on every run, and adaptation for 4 heterogeneous robots and 10 VLA/WAM models
 - **2025-12 · Preprint release** — [VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots](https://arxiv.org/abs/2512.24673): asynchronous inference with intra-/inter-chunk two-level online smoothing
 
 <!-- TODO: assign and record a formal version number for the first public release; add a new entry at the top of this section for each subsequent release, noting which axis (models / hardware / scenarios) it widened. -->
 
 ## ✨ Features
 
-| Pain point | What OPEN-RAIL does | Effect |
+| Pain point | What Open-RAIL does | Effect |
 | --- | --- | --- |
 | ⚡ Inference can't keep up with the control cycle; motion stutters and jitters | Three-thread asynchronous pipeline (observation / inference / control) + two-level online smoothing (intra-/inter-chunk) | Joint acceleration std **10+ → 0.1 rad/s²**, eliminating a **30–50×** frequency gap |
 | ☁️ Robot-side compute can't run large models | Server-client split, with non-overlapping dependency trees | Embedded devices can drive large models; device / edge / cloud switching with **zero code changes** |
@@ -86,9 +86,9 @@ Smoothing happens at the **framework level** — no model changes, no training a
 
 | Robot | Type | Status | Adapter |
 | --- | --- | --- | --- |
-| Agibot G1 | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/agibot_g1/` |
-| Ti5 T170C | Bimanual wheeled robot (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
-| Navi WA2 (Zhejiang Humanoid) | Folding wheel-legged humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
+| AgiBot G1 | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/agibot_g1/` |
+| China Mobile Lingxi (Ti5 T170C) | Bimanual wheeled robot (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
+| NAVIAI-WA2 (Zhejiang Humanoid) | Folding wheel-legged humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
 | Mock | LeRobot-based simulation backend | ✅ Adapted | `client/robots/mock/` |
 | _Your robot_ | — | 🔜 Planned | [Integration guide](docs/guides/add-new-robot.md) |
 
@@ -113,7 +113,7 @@ All commands below are run from the repository root.
 
 - **Python ≥ 3.10**
 - **Server**: the NVIDIA GPU, CUDA, PyTorch, and any model-specific dependencies required by your chosen model; For version requirements, refer to that model's official documentation.
-- **Client**: Depends on the robot: AgiBot G1 requires the vendor SDK; ChinaMobile Lingxi(ti5_t170c) requires ROS 2; NAVIAI-WA2 requires ROS 1.;The Mock simulation backend requires no additional hardware.
+- **Client**: Depends on the robot: AgiBot G1 requires the vendor SDK; China Mobile Lingxi (Ti5 T170C) requires ROS 2; NAVIAI-WA2 requires ROS 1. The Mock simulation backend requires no additional hardware.
 - **Network**: The server and client communicate over ZMQ; a shared LAN or mutual network reachability is sufficient.
 - **OS**: Ubuntu (macOS is not currently supported)
 
@@ -213,13 +213,13 @@ Set `robots.type` in `conf/*.yaml` to the target robot adapter (`agibot_g1` / `t
 
 Switch between three run modes in the client — pure inference / pure teleop / hybrid. In hybrid mode you can **pause → take over → resume** at any time; state pre-alignment keeps the takeover free of jumps. Correction trajectories are timestamp-aligned with inference trajectories and saved in parallel, so every human correction is a demonstration that goes straight into the training pipeline.
 
-![Data recording and teleoperation integration](data/media/data-teleop.png)
+![Data recording and teleoperation integration](data/media/teleop.png)
 
 ## 🏗️ Architecture
 
-![OPEN-RAIL Architecture](data/media/framework.png)
+![Open-RAIL Architecture](data/media/architecture.png)
 
-OPEN-RAIL uses a **server-client distributed architecture**; the inference path and the visualization path run independently and never interfere. The **server** handles model inference; the **client** runs on the robot side and takes care of observation collection, task execution, command dispatch, and data recording, tying robot configuration and model inference into one workflow.
+Open-RAIL uses a **server-client distributed architecture**; the inference path and the visualization path run independently and never interfere. The **server** handles model inference; the **client** runs on the robot side and takes care of observation collection, task execution, command dispatch, and data recording, tying robot configuration and model inference into one workflow.
 
 The server owns the model environment and the client owns the robot environment, so the two dependency trees never collide — the CUDA / PyTorch versions the model needs don't conflict with the ROS versions the robot drivers need. This is also what makes device / edge / cloud switching a zero-code-change operation: moving the deployment only means changing the server's network address.
 
@@ -259,9 +259,9 @@ The server owns the model environment and the client owns the robot environment,
 
 VLA inference and control are separated by an order-of-magnitude frequency gap: a model needs hundreds of milliseconds to emit one action chunk, while the control loop runs at tens to hundreds of hertz. In a synchronous design, the control cycle's latency floor is the model latency — this is where stutter and jitter come from.
 
-OPEN-RAIL closes that gap with **three decoupled threads**:
+Open-RAIL closes that gap with **three decoupled threads**:
 
-![OPEN-RAIL three-thread asynchronous pipeline](data/media/async-pipeline.png)
+![Open-RAIL three-thread asynchronous pipeline](data/media/async-pipeline.png)
 
 Each thread runs at its own pace, and none of them wait:
 
@@ -269,7 +269,7 @@ Each thread runs at its own pace, and none of them wait:
 2. **Inference thread** emits action chunks at the model's own pace; one inference result is reused across many subsequent control cycles
 3. **Control thread** executes at control frequency: it interpolates the chunk it already holds, folds in new chunks online as they arrive, and never idles
 
-Once the frequency gap is absorbed, the jitter that remains comes from the action chunks themselves — a chunk may be discontinuous internally, and the seam between chunks can jump. OPEN-RAIL handles this with two levels of online smoothing:
+Once the frequency gap is absorbed, the jitter that remains comes from the action chunks themselves — a chunk may be discontinuous internally, and the seam between chunks can jump. Open-RAIL handles this with two levels of online smoothing:
 
 - **Intra-chunk smoothing** — removes discrete jumps inside a single chunk
 - **Inter-chunk smoothing** — removes discontinuities at the seam between adjacent chunks
@@ -278,7 +278,7 @@ Implementation details (smoothing algorithms and windows, chunk merge policy, th
 
 ## 📊 Data & Evaluation
 
-Inference, data collection, and evaluation are usually three separate workflows; OPEN-RAIL builds all of them into every run.
+Inference, data collection, and evaluation are usually three separate workflows; Open-RAIL builds all of them into every run.
 
 ### Collect: capture as you run
 
@@ -358,7 +358,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 
 **Adapt — multi-model and multi-robot control**
 
-- [x] 4 heterogeneous robots (Agibot G1 / Ti5 T170C / Navi WA2 + a LeRobot simulation backend)
+- [x] 4 heterogeneous robots (AgiBot G1 / China Mobile Lingxi (Ti5 T170C) / NAVIAI-WA2 + a LeRobot simulation backend)
 - [x] 10 VLA/WAM models across 7 families
 - [x] Visualization abstracted as its own layer — a control entry for non-developers
 - [ ] WAM integration (October)
@@ -401,11 +401,11 @@ The code is open-source in sync on GitHub, Gitee, and the Huanxin Community; the
 
 ## 📖 Citation
 
-Cite this repository (OPEN-RAIL, code and documentation):
+Cite this repository (Open-RAIL, code and documentation):
 
 ```bibtex
 @misc{openrail2026,
-  title        = {OPEN-RAIL},
+  title        = {Open-RAIL},
   author       = {Zhao, Yongsheng and Zhao, Lei and Cheng, Baoping and Yao, Gongxin and Wen, Xuanzhang and Gao, Han},
   year         = {2026},
   howpublished = {\url{https://github.com/CMCC-TAO/open-rail}},
@@ -436,8 +436,8 @@ Apache License 2.0. See [LICENSE](LICENSE).
 - Dataset format and tooling follow [LeRobot](https://github.com/huggingface/lerobot)'s Parquet and video organization conventions
 - Model adapters are based on each model's official implementation: GR00T ([NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)), RDT ([thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)), ACT, SmolVLA, GO1, π series, TAO
 - The DETR portion of the ACT adapter is adapted from [facebookresearch/detr](https://github.com/facebookresearch/detr) (Apache 2.0), and the diffusion-policy implementations reference [real-stanford/diffusion_policy](https://github.com/real-stanford/diffusion_policy)
-- Robot adapters rely on each vendor's SDK and drivers: Agibot G1, Ti5 T170C, Navi WA2 (Zhejiang Humanoid)
+- Robot adapters rely on each vendor's SDK and drivers: AgiBot G1, China Mobile Lingxi (Ti5 T170C), NAVIAI-WA2 (Zhejiang Humanoid)
 
 ---
 
-**Inference ends where the real robot begins.** Give OPEN-RAIL a star, join the community, and let models, hardware, and scenarios turn together. ⭐
+**Inference ends where the real robot begins.** Give Open-RAIL a star, join the community, and let models, hardware, and scenarios turn together. ⭐

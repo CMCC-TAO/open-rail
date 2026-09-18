@@ -1,7 +1,7 @@
 <div align="center">
 
 
-# OPEN-RAIL
+# Open-RAIL
 
 **一套异步连接 VLA/WAM 模型推理与机器人执行的通用底座**
 
@@ -24,12 +24,12 @@
 
 <video controls width="100%" preload="metadata">
   <source src="data/media/OPEN-RAIL_demo.mp4" type="video/mp4">
-  <a href="data/media/OPEN-RAIL_demo.mp4">播放 OPEN-RAIL 演示视频</a>
+  <a href="data/media/OPEN-RAIL_demo.mp4">播放 Open-RAIL 演示视频</a>
 </video>
 
 VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但真正没解决的，是模型 checkpoint 与机器人之间的那段工程链路：动作卡顿抖动、长时运行断流、执行数据回不到模型迭代。
 
-**OPEN-RAIL 就是这段链路**：一套轻量级服务端-客户端框架，把任意 VLA/WAM 模型接到任意已适配机器人上，并把「**推**（真机推理执行）→ **采**（运行即采集）→ **评**（数据驱动迭代）」的闭环端到端接进每一次运行。
+**Open-RAIL 就是这段链路**：一套轻量级服务端-客户端框架，把任意 VLA/WAM 模型接到任意已适配机器人上，并把「**推**（真机推理执行）→ **采**（运行即采集）→ **评**（数据驱动迭代）」的闭环端到端接进每一次运行。
 
 目前已适配 **4 款异构机器人**（含 LeRobot 仿真后端）、支持 **10 个主流 VLA/WAM 模型**（7 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
 
@@ -62,14 +62,14 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 ## 📰 更新日志
 
-- **2026-09-16 · 首次公开** — 项目更名为 **OPEN-RAIL**（原 VLA-RAIL），首次开放 **推 / 采 / 评 / 兼容** 四层：三线程异步流水与两级在线平滑、推理即采集、评估数据随每次运行落盘、4 款异构机器人与 10 个 VLA/WAM 模型适配
+- **2026-09-16 · 首次公开** — 项目更名为 **Open-RAIL**（原 VLA-RAIL），首次开放 **推 / 采 / 评 / 兼容** 四层：三线程异步流水与两级在线平滑、推理即采集、评估数据随每次运行落盘、4 款异构机器人与 10 个 VLA/WAM 模型适配
 - **2025-12 · 预印本发布** — [VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots](https://arxiv.org/abs/2512.24673)：异步推理与块内 / 块间两级在线平滑
 
 <!-- TODO：为首次公开版本确定并记录正式版本号；此后每次发版在本节顶部补一条，并注明拓宽了哪条轴（模型 / 硬件 / 场景）。 -->
 
 ## ✨ 功能特性
 
-| 痛点 | OPEN-RAIL 做法 | 效果 |
+| 痛点 | Open-RAIL 做法 | 效果 |
 | --- | --- | --- |
 | ⚡ 推理跟不上控制周期，动作又卡又抖 | 三线程异步流水（观测 / 推理 / 控制）+ 块内/块间两级在线平滑 | 关节加速度标准差 **10+ → 0.1 rad/s²**，消除 **30–50 倍**频率差 |
 | ☁️ 机器人端算力跑不动大模型 | 服务端-客户端分离，两侧依赖树互不干涉 | 嵌入式设备也能驱动大模型；端 / 边 / 云**代码零改动**切换 |
@@ -86,9 +86,9 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 | 机器人 | 类型 | 状态 | 适配器 |
 | --- | --- | --- | --- |
-| Agibot G1 | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/agibot_g1/` |
-| Ti5 T170C | 双臂轮式机器人（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
-| Navi WA2（浙江人形） | 折叠轮臂人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
+| AgiBot G1 | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/agibot_g1/` |
+| 中国移动灵犀（Ti5 T170C） | 双臂轮式机器人（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
+| NAVIAI-WA2（浙江人形） | 折叠轮臂人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
 | Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
 | _你的机器人_ | — | 🔜 计划中 | [接入指南](docs/guides/add-new-robot.zh-CN.md) |
 
@@ -113,7 +113,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 - **Python ≥ 3.10**
 - **服务端（Server）**：所选模型所需的 NVIDIA 显卡、CUDA、PyTorch，以及该模型特有的依赖；各组件的版本要求以对应模型的官方文档为准。
-- **客户端（Client）**：取决于所接入的机器人：AgiBot G1 需安装厂商 SDK；中国移动灵犀（ti5_t170c）需 ROS 2；NAVIAI-WA2 需 ROS 1；若使用Mock 仿真机器人，则无需额外硬件。
+- **客户端（Client）**：取决于所接入的机器人：AgiBot G1 需安装厂商 SDK；中国移动灵犀（Ti5 T170C）需 ROS 2；NAVIAI-WA2 需 ROS 1；若使用 Mock 仿真机器人，则无需额外硬件。
 - **网络**：服务端与客户端通过 ZMQ 通信，两者处于同一局域网或网络互通即可。
 - **操作系统**：目前仅支持 Ubuntu（暂不支持 macOS）。
 
@@ -217,9 +217,9 @@ Mock 模型只返回随机动作，不能替代真实模型评测。
 
 ## 🏗️ 系统架构
 
-![OPEN-RAIL 架构图](data/media/architecture.zh-CN.png)
+![Open-RAIL 架构图](data/media/architecture.zh-CN.png)
 
-OPEN-RAIL 采用 **服务端-客户端分布式架构**，推理主链路与可视化链路各自独立、互不干扰。**服务端**负责模型推理；**客户端**部署在机器人一侧，负责状态采集、任务执行、指令下发和数据记录，把机器人配置与模型推理整合成一条完整的工作流。
+Open-RAIL 采用 **服务端-客户端分布式架构**，推理主链路与可视化链路各自独立、互不干扰。**服务端**负责模型推理；**客户端**部署在机器人一侧，负责状态采集、任务执行、指令下发和数据记录，把机器人配置与模型推理整合成一条完整的工作流。
 
 服务端独占模型环境，客户端独占机器人环境，两侧的依赖树因此互不干涉——模型需要的 CUDA / PyTorch 版本和机器人驱动需要的 ROS 版本不会互相冲突。这也是端 / 边 / 云「代码零改动切换」的前提：换部署位置，只需修改服务端网络地址。
 
@@ -259,9 +259,9 @@ OPEN-RAIL 采用 **服务端-客户端分布式架构**，推理主链路与可�
 
 VLA 推理与控制之间存在数量级的频率差：模型出一次 action chunk 要几百毫秒，机器人控制回路却跑在几十到几百赫兹。同步方案里，控制周期的延迟下界就是模型延迟——动作卡顿与抖动正是从这里来的。
 
-OPEN-RAIL 用**三条互相解耦的线程**消除这个差距：
+Open-RAIL 用**三条互相解耦的线程**消除这个差距：
 
-![OPEN-RAIL 三线程异步流水线](data/media/async-pipeline.zh-CN.png)
+![Open-RAIL 三线程异步流水线](data/media/async-pipeline.zh-CN.png)
 
 三条线程各按自己的节奏跑，互不等待：
 
@@ -269,7 +269,7 @@ OPEN-RAIL 用**三条互相解耦的线程**消除这个差距：
 2. **推理线程**按模型自身节奏产出动作块，一次推理结果被后续多个控制周期复用
 3. **控制线程**按控制频率执行：拿已有 chunk 做插值，新 chunk 到达时在线并入，从不空等
 
-频率差吸收掉之后，剩下的抖动来自动作分块本身——动作块内部可能不连续，块与块的接缝处会跳变。OPEN-RAIL 用两级在线平滑处理：
+频率差吸收掉之后，剩下的抖动来自动作分块本身——动作块内部可能不连续，块与块的接缝处会跳变。Open-RAIL 用两级在线平滑处理：
 
 - **块内平滑** — 消除单个动作块内部的离散跳变
 - **块间平滑** — 消除相邻动作块接缝处的突变
@@ -278,7 +278,7 @@ OPEN-RAIL 用**三条互相解耦的线程**消除这个差距：
 
 ## 📊 数据与评估
 
-推理、数采与评估通常是三套分开的流程，OPEN-RAIL 把它们都接进每一次运行。
+推理、数采与评估通常是三套分开的流程，Open-RAIL 把它们都接进每一次运行。
 
 ### 采：运行即采集
 
@@ -358,7 +358,7 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 
 **兼容——多模型与多机器人控制**
 
-- [x] 4 款异构机器人（Agibot G1 / Ti5 T170C / Navi WA2 + 一套 LeRobot 仿真后端）
+- [x] 4 款异构机器人（AgiBot G1 / 中国移动灵犀（Ti5 T170C）/ NAVIAI-WA2 + 一套 LeRobot 仿真后端）
 - [x] 10 个 VLA/WAM 模型（7 系列）
 - [x] 可视化抽象为独立层——面向非开发人员的控制入口
 - [ ] WAM 模型接入（10 月）
@@ -401,11 +401,11 @@ python -m pip install -e ".[dev]"
 
 ## 📖 引用
 
-引用本仓库（OPEN-RAIL，代码与文档）：
+引用本仓库（Open-RAIL，代码与文档）：
 
 ```bibtex
 @misc{openrail2026,
-  title        = {OPEN-RAIL},
+  title        = {Open-RAIL},
   author       = {Zhao, Yongsheng and Zhao, Lei and Cheng, Baoping and Yao, Gongxin and Wen, Xuanzhang and Gao, Han},
   year         = {2026},
   howpublished = {\url{https://github.com/CMCC-TAO/open-rail}},
@@ -436,8 +436,8 @@ Apache License 2.0，详见 [LICENSE](LICENSE)。
 - 数据集格式与工具链借鉴 [LeRobot](https://github.com/huggingface/lerobot) 的 Parquet 与视频组织约定
 - 模型适配基于各模型官方实现：GR00T（[NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)）、RDT（[thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)）、ACT、SmolVLA、GO1、π 系列、TAO
 - ACT 适配中的 DETR 部分修改自 [facebookresearch/detr](https://github.com/facebookresearch/detr)（Apache 2.0），扩散策略相关实现参考 [real-stanford/diffusion_policy](https://github.com/real-stanford/diffusion_policy)
-- 机器人适配依赖各厂商 SDK 与驱动：Agibot G1、Navi WA2（浙江人形）、中国移动
+- 机器人适配依赖各厂商 SDK 与驱动：AgiBot G1、NAVIAI-WA2（浙江人形）、中国移动
 
 ---
 
-**推理的终点，是真机的起点。** 给 OPEN-RAIL 一个 Star，加入社区，让模型、硬件、场景，在这里一起转起来。 ⭐
+**推理的终点，是真机的起点。** 给 Open-RAIL 一个 Star，加入社区，让模型、硬件、场景，在这里一起转起来。 ⭐

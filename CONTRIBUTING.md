@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for contributing code, model adapters, robot adapters, smoothing strategies, tests, or documentation to OPEN-RAIL.
+Thank you for contributing code, model adapters, robot adapters, smoothing strategies, tests, or documentation to Open-RAIL.
 
 ## Before you start
 
@@ -25,7 +25,7 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-`pyproject.toml` defines OPEN-RAIL’s own dependencies and CLI entry points. Launching a OPEN-RAIL server also requires the dependencies of the model it serves, which should be installed in the server-side environment. Running a OPEN-RAIL client requires the relevant robot SDK or ROS dependencies, which should be installed in the client-side environment. Keeping these dependencies separate avoids unnecessarily coupling and dependency conflicts.
+`pyproject.toml` defines Open-RAIL’s own dependencies and CLI entry points. Launching a Open-RAIL server also requires the dependencies of the model it serves, which should be installed in the server-side environment. Running a Open-RAIL client requires the relevant robot SDK or ROS dependencies, which should be installed in the client-side environment. Keeping these dependencies separate avoids unnecessarily coupling and dependency conflicts.
 
 ## How to contribute
 
