@@ -30,7 +30,7 @@ export default defineConfig({
         {
           label: 'Guides',
           items: [
-            { label: 'Add a VLA Model', link: '/guides/add-new-vla-model/' },
+            { label: 'Add a VLA Model', link: '/guides/add-new-model/' },
             { label: 'Add a Robot', link: '/guides/add-new-robot/' },
           ],
         },
