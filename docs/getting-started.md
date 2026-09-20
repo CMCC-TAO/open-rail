@@ -1,6 +1,6 @@
 ---
 title: "Getting Started"
-description: "Complete environment setup and feature integration for VLA-RAIL."
+description: "Complete environment setup and feature integration for Open-RAIL."
 ---
 
 # Getting Started
@@ -84,7 +84,7 @@ Without arguments, the program reads `conf/default_conf.yaml` by default and lis
 python run_web_client.py --conf custom_conf.yaml
 ```
 
-Open your browser and visit `http://localhost:9000`. You should see the VLA-RAIL Web console, client status, and configuration panel; inference results and robot status may be empty until Server is connected and the robot is properly configured.
+Open your browser and visit `http://localhost:9000`. You should see the Open-RAIL Web console, client status, and configuration panel; inference results and robot status may be empty until Server is connected and the robot is properly configured.
 
 > **Port Details**:
 > - `9000`: Main Web service port (provides REST API and WebSocket via `uvicorn`).

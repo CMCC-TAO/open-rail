@@ -1217,7 +1217,7 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
     """
     if _HAS_YAML:
         header = (
-            "# VLA-RAIL Client Configuration\n"
+            "# Open-RAIL Client Configuration\n"
             "# Auto-generated — edit values as needed\n\n"
         )
         return header + _yaml.dump(
@@ -1229,7 +1229,7 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
 
     # ── fallback: manual serializer ──────────────────────────────────────────
     lines = [
-        "# VLA-RAIL Client Configuration",
+        "# Open-RAIL Client Configuration",
         "# Auto-generated — edit values as needed",
         "",
     ]

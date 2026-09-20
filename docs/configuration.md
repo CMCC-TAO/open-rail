@@ -1,6 +1,6 @@
 ---
 title: "Configuration Reference"
-description: "Configuration sources, precedence, and reference tables for VLA-RAIL."
+description: "Configuration sources, precedence, and reference tables for Open-RAIL."
 ---
 
 # Configuration Reference

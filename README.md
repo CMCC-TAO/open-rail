@@ -86,7 +86,7 @@ Smoothing happens at the **framework level** — no model changes, no training a
 
 | Robot | Type | Status | Adapter |
 | --- | --- | --- | --- |
-| AgiBot G1 | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/agibot_g1/` |
+| AgiBot G1 | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/a2d/` |
 | China Mobile Lingxi (Ti5 T170C) | Bimanual wheeled robot (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
 | NAVIAI-WA2 (Zhejiang Humanoid) | Folding wheel-legged humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
 | Mock | LeRobot-based simulation backend | ✅ Adapted | `client/robots/mock/` |
@@ -205,7 +205,7 @@ The mock model only returns random actions and cannot stand in for real model ev
 
 ### Real-robot execution
 
-Set `robots.type` in `conf/*.yaml` to the target robot adapter (`agibot_g1` / `ti5_t170c` / `navi_wa2`), configure camera topics, `action_layout`, and proprioception parameters per [docs/configuration.md](docs/configuration.md), then start with the same two commands.
+Set `robots.type` in `conf/*.yaml` to the target robot adapter (`a2d` / `ti5_t170c` / `navi_wa2`), configure camera topics, `action_layout`, and proprioception parameters per [docs/configuration.md](docs/configuration.md), then start with the same two commands.
 
 ### Hybrid mode: inference + live teleoperation correction (opening in October)
 
@@ -417,7 +417,7 @@ Cite the paper (this repository is published under the name **VLA-RAIL** in the 
 
 ```bibtex
 @misc{zhao2025vlarailrealtimeasynchronousinference,
-  title={VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA/WAM Models and Robots},
+  title={VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots},
   author={Yongsheng Zhao and Lei Zhao and Baoping Cheng and Gongxin Yao and Xuanzhang Wen and Han Gao},
   year={2025},
   eprint={2512.24673},

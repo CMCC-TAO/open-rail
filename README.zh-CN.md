@@ -86,7 +86,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 | 机器人 | 类型 | 状态 | 适配器 |
 | --- | --- | --- | --- |
-| AgiBot G1 | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/agibot_g1/` |
+| AgiBot G1 | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/a2d/` |
 | 中国移动灵犀（Ti5 T170C） | 双臂轮式机器人（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
 | NAVIAI-WA2（浙江人形） | 折叠轮臂人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
 | Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
@@ -205,7 +205,7 @@ Mock 模型只返回随机动作，不能替代真实模型评测。
 
 ### 真机执行
 
-修改 `conf/*.yaml` 中的 `robots.type` 为目标机器人适配器（`agibot_g1` / `ti5_t170c` / `navi_wa2`），并按 [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md) 配置相机话题、`action_layout` 与本体感知参数，然后同样用两条命令启动。
+修改 `conf/*.yaml` 中的 `robots.type` 为目标机器人适配器（`a2d` / `ti5_t170c` / `navi_wa2`），并按 [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md) 配置相机话题、`action_layout` 与本体感知参数，然后同样用两条命令启动。
 
 ### 混合模式：推理 + 实时遥操纠偏
 

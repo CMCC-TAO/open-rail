@@ -1,5 +1,5 @@
 export const site = {
-  name: 'OPEN-RAIL 2026',
+  name: 'Open-RAIL',
   tagline: 'Where inference ends, real robots begin',
   description:
     'Open-source infrastructure bridging VLA (Vision-Language-Action) models and physical robots — stable, compatible, and self-evolving.',
@@ -25,8 +25,8 @@ export const supportedModels: { name: string; note: string; soon?: boolean }[] =
   { name: 'π0', note: 'Physical Intelligence VLA' },
   { name: 'π0.5', note: 'Physical Intelligence VLA' },
   { name: 'TAO', note: 'China Mobile TAO Team VLA base model' },
-  { name: 'GO1', note: 'Generalist VLA policy' },
-  { name: 'SmoLVLA', note: 'SmoLVLA VLA policy' },
+  { name: 'GO1', note: 'AgiBot GO-1 generalist VLA policy' },
+  { name: 'SmolVLA', note: 'HuggingFace SmolVLA VLA policy' },
   { name: 'ACT', note: 'Action Chunking Transformer' },
   { name: 'RDT', note: 'Robotics Diffusion Transformer' },
   // Adapted, pending merge into master.

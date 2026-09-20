@@ -62,7 +62,7 @@ def get_robot(config: ConfigDict):
     return RobotProxy(robot_type.value, robot_config)
 
 def parse_args():
-    """Parse command line arguments for VLA-RAIL Client
+    """Parse command line arguments for Open-RAIL Client
     
     Returns:
         argparse.Namespace: Parsed command line arguments

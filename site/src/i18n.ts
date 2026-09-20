@@ -23,7 +23,7 @@ export const ui = {
       features: [
         '**Asynchronous Pipeline** — decouples **5‑10 Hz** VLA inference from **200‑500 Hz** motor control, removes inference‑control waiting latency.',
         '**Two‑stage Trajectory Smoothing** — achieves near *C²* continuity and motion jitter drastically suppressed with *acceleration std* reduces **~100×** *( 10+ → 0.1 rad/s²)*.',
-        '**Drop‑in Compatibility** — supports more than **20 VLA/WAM models** & **4 heterogeneous robots**; new model adaptation needs only **50‑100 lines** of code without retraining.',
+        '**Drop‑in Compatibility** — supports **10 VLA/WAM models** across **7 families** & **4 heterogeneous robots**; new model adaptation needs only **50‑100 lines** of code without retraining.',
         '**Cloud‑Edge‑End Deployment** — Server‑Client architecture supports robot‑local, edge and cloud execution over **wired/Wi‑Fi/5G** with respective latency of end‑side **3‑5** ms, edge **35‑45** ms, cloud **80‑120** ms, requiring zero upper‑level code modification.',
         '**Enhanced Execution Throughput** — achieves up to **2.09×** speedup against raw policy output, outperforming tele‑operation speed with no need for recollecting training data.',
         '**Universal Task Success Boost** — lifts model success rate up to **0.95**, with absolute gain Δ from **+0.10 to +0.725** (evaluated on *π₀.₅* and *GR00T‑N1.5*).',
@@ -98,13 +98,13 @@ export const ui = {
           summary:
             'RobotBase unified hardware interface, standardized inference interface, and Server-Client distributed architecture collapse robot swaps, VLA-model swaps, and deployment swaps into low-level configuration.',
           metrics: [
-            { value: '4+', label: 'Heterogeneous humanoid robots adapted' },
-            { value: '20+', label: 'Mainstream VLA/WAM models supported' },
+            { value: '4', label: 'Heterogeneous humanoid robots adapted' },
+            { value: '10', label: 'Mainstream VLA/WAM models supported (7 families)' },
             { value: '<100', label: 'Lines of code to integrate a new model' },
           ],
           details: [
             'Switch robots: RobotBase unified hardware interface, action_layout unified action mapping; already adapted Unitree G1, AgiBot G1, China Mobile Lingxi, Zhejiang humanoid.',
-            'Switch VLA models: standardized input/output inference interface; already supports more than 20 models including GR00T, TAO, RDT, DreamZero, PI, ACT; integrating a new model needs only 50–100 lines of business code.',
+            'Switch VLA models: standardized input/output inference interface; already supports 10 models across 7 families — GR00T N1 / N1.5 / N1.6, π0, π0.5, TAO, GO1, SmolVLA, ACT, RDT; integrating a new model needs only 50–100 lines of business code.',
             'Switch deployments: Server-Client end-edge-cloud distributed architecture; Server can run on local body / edge / cloud, Client on the robot; switch deployment by changing only the comms address with zero upper-logic changes and auto-reconnect heartbeat.',
           ],
         },
@@ -184,6 +184,9 @@ export const ui = {
         { label: 'Getting Started', href: 'getting-started/' },
         { label: 'Architecture', href: 'architecture/' },
         { label: 'Configuration', href: 'configuration/' },
+        { label: 'Dataset Demo', href: 'demo-running-on-dataset/' },
+        { label: 'Add a Model', href: 'guides/add-new-model/' },
+        { label: 'Add a Robot', href: 'guides/add-new-robot/' },
         { label: 'Troubleshooting', href: 'troubleshooting/' },
       ],
     },
