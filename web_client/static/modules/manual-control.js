@@ -28,11 +28,8 @@ const readPreset = (id) => {
 };
 const updateEditState = (select, edit, disabledReason = 'Preset control is disabled.') => {
   if (!select || !edit) return;
-  const isDefault = select.selectedOptions?.[0]?.dataset.key === 'Default';
   edit.disabled = select.disabled;
-  edit.title = select.disabled
-    ? disabledReason
-    : isDefault ? 'View default preset' : 'Edit preset';
+  edit.title = select.disabled ? disabledReason : 'Edit preset';
 };
 const populate = (selectId, checkId, action, side = null) => {
   const select = $(selectId);
@@ -90,7 +87,7 @@ const refreshControls = () => {
   });
 };
 
-const requestPreset = (key, current, readOnly = false) => new Promise(resolve => {
+const requestPreset = (key, current) => new Promise(resolve => {
   const modal = $('modal-preset-edit');
   const title = $('preset-edit-title');
   const valueInput = $('preset-edit-value');
@@ -106,17 +103,17 @@ const requestPreset = (key, current, readOnly = false) => new Promise(resolve =>
     document.removeEventListener('keydown', onKeyDown);
     resolve(result);
   };
-  const submit = () => readOnly ? finish(null) : finish({ value: valueInput.value });
+  const submit = () => finish({ value: valueInput.value });
   const onKeyDown = event => {
     if (event.key === 'Enter') submit();
     if (event.key === 'Escape') finish(null);
   };
 
-  title.textContent = `${readOnly ? 'View' : 'Edit'} Preset: ${key}`;
+  title.textContent = `Edit Preset: ${key}`;
   valueInput.value = JSON.stringify(current);
-  valueInput.readOnly = readOnly;
-  confirm.hidden = readOnly;
-  cancel.textContent = readOnly ? 'Close' : 'Cancel';
+  valueInput.readOnly = false;
+  confirm.hidden = false;
+  cancel.textContent = 'Cancel';
   confirm.onclick = submit;
   cancel.onclick = () => finish(null);
   modal.onclick = event => {
@@ -163,12 +160,11 @@ const savePresets = async (selectId, action, side, items, selectedKey, verb) => 
     if (selected) select.value = selected.value;
     updateEditState(select, $(`${selectId}-edit`));
 
-    const display = $('conf-path-display');
-    const path = display?.dataset.fullPath || display?.textContent.trim() || '';
-    if (path) {
+    const confRes = await apiFetch('/api/client/config/path');
+    if (confRes.path) {
       await apiFetch('/api/client/config/save', {
         method: 'POST',
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({ path: confRes.path }),
       });
     }
     toast(`Preset "${selectedKey}" ${verb}.`, 'ok');
@@ -181,9 +177,7 @@ const editPreset = async (selectId, action, side = null) => {
   if (!option?.dataset.key || !current) return;
 
   const key = option.dataset.key;
-  const isDefault = key === 'Default';
-  const result = await requestPreset(key, current, isDefault);
-  if (isDefault) return;
+  const result = await requestPreset(key, current);
   if (!result) return;
   const value = parsePresetValue(result.value, current.length);
   if (!value) return;
@@ -257,6 +251,23 @@ const sendActions = async (endpoint, actions) => {
     }
   });
   return Object.keys(payload).length > 1 && sendControl(endpoint, payload);
+};
+
+window.getRobotControlPayload = () => {
+  const payload = { source: 'manual' };
+  for (const [prefix, action] of [['arm', 'arm'], ['gripper', handAction()]]) {
+    for (const side of ['left', 'right']) {
+      if (!checked(`chk-${prefix}-${side}`)) continue;
+      const value = readPreset(`${prefix}-${side}-preset`);
+      if (value) payload[`${side[0]}_${action}`] = value;
+    }
+  }
+  ['head', 'waist', 'body', 'wheel', 'leg'].forEach(action => {
+    if (!checked(`chk-${action}`)) return;
+    const value = readPreset(`${action}-preset`);
+    if (value) payload[action] = value;
+  });
+  return Object.keys(payload).length > 1 ? payload : null;
 };
 
 $('btn-arm')?.addEventListener('click', async () => {

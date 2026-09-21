@@ -55,6 +55,9 @@ def get_model(config):
     elif config.type == ModelType.TAO:
         from server.models.tao import ModelVLA as TAO
         return TAO(config.tao)
+    elif config.type == ModelType.DM05:
+        from server.models.dm05 import ModelVLA as DM05
+        return DM05(config.dm05)
     else:
         raise ValueError("Invalid model type")
 
@@ -67,7 +70,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao'],
+    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao', 'dm05'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
@@ -106,7 +109,9 @@ def override_config_with_args(config, args):
             config.models.pi05.model_path = args.model_path
         elif config.models.type == ModelType.TAO:
             config.models.tao.model_path = args.model_path
-    
+        elif config.models.type == ModelType.DM05:
+            config.models.dm05.model_path = args.model_path
+
     return config
 
 def main():
