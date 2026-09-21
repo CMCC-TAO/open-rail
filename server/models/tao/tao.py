@@ -131,15 +131,22 @@ class ModelVLA:
         predicted_action = np.concatenate([v.squeeze(0) for v in predicted_action['action'].values()], axis=1)
         # hand_to_grasp: model outputs compact 16-dim action
         # [left_arm(7), right_arm(7), left_gripper(1), right_gripper(1)] in 0~1000.
-        # Expand each gripper to 6 hand motors: [v,v,v,v,v,1000] — thumb_bend +
-        # 4 fingers follow model output, thumb_rotate held at 1000 (ready-to-grasp).
+        # Hand motor order is [little, ring, middle, index, thumb_bend, thumb_rotate].
+        # Keep the four non-little fingers following the model, cap the little finger
+        # at 300, and keep thumb_rotate at 750.
         if self.cfg['embodiment_tag'] == 'unitree_g1' and predicted_action.shape[-1] == 16:
             arm = predicted_action[:, :14]
+            left_gripper = predicted_action[:, 14:15]
+            right_gripper = predicted_action[:, 15:16]
             left_hand = np.concatenate([
-                np.repeat(predicted_action[:, 14:15], 5, axis=1),
+                np.minimum(left_gripper, 300.0),
+                np.repeat(left_gripper, 3, axis=1),
+                left_gripper,
                 np.full((predicted_action.shape[0], 1), 750.0)], axis=1)
             right_hand = np.concatenate([
-                np.repeat(predicted_action[:, 15:16], 5, axis=1),
+                np.minimum(right_gripper, 300.0),
+                np.repeat(right_gripper, 3, axis=1),
+                right_gripper,
                 np.full((predicted_action.shape[0], 1), 750.0)], axis=1)
             predicted_action = np.concatenate([arm, left_hand, right_hand], axis=1)
         print(time.time() - time1, 'action shape:', predicted_action.shape)

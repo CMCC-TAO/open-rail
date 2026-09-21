@@ -92,7 +92,7 @@ class PlaceHandler(AbstractTaskHandler):
         return "place"
 
     def _move_to_initial_pose(self, goal_handle, robot_body, target, context):
-        """Keep the legacy safe-to-initial arm transition before VLA control."""
+        """Move to the initial pose and return its final commanded action."""
         self.send_feedback(goal_handle, 10, "放置前移动到安全姿态")
 
         safe_state = robot_body.move_arms(
@@ -123,7 +123,7 @@ class PlaceHandler(AbstractTaskHandler):
             )
 
         self.send_feedback(goal_handle, 20, "已到初始姿态，开始模型放置")
-        return None
+        return np.asarray(init_state, dtype=np.float64).copy()
 
     def execute(self, goal_handle, params: dict, context) -> TaskResult:
         requested_target = params.get("target", "")
@@ -190,30 +190,24 @@ class PlaceHandler(AbstractTaskHandler):
         try:
             context._active_vla_client = vla_client
 
-            init_result = self._move_to_initial_pose(
+            initial_action = self._move_to_initial_pose(
                 goal_handle, robot_body, target, context
             )
-            if init_result is not None:
-                return init_result
+            if isinstance(initial_action, TaskResult):
+                return initial_action
 
-            blend_config = None
-            try:
-                current_action = robot_body._get_reset_current_action()
-                if current_action is not None:
-                    blend_config = {
-                        "start_action": np.asarray(current_action, dtype=np.float64),
-                        "duration": 3.0,
-                    }
-            except Exception:
-                pass
+            blend_config = {
+                "start_action": initial_action,
+                "duration": 3.0,
+            }
 
             result = run_vla_control_only(
                 goal_handle=goal_handle,
                 vla_client=vla_client,
                 language_instruction=instruction,
                 max_duration=30.0,
-                complete_threshold=0.50,
-                complete_hold_time=2.0,
+                complete_threshold=0.45,
+                complete_hold_time=1.0,
                 blend_config=blend_config,
             )
 

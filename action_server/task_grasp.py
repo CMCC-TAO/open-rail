@@ -204,8 +204,8 @@ class GraspHandler(AbstractTaskHandler):
                 vla_client=vla_client,
                 language_instruction=instruction,
                 max_duration=30.0,
-                thre_progress=0.8,
-                complete_hold_time=2.0,
+                thre_progress=0.75,
+                complete_hold_time=1.0,
                 blend_config=blend_config,
             )
 

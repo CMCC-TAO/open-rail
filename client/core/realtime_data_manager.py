@@ -88,6 +88,7 @@ class RealtimeDataManager():
         self.avg_infer_time = 0.0
         self.avg_comm_time = 0.0 # communication latency between vla_client and vla_server
         self.infer_count = 0
+        self._generation = 0
         self.observe_marker = 0.0
 
         # Synchronous Running Flag
@@ -97,12 +98,20 @@ class RealtimeDataManager():
         # Inter-chunk transition / fusion helper
         self.inter_chunk_fusion = InterChunkFuser(config=self.rdm_config)
 
-    def add_infer_count(self):
+    def add_infer_count(self, generation=None):
         """Add one to infer count for each inference step.
         Returns:
-            None.
+            bool: False when the inference result belongs to an old generation.
         """
-        self.infer_count += 1
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            self.infer_count += 1
+            return True
+
+    def get_generation(self):
+        with self.action_lock:
+            return self._generation
 
     def set_init_observe_timestamp(self, timestamp):
         """Set the timestamp of the first observe data to inference. The timestamp comes from robot observations.
@@ -112,72 +121,108 @@ class RealtimeDataManager():
         """
         self.init_observe_timestamp = timestamp
     
-    def set_observe_time_marker(self, timestamp):
+    def set_observe_time_marker(self, timestamp, generation=None):
         """Set the local timestamp when received the observe frame from robot. Used for calculating the inference time.
 
         Args:
             timestamp (float): The local timestamp in seconds.
         """
-        self.observe_marker = timestamp
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            self.observe_marker = timestamp
+        return True
         
-    def set_infer_time_marker(self):
+    def set_infer_time_marker(self, generation=None):
         """Set the local timestamp when start inference. Used for calculating the inference time.
         """
-        self.start_infer_marker = time.perf_counter()
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            self.start_infer_marker = time.perf_counter()
+        return True
         # print(f"Start inference at {self.start_infer_marker:.4f} s")
         
-    def set_intra_traj_time_marker(self):
+    def set_intra_traj_time_marker(self, generation=None):
         """Set the local timestamp when start intra chunk process. Used for calculating the trajectory fitting time.
         """
-        self.start_intra_traj_marker = time.perf_counter()
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            self.start_intra_traj_marker = time.perf_counter()
+        return True
         # print(f"Start intra chunk process at {self.start_intra_traj_marker:.4f} s")
         
-    def set_inter_traj_time_marker(self):
+    def set_inter_traj_time_marker(self, generation=None):
         """Set the local timestamp when start inter chunk process. Used for calculating the inter chunk fusion time.
         """
-        self.start_inter_traj_marker = time.perf_counter()
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            self.start_inter_traj_marker = time.perf_counter()
+        return True
         # print(f"Start inter chunk process at {self.start_inter_traj_marker:.4f} s")
-    def set_control_time_marker(self):
+    def set_control_time_marker(self, generation=None):
         """Set the local timestamp when start control. Used for calculating the control time.
         """
-        self.start_ctrl_marker = time.perf_counter()
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            self.start_ctrl_marker = time.perf_counter()
+        return True
     
-    def compute_avg_comm_infer_time(self):
+    def compute_avg_comm_infer_time(self, generation=None):
         """Compute the average inference time. The average inference time is used to set the offset of the action chunk.
         """
-        # self.last_infer_time = self.currt_infer_time
-        currt_comm_infer_time = self.start_intra_traj_marker - self.start_infer_marker
-        # self.avg_comm_infer_time = (self.avg_comm_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
-        self.avg_comm_infer_time = self.avg_comm_infer_time * 0.8 + currt_comm_infer_time * 0.2 if self.avg_comm_infer_time > 0 else currt_comm_infer_time
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            # self.last_infer_time = self.currt_infer_time
+            currt_comm_infer_time = self.start_intra_traj_marker - self.start_infer_marker
+            # self.avg_comm_infer_time = (self.avg_comm_infer_time * (self.infer_count - 1) + currt_infer_time) / self.infer_count if self.infer_count > 0 else currt_infer_time
+            self.avg_comm_infer_time = self.avg_comm_infer_time * 0.8 + currt_comm_infer_time * 0.2 if self.avg_comm_infer_time > 0 else currt_comm_infer_time
         self.logger.debug(f'avg communication and inference time: {self.avg_comm_infer_time:.4f}s')
+        return True
         # print(f"avg infer time: {self.avg_comm_infer_time}, infer count: {self.infer_count}")
     
-    def compute_avg_comm_time(self, avg_infer_time):
+    def compute_avg_comm_time(self, avg_infer_time, generation=None):
         """Compute the average communication time between vla_client and vla_server.
 
         Args:
             avg_infer_time (float): The average inference time return from vla_server
         """
-        self.avg_infer_time = self.avg_infer_time * 0.8 + avg_infer_time * 0.2 if self.avg_infer_time > 0.0 else avg_infer_time
-        self.avg_comm_time = self.avg_comm_infer_time - avg_infer_time
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            self.avg_infer_time = self.avg_infer_time * 0.8 + avg_infer_time * 0.2 if self.avg_infer_time > 0.0 else avg_infer_time
+            self.avg_comm_time = self.avg_comm_infer_time - avg_infer_time
+        return True
 
-    def compute_avg_intra_traj_time(self):
+    def compute_avg_intra_traj_time(self, generation=None):
         """Compute the average intra chunk process time. The average trajectory fitting time is used to set the offset of the action chunk.
         """
-        # self.last_traj_time = self.currt_traj_time
-        currt_intra_traj_time = self.start_inter_traj_marker - self.start_intra_traj_marker
-        # self.avg_intra_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_intra_traj_time) / self.infer_count if self.infer_count > 0 else currt_intra_traj_time
-        self.avg_intra_traj_time = self.avg_intra_traj_time * 0.8 + currt_intra_traj_time * 0.2 if self.avg_intra_traj_time > 0 else currt_intra_traj_time
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            # self.last_traj_time = self.currt_traj_time
+            currt_intra_traj_time = self.start_inter_traj_marker - self.start_intra_traj_marker
+            # self.avg_intra_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_intra_traj_time) / self.infer_count if self.infer_count > 0 else currt_intra_traj_time
+            self.avg_intra_traj_time = self.avg_intra_traj_time * 0.8 + currt_intra_traj_time * 0.2 if self.avg_intra_traj_time > 0 else currt_intra_traj_time
         self.logger.debug(f'avg intra traj time: {self.avg_intra_traj_time:.4f}s')
+        return True
         # self.logger.debug(f'avg traj time: {self.avg_intra_traj_time}')
-    def compute_avg_inter_traj_time(self):
+    def compute_avg_inter_traj_time(self, generation=None):
         """Compute the average trajectory fitting time. The average trajectory fitting time is used to set the offset of the action chunk.
         """
-        # self.last_traj_time = self.currt_traj_time
-        currt_inter_traj_time = self.start_ctrl_marker - self.start_inter_traj_marker
-        # self.avg_inter_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_inter_traj_time) / self.infer_count if self.infer_count > 0 else currt_inter_traj_time
-        self.avg_inter_traj_time = self.avg_inter_traj_time * 0.8 + currt_inter_traj_time * 0.2 if self.avg_inter_traj_time > 0 else currt_inter_traj_time
+        with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
+            # self.last_traj_time = self.currt_traj_time
+            currt_inter_traj_time = self.start_ctrl_marker - self.start_inter_traj_marker
+            # self.avg_inter_traj_time = (self.avg_intra_traj_time * (self.infer_count - 1) + currt_inter_traj_time) / self.infer_count if self.infer_count > 0 else currt_inter_traj_time
+            self.avg_inter_traj_time = self.avg_inter_traj_time * 0.8 + currt_inter_traj_time * 0.2 if self.avg_inter_traj_time > 0 else currt_inter_traj_time
         self.logger.debug(f'avg inter traj time: {self.avg_inter_traj_time:.4f}s')
+        return True
  
     def add_observe_data(self, frame):
         """Add observe data to buffer. The observe data is a dictionary containing the robot state, camera images and timestamps.
@@ -209,7 +254,7 @@ class RealtimeDataManager():
         with self.observe_thread_lock:
             return float(self.observe_fps)
 
-    def update_action_chunk_raw(self, action_chunk, timestamp_chunk):
+    def update_action_chunk_raw(self, action_chunk, timestamp_chunk, generation=None):
         """Update the raw action chunk and timestamp chunk predicted by the VLA model.
 
         Args:
@@ -238,9 +283,12 @@ class RealtimeDataManager():
         # published together under one lock, and get_action_fitted() reads them
         # under the same lock, so it can never observe a mismatched pair.
         with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
             self.action_chunks = action_array
             self.timestamp_chunks = timestamp_array
             self.raw_action_count = action_array.shape[1]
+        return True
 
     @run_time_decorator
     def fusionActionChunks(self, action_chunk, timestamp_chunk):
@@ -415,7 +463,8 @@ class RealtimeDataManager():
                                 target_chunk_index,
                                 prob_progress=None,
                                 step_indices=None,
-                                gripper_offset=0):
+                                gripper_offset=0,
+                                generation=None):
         """Update action chunk with the new fitted action chunk.
 
         Args:
@@ -432,6 +481,8 @@ class RealtimeDataManager():
             action_chunk_smoothed, step_indices, gripper_offset
         )
         with self.action_lock:
+            if generation is not None and generation != self._generation:
+                return False
             self.action_chunk_index = target_chunk_index if self.action_chunk_index is not None else 0
             self.action_chunk_fitted = action_chunk_smoothed
             self.vel_chunk_fitted = vel_chunk_smoothed
@@ -443,6 +494,7 @@ class RealtimeDataManager():
             # itself -- but a waiter may be blocked on the *previous* chunk's
             # predicate and must re-evaluate against the new one.
             self.action_cond.notify_all()
+            return True
 
     def get_start_chunk_index(self, next_timestamps):
         start_chunk_index = 0
@@ -631,6 +683,7 @@ class RealtimeDataManager():
             self.avg_comm_time = 0.0
             self.avg_intra_traj_time = 0.0
             self.avg_inter_traj_time = 0.0
+            self._generation += 1
             self.action_chunk_fitted = None
             self.vel_chunk_fitted = None
             self.acc_chunk_fitted = None

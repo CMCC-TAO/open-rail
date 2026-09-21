@@ -85,13 +85,13 @@ controller:
 inter_chunk:
   inter_chunk_mode: min_jerk
   min_jerk:
-    blend_threshold: 0.7
+    blend_threshold: 0.8
     arm_transition_ratio: -1.0
     hand_transition_ratio: 0.15
-    arm_adapt_scale: 1.0
+    arm_adapt_scale: 0.75
     hand_adapt_scale: 1000.0
-    adapt_factor_min: 0.1
-    adapt_gain_vel: 0.0
+    adapt_factor_min: 0.25
+    adapt_gain_vel: 0.1
   search_action:
     search_length: 100
   smooth_velocity:
@@ -822,4 +822,4 @@ vla_zmq:
   heartbeat_timeout: 30000
   infer_timeout: 5000
   ip: 117.147.181.179
-  port: '5566'
+  port: '5567'

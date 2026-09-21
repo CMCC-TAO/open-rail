@@ -108,6 +108,9 @@ class VLAClient():
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
         self.is_control_thread_running = False
+        self._blend_start_action = None
+        self._blend_duration = 0.0
+        self._blend_start_time = None
         
         # Define image preprocess function
         self.update_preprocess_func()
@@ -183,15 +186,23 @@ class VLAClient():
         """
         self.is_running = True
         self.is_control_thread_running = True
+        self._blend_start_action = None
+        self._blend_duration = 0.0
+        self._blend_start_time = None
         if blend_config is not None:
             self._blend_start_action = np.asarray(blend_config['start_action'], dtype=np.float64)
             self._blend_duration = float(blend_config.get('duration', 3.0))
-            self._blend_start_time = time.perf_counter()
+            # Start the duration when the first fitted action is available,
+            # not while the inference pipeline is still being reinitialized.
+            self._blend_start_time = None
         if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
 
     def stop_control(self):
         self.is_control_thread_running = False
+        self._blend_start_action = None
+        self._blend_duration = 0.0
+        self._blend_start_time = None
     
     def set_control_period(self, period) -> None:
         self.control_thread_timer.set_interval(period)
@@ -523,9 +534,38 @@ class VLAClient():
         else:
             action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
 
+            control_action = action_fitted
             if action_fitted is not None:
                 try:
-                    self.robot.control_robot(action_fitted)
+                    blend_start_action = self._blend_start_action
+                    if blend_start_action is not None:
+                        fitted_action = np.asarray(action_fitted, dtype=np.float64)
+                        if blend_start_action.shape == fitted_action.shape:
+                            if self._blend_start_time is None:
+                                self._blend_start_time = time.perf_counter()
+                            elapsed = max(0.0, time.perf_counter() - self._blend_start_time)
+                            if self._blend_duration > 0.0 and elapsed < self._blend_duration:
+                                blend_ratio = elapsed / self._blend_duration
+                                control_action = (
+                                    (1.0 - blend_ratio) * blend_start_action
+                                    + blend_ratio * fitted_action
+                                )
+                            else:
+                                self._blend_start_action = None
+                                self._blend_duration = 0.0
+                                self._blend_start_time = None
+                                control_action = action_fitted
+                        else:
+                            self.logger.warning(
+                                "Ignoring action blend because start shape %s does not match action shape %s",
+                                blend_start_action.shape,
+                                fitted_action.shape,
+                            )
+                            self._blend_start_action = None
+                            self._blend_duration = 0.0
+                            self._blend_start_time = None
+
+                    self.robot.control_robot(control_action)
                 except Exception as exc:
                     self._stop_control_thread_on_error()
                     self.logger.error("Robot control failed: %s", exc)
@@ -534,7 +574,7 @@ class VLAClient():
                     # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
                 
                 if self.config.record.switch:
-                    self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
+                    self.data_record_manager.add_action_async(control_action, time.perf_counter())
                 
                 # with self.show_thread_lock:
                 #     self.info_act['action'] = action_fitted.shape
@@ -553,7 +593,7 @@ class VLAClient():
             if self.visualize_server.vis_global_step % 5 == 0:
                 current_state = getattr(self.robot, 'current_state', None)
                 self.visualize_server.update_chart_data(
-                    action_fitted=action_fitted,
+                    action_fitted=control_action,
                     vel_fitted=vel_fitted,
                     acc_fitted=acc_fitted,
                     action_raw=action_raw,
@@ -604,10 +644,12 @@ class VLAClient():
             # Clear action data to ensure fresh action retrieval
         
         # Get observation data (thread-safe function, no lock needed)
+        generation = self.realtime_data_manager.get_generation()
         data = self.realtime_data_manager.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
         if data is not None:
             # Record inference start timestamp for control timestamp updates
-            self.realtime_data_manager.set_infer_time_marker()
+            if not self.realtime_data_manager.set_infer_time_marker(generation=generation):
+                return
             
             # Send data for inference and wait for results
             result = self._request_inference(data, timeout_ms=self.config.vla_zmq.infer_timeout * 4)
@@ -616,20 +658,32 @@ class VLAClient():
                 return
             # Record trajectory fitting timestamp
             avg_infer_time = result.get('meta', {}).get('avg_infer_time', 0.0)
-            self.realtime_data_manager.set_intra_traj_time_marker()
-            self.realtime_data_manager.add_infer_count()
+            if not self.realtime_data_manager.set_intra_traj_time_marker(generation=generation):
+                return
+            if not self.realtime_data_manager.add_infer_count(generation=generation):
+                return
 
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
             action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
-            self.realtime_data_manager.set_observe_time_marker(loc_timestamp)
+            if not self.realtime_data_manager.set_observe_time_marker(
+                loc_timestamp, generation=generation
+            ):
+                return
             
             # Add action data (thread-safe function, no lock needed)
-            self.realtime_data_manager.set_init_observe_timestamp(timestamp=timestamp_chunk[0])
-            self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
+            self.realtime_data_manager.set_init_observe_timestamp(
+                timestamp=timestamp_chunk[0]
+            )
+            if not self.realtime_data_manager.update_action_chunk_raw(
+                action_chunk, timestamp_chunk, generation=generation
+            ):
+                return
 
             timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
+            if timestamps is None:
+                return
             prob_progress = self._parse_prob_progress(action_data)
             action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted = self.intra_chunk_smoother.process(
                 timestamps,
@@ -639,7 +693,8 @@ class VLAClient():
                 joint_indices=self.robot.get_joint_indices(),
                 step_indices=self.robot.get_step_indices())
 
-            self.realtime_data_manager.set_inter_traj_time_marker()
+            if not self.realtime_data_manager.set_inter_traj_time_marker(generation=generation):
+                return
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
             # currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
@@ -655,8 +710,9 @@ class VLAClient():
                 step_indices=None,
             )
             # Record control timestamp
-            self.realtime_data_manager.set_control_time_marker()
-            self.realtime_data_manager.update_action_chunk_fitted(
+            if not self.realtime_data_manager.set_control_time_marker(generation=generation):
+                return
+            if not self.realtime_data_manager.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
                 vel_chunk_smoothed=vel_chunk_smoothed,
                 acc_chunk_smoothed=acc_chunk_smoothed,
@@ -665,13 +721,21 @@ class VLAClient():
                 prob_progress=task_progress_fitted,
                 step_indices=self.robot.get_step_indices(),
                 gripper_offset=self.config.controller.gripper_offset,
-            )
+                generation=generation,
+            ):
+                return
 
             # Compute average inference and trajectory fitting times
-            self.realtime_data_manager.compute_avg_comm_infer_time()
-            self.realtime_data_manager.compute_avg_intra_traj_time()
-            self.realtime_data_manager.compute_avg_inter_traj_time()
-            self.realtime_data_manager.compute_avg_comm_time(avg_infer_time=avg_infer_time)
+            if not self.realtime_data_manager.compute_avg_comm_infer_time(generation=generation):
+                return
+            if not self.realtime_data_manager.compute_avg_intra_traj_time(generation=generation):
+                return
+            if not self.realtime_data_manager.compute_avg_inter_traj_time(generation=generation):
+                return
+            if not self.realtime_data_manager.compute_avg_comm_time(
+                avg_infer_time=avg_infer_time, generation=generation
+            ):
+                return
     
     # @run_time_decorator
     def _inference_step(self):
@@ -688,6 +752,7 @@ class VLAClient():
             return
         
         # Get observation data (thread-safe function, no lock needed)
+        generation = self.realtime_data_manager.get_generation()
         data = self.realtime_data_manager.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
         if isinstance(data, dict):
             currt_language_instruction = data.get("obs", {}).get("language")[0]
@@ -698,7 +763,8 @@ class VLAClient():
         # print(f"data keys: {data.keys() if data is not None else None}, infer_count: {self.realtime_data_manager.infer_count}")
         if data is not None:
             # Record inference start timestamp
-            self.realtime_data_manager.set_infer_time_marker()
+            if not self.realtime_data_manager.set_infer_time_marker(generation=generation):
+                return
             
             # Send data for inference and wait for results
             result = self._request_inference(data, timeout_ms = self.config.vla_zmq.infer_timeout)
@@ -708,19 +774,26 @@ class VLAClient():
             if 'data' not in result:
                 self.logger.warning("Inference result doesn't have data.")
                 return
-
             avg_infer_time = result.get('meta', {}).get('avg_infer_time', 0.0)
             # Record trajectory fitting timestamp
-            self.realtime_data_manager.set_intra_traj_time_marker()
-            self.realtime_data_manager.add_infer_count()
+            if not self.realtime_data_manager.set_intra_traj_time_marker(generation=generation):
+                return
+            if not self.realtime_data_manager.add_infer_count(generation=generation):
+                return
             action_data = result['data']
             
             # Get current data timestamp and update timestamps
             action_chunk, timestamp_chunk, loc_timestamp = self._process_action_chunk(action_data)
-            self.realtime_data_manager.set_observe_time_marker(loc_timestamp)
+            if not self.realtime_data_manager.set_observe_time_marker(
+                loc_timestamp, generation=generation
+            ):
+                return
             
             # Add action data (thread-safe function, no lock needed)
-            self.realtime_data_manager.update_action_chunk_raw(action_chunk, timestamp_chunk)
+            if not self.realtime_data_manager.update_action_chunk_raw(
+                action_chunk, timestamp_chunk, generation=generation
+            ):
+                return
 
 
             timestamps, action_chunk = self.realtime_data_manager.pop_action_chunk(time_offset=0.0)
@@ -737,7 +810,8 @@ class VLAClient():
                 joint_indices=self.robot.get_joint_indices(),
                 step_indices=step_indices)
 
-            self.realtime_data_manager.set_inter_traj_time_marker()
+            if not self.realtime_data_manager.set_inter_traj_time_marker(generation=generation):
+                return
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
             currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
             # Use inter chunk fusion when control thread is running, otherwise use intra chunk smoother output directly for visualization and monitoring
@@ -759,8 +833,9 @@ class VLAClient():
                 step_indices=step_indices,
             )
             # Record control timestamp
-            self.realtime_data_manager.set_control_time_marker()
-            self.realtime_data_manager.update_action_chunk_fitted(
+            if not self.realtime_data_manager.set_control_time_marker(generation=generation):
+                return
+            if not self.realtime_data_manager.update_action_chunk_fitted(
                 action_chunk_smoothed=action_chunk_smoothed,
                 vel_chunk_smoothed=vel_chunk_smoothed,
                 acc_chunk_smoothed=acc_chunk_smoothed,
@@ -769,13 +844,23 @@ class VLAClient():
                 prob_progress=task_progress_fitted,
                 step_indices=self.robot.get_step_indices(),
                 gripper_offset=self.config.controller.gripper_offset,
-            )
+                generation=generation,
+            ):
+                return
 
             # Compute average inference and trajectory fitting times
-            self.realtime_data_manager.compute_avg_comm_infer_time()
-            self.realtime_data_manager.compute_avg_intra_traj_time()
-            self.realtime_data_manager.compute_avg_inter_traj_time()
-            self.realtime_data_manager.compute_avg_comm_time(avg_infer_time=avg_infer_time)
+            if not self.realtime_data_manager.compute_avg_comm_infer_time(generation=generation):
+                return
+            if not self.realtime_data_manager.compute_avg_intra_traj_time(generation=generation):
+                return
+            if not self.realtime_data_manager.compute_avg_inter_traj_time(generation=generation):
+                return
+            if not self.realtime_data_manager.compute_avg_comm_time(
+                avg_infer_time=avg_infer_time, generation=generation
+            ):
+                return
+            if self.realtime_data_manager.get_generation() != generation:
+                return
             if self.config.language.auto_mode == True:
                 self.task_language_manager.confirm_advance_subtask(
                     language_instruction=currt_language_instruction,
