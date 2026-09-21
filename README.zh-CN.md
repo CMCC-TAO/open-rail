@@ -90,6 +90,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | 中国移动灵犀（Ti5 T170C） | 双臂轮式机器人（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
 | NAVIAI-WA2（浙江人形） | 折叠轮臂人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
 | Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
+| Unitree G1 | 双臂双足人形 | 🔜 即将支持 | — |
 | _你的机器人_ | — | 🔜 计划中 | [接入指南](docs/guides/add-new-robot.zh-CN.md) |
 
 ### 模型
@@ -359,6 +360,7 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 **兼容——多模型与多机器人控制**
 
 - [x] 4 款异构机器人（AgiBot G1 / 中国移动灵犀（Ti5 T170C）/ NAVIAI-WA2 + 一套 LeRobot 仿真后端）
+- [ ] Unitree G1 适配器——已适配，下个版本放出
 - [x] 10 个 VLA/WAM 模型（7 系列）
 - [x] 可视化抽象为独立层——面向非开发人员的控制入口
 - [ ] WAM 模型接入（10 月）

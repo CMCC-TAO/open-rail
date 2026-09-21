@@ -42,12 +42,24 @@ export const supportedModels: { name: string; note: string; soon?: boolean }[] =
   { name: 'XVLA EEF', note: 'XVLA end-effector variant', soon: true },
 ];
 
-// Heterogeneous humanoid robots already adapted.
-export const supportedRobots = [
-  { name: 'Unitree G1', note: 'Dual-arm bipedal humanoid', tags: ['Hand'] },
+// Heterogeneous humanoid robots adapted by Open-RAIL.
+// `soon: true`  = adapter ready, ships in the next release (badge: "Coming soon").
+// `kind: 'sim'` = simulation backend, listed on its own; it is not a robot body.
+export const supportedRobots: {
+  name: string;
+  note: string;
+  tags?: string[];
+  soon?: boolean;
+  kind?: 'sim';
+}[] = [
+  // Adapted and shipped in the current release.
   { name: 'AgiBot G1', note: 'Dual-arm wheeled humanoid', tags: ['Gripper', 'Hand'] },
   { name: 'China Mobile Lingxi', note: 'Dual-arm wheeled humanoid', tags: ['Gripper', 'Hand'] },
-  { name: 'NAVIAI-WA2', note: 'Dual-arm wheeled humanoid', tags: ['Hand'] },
+  { name: 'NAVIAI-WA2', note: 'Folding wheel-legged humanoid', tags: ['Hand'] },
+  // Adapter ready, shipping in the next release.
+  { name: 'Unitree G1', note: 'Dual-arm bipedal humanoid', tags: ['Hand'], soon: true },
+  // Simulation backend.
+  { name: 'Mock', note: 'LeRobot simulation backend, no hardware needed', kind: 'sim' },
 ];
 
 // Tutorials: a series of walkthrough videos (YouTube or Bilibili).

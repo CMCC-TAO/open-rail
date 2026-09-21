@@ -5,46 +5,127 @@ import { platformIcons as icons } from '../data/icons';
 import Highlight from './Highlight.astro';
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
+const c = t.community;
+
+const BASE = import.meta.env.BASE_URL;
+const REPO = 'https://github.com/CMCC-TAO/open-rail';
+
+// Copy keeps destinations as tokens, so the wording stays reviewable in i18n.ts.
+const LINK: Record<string, string> = {
+  '{DISCUSSIONS}': `${REPO}/discussions`,
+  '{ISSUES}': `${REPO}/issues`,
+  '{PR_LIST}': `${REPO}/pulls`,
+  '{CONTRIBUTING}': `${REPO}/blob/main/CONTRIBUTING.md`,
+  '{EMAIL}': `mailto:${site.email}`,
+  '{DOC_ADD_MODEL}': `${BASE}guides/add-new-model/`,
+  '{DOC_ADD_ROBOT}': `${BASE}guides/add-new-robot/`,
+  '{DOCS_FOLDER}': `${REPO}/tree/main/docs`,
+  '{ARCH_CHUNK}': `${BASE}architecture/#6-action-chunk-processing`,
+};
+const resolve = (token: string) => LINK[token];
+// {WECHAT} has no destination yet, so it renders as a disabled label instead of a link.
+const isLink = (token: string) => Object.prototype.hasOwnProperty.call(LINK, token);
 ---
 
-<section id="get-involved" class="section">
+<section id="get-involved" class="section scroll-mt-24">
   <div class="container-wide">
     <div class="text-center">
-      <p class="eyebrow">OPEN COMMUNITY</p>
-      <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">{t.community.title}</h2>
-      <p class="mx-auto mt-4 max-w-[54rem] text-slate-300"><Highlight text={t.community.vision} /></p>
+      <p class="eyebrow">{c.eyebrow}</p>
+      <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">{c.title}</h2>
+      <p class="mx-auto mt-4 max-w-[54rem] text-slate-300"><Highlight text={c.lead} /></p>
     </div>
 
-    <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-      {t.community.templates.map((tm) => (
-        <div class="card lift reveal">
-          <h3 class="text-base font-bold text-white"><Highlight text={tm.title} /></h3>
-          <p class="mt-2 text-sm text-slate-400"><Highlight text={tm.body} /></p>
+    <!-- What you can contribute -->
+    <h3 class="mt-10 text-xl font-bold text-white">{c.pathsTitle}</h3>
+    <div class="mt-4 grid gap-4 lg:grid-cols-3">
+      {c.tiers.map((tier) => (
+        <div class="card flex flex-col p-4">
+          <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <h4 class="text-xs font-bold uppercase tracking-[0.16em] text-brand-light">
+              <Highlight text={tier.name} />
+            </h4>
+            {tier.note && <p class="text-xs text-slate-500"><Highlight text={tier.note} /></p>}
+          </div>
+          <div class="mt-3 flex flex-col divide-y divide-ink-border">
+            {tier.items.map((p) => (
+              <div class="flex flex-col pt-3 first:pt-0">
+                <h5 class="text-lg font-bold text-white"><Highlight text={p.title} /></h5>
+                <p class="mt-2 text-sm leading-relaxed text-slate-400"><Highlight text={p.body} /></p>
+                <a class="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-brand-light hover:text-brand" href={resolve(p.href)}>
+                  <Highlight text={p.cta} />
+                  <span aria-hidden="true">&rarr;</span>
+                </a>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>
 
-    <div class="mt-8 rounded-2xl border border-ink-border bg-gradient-to-r from-brand/10 to-accent/10 p-6">
-      <p class="text-sm font-semibold text-slate-200"><Highlight text={t.community.entryLabel} /></p>
-      <div class="mt-3 flex flex-wrap items-center justify-center gap-3">
+    <!-- How to contribute -->
+    <h3 class="mt-10 text-xl font-bold text-white">{c.talkTitle}</h3>
+    <div class="mt-4 grid gap-4 sm:grid-cols-3">
+      {c.talk.map((k) => (
+        <div class="card reveal flex flex-col p-4">
+          <h4 class="text-lg font-bold text-white"><Highlight text={k.title} /></h4>
+          <p class="mt-2 flex-1 text-sm leading-relaxed text-slate-400"><Highlight text={k.body} /></p>
+          <a class="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-brand-light hover:text-brand" href={resolve(k.href)}>
+            <Highlight text={k.cta} />
+            <span aria-hidden="true">&rarr;</span>
+          </a>
+        </div>
+      ))}
+    </div>
+
+    <!-- Mirrors -->
+    <div class="mt-4 flex flex-col items-center gap-2">
+      <div class="flex flex-wrap items-center justify-center gap-2">
         {site.platforms.map((p) => (
-          <a class="btn-ghost px-3 py-2" href={p.href} title={p.label} aria-label={p.label}>
-            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><Fragment set:html={icons[p.icon]} /></svg>
+          <a class="btn-ghost px-3 py-1.5 text-xs" href={p.href} title={p.label} aria-label={p.label}>
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><Fragment set:html={icons[p.icon]} /></svg>
             <span>{p.label}</span>
           </a>
         ))}
-        <a class="btn-ghost" href={site.whitepaper}>{t.community.paperLabel}</a>
       </div>
-      <p class="mt-3 text-xs text-slate-500"><Highlight text={t.community.resourcesLabel} /></p>
+      <p class="mx-auto max-w-[54rem] text-center text-xs text-slate-500"><Highlight text={c.mirror} /></p>
+      <p class="text-center text-xs text-slate-500">
+        <Highlight text={c.contactNote} />
+        <a class="text-brand-light hover:text-brand" href={resolve('{EMAIL}')}>{site.email}</a>
+      </p>
     </div>
 
-    <div class="mt-8 grid gap-5 md:grid-cols-3">
-      {t.community.values.map((v) => (
-        <div class="rounded-xl border border-ink-border bg-white/5 p-4">
-          <p class="text-sm font-semibold text-brand-light"><Highlight text={v.who} /></p>
-          <p class="mt-1 text-sm text-slate-400"><Highlight text={v.value} /></p>
-        </div>
-      ))}
+    <!-- Before you open a PR -->
+    <div class="mt-6 rounded-2xl border border-ink-border bg-gradient-to-r from-brand/10 to-accent/10 p-5">
+      <h3 class="text-lg font-bold text-white"><Highlight text={c.stepsTitle} /></h3>
+      <ul class="mt-3 flex flex-col gap-2.5">
+        {c.steps.map((s, i) => (
+          <li class="flex gap-3">
+            <span class="mt-0.5 shrink-0 font-mono text-sm font-semibold text-slate-500">
+              {String(i + 1).padStart(2, '0')}
+            </span>
+            <span class="text-sm text-slate-400">
+              <span class="font-semibold text-slate-300"><Highlight text={s.title} /></span>
+              {' — '}
+              <Highlight text={s.body} />
+              {s.href && (
+                <>
+                  {' '}
+                  <a class="font-semibold text-brand-light hover:text-brand" href={resolve(s.href)}>
+                    <Highlight text={s.cta} />
+                  </a>
+                </>
+              )}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p class="mt-4 text-sm text-slate-500">
+        <Highlight text={c.stepsNote} />{' '}
+        <a class="text-brand-light hover:text-brand" href={resolve('{CONTRIBUTING}')}>{c.contributingCta}</a>
+        {' · '}
+        <Highlight text={c.devInstallNote} />{' '}
+        <code class="rounded bg-white/5 px-1.5 py-0.5 text-xs text-slate-300">{'python -m pip install -e ".[dev]"'}</code>
+      </p>
     </div>
   </div>
 </section>

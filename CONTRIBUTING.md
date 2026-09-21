@@ -84,9 +84,13 @@ Model code should not directly operate the ZMQ socket, robot SDK, or client API.
 
 ## Testing and style checks
 
-The repository does not yet have a dedicated test suite. Formatting and linting checks are, however, configured in `.pre-commit-config.yaml`.
+The repository does not yet have a dedicated test suite. `pytest` and `ruff` are declared in the `dev` extra in `pyproject.toml` and are installed by `python -m pip install -e ".[dev]"`; `ruff` uses a line length of 100 (see `[tool.ruff]` in `pyproject.toml`).
 
-For document modifications, also check Markdown fences, relative links, and `git diff --check`:
+For document modifications, also check the following before opening a pull request:
+
+- Markdown code fences are opened and closed correctly.
+- Relative links resolve to files that exist.
+- `git diff --check` reports no whitespace errors.
 
 For all code changes, include enough information in your pull request for reviewers to run and verify your changes, as applicable:
 - Python environment setup and key dependency versions

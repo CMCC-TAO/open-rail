@@ -157,6 +157,8 @@ site/.astro/
 *.tsbuildinfo
 .npm
 .vercel/
+# Local code-reading note; keep it out of commits.
+doc/site-code-reading.md
 .netlify/
 # Keep the site's own static assets even though `*.svg` is ignored above.
 !site/public/**/*.svg

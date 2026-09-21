@@ -23,7 +23,7 @@ export const ui = {
       features: [
         '**Asynchronous Pipeline** — decouples **5‑10 Hz** VLA inference from **200‑500 Hz** motor control, removes inference‑control waiting latency.',
         '**Two‑stage Trajectory Smoothing** — achieves near *C²* continuity and motion jitter drastically suppressed with *acceleration std* reduces **~100×** *( 10+ → 0.1 rad/s²)*.',
-        '**Drop‑in Compatibility** — supports **10 VLA/WAM models** across **7 families** & **4 heterogeneous robots**; new model adaptation needs only **50‑100 lines** of code without retraining.',
+        '**Drop‑in Compatibility** — supports **10 VLA/WAM models** across **7 families** & **3 heterogeneous robots** in this release (Unitree G1 **coming soon**); new model adaptation needs only **50‑100 lines** of code without retraining.',
         '**Cloud‑Edge‑End Deployment** — Server‑Client architecture supports robot‑local, edge and cloud execution over **wired/Wi‑Fi/5G** with respective latency of end‑side **3‑5** ms, edge **35‑45** ms, cloud **80‑120** ms, requiring zero upper‑level code modification.',
         '**Enhanced Execution Throughput** — achieves up to **2.09×** speedup against raw policy output, outperforming tele‑operation speed with no need for recollecting training data.',
         '**Universal Task Success Boost** — lifts model success rate up to **0.95**, with absolute gain Δ from **+0.10 to +0.725** (evaluated on *π₀.₅* and *GR00T‑N1.5*).',
@@ -98,12 +98,12 @@ export const ui = {
           summary:
             'RobotBase unified hardware interface, standardized inference interface, and Server-Client distributed architecture collapse robot swaps, VLA-model swaps, and deployment swaps into low-level configuration.',
           metrics: [
-            { value: '4', label: 'Heterogeneous humanoid robots adapted' },
+            { value: '3', label: 'Heterogeneous humanoid robots in this release' },
             { value: '10', label: 'Mainstream VLA/WAM models supported (7 families)' },
             { value: '<100', label: 'Lines of code to integrate a new model' },
           ],
           details: [
-            'Switch robots: RobotBase unified hardware interface, action_layout unified action mapping; already adapted Unitree G1, AgiBot G1, China Mobile Lingxi, Zhejiang humanoid.',
+            'Switch robots: RobotBase unified hardware interface, action_layout unified action mapping; AgiBot G1, China Mobile Lingxi and NAVIAI-WA2 ship in this release, with Unitree G1 coming soon.',
             'Switch VLA models: standardized input/output inference interface; already supports 10 models across 7 families — GR00T N1 / N1.5 / N1.6, π0, π0.5, TAO, GO1, SmolVLA, ACT, RDT; integrating a new model needs only 50–100 lines of business code.',
             'Switch deployments: Server-Client end-edge-cloud distributed architecture; Server can run on local body / edge / cloud, Client on the robot; switch deployment by changing only the comms address with zero upper-logic changes and auto-reconnect heartbeat.',
           ],
@@ -129,24 +129,96 @@ export const ui = {
       ],
     },
     community: {
-      eyebrow: 'OPEN COMMUNITY',
-      title: 'Open and Collaborative Open-Source Community',
-      vision:
-        'Open-sourcing the proven model-to-robot engineering pipeline so developers focus on model innovation, robot bodies, and scenarios instead of rebuilding deployment plumbing.',
-      templates: [
-        { title: 'Model Template', body: 'Observation input, inference interface, action output specs; 20 VLA models adapted.' },
-        { title: 'Robot Template', body: 'Body parameters, action layout, comms adaptation templates; 4 heterogeneous robots referenced.' },
-        { title: 'Evaluation Template', body: 'Scoring rules, metric logging, analysis export scripts.' },
-        { title: 'Deployment Template', body: 'End-edge-cloud distributed deployment examples.' },
+      eyebrow: 'COMMUNITY',
+      title: 'Get involved in Open-RAIL',
+      lead: 'Open-RAIL speeds up when more models and robots run on it.',
+      pathsTitle: 'What you can contribute',
+      tiers: [
+        {
+          name: 'Adapt',
+          note: 'Model and robot layer. Your adapter is the only thing that has to change.',
+          items: [
+            {
+              title: 'Add a model adapter',
+              body: 'Wire in a new VLA/WAM model in 50–100 lines against the Unified Model Interface. No retraining.',
+              href: '{DOC_ADD_MODEL}',
+              cta: 'Model guide',
+            },
+            {
+              title: 'Add a robot adapter',
+              body: 'Implement the Unified Robot Interface to unify control commands and state feedback across hardware.',
+              href: '{DOC_ADD_ROBOT}',
+              cta: 'Robot guide',
+            },
+          ],
+        },
+        {
+          name: 'Extend',
+          note: 'Shared layer. Change control policy without touching any adapter.',
+          items: [
+            {
+              title: 'Contribute a smoothing strategy',
+              body: 'Swap in your own algorithm and compare it side by side with the four inter-chunk modes and three intra-chunk modes already shipped. The Inter-Chunk Fuser and Intra-Chunk Smoother are pure control policy in client/core/, so no model or robot adapter is affected. Not sure which layer to change? Start a Discussion.',
+              href: '{ARCH_CHUNK}',
+              cta: 'Read the extension rules',
+            },
+          ],
+        },
+        {
+          name: 'Help',
+          items: [
+            {
+              title: 'Improve the docs',
+              body: 'Fix a broken guide, clarify a configuration option, or record a walkthrough video for one of the tutorials.',
+              href: '{DOCS_FOLDER}',
+              cta: 'Browse docs/',
+            },
+          ],
+        },
       ],
-      entryLabel: 'Open-source entry',
-      paperLabel: 'Technical Paper',
-      resourcesLabel: 'Resources: full docs · hands-on video tutorials · API manual · troubleshooting guide',
-      values: [
-        { who: 'Model teams', value: 'Skip real-robot deployment dev, focus on algorithm innovation' },
-        { who: 'Robot teams', value: 'Reuse execution, smoothing, and data-collection base, focus on body control' },
-        { who: 'Application teams', value: 'Lower scenario-deployment barrier, accelerate from sim demo to physical robots' },
+      talkTitle: 'How to contribute',
+      talk: [
+        {
+          title: 'Discuss',
+          body: 'Ask about integration, parameter tuning, or design choices before you commit to an approach, and show what you built.',
+          href: '{DISCUSSIONS}',
+          cta: 'Open a discussion',
+        },
+        {
+          title: 'Report or request',
+          body: 'Report a bug, flag a documentation error, or request a feature. Not sure what to work on? The same list is where users ask for models and robots.',
+          href: '{ISSUES}',
+          cta: 'Browse the issue list',
+        },
+        {
+          title: 'Submit code',
+          body: 'Send a pull request for an adapter, a strategy, or a documentation fix. Read the checklist below before you open it.',
+          href: '{PR_LIST}',
+          cta: 'Open a pull request',
+        },
       ],
+      mirror: 'GitHub, Gitee, and the Huanxin community host the same synchronized code. This page and the links above follow the GitHub repository.',
+      contactNote: 'For partnership talks and technical proposals: ',
+      stepsTitle: 'Before you open a PR',
+      steps: [
+        {
+          title: 'Open an issue first',
+          body: 'Open an issue before coding. For new model or robot adapters, describe the use case, dependencies, input/output contract, and test plan.',
+          href: '{ISSUES}',
+          cta: 'Start with an issue',
+        },
+        {
+          title: 'Follow the adapter conventions',
+          body: 'Follow the adapter conventions under docs/guides/, and match the existing model and robot adapter structure.',
+        },
+        {
+          title: "Don't break existing backends",
+          body: 'Keep existing robot and model backends working. Before submitting, check git diff and never commit model checkpoints, recordings, logs, or local config.',
+        },
+      ],
+      stepsNote: 'Full process, code style, and module boundaries:',
+      contributingCta: 'CONTRIBUTING.md',
+      devInstallNote: 'Development install (Python 3.10+):',
     },
     quick: {
       eyebrow: 'GET STARTED',
@@ -231,7 +303,7 @@ export const ui = {
         ctrlNote: 'frequency scaling',
         ctrlNote2: 'interrupt handling',
         uri: 'Unified Robot Interface',
-        robots: ['Unitree G1', 'AgiBot G1', 'Lingxi', 'ZJ Humanoid'],
+        robots: ['Unitree G1', 'AgiBot G1', 'Lingxi', 'NAVIAI-WA2'],
       },
       flywheel: {
         title: 'Train-Collect',

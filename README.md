@@ -90,6 +90,7 @@ Smoothing happens at the **framework level** — no model changes, no training a
 | China Mobile Lingxi (Ti5 T170C) | Bimanual wheeled robot (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
 | NAVIAI-WA2 (Zhejiang Humanoid) | Folding wheel-legged humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
 | Mock | LeRobot-based simulation backend | ✅ Adapted | `client/robots/mock/` |
+| Unitree G1 | Bimanual bipedal humanoid | 🔜 Coming soon | — |
 | _Your robot_ | — | 🔜 Planned | [Integration guide](docs/guides/add-new-robot.md) |
 
 ### Models
@@ -359,6 +360,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 **Adapt — multi-model and multi-robot control**
 
 - [x] 4 heterogeneous robots (AgiBot G1 / China Mobile Lingxi (Ti5 T170C) / NAVIAI-WA2 + a LeRobot simulation backend)
+- [ ] Unitree G1 adapter — adapted, shipping in the next release
 - [x] 10 VLA/WAM models across 7 families
 - [x] Visualization abstracted as its own layer — a control entry for non-developers
 - [ ] WAM integration (October)
