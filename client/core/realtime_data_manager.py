@@ -720,16 +720,18 @@ class RealtimeDataManager():
             result = True
         elif mode == 'sync':
             with self.action_cond:
+                wait_generation = self._generation
                 if self.action_chunk_fitted is None:
                     result = False
                 else:
                     target_index = max(0, self.action_chunk_fitted.shape[1] - 1)
-                    self.action_cond.wait_for(
-                        lambda: (self.action_chunk_index is not None
-                                 and self.action_chunk_fitted is not None
-                                 and self.action_chunk_index >= target_index)
+                    completed = self.action_cond.wait_for(
+                        lambda: (self._generation != wait_generation
+                                 or (self.action_chunk_index is not None
+                                     and self.action_chunk_fitted is not None
+                                     and self.action_chunk_index >= target_index))
                     )
-                    result = True
+                    result = completed and self._generation == wait_generation
         else:
             raise ValueError("mode must be 'async' or 'sync'")
 
