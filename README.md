@@ -14,6 +14,7 @@
 [![Docs](https://img.shields.io/badge/Docs-online-2496ed)](https://cmcc-tao.github.io/open-rail/)
 [![Deploy site](https://github.com/CMCC-TAO/open-rail/actions/workflows/deploy-site.yml/badge.svg)](https://github.com/CMCC-TAO/open-rail/actions/workflows/deploy-site.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/CMCC-TAO/open-rail)](https://github.com/CMCC-TAO/open-rail/stargazers)
+[![GitHub Clones](https://raw.githubusercontent.com/CMCC-TAO/open-rail/traffic/github/CMCC-TAO/open-rail/total_clones.svg)](https://github.com/CMCC-TAO/open-rail/graphs/traffic)
 [![GitHub Issues](https://img.shields.io/github/issues/CMCC-TAO/open-rail)](https://github.com/CMCC-TAO/open-rail/issues)
 
 <!-- This project does not use a formal software version; release notes track public milestones instead. -->
