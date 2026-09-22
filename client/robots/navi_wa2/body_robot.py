@@ -178,7 +178,7 @@ class RobotBody(RobotBase):
         Args:
             action (array-like): Action array containing arm commands (0:14) and gripper commands (14:16)
         """
-        action = self._check_control_action_jump(action)
+        # action = self._check_control_action_jump(action)
         left_hand_action = np.array(action[16:22])
         right_hand_action = np.array(action[22:28])
 
