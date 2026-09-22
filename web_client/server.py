@@ -385,10 +385,20 @@ def _apply_flat_patch_new(config, patch: dict):
     legacy_inter_chunk_keys = {
         "inter_chunk.search_length": "inter_chunk.search_action.search_length",
     }
-    patch = {
-        legacy_inter_chunk_keys.get(key, key): value
-        for key, value in patch.items()
-    }
+    migrated_patch = {}
+    for key, value in patch.items():
+        key = legacy_inter_chunk_keys.get(key, key)
+        if key.startswith('robots.a2d.'):
+            key = 'robots.agibot_g1.' + key[len('robots.a2d.'):]
+        if key in ('robots.type', 'record.lerobot.robot_type') and value == 'a2d':
+            value = 'agibot_g1'
+        migrated_patch[key] = value
+    # Explicit new-format keys take precedence over their legacy equivalents.
+    migrated_patch.update({
+        key: value for key, value in patch.items()
+        if key.startswith('robots.agibot_g1.')
+    })
+    patch = migrated_patch
 
     def _is_mapping(obj):
         return isinstance(obj, (dict, ConfigDict))
@@ -1327,7 +1337,7 @@ def _create_robot(robot_type, robot_config):
         return RobotProxy(robot_type, robot_config)
     except Exception as e:
         logger.exception(f"Robot creation failed: {e}")
-        raise ValueError(f"Create robot failed, type: {robot_type}")
+        raise ValueError(f"Create robot failed, type: {robot_type}: {e}") from e
 
 async def _start_client():
     try:
