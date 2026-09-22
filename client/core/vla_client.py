@@ -125,6 +125,12 @@ class VLAClient():
         self._raw_observe_queue = Queue(maxsize=2)
         self._raw_observe_shm_cache = {}
 
+        # The data socket belongs to the inference thread alone. Other threads
+        # ask for work through this queue instead of touching the socket, and
+        # use _inference_parked to learn when the thread sits at a safe point.
+        self._inference_commands = Queue()
+        self._inference_parked = threading.Event()
+
         # Shared thread pool for image encoding (avoid per-frame pool creation overhead)
         self._img_executor = ThreadPoolExecutor(max_workers=3, thread_name_prefix="img_enc")
 
@@ -242,12 +248,53 @@ class VLAClient():
         self.start_visualize()
         self.logger.info('VLA client resumed.')
 
+    def request_inference_first(self, timeout: float = 3.0) -> bool:
+        """Ask the inference thread to run a warm-up inference.
+
+        Other threads must not call ``_inference_first`` directly: the ZMQ data
+        socket belongs to the inference thread. The request is queued instead,
+        and this returns True once that thread has finished it.
+
+        Args:
+            timeout (float): Seconds to wait for the acknowledgement.
+
+        Returns:
+            bool: True if the warm-up completed, False if it timed out or the
+                inference thread is not running.
+        """
+        if not self.is_running or not self.inference_thread.is_alive():
+            self.logger.warning('Inference thread is not running; warm-up skipped.')
+            return False
+        done = threading.Event()
+        self._inference_commands.put(('inference_first', done))
+        if not done.wait(timeout):
+            self.logger.warning(f'Warm-up inference did not complete within {timeout}s.')
+            return False
+        return True
+
+    def wait_inference_parked(self, timeout: float = 3.0) -> bool:
+        """Block until the inference thread sits at a safe point.
+
+        Used by shutdown and by interactive commands that need to know the
+        inference thread is not in the middle of a request.
+
+        Returns:
+            bool: True if the thread is parked (or already finished).
+        """
+        if not self.inference_thread.is_alive():
+            return True
+        return self._inference_parked.wait(timeout)
+
     def stop(self):
         self.stop_observe()
         self.stop_inference()
         self.stop_control()
         self.stop_visualize()
-        time.sleep(self.realtime_data_manager.avg_infer_time * 1.5) # make sure inference thread is stopped.
+        # Park the inference thread before clearing the state it is reading.
+        # This replaces a fixed sleep on avg_infer_time: it returns as soon as
+        # the thread is idle, and is bounded so web callers never hang.
+        if not self.wait_inference_parked(timeout=1.0):
+            self.logger.warning('Inference thread did not park before stop(); state is cleared anyway.')
         self.image_process_time = 0.0
         self.task_language_manager.reset()
         self.realtime_data_manager.clear()
@@ -311,7 +358,16 @@ class VLAClient():
         if self.process_observe_thread.is_alive():
             self.process_observe_thread.join(timeout=1.0)
         if self.inference_thread.is_alive():
-            self.inference_thread.join(timeout=1.0)
+            # Must outlast the worst case single round: _inference_first waits
+            # up to infer_timeout * 4, plus the bounded wait_for_next. The
+            # inference thread releases the data socket on its way out, so this
+            # join is what makes the later vla_zmq.close() safe.
+            infer_join_timeout = self.config.vla_zmq.infer_timeout * 4 / 1000 + 1.0
+            self.inference_thread.join(timeout=infer_join_timeout)
+            if self.inference_thread.is_alive():
+                self.logger.warning(
+                    f'Inference thread still alive after {infer_join_timeout}s; '
+                    f'its ZMQ socket will not be closed from this thread.')
 
         # Stop and join timer threads
         if self.control_thread_timer.is_alive():
@@ -477,22 +533,53 @@ class VLAClient():
                 self._raw_observe_queue.task_done()
     
     def _inference_thread_fun(self):
-        while self.is_running:
-            if not self.is_inference_thread_running:
-                time.sleep(0.001)
-                continue
+        """Inference loop. This thread is the sole owner of the ZMQ data socket.
 
-            if self.realtime_data_manager.infer_count == 0:
-                self._inference_first()
-                self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
-                # self.realtime_data_manager.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
-            else:
-                self._inference_step()
-                # self.inferenceFirstThreadFun()
-                self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
-                # self.realtime_data_manager.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
-            # print(f'\rInference count: {self.realtime_data_manager.infer_count}, current infer time: {self.realtime_data_manager.start_intra_traj_marker-self.realtime_data_manager.start_infer_marker:.4f}s, current traj time: {self.realtime_data_manager.start_ctrl_marker-self.realtime_data_manager.start_intra_traj_marker:.4f}s', end='', flush=True)
-            # symbol = '=' * 10
+        It claims the socket on first use and releases it on the way out, so no
+        other thread ever creates, uses or closes it.
+        """
+        try:
+            while self.is_running:
+                # Commands are served even while parked: that is how other
+                # threads get inference work done without touching the socket.
+                self._drain_inference_commands()
+
+                if not self.is_inference_thread_running:
+                    self._inference_parked.set()
+                    time.sleep(0.001)
+                    continue
+
+                self._inference_parked.clear()
+                if self.realtime_data_manager.infer_count == 0:
+                    self._inference_first()
+                    self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
+                else:
+                    self._inference_step()
+                    self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
+        finally:
+            self._inference_parked.set()
+            try:
+                self.vla_zmq.release_data_socket()
+            except Exception as exc:
+                self.logger.error(f'Failed to release the data socket: {exc}')
+
+    def _drain_inference_commands(self):
+        """Execute queued requests from other threads, then acknowledge them."""
+        while True:
+            try:
+                name, done = self._inference_commands.get_nowait()
+            except Empty:
+                return
+            try:
+                if name == 'inference_first':
+                    self._inference_first()
+                else:
+                    self.logger.warning(f'Unknown inference command ignored: {name}')
+            except Exception as exc:
+                self.logger.error(f'Inference command {name} failed: {exc}')
+            finally:
+                done.set()
+
     def _control_thread_fun(self):
         if not self.is_control_thread_running:
             if self.visualize_server.vis_global_step % 5 == 0:

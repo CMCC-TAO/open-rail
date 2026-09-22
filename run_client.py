@@ -167,6 +167,9 @@ def handle_user_input(vla_client, robot):
     It provides a menu-driven interface for robot control commands.
     """
     pause_vla_client_actions(vla_client)
+    # The inference thread owns the ZMQ data socket; wait until it parks before
+    # queueing work for it, so prompts reflect the real state.
+    vla_client.wait_inference_parked()
     cmd = input('\nProgram paused, please enter command, press Enter to continue:\nr: reset robot\nc: control robot\nl: modify language instruction\ns: save data (if recording enabled)\nd: delete data (if recording enabled)\nq: quit\n')
     language_reset_pos = getattr(vla_client.config, 'language_reset_pos', None)
         
@@ -191,24 +194,24 @@ def handle_user_input(vla_client, robot):
         if ys_cmd == 'y':
             if language_reset_pos is None:
                 robot.reset_robot(mode='default')
-                vla_client._inference_first()
+                vla_client.request_inference_first()
                 input('\nRobot reset completed, program paused, press Enter to continue...')
             else:
                 lang_idx = vla_client.task_language_manager.task_language_map["make_coffee"].index(vla_client.task_language_manager.currt_language_instruction)
                 target_pose = language_reset_pos[lang_idx]
                 robot.reset_robot(target_pose=target_pose)
-                vla_client._inference_first()
+                vla_client.request_inference_first()
                 input('\nRobot reset completed, program paused, press Enter to continue...')
     elif cmd == 'r':
         if language_reset_pos is None:
             robot.reset_robot(mode='default')
-            vla_client._inference_first()
+            vla_client.request_inference_first()
             input('\nRobot reset completed, program paused, press Enter to continue...')
         else:
             lang_idx = vla_client.task_language_manager.task_language_map["make_coffee"].index(vla_client.task_language_manager.currt_language_instruction)
             target_pose = language_reset_pos[lang_idx]
             robot.reset_robot(target_pose=target_pose)
-            vla_client._inference_first()
+            vla_client.request_inference_first()
             input('\nRobot reset completed, program paused, press Enter to continue...')
     elif cmd == 's' and vla_client.config.record.switch:
         # vla_client.data_record_manager.save_writed_data()
@@ -219,7 +222,7 @@ def handle_user_input(vla_client, robot):
     elif cmd == 'q':
         return False  # Signal to quit
         
-    vla_client._inference_first() # avoid pause/restart shaking
+    vla_client.request_inference_first() # avoid pause/restart shaking
     resume_vla_client_actions(vla_client)
     return True  # Continue running
 

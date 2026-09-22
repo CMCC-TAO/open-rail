@@ -158,7 +158,7 @@ class DispatchClient:
         if 'replay:' not in self.config.language[key]:
             print(f'\n语言指令：{self.config.language[key]}\n')
             self.vla_client.language = self.config.language[key]
-            self.vla_client.inference_first()
+            self.vla_client.request_inference_first()
             self._resume_vla_client_actions()
             # 需等待current_prob_progress更新，避免还是上次任务的值
             time.sleep(1.0)
@@ -242,7 +242,7 @@ class DispatchClient:
         if key in self.config.reset_pose_finish and self.config.reset_pose_finish[key] is not None:
             self.robot.reset_robot(target_pose=self.config.reset_pose_finish[key])
             time.sleep(self.config.sleep_reset_pose[key][1])
-            self.vla_client.inference_first()
+            self.vla_client.request_inference_first()
         print(f'\n任务完成，暂停：{key}\n')
         self.client.send_status_update(task_data, 'executing', sub_skill=key, progress=100)
 
