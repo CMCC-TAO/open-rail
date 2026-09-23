@@ -5,7 +5,7 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.0
+  speed: 1.5
   wait_time: 10
 inter_chunk:
   inter_chunk_mode: min_jerk
@@ -35,9 +35,9 @@ intra_chunk:
   min_gripper_action_threshold: 0.05
 language:
   auto_mode: false
-  auto_mode_start_sub_task_id: 0
+  auto_mode_start_sub_task_id: 3
   file_path: language_cmd.json
-  sub_task_id: 0
+  sub_task_id: 3
   task_id: tea_master
   task_progress_threshold: 0.9
   task_progress_win_size: 10
@@ -46,7 +46,7 @@ rdm:
   mode: async
   observe_fps_window_size: 10
 record:
-  auto: true
+  auto: false
   evaluation:
     scores:
     - 0
@@ -159,7 +159,7 @@ robots:
             - 1.0
           right:
             Default:
-            - 0.0
+            - 0
             Custom:
             - 0.5
             Open:
@@ -184,10 +184,10 @@ robots:
         presets:
           Default:
           - 0.4012
-          - 27.0
+          - 27
           Custom:
-          - 0.4012
-          - 27.0
+          - 0.7854
+          - 52
       wheel:
         start: 20
         end: 22
@@ -286,7 +286,7 @@ robots:
         hand_right: observation.images.hand_right
         head: observation.images.top_head
       ref: head
-    dataset_path: /home/robot/Downloads/tea_model_data/task_1196
+    dataset_path: /home/zl/zl/mdata/task_1196
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -454,7 +454,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: a2d
 vision:
   history_frame: false
   preprocess:
@@ -475,7 +475,7 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 7
+    - 0
     source:
     - ActionRaw
     - ActionFitted
@@ -485,6 +485,6 @@ visualize:
 vla_zmq:
   heartbeat_interval: 1000
   heartbeat_timeout: 30000
-  infer_timeout: 500
-  ip: 127.0.0.1
-  port: '5566'
+  infer_timeout: 5000
+  ip: 111.0.18.170
+  port: '5567'

@@ -1,5 +1,6 @@
 # C extensions
 *.so
+/run_client.py
 python3.10.INFO
 .codebuddy/
 .marscode/

@@ -14,6 +14,7 @@ class ModelType(str, Enum):
     PI0 = 'pi0'
     PI05 = 'pi05'
     TAO = 'tao'
+    DM05 = 'dm05'
 
 def get_mock_config():
     """Generate configuration for MOCK model.
@@ -68,7 +69,7 @@ def get_smolvla_config():
     """
     config = ConfigDict()
     config.model_path = '/path/to/model'
-    config.root_path = '/home/rm/wxz/EmbodiedAI/vla_infer_remote/vla_infer/model/checkpoint_5w5/055000/data'
+    config.root_path = '/path/to/root'
     return config
 
 def get_go1_config():
@@ -117,6 +118,24 @@ def get_tao_config():
 
     return config
 
+def get_dm05_config():
+    """Generate configuration for the DM0.5 (OpenDM) model.
+
+    Returns:
+        ConfigDict: Configuration dictionary for the DM05 in-process policy.
+    """
+    config = ConfigDict()
+    config.model_path = '/path/to/model'
+    config.repo_path = '/path/to/repo'
+    config.action_mode = 'absolute' # relative | absolute
+    config.backend = 'fast'  # 'fast' | 'default' | 'compile'
+    config.vision_trt_engine_path = '/path/to/dm05_vision.engine'
+    config.diffusion_steps = 10
+    config.vision_attn_implementation = 'flash_attention_2'
+    config.execute_horizon = 16  # steps actually sent to the robot per cycle
+    return config
+
+
 def get_models_config():
     """Generate configuration for all available VLA models.
     
@@ -142,4 +161,5 @@ def get_models_config():
     config.pi0 = get_pi0_config()
     config.pi05 = get_pi05_config()
     config.tao = get_tao_config()
+    config.dm05 = get_dm05_config()
     return config

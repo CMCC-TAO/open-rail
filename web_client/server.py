@@ -40,7 +40,7 @@ except ImportError:
     _HAS_YAML = False
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -101,7 +101,6 @@ async def _lifespan(_: FastAPI):
     client_state.loop = loop
 
     asyncio.create_task(_stats_push_loop())
-    _ensure_vla_client_created()
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
     # ── shutdown ──
@@ -1745,7 +1744,7 @@ async def _run_web_control(command: str, req: ManualControlRequest):
 
 
 @app.post('/api/client/control/reset')
-async def client_control_reset():
+async def client_control_reset(req: Optional[ManualControlRequest] = Body(default=None)):
     vla_client, robot = _require_runtime('reset')
     try:
         with client_state.lock:
@@ -1755,7 +1754,16 @@ async def client_control_reset():
             if not client_state.paused:
                 client_state.paused_thread_state = _pause_vla_client(vla_client)
                 client_state.paused = True
-        robot.reset_robot(mode='default')
+        data = {
+            name: value for name, value in vars(req or ManualControlRequest()).items()
+            if value is not None
+        }
+        if len(data) > 1:
+            await asyncio.to_thread(robot._control_robot, data)
+        else:
+            robot.reset_robot(mode='default')
+        wait_time = max(vla_client.realtime_data_manager.avg_infer_time * 1.5, 0.2)
+        await asyncio.sleep(wait_time * 2.0)
         vla_client.realtime_data_manager.clear()
         vla_client.reset()
         # _resume_vla_client(vla_client, paused_state)
@@ -1763,6 +1771,10 @@ async def client_control_reset():
         return {"status": "ok", "command": 'reset'}
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
 

@@ -71,6 +71,7 @@ class RobotBase():
 
         cfg = getattr(self, 'cfg', {})
         interval = float(cfg.get('manual_arm_interval', 0.01)) if hasattr(cfg, 'get') else 0.01
+
         for action in ('arm', 'gripper', 'hand', 'hand_as_gripper'):
             left, right = data.get(f'l_{action}'), data.get(f'r_{action}')
             if left is None and right is None:
@@ -97,7 +98,7 @@ class RobotBase():
                 command = cfg.get('hand_type', action) if action == 'gripper' else action
                 self.execute_action({command: target_pose.tolist()})
 
-        for action in ('head', 'waist', 'body', 'wheel', 'leg'):
+        for action in ('head', 'waist', 'body'):
             if action not in data:
                 continue
             current_pose = self._current_pose(action)
@@ -106,13 +107,19 @@ class RobotBase():
                     action: self._target_pose(current_pose, data[action]).tolist()
                 })
 
+        for action in ('wheel', 'leg'):
+            if action in data and action in self.action_layout:
+                self.execute_action({action: list(data[action])})
+
     def _current_pose(self, action):
         layout = self.action_layout.get(action)
         if layout is None:
             return None
-        current_obs = self.retrieve_observation() # update current_state
-        if current_obs is None:
-            return None
+        deadline = time.monotonic() + 0.5
+        while self.retrieve_observation() is None:  # update current_state
+            if time.monotonic() >= deadline:
+                raise RuntimeError('Timed out waiting for current robot state')
+            time.sleep(0.01)
         if self.current_state is None:
             raise RuntimeError('current robot state is unavailable')
         return np.asarray(self.current_state, dtype=float)[layout['start']:layout['end']].copy()

@@ -1,0 +1,45 @@
+name: traffic-badge
+
+# GitHub does not expose clone/view counts through a public API, so this
+# scheduled job fetches the (collaborator-only) traffic API, accumulates the
+# history on the `traffic` branch and renders shields.io badge SVGs which the
+# READMEs reference. Needs repo secret TRAFFIC_TOKEN (classic PAT with `repo`
+# scope, or a fine-grained PAT with read access to this repository).
+on:
+  schedule:
+    - cron: '0 22 * * *' # daily 22:00 UTC = 06:00 +08:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: traffic-badge
+  cancel-in-progress: true
+
+jobs:
+  traffic:
+    name: Make GitHub Traffic to Badge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get traffic data and build badges
+        id: traffic
+        uses: yi-Xu-0100/traffic-to-badge@v1.4.0
+        with:
+          my_token: ${{ secrets.TRAFFIC_TOKEN }}
+          static_list: '${{ github.repository }}'
+          traffic_branch: traffic
+          logo: github
+
+      - name: Deploy badges to the traffic branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: ${{ steps.traffic.outputs.traffic_branch }}
+          publish_dir: ${{ steps.traffic.outputs.traffic_path }}
+          user_name: 'github-actions[bot]'
+          user_email: 'github-actions[bot]@users.noreply.github.com'
+          full_commit_message: 'chore: update traffic badges'

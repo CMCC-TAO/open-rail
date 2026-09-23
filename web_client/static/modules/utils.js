@@ -104,7 +104,7 @@ async function apiFetch(url, opts = {}) {
 
 async function sendControl(action, payload = {}) {
   try {
-    const timeoutMs = action === 'arm' ? 30000 : 3000;
+    const timeoutMs = action === 'arm' || action === 'reset' ? 30000 : 3000;
     await apiFetch(`/api/client/control/${action}`, {
       method: 'POST',
       body: JSON.stringify(payload || {}),

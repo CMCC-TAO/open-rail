@@ -71,6 +71,8 @@ class VLAServer:
         Returns:
             numpy.ndarray: Padded and resized image
         """
+        if target_height <= 0 or target_width <= 0:
+            raise ValueError('Target image height and width must be positive')
         height, width = img.shape[:2]
         # print(f"Debug: raw shape={height}x{width}, target shape={target_width}x{target_height}")
         target_ratio = target_width / target_height
@@ -95,7 +97,7 @@ class VLAServer:
             padded = img
 
         # Resize to target dimensions (using INTER_AREA interpolation suitable for downscaling)
-        if max(height, width) != max(target_width, target_height):
+        if padded.shape[:2] != (target_height, target_width):
             resized = cv2.resize(padded, (target_width, target_height), interpolation=cv2.INTER_AREA)
             # print(f"Debug: resized shape={resized.shape}")
             return resized
@@ -117,8 +119,13 @@ class VLAServer:
         if encoded_img.dtype != np.uint8 or not encoded_img.flags.c_contiguous:
             encoded_img = np.ascontiguousarray(encoded_img, dtype=np.uint8)
         decoded_img = cv2.imdecode(encoded_img, cv2.IMREAD_ANYDEPTH if 'depth.' in key else cv2.IMREAD_COLOR)
-        padded_img = self._pad_and_resize(decoded_img)
-        return key, padded_img[:, :, ::-1] # RGB to BGR
+        if self.config.get('image_pad_and_resize', False):
+            decoded_img = self._pad_and_resize(
+                decoded_img,
+                target_height=self.config.get('image_target_height', 640),
+                target_width=self.config.get('image_target_width', 640),
+            )
+        return key, decoded_img[:, :, ::-1] # RGB to BGR
     
     def _process_image(self, frame):
         # futures = [self.image_decode_executor.submit(self._image_decode_thread_func, key, value) for key, value in frame if 'cam.' in key]

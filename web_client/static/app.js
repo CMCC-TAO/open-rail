@@ -636,7 +636,7 @@ async function wireEvents() {
   });
 
   $('btn-reset').addEventListener('click',  async () => {
-    await sendControl('reset');
+    if (!(await sendControl('reset', window.getRobotControlPayload?.() || {}))) return;
     toast('Robot reset initiated.', 'info');
     if (App.isRecording ) {
       const autoCheckRecordMode = $('chk-record-auto');
