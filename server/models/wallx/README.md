@@ -3,14 +3,9 @@
 This guide describes `run_server.py --model_type wallx`, using the `agibot_g1`
 configuration with two 7-joint arms and two grippers as an example. open-rail
 handles ZMQ transport and image decoding; the adapter calls the policy backend
-in the sibling Wall-X checkout. Other configurations require matching adapters,
-state/action layouts, and checkpoints.
-
-Implementation naming: the current backend is still named
-`wall_x.serving.a2d.A2DPolicy`, and its accepted `embodiment_tag` is
-`a2d_gripper`. These are existing code identifiers for the example layout.
-Keep them unchanged in the current implementation; `agibot_g1` in this guide
-names the example robot configuration, not a newly supported configuration value.
+in the sibling Wall-X checkout. The camera fields, state/action dimensions, and
+client code below describe this example. For another configuration, align the
+interface and checkpoint with its training layout.
 
 ## Start the server
 
@@ -35,15 +30,13 @@ for this state/action layout.
 | `repo_path` | `conf/models_conf.py:get_wallx_config()` | Sibling `wall-x` directory |
 | `device` | Same function | `cuda:0` |
 | `flow_steps` | Same function | `10`; flow iterations, not output chunk length |
-| `embodiment_tag` | Same function | `a2d_gripper`; existing backend identifier, see above |
 | `port` | `conf/zmq_conf.py:get_vla_zmq_config()` | `5566`; server binds to `tcp://*:5566` |
 | `image_pad_and_resize` | `conf/server_conf.py` | `False`; Wall-X still applies its training-config preprocessing |
 
 `run_server.py` does not accept `--port` or `--device`; edit the corresponding
 configuration entries. The environment needs Wall-X dependencies and open-rail
 server dependencies, including `ml_collections` and `rich`.
-Use either this entry point or Wall-X's standalone `scripts/serve_a2d.py` on a
-port, not both. Restart the server after changing adapter code.
+Run one server per port. Restart the server after changing adapter code.
 
 ## Wire protocol
 
@@ -67,7 +60,7 @@ The protocol uses pickle and is intended for trusted clients and servers.
 
 ## Observation request
 
-Send one observation dictionary per inference request:
+For the `agibot_g1` example, send one observation dictionary per inference request:
 
 ```python
 request = {
@@ -137,9 +130,9 @@ single-observation requests.
 
 State values must match the checkpoint's training joint order and original units.
 Do not substitute end-effector poses or independently rescale angles/gripper values.
-The backend pads to 26 dimensions and masks the last 10 internally; the external
-interface uses the 16 dimensions above. This is the policy's arm/gripper layout,
-not a specification of every joint on the robot.
+For this example, the backend pads to 26 dimensions and masks the last 10
+internally; the external interface uses the 16 dimensions above. These describe
+the arm/gripper channels used by the policy.
 
 Action response:
 
@@ -238,8 +231,7 @@ Adjust the action-shape check when using a checkpoint with a different horizon.
   policy calls with a lock.
 - The shared open-rail server currently prints a traceback on decoding or inference
   failure and does not guarantee an error response. Set a client timeout and inspect
-  server logs. The standalone `serve_a2d.py` returns `type=error`; this behavior is
-  not a guarantee of the shared server.
+  server logs.
 - `avg_infer_time` is the shared server's smoothed inference duration in seconds,
   not the full request round-trip time.
 - Dataset replay checks protocol behavior and action curves, not closed-loop robot
