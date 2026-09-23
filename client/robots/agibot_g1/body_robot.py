@@ -12,7 +12,7 @@ from ..base_robot import RobotBase
 
 class RobotBody(RobotBase):
     def __init__(self, config):
-        """Initialize the A2D robot body with camera and robot instances.
+        """Initialize the AgiBot G1 robot body with camera and robot instances.
         
         Args:
             config (dict): Configuration dictionary containing robot and camera settings
@@ -50,7 +50,7 @@ class RobotBody(RobotBase):
         if self._non_ref_cameras and self._non_ref_fetch_workers > 0:
             self._non_ref_fetch_pool = ThreadPoolExecutor(
                 max_workers=self._non_ref_fetch_workers,
-                thread_name_prefix='a2d-nonref-fetch'
+                thread_name_prefix='agibot-g1-nonref-fetch'
             )
 
         time.sleep(1)

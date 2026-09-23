@@ -36,7 +36,7 @@ def get_record_data_config() -> ConfigDict:
     # LeRobot metadata (metadata)
     config.lerobot = ConfigDict(allow_dotted_keys=True)
     config.lerobot.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
-    config.lerobot.robot_type = "a2d"  # Type of robot used
+    config.lerobot.robot_type = "agibot_g1"  # Type of robot used
 
     # Data statistics (initialized to 0)
     config.lerobot.total_episodes = 0

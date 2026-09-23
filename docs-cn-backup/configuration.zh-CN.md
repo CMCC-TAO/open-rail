@@ -159,7 +159,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 
 ## `robots`：机器人适配器
 
-`robots.type` 可选择 `a2d`、`mock`、`ti5_t170c` 或 `navi_wa2`。运行时通常只需要配置当前选用适配器的子段。
+`robots.type` 可选择 `agibot_g1`、`mock`、`ti5_t170c` 或 `navi_wa2`。运行时通常只需要配置当前选用适配器的子段。
 
 ### 通用动作布局约定
 
@@ -171,9 +171,9 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `stepwise` | 离散或近似离散维度，通常为夹爪/灵巧手。 |
 | `manual` | 不由模型推理、由机器人或 Web 端控制的维度；应排在模型控制区间之后。 |
 
-存在 `presets` 时，它提供 UI 复位和手动控制目标。`Default` 与 `Custom` 是通用预设；A2D 夹爪还包括 `Open` 与 `Close`。
+存在 `presets` 时，它提供 UI 复位和手动控制目标。`Default` 与 `Custom` 是通用预设；AgiBot G1 夹爪还包括 `Open` 与 `Close`。
 
-### `robots.a2d`
+### `robots.agibot_g1`
 
 | 字段 | 含义 |
 | --- | --- |
@@ -183,7 +183,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `proprio_names` | 拼接机器人状态时使用的有序本体状态组。 |
 | `gripper_freq`、`head_freq` | 夹爪、头部控制命令频率。 |
 | `manual_arm_interval` | 手动生成手臂目标之间的时间间隔，单位为秒。 |
-| `action_layout` | A2D 手臂、夹爪、头部、腰部和底盘动作范围及 UI 预设。 |
+| `action_layout` | AgiBot G1 手臂、夹爪、头部、腰部和底盘动作范围及 UI 预设。 |
 
 ### `robots.mock`
 

@@ -26,7 +26,7 @@ const CONFIG_SELECT_OPTIONS = {
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['a2d', 'mock', 'ti5_t170c', 'navi_wa2'],
+  type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1'],
   eval_log_format: ['json', 'csv', 'both'],
@@ -591,14 +591,14 @@ function buildTree(obj, prefix, parentEl) {
 
 /**
  * Renders the robots config group with dynamic sub-group visibility.
- * The robots.type select controls which sub-group (a2d / mock / …) is shown.
+ * The robots.type select controls which sub-group (agibot_g1 / mock / …) is shown.
  *
  * robots object structure (example):
- *   { type: 'a2d', a2d: {...}, mock: {...} }
+ *   { type: 'agibot_g1', agibot_g1: {...}, mock: {...} }
  *
  * Layout inside parentEl:
  *   ┌── type row (select)
- *   ├── [sub-group: a2d]   ← shown only when type === 'a2d'
+ *   ├── [sub-group: agibot_g1]   ← shown only when type === 'agibot_g1'
  *   └── [sub-group: mock]  ← shown only when type === 'mock'
  */
 function _buildRobotsGroup(obj, parentEl) {

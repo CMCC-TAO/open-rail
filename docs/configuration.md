@@ -163,7 +163,7 @@ Supported video codecs include `mp4v`, `avc1`, `XVID`, and `MJPG`. Camera shapes
 
 ## `robots`: robot adapters
 
-`robots.type` selects `a2d`, `mock`, `ti5_t170c`, or `navi_wa2`. Configure only the subsection for the selected adapter unless preparing reusable profiles.
+`robots.type` selects `agibot_g1`, `mock`, `ti5_t170c`, or `navi_wa2`. Configure only the subsection for the selected adapter unless preparing reusable profiles.
 
 ### Shared action-layout convention
 
@@ -175,9 +175,9 @@ An `action_layout` section divides a flat action vector into named segments. Eve
 | `stepwise` | Discrete or near-discrete dimensions, normally grippers/hands. |
 | `manual` | Robot/Web-controlled dimensions that are not inferred by the model. Place these after model-controlled segments. |
 
-Where available, `presets` provides UI reset/manual targets. `Default` and `Custom` are general presets; A2D grippers also provide `Open` and `Close`.
+Where available, `presets` provides UI reset/manual targets. `Default` and `Custom` are general presets; AgiBot G1 grippers also provide `Open` and `Close`.
 
-### `robots.a2d`
+### `robots.agibot_g1`
 
 | Key | Meaning |
 | --- | --- |
@@ -187,7 +187,7 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `proprio_names` | Ordered proprioception groups used to assemble robot state. |
 | `gripper_freq`, `head_freq` | Command frequencies for gripper and head control. |
 | `manual_arm_interval` | Time interval in seconds between manually generated arm targets. |
-| `action_layout` | A2D arm, gripper, head, waist, and wheel action ranges and UI presets. |
+| `action_layout` | AgiBot G1 arm, gripper, head, waist, and wheel action ranges and UI presets. |
 
 ### `robots.mock`
 
