@@ -131,7 +131,9 @@ export const ui = {
     community: {
       eyebrow: 'COMMUNITY',
       title: 'Get involved in Open-RAIL',
-      lead: 'Open-RAIL speeds up when more models and robots run on it.',
+      lead: '4 robots. 10 VLA/WAM models. Yours could be next.',
+      leadSub: 'Every adapter makes the ecosystem richer. Pick up a task, or start by asking a question.',
+      leadCta: "See what's open",
       pathsTitle: 'What you can contribute',
       tiers: [
         {
@@ -140,13 +142,17 @@ export const ui = {
           items: [
             {
               title: 'Add a model adapter',
-              body: 'Wire in a new VLA/WAM model in 50–100 lines against the Unified Model Interface. No retraining.',
+              body: 'Wire in a new VLA/WAM model against the Unified Model Interface. No retraining.',
+              who: 'Teams with a VLA/WAM model to run',
+              deliver: 'An inference interface (~50–100 lines) plus its registration',
               href: '{DOC_ADD_MODEL}',
               cta: 'Model guide',
             },
             {
               title: 'Add a robot adapter',
               body: 'Implement the Unified Robot Interface to unify control commands and state feedback across hardware.',
+              who: 'Robot hardware vendors — real hardware required',
+              deliver: 'A RobotBase adapter, its action_layout, and one registry entry',
               href: '{DOC_ADD_ROBOT}',
               cta: 'Robot guide',
             },
@@ -158,7 +164,9 @@ export const ui = {
           items: [
             {
               title: 'Contribute a smoothing strategy',
-              body: 'Swap in your own algorithm and compare it side by side with the four inter-chunk modes and three intra-chunk modes already shipped. The Inter-Chunk Fuser and Intra-Chunk Smoother are pure control policy in client/core/, so no model or robot adapter is affected. Not sure which layer to change? Start a Discussion.',
+              body: 'Swap in your own algorithm and compare it with the four inter-chunk and three intra-chunk modes already shipped. In plain terms: it removes the jumps inside a single model output, and the seam where a new chunk meets the robot as it moves. Runs on the client, so no model or training change is needed. Not sure which layer to change? Start a Discussion.',
+              who: 'Background in control or trajectory optimization',
+              deliver: 'One strategy implementation, intra-chunk or inter-chunk',
               href: '{ARCH_CHUNK}',
               cta: 'Read the extension rules',
             },
@@ -170,55 +178,37 @@ export const ui = {
             {
               title: 'Improve the docs',
               body: 'Fix a broken guide, clarify a configuration option, or record a walkthrough video for one of the tutorials.',
+              who: 'Anyone, including first-time contributors',
+              deliver: 'One documentation fix',
               href: '{DOCS_FOLDER}',
               cta: 'Browse docs/',
             },
           ],
         },
       ],
-      talkTitle: 'How to contribute',
-      talk: [
+      howTitle: 'How to contribute',
+      how: [
         {
           title: 'Discuss',
-          body: 'Ask about integration, parameter tuning, or design choices before you commit to an approach, and show what you built.',
+          body: 'Not sure whether it is a bug, or want to talk a design choice through first?',
           href: '{DISCUSSIONS}',
           cta: 'Open a discussion',
         },
         {
           title: 'Report or request',
-          body: 'Report a bug, flag a documentation error, or request a feature. Not sure what to work on? The same list is where users ask for models and robots.',
+          body: 'A reproducible defect, a documentation error, or a model or robot you would like adapted.',
           href: '{ISSUES}',
           cta: 'Browse the issue list',
         },
         {
           title: 'Submit code',
-          body: 'Send a pull request for an adapter, a strategy, or a documentation fix. Read the checklist below before you open it.',
+          body: 'You have something ready to send.',
           href: '{PR_LIST}',
           cta: 'Open a pull request',
+          processNote: 'Full process, code style, and module boundaries:',
+          processCta: 'CONTRIBUTING.md',
         },
       ],
-      mirror: 'GitHub, Gitee, and the Huanxin community host the same synchronized code. This page and the links above follow the GitHub repository.',
-      contactNote: 'For partnership talks and technical proposals: ',
-      stepsTitle: 'Before you open a PR',
-      steps: [
-        {
-          title: 'Open an issue first',
-          body: 'Open an issue before coding. For new model or robot adapters, describe the use case, dependencies, input/output contract, and test plan.',
-          href: '{ISSUES}',
-          cta: 'Start with an issue',
-        },
-        {
-          title: 'Follow the adapter conventions',
-          body: 'Follow the adapter conventions under docs/guides/, and match the existing model and robot adapter structure.',
-        },
-        {
-          title: "Don't break existing backends",
-          body: 'Keep existing robot and model backends working. Before submitting, check git diff and never commit model checkpoints, recordings, logs, or local config.',
-        },
-      ],
-      stepsNote: 'Full process, code style, and module boundaries:',
-      contributingCta: 'CONTRIBUTING.md',
-      devInstallNote: 'Development install (Python 3.10+):',
     },
     quick: {
       eyebrow: 'GET STARTED',
