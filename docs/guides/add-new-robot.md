@@ -129,34 +129,31 @@ def get_robots_config():
     return config
 ```
 
-### 3. Register both factories
+### 3. Register the Web factory
 
-CLI factory: add to `get_robot()` in [`run_client.py`](../../run_client.py):
-
-```python
-elif robot_type == RobotType.MY_ROBOT:
-    from client.robots.my_robot.body_robot import RobotBody
-    return RobotBody(robot_config)
-```
-
-Web factory: add a creation branch to `_get_robot()` in [`web_client/server.py`](../../web_client/server.py):
+New robot types are registered by adding one entry to the `_ROBOT_MODULES` map in [`client/robots/robot_proxy.py`](../../client/robots/robot_proxy.py), which maps each `RobotType` value to the module that exposes its `RobotBody`:
 
 ```python
-elif robot_type == RobotType.MY_ROBOT:
-    from client.robots.my_robot.body_robot import RobotBody
-    robot_instance = RobotBody(robot_config)
+_ROBOT_MODULES: Dict[str, str] = {
+    'a2d': 'client.robots.a2d.body_robot',
+    'mock': 'client.robots.mock.body_robot',
+    'ti5_t170c': 'client.robots.ti5_t170c.body_robot',
+    'navi_wa2': 'client.robots.navi_wa2.body_robot',
+    'my_robot': 'client.robots.my_robot.body_robot',
+}
 ```
 
-To reuse the same SDK object after Web stop/start, also add a type/module match to the reuse section at the beginning of `_get_robot()`. Otherwise, the Web factory closes and recreates it.
+No edit is needed in [`web_client/server.py`](../../web_client/server.py): `_create_robot()` (`web_client/server.py:1318`) just wraps the registered type in a `RobotProxy`, and the concrete `RobotBody` is imported from `_ROBOT_MODULES` inside the robot worker subprocess. A type that is missing from `_ROBOT_MODULES` fails with `Unsupported robot type`.
+
+Each client start builds a fresh `RobotProxy`, so there is no SDK-instance reuse hook to update.
 
 `RobotBody` receives the `config.robots.my_robot` subsection, not the complete Client configuration. The base constructor stores it as `self.config`, while current Web manual control reads `self.cfg`, so the adapter should set the alias shown in the template.
 
 ### 4. Run
 
-Disconnect actuators or reduce speed first, then verify dimensions, direction, units, and limits:
+Disconnect actuators or reduce speed first, then verify dimensions, direction, units, and limits. The robot type is read from `robots.type` in the configuration (step 2), so select it in the Web config panel rather than on the command line:
 
 ```bash
-python run_client.py --robots_type my_robot
 python run_web_client.py
 ```
 
@@ -241,5 +238,5 @@ Keep observation keys, dtypes, and shapes stable; keep `obs.state` order fixed; 
 - [ ] Default presets reset every configured segment safely.
 - [ ] Images, timestamps, `obs.state`, and `current_state` are correct and synchronized.
 - [ ] Joint order, units, signs, and limits are correct.
-- [ ] Both `run_client.py` and `run_web_client.py` can construct the robot.
+- [ ] `python run_web_client.py` starts and constructs the robot.
 - [ ] Network/device loss and shutdown enter a safe state; `close()` is repeatable.
