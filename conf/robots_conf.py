@@ -14,16 +14,16 @@ def _ordered_config(value):
 
 
 class RobotType(str, Enum):
-    A2D = 'a2d'
+    AGIBOT_G1 = 'agibot_g1'
     MOCK = 'mock'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
 
-def get_a2d_config():
-    """Generate configuration for A2D robot.
+def get_agibot_g1_config():
+    """Generate configuration for AgiBot G1 robot.
     
     Returns:
-        ConfigDict: Configuration dictionary containing camera settings, proprioception names, and gripper frequency for A2D robot.
+        ConfigDict: Configuration dictionary containing camera settings, proprioception names, and gripper frequency for AgiBot G1 robot.
     """
     config = ConfigDict()
     config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
@@ -261,12 +261,12 @@ def get_robots_config():
     Returns:
         ConfigDict: Configuration dictionary containing:
             - type: Default robot type to use
-            - a2d: A2D robot configuration
+            - agibot_g1: AgiBot G1 robot configuration
             - mock: Mock robot configuration for testing
     """
     config = ConfigDict()
-    config.type = RobotType.A2D
-    config.a2d = get_a2d_config()
+    config.type = RobotType.AGIBOT_G1
+    config.agibot_g1 = get_agibot_g1_config()
     config.mock = get_mock_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()

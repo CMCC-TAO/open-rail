@@ -183,6 +183,9 @@ class VLAClient():
 
     def stop_control(self):
         self.is_control_thread_running = False
+        clear_control_actions = getattr(self.robot, 'clear_control_actions', None)
+        if clear_control_actions is not None:
+            clear_control_actions()
     
     def set_control_period(self, period) -> None:
         self.control_thread_timer.set_interval(period)
@@ -194,6 +197,9 @@ class VLAClient():
     
     def _stop_control_thread_on_error(self):
         self.is_control_thread_running = False
+        clear_control_actions = getattr(self.robot, 'clear_control_actions', None)
+        if clear_control_actions is not None:
+            clear_control_actions()
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
 

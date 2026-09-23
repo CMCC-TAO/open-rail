@@ -1,6 +1,7 @@
 from enum import Enum
 from ml_collections import ConfigDict
 import os
+from pathlib import Path
 
 class ModelType(str, Enum):
     MOCK = 'mock'
@@ -15,6 +16,7 @@ class ModelType(str, Enum):
     PI05 = 'pi05'
     TAO = 'tao'
     DM05 = 'dm05'
+    WALLX = 'wallx'
 
 def get_mock_config():
     """Generate configuration for MOCK model.
@@ -136,6 +138,16 @@ def get_dm05_config():
     return config
 
 
+def get_wallx_config():
+    config = ConfigDict()
+    config.model_path = '/path/to/model'
+    config.repo_path = str(Path(__file__).resolve().parents[2] / 'wall-x')
+    config.embodiment_tag = 'a2d_gripper'
+    config.device = 'cuda:0'
+    config.flow_steps = 10
+    return config
+
+
 def get_models_config():
     """Generate configuration for all available VLA models.
     
@@ -162,4 +174,5 @@ def get_models_config():
     config.pi05 = get_pi05_config()
     config.tao = get_tao_config()
     config.dm05 = get_dm05_config()
+    config.wallx = get_wallx_config()
     return config

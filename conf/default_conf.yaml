@@ -6,7 +6,7 @@ controller:
   period: 1.0
   raw_fps: 30
   speed: 1.0
-  wait_time: 4
+  wait_time: 10
 inter_chunk:
   inter_chunk_mode: min_jerk
   min_jerk:
@@ -35,10 +35,10 @@ intra_chunk:
   min_gripper_action_threshold: 0.05
 language:
   auto_mode: false
-  auto_mode_start_sub_task_id: 3
+  auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
-  sub_task_id: 3
-  task_id: make_coffee
+  sub_task_id: 0
+  task_id: tea_master
   task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
@@ -88,7 +88,7 @@ record:
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
     fps: 30
-    robot_type: a2d
+    robot_type: agibot_g1
     splits:
       valid: 0:100
     state_shape: 20
@@ -102,7 +102,7 @@ record:
   save_raw: true
   switch: false
 robots:
-  a2d:
+  agibot_g1:
     action_layout:
       arm:
         start: 0
@@ -276,9 +276,9 @@ robots:
         presets:
           left:
             Default:
-            - 0.0
+            - 0.5
             Custom:
-            - 0.0
+            - 1
           right:
             Default:
             - 0.0
@@ -583,7 +583,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: agibot_g1
 vision:
   history_frame: false
   preprocess:
@@ -604,16 +604,17 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
+    - 10
     source:
     - State
     - ActionRaw
     - ActionFitted
-    window_span_sec: 10.0
+    - State
+    window_span_sec: 5.0
   updata_fps: 30
 vla_zmq:
   heartbeat_interval: 1000
   heartbeat_timeout: 30000
-  infer_timeout: 500
+  infer_timeout: 5000
   ip: 127.0.0.1
   port: '5566'
