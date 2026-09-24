@@ -8,8 +8,6 @@ class ModelVLA:
 
     def __init__(self, config):
         self.cfg = config
-        if config.get('embodiment_tag', 'a2d_gripper') != 'a2d_gripper':
-            raise ValueError('Wall-X adapter currently supports only a2d_gripper')
         repo_path = str(Path(config['repo_path']).expanduser().resolve())
         if repo_path not in sys.path:
             sys.path.insert(0, repo_path)
