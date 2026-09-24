@@ -35,7 +35,7 @@ class RobotBody(RobotBase):
         super().__init__(config)
         self.logger = logging.getLogger(__name__)
         self.cfg = config
-        self.current_state = np.zeros(8*2+6*2)
+        self.current_state = np.zeros(8*2+6*2+2+4)
         # Main stop flag
         self._stop = False
 
@@ -78,8 +78,7 @@ class RobotBody(RobotBase):
         self.camera_image_queue = {came_name:None for came_name in camera_topics}
         self.camera_stamp_queue = {came_name:None for came_name in camera_topics}
         self.camera_lock = threading.Lock()
-        configured_ref = str(getattr(getattr(self.cfg, 'camera', None), 'ref', 'head') or 'head')
-        self.camera_ref = configured_ref if configured_ref in camera_topics else next(iter(camera_topics), None)
+        self.camera_ref = "head"
         self.current_timestamp = None
         for cam_name, cam_topic in camera_topics.items():
             if not cam_topic:
@@ -132,13 +131,15 @@ class RobotBody(RobotBase):
         Callback function for received JointState messages.
         """
         self.current_state[:16] = msg.position[:16]
+        self.current_state[28:30]=msg.position[16:18]
+        self.current_state[30:34]=msg.position[18:22]
         return
     
     def joint_states_callback_hand(self, msg):
         """
         Callback function for received JointState messages.
         """
-        self.current_state[16:] = msg.position[:]
+        self.current_state[16:28] = msg.position[:]
         return
 
     def _check_control_action_jump(self, action):
@@ -177,7 +178,7 @@ class RobotBody(RobotBase):
         Args:
             action (array-like): Action array containing arm commands (0:14) and gripper commands (14:16)
         """
-        action = self._check_control_action_jump(action)
+        # action = self._check_control_action_jump(action)
         left_hand_action = np.array(action[16:22])
         right_hand_action = np.array(action[22:28])
 
@@ -223,16 +224,13 @@ class RobotBody(RobotBase):
             joints = np.asarray(data['waist'], dtype=float).ravel()
             print(joints.shape)
             request.joints=joints.tolist()
-            request.v=0.8
-            request.acc=0.4
+            request.t=t
             request.is_async=False
             resp: MoveJResponse = self.waist_movej_controller.call(request)
             print(f"Service Name:/zj_humanoid/upperlimb/movej/waist | Resp Success:{resp.success}, Resp Message:{resp.message}")
         if 'left_arm' in data:
             request=MoveJRequest()
             request.joints=np.asarray(data['left_arm'], dtype=float).ravel().tolist()
-            request.v=0.1
-            request.acc=0.05
             request.t=t
             request.is_async=False
             resp: MoveJResponse = self.left_arm_movej_controller.call(request)
@@ -240,8 +238,6 @@ class RobotBody(RobotBase):
         if 'right_arm' in data:
             request=MoveJRequest()
             request.joints=np.asarray(data['right_arm'], dtype=float).ravel().tolist()
-            request.v=0.1
-            request.acc=0.05
             request.t=t
             request.is_async=False
             resp: MoveJResponse = self.right_arm_movej_controller.call(request)
@@ -249,8 +245,7 @@ class RobotBody(RobotBase):
         if 'neck' in data:
             request=MoveJRequest()
             request.joints=np.asarray(data['neck'], dtype=float).ravel().tolist()
-            request.v=0.4
-            request.acc=0.15
+            request.t=t
             request.is_async=False
             resp: MoveJResponse = self.neck_movej_controller.call(request)
             print(f"Service Name:/zj_humanoid/upperlimb/movej/neck | Resp Success:{resp.success}, Resp Message:{resp.message}")
@@ -329,8 +324,6 @@ class RobotBody(RobotBase):
         """
         try:
             with self.camera_lock:
-                if self.camera_ref is None:
-                    return None
                 ref_timestamp = self.camera_stamp_queue.get(self.camera_ref)
                 if ref_timestamp is None:
                     return None
