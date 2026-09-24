@@ -285,13 +285,8 @@ function applyConfigSubtaskSelection(rawIndex, autoMode, forceFirstSubtask) {
     textEl.value = '';
   }
 
-  if (App.config && App.config.language && safeIndex >= 0) {
-    App.config.language.task_id = taskName || App.config.language.task_id;
-    App.config.language.sub_task_id = safeIndex;
-  }
-
   syncLangTaskOptions(taskName || taskSel.value, safeIndex >= 0 ? safeIndex : 0);
-  refreshLangAppliedMarkers(taskName || taskSel.value, safeIndex >= 0 ? safeIndex : null);
+  refreshLangAppliedMarkers();
 }
 
 function applyLangConfigSelection(forceFirstSubtask = false) {
@@ -527,13 +522,14 @@ function setupLangPanel() {
 /** Save LangCmd.tasks back to the configured language file. */
 async function saveLangFile() {
   const path = App.config && App.config.language && App.config.language.file_path;
-  if (!path) { toast('No language file configured.', 'warn'); return; }
+  if (!path) { toast('No language file configured.', 'warn'); return false; }
   try {
     await apiFetch('/api/client/language/save', {
       method: 'POST',
       body: JSON.stringify({ path, data: LangCmd.tasks }),
     });
-  } catch (e) { /* toasted */ }
+    return true;
+  } catch (e) { return false; }
 }
 
 /** Edit the instruction at the selected sub-task index with the textarea content. */
@@ -550,23 +546,26 @@ async function editLangSubtask() {
   if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
   if (LangCmd.tasks[taskName][idx] == lang) { toast('Nothing changed.', 'warn'); return; }
   
+  const previous = LangCmd.tasks[taskName][idx];
   LangCmd.tasks[taskName][idx] = lang;
-  await saveLangFile();
+  if (!await saveLangFile()) {
+    LangCmd.tasks[taskName][idx] = previous;
+    return;
+  }
   renderLangSubtaskSelect();
   subtaskSel.value = String(idx);
-  try {
-    if (idx == App.config.language.sub_task_id) {
+  if (taskName === App.config.language.task_id && idx === App.config.language.sub_task_id) {
+    try {
       await sendLanguageSet(lang);
-    } 
-  } finally {
+    } catch (e) {
+      return;
+    }
   }
   toast('Sub-task instruction updated.', 'ok');
 }
 
 async function sendLanguageSet(language = '') {
-  try {
-    await apiFetch('/api/client/language/set', { method: 'POST', body: JSON.stringify({ language }) });
-  } catch (e) { /* toasted */ }
+  return apiFetch('/api/client/language/set', { method: 'POST', body: JSON.stringify({ language }) });
 }
 /** Add a new sub-task after the current list using the textarea content. */
 async function addLangSubtask() {
@@ -580,7 +579,10 @@ async function addLangSubtask() {
 
   LangCmd.tasks[taskName].push(lang);
   const newIdx = LangCmd.tasks[taskName].length - 1;
-  await saveLangFile();
+  if (!await saveLangFile()) {
+    LangCmd.tasks[taskName].pop();
+    return;
+  }
   renderLangSubtaskSelect();
   const subtaskSel = $('lang-subtask-select');
   if (subtaskSel) {
@@ -602,8 +604,11 @@ async function deleteLangSubtask() {
   if (!Number.isFinite(idx) || idx < 0 || idx >= LangCmd.tasks[taskName].length) { toast('Select a sub-task first.', 'warn'); return; }
   if (!confirm('Delete this sub-task?')) return;
 
-  LangCmd.tasks[taskName].splice(idx, 1);
-  await saveLangFile();
+  const [removed] = LangCmd.tasks[taskName].splice(idx, 1);
+  if (!await saveLangFile()) {
+    LangCmd.tasks[taskName].splice(idx, 0, removed);
+    return;
+  }
   renderLangSubtaskSelect();
   const newIdx = Math.max(0, Math.min(idx, LangCmd.tasks[taskName].length - 1));
   if (LangCmd.tasks[taskName].length > 0) {
@@ -615,63 +620,81 @@ async function deleteLangSubtask() {
   toast('Sub-task deleted.', 'ok');
 }
 
-async function sendLanguageCommand() {
-  const taskSel = $('lang-task-select');
-  const subtaskSel = $('lang-subtask-select');
-  const task = taskSel ? taskSel.value : null;
-  if (task == null) { toast('Select a valid task.', 'warn'); return; }
-  let lang = $('lang-cmd-text').value.trim();
-  if (!lang) { toast('Enter a language instruction.', 'warn'); return; }
+let languageSendQueue = Promise.resolve();
 
-  const subtasks = LangCmd.tasks[task] ? LangCmd.tasks[task] : [];
-  let idx = subtaskSel ? parseInt(subtaskSel.value, 10) : NaN;
-  if (!Number.isFinite(idx) || idx < 0) idx = 0;
-  if (App.config.language.task_id == task && App.config.language.sub_task_id == idx) {
-    if (subtasks[idx] != lang) {
-      editLangSubtask()
-    }
-    else {
-      toast('Language command not changed.', 'info');
-    }
-    return;
+function sendLanguageCommand() {
+  const task = $('lang-task-select')?.value;
+  const idx = Number($('lang-subtask-select')?.value);
+  const language = $('lang-cmd-text')?.value.trim() || '';
+  if (!task || !LangCmd.tasks[task]) { toast('Select a valid task.', 'warn'); return; }
+  if (!Number.isInteger(idx) || idx < 0 || idx >= LangCmd.tasks[task].length) {
+    toast('Select a valid sub-task.', 'warn'); return;
   }
-  if (App.config.record.switch && App.config.language.task_id != task) {
-    toast('Can not change task when recording.', 'warn');
-    return;
-  }
-  // console.info('old task: ', App.config.language.task_id, 'new task: ', task);
-  // console.info('old sub_task: ', App.config.language.sub_task_id, 'new sub_task: ', idx);
-  // console.info('recording: ', App.config.record.switch);
-  // 1. persistLanguagePatch
-  const patch = {
-    'language.task_id': task,
-    'language.sub_task_id': idx,
-  };
-  // If not in auto mode, keep auto start id in sync with manual selection
-  const isAutoMode = !!(App.config && App.config.language && App.config.language.auto_mode);
-  if (!isAutoMode) {
-    patch['language.auto_mode_start_sub_task_id'] = idx;
-  }
-  await persistLanguagePatch(patch);
-  // applyConfigTaskSelection(task);
-  applyConfigSubtaskSelection(idx, false, false);
+  if (!language) { toast('Enter a language instruction.', 'warn'); return; }
 
-  if (!isAutoMode) {
-    // ensure auto-start selector reflects the manual selection
-    try { applyConfigAutoStartSubtask(idx); } catch (e) { /* best-effort */ }
-  }
-
-  // 2. Send language command to robot
-  try {
-    await sendLanguageSet(lang);
-  }
-  finally {
-    if (App.config.record.switch) {
-      handleSubTaskRecordingRefresh(true);
+  // Capture the clicked selection now, then apply submissions in click order.
+  languageSendQueue = languageSendQueue.then(async () => {
+    if (App.config.record.switch && App.config.language.task_id !== task) {
+      toast('Can not change task when recording.', 'warn');
+      return;
     }
-  }
-  toast('Language command updated.', 'info');
+    if (App.config.language.auto_mode) {
+      toast('Disable automatic language mode before selecting an instruction.', 'warn');
+      return;
+    }
+
+    if (LangCmd.tasks[task][idx] !== language) {
+      const updatedTasks = { ...LangCmd.tasks, [task]: [...LangCmd.tasks[task]] };
+      updatedTasks[task][idx] = language;
+      const path = App.config.language.file_path;
+      if (!path) throw new Error('No language file configured.');
+      await apiFetch('/api/client/language/save', {
+        method: 'POST',
+        suppressToast: true,
+        body: JSON.stringify({ path, data: updatedTasks }),
+      });
+      LangCmd.tasks[task] = updatedTasks[task];
+    }
+
+    const applied = await apiFetch('/api/client/language/select', {
+      method: 'POST',
+      suppressToast: true,
+      body: JSON.stringify({ task_id: task, sub_task_id: idx, language }),
+    });
+    if (applied.task_id !== task || applied.sub_task_id !== idx || applied.language.trim() !== language) {
+      throw new Error('The server did not confirm the selected language.');
+    }
+
+    App.config.language.task_id = applied.task_id;
+    App.config.language.sub_task_id = applied.sub_task_id;
+    App.config.language.auto_mode_start_sub_task_id = applied.sub_task_id;
+    syncLangTaskOptions(applied.task_id, applied.sub_task_id);
+    refreshLangAppliedMarkers(applied.task_id, applied.sub_task_id);
+    applyConfigAutoStartSubtask(applied.sub_task_id);
+
+    try {
+      const confRes = await apiFetch('/api/client/config/path', { suppressToast: true });
+      if (confRes.path) {
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          suppressToast: true,
+          body: JSON.stringify({ path: confRes.path }),
+        });
+      }
+    } catch (e) {
+      toast('Language applied, but the config file was not saved.', 'warn');
+      return;
+    }
+
+    if (App.config.record.switch) handleSubTaskRecordingRefresh(true);
+    toast('Language command updated.', 'info');
+  }).catch((e) => {
+    console.error('Failed to apply language command:', e);
+    toast(`Language command was not applied: ${e.message}`, 'error');
+  });
+  return languageSendQueue;
 }
+
 async function loadDefaultLangFile() {
   try {
     const langPath = App.config && App.config.language && App.config.language.file_path;
@@ -730,7 +753,7 @@ function setupLanguageShortcuts() {
   let lKeyDown = false;
 
   document.addEventListener('keydown', (e) => {
-    if (isLanguageShortcutTypingTarget(e.target)) return;
+    if (isLanguageShortcutTypingTarget(e.target) || !$('shortcuts-popover').classList.contains('hidden')) return;
 
     const key = String(e.key || '').toLowerCase();
     if (key === 'l') {

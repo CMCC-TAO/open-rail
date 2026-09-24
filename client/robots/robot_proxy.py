@@ -15,7 +15,9 @@ Transport:
                 picklable descriptors cross the process boundary and the main
                 process attaches to the same blocks (zero-copy views).
     * other   : ``obs.state`` and ``current_state`` travel through a queue.
-    * commands: control / manual / arbitrary method calls travel through a queue
+    * control : continuous trajectory commands use a latest-value queue and are
+                executed by a dedicated worker thread (asynchronous).
+    * commands: manual / reset / arbitrary method calls travel through a queue
                 and are executed by the worker (synchronous RPC).
 """
 
@@ -24,6 +26,7 @@ from __future__ import annotations
 import atexit
 import logging
 import multiprocessing as mp
+import os
 import queue
 import signal
 import threading
@@ -42,7 +45,7 @@ _CMD_STOP = 'stop'
 
 # Maps RobotType values to the module exposing the concrete ``RobotBody``.
 _ROBOT_MODULES: Dict[str, str] = {
-    'a2d': 'client.robots.a2d.body_robot',
+    'agibot_g1': 'client.robots.agibot_g1.body_robot',
     'mock': 'client.robots.mock.body_robot',
     'ti5_t170c': 'client.robots.ti5_t170c.body_robot',
     'navi_wa2': 'client.robots.navi_wa2.body_robot',
@@ -53,16 +56,25 @@ _IDLE_SLEEP_S = 0.0005
 
 # Queues owned by the proxy; each one holds three semaphores that must be
 # released on shutdown (see RobotProxy._close_queues).
-_QUEUE_ATTRS = ('_obs_queue', '_cmd_queue', '_resp_queue', '_ready_queue')
+_QUEUE_ATTRS = (
+    '_obs_queue',
+    '_cmd_queue',
+    '_resp_queue',
+    '_ready_queue',
+    '_control_queue',
+    '_control_error_queue',
+)
 
 
 def _normalize_robot_type(robot_type) -> str:
-    """Accept a RobotType enum, a plain string, or 'RobotType.A2D'-like values."""
+    """Accept a RobotType enum, a plain string, or enum-like strings."""
     value = getattr(robot_type, 'value', robot_type)
     value = str(value)
     if '.' in value:
         value = value.rsplit('.', 1)[-1]
     value = value.strip().lower()
+    if value == 'a2d':  # Accept legacy robot identifiers at the IPC boundary.
+        value = 'agibot_g1'
     if value not in _ROBOT_MODULES:
         raise ValueError(f'Unsupported robot type: {robot_type!r} '
                          f'(supported: {sorted(_ROBOT_MODULES)})')
@@ -87,7 +99,8 @@ class _RobotWorker:
     """Subprocess side: owns the real robot and serves commands/observations."""
 
     def __init__(self, robot_type, config, obs_queue, cmd_queue, resp_queue,
-                 ready_queue, shm_ring_size, robot_module=None):
+                 ready_queue, control_queue, control_error_queue, control_epoch,
+                 shm_ring_size, robot_module=None):
         self._robot_type = robot_type
         self._config = config
         self._robot_module = robot_module
@@ -95,11 +108,18 @@ class _RobotWorker:
         self._cmd_queue = cmd_queue
         self._resp_queue = resp_queue
         self._ready_queue = ready_queue
+        self._control_queue = control_queue
+        self._control_error_queue = control_error_queue
+        self._control_epoch = control_epoch
         self._shm_ring_size = shm_ring_size
 
         self._robot = None
         self._shm: Optional[SharedMemoryManager] = None
         self._stop = False
+        self._control_stop = threading.Event()
+        self._control_failed = threading.Event()
+        self._control_thread = None
+        self._robot_command_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # lifecycle
@@ -120,6 +140,13 @@ class _RobotWorker:
             logger.exception('Failed to publish robot metadata')
             self._ready_queue.put(('error', exc))
             return
+
+        self._control_thread = threading.Thread(
+            target=self._control_loop,
+            name='robot-control',
+            daemon=True,
+        )
+        self._control_thread.start()
 
         try:
             self._loop()
@@ -154,6 +181,9 @@ class _RobotWorker:
         ``except BaseException`` is deliberate: a second Ctrl-C during shutdown
         must not skip the shared memory release and leak the blocks.
         """
+        self._control_stop.set()
+        if self._control_thread is not None:
+            self._control_thread.join(timeout=1.0)
         try:
             if self._robot is not None:
                 self._robot.close()
@@ -214,7 +244,8 @@ class _RobotWorker:
         _, cmd_id, method, args, kwargs = command
         try:
             target = getattr(self._robot, method)
-            result = target(*args, **kwargs)
+            with self._robot_command_lock:
+                result = target(*args, **kwargs)
         except (KeyboardInterrupt, SystemExit):
             # Never convert an interrupt into a command error; let _loop shut down.
             raise
@@ -222,6 +253,52 @@ class _RobotWorker:
             self._resp_queue.put((cmd_id, False, exc))
         else:
             self._resp_queue.put((cmd_id, True, result))
+
+    def _control_loop(self) -> None:
+        """Execute only the newest pending trajectory command.
+
+        This thread is deliberately independent from ``retrieve_observation``.
+        The previous synchronous RPC path serialized every control point behind
+        camera retrieval, which capped a nominal 3.75 ms control loop at roughly
+        the camera polling latency.
+        """
+        while not self._control_stop.is_set():
+            try:
+                epoch, action = self._control_queue.get(timeout=0.05)
+            except queue.Empty:
+                continue
+
+            # Collapse a burst to its newest value. A stale trajectory point is
+            # less useful (and less safe) than the latest requested point.
+            while True:
+                try:
+                    next_epoch, next_action = self._control_queue.get_nowait()
+                except queue.Empty:
+                    break
+                # A delayed old-epoch item must not replace a fresh action.
+                if next_epoch >= epoch:
+                    epoch, action = next_epoch, next_action
+
+            if self._control_failed.is_set():
+                continue
+
+            try:
+                with self._robot_command_lock:
+                    # The parent may pause while this item waits behind Reset.
+                    # Check only after acquiring the robot lock so an old action
+                    # cannot run once the reset command has completed.
+                    with self._control_epoch.get_lock():
+                        if epoch != self._control_epoch.value:
+                            continue
+                    self._robot.control_robot(action)
+            except BaseException as exc:  # noqa: BLE001 - surfaced to parent
+                self._control_failed.set()
+                logger.exception('Asynchronous robot control failed')
+                error = (type(exc).__name__, str(exc))
+                try:
+                    self._control_error_queue.put_nowait(error)
+                except queue.Full:
+                    pass
 
     # ------------------------------------------------------------------
     # observation publishing
@@ -312,8 +389,12 @@ def _install_worker_signal_handlers() -> None:
 
 
 def _robot_worker_entry(robot_type, config, obs_queue, cmd_queue, resp_queue,
-                        ready_queue, shm_ring_size, robot_module=None) -> None:
+                        ready_queue, control_queue, control_error_queue,
+                        control_epoch, shm_ring_size, robot_module=None) -> None:
     """Subprocess entry point (must stay importable/picklable for spawn)."""
+    if robot_type == 'agibot_g1':
+        os.environ.setdefault('PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION', 'python')
+
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
@@ -327,6 +408,9 @@ def _robot_worker_entry(robot_type, config, obs_queue, cmd_queue, resp_queue,
         cmd_queue=cmd_queue,
         resp_queue=resp_queue,
         ready_queue=ready_queue,
+        control_queue=control_queue,
+        control_error_queue=control_error_queue,
+        control_epoch=control_epoch,
         shm_ring_size=shm_ring_size,
         robot_module=robot_module,
     ).run()
@@ -338,8 +422,9 @@ class RobotProxy:
     Exposes the same surface the VLA client and the web API rely on, so no caller
     needs to change:
         * ``retrieve_observation()``      -> newest frame from the worker queue
-        * ``control_robot`` / ``execute_action`` / ``_control_robot`` / ``reset_robot``
-          and any other public robot method -> synchronous RPC to the worker
+        * ``control_robot`` -> non-blocking latest-value control queue
+        * ``execute_action`` / ``_control_robot`` / ``reset_robot`` and any
+          other public robot method -> synchronous RPC to the worker
         * ``config`` / ``action_layout`` / ``*_dim`` / ``*_indices`` -> captured once
           at startup (no per-frame IPC)
         * ``current_state`` -> refreshed from the observation stream
@@ -361,6 +446,13 @@ class RobotProxy:
         self._cmd_queue = self._ctx.Queue(maxsize=cmd_queue_size)
         self._resp_queue = self._ctx.Queue()
         self._ready_queue = self._ctx.Queue(maxsize=1)
+        # Keep submission non-blocking. The worker drains every currently queued
+        # value before each SDK call, so bursts collapse to the newest action.
+        self._control_queue = self._ctx.Queue()
+        self._control_error_queue = self._ctx.Queue(maxsize=1)
+        self._control_epoch = self._ctx.Value('Q', 0)
+        self._control_submit_lock = threading.Lock()
+        self._control_enabled = True
 
         self._rpc_lock = threading.Lock()
         self._rpc_timeout = rpc_timeout
@@ -378,7 +470,8 @@ class RobotProxy:
         self._process = self._ctx.Process(
             target=_robot_worker_entry,
             args=(self._robot_type, config, self._obs_queue, self._cmd_queue,
-                  self._resp_queue, self._ready_queue, shm_ring_size,
+                  self._resp_queue, self._ready_queue, self._control_queue,
+                  self._control_error_queue, self._control_epoch, shm_ring_size,
                   self._robot_module),
             name=f'robot-worker-{self._robot_type}',
             daemon=True,
@@ -474,6 +567,9 @@ class RobotProxy:
         if decoded is None:
             self.logger.warning('Dropping one observation: shared memory decode failed')
             return None
+        # Preserve the worker publication time across the local image pipeline.
+        # Reset uses it to reject frames captured before the reset barrier.
+        decoded['_worker_publish_time'] = payload['t_send']
         return decoded
 
     # ------------------------------------------------------------------
@@ -511,8 +607,58 @@ class RobotProxy:
                 raise value
 
     def control_robot(self, action):
-        """Send an action to the robot (mirrors RobotBody.control_robot)."""
-        return self._rpc('control_robot', action)
+        """Queue the newest trajectory action without waiting for an RPC reply."""
+        with self._control_submit_lock:
+            if not self._control_enabled:
+                return None
+            if self._closed:
+                raise RuntimeError("Robot proxy is closed; cannot call 'control_robot'")
+            self._raise_pending_control_error()
+            if not self._process.is_alive():
+                raise RuntimeError(
+                    'Robot worker process died while submitting control action '
+                    f'(exitcode={self._process.exitcode})'
+                )
+
+            # Queue.put returns before its feeder thread publishes the item.
+            # The epoch lets the worker reject it after a later Pause/Reset.
+            action_snapshot = np.array(action, copy=True)
+            with self._control_epoch.get_lock():
+                epoch = self._control_epoch.value
+            self._control_queue.put_nowait((epoch, action_snapshot))
+        return None
+
+    def pause_controls(self):
+        """Invalidate queued and dequeued trajectory points before robot reset."""
+        with self._control_submit_lock:
+            self._control_enabled = False
+            with self._control_epoch.get_lock():
+                self._control_epoch.value += 1
+            self.clear_control_actions()
+
+    def resume_controls(self):
+        with self._control_submit_lock:
+            self._control_enabled = True
+
+    def clear_control_actions(self):
+        """Discard trajectory points that have not started executing yet."""
+        control_queue = self._control_queue
+        if control_queue is None:
+            return
+        while True:
+            try:
+                control_queue.get_nowait()
+            except queue.Empty:
+                return
+
+    def _raise_pending_control_error(self) -> None:
+        """Surface an asynchronous worker error on the next control tick."""
+        try:
+            error_type, message = self._control_error_queue.get_nowait()
+        except queue.Empty:
+            return
+        detail = f'{error_type}: {message}' if message else error_type
+        raise RuntimeError(f'Robot control failed in worker subprocess: {detail}')
 
     def execute_action(self, data):
         """Send a raw action command to the robot."""

@@ -5,7 +5,7 @@ controller:
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
-  speed: 1.5
+  speed: 1.0
   wait_time: 10
 inter_chunk:
   inter_chunk_mode: min_jerk
@@ -15,10 +15,10 @@ inter_chunk:
   search_action:
     search_length: 100
   smooth_velocity:
-    kd: 2.0
-    kp: 5.0
-    max_acc: 5.0
-    max_vel: 2.0
+    k_d: 4.0
+    k_p: 10.0
+    kf_acc: 0.3
+    kf_vel: 2.5
   sync: {}
 intra_chunk:
   filter_window_size: 4
@@ -35,9 +35,9 @@ intra_chunk:
   min_gripper_action_threshold: 0.05
 language:
   auto_mode: false
-  auto_mode_start_sub_task_id: 3
+  auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
-  sub_task_id: 3
+  sub_task_id: 0
   task_id: tea_master
   task_progress_threshold: 0.9
   task_progress_win_size: 10
@@ -88,7 +88,7 @@ record:
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
     fps: 30
-    robot_type: a2d
+    robot_type: agibot_g1
     splits:
       valid: 0:100
     state_shape: 20
@@ -102,7 +102,7 @@ record:
   save_raw: true
   switch: false
 robots:
-  a2d:
+  agibot_g1:
     action_layout:
       arm:
         start: 0
@@ -272,9 +272,9 @@ robots:
         presets:
           left:
             Default:
-            - 0.0
+            - 0.5
             Custom:
-            - 0.0
+            - 1
           right:
             Default:
             - 0.0
@@ -299,16 +299,141 @@ robots:
         start: 0
         end: 16
         policy: gradual
+        presets:
+          left:
+            Default:
+            - 0.182591655739083
+            - 0.32575521044236666
+            - 0.639202615644364
+            - 0.03292066673111549
+            - -1.9789475037079458
+            - 0.5495126798768879
+            - -0.1635420177877668
+            - -0.03926435617611085
+            Custom:
+            - 0.182591655739083
+            - 0.32575521044236666
+            - 0.639202615644364
+            - 0.03292066673111549
+            - -1.9789475037079458
+            - 0.5495126798768879
+            - -0.1635420177877668
+            - -0.5
+          right:
+            Default:
+            - -0.22653780968994397
+            - 0.19016568609004025
+            - -0.6990877950829599
+            - 0.17601231608296075
+            - -1.888115764960776
+            - -0.5459413807557212
+            - -0.38742182124429064
+            - 0.5
+            Custom:
+            - -0.22653780968994397
+            - 0.19016568609004025
+            - -0.6990877950829599
+            - 0.17601231608296075
+            - -1.888115764960776
+            - -0.5459413807557212
+            - -0.38742182124429064
+            - 0.5
       hand:
         start: 16
         end: 28
         policy: stepwise
+        presets:
+          left:
+            Default:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Custom:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Open:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Finger:
+            - -0.2
+            - 0.9
+            - 0
+            - 1
+            - 1
+            - 1
+          right:
+            Default:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Custom:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Open:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Finger:
+            - -0.2
+            - 0.9
+            - 0
+            - 1
+            - 1
+            - 1
+      head:
+        start: 28
+        end: 30
+        policy: manual
+        presets:
+          Default:
+          - 0
+          - 0.25
+          Custom:
+          - 0
+          - 0.25
+      waist:
+        start: 30
+        end: 34
+        policy: manual
+        presets:
+          Default:
+          - -0.994804544964154
+          - 1.0044877989571432
+          - 0
+          - 0.32794832366107585
+          Custom:
+          - -0.994804544964154
+          - 1.0044877989571432
+          - 0
+          - 0.32794832366107585
     camera:
       topic_dict:
         hand_left: /zj_humanoid/sensor/left_wrist/image_raw/compressed
         hand_right: /zj_humanoid/sensor/right_wrist/image_raw/compressed
         head: /zj_humanoid/sensor/realsense_head/color/image_raw/compressed
     gain: 900
+    hand_type: hand
     reset_position:
     - 0.182591655739083
     - 0.32575521044236666
@@ -454,13 +579,13 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: a2d
+  type: mock
 vision:
   history_frame: false
   preprocess:
     height: 480
     keep_ratio: true
-    method: resize
+    method: none
     width: 640
 visualize:
   camera:
@@ -475,16 +600,16 @@ visualize:
   trajectory:
     play: true
     selected_joints:
-    - 0
+    - 10
     source:
     - ActionRaw
     - ActionFitted
     - State
-    window_span_sec: 8.0
+    window_span_sec: 5.0
   updata_fps: 30
 vla_zmq:
   heartbeat_interval: 1000
   heartbeat_timeout: 30000
   infer_timeout: 5000
-  ip: 111.0.18.170
-  port: '5567'
+  ip: 127.0.0.1
+  port: '5566'

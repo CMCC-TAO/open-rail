@@ -86,7 +86,7 @@ Edit [`conf/robots_conf.py`](../../conf/robots_conf.py):
 
 ```python
 class RobotType(str, Enum):
-    A2D = "a2d"
+    AGIBOT_G1 = "agibot_g1"
     MOCK = "mock"
     TI5_T170C = "ti5_t170c"
     NAVI_WA2 = "navi_wa2"

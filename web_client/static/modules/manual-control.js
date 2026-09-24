@@ -31,13 +31,12 @@ const updateEditState = (select, edit, disabledReason = 'Preset control is disab
   edit.disabled = select.disabled;
   edit.title = select.disabled ? disabledReason : 'Edit preset';
 };
-const populate = (selectId, checkId, action, side = null) => {
+const populate = (selectId, checkId, action, side = null, preferredKey = null) => {
   const select = $(selectId);
   const check = $(checkId);
   const edit = $(`${selectId}-edit`);
   if (!select || !check) return;
   const wasDisabled = check.disabled;
-  const previous = select.value;
   select.innerHTML = '';
   presets(action, side).forEach(preset => {
     const key = presetKey(preset);
@@ -58,7 +57,11 @@ const populate = (selectId, checkId, action, side = null) => {
   const targets = [select.closest('.robot-preset-row'), select, check].filter(Boolean);
   if (supported) {
     if (wasDisabled) check.checked = true;
-    if ([...select.options].some(option => option.value === previous)) select.value = previous;
+    const options = [...select.options];
+    const selected = options.find(option => option.dataset.key === preferredKey)
+      || options.find(option => option.dataset.key === 'Default')
+      || options[0];
+    select.selectedIndex = options.indexOf(selected);
     targets.forEach(target => target.removeAttribute('title'));
   } else {
     select.innerHTML = '';
@@ -76,15 +79,57 @@ const handAction = () => {
   const action = String(robotConfig().hand_type || 'gripper');
   return hasLayout(action) ? action : 'gripper';
 };
-const refreshControls = () => {
-  populate('arm-left-preset', 'chk-arm-left', 'arm', 'left');
-  populate('arm-right-preset', 'chk-arm-right', 'arm', 'right');
-  const hand = handAction();
-  populate('gripper-left-preset', 'chk-gripper-left', hand, 'left');
-  populate('gripper-right-preset', 'chk-gripper-right', hand, 'right');
-  ['head', 'waist', 'body', 'wheel', 'leg'].forEach(action => {
-    populate(`${action}-preset`, `chk-${action}`, action);
+const presetSelectIds = [
+  'arm-left-preset', 'arm-right-preset',
+  'gripper-left-preset', 'gripper-right-preset',
+  'head-preset', 'waist-preset', 'body-preset', 'wheel-preset', 'leg-preset',
+];
+const presetStorageKey = 'openrail.robot-control.preset-selection';
+const isPageReload = performance.getEntriesByType('navigation')[0]?.type === 'reload';
+const restoredSelection = (() => {
+  if (!isPageReload) return null;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(presetStorageKey));
+    return saved && typeof saved === 'object' ? saved : null;
+  } catch (_) {
+    return null;
+  }
+})();
+const savePresetSelection = () => {
+  const selections = {};
+  presetSelectIds.forEach(id => {
+    const key = $(id)?.selectedOptions[0]?.dataset.key;
+    if (key) selections[id] = key;
   });
+  try {
+    sessionStorage.setItem(presetStorageKey, JSON.stringify({
+      robotType: String(App.config?.robots?.type || ''),
+      selections,
+    }));
+  } catch (_) { /* Selection still works when session storage is unavailable. */ }
+};
+let selectedRobotType = null;
+const refreshControls = () => {
+  const robotType = String(App.config?.robots?.type || '');
+  const sameRobot = selectedRobotType === robotType;
+  const restored = selectedRobotType === null && restoredSelection?.robotType === robotType
+    ? restoredSelection.selections
+    : null;
+  const preferredKey = id => sameRobot
+    ? $(id)?.selectedOptions[0]?.dataset.key
+    : restored?.[id];
+
+  populate('arm-left-preset', 'chk-arm-left', 'arm', 'left', preferredKey('arm-left-preset'));
+  populate('arm-right-preset', 'chk-arm-right', 'arm', 'right', preferredKey('arm-right-preset'));
+  const hand = handAction();
+  populate('gripper-left-preset', 'chk-gripper-left', hand, 'left', preferredKey('gripper-left-preset'));
+  populate('gripper-right-preset', 'chk-gripper-right', hand, 'right', preferredKey('gripper-right-preset'));
+  ['head', 'waist', 'body', 'wheel', 'leg'].forEach(action => {
+    const id = `${action}-preset`;
+    populate(id, `chk-${action}`, action, null, preferredKey(id));
+  });
+  selectedRobotType = robotType;
+  savePresetSelection();
 };
 
 const requestPreset = (key, current) => new Promise(resolve => {
@@ -157,7 +202,8 @@ const savePresets = async (selectId, action, side, items, selectedKey, verb) => 
     refreshControls();
     const select = $(selectId);
     const selected = [...select.options].find(item => item.dataset.key === selectedKey);
-    if (selected) select.value = selected.value;
+    if (selected) select.selectedIndex = [...select.options].indexOf(selected);
+    savePresetSelection();
     updateEditState(select, $(`${selectId}-edit`));
 
     const confRes = await apiFetch('/api/client/config/path');
@@ -226,6 +272,7 @@ const editPreset = async (selectId, action, side = null) => {
 ].forEach(([selectId, getAction, side = null]) => {
   $(selectId)?.addEventListener('change', () => {
     updateEditState($(selectId), $(`${selectId}-edit`));
+    savePresetSelection();
   });
   $(`${selectId}-edit`)?.addEventListener('click', () => {
     editPreset(selectId, getAction(), side);

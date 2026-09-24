@@ -7,7 +7,7 @@
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <link rel="stylesheet" href="/static/styles/main.css" />
+  <link rel="stylesheet" href="/static/styles/main.css?v=20260924-shortcuts-popover-1" />
 </head>
 <body>
 
@@ -15,6 +15,30 @@
   <header class="topbar">
     <div class="topbar-left">
       <div id="status-badge" class="status-badge stopped">STOPPED</div>
+      <button class="btn btn-xs topbar-shortcuts-button" id="btn-shortcuts" type="button" aria-haspopup="dialog" aria-controls="shortcuts-popover" aria-expanded="false">⌨ Shortcuts</button>
+      <div id="shortcuts-popover" class="shortcuts-popover hidden" role="dialog" aria-labelledby="shortcuts-popover-title">
+        <div class="shortcuts-popover-header">
+          <strong id="shortcuts-popover-title">Keyboard shortcuts</strong>
+          <button class="btn btn-xs" id="btn-shortcuts-close" type="button" aria-label="Close shortcut help">×</button>
+        </div>
+        <section class="shortcuts-group" aria-labelledby="shortcut-runtime-title">
+          <h3 id="shortcut-runtime-title">Run control</h3>
+          <dl class="shortcuts-list">
+            <div><dt><kbd>Space</kbd></dt><dd>Pause / resume</dd></div>
+            <div><dt><kbd>Ctrl</kbd> + <kbd>Space</kbd></dt><dd>Start / stop control</dd></div>
+            <div><dt><kbd>Shift</kbd> + <kbd>R</kbd></dt><dd>Reset robot</dd></div>
+          </dl>
+        </section>
+        <section class="shortcuts-group" aria-labelledby="shortcut-language-title">
+          <h3 id="shortcut-language-title">Language instructions</h3>
+          <dl class="shortcuts-list">
+            <div><dt>Hold <kbd>L</kbd> + <kbd>1–9</kbd></dt><dd>Apply instruction 1–9</dd></div>
+            <div><dt>Hold <kbd>L</kbd> + <kbd>0</kbd></dt><dd>Apply instruction 10</dd></div>
+            <div><dt>Hold <kbd>L</kbd> + <kbd>↑</kbd> / <kbd>↓</kbd></dt><dd>Apply previous / next</dd></div>
+            <div><dt><kbd>Ctrl</kbd> + <kbd>Enter</kbd></dt><dd>Apply typed instruction</dd></div>
+          </dl>
+        </section>
+      </div>
     </div>
     <div class="topbar-center">
       <a class="logo" id="topbar-logo" href="https://arxiv.org/abs/2512.24673" target="_blank" rel="noopener noreferrer" title="Open-RAIL — Paper: arXiv:2512.24673 (opens in new tab)" aria-label="Open-RAIL — arXiv:2512.24673 (opens in new tab)">Open-RAIL</a>
@@ -655,9 +679,9 @@
   <script src="/static/modules/camera.js"></script>
   <script src="/static/modules/trajectory.js"></script>
   <script src="/static/modules/config.js"></script>
-  <script src="/static/modules/language.js"></script>
+  <script src="/static/modules/language.js?v=20260924-shortcuts-popover-1"></script>
   <script src="/static/modules/recording.js"></script>
-  <script src="/static/modules/manual-control.js"></script>
-  <script src="/static/app.js"></script>
+  <script src="/static/modules/manual-control.js?v=20260924-preset-selection-2"></script>
+  <script src="/static/app.js?v=20260924-shortcuts-popover-1"></script>
 </body>
 </html>
