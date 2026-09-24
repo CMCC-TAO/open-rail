@@ -821,5 +821,5 @@ vla_zmq:
   heartbeat_interval: 1000
   heartbeat_timeout: 30000
   infer_timeout: 5000
-  ip: 117.147.181.179
-  port: '5567'
+  ip: 117.147.181.181
+  port: '5566'

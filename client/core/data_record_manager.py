@@ -581,7 +581,9 @@ class DataRecordManager:
         self.logger.info("Closing DataRecordManager...")
 
         try:
-            if self.shared_data.running.value:
+            # running 是 multiprocessing.Event，读取状态要用 is_set()，
+            # 它没有 .value 属性（写错会抛 AttributeError，导致关闭时漏掉停止录制）。
+            if self.shared_data.running.is_set():
                 self.stop_recording()
             else:
                 self.logger.info("Recording is not active, skip stop synchronization.")

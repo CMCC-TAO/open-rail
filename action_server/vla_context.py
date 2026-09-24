@@ -167,17 +167,18 @@ class VLAContext:
             # 跨进程前必须摘掉 record 子树：它带点号键（record.lerobot['cam.head']），
             # ConfigDict 无法 pickle 往返（__setstate__ 会在恢复 allow_dotted_keys
             # 之前按字段名重新校验，连 deepcopy 都失败），而 worker 根本不读它。
-            # 与 web_client/server.py:_create_robot 的处理保持一致。
-            _saved_record = self.config.record
-            self.config.record = None
-            try:
-                self._robot_body = RobotProxy(
-                    self.config.robots.type.value,
-                    self.config,
-                    robot_module='action_server.robot_body_ext',
-                )
-            finally:
-                self.config.record = _saved_record
+            # 与 web_client/server.py:_create_robot 的处理保持一致：不改写共享的
+            # self.config，而是另造一份不含 record 的副本再交给子进程。
+            from ml_collections import ConfigDict
+            robot_cfg = ConfigDict({
+                key: value for key, value in self.config.items()
+                if key != 'record'
+            })
+            self._robot_body = RobotProxy(
+                self.config.robots.type.value,
+                robot_cfg,
+                robot_module='action_server.robot_body_ext',
+            )
 
             # 仿真模式：禁用相对限幅和绝对限幅，允许大幅轨迹规划
             if self._sim_mode:

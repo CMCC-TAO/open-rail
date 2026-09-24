@@ -143,6 +143,9 @@ class ClientState:
         self.stopping = False
         self.paused = False
         self.lock = threading.Lock()
+        # Serializes VLA client creation so concurrent requests cannot build the
+        # robot subprocess / touch shared config at the same time.
+        self.create_lock = threading.Lock()
         self.ws_clients: set[WebSocket] = set()
         self.ws_lock = threading.Lock()
         self._broadcast_task: Optional[asyncio.Task] = None
@@ -1318,51 +1321,55 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
 #  REST: client control
 # ─────────────────────────────────────────────────────────────────────────────
 def _ensure_vla_client_created():
-    with client_state.lock:
-        if client_state.vla_client is not None:
-            return client_state.vla_client
-        client_config = client_state.config
+    # Serialize creation: several endpoints (start / observe-start / config-load)
+    # can request the client concurrently. Without this lock two callers would
+    # build a robot subprocess at the same time and race over shared state.
+    with client_state.create_lock:
+        with client_state.lock:
+            if client_state.vla_client is not None:
+                return client_state.vla_client
+            client_config = client_state.config
 
-    vla_zmq_client = None
-    robot = None
-    try:
-        # print(f"DEBUG, robot = {client_config.robots}, type = {client_config.robots.type.value}")
-        robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
-        _sync_robot_action_layout(client_config, robot_config)
-        robot = _create_robot(client_config.robots.type, robot_config, client_config)
-        vla_zmq_client = ZMQClient(client_config.vla_zmq)
-        realtime_data_manager = RealtimeDataManager(client_config.rdm)
-        inter_chunk_fuser = InterChunkFuser(config=client_config.inter_chunk)
-        intra_chunk_smoother = IntraChunkSmoother(config=client_config.intra_chunk)
-        task_language_manager = TaskLanguageManager(config=client_config.language)
-        from client.core.vla_client import VLAClient
-        vla_client = VLAClient(
-            config=client_config,
-            realtime_data_manager=realtime_data_manager,
-            inter_chunk_fuser=inter_chunk_fuser,
-            intra_chunk_smoother=intra_chunk_smoother,
-            task_language_manager=task_language_manager,
-            vla_zmq_client=vla_zmq_client,
-            robot=robot,
-        )
-    except Exception as e:
-        logger.exception(f"Client creation failed: {e}")
-        if vla_zmq_client is not None:
-            try:
-                vla_zmq_client.close()
-            except Exception:
-                pass
-        if robot is not None:
-            try:
-                robot.close()
-            except Exception:
-                pass
-        raise
+        vla_zmq_client = None
+        robot = None
+        try:
+            # print(f"DEBUG, robot = {client_config.robots}, type = {client_config.robots.type.value}")
+            robot_config = getattr(client_config.robots, client_config.robots.type.value, None)
+            _sync_robot_action_layout(client_config, robot_config)
+            robot = _create_robot(client_config.robots.type, robot_config, client_config)
+            vla_zmq_client = ZMQClient(client_config.vla_zmq)
+            realtime_data_manager = RealtimeDataManager(client_config.rdm)
+            inter_chunk_fuser = InterChunkFuser(config=client_config.inter_chunk)
+            intra_chunk_smoother = IntraChunkSmoother(config=client_config.intra_chunk)
+            task_language_manager = TaskLanguageManager(config=client_config.language)
+            from client.core.vla_client import VLAClient
+            vla_client = VLAClient(
+                config=client_config,
+                realtime_data_manager=realtime_data_manager,
+                inter_chunk_fuser=inter_chunk_fuser,
+                intra_chunk_smoother=intra_chunk_smoother,
+                task_language_manager=task_language_manager,
+                vla_zmq_client=vla_zmq_client,
+                robot=robot,
+            )
+        except Exception as e:
+            logger.exception(f"Client creation failed: {e}")
+            if vla_zmq_client is not None:
+                try:
+                    vla_zmq_client.close()
+                except Exception:
+                    pass
+            if robot is not None:
+                try:
+                    robot.close()
+                except Exception:
+                    pass
+            raise
 
-    with client_state.lock:
-        client_state.vla_client = vla_client
-        client_state.robot = robot
-    return vla_client
+        with client_state.lock:
+            client_state.vla_client = vla_client
+            client_state.robot = robot
+        return vla_client
 
 def _create_robot(robot_type, robot_config, client_config=None):
     """Create the robot proxy that owns a dedicated worker subprocess.
@@ -1371,28 +1378,31 @@ def _create_robot(robot_type, robot_config, client_config=None):
     subprocess, see ``client/robots/robot_proxy.py``. Running it out of process
     removes the GIL contention between observation/control and the VLA client.
 
-    unitree_g1's ``RobotBody`` reads ``config["robots"]["unitree_g1"]`` from
-    the full client config, so it is given ``client_config`` instead of the
-    robot sub-config; its ``ros_context`` is self-created inside the worker
-    subprocess (an independent ``rclpy.Context`` when none is passed).
+    unitree_g1's ``RobotBody`` reads ``config["robots"]["unitree_g1"]`` and
+    ``action_layout`` from the full client config, so it is given a config that
+    carries the whole tree instead of just the robot sub-config; its
+    ``ros_context`` is self-created inside the worker subprocess (an independent
+    ``rclpy.Context`` when none is passed).
 
-    The ``record`` subtree is temporarily stripped before crossing the
-    process boundary: it carries dotted keys (``record.lerobot['cam.head']``
-    etc.) which ``ConfigDict`` cannot pickle-roundtrip (``__setstate__``
-    revalidates field names before restoring ``allow_dotted_keys``, so even
-    ``copy.deepcopy`` fails). The worker never reads ``record``; the original
-    main-process config is restored right after the proxy has pickled its
-    spawn args (inside ``RobotProxy.__init__``).
+    The worker never reads ``record``, and that subtree carries dotted keys
+    (``record.lerobot['cam.head']`` etc.) which ``ConfigDict`` cannot pickle
+    across the ``spawn`` boundary (``__setstate__`` revalidates field names
+    before restoring ``allow_dotted_keys``, so even ``copy.deepcopy`` fails).
+    We therefore hand the worker a *copy* of the full config with ``record``
+    dropped, instead of temporarily mutating the shared ``client_config``: the
+    old mutation raced with concurrent creation and could leave ``record=None``
+    (crashing DataRecordManager with "'NoneType' object has no attribute
+    'lerobot'").
     """
     try:
         from client.robots.robot_proxy import RobotProxy
         if robot_type == RobotType.UNITREE_G1:
-            saved_record = client_config.record
-            client_config.record = None
-            try:
-                return RobotProxy(robot_type, client_config)
-            finally:
-                client_config.record = saved_record
+            from ml_collections import ConfigDict
+            robot_cfg = ConfigDict({
+                key: value for key, value in client_config.items()
+                if key != 'record'
+            })
+            return RobotProxy(robot_type, robot_cfg)
         return RobotProxy(robot_type, robot_config)
     except Exception as e:
         logger.exception(f"Robot creation failed: {e}")

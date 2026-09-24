@@ -118,6 +118,13 @@ def override_config_with_args(config, args):
         elif config.models.type == ModelType.WALLX:
             config.models.wallx.model_path = args.model_path
 
+    # Override embodiment tag
+    if args.embodiment_tag:
+        if config.models.type == ModelType.TAO:
+            config.models.tao.embodiment_tag = args.embodiment_tag
+        elif config.models.type in [ModelType.GR00T_N1, ModelType.GR00T_N1_5, ModelType.GR00T_N1_6]:
+            config.models.gr00t.embodiment_tag = args.embodiment_tag
+
     return config
 
 def main():
