@@ -5,6 +5,10 @@
 - Fixed intermittent language instruction switching in the web client and inference requests.
 - Added a top-bar keyboard shortcut popover for run controls and language instructions.
 - Made Robot Control presets select `Default` in new tabs and restore selections by name after page reloads.
+- Fixed network latency spikes after Reset and Resume.
+- Restored inference after Reset and Resume when synchronous waiting or a transient inference error interrupts the worker.
+- Prevented stale control commands and observations from crossing Reset and Resume.
+- Merge smooth_velocity_2
 
 ## [20260923]
 

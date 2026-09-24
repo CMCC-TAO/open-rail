@@ -15,10 +15,10 @@ inter_chunk:
   search_action:
     search_length: 100
   smooth_velocity:
-    kd: 2.0
-    kp: 5.0
-    max_acc: 5.0
-    max_vel: 2.0
+    k_d: 4.0
+    k_p: 10.0
+    kf_acc: 0.3
+    kf_vel: 2.5
   sync: {}
 intra_chunk:
   filter_window_size: 4
@@ -35,9 +35,9 @@ intra_chunk:
   min_gripper_action_threshold: 0.05
 language:
   auto_mode: false
-  auto_mode_start_sub_task_id: 3
+  auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
-  sub_task_id: 3
+  sub_task_id: 0
   task_id: tea_master
   task_progress_threshold: 0.9
   task_progress_win_size: 10
@@ -299,16 +299,141 @@ robots:
         start: 0
         end: 16
         policy: gradual
+        presets:
+          left:
+            Default:
+            - 0.182591655739083
+            - 0.32575521044236666
+            - 0.639202615644364
+            - 0.03292066673111549
+            - -1.9789475037079458
+            - 0.5495126798768879
+            - -0.1635420177877668
+            - -0.03926435617611085
+            Custom:
+            - 0.182591655739083
+            - 0.32575521044236666
+            - 0.639202615644364
+            - 0.03292066673111549
+            - -1.9789475037079458
+            - 0.5495126798768879
+            - -0.1635420177877668
+            - -0.5
+          right:
+            Default:
+            - -0.22653780968994397
+            - 0.19016568609004025
+            - -0.6990877950829599
+            - 0.17601231608296075
+            - -1.888115764960776
+            - -0.5459413807557212
+            - -0.38742182124429064
+            - 0.5
+            Custom:
+            - -0.22653780968994397
+            - 0.19016568609004025
+            - -0.6990877950829599
+            - 0.17601231608296075
+            - -1.888115764960776
+            - -0.5459413807557212
+            - -0.38742182124429064
+            - 0.5
       hand:
         start: 16
         end: 28
         policy: stepwise
+        presets:
+          left:
+            Default:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Custom:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Open:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Finger:
+            - -0.2
+            - 0.9
+            - 0
+            - 1
+            - 1
+            - 1
+          right:
+            Default:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Custom:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Open:
+            - -0.6
+            - 0.9
+            - 0
+            - 0
+            - 0
+            - 0
+            Finger:
+            - -0.2
+            - 0.9
+            - 0
+            - 1
+            - 1
+            - 1
+      head:
+        start: 28
+        end: 30
+        policy: manual
+        presets:
+          Default:
+          - 0
+          - 0.25
+          Custom:
+          - 0
+          - 0.25
+      waist:
+        start: 30
+        end: 34
+        policy: manual
+        presets:
+          Default:
+          - -0.994804544964154
+          - 1.0044877989571432
+          - 0
+          - 0.32794832366107585
+          Custom:
+          - -0.994804544964154
+          - 1.0044877989571432
+          - 0
+          - 0.32794832366107585
     camera:
       topic_dict:
         hand_left: /zj_humanoid/sensor/left_wrist/image_raw/compressed
         hand_right: /zj_humanoid/sensor/right_wrist/image_raw/compressed
         head: /zj_humanoid/sensor/realsense_head/color/image_raw/compressed
     gain: 900
+    hand_type: hand
     reset_position:
     - 0.182591655739083
     - 0.32575521044236666

@@ -26,6 +26,7 @@ class RealtimeDataManager():
         self.observe_buffer = deque(maxlen=max(10, rdm_config.max_len))
         self.observe_add_timestamps = deque(maxlen=max(2, rdm_config.observe_fps_window_size))
         self.observe_fps = 0.0
+        self._min_observe_publish_time = 0.0
         # Raw actions are stored as [dof, chunk] float32 arrays from receipt.
         self.action_chunks = np.empty((0, 0), dtype=np.float32)
         self.timestamp_chunks = np.empty(0, dtype=np.float32)
@@ -58,6 +59,7 @@ class RealtimeDataManager():
         self.observe_thread_lock = threading.Lock()
         # Condition variable to wait/notify on action index / chunk updates
         self.action_cond = threading.Condition(self.action_lock)
+        self._action_generation = 0
         
         # Timestamp of the first observe data for inference
         self.init_observe_timestamp = None
@@ -166,12 +168,8 @@ class RealtimeDataManager():
         self.avg_inter_traj_time = self.avg_intra_traj_time * 0.8 + currt_inter_traj_time * 0.2 if self.avg_inter_traj_time > 0 else currt_inter_traj_time
         self.logger.debug(f'avg inter traj time: {self.avg_inter_traj_time:.4f}s')
  
-    def add_observe_data(self, frame):
-        """Add observe data to buffer. The observe data is a dictionary containing the robot state, camera images and timestamps.
-
-        Args:
-            frame (dict): The observe data frame. The keys of the dictionary are 'robot_state', 'camera_images' and 'timestamps'.
-        """
+    def add_observe_data(self, frame, source_time=None):
+        """Add an observation only if it was published after the last reset."""
         # frame_count / observe_add_timestamps / observe_fps are only ever
         # touched by the process_observe thread, but they are kept inside
         # observe_thread_lock anyway: at 30 Hz the cost is negligible, and it
@@ -179,6 +177,8 @@ class RealtimeDataManager():
         # relying on an implicit single-writer convention that a later edit
         # could silently break.
         with self.observe_thread_lock:
+            if source_time is not None and source_time < self._min_observe_publish_time:
+                return False
             self.frame_count += 1
             # Skip the first few frames as they may be unstable
             if self.frame_count > 5:
@@ -190,6 +190,7 @@ class RealtimeDataManager():
                     if duration > 1e-6:
                         observe_fps_tmp = (len(self.observe_add_timestamps) - 1) / duration
                         self.observe_fps = observe_fps_tmp * 0.8 + self.observe_fps * 0.2 if self.observe_fps > 0 else observe_fps_tmp
+            return True
 
     def update_action_chunk_raw(self, action_chunk, timestamp_chunk):
         """Update the raw action chunk and timestamp chunk predicted by the VLA model.
@@ -433,12 +434,14 @@ class RealtimeDataManager():
             self.action_chunks = np.empty((0, 0), dtype=np.float32)
             self.timestamp_chunks = np.empty(0, dtype=np.float32)
             self.raw_action_count = 0
+            self._action_generation += 1
             self.infer_count = 0
             self.start_infer_marker = 0.0
             self.start_intra_traj_marker = 0.0
             self.start_inter_traj_marker = 0.0
             self.start_ctrl_marker = 0.0
             self.avg_infer_time = 0.0
+            self.avg_comm_infer_time = 0.0
             self.avg_comm_time = 0.0
             self.avg_intra_traj_time = 0.0
             self.avg_inter_traj_time = 0.0
@@ -448,14 +451,18 @@ class RealtimeDataManager():
             self.timestamps_fitted = None
             self.action_chunk_index = None
             self.prob_progress = None
+            self.mode = 'control'
+            self.init_observe_timestamp = None
             # Wake anyone blocked in wait_for_next() so it re-evaluates against
             # the cleared state instead of hanging on a chunk that is gone.
             self.action_cond.notify_all()
 
         with self.observe_thread_lock:
+            self._min_observe_publish_time = time.perf_counter()
             self.observe_buffer.clear()
             self.observe_add_timestamps.clear()
             self.observe_fps = 0.0
+            self.frame_count = 0
             
         self.logger.debug("All data cleared for fresh inference")
     @property
@@ -468,6 +475,12 @@ class RealtimeDataManager():
             "avg_inter_traj_time": self.avg_inter_traj_time,
             "obv_fps": self.observe_fps
         }
+    def interrupt_wait_for_next(self):
+        """Release a synchronous inference wait when inference is paused."""
+        with self.action_cond:
+            self._action_generation += 1
+            self.action_cond.notify_all()
+
     def wait_for_next(self, mode: str = 'sync', wait_time: float = 0.01) -> bool:
         """Wait for next action/frame according to mode.
 
@@ -490,13 +503,15 @@ class RealtimeDataManager():
                 if self.action_chunk_fitted is None:
                     result = False
                 else:
+                    generation = self._action_generation
                     target_index = max(0, self.action_chunk_fitted.shape[1] - 1)
                     self.action_cond.wait_for(
-                        lambda: (self.action_chunk_index is not None
-                                 and self.action_chunk_fitted is not None
-                                 and self.action_chunk_index >= target_index)
+                        lambda: self._action_generation != generation
+                        or (self.action_chunk_index is not None
+                            and self.action_chunk_fitted is not None
+                            and self.action_chunk_index >= target_index)
                     )
-                    result = True
+                    result = self._action_generation == generation
         else:
             raise ValueError("mode must be 'async' or 'sync'")
 
