@@ -320,7 +320,7 @@ function setRunningUI(running, paused = false) {
 function isRuntimeShortcutTypingTarget(el) {
   if (!el) return false;
   const tag = (el.tagName || '').toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a' || el.isContentEditable;
 }
 
 function clickButtonIfReady(id) {
@@ -331,7 +331,7 @@ function clickButtonIfReady(id) {
 
 function setupRuntimeShortcuts() {
   document.addEventListener('keydown', (e) => {
-    if (e.repeat || isRuntimeShortcutTypingTarget(e.target)) return;
+    if (e.repeat || isRuntimeShortcutTypingTarget(e.target) || !$('shortcuts-popover').classList.contains('hidden')) return;
 
     const key = e.key.toLowerCase();
     const isSpace = e.code === 'Space' || key === ' ';
@@ -350,6 +350,34 @@ function setupRuntimeShortcuts() {
     if (key === 'r' && e.shiftKey) {
       e.preventDefault();
       clickButtonIfReady('btn-reset');
+    }
+  });
+}
+
+function setupShortcutHelp() {
+  const trigger = $('btn-shortcuts');
+  const popover = $('shortcuts-popover');
+  const close = $('btn-shortcuts-close');
+
+  function hide(restoreFocus = false) {
+    popover.classList.add('hidden');
+    trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) trigger.focus();
+  }
+
+  trigger.addEventListener('click', () => {
+    const opening = popover.classList.contains('hidden');
+    popover.classList.toggle('hidden', !opening);
+    trigger.setAttribute('aria-expanded', String(opening));
+  });
+  close.addEventListener('click', () => hide(true));
+  document.addEventListener('click', (e) => {
+    if (!popover.classList.contains('hidden') && !popover.contains(e.target) && e.target !== trigger) hide();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !popover.classList.contains('hidden')) {
+      e.preventDefault();
+      hide(true);
     }
   });
 }
@@ -754,6 +782,7 @@ function startStatusPoll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  setupShortcutHelp();
   initConfDir().then(async () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
