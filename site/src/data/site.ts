@@ -16,7 +16,7 @@ export const site = {
 };
 
 // VLA models already adapted / supported by Open-RAIL.
-// `soon: true` = adapted but not yet merged into master (shown as "Release soon").
+// `soon: true` = adapted but not yet included in this release (shown as "Release soon").
 export const supportedModels: { name: string; note: string; soon?: boolean }[] = [
   // Merged into master.
   { name: 'GR00T N1', note: 'NVIDIA GR00T humanoid foundation' },
@@ -29,9 +29,9 @@ export const supportedModels: { name: string; note: string; soon?: boolean }[] =
   { name: 'SmolVLA', note: 'HuggingFace SmolVLA VLA policy' },
   { name: 'ACT', note: 'Action Chunking Transformer' },
   { name: 'RDT', note: 'Robotics Diffusion Transformer' },
-  // Adapted, pending merge into master.
-  { name: 'DM0.5', note: 'Diffusion policy', soon: true },
-  { name: 'Wall-oss', note: 'Wall-OSS open model', soon: true },
+  { name: 'DM0.5', note: 'OpenDM diffusion policy' },
+  { name: 'WALL-X', note: 'Wall-X policy' },
+  // Adapted, pending release.
   { name: 'T-Rex', note: 'Visual-prompt VLA', soon: true },
   { name: 'DeCAL', note: 'DeCAL adaptation', soon: true },
   { name: 'DreamZero', note: 'Zero-shot visuomotor policy', soon: true },

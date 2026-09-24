@@ -23,7 +23,7 @@ export const ui = {
       features: [
         '**Asynchronous Pipeline** — decouples **5‑10 Hz** VLA inference from **200‑500 Hz** motor control, removes inference‑control waiting latency.',
         '**Two‑stage Trajectory Smoothing** — achieves near *C²* continuity and motion jitter drastically suppressed with *acceleration std* reduces **~100×** *( 10+ → 0.1 rad/s²)*.',
-        '**Drop‑in Compatibility** — supports **10 VLA/WAM models** across **7 families** & **3 heterogeneous robots** in this release (Unitree G1 **coming soon**); new model adaptation needs only **50‑100 lines** of code without retraining.',
+        '**Drop‑in Compatibility** — supports **12 VLA/WAM models** across **9 families** & **3 heterogeneous robots** in this release (Unitree G1 **coming soon**); new model adaptation needs only **50‑100 lines** of code without retraining.',
         '**Cloud‑Edge‑End Deployment** — Server‑Client architecture supports robot‑local, edge and cloud execution over **wired/Wi‑Fi/5G** with respective latency of end‑side **3‑5** ms, edge **35‑45** ms, cloud **80‑120** ms, requiring zero upper‑level code modification.',
         '**Enhanced Execution Throughput** — achieves up to **2.09×** speedup against raw policy output, outperforming tele‑operation speed with no need for recollecting training data.',
         '**Universal Task Success Boost** — lifts model success rate up to **0.95**, with absolute gain Δ from **+0.10 to +0.725** (evaluated on *π₀.₅* and *GR00T‑N1.5*).',
@@ -99,12 +99,12 @@ export const ui = {
             'RobotBase unified hardware interface, standardized inference interface, and Server-Client distributed architecture collapse robot swaps, VLA-model swaps, and deployment swaps into low-level configuration.',
           metrics: [
             { value: '3', label: 'Heterogeneous humanoid robots in this release' },
-            { value: '10', label: 'Mainstream VLA/WAM models supported (7 families)' },
+            { value: '12', label: 'Mainstream VLA/WAM models supported (9 families)' },
             { value: '<100', label: 'Lines of code to integrate a new model' },
           ],
           details: [
             'Switch robots: RobotBase unified hardware interface, action_layout unified action mapping; AgiBot G1, China Mobile Lingxi and NAVIAI-WA2 ship in this release, with Unitree G1 coming soon.',
-            'Switch VLA models: standardized input/output inference interface; already supports 10 models across 7 families — GR00T N1 / N1.5 / N1.6, π0, π0.5, TAO, GO1, SmolVLA, ACT, RDT; integrating a new model needs only 50–100 lines of business code.',
+            'Switch VLA models: standardized input/output inference interface; already supports 12 models across 9 families — GR00T N1 / N1.5 / N1.6, π0, π0.5, TAO, GO1, SmolVLA, ACT, RDT, DM0.5, WALL-X; integrating a new model needs only 50–100 lines of business code.',
             'Switch deployments: Server-Client end-edge-cloud distributed architecture; Server can run on local body / edge / cloud, Client on the robot; switch deployment by changing only the comms address with zero upper-logic changes and auto-reconnect heartbeat.',
           ],
         },
@@ -131,7 +131,7 @@ export const ui = {
     community: {
       eyebrow: 'COMMUNITY',
       title: 'Get involved in Open-RAIL',
-      lead: '4 robots. 10 VLA/WAM models. Yours could be next.',
+      lead: '4 robots. 12 VLA/WAM models. Yours could be next.',
       leadSub: 'Every adapter makes the ecosystem richer. Pick up a task, or start by asking a question.',
       leadCta: "See what's open",
       pathsTitle: 'What you can contribute',
