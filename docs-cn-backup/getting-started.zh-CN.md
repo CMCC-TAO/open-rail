@@ -154,13 +154,13 @@ Mock 机器人会从 LeRobot 格式的数据集中回放历史观测，适合演
 5. 在 Client 环境安装厂商 SDK，先脱离模型单独验证观测/动作接口。
 6. 再连接 Server，确认推理结果与动作执行流程正常。
 
-完整接口规范参见 [机器人适配指南](guides/add-new-robot.zh-CN.md)。
+完整接口规范参见 [机器人适配指南](add-new-robot.zh-CN.md)。
 
 ## 下一步
 
 - [项目架构](../README.zh-CN.md#项目架构)：理解 Client、Server 和 ZMQ 通信层的职责边界。
 - [配置说明](configuration.zh-CN.md)：查看客户端、Server、机器人和记录配置。
 - [新增模型指南](add-new-model.zh-CN.md)：接入新的 checkpoint/模型实现。
-- [机器人适配指南](guides/add-new-robot.zh-CN.md)：接入真实机器人。
+- [机器人适配指南](add-new-robot.zh-CN.md)：接入真实机器人。
 - [故障排查](troubleshooting.zh-CN.md)：查看运行期间的常见问题。
 - [Mock Robot 说明](../client/robots/mock/README.md)：配置离线数据集回放。

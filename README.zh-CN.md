@@ -95,7 +95,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | NAVIAI-WA2（浙江人形） | 折叠轮臂人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
 | Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
 | Unitree G1 | 双臂双足人形 | 🔜 即将支持 | — |
-| _你的机器人_ | — | 🔜 计划中 | [接入指南](docs/guides/add-new-robot.zh-CN.md) |
+| _你的机器人_ | — | 🔜 计划中 | [接入指南](docs-cn-backup/add-new-robot.zh-CN.md) |
 
 ### 模型
 
@@ -189,7 +189,7 @@ python run_web_client.py --conf custom_conf.yaml
 | --- | --- |
 | `conf/*.yaml` | 主配置：`robots.type` 选择机器人适配器，相机话题、`action_layout` 与本体感知参数 |
 | `conf/robots_conf.py` | 机器人硬件参数；Mock 后端在此设置 `dataset_path` |
-| 服务端网络地址 | 端 / 边 / 云切换只需修改此项，字段名见 [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md) |
+| 服务端网络地址 | 端 / 边 / 云切换只需修改此项，字段名见 [docs-cn-backup/configuration.zh-CN.md](docs-cn-backup/configuration.zh-CN.md) |
 
 ### 仿真闭环（无真机起步）
 
@@ -210,7 +210,7 @@ Mock 模型只返回随机动作，不能替代真实模型评测。
 
 ### 真机执行
 
-修改 `conf/*.yaml` 中的 `robots.type` 为目标机器人适配器（`a2d` / `ti5_t170c` / `navi_wa2`），并按 [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md) 配置相机话题、`action_layout` 与本体感知参数，然后同样用两条命令启动。
+修改 `conf/*.yaml` 中的 `robots.type` 为目标机器人适配器（`a2d` / `ti5_t170c` / `navi_wa2`），并按 [docs-cn-backup/configuration.zh-CN.md](docs-cn-backup/configuration.zh-CN.md) 配置相机话题、`action_layout` 与本体感知参数，然后同样用两条命令启动。
 
 ### 混合模式：推理 + 实时遥操纠偏
 
@@ -279,7 +279,7 @@ Open-RAIL 用**三条互相解耦的线程**消除这个差距：
 - **块内平滑** — 消除单个动作块内部的离散跳变
 - **块间平滑** — 消除相邻动作块接缝处的突变
 
-实现细节（平滑算法与窗口、chunk 并入策略、推理超时降级策略、缓冲区结构与容量）见 [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md)。
+实现细节（平滑算法与窗口、chunk 并入策略、推理超时降级策略、缓冲区结构与容量）见 [docs-cn-backup/architecture.zh-CN.md](docs-cn-backup/architecture.zh-CN.md)。
 
 ## 📊 数据与评估
 
@@ -325,13 +325,13 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 
 | 文档                                                         | 说明                         |
 | ------------------------------------------------------------ | ---------------------------- |
-| 🚀 [docs/getting-started.zh-CN.md](docs/getting-started.zh-CN.md)         | 安装与首次运行               |
-| 🏗️ [docs/architecture.zh-CN.md](docs/architecture.zh-CN.md)               | 架构详解与异步流水线实现细节 |
-| ⚙️ [docs/configuration.zh-CN.md](docs/configuration.zh-CN.md)             | 完整配置项参考               |
-| 🔧 [docs/troubleshooting.zh-CN.md](docs/troubleshooting.zh-CN.md)         | 常见问题与排查               |
-| 🤖 [docs/guides/add-new-robot.zh-CN.md](docs/guides/add-new-robot.zh-CN.md)     | 如何新增机器人适配器         |
+| 🚀 [docs-cn-backup/getting-started.zh-CN.md](docs-cn-backup/getting-started.zh-CN.md)         | 安装与首次运行               |
+| 🏗️ [docs-cn-backup/architecture.zh-CN.md](docs-cn-backup/architecture.zh-CN.md)               | 架构详解与异步流水线实现细节 |
+| ⚙️ [docs-cn-backup/configuration.zh-CN.md](docs-cn-backup/configuration.zh-CN.md)             | 完整配置项参考               |
+| 🔧 [docs-cn-backup/troubleshooting.zh-CN.md](docs-cn-backup/troubleshooting.zh-CN.md)         | 常见问题与排查               |
+| 🤖 [docs-cn-backup/add-new-robot.zh-CN.md](docs-cn-backup/add-new-robot.zh-CN.md)     | 如何新增机器人适配器         |
 | 🧠 [docs-cn-backup/add-new-model.zh-CN.md](docs-cn-backup/add-new-model.zh-CN.md) | 如何新增 VLA/WAM 模型适配器      |
-| 📦 [docs/demo-running-on-dataset.zh-CN.md](docs/demo-running-on-dataset.zh-CN.md) | 端到端实例：在 AgiBotWorld 2026 数据集上运行 GR00T-N1.5 |
+| 📦 [docs-cn-backup/demo-running-on-dataset.zh-CN.md](docs-cn-backup/demo-running-on-dataset.zh-CN.md) | 端到端实例：在 AgiBotWorld 2026 数据集上运行 GR00T-N1.5 |
 
 ## 待办清单 📅 <a name="todolist"></a>
 
