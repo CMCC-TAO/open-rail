@@ -1,18 +1,18 @@
-# A2D Robot
+# AgiBot G1 Robot
 
 ## Overview
 
-The A2D Robot is a humanoid robot implementation that provides real-time control and observation capabilities. This module interfaces with the A2D SDK to control the robot's arm movements, gripper operations, and multi-camera vision system.
+The AgiBot G1 Robot is a humanoid robot implementation that provides real-time control and observation capabilities. This module continues to use the external `a2d_sdk` package to control the robot's arm movements, gripper operations, and multi-camera vision system.
 
 ## 1.Installation
 
 ### Preparation
 
-Plug in the network cable of the PC into the DEBUG port of the A2D robot, and configure the IPv4 network of the PC to `10.42.0.88` with a subnet mask of `255.255.255.0`. Note that you need to turn off the WIFI, as the `curl` command below may use the WIFI network, which may cause connection errors.
+Plug in the network cable of the PC into the DEBUG port of the AgiBot G1 robot, and configure the IPv4 network of the PC to `10.42.0.88` with a subnet mask of `255.255.255.0`. Note that you need to turn off the WIFI, as the `curl` command below may use the WIFI network, which may cause connection errors.
 
-### Install A2D SDK
+### Install AgiBot G1 SDK
 
-After confirming network connection between PC and A2D robot, execute the following command to deploy the GDK environment:
+After confirming network connection between PC and AgiBot G1 robot, execute the following command to deploy the GDK environment:
 
 ```bash
 conda activate gr00t
@@ -46,4 +46,10 @@ python robot_service.py -s -c ./conf/copilot.pbtxt
 
 ## 4. Configuration
 
-The A2D robot is configured through the `conf/robots_conf.yaml` file.
+The AgiBot G1 robot is configured through `get_agibot_g1_config()` in
+`conf/robots_conf.py`, with overrides in the `robots.agibot_g1` section of
+`conf/default_conf.yaml`. Select it with `robots.type: agibot_g1`.
+
+The Web config loader accepts legacy `robots.type: a2d` and `robots.a2d`
+settings and maps them to `agibot_g1`. Model-side A2D embodiment/dataset
+identifiers and the external `a2d_sdk` import are unchanged.

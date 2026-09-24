@@ -41,7 +41,7 @@ except ImportError:
     _HAS_YAML = False
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -104,7 +104,6 @@ async def _lifespan(_: FastAPI):
     client_state.loop = loop
 
     asyncio.create_task(_stats_push_loop())
-    _ensure_vla_client_created()
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
     # ── shutdown ──
@@ -391,10 +390,20 @@ def _apply_flat_patch_new(config, patch: dict):
     legacy_inter_chunk_keys = {
         "inter_chunk.search_length": "inter_chunk.search_action.search_length",
     }
-    patch = {
-        legacy_inter_chunk_keys.get(key, key): value
-        for key, value in patch.items()
-    }
+    migrated_patch = {}
+    for key, value in patch.items():
+        key = legacy_inter_chunk_keys.get(key, key)
+        if key.startswith('robots.a2d.'):
+            key = 'robots.agibot_g1.' + key[len('robots.a2d.'):]
+        if key in ('robots.type', 'record.lerobot.robot_type') and value == 'a2d':
+            value = 'agibot_g1'
+        migrated_patch[key] = value
+    # Explicit new-format keys take precedence over their legacy equivalents.
+    migrated_patch.update({
+        key: value for key, value in patch.items()
+        if key.startswith('robots.agibot_g1.')
+    })
+    patch = migrated_patch
 
     def _is_mapping(obj):
         return isinstance(obj, (dict, ConfigDict))
@@ -1387,7 +1396,7 @@ def _create_robot(robot_type, robot_config, client_config=None):
         return RobotProxy(robot_type, robot_config)
     except Exception as e:
         logger.exception(f"Robot creation failed: {e}")
-        raise ValueError(f"Create robot failed, type: {robot_type}")
+        raise ValueError(f"Create robot failed, type: {robot_type}: {e}") from e
 
 async def _start_client():
     try:
@@ -1877,7 +1886,7 @@ async def _run_web_control(command: str, req: ManualControlRequest):
 
 
 @app.post('/api/client/control/reset')
-async def client_control_reset():
+async def client_control_reset(req: Optional[ManualControlRequest] = Body(default=None)):
     vla_client, robot = _require_runtime('reset')
     try:
         with client_state.lock:
@@ -1887,7 +1896,16 @@ async def client_control_reset():
             if not client_state.paused:
                 client_state.paused_thread_state = _pause_vla_client(vla_client)
                 client_state.paused = True
-        robot.reset_robot(mode='default')
+        data = {
+            name: value for name, value in vars(req or ManualControlRequest()).items()
+            if value is not None
+        }
+        if len(data) > 1:
+            await asyncio.to_thread(robot._control_robot, data)
+        else:
+            robot.reset_robot(mode='default')
+        wait_time = max(vla_client.realtime_data_manager.avg_infer_time * 1.5, 0.2)
+        await asyncio.sleep(wait_time * 2.0)
         vla_client.realtime_data_manager.clear()
         vla_client.reset()
         # _resume_vla_client(vla_client, paused_state)
@@ -1895,6 +1913,10 @@ async def client_control_reset():
         return {"status": "ok", "command": 'reset'}
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
 

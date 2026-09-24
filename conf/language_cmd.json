@@ -51,5 +51,9 @@
       "name": "grasp two Coca-Cola",
       "instruction": "use both hands to grab the two nearest cans from a pile of canned drinks."
     }
+  ],
+  "a2d_tidyup": [
+    "Tidy up the table: [Step 1] Pick up dishes with garbage, empty the garbage and place the dishes on the right rack. [Step 2] Pick up each empty dish on the table, place on the right rack. Continue until no dishes left. [Step 3] Pick up loose garbage on the table, place into the left trash bin. Continue until no garbage left.",
+    "Tidy up the table: Pick up loose garbage on the table, place into the left trash bin. Continue until no garbage left."
   ]
 }

@@ -1,10 +1,10 @@
-# Minimal dependencies for web_client startup 
+# Legacy dependency list kept for compatibility.
+# Prefer installing from pyproject.toml with: pip install -e .
 # Usage:
 #   conda create -n <env_name> python=3.10 -y
 #   conda activate <env_name>
 #   pip install -r requirements.txt
 #   python run_web_client.py --conf default_conf.yaml
-
 
 fastapi>=0.110.0
 uvicorn[standard]>=0.46.0

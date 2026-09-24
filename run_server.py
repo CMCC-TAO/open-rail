@@ -55,6 +55,12 @@ def get_model(config):
     elif config.type == ModelType.TAO:
         from server.models.tao import ModelVLA as TAO
         return TAO(config.tao)
+    elif config.type == ModelType.DM05:
+        from server.models.dm05 import ModelVLA as DM05
+        return DM05(config.dm05)
+    elif config.type == ModelType.WALLX:
+        from server.models.wallx import ModelVLA as WallX
+        return WallX(config.wallx)
     else:
         raise ValueError("Invalid model type")
 
@@ -67,7 +73,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao'],
+    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao', 'dm05', 'wallx'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--embodiment_tag', type=str, help='Embodiment tag for the model (e.g., unitree_g1, a2d_gripper)')
@@ -107,17 +113,14 @@ def override_config_with_args(config, args):
             config.models.pi05.model_path = args.model_path
         elif config.models.type == ModelType.TAO:
             config.models.tao.model_path = args.model_path
+        elif config.models.type == ModelType.DM05:
+            config.models.dm05.model_path = args.model_path
+        elif config.models.type == ModelType.WALLX:
+            config.models.wallx.model_path = args.model_path
 
-    # Override embodiment tag
-    if args.embodiment_tag:
-        if config.models.type == ModelType.TAO:
-            config.models.tao.embodiment_tag = args.embodiment_tag
-        elif config.models.type in [ModelType.GR00T_N1, ModelType.GR00T_N1_5, ModelType.GR00T_N1_6]:
-            config.models.gr00t.embodiment_tag = args.embodiment_tag
-    
     return config
 
-if __name__ == "__main__":
+def main():
     """Main entry point for VLA Server
     
     This script initializes and runs the VLA server with the specified
@@ -180,3 +183,8 @@ if __name__ == "__main__":
             live.stop()
         vla_server.close()
         print("Server shutdown complete")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
