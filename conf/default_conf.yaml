@@ -3,7 +3,7 @@
 
 controller:
   gripper_offset: 5
-  period: 1.0
+  period: 3.75
   raw_fps: 30
   speed: 1.0
   wait_time: 10
@@ -46,7 +46,7 @@ rdm:
   mode: async
   observe_fps_window_size: 10
 record:
-  auto: true
+  auto: false
   evaluation:
     scores:
     - 0
@@ -54,7 +54,7 @@ record:
     - 1
   is_record_episode: true
   is_record_eval_log: true
-  is_record_expe_data: true
+  is_record_expe_data: false
   lerobot:
     action_shape: 22
     cam.hand_left:
@@ -64,8 +64,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 720
-        width: 1280
+        height: 480
+        width: 848
     cam.hand_right:
       encode:
         codec: mp4v
@@ -73,8 +73,8 @@ record:
         is_depth_map: false
       shape:
         channel: 3
-        height: 720
-        width: 1280
+        height: 480
+        width: 848
     cam.head:
       encode:
         codec: mp4v
@@ -93,10 +93,10 @@ record:
       valid: 0:100
     state_shape: 20
     total_chunks: 1
-    total_episodes: 5
-    total_frames: 533
-    total_tasks: 1
-    total_videos: 15
+    total_episodes: 0
+    total_frames: 0
+    total_tasks: 0
+    total_videos: 0
     video_path: videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4
   save_dir: data/recording
   save_raw: true
@@ -159,7 +159,7 @@ robots:
             - 1.0
           right:
             Default:
-            - 0.0
+            - 0
             Custom:
             - 0.5
             Open:
@@ -184,10 +184,10 @@ robots:
         presets:
           Default:
           - 0.4012
-          - 27.0
+          - 27
           Custom:
-          - 0.4012
-          - 27.0
+          - 0.7854
+          - 52
       wheel:
         start: 20
         end: 22
@@ -228,47 +228,43 @@ robots:
     action_layout:
       arm:
         start: 0
-        end: 16
+        end: 14
         policy: gradual
         presets:
           left:
             Default:
-            - 0.182591655739083
-            - 0.32575521044236666
-            - 0.639202615644364
-            - 0.03292066673111549
-            - -1.9789475037079458
-            - 0.5495126798768879
-            - -0.1635420177877668
-            - -0.03926435617611085
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
             Custom:
-            - 0.182591655739083
-            - 0.32575521044236666
-            - 0.639202615644364
-            - 0.03292066673111549
-            - -1.9789475037079458
-            - 0.5495126798768879
-            - -0.1635420177877668
-            - -0.5
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
           right:
             Default:
-            - -0.22653780968994397
-            - 0.19016568609004025
-            - -0.6990877950829599
-            - 0.17601231608296075
-            - -1.888115764960776
-            - -0.5459413807557212
-            - -0.38742182124429064
-            - -0.27196253226160444
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
             Custom:
-            - -0.22653780968994397
-            - 0.19016568609004025
-            - -0.6990877950829599
-            - 0.17601231608296075
-            - -1.888115764960776
-            - -0.5459413807557212
-            - -0.38742182124429064
-            - 0.5
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
+            - 0.0
       gripper:
         start: 14
         end: 16
@@ -286,11 +282,11 @@ robots:
             - 0.0
     camera:
       names:
-        hand_left: observation.images.left_wrist_rgb
-        hand_right: observation.images.right_wrist_rgb
-        head: observation.images.head_rgb
+        hand_left: observation.images.hand_left
+        hand_right: observation.images.hand_right
+        head: observation.images.top_head
       ref: head
-    dataset_path: /home/lza/code/dataset/use_coffee_machine/zjrobot_v3_handpose/2026-0414-tap_Latte_button_left
+    dataset_path: /home/zl/zl/mdata/task_1196
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
@@ -303,141 +299,16 @@ robots:
         start: 0
         end: 16
         policy: gradual
-        presets:
-          left:
-            Default:
-            - 0.182591655739083
-            - 0.32575521044236666
-            - 0.639202615644364
-            - 0.03292066673111549
-            - -1.9789475037079458
-            - 0.5495126798768879
-            - -0.1635420177877668
-            - -0.03926435617611085
-            Custom:
-            - 0.182591655739083
-            - 0.32575521044236666
-            - 0.639202615644364
-            - 0.03292066673111549
-            - -1.9789475037079458
-            - 0.5495126798768879
-            - -0.1635420177877668
-            - -0.5
-          right:
-            Default:
-            - -0.22653780968994397
-            - 0.19016568609004025
-            - -0.6990877950829599
-            - 0.17601231608296075
-            - -1.888115764960776
-            - -0.5459413807557212
-            - -0.38742182124429064
-            - -0.27196253226160444
-            Custom:
-            - -0.22653780968994397
-            - 0.19016568609004025
-            - -0.6990877950829599
-            - 0.17601231608296075
-            - -1.888115764960776
-            - -0.5459413807557212
-            - -0.38742182124429064
-            - 0.5
       hand:
         start: 16
         end: 28
         policy: stepwise
-        presets:
-          left:
-            Default:
-            - -0.6
-            - 0.9
-            - 0
-            - 0
-            - 0
-            - 0
-            Custom:
-            - -0.2
-            - 0.9
-            - 0
-            - 1
-            - 1
-            - 1
-            Open:
-            - -0.6
-            - 0.9
-            - 0
-            - 0
-            - 0
-            - 0
-            Finger:
-            - -0.2
-            - 0.9
-            - 0
-            - 1
-            - 1
-            - 1
-          right:
-            Default:
-            - -0.6
-            - 0.9
-            - 0
-            - 0
-            - 0
-            - 0
-            Custom:
-            - -0.2
-            - 0.9
-            - 0
-            - 1
-            - 1
-            - 1
-            Open:
-            - -0.6
-            - 0.9
-            - 0
-            - 0
-            - 0
-            - 0
-            Finger:
-            - -0.2
-            - 0.9
-            - 0
-            - 1
-            - 1
-            - 1
-      head:
-        start: 28
-        end: 30
-        policy: manual
-        presets:
-          Default:
-          - 0
-          - 0.25
-          Custom:
-          - 0
-          - 0.25
-      waist:
-        start: 30
-        end: 34
-        policy: manual
-        presets:
-          Default:
-          - -0.994804544964154
-          - 1.0044877989571432
-          - 0
-          - 0.32794832366107585
-          Custom:
-          - -0.994804544964154
-          - 1.0044877989571432
-          - 0
-          - 0.32794832366107585
     camera:
       topic_dict:
         hand_left: /zj_humanoid/sensor/left_wrist/image_raw/compressed
         hand_right: /zj_humanoid/sensor/right_wrist/image_raw/compressed
         head: /zj_humanoid/sensor/realsense_head/color/image_raw/compressed
     gain: 900
-    hand_type: hand
     reset_position:
     - 0.182591655739083
     - 0.32575521044236666
@@ -455,18 +326,18 @@ robots:
     - -0.5459413807557212
     - -0.38742182124429064
     - -0.27196253226160444
-    - -0.6
-    - 0.9
-    - 0
-    - 0
-    - 0
-    - 0
-    - -0.6
-    - 0.9
-    - 0
-    - 0
-    - 0
-    - 0
+    - -0.6062110066413879
+    - 0.9023351669311523
+    - 0.006108652334660292
+    - 0.006108652334660292
+    - 0.00901753455400467
+    - 0.015126187354326248
+    - -0.5980661511421204
+    - 0.8994263410568237
+    - 0.012217304669320583
+    - 0.006108652334660292
+    - 0.004363323096185923
+    - 0.0
     tt: 0.033
   ti5_t170c:
     action_layout:
@@ -606,7 +477,6 @@ visualize:
     selected_joints:
     - 10
     source:
-    - State
     - ActionRaw
     - ActionFitted
     - State
