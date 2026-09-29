@@ -129,86 +129,65 @@ export const ui = {
       ],
     },
     community: {
-      eyebrow: 'COMMUNITY',
-      title: 'Get involved in Open-RAIL',
-      lead: '4 robots. 12 VLA/WAM models. Yours could be next.',
-      leadSub: 'Every adapter makes the ecosystem richer. Pick up a task, or start by asking a question.',
-      leadCta: "See what's open",
-      pathsTitle: 'What you can contribute',
-      tiers: [
+      eyebrow: 'OPEN COMMUNITY',
+      title: 'Build it once.',
+      titleGrad: 'Run it everywhere.',
+      note: '**Everything here is ready to use, and what comes next is still unwritten** — bring your **model**, your **robot**, your **patch**, or just **what you learned**. Questions and pull requests are welcome.',
+      whoTitle: "Who it's for",
+      whoSub: 'Pick the one that sounds like you.',
+      who: [
         {
-          name: 'Adapt',
-          note: 'Model and robot layer. Your adapter is the only thing that has to change.',
-          items: [
-            {
-              title: 'Add a model adapter',
-              body: 'Wire in a new VLA/WAM model against the Unified Model Interface. No retraining.',
-              who: 'Teams with a VLA/WAM model to run',
-              deliver: 'An inference interface (~50–100 lines) plus its registration',
-              href: '{DOC_ADD_MODEL}',
-              cta: 'Model guide',
-            },
-            {
-              title: 'Add a robot adapter',
-              body: 'Implement the Unified Robot Interface to unify control commands and state feedback across hardware.',
-              who: 'Robot hardware vendors — real hardware required',
-              deliver: 'A RobotBase adapter, its action_layout, and one registry entry',
-              href: '{DOC_ADD_ROBOT}',
-              cta: 'Robot guide',
-            },
+          name: 'Robot manufacturers',
+          body: 'Ship **one integration**, and every model we have adapted runs on your robot — %%20 models%%, plus every model the community adds later. You integrate once, **not once per model**.',
+        },
+        {
+          name: 'Model developers',
+          body: 'Integrate **once**, and your model runs on every robot we have adapted — %%4%% **heterogeneous robots**, with **no robot-specific code**. Each one means one more team that can run your model and **reproduce your results**.',
+        },
+        {
+          name: 'Research institutions',
+          body: 'Swap the model, the robot or the config — collection, evaluation and recording **stay on the same path**, so every combination is measured **the same way**, in **the same data format**. A comparison is **one config change away**, not another integration.',
+        },
+        {
+          name: 'Solution integrators',
+          body: 'A scenario you tune **once** is a scenario you can deploy **again** — next site, next customer, **same config**. On-device, edge, or cloud: **same code, one endpoint to change**.',
+        },
+      ],
+      waysTitle: 'Ways to contribute',
+      ways: [
+        {
+          tier: 'Integrations',
+          title: 'Bring your robot or model',
+          body: 'Robots use **URI**, models use **UMI** — both already defined, and everything on the compatibility list is wired through one of them: %%20 models%% and %%4 robots%%. **One integration** — your model on every robot, every model on your robot. **Model side needs no hardware: develop against recorded data.**',
+          ctas: [
+            { label: 'Add a model', href: '{DOC_ADD_MODEL}' },
+            { label: 'Add a robot', href: '{DOC_ADD_ROBOT}' },
           ],
         },
         {
-          name: 'Extend',
-          note: 'Shared layer. Change control policy without touching any adapter.',
-          items: [
-            {
-              title: 'Contribute a smoothing strategy',
-              body: 'Swap in your own algorithm and compare it with the four inter-chunk and three intra-chunk modes already shipped. In plain terms: it removes the jumps inside a single model output, and the seam where a new chunk meets the robot as it moves. Runs on the client, so no model or training change is needed. Not sure which layer to change? Start a Discussion.',
-              who: 'Background in control or trajectory optimization',
-              deliver: 'One strategy implementation, intra-chunk or inter-chunk',
-              href: '{ARCH_CHUNK}',
-              cta: 'Read the extension rules',
-            },
+          tier: 'Shared runtime',
+          title: 'Improve the shared core',
+          body: 'Smoothing, evaluation, data recording and transport sit in the shared runtime — the same path every model and every robot runs on. **Change one module here, and every model–robot pair gets it.**',
+          ctas: [
+            { label: 'Add a smoother', href: '{ARCH_CHUNK}' },
+            { label: 'Read the architecture', href: '{ARCH}' },
           ],
         },
         {
-          name: 'Help',
-          items: [
-            {
-              title: 'Improve the docs',
-              body: 'Fix a broken guide, clarify a configuration option, or record a walkthrough video for one of the tutorials.',
-              who: 'Anyone, including first-time contributors',
-              deliver: 'One documentation fix',
-              href: '{DOCS_FOLDER}',
-              cta: 'Browse docs/',
-            },
+          tier: 'Tooling & docs',
+          title: 'Share what you learned',
+          body: 'The docs, the Web Panel, visualization, config — all open, all ready to use today. A better config, a pitfall you hit, a tip worth passing on: that is a contribution, and **most first PRs land here**. Not sure where to start? Come talk to us first — asking counts too.',
+          ctas: [
+            { label: 'Browse the docs', href: '{DOCS}' },
+            { label: 'Ask a question', href: '{DISCUSSIONS}' },
+            { label: 'Report a problem', href: '{ISSUES}' },
           ],
         },
       ],
-      howTitle: 'How to contribute',
-      how: [
-        {
-          title: 'Discuss',
-          body: 'Not sure whether it is a bug, or want to talk a design choice through first?',
-          href: '{DISCUSSIONS}',
-          cta: 'Open a discussion',
-        },
-        {
-          title: 'Report or request',
-          body: 'A reproducible defect, a documentation error, or a model or robot you would like adapted.',
-          href: '{ISSUES}',
-          cta: 'Browse the issue list',
-        },
-        {
-          title: 'Submit code',
-          body: 'You have something ready to send.',
-          href: '{PR_LIST}',
-          cta: 'Open a pull request',
-          processNote: 'Full process, code style, and module boundaries:',
-          processCta: 'CONTRIBUTING.md',
-        },
-      ],
+      entryTitle: 'Get the code',
+      entryNote: 'Ready to contribute?',
+      entryContrib: 'Read CONTRIBUTING.md',
+      entryPr: 'Open a pull request',
     },
     quick: {
       eyebrow: 'GET STARTED',
@@ -254,7 +233,6 @@ export const ui = {
     },
     footer: {
       tagline: 'Where inference ends, real robots begin',
-      repoLabel: 'Open-source Repos',
       paperLabel: 'Technical PDF',
       contactLabel: 'Contact & Collaboration',
       emailNote: 'Partnership inquiries · technical proposals · community contribution portal',

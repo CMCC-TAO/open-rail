@@ -1,11 +1,12 @@
 ---
 // Renders text with inline highlight markers:
-//   **text** → bold, *text* → italic, ==text== → red highlight.
+//   **text** → bold, *text* → italic, ==text== → red highlight,
+//   %%text%% → numeric pill (brand-tinted; used for key counts, e.g. "20 models").
 interface Props {
   text?: string;
 }
 const { text = '' } = Astro.props;
-const re = /(\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==)/g;
+const re = /(\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==|%%[^%]+%%)/g;
 const parts = text
   .split(re)
   .filter((p) => p !== '')
@@ -16,6 +17,8 @@ const parts = text
     if (m) return { text: m[1], style: 'italic' as const };
     m = p.match(/^==([^=]+)==$/);
     if (m) return { text: m[1], style: 'red' as const };
+    m = p.match(/^%%([^%]+)%%$/);
+    if (m) return { text: m[1], style: 'pill' as const };
     return { text: p, style: 'normal' as const };
   });
 ---
@@ -27,6 +30,8 @@ const parts = text
       <em class="italic">{s.text}</em>
     ) : s.style === 'red' ? (
       <span class="text-red-400">{s.text}</span>
+    ) : s.style === 'pill' ? (
+      <span class="whitespace-nowrap rounded-md bg-brand/15 px-1.5 font-semibold text-brand-light">{s.text}</span>
     ) : (
       s.text
     )

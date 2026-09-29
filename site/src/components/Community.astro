@@ -1,6 +1,7 @@
 ---
 import { getUI } from '../i18n';
 import { site } from '../data/site';
+import { platformIcons } from '../data/icons';
 import Highlight from './Highlight.astro';
 const { locale = 'en' } = Astro.props;
 const t = getUI(locale);
@@ -15,100 +16,79 @@ const LINK: Record<string, string> = {
   '{ISSUES}': `${REPO}/issues`,
   '{PR_LIST}': `${REPO}/pulls`,
   '{CONTRIBUTING}': `${REPO}/blob/main/CONTRIBUTING.md`,
-  '{EMAIL}': `mailto:${site.email}`,
   '{DOC_ADD_MODEL}': `${BASE}guides/add-new-model/`,
   '{DOC_ADD_ROBOT}': `${BASE}guides/add-new-robot/`,
-  '{DOCS_FOLDER}': `${REPO}/tree/main/docs`,
+  '{DOCS}': `${BASE}getting-started/`,
+  '{ARCH}': `${BASE}architecture/`,
   '{ARCH_CHUNK}': `${BASE}architecture/#6-action-chunk-processing`,
 };
 const resolve = (token: string) => LINK[token];
-// {WECHAT} has no destination yet, so it renders as a disabled label instead of a link.
-const isLink = (token: string) => Object.prototype.hasOwnProperty.call(LINK, token);
 ---
 
 <section id="get-involved" class="section scroll-mt-24">
   <div class="container-wide">
+    <!-- Section head. The title is the promise; the note panel directly under it carries the invitation. -->
     <div class="text-center">
-      <p class="eyebrow">{c.eyebrow}</p>
-      <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">{c.title}</h2>
-      <p class="mx-auto mt-5 max-w-[54rem] text-xl font-semibold tracking-tight text-white sm:text-2xl">
-        <Highlight text={c.lead} />
+      <p class="eyebrow"><Highlight text={c.eyebrow} /></p>
+      <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+        <Highlight text={c.title} /> <span class="gradient-text"><Highlight text={c.titleGrad} /></span>
+      </h2>
+      <p class="mx-auto mt-6 max-w-[54rem] rounded-2xl border border-brand/25 bg-brand/5 px-5 py-4 text-left text-sm leading-relaxed text-slate-300">
+        <Highlight text={c.note} />
       </p>
-      <p class="mx-auto mt-3 max-w-[54rem] text-sm text-slate-400"><Highlight text={c.leadSub} /></p>
-      <div class="mt-6 flex justify-center">
-        <a class="btn-primary" href={resolve('{ISSUES}')}>
-          <Highlight text={c.leadCta} />
-          <span aria-hidden="true" class="ml-1.5">&rarr;</span>
-        </a>
-      </div>
     </div>
 
-    <!-- What you can contribute -->
-    <h3 class="mt-10 text-xl font-bold text-white">{c.pathsTitle}</h3>
-    <div class="mt-4 grid gap-4 lg:grid-cols-3">
-      {c.tiers.map((tier) => (
-        <div class="card flex flex-col p-4">
-          <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-            <h4 class="text-xs font-bold uppercase tracking-[0.16em] text-brand-light">
-              <Highlight text={tier.name} />
-            </h4>
-            {tier.note && <p class="text-xs text-slate-500"><Highlight text={tier.note} /></p>}
-          </div>
-          <div class="mt-3 flex flex-col divide-y divide-ink-border">
-            {tier.items.map((p) => (
-              <div class="flex flex-col pt-3 first:pt-0">
-                <h5 class="text-lg font-bold text-white"><Highlight text={p.title} /></h5>
-                <p class="mt-2 text-sm leading-relaxed text-slate-400"><Highlight text={p.body} /></p>
-                <dl class="mt-2.5 flex flex-col gap-1 border-l border-ink-border pl-3 text-xs leading-relaxed">
-                  {p.who && (
-                    <div class="flex gap-1.5">
-                      <dt class="shrink-0 font-semibold text-slate-500">Who:</dt>
-                      <dd class="text-slate-400"><Highlight text={p.who} /></dd>
-                    </div>
-                  )}
-                  {p.deliver && (
-                    <div class="flex gap-1.5">
-                      <dt class="shrink-0 font-semibold text-slate-500">Deliverable:</dt>
-                      <dd class="text-slate-400"><Highlight text={p.deliver} /></dd>
-                    </div>
-                  )}
-                </dl>
-                <a class="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-brand-light hover:text-brand" href={resolve(p.href)}>
-                  <Highlight text={p.cta} />
-                  <span aria-hidden="true">&rarr;</span>
-                </a>
-              </div>
+    <!-- Who it's for: identity + what you get. Never says how to do it. -->
+    <h3 class="mt-12 text-center text-xl font-bold text-white">{c.whoTitle}</h3>
+    <p class="mt-1.5 text-center text-sm text-slate-500">{c.whoSub}</p>
+    <div class="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {c.who.map((w) => (
+        <div class="card reveal p-5">
+          <h4 class="text-base font-bold text-white">{w.name}</h4>
+          <p class="mt-2 text-sm leading-relaxed text-slate-400"><Highlight text={w.body} /></p>
+        </div>
+      ))}
+    </div>
+
+    <!-- Ways to contribute: what already exists + what you can add. Never repeats the value pitch. -->
+    <h3 class="mt-12 text-center text-xl font-bold text-white">{c.waysTitle}</h3>
+    <div class="mt-5 grid gap-4 lg:grid-cols-3">
+      {c.ways.map((w) => (
+        <div class="card reveal flex flex-col p-5">
+          <p class="self-start rounded-md bg-brand/10 px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.13em] text-brand-light">
+            <Highlight text={w.tier} />
+          </p>
+          <h4 class="mt-3 text-base font-bold text-white"><Highlight text={w.title} /></h4>
+          <p class="mb-4 mt-2 text-sm leading-relaxed text-slate-400"><Highlight text={w.body} /></p>
+          <div class="mt-auto flex flex-col items-start gap-2 border-t border-ink-border pt-3">
+            {w.ctas.map((a) => (
+              <a class="inline-flex items-center gap-1 text-sm font-semibold text-brand-light hover:text-brand" href={resolve(a.href)}>
+                {a.label}
+                <span aria-hidden="true">&rarr;</span>
+              </a>
             ))}
           </div>
         </div>
       ))}
     </div>
 
-    <!-- How to contribute: one path, three equal-weight steps -->
-    <h3 class="mt-10 text-xl font-bold text-white">{c.howTitle}</h3>
-    <ol class="mt-5 grid items-start gap-6 sm:grid-cols-3">
-      {c.how.map((k, i) => (
-        <li class="flex gap-3.5">
-          <span aria-hidden="true" class="shrink-0 font-mono text-2xl font-extrabold leading-none gradient-text">
-            {String(i + 1).padStart(2, '0')}
-          </span>
-          <div class="flex min-w-0 flex-col">
-            <h4 class="text-lg font-bold text-white"><Highlight text={k.title} /></h4>
-            <p class="mt-1.5 text-sm leading-relaxed text-slate-400"><Highlight text={k.body} /></p>
-            <a class="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-brand-light hover:text-brand" href={resolve(k.href)}>
-              <Highlight text={k.cta} />
-              <span aria-hidden="true">&rarr;</span>
-            </a>
-
-            {k.processNote && (
-              <p class="mt-3 text-xs text-slate-500">
-                <Highlight text={k.processNote} />{' '}
-                <a class="text-brand-light hover:text-brand" href={resolve('{CONTRIBUTING}')}>{k.processCta}</a>
-              </p>
-            )}
-          </div>
-        </li>
-      ))}
-    </ol>
+    <!-- Single closing entry: code first, process second. -->
+    <div class="card mt-8 p-6 text-center">
+      <h4 class="text-base font-bold text-white">{c.entryTitle}</h4>
+      <div class="mt-4 flex flex-wrap items-center justify-center gap-3">
+        {site.platforms.map((p, i) => (
+          <a class={i === 0 ? 'btn-primary px-4 py-2' : 'btn-ghost px-4 py-2'} href={p.href} title={p.label} aria-label={p.label}>
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><Fragment set:html={platformIcons[p.icon]} /></svg>
+            <span>{p.label}</span>
+          </a>
+        ))}
+      </div>
+      <p class="mt-4 text-sm text-slate-400">
+        {c.entryNote}{' '}
+        <a class="font-semibold text-brand-light hover:text-brand" href={resolve('{CONTRIBUTING}')}>{c.entryContrib}</a>
+        <span aria-hidden="true" class="mx-1.5 text-slate-500">&middot;</span>
+        <a class="font-semibold text-brand-light hover:text-brand" href={resolve('{PR_LIST}')}>{c.entryPr}</a>
+      </p>
+    </div>
   </div>
 </section>
