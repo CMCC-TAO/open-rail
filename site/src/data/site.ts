@@ -1,6 +1,6 @@
 export const site = {
   name: 'Open-RAIL',
-  tagline: 'Where inference ends, real robots begin',
+  tagline: 'Where model inference ends, real-robot execution begins',
   description:
     'Open-RAIL: plug-and-play async inference middleware linking 20 VLA/WAM models to 4 heterogeneous robots. 50–100 lines per model, no retraining, Apache-2.0.',
   email: 'zhengjiahui@cmhi.chinamobile.com',

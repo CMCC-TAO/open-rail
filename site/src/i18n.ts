@@ -3,7 +3,7 @@ export type Locale = 'en';
 export const ui = {
   en: {
     nav: {
-      tagline: 'Where inference ends, real robots begin',
+      tagline: 'Where model inference ends, real-robot execution begins',
       overview: 'Overview',
       capabilities: 'Capabilities',
       architecture: 'Architecture',
@@ -233,7 +233,7 @@ export const ui = {
       ],
     },
     footer: {
-      tagline: 'Where inference ends, real robots begin',
+      tagline: 'Where model inference ends, real-robot execution begins',
       repoLabel: 'Repositories',
       paperHeading: 'Paper',
       paperLabel: 'Technical PDF',
