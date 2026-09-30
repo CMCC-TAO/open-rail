@@ -234,6 +234,7 @@ export const ui = {
     },
     footer: {
       tagline: 'Where inference ends, real robots begin',
+      repoLabel: 'Repositories',
       paperHeading: 'Paper',
       paperLabel: 'Technical PDF',
       contactLabel: 'Contact & Collaboration',
@@ -241,6 +242,8 @@ export const ui = {
       contribHeading: 'Community contributors',
       contribInvite: 'Your name could be here — ',
       contribSeeHow: 'see how',
+      licenseLabel: 'License',
+      backToTop: 'Back to top',
       copyright: '© 2026 China Mobile Embodied Intelligence Industry Innovation Center. All Rights Reserved',
       org: 'China Mobile Embodied Intelligence Industry Innovation Center',
       author: 'Embodied Model Team (TAO Team)',

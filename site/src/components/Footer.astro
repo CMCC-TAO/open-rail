@@ -52,10 +52,18 @@ const t = getUI(locale);
       </div>
     </div>
 
-    <!-- Contact, org, and the one call-to-action the footer keeps. The repo links live in the
-         Hero and in the Get Involved entry block; repeating them here would be a third
-         consumer of the same data. -->
-    <div class="grid gap-8 border-t border-ink-border pt-8 sm:grid-cols-3">
+    <!-- Repositories, contact, and org. The repo links also appear in the Hero and in the
+         Get Involved entry block, and are repeated here on purpose: readers look for the
+         code at the bottom of the page. -->
+    <div class="grid gap-8 border-t border-ink-border pt-8 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.repoLabel}</p>
+        <ul class="mt-3 space-y-2 text-sm text-slate-400">
+          {site.platforms.map((p) => (
+            <li><a class="hover:text-brand" href={p.href}>{p.label}</a></li>
+          ))}
+        </ul>
+      </div>
       <div>
         <p class="text-sm font-semibold text-slate-300">{t.footer.contribHeading}</p>
         <p class="mt-3 text-sm text-slate-400">
@@ -73,8 +81,20 @@ const t = getUI(locale);
       </div>
     </div>
 
-    <div class="border-t border-ink-border pt-6 text-center text-xs text-slate-500">
+    <!-- Bottom bar: copyright on one side, licence and back-to-top on the other. -->
+    <div class="flex flex-col items-center gap-4 border-t border-ink-border pt-6 text-center text-xs text-slate-500 sm:flex-row sm:justify-between sm:text-left">
       <p><Highlight text={t.footer.copyright} /></p>
+      <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        <span class="inline-flex items-center gap-1.5">
+          {t.footer.licenseLabel}
+          <span class="text-slate-600" aria-hidden="true">&middot;</span>
+          <a class="font-semibold text-slate-300 hover:text-brand" href={site.license.url}>{site.license.name}</a>
+        </span>
+        <button id="back-to-top" class="btn-ghost px-3 py-1 text-xs" type="button">
+          {t.footer.backToTop}
+          <span aria-hidden="true">&uarr;</span>
+        </button>
+      </div>
     </div>
   </div>
 </footer>
@@ -90,6 +110,20 @@ const t = getUI(locale);
       setTimeout(() => (btn.textContent = old), 1500);
     } catch {
       /* clipboard not available */
+    }
+  });
+
+  // Back to top. Scroll smoothly unless the visitor asked for less motion, and
+  // hand focus to the top of the page so keyboard and screen-reader users do not
+  // stay parked on a button that is now off-screen.
+  const toTop = document.getElementById('back-to-top');
+  toTop?.addEventListener('click', () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    const top = document.querySelector('main') as HTMLElement | null;
+    if (top) {
+      top.setAttribute('tabindex', '-1');
+      top.focus({ preventScroll: true });
     }
   });
 </script>

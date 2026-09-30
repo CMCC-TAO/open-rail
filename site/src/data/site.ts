@@ -10,6 +10,10 @@ export const site = {
     { label: 'AI.Huanxin', href: 'https://aihuanxin.cn/project/detail/CMHI_EAI/open-rail/type=org', icon: 'hf' },
   ],
   whitepaper: 'https://arxiv.org/abs/2512.24673',
+  license: {
+    name: 'Apache-2.0',
+    url: 'https://github.com/CMCC-TAO/open-rail/blob/main/LICENSE',
+  },
   // Optional hero overview video. Set to a YouTube watch URL, embed URL,
   // or 11-char video id; leave '' to show a placeholder.
   heroVideo: 'https://www.youtube.com/watch?v=1dpdDsb8Trg',
