@@ -40,6 +40,9 @@ export default defineConfig({
       },
       customCss: ['./src/styles/katex.css'],
       sidebar: [
+        // Back to the project homepage (`src/pages/index.astro`), which sits at the
+        // docs root. Without this entry the header wordmark is the only way back.
+        { label: 'Project Home', link: '/' },
         { label: 'Getting Started', link: '/getting-started/' },
         { label: 'Architecture', link: '/architecture/' },
         { label: 'Configuration', link: '/configuration/' },
@@ -50,6 +53,7 @@ export default defineConfig({
           items: [
             { label: 'Add a VLA Model', link: '/guides/add-new-model/' },
             { label: 'Add a Robot', link: '/guides/add-new-robot/' },
+            { label: 'Add a Smoother', link: '/guides/add-new-inter-chunk-fuser/' },
           ],
         },
       ],
