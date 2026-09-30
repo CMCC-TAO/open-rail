@@ -18,11 +18,15 @@ const t = getUI(locale);
     <!-- Paper & Citation -->
     <div class="grid gap-8 lg:grid-cols-2">
       <div>
-        <p class="text-sm font-semibold text-slate-300">{t.footer.paperLabel}</p>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.paperHeading}</p>
         <a class="mt-3 block text-base font-semibold text-white hover:text-brand" href={paper.url}>
           <Highlight text={paper.title} />
         </a>
         <p class="mt-2 text-sm text-slate-400"><Highlight text={`${paper.authors} · ${paper.venue}`} /></p>
+        <a class="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-light hover:text-brand" href={paper.pdf}>
+          {t.footer.paperLabel}
+          <span aria-hidden="true">&rarr;</span>
+        </a>
       </div>
       <div>
         <div class="flex items-center justify-between">
@@ -48,9 +52,16 @@ const t = getUI(locale);
       </div>
     </div>
 
-    <!-- Contact & org. The repo links live in the Hero and in the Get Involved entry block;
-         repeating them here would be a third consumer of the same data. -->
-    <div class="grid gap-8 border-t border-ink-border pt-8 sm:grid-cols-2">
+    <!-- Contact, org, and the one call-to-action the footer keeps. The repo links live in the
+         Hero and in the Get Involved entry block; repeating them here would be a third
+         consumer of the same data. -->
+    <div class="grid gap-8 border-t border-ink-border pt-8 sm:grid-cols-3">
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.contribHeading}</p>
+        <p class="mt-3 text-sm text-slate-400">
+          {t.footer.contribInvite}<a class="font-semibold text-brand-light hover:text-brand" href={`${BASE}#get-involved`}>{t.footer.contribSeeHow} <span aria-hidden="true">&rarr;</span></a>
+        </p>
+      </div>
       <div>
         <p class="text-sm font-semibold text-slate-300">{t.footer.contactLabel}</p>
         <p class="mt-3 text-sm text-slate-400">{site.email}</p>

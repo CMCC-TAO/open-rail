@@ -100,6 +100,7 @@ export const paper = {
   authors: 'Yongsheng Zhao and Lei Zhao and Baoping Cheng and Gongxin Yao and Xuanzhang Wen and Han Gao',
   venue: 'arXiv:2512.24673, 2025',
   url: 'https://arxiv.org/abs/2512.24673',
+  pdf: 'https://arxiv.org/pdf/2512.24673',
   bibtex: `@misc{zhao2025vlarailrealtimeasynchronousinference,
       title={VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots},
       author={Yongsheng Zhao and Lei Zhao and Baoping Cheng and Gongxin Yao and Xuanzhang Wen and Han Gao},
