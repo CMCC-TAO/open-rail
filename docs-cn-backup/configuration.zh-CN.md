@@ -1,6 +1,6 @@
 # 配置参数字典
 
-[English Version](configuration.md)
+[English Version](../docs/configuration.md)
 
 ## 配置来源与优先级
 

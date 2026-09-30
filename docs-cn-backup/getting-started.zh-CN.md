@@ -1,6 +1,6 @@
 # 快速开始（中文版）
 
-[English Version](getting-started.md) | **中文版**
+[English Version](../docs/getting-started.md) | **中文版**
 
 > 📌 本文档用于**完整的环境配置和功能接入**。  
 > 如果只想先确认 Web 服务是否能访问，可以**只执行第二步**；此时不需要启动 Server，但客户端业务状态、机器人状态和推理结果可能不可用。  

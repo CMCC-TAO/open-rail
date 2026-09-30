@@ -1,6 +1,6 @@
 # 新机器人接入指南
 
-[English Version](add-new-robot.md)
+[English Version](../docs/guides/add-new-robot.md)
 
 ## 快速开始
 

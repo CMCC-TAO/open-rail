@@ -1,6 +1,6 @@
 # 架构说明
 
-[English Version](architecture.md)
+[English Version](../docs/architecture.md)
 
 ## 1. 第一性原理
 

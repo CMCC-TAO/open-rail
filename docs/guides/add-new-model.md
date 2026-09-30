@@ -5,6 +5,8 @@ description: "Step-by-step guide to integrate a new VLA/WAM model into the serve
 
 # Quick‑Start for Adding New VLA/WAM Model
 
+[中文版](../../docs-cn-backup/add-new-model.zh-CN.md)
+
 
 > Assume the target VLA/WAM model to be integrated is named `your_model`
 

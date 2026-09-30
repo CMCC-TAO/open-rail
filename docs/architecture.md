@@ -5,6 +5,8 @@ description: "How Open-RAIL’s robot VLA system is structured and the core cont
 
 # Architecture
 
+[中文版](../docs-cn-backup/architecture.zh-CN.md)
+
 
 ## 1. First Principles
 

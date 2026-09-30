@@ -5,6 +5,8 @@ description: "Common issues with the web client, server, and robots and how to r
 
 # Troubleshooting
 
+[中文版](../docs-cn-backup/troubleshooting.zh-CN.md)
+
 
 ## Web client
 

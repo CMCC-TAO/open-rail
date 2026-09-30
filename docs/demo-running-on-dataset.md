@@ -5,6 +5,8 @@ description: "Run the GR00T-N1.5 pretrained model on the AgiBotWorld 2026 datase
 
 # Running the GR00T‑N1.5 Pretrained Model on the AgiBotWorld 2026 Dataset with RAIL
 
+[中文版](../docs-cn-backup/demo-running-on-dataset.zh-CN.md)
+
 > 
 > Complete deployment pipeline: source code download, dataset preparation, AV1-to-H.264 video transcoding, multiple configuration modifications, server/client startup.
 > All `Path/To/xxx` placeholders in this document must be replaced with the real **absolute paths** on your machine.

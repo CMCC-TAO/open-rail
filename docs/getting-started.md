@@ -5,6 +5,8 @@ description: "Complete environment setup and feature integration for Open-RAIL."
 
 # Getting Started
 
+[中文版](../docs-cn-backup/getting-started.zh-CN.md)
+
 > 📌 This document is for **complete environment setup and feature integration**.  
 > If you just want to verify the Web service is accessible, you can **only execute Step 2**; Server is not required, but client business status, robot status, and inference results may be unavailable.  
 > For a 30-second quick experience, return to the [README Quick Start](https://github.com/CMCC-TAO/open-rail#quick-start).

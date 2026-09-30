@@ -1,5 +1,7 @@
 # 基于RAIL，在AgiBotWorld 2026数据集上运行GR00T‑N1.5预训练模型
 
+[English Version](../docs/demo-running-on-dataset.md)
+
 > 完整部署流程：源码下载、数据集准备、AV1视频转H.264、多处配置修改、服务端/客户端启动。
 > 文档中 `Path/To/xxx` 均需要替换为本机真实**绝对路径**。
 

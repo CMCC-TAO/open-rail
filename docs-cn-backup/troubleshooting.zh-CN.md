@@ -1,6 +1,6 @@
 # 常见问题
 
-[English Version](troubleshooting.md)
+[English Version](../docs/troubleshooting.md)
 
 ## Web 客户端
 

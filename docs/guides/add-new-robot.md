@@ -5,6 +5,8 @@ description: "Step-by-step guide to integrate a new robot into Open-RAIL."
 
 # New Robot Integration Guide
 
+[中文版](../../docs-cn-backup/add-new-robot.zh-CN.md)
+
 
 ## Quick Start
 

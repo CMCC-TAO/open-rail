@@ -5,6 +5,8 @@ description: "Configuration sources, precedence, and reference tables for Open-R
 
 # Configuration Reference
 
+[中文版](../docs-cn-backup/configuration.zh-CN.md)
+
 
 ## Configuration sources and precedence
 
