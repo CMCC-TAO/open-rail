@@ -2,7 +2,7 @@ export const site = {
   name: 'Open-RAIL',
   tagline: 'Where inference ends, real robots begin',
   description:
-    'Open-source infrastructure bridging VLA (Vision-Language-Action) models and physical robots — stable, compatible, and self-evolving.',
+    'Open-RAIL: plug-and-play async inference middleware linking 20 VLA/WAM models to 4 heterogeneous robots. 50–100 lines per model, no retraining, Apache-2.0.',
   email: 'zhengjiahui@cmhi.chinamobile.com',
   platforms: [
     { label: 'GitHub', href: 'https://github.com/CMCC-TAO/open-rail', icon: 'github' },
