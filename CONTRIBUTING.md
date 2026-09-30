@@ -11,6 +11,7 @@ Please read the following first:
 - [Configuration guide](docs/configuration.md)
 - [Robot integration guide](docs/guides/add-new-robot.md)
 - [VLA/WAM model integration guide](docs/guides/add-new-model.md)
+- [Inter-chunk fuser guide](docs/guides/add-new-inter-chunk-fuser.md)
 
 For new robots or model adapters, it is recommended to open an issue first and describe the use case, dependencies, input/output contract, and validation method.
 

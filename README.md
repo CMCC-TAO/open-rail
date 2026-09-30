@@ -333,6 +333,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 | 🔧 [docs/troubleshooting.md](docs/troubleshooting.md) | Common issues and fixes |
 | 🤖 [docs/guides/add-new-robot.md](docs/guides/add-new-robot.md) | How to add a robot adapter |
 | 🧠 [docs/guides/add-new-model.md](docs/guides/add-new-model.md) | How to add a VLA/WAM model adapter |
+| ✨ [docs/guides/add-new-inter-chunk-fuser.md](docs/guides/add-new-inter-chunk-fuser.md) | How to add a custom inter-chunk smoothing strategy |
 | 📦 [docs/demo-running-on-dataset.md](docs/demo-running-on-dataset.md) | End-to-end example: running GR00T-N1.5 on the AgiBotWorld 2026 dataset |
 
 ## TODO List 📅 <a name="todolist"></a>

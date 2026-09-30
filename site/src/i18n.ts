@@ -169,7 +169,7 @@ export const ui = {
           title: 'Improve the shared core',
           body: 'Smoothing, evaluation, data recording and transport sit in the shared runtime — the same path every model and every robot runs on. **Change one module here, and every model–robot pair gets it.**',
           ctas: [
-            { label: 'Add a smoother', href: '{ARCH_CHUNK}' },
+            { label: 'Add a smoother', href: '{DOC_ADD_SMOOTHER}' },
             { label: 'Read the architecture', href: '{ARCH}' },
           ],
         },
@@ -228,6 +228,7 @@ export const ui = {
         { label: 'Dataset Demo', href: 'demo-running-on-dataset/' },
         { label: 'Add a Model', href: 'guides/add-new-model/' },
         { label: 'Add a Robot', href: 'guides/add-new-robot/' },
+        { label: 'Add a Smoother', href: 'guides/add-new-inter-chunk-fuser/' },
         { label: 'Troubleshooting', href: 'troubleshooting/' },
       ],
     },

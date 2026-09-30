@@ -333,6 +333,7 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 | 🔧 [docs-cn-backup/troubleshooting.zh-CN.md](docs-cn-backup/troubleshooting.zh-CN.md)         | 常见问题与排查               |
 | 🤖 [docs-cn-backup/add-new-robot.zh-CN.md](docs-cn-backup/add-new-robot.zh-CN.md)     | 如何新增机器人适配器         |
 | 🧠 [docs-cn-backup/add-new-model.zh-CN.md](docs-cn-backup/add-new-model.zh-CN.md) | 如何新增 VLA/WAM 模型适配器      |
+| ✨ [docs-cn-backup/add-new-inter-chunk-fuser.zh-CN.md](docs-cn-backup/add-new-inter-chunk-fuser.zh-CN.md) | 如何新增自定义动作块平滑策略 |
 | 📦 [docs-cn-backup/demo-running-on-dataset.zh-CN.md](docs-cn-backup/demo-running-on-dataset.zh-CN.md) | 端到端实例：在 AgiBotWorld 2026 数据集上运行 GR00T-N1.5 |
 
 ## 待办清单 📅 <a name="todolist"></a>

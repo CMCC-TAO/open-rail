@@ -166,5 +166,6 @@ See the [Robot Adaptation Guide](guides/add-new-robot.md) for the complete inter
 - [Configuration Guide](configuration.md): Complete configuration options for Client, Server, robots, and recording.
 - [Add New Model Guide](guides/add-new-model.md): Integrate new checkpoints/model implementations.
 - [Robot Adaptation Guide](guides/add-new-robot.md): Integrate physical robots.
+- [Inter-Chunk Fuser Guide](guides/add-new-inter-chunk-fuser.md): Add a custom action-chunk smoothing strategy.
 - [Troubleshooting](troubleshooting.md): Common runtime issues.
 - [Mock Robot Documentation](../client/robots/mock/README.md): Configure offline dataset replay.
