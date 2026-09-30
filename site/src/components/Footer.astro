@@ -37,7 +37,9 @@ const t = getUI(locale);
       </div>
     </div>
 
-    <!-- Contributors -->
+    <!-- Contributors. The invitation to join them belongs to this block rather than to
+         the grid below: it is the same subject, and it reads better directly under the
+         names than as a column beside the repository links. -->
     <div>
       <p class="text-sm font-semibold text-slate-300">Contributors</p>
       <div class="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -50,12 +52,15 @@ const t = getUI(locale);
           </div>
         ))}
       </div>
+      <p class="mt-5 text-sm text-slate-400">
+        {t.footer.contribInvite}<a class="font-semibold text-brand-light hover:text-brand" href={`${BASE}#get-involved`}>{t.footer.contribSeeHow} <span aria-hidden="true">&rarr;</span></a>
+      </p>
     </div>
 
     <!-- Repositories, contact, and org. The repo links also appear in the Hero and in the
          Get Involved entry block, and are repeated here on purpose: readers look for the
          code at the bottom of the page. -->
-    <div class="grid gap-8 border-t border-ink-border pt-8 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid gap-8 border-t border-ink-border pt-8 sm:grid-cols-2 lg:grid-cols-3">
       <div>
         <p class="text-sm font-semibold text-slate-300">{t.footer.repoLabel}</p>
         <ul class="mt-3 space-y-2 text-sm text-slate-400">
@@ -63,12 +68,6 @@ const t = getUI(locale);
             <li><a class="hover:text-brand" href={p.href}>{p.label}</a></li>
           ))}
         </ul>
-      </div>
-      <div>
-        <p class="text-sm font-semibold text-slate-300">{t.footer.contribHeading}</p>
-        <p class="mt-3 text-sm text-slate-400">
-          {t.footer.contribInvite}<a class="font-semibold text-brand-light hover:text-brand" href={`${BASE}#get-involved`}>{t.footer.contribSeeHow} <span aria-hidden="true">&rarr;</span></a>
-        </p>
       </div>
       <div>
         <p class="text-sm font-semibold text-slate-300">{t.footer.contactLabel}</p>

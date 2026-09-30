@@ -239,7 +239,6 @@ export const ui = {
       paperLabel: 'Technical PDF',
       contactLabel: 'Contact & Collaboration',
       emailNote: 'Partnership inquiries · technical proposals · community contribution portal',
-      contribHeading: 'Community contributors',
       contribInvite: 'Your name could be here — ',
       contribSeeHow: 'see how',
       licenseLabel: 'License',
