@@ -1,13 +1,13 @@
 [
   {
     "referrer": "cmcc-tao.github.io",
-    "count": 171,
-    "uniques": 120
+    "count": 172,
+    "uniques": 122
   },
   {
     "referrer": "github.com",
-    "count": 66,
-    "uniques": 38
+    "count": 67,
+    "uniques": 39
   },
   {
     "referrer": "Bing",
@@ -16,8 +16,13 @@
   },
   {
     "referrer": "Google",
-    "count": 14,
-    "uniques": 10
+    "count": 21,
+    "uniques": 13
+  },
+  {
+    "referrer": "teams.public.onecdn.static.microsoft",
+    "count": 4,
+    "uniques": 2
   },
   {
     "referrer": "t.co",
@@ -26,11 +31,6 @@
   },
   {
     "referrer": "chatgpt.com",
-    "count": 2,
-    "uniques": 2
-  },
-  {
-    "referrer": "teams.public.onecdn.static.microsoft",
     "count": 2,
     "uniques": 2
   },
