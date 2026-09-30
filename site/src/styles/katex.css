@@ -1,0 +1,10 @@
+/* KaTeX styles for the docs. Loaded by Starlight via `customCss`. */
+@import 'katex/dist/katex.min.css';
+
+/* KaTeX inherits the surrounding text color, which is already theme-aware.
+   Only the display-math scroll behaviour needs a small adjustment. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
