@@ -91,8 +91,8 @@ Smoothing happens at the **framework level** — no model changes, no training a
 | Robot | Type | Status | Adapter |
 | --- | --- | --- | --- |
 | AgiBot G1 | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/agibot_g1/` |
-| China Mobile Lingxi (Ti5 T170C) | Bimanual wheeled robot (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
-| NAVIAI-WA2 (Zhejiang Humanoid) | Folding wheel-legged humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
+| China Mobile Lingxi (Ti5 T170C) | Folding wheeled dual-arm humanoid (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
+| NAVIAI-WA2 (Zhejiang Humanoid) | Dual-arm wheeled humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
 | Mock | LeRobot-based simulation backend | ✅ Adapted | `client/robots/mock/` |
 | Unitree G1 | Bimanual bipedal humanoid | 🔜 Coming soon | — |
 | _Your robot_ | — | 🔜 Planned | [Integration guide](docs/guides/add-new-robot.md) |

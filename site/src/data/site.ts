@@ -54,8 +54,8 @@ export const supportedRobots: {
 }[] = [
   // Adapted and shipped in the current release.
   { name: 'AgiBot G1', note: 'Dual-arm wheeled humanoid', tags: ['Gripper', 'Hand'] },
-  { name: 'China Mobile Lingxi', note: 'Dual-arm wheeled humanoid', tags: ['Gripper', 'Hand'] },
-  { name: 'NAVIAI-WA2', note: 'Folding wheel-legged humanoid', tags: ['Hand'] },
+  { name: 'China Mobile Lingxi', note: 'Folding wheeled dual-arm humanoid', tags: ['Gripper', 'Hand'] },
+  { name: 'NAVIAI-WA2', note: 'Dual-arm wheeled humanoid', tags: ['Hand'] },
   // Adapter ready, shipping in the next release.
   { name: 'Unitree G1', note: 'Dual-arm bipedal humanoid', tags: ['Hand'], soon: true },
   // Simulation backend.

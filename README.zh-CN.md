@@ -91,8 +91,8 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | 机器人 | 类型 | 状态 | 适配器 |
 | --- | --- | --- | --- |
 | AgiBot G1 | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/agibot_g1/` |
-| 中国移动灵犀（Ti5 T170C） | 双臂轮式机器人（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
-| NAVIAI-WA2（浙江人形） | 折叠轮臂人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
+| 中国移动灵犀（Ti5 T170C） | 折叠轮式双臂人形（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
+| NAVIAI-WA2（浙江人形） | 双臂轮式人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
 | Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
 | Unitree G1 | 双臂双足人形 | 🔜 即将支持 | — |
 | _你的机器人_ | — | 🔜 计划中 | [接入指南](docs-cn-backup/add-new-robot.zh-CN.md) |
