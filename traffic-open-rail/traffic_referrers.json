@@ -1,23 +1,23 @@
 [
   {
     "referrer": "cmcc-tao.github.io",
-    "count": 172,
-    "uniques": 122
+    "count": 78,
+    "uniques": 48
   },
   {
     "referrer": "github.com",
-    "count": 67,
-    "uniques": 39
-  },
-  {
-    "referrer": "Bing",
-    "count": 26,
-    "uniques": 22
+    "count": 38,
+    "uniques": 23
   },
   {
     "referrer": "Google",
-    "count": 21,
-    "uniques": 13
+    "count": 19,
+    "uniques": 12
+  },
+  {
+    "referrer": "Bing",
+    "count": 11,
+    "uniques": 8
   },
   {
     "referrer": "teams.public.onecdn.static.microsoft",
