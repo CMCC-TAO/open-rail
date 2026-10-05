@@ -2,49 +2,37 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 213,
-    "uniques": 100
+    "count": 187,
+    "uniques": 89
   },
   {
     "path": "/CMCC-TAO/open-rail/graphs/traffic",
     "title": "/graphs/traffic",
-    "count": 43,
+    "count": 35,
     "uniques": 1
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
     "title": "/blob/main/README.zh-CN.md",
-    "count": 37,
-    "uniques": 17
+    "count": 32,
+    "uniques": 15
   },
   {
     "path": "/CMCC-TAO/open-rail/issues",
     "title": "/issues",
-    "count": 32,
-    "uniques": 24
+    "count": 28,
+    "uniques": 20
   },
   {
     "path": "/CMCC-TAO/open-rail/pulse",
     "title": "/pulse",
-    "count": 31,
+    "count": 25,
     "uniques": 1
-  },
-  {
-    "path": "/CMCC-TAO/open-rail/discussions",
-    "title": "/discussions",
-    "count": 9,
-    "uniques": 7
   },
   {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
-    "count": 9,
-    "uniques": 6
-  },
-  {
-    "path": "/CMCC-TAO/open-rail/issues/3",
-    "title": "/issues/3",
-    "count": 9,
+    "count": 8,
     "uniques": 5
   },
   {
@@ -54,9 +42,21 @@
     "uniques": 1
   },
   {
+    "path": "/CMCC-TAO/open-rail/discussions",
+    "title": "/discussions",
+    "count": 7,
+    "uniques": 5
+  },
+  {
     "path": "/CMCC-TAO/open-rail/issues/2",
     "title": "/issues/2",
-    "count": 7,
-    "uniques": 7
+    "count": 5,
+    "uniques": 5
+  },
+  {
+    "path": "/CMCC-TAO/open-rail/tree/main/docs",
+    "title": "/tree/main/docs",
+    "count": 5,
+    "uniques": 5
   }
 ]
