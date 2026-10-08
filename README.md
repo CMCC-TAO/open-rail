@@ -101,7 +101,7 @@ Smoothing happens at the **framework level** — no model changes, no training a
 
 | Model family | Members | Status |
 | --- | --- | --- |
-| TAO(ours) | TAO | ✅ Supported |
+| TAO(ours) | TAO 0, 0.5 | ✅ Supported |
 | ACT | ACT | ✅ Supported |
 | GR00T N1 series | GR00T N1, N1.5, N1.6 | ✅ Supported |
 | RDT | RDT-1B | ✅ Supported |
