@@ -113,6 +113,7 @@ def get_robocasa_config():
     config.env_name = 'PickPlaceCounterToCabinet'
     config.split = 'target'
     config.seed = 42
+    config.episode_offset = 0
     config.camera_width = 256
     config.camera_height = 256
     config.enable_render = True

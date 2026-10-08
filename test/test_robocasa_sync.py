@@ -160,9 +160,9 @@ class VLAClientSimulationControlTest(unittest.TestCase):
                 'control_robot': lambda self, action: events.append('step') or result,
             },
         )()
-        client._ingest_observation = lambda obs: events.append('observe')
+        client._ingest_observation = lambda obs, **kwargs: events.append('observe')
         client._track_step_result = lambda step_result: None
-        client._stop_control_thread_on_error = lambda: None
+        client._stop_control_thread_on_error = lambda error: None
         client.episode_done_event = threading.Event()
         client.last_step_result = None
         client.pipeline_error = None

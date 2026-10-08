@@ -31,11 +31,14 @@ python scripts/robocasa_eval.py \
   --env_name PickPlaceCounterToCabinet \
   --split target \
   --n_episodes 50 \
+  --n_envs 10 \
   --n_action_steps 16 \
   --output_dir data/robocasa_eval
 ```
 
 Use `--mujoco_gl egl` on a compatible GPU node or `--mujoco_gl osmesa` when OSMesa is installed. Results are saved under `OUTPUT/evals/SPLIT/TASK/`.
+
+`--n_envs` runs that many isolated RoboCasa clients concurrently against the same model server. Each worker owns its environment and seed range. With `--record`, the supervisor merges all workers for one task into one LeRobot recording root, then creates the global `success/` and `failure/` partitions.
 
 Run all Target50 tasks sequentially:
 
@@ -44,6 +47,7 @@ python scripts/robocasa_eval.py \
   --task_suite target50 \
   --split target \
   --n_episodes 50 \
+  --n_envs 10 \
   --n_action_steps 16 \
   --output_dir data/robocasa_eval
 ```

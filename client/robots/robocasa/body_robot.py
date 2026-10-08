@@ -17,6 +17,20 @@ class RobotBody(RobotBase):
         'base_motion',
         'control_mode',
     )
+    DATASET_ACTION_KEYS = (
+        'base_motion',
+        'control_mode',
+        'end_effector_position',
+        'end_effector_rotation',
+        'gripper_close',
+    )
+    DATASET_CAMERA_KEYS = {
+        'head': 'observation.images.robot0_agentview_left',
+        'hand_left': 'observation.images.robot0_agentview_right',
+        'hand_right': 'observation.images.robot0_eye_in_hand',
+    }
+    DATASET_INSTRUCTION_KEY = 'annotation.human.task_description'
+    DATASET_ROBOT_TYPE = 'PandaOmron'
 
     def __init__(self, config):
         super().__init__(config)
@@ -31,7 +45,7 @@ class RobotBody(RobotBase):
             raise
         self._last_obs = None
         self._initial_observation_pending = False
-        self._episode_index = -1
+        self._episode_index = int(config.get('episode_offset', 0)) - 1
         self._episode_steps = 0
         self._episode_success = False
         self._episode_done = False
@@ -141,6 +155,12 @@ class RobotBody(RobotBase):
                 raise ValueError(f'{key} must contain {expected} values')
             result[layout['start']:layout['end']] = value
         return result
+
+    def to_dataset_action(self, action):
+        action_dict = self._flat_to_action_dict(self._to_flat_action(action))
+        return np.concatenate([
+            action_dict[f'action.{key}'] for key in self.DATASET_ACTION_KEYS
+        ]).astype(np.float32, copy=False)
 
     def control_robot(self, action):
         with self._lock:

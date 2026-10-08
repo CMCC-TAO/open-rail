@@ -351,13 +351,24 @@ class VLAClientAsync():
 
         if action_fitted is not None:
             episode_done = False
+            recorded_step = False
             try:
                 step_result = self.robot.control_robot(action_fitted)
                 if isinstance(step_result, RobotStepResult):
                     self.last_step_result = step_result
                     self._track_step_result(step_result)
                     if step_result.observation is not None:
-                        self._ingest_observation(step_result.observation)
+                        if self.config.record.switch:
+                            record_action = action_fitted
+                            if hasattr(self.robot, 'to_dataset_action'):
+                                record_action = self.robot.to_dataset_action(action_fitted)
+                            self.data_record_manager.add_step(
+                                step_result.observation,
+                                record_action,
+                                self.task_language_manager.get_current_language(),
+                            )
+                            recorded_step = True
+                        self._ingest_observation(step_result.observation, record=False)
                     episode_done = bool(
                         step_result.success or step_result.terminated or step_result.truncated
                     )
@@ -378,7 +389,7 @@ class VLAClientAsync():
             # with self.show_thread_lock:
                 # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
             
-            if self.config.record.switch:
+            if self.config.record.switch and not recorded_step:
                 self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
 
             # with self.show_thread_lock:
@@ -405,9 +416,9 @@ class VLAClientAsync():
             control_period=self.config.controller.period / 1000
             )
 
-    def _ingest_observation(self, observations):
+    def _ingest_observation(self, observations, record=True):
         """Process one observation and publish it to the shared inference buffer."""
-        if self.config.record.switch:
+        if record and self.config.record.switch:
             self.data_record_manager.add_observation_async(
                 observations,
                 self.task_language_manager.get_current_language(),

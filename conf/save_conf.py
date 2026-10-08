@@ -34,7 +34,7 @@ def get_record_data_config() -> ConfigDict:
     config.evaluation.scores = [0, 0.5, 1]  # Score options for evaluation log scoring buttons
     # LeRobot metadata (metadata)
     config.lerobot = ConfigDict(allow_dotted_keys=True)
-    config.lerobot.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)
+    config.lerobot.codebase_version = "v2.1"
     config.lerobot.robot_type = "a2d"  # Type of robot used
 
     # Data statistics (initialized to 0)
@@ -62,6 +62,11 @@ def get_record_data_config() -> ConfigDict:
     config.lerobot['cam.head'] = generate_image_feature_config()
     config.lerobot['cam.hand_left'] = generate_image_feature_config(width=848,height=480)
     config.lerobot['cam.hand_right'] = generate_image_feature_config(width=848,height=480)
+    config.lerobot.image_feature_keys = ConfigDict({
+        'head': 'observation.images.head',
+        'hand_left': 'observation.images.left',
+        'hand_right': 'observation.images.right',
+    })
 
     # Other features
     # config.lerobot.features['observation.state'] = ConfigDict({
@@ -122,7 +127,7 @@ def generate_image_feature_config(width: int = 1280, height: int = 720, fps: int
     # Common video metadata definitions
     encode = {
         # "video.fps": fps,
-        "codec": "mp4v", # ('mp4v', 'avc1', 'XVID', 'MJPG')
+        "codec": "h264",
         "is_depth_map": False, # Depth image for True and False for RGB image
         "has_audio": False
     }
