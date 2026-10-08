@@ -40,7 +40,7 @@ except ImportError:
     _HAS_YAML = False
 
 import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -101,7 +101,6 @@ async def _lifespan(_: FastAPI):
     client_state.loop = loop
 
     asyncio.create_task(_stats_push_loop())
-    _ensure_vla_client_created()
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
     # ── shutdown ──
@@ -386,10 +385,20 @@ def _apply_flat_patch_new(config, patch: dict):
     legacy_inter_chunk_keys = {
         "inter_chunk.search_length": "inter_chunk.search_action.search_length",
     }
-    patch = {
-        legacy_inter_chunk_keys.get(key, key): value
-        for key, value in patch.items()
-    }
+    migrated_patch = {}
+    for key, value in patch.items():
+        key = legacy_inter_chunk_keys.get(key, key)
+        if key.startswith('robots.a2d.'):
+            key = 'robots.agibot_g1.' + key[len('robots.a2d.'):]
+        if key in ('robots.type', 'record.lerobot.robot_type') and value == 'a2d':
+            value = 'agibot_g1'
+        migrated_patch[key] = value
+    # Explicit new-format keys take precedence over their legacy equivalents.
+    migrated_patch.update({
+        key: value for key, value in patch.items()
+        if key.startswith('robots.agibot_g1.')
+    })
+    patch = migrated_patch
 
     def _is_mapping(obj):
         return isinstance(obj, (dict, ConfigDict))
@@ -783,9 +792,9 @@ async def load_lang_file(req: LangFileRequest):
     """Load a JSON language command file and return its contents."""
     # print(f"Loading language file: {req.path}")
     p = Path(req.path)
-    if "conf" not in req.path:
-        p = "conf" / p
     if not p.is_absolute():
+        if not p.parts or p.parts[0] != 'conf':
+            p = Path('conf') / p
         p = ROOT / p
     # Guard against path-traversal: resolved path must stay inside ROOT
     # print(f"language file path: {p}")
@@ -812,9 +821,9 @@ class LangSaveRequest(BaseModel):
 async def save_lang_file(req: LangSaveRequest):
     """Save the language command JSON file."""
     p = Path(req.path)
-    if "conf" not in req.path:
-        p = "conf" / p
     if not p.is_absolute():
+        if not p.parts or p.parts[0] != 'conf':
+            p = Path('conf') / p
         p = ROOT / p
     try:
         p = p.resolve()
@@ -922,6 +931,12 @@ async def patch_config(req: ConfigPatchRequest):
             else:
                 # print(f"Debug: key={k}, value={flat[k]}")
                 pass
+        if language_patch_changed and current_vla_client is not None:
+            try:
+                _sync_runtime_language_state(current_vla_client, flat)
+            except Exception as e:
+                logger.exception("[language-sync] failed to apply runtime language sync after patch")
+                raise HTTPException(500, f"Failed to apply language configuration: {e}") from e
         if vision_preprocess_keys and current_vla_client is not None:
             try:
                 current_vla_client.update_preprocess_func()
@@ -930,12 +945,6 @@ async def patch_config(req: ConfigPatchRequest):
                 logger.error(f"Failed to update preprocess function: {e}")
     finally:
         client_state.lock.release()
-    if language_patch_changed and current_vla_client is not None:
-        try:
-            await asyncio.wait_for(asyncio.to_thread(_sync_runtime_language_state, current_vla_client, flat), timeout=3.0)
-        except Exception as e:
-            logger.warning(f"[language-sync] failed to apply runtime language sync after patch: {e}")
-
     if (
         robot_type_changed
         and is_running
@@ -1328,7 +1337,7 @@ def _create_robot(robot_type, robot_config):
         return RobotProxy(robot_type, robot_config)
     except Exception as e:
         logger.exception(f"Robot creation failed: {e}")
-        raise ValueError(f"Create robot failed, type: {robot_type}")
+        raise ValueError(f"Create robot failed, type: {robot_type}: {e}") from e
 
 async def _start_client():
     try:
@@ -1707,6 +1716,12 @@ class LanguageSetRequest(BaseModel):
     language: str = ""
 
 
+class LanguageSelectRequest(BaseModel):
+    task_id: str
+    sub_task_id: int
+    language: str
+
+
 class RecordStartRequest(BaseModel):
     save_items: Optional[list[str]] = None
 
@@ -1745,7 +1760,7 @@ async def _run_web_control(command: str, req: ManualControlRequest):
 
 
 @app.post('/api/client/control/reset')
-async def client_control_reset():
+async def client_control_reset(req: Optional[ManualControlRequest] = Body(default=None)):
     vla_client, robot = _require_runtime('reset')
     try:
         with client_state.lock:
@@ -1755,7 +1770,16 @@ async def client_control_reset():
             if not client_state.paused:
                 client_state.paused_thread_state = _pause_vla_client(vla_client)
                 client_state.paused = True
-        robot.reset_robot(mode='default')
+        data = {
+            name: value for name, value in vars(req or ManualControlRequest()).items()
+            if value is not None
+        }
+        if len(data) > 1:
+            await asyncio.to_thread(robot._control_robot, data)
+        else:
+            robot.reset_robot(mode='default')
+        wait_time = max(vla_client.realtime_data_manager.avg_infer_time * 1.5, 0.2)
+        await asyncio.sleep(wait_time * 2.0)
         vla_client.realtime_data_manager.clear()
         vla_client.reset()
         # _resume_vla_client(vla_client, paused_state)
@@ -1763,6 +1787,10 @@ async def client_control_reset():
         return {"status": "ok", "command": 'reset'}
     except HTTPException:
         raise
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except RuntimeError as e:
+        raise HTTPException(500, str(e))
     except Exception as e:
         raise HTTPException(500, str(e))
 
@@ -1789,21 +1817,70 @@ async def client_control_wheel(req: ManualControlRequest):
     return await _run_web_control('wheel', req)
 
 
+@app.post('/api/client/language/select')
+async def client_language_select(req: LanguageSelectRequest):
+    """Apply a selected instruction and its task coordinates as one update."""
+    acquired = client_state.lock.acquire(timeout=2.0)
+    if not acquired:
+        raise HTTPException(503, "Config is busy. Please retry.")
+    try:
+        vla_client, _ = _require_runtime('select_language')
+        config = vla_client.config
+        if config.record.switch and config.language.task_id != req.task_id:
+            raise HTTPException(409, "Cannot change task while recording.")
+        if config.language.auto_mode:
+            raise HTTPException(409, "Disable automatic language mode before selecting an instruction.")
+
+        tlm = vla_client.task_language_manager
+        task_map = tlm._load_task_language_map(config.language.file_path)
+        commands = task_map.get(req.task_id)
+        if commands is None or not 0 <= req.sub_task_id < len(commands):
+            raise HTTPException(400, "Unknown task or sub-task.")
+        language = commands[req.sub_task_id]
+        if language.strip() != req.language.strip():
+            raise HTTPException(409, "Language file changed. Reload the instructions and try again.")
+
+        tlm.task_language_map = task_map
+        config.language.task_id = req.task_id
+        config.language.sub_task_id = req.sub_task_id
+        config.language.auto_mode_start_sub_task_id = req.sub_task_id
+        tlm.currt_language_instruction = language
+        tlm.currt_task_steps = len(commands)
+        tlm.sub_task_id_tmp = req.sub_task_id
+        tlm.task_progress_queue.clear()
+        tlm.ready_for_try = True
+        tlm.ready_for_confirm = False
+        tlm.is_sub_task_finished = False
+        tlm.is_task_finished = False
+        return {
+            "status": "ok",
+            "task_id": req.task_id,
+            "sub_task_id": req.sub_task_id,
+            "language": language,
+        }
+    finally:
+        client_state.lock.release()
+
+
 @app.post('/api/client/language/set')
 async def client_language_set(req: LanguageSetRequest):
-    vla_client, _ = _require_runtime('set_language')
+    """Update the text of the currently selected instruction after editing it."""
+    acquired = client_state.lock.acquire(timeout=2.0)
+    if not acquired:
+        raise HTTPException(503, "Config is busy. Please retry.")
     try:
-        # with client_state.lock:
-        #     client_state.paused_thread_state = _pause_vla_client(vla_client)
-        vla_client.task_language_manager.currt_language_instruction = req.language if isinstance(req.language, str) else ''
-        # with client_state.lock:
-        #     _resume_vla_client(vla_client, client_state.paused_thread_state)
-        return {"status": "ok", "command": 'set_language'}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
+        vla_client, _ = _require_runtime('set_language')
+        tlm = vla_client.task_language_manager
+        language = req.language if isinstance(req.language, str) else ''
+        task_id = vla_client.config.language.task_id
+        sub_task_id = vla_client.config.language.sub_task_id
+        commands = tlm.task_language_map.get(task_id, [])
+        if 0 <= sub_task_id < len(commands):
+            commands[sub_task_id] = language
+        tlm.currt_language_instruction = language
+        return {"status": "ok", "command": "set_language", "language": language}
+    finally:
+        client_state.lock.release()
 
 
 @app.post('/api/client/record/start')

@@ -190,6 +190,9 @@ class VLAClient():
 
     def stop_control(self):
         self.is_control_thread_running = False
+        clear_control_actions = getattr(self.robot, 'clear_control_actions', None)
+        if clear_control_actions is not None:
+            clear_control_actions()
     
     def set_control_period(self, period) -> None:
         self.control_thread_timer.set_interval(period)
@@ -201,6 +204,9 @@ class VLAClient():
     
     def _stop_control_thread_on_error(self):
         self.is_control_thread_running = False
+        clear_control_actions = getattr(self.robot, 'clear_control_actions', None)
+        if clear_control_actions is not None:
+            clear_control_actions()
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
 
@@ -1003,6 +1009,14 @@ class VLAClient():
         return f"{time.time_ns()}-{self._request_id}"
 
     def _request_inference(self, data, timeout_ms=500):
+        # Observations may have been queued before a manual language switch.
+        # Apply the current instruction when the inference request is sent.
+        if not self.config.language.auto_mode:
+            language = self.task_language_manager.get_current_language()
+            frames = data if isinstance(data, list) else [data]
+            for frame in frames:
+                if isinstance(frame, dict) and isinstance(frame.get('obs'), dict):
+                    frame['obs']['language'] = [language]
         request_id = self._next_request_id()
         # start_time = time.time()
         if not self.vla_zmq.sendMessage(data, meta={'request_id': request_id}):

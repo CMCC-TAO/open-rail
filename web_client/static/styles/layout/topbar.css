@@ -221,3 +221,89 @@
   color: var(--text-muted); 
   font-weight: var(--font-weight-1);
 }
+/* Shortcut popover stays beside the top-bar entry and shifts left on narrow screens. */
+.shortcuts-popover {
+  position: fixed;
+  top: calc(var(--topbar-h) + 8px);
+  left: clamp(12px, calc(100vw - 452px), 136px);
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 24px));
+  max-height: calc(100vh - var(--topbar-h) - 20px);
+  overflow-y: auto;
+  padding: 14px 16px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .16);
+  color: var(--text);
+  z-index: 200;
+}
+.shortcuts-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.shortcuts-popover-header strong { font-size: var(--font-size-3); }
+.shortcuts-popover-header button { min-width: 24px; }
+.shortcuts-group + .shortcuts-group { margin-top: 12px; }
+.shortcuts-group h3 {
+  margin: 0 0 5px;
+  color: var(--text-muted);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-3);
+}
+.shortcuts-list { margin: 0; }
+.shortcuts-list > div {
+  display: grid;
+  grid-template-columns: 45% 55%;
+  align-items: center;
+  padding: 5px 0;
+  border-top: 1px solid var(--border);
+  font-size: var(--font-size-2);
+}
+.shortcuts-list dt, .shortcuts-list dd {
+  margin: 0;
+  white-space: nowrap;
+}
+.shortcuts-list dd { color: var(--text-muted); }
+.shortcuts-list kbd {
+  display: inline-block;
+  padding: 1px 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+@media (max-width: 400px) {
+  .shortcuts-popover { padding: 12px; }
+  .shortcuts-list > div { font-size: 12px; }
+  .shortcuts-list kbd { font-size: 11px; padding: 1px 3px; }
+}
+
+/* Keep shortcut help visible in the fixed header. */
+.topbar-shortcuts-button {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font-weight: var(--font-weight-3);
+}
+
+@media (max-width: 900px) {
+  .topbar .system-resource-group,
+  .topbar .topbar-sep,
+  .topbar .subtitle { display: none; }
+  .topbar { padding: 0 10px; }
+  .topbar-left { gap: 8px; }
+}
+
+@media (max-width: 600px) {
+  .topbar-center { min-width: 0; }
+  .topbar .logo { font-size: 17px; white-space: nowrap; }
+  .topbar .status-badge { padding: 4px 7px; font-size: 11px; }
+  .topbar-right { flex: 0 0 auto; }
+  .topbar .ws-label { display: none; }
+  .topbar .net-indicator-group { min-width: 16px; align-items: center; }
+}

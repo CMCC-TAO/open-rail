@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""A2D 机器人观测降频 / 丢帧测试。
+"""AgiBot G1 机器人观测降频 / 丢帧测试。
 
 测试内容：
     1. 记录 ``retrieve_observation`` 的单次 / 累计运行时间；
@@ -15,11 +15,11 @@
 
 用法::
 
-    python test/test_a2d_observe_fps.py                       # 默认 30FPS，测试 60s
-    python test/test_a2d_observe_fps.py --duration 120        # 测试 120s
-    python test/test_a2d_observe_fps.py --fps 30 --output /tmp/a2d_obs.json
+    python test/test_agibot_g1_observe_fps.py                       # 默认 30FPS，测试 60s
+    python test/test_agibot_g1_observe_fps.py --duration 120        # 测试 120s
+    python test/test_agibot_g1_observe_fps.py --fps 30 --output /tmp/a2d_obs.json
 
-注意：需要连接 A2D 机器人（或已启动 a2d_sdk 服务），并已安装 ``a2d_sdk``。
+注意：需要连接 AgiBot G1 机器人（或已启动 a2d_sdk 服务），并已安装 ``a2d_sdk``。
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ if _REPO_ROOT not in sys.path:
 
 from conf.robots_conf import get_robots_config  # noqa: E402
 
-logger = logging.getLogger('a2d_observe_fps')
+logger = logging.getLogger('agibot_g1_observe_fps')
 
 DEFAULT_FPS = 30
 DEFAULT_WARMUP_FRAMES = 5
@@ -46,7 +46,7 @@ DEFAULT_WARMUP_FRAMES = 5
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='A2D robot observation FPS / frame-drop test',
+        description='AgiBot G1 robot observation FPS / frame-drop test',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument('--fps', type=float, default=DEFAULT_FPS,
@@ -67,7 +67,7 @@ def parse_args():
                         help='测试过程中打印进度的间隔（秒），0 表示不打印')
     parser.add_argument('--hand-type', type=str, default=None,
                         choices=['gripper', 'hand_as_gripper', 'hand'],
-                        help='覆盖 A2D 配置中的 hand_type（影响相机名与 proprio 名称）')
+                        help='覆盖 AgiBot G1 配置中的 hand_type（影响相机名与 proprio 名称）')
     parser.add_argument('--gap-high-ms', type=float, default=45.0,
                         help='相邻两帧返回时间间隔的偏慢阈值（ms），统计间隔大于该值的帧数')
     parser.add_argument('--gap-low-ms', type=float, default=15.0,
@@ -82,16 +82,16 @@ def parse_args():
 
 
 def build_robot(args):
-    """构建 A2D RobotBody 实例。"""
+    """构建 AgiBot G1 RobotBody 实例。"""
     try:
-        from client.robots.a2d.body_robot import RobotBody
+        from client.robots.agibot_g1.body_robot import RobotBody
     except ImportError as exc:  # pragma: no cover - 依赖真实硬件环境
         raise SystemExit(
-            f'导入 client.robots.a2d.body_robot 失败: {exc}\n'
-            '请确认已安装 a2d_sdk（参考 client/robots/a2d/README.md）。'
+            f'导入 client.robots.agibot_g1.body_robot 失败: {exc}\n'
+            '请确认已安装 a2d_sdk（参考 client/robots/agibot_g1/README.md）。'
         )
 
-    config = get_robots_config().a2d
+    config = get_robots_config().agibot_g1
     if args.hand_type is not None and args.hand_type != config.hand_type:
         config.hand_type = args.hand_type
         config.camera.names = {
@@ -109,8 +109,8 @@ def build_robot(args):
 class FrameTracker:
     """基于 ref_timestamp 对 retrieve_observation 返回的观测帧去重。
 
-    A2D 的 ``retrieve_observation`` 内部通过与 ``current_timestamp`` 比较来过滤重复帧
-    （见 client/robots/a2d/body_robot.py:143），该判据只在相邻两次调用之间生效。
+    AgiBot G1 的 ``retrieve_observation`` 内部通过与 ``current_timestamp`` 比较来过滤重复帧
+    （见 client/robots/agibot_g1/body_robot.py:143），该判据只在相邻两次调用之间生效。
     这里在测试侧独立记录所有出现过的 ``ref_timestamp``，确保统计到的观测数据不重复，
     并能暴露出 SDK 侧去重失效 / 时间戳回退等问题。
     """
@@ -272,8 +272,8 @@ def _percentile(values, q):
 def _resolve_timestamp_scale(stamps, unit):
     """推断 ref_timestamp 的时间单位换算系数（换算为秒）。
 
-    ``client/robots/a2d/body_robot.py`` 中按 ``(ts - last_ts) / 1e6`` 得到毫秒，
-    说明 A2D SDK 的 ref_timestamp 单位为纳秒，因此默认值取 'ns'。
+    ``client/robots/agibot_g1/body_robot.py`` 中按 ``(ts - last_ts) / 1e6`` 得到毫秒，
+    说明 AgiBot G1 SDK 的 ref_timestamp 单位为纳秒，因此默认值取 'ns'。
     """
     scales = {'ns': 1e-9, 'us': 1e-6, 'ms': 1e-3, 's': 1.0}
     if unit != 'auto':
@@ -387,7 +387,7 @@ def analyze(result, target_fps, ts_unit='ns', gap_high_ms=45.0, gap_low_ms=15.0)
 def print_report(stats, warmup_frames):
     line = '=' * 66
     print('\n' + line)
-    print('A2D 观测降频 / 丢帧测试报告')
+    print('AgiBot G1 观测降频 / 丢帧测试报告')
     print(line)
     print(f'预热丢弃帧数          : {warmup_frames}')
     print(f'测试运行时长          : {stats["elapsed_s"]:.3f} s')

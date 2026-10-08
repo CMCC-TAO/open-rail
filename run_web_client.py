@@ -15,6 +15,8 @@ Port layout:
 
 import argparse
 import os
+import signal
+import subprocess
 import sys
 import cv2
 import uvicorn
@@ -35,11 +37,22 @@ def parse_args():
     return p.parse_args()
 
 def kill_port(port):
-    os.system(f'kill -9 $(lsof -t -i:{port})')  # 杀掉占用端口的进程
+    """Kill processes occupying the Web port, if any."""
+    try:
+        result = subprocess.run(
+            ['lsof', '-t', f'-i:{port}'],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError:
+        return
+    for value in result.stdout.split():
+        if value.isdigit() and int(value) != os.getpid():
+            os.kill(int(value), signal.SIGKILL)
 
 def _ensure_dds_env(conf_name: str) -> None:
     """Bind Cyclone DDS to the robot subnet before any DomainParticipant is created."""
-    peer_ip = None
     try:
         from pathlib import Path
 
@@ -48,21 +61,26 @@ def _ensure_dds_env(conf_name: str) -> None:
         from ti5_t170c_sdk._network import ensure_cyclonedds_uri, parse_host_from_uri
 
         conf_path = Path(__file__).resolve().parent / "conf" / conf_name
-        if conf_path.is_file():
-            data = yaml.safe_load(conf_path.read_text(encoding="utf-8")) or {}
-            robots = data.get("robots") or {}
-            ti5 = robots.get("ti5_t170c") or {}
-            camera = ti5.get("camera") or {}
-            peer_ip = parse_host_from_uri(camera.get("forwarder_uri"))
+        if not conf_path.is_file():
+            return
+        data = yaml.safe_load(conf_path.read_text(encoding="utf-8")) or {}
+        robots = data.get("robots") or {}
+        if robots.get("type") != "ti5_t170c":
+            return
+        ti5 = robots.get("ti5_t170c") or {}
+        camera = ti5.get("camera") or {}
+        peer_ip = parse_host_from_uri(camera.get("forwarder_uri"))
+        ensure_cyclonedds_uri(peer_ip=peer_ip)
     except Exception:
-        peer_ip = None
-    ensure_cyclonedds_uri(peer_ip=peer_ip)
+        pass
 
-if __name__ == '__main__':
+
+def main():
     args = parse_args()
     kill_port(port=args.port)
 
     exit_code = 0
+    logger = None
     try:
         logger = setup_logging("client.log", "run_web_client")
         os.environ['conf_file'] = args.conf
@@ -90,7 +108,10 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         exit_code = 0
     except Exception as e:
-        logger.exception(f"Exception: {e}")
+        if logger is not None:
+            logger.exception(f"Exception: {e}")
+        else:
+            print(f"Exception: {e}")
         exit_code = 1
         raise
     finally:
@@ -103,3 +124,9 @@ if __name__ == '__main__':
             except Exception:
                 pass
             os._exit(exit_code)
+
+        return exit_code
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -1,0 +1,50 @@
+---
+import { getUI } from '../i18n';
+import { site } from '../data/site';
+import { platformIcons as icons } from '../data/icons';
+import Highlight from './Highlight.astro';
+const { locale = 'en' } = Astro.props;
+const t = getUI(locale);
+---
+
+<section id="get-involved" class="section">
+  <div class="container-wide">
+    <div class="text-center">
+      <p class="eyebrow">OPEN COMMUNITY</p>
+      <h2 class="text-3xl font-bold tracking-tight text-white sm:text-4xl">{t.community.title}</h2>
+      <p class="mx-auto mt-4 max-w-[54rem] text-slate-300"><Highlight text={t.community.vision} /></p>
+    </div>
+
+    <div class="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      {t.community.templates.map((tm) => (
+        <div class="card lift reveal">
+          <h3 class="text-base font-bold text-white"><Highlight text={tm.title} /></h3>
+          <p class="mt-2 text-sm text-slate-400"><Highlight text={tm.body} /></p>
+        </div>
+      ))}
+    </div>
+
+    <div class="mt-8 rounded-2xl border border-ink-border bg-gradient-to-r from-brand/10 to-accent/10 p-6">
+      <p class="text-sm font-semibold text-slate-200"><Highlight text={t.community.entryLabel} /></p>
+      <div class="mt-3 flex flex-wrap items-center justify-center gap-3">
+        {site.platforms.map((p) => (
+          <a class="btn-ghost px-3 py-2" href={p.href} title={p.label} aria-label={p.label}>
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><Fragment set:html={icons[p.icon]} /></svg>
+            <span>{p.label}</span>
+          </a>
+        ))}
+        <a class="btn-ghost" href={site.whitepaper}>{t.community.paperLabel}</a>
+      </div>
+      <p class="mt-3 text-xs text-slate-500"><Highlight text={t.community.resourcesLabel} /></p>
+    </div>
+
+    <div class="mt-8 grid gap-5 md:grid-cols-3">
+      {t.community.values.map((v) => (
+        <div class="rounded-xl border border-ink-border bg-white/5 p-4">
+          <p class="text-sm font-semibold text-brand-light"><Highlight text={v.who} /></p>
+          <p class="mt-1 text-sm text-slate-400"><Highlight text={v.value} /></p>
+        </div>
+      ))}
+    </div>
+  </div>
+</section>

@@ -15,11 +15,16 @@ def get_vla_server_config():
             - zmq: ZMQ communication configuration
             - max_workers: Maximum number of inference worker threads
             - models: Model configuration settings
+            - image_pad_and_resize: Whether to pad and resize decoded images
+            - image_target_height/image_target_width: Target image dimensions in pixels
     """
     config = ConfigDict()
     config.zmq = get_vla_zmq_config()
     config.max_infer_workers = 3  # Maximum inference worker threads, 1 means no concurrent inference support
     config.max_decode_workers = 9  # Maximum inference worker threads, 1 means no concurrent inference support
+    config.image_pad_and_resize = False  # Enable aspect-ratio-preserving padding and resizing
+    config.image_target_height = 640
+    config.image_target_width = 640
     config.models = get_models_config()
     return config
 
