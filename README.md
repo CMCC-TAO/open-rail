@@ -65,7 +65,7 @@ It currently adapts **4 heterogeneous robots** (including a LeRobot simulation b
 ---
 
 ## 📰 Changelog
-
+- [Detailed change logs](CHANGELOG.md)
 - **2026-09-16 · First public release** — Renamed to **Open-RAIL** (formerly VLA-RAIL), opening four layers — **infer / collect / evaluate / adapt**: three-thread asynchronous pipeline with two-level online smoothing, inference-as-collection, evaluation data written on every run, and adaptation for 4 heterogeneous robots and 10 VLA/WAM models
 - **2025-12 · Preprint release** — [VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots](https://arxiv.org/abs/2512.24673): asynchronous inference with intra-/inter-chunk two-level online smoothing
 
@@ -90,8 +90,8 @@ Smoothing happens at the **framework level** — no model changes, no training a
 
 | Robot | Type | Status | Adapter |
 | --- | --- | --- | --- |
+| China Mobile Lingxi (ours) | Folding wheeled dual-arm humanoid (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
 | AgiBot G1 | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/agibot_g1/` |
-| China Mobile Lingxi (Ti5 T170C) | Folding wheeled dual-arm humanoid (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
 | NAVIAI-WA2 (Zhejiang Humanoid) | Dual-arm wheeled humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
 | Mock | LeRobot-based simulation backend | ✅ Adapted | `client/robots/mock/` |
 | Unitree G1 | Bimanual bipedal humanoid | 🔜 Coming soon | — |
@@ -101,15 +101,15 @@ Smoothing happens at the **framework level** — no model changes, no training a
 
 | Model family | Members | Status |
 | --- | --- | --- |
+| TAO(ours) | TAO | ✅ Supported |
 | ACT | ACT | ✅ Supported |
 | GR00T N1 series | GR00T N1, N1.5, N1.6 | ✅ Supported |
 | RDT | RDT-1B | ✅ Supported |
 | SmolVLA | SmolVLA | ✅ Supported |
 | GO1 | AgiBot GO-1 | ✅ Supported |
 | π series | π0, π0.5 | ✅ Supported |
-| TAO | TAO | ✅ Supported |
 | DM0.5 | DM0.5 | ✅ Supported |
-| WALL-X | WALL-X | ✅ Supported |
+| WALL-X | Wall-OSS-0.5 | ✅ Supported |
 | _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-model.md) |
 
 ## 🚀 Quick Start
