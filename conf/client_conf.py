@@ -103,10 +103,12 @@ def get_search_action_config() -> ConfigDict:
 
 def get_smooth_velocity_config() -> ConfigDict:
     config = ConfigDict()
-    config.max_vel = 2.0
-    config.max_acc = 5.0
-    config.kp = 5.0
-    config.kd = 2.0
+    # config.max_vel = 2.0
+    # config.max_acc = 5.0
+    config.k_p = 10.0
+    config.k_d = 4.0
+    config.kf_vel = 2.5
+    config.kf_acc = 0.3
     return config
 
 def get_min_jerk_config() -> ConfigDict:
@@ -184,6 +186,7 @@ def get_language_config() -> ConfigDict:
     config.file_path = 'language_cmd.json'  # Path to language configuration file, must in conf dir.
     config.task_id = 'make_coffee'
     config.sub_task_id = 0
+    config.auto_mode_start_sub_task_id = 0
     config.auto_mode = False  # If True, automatically switch language instructions based on probability threshold
     config.task_progress_threshold = 0.9  # Probability threshold for switching language instructions
     config.task_progress_win_size = 10 # Sliding window size to compute average task progress

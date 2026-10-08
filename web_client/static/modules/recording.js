@@ -1,13 +1,14 @@
 function syncRecordingSwitchUI() {
   const running = !!App.isRunning;
   const recording = !!App.isRecording;
+  const paused = !!App.isRecordingPaused;
   const btnStartStop = $('btn-recording-startstop');
   if (!btnStartStop) return;
-  const btnPauseResume = $('btn-recording-pauseresume');
-  if (!btnPauseResume) return;
+  // const btnPauseResume = $('btn-recording-pauseresume');
+  // if (!btnPauseResume) return;
 
   btnStartStop.disabled = !running;
-  btnPauseResume.disabled = !running || !recording
+  // btnPauseResume.disabled = !running || !recording
   
   // Update button text/icon/style based on recording status
   if (recording) {
@@ -17,19 +18,133 @@ function syncRecordingSwitchUI() {
     btnStartStop.innerHTML = '<i class="fas fa-play"></i> Start';
     btnStartStop.className = 'btn btn-sm btn-success';
   }
-  if (recording) {
-    btnPauseResume.innerHTML = '<i class="fas fa-play"></i> Resume';
-    btnPauseResume.className = 'btn btn-sm btn-success';
-  } else {
-    btnPauseResume.innerHTML = '<i class="fas fa-pause"></i> Pause';
-    btnPauseResume.className = 'btn btn-sm btn-danger';
+
+  syncRecordingTimerState({ running, recording, paused });
+
+  // if (recording) {
+  //   btnPauseResume.innerHTML = '<i class="fas fa-pause"></i> Pause';
+  //   btnPauseResume.className = 'btn btn-sm btn-danger';
+  // } else {
+  //   btnPauseResume.innerHTML = '<i class="fas fa-play"></i> Resume';
+  //   btnPauseResume.className = 'btn btn-sm btn-success';
+  // }
+}
+
+const RecordingTimer = {
+  elapsedMs: 0,
+  startedAtMs: null,
+  ticker: null,
+  status: 'stopped',
+};
+
+function _formatRecordingDuration(ms) {
+  const safeMs = Number.isFinite(ms) && ms > 0 ? ms : 0;
+  const totalSeconds = Math.floor(safeMs / 1000);
+  const mm = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+  const ss = String(totalSeconds % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
+function _currentRecordingElapsedMs() {
+  if (RecordingTimer.startedAtMs == null) return RecordingTimer.elapsedMs;
+  return RecordingTimer.elapsedMs + Math.max(0, Date.now() - RecordingTimer.startedAtMs);
+}
+
+function _clearRecordingTicker() {
+  if (!RecordingTimer.ticker) return;
+  clearInterval(RecordingTimer.ticker);
+  RecordingTimer.ticker = null;
+}
+
+function _startRecordingTicker() {
+  if (RecordingTimer.ticker) return;
+  RecordingTimer.ticker = setInterval(() => {
+    renderRecordingTimer();
+  }, 250);
+}
+
+function renderRecordingTimer() {
+  const timerEl = $('recording-timer');
+  const timeEl = $('recording-timer-time');
+  const statusEl = $('recording-timer-status');
+  if (!timerEl || !timeEl || !statusEl) return;
+
+  const elapsed = _currentRecordingElapsedMs();
+  timeEl.textContent = _formatRecordingDuration(elapsed);
+  statusEl.textContent = RecordingTimer.status;
+
+  timerEl.classList.remove('recording-timer-recording', 'recording-timer-paused', 'recording-timer-stopped');
+  timerEl.classList.add(`recording-timer-${RecordingTimer.status}`);
+}
+
+function setRecordingTimerStatus(status) {
+  const nextStatus = status === 'recording' || status === 'paused' ? status : 'stopped';
+  RecordingTimer.status = nextStatus;
+  renderRecordingTimer();
+}
+
+function startRecordingTimer({ reset = true } = {}) {
+  if (reset) {
+    RecordingTimer.elapsedMs = 0;
   }
+  RecordingTimer.startedAtMs = Date.now();
+  setRecordingTimerStatus('recording');
+  _startRecordingTicker();
+}
+
+function pauseRecordingTimer() {
+  if (RecordingTimer.startedAtMs != null) {
+    RecordingTimer.elapsedMs = _currentRecordingElapsedMs();
+    RecordingTimer.startedAtMs = null;
+  }
+  setRecordingTimerStatus('paused');
+  _clearRecordingTicker();
+}
+
+function resumeRecordingTimer() {
+  if (RecordingTimer.status !== 'paused') return;
+  RecordingTimer.startedAtMs = Date.now();
+  setRecordingTimerStatus('recording');
+  _startRecordingTicker();
+}
+
+function stopRecordingTimer({ reset = false } = {}) {
+  RecordingTimer.elapsedMs = _currentRecordingElapsedMs();
+  RecordingTimer.startedAtMs = null;
+  _clearRecordingTicker();
+  setRecordingTimerStatus('stopped');
+  if (reset) {
+    RecordingTimer.elapsedMs = 0;
+    renderRecordingTimer();
+  }
+}
+
+function syncRecordingTimerState({ running = !!App.isRunning, recording = !!App.isRecording, paused = !!App.isRecordingPaused } = {}) {
+  if (!running || !recording) {
+    stopRecordingTimer();
+    return;
+  }
+  if (paused) {
+    pauseRecordingTimer();
+    return;
+  }
+  if (RecordingTimer.status === 'paused') {
+    resumeRecordingTimer();
+    return;
+  }
+  if (RecordingTimer.startedAtMs == null) {
+    startRecordingTimer({ reset: false });
+  }
+}
+
+function initRecordingTimer() {
+  stopRecordingTimer({ reset: true });
 }
 
 function syncRecordingCheckboxesFromConfig(cfg = App.config) {
   const episodeChk = $('chk-record-episode');
   const evalLogChk = $('chk-record-eval-log');
-  const autoChk = $('chk-record-auto');
+  const autoCheckRecordMode = $('chk-record-auto');
   const expDataChk = $('chk-record-expdata');
   const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : null;
 
@@ -39,8 +154,8 @@ function syncRecordingCheckboxesFromConfig(cfg = App.config) {
   if (evalLogChk && recordCfg && typeof recordCfg.is_record_eval_log === 'boolean') {
     evalLogChk.checked = recordCfg.is_record_eval_log;
   }
-  if (autoChk && recordCfg && typeof recordCfg.auto === 'boolean') {
-    autoChk.checked = recordCfg.auto;
+  if (autoCheckRecordMode && recordCfg && typeof recordCfg.auto === 'boolean') {
+    autoCheckRecordMode.checked = recordCfg.auto;
   }
   if (expDataChk && recordCfg && typeof recordCfg.is_record_expe_data === 'boolean') {
     expDataChk.checked = recordCfg.is_record_expe_data;
@@ -86,20 +201,35 @@ function renderRecordingConfigTree(cfg = App.config) {
   syncRecordingSwitchUI();
 }
 
-function getRecordingSaveItems() {
-  const items = [];
-  if ($('chk-record-episode')?.checked) items.push('Episode');
-  // if ($('chk-record-expdata')?.checked) items.push('ExpData');
-  if ($('chk-record-eval-log')?.checked) items.push('Evaluation');
-  return items;
-}
+async function startDataRecording({} = {}) {
+  try {
+    const res = await apiFetch('/api/client/record/start', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
+    if (currentTaskDir) {
+      App.recordingTask = currentTaskDir;
+      App.recordingChunk = null;
+      App.recordingChunksSnapshot = [];
+    } 
 
-async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } = {}) {
-  if (!App.isRunning || !App.isRecording) {
-    syncRecordingSwitchUI();
+    App.isRecording = true;
+    App.isRecordingPaused = false;
+    if (!App.config || typeof App.config !== 'object') App.config = {};
+    if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
+    App.config.record.switch = true;
+    renderRecordingConfigTree(App.config);
+    await refreshRecordingFileList();
+    startRecordingTimer({ reset: true });
+    toast('Recording started.', 'ok');
+    return true;
+  } catch (_) { 
+    /* toasted */ 
     return false;
   }
-
+}
+async function stopDataRecording({ silent = false, refreshList = true } = {}) {
   try {
     if (!silent) toast('Recording stopping.', 'info');
     await apiFetch('/api/client/record/stop', {
@@ -108,14 +238,16 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
     });
 
     App.isRecording = false;
+    App.isRecordingPaused = false;
+    stopRecordingTimer();
     if (!App.config || typeof App.config !== 'object') App.config = {};
     if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
     App.config.record.switch = false;
 
     renderRecordingConfigTree(App.config);
-    if (!silent) toast('Recording stopped.', 'warn');
     if (refreshList) await refreshRecordingFileList();
     syncRecordingSwitchUI();
+    if (!silent) toast('Recording stopped.', 'warn');
     return true;
   } catch (_) {
     syncRecordingSwitchUI();
@@ -123,6 +255,41 @@ async function stopDataRecordingIfNeeded({ silent = false, refreshList = true } 
   }
 }
 
+async function pauseDataRecording({ silent = false, refreshList = true } = {}) {
+  try {
+    const res = await apiFetch('/api/client/record/pause', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    App.isRecordingPaused = true;
+    pauseRecordingTimer();
+    if (refreshList) await refreshRecordingFileList();
+    syncRecordingSwitchUI();
+    if (!silent) toast('Recording paused.', 'ok');
+    return true;
+  } catch (_) { 
+    /* toasted */ 
+    return false;
+  }
+}
+
+async function resumeDataRecording({ silent = false, refreshList = true } = {}) {
+  try {
+    const res = await apiFetch('/api/client/record/resume', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    });
+    App.isRecordingPaused = false;
+    resumeRecordingTimer();
+    if (refreshList) await refreshRecordingFileList();
+    syncRecordingSwitchUI();
+    if (!silent) toast('Recording resumed.', 'ok');
+    return true;
+  } catch (_) { 
+    /* toasted */ 
+    return false;
+  }
+}
 async function renderRecordingFileList(data) {
   const listEl = $('recording-file-list');
   const taskSel = $('recording-task-select');
@@ -132,10 +299,13 @@ async function renderRecordingFileList(data) {
   const episodes = Array.isArray(data?.episodes)
     ? data.episodes
     : (Array.isArray(data?.files) ? data.files : []);
+  const evalResults = Array.isArray(data?.eval_results) ? data.eval_results : [];
   const tasks = Array.isArray(data?.tasks) ? data.tasks : [];
   const chunks = Array.isArray(data?.chunks) ? data.chunks : [];
   const serverSelectedTask = typeof data?.selected_task === 'string' ? data.selected_task : '';
   const serverSelectedChunk = typeof data?.selected_chunk === 'string' ? data.selected_chunk : '';
+
+  renderEvaluationResults(evalResults);
 
   if (taskSel) {
     const prevTasks = Array.isArray(App.recordingTasksSnapshot) ? App.recordingTasksSnapshot : [];
@@ -260,9 +430,228 @@ async function renderRecordingFileList(data) {
   });
 }
 
+function getEvaluationScoreOptions() {
+  const fromRecord = App?.config?.record?.evaluation?.scores;
+  const fromRoot = App?.config?.evaluation?.scores;
+  const scores = Array.isArray(fromRecord) ? fromRecord : (Array.isArray(fromRoot) ? fromRoot : []);
+  return scores.filter(v => v !== null && v !== undefined && v !== '');
+}
+
+async function updateEvaluationScore(recordId, score) {
+  if (!App.recordingTask) return;
+  await apiFetch('/api/client/record/eval/score', {
+    method: 'POST',
+    body: JSON.stringify({
+      task: App.recordingTask,
+      record_id: Number(recordId),
+      score: score,
+    }),
+  });
+}
+
+async function updateEvaluationNote(recordId, note) {
+  // Reserved for future backend API integration.
+  if (!App.recordingTask) return;
+  await apiFetch('/api/client/record/eval/note', {
+    method: 'POST',
+    body: JSON.stringify({
+      task: App.recordingTask,
+      record_id: Number(recordId),
+      note: note,
+    }),
+  });
+}
+
+function renderEvaluationResults(evalResults = []) {
+  const tbody = $('eval-log-tbody');
+  const countEl = $('eval-log-count');
+  if (!tbody) return;
+
+  const list = Array.isArray(evalResults) ? evalResults.slice() : [];
+  list.sort((a, b) => Number(b?.id ?? -1) - Number(a?.id ?? -1));
+  App.evalResultsSnapshot = list.map(item => ({ ...(item || {}) }));
+
+  if (countEl) countEl.textContent = String(list.length);
+
+  if (!list.length) {
+    App.evalResultSnapshot = [];
+    App.evalResultActiveId = null;
+    tbody.innerHTML = '<tr><td colspan="6" class="eval-log-empty">(empty)</td></tr>';
+    return;
+  }
+
+  const esc = (val) => String(val ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+  const escAttr = (val) => esc(val).replaceAll('"', '&quot;');
+  const scoreOptions = getEvaluationScoreOptions();
+
+  const recordIds = list
+    .map(item => String(item?.id ?? ''))
+    .filter(Boolean);
+  const prevRecordIds = Array.isArray(App.evalResultSnapshot) ? App.evalResultSnapshot : [];
+  const prevRecordSet = new Set(prevRecordIds);
+  const addedRecordIds = recordIds.filter(id => !prevRecordSet.has(id));
+
+  let activeRecordId = App.evalResultActiveId;
+  if (addedRecordIds.length > 0) {
+    activeRecordId = addedRecordIds[0];
+  } else if (!recordIds.includes(String(activeRecordId ?? ''))) {
+    activeRecordId = recordIds[0] || null;
+  }
+  activeRecordId = activeRecordId ? String(activeRecordId) : null;
+  App.evalResultActiveId = activeRecordId;
+  App.evalResultSnapshot = recordIds;
+
+  tbody.innerHTML = list.map((item) => {
+    const idNum = Number(item?.id ?? -1);
+    const id = String(idNum);
+    const subTask = item?.sub_task_id ?? '';
+    const durationNum = Number(item?.duration);
+    const duration = Number.isFinite(durationNum) ? durationNum.toFixed(1) : '';
+    const note = item?.note ?? '';
+    const currentScore = (item?.score === null || item?.score === undefined) ? '' : String(item.score);
+    const activeCls = id === activeRecordId ? ' active' : '';
+    const scoreOptionsHtml = ['<option value=""></option>']
+      .concat(scoreOptions.map((opt) => {
+        const val = String(opt);
+        const selected = val === currentScore ? ' selected' : '';
+        return `<option value="${escAttr(val)}"${selected}>${esc(val)}</option>`;
+      }))
+      .join('');
+
+    return `
+      <tr class="eval-log-row${activeCls}" data-record-id="${escAttr(id)}">
+        <td class="col-id">${esc(id)}</td>
+        <td class="col-task">${esc(subTask)}</td>
+        <td class="col-dur">${esc(duration)}s</td>
+        <td class="col-score"><select class="eval-log-score-sel" data-record-id="${escAttr(id)}">${scoreOptionsHtml}</select></td>
+        <td class="col-note"><input class="eval-log-note-input" data-record-id="${escAttr(id)}" value="${escAttr(note)}" placeholder="Add note" /></td>
+        <td class="col-del"><button class="eval-log-del-btn" data-record-id="${escAttr(id)}" title="Delete evaluation result" aria-label="Delete evaluation result"><svg class="recording-file-item-delete-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-1 6h2v9H8V9zm4 0h2v9h-2V9zm4 0h2v9h-2V9z"/></svg></button></td>
+      </tr>
+    `;
+  }).join('');
+
+  const setActiveEvalRecord = (recordId, row = null) => {
+    const targetId = String(recordId ?? '').trim();
+    if (!targetId) return;
+    App.evalResultActiveId = targetId;
+
+    tbody.querySelectorAll('.eval-log-row.active').forEach(node => node.classList.remove('active'));
+    const target = row || tbody.querySelector(`.eval-log-row[data-record-id="${CSS.escape(targetId)}"]`);
+    if (target) target.classList.add('active');
+  };
+
+  tbody.querySelectorAll('.eval-log-row[data-record-id]').forEach((row) => {
+    row.addEventListener('click', () => {
+      const id = row.getAttribute('data-record-id') || '';
+      setActiveEvalRecord(id, row);
+    });
+  });
+
+  tbody.querySelectorAll('.eval-log-score-sel[data-record-id]').forEach((sel) => {
+    sel.addEventListener('focus', () => {
+      const row = sel.closest('.eval-log-row');
+      if (!row) return;
+      const id = row.getAttribute('data-record-id') || '';
+      setActiveEvalRecord(id, row);
+    });
+
+    sel.addEventListener('change', async () => {
+      const recordId = Number(sel.getAttribute('data-record-id'));
+      if (!Number.isFinite(recordId)) return;
+
+      const raw = sel.value;
+      const score = raw === '' ? null : Number(raw);
+      if (raw !== '' && !Number.isFinite(score)) {
+        toast('Invalid score value.', 'warn');
+        await refreshRecordingFileList();
+        return;
+      }
+
+      sel.disabled = true;
+      try {
+        await updateEvaluationScore(recordId, score);
+      } catch (_) {
+      } finally {
+        sel.disabled = false;
+        await refreshRecordingFileList();
+      }
+    });
+  });
+
+  tbody.querySelectorAll('.eval-log-note-input[data-record-id]').forEach((input) => {
+    let currentValue = String(input.value || '');
+
+    input.addEventListener('focus', () => {
+      const row = input.closest('.eval-log-row');
+      if (!row) return;
+      const id = row.getAttribute('data-record-id') || '';
+      setActiveEvalRecord(id, row);
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      input.blur();
+    });
+
+    input.addEventListener('change', async () => {
+      const recordId = Number(input.getAttribute('data-record-id'));
+      if (!Number.isFinite(recordId)) return;
+
+      const nextValue = String(input.value ?? '');
+      if (nextValue === currentValue) return;
+
+      input.disabled = true;
+      try {
+        await updateEvaluationNote(recordId, nextValue);
+        currentValue = nextValue;
+      } catch (_) {
+        // Reserved: backend not connected yet.
+      } finally {
+        await refreshRecordingFileList();
+        input.disabled = false;
+      }
+    });
+  });
+
+  tbody.querySelectorAll('.eval-log-del-btn[data-record-id]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const recordId = Number(btn.getAttribute('data-record-id'));
+      if (!Number.isFinite(recordId)) return;
+      const row = btn.closest('.eval-log-row');
+      if (row) {
+        const id = row.getAttribute('data-record-id') || '';
+        setActiveEvalRecord(id, row);
+      }
+      await deleteEvaluationResult(recordId);
+    });
+  });
+}
+
+async function deleteEvaluationResult(recordId) {
+  const validRecordId = Number(recordId);
+  if (!App.recordingTask || !Number.isFinite(validRecordId)) return;
+  const ok = window.confirm(`Delete Evaluation Record ${validRecordId} ? This cannot be undone.`);
+  if (!ok) return;
+
+  try {
+    await apiFetch('/api/client/record/delete', {
+      method: 'DELETE',
+      body: JSON.stringify({ task: App.recordingTask, record_id: validRecordId }),
+    });
+    await refreshRecordingFileList();
+    toast(`Deleted record ${validRecordId}.`, 'ok', 1800);
+  } catch (_) { /* toasted */ }
+}
+
 async function deleteRecordingEpisode(episodeId) {
   if (!App.recordingTask || !episodeId) return;
-  const ok = window.confirm(`Delete ${episodeId} ? This cannot be undone.`);
+  const ok = window.confirm(`Delete LeRobot Episode ${episodeId} ? This cannot be undone.`);
   if (!ok) return;
 
   try {
@@ -271,8 +660,8 @@ async function deleteRecordingEpisode(episodeId) {
       body: JSON.stringify({ task: App.recordingTask, episode_id: episodeId }),
     });
     if (App.recordingEpisodeId === episodeId) App.recordingEpisodeId = null;
-    toast(`Deleted ${episodeId}.`, 'ok', 1800);
     await refreshRecordingFileList();
+    toast(`Deleted ${episodeId}.`, 'ok', 1800);
   } catch (_) { /* toasted */ }
 }
 
@@ -287,16 +676,6 @@ async function refreshRecordingFileList() {
     const q = params.toString();
     const res = await apiFetch(`/api/client/record/episodes${q ? `?${q}` : ''}`);
     renderRecordingFileList(res);
-
-    const changed = ((App.recordingTask || '') !== (requestedTask || '')) || ((App.recordingChunk || '') !== (requestedChunk || ''));
-    if (changed) {
-      const params2 = new URLSearchParams();
-      if (App.recordingTask) params2.set('task', App.recordingTask);
-      if (App.recordingChunk) params2.set('chunk', App.recordingChunk);
-      const q2 = params2.toString();
-      const res2 = await apiFetch(`/api/client/record/episodes${q2 ? `?${q2}` : ''}`);
-      renderRecordingFileList(res2);
-    }
   } catch (_) { /* toasted */ }
 }
 
@@ -323,9 +702,9 @@ function startRecordingFileListPolling() {
 function syncRecordingFileListPolling() {
   if (isRecordingPanelExpanded()) {
     refreshRecordingFileList();
-    startRecordingFileListPolling();
+    // startRecordingFileListPolling();
   } else {
-    stopRecordingFileListPolling();
+    // stopRecordingFileListPolling();
   }
 }
 
@@ -432,47 +811,26 @@ async function setRecordSwitch(enable) {
 }
 
 function setupRecordingPanel() {
+  initRecordingTimer();
+
   // Handle the unified start/stop button
   const startStopBtn = $('btn-recording-startstop');
   if (startStopBtn) {
     startStopBtn.addEventListener('click', async function() {
+      // console.log('Data recording button clicked.');
       if (!App.isRunning) {
         toast('Client is not running.', 'warn');
         syncRecordingSwitchUI();
         return;
       }
 
+      // console.log('Data recording button working.');
       if (App.isRecording) {
         // Stop recording
-        await stopDataRecordingIfNeeded({ silent: false, refreshList: true });
+        await stopDataRecording({ silent: false, refreshList: true });
       } else {
         // Start recording
-        const saveItems = getRecordingSaveItems();
-        try {
-          const res = await apiFetch('/api/client/record/start', {
-            method: 'POST',
-            body: JSON.stringify({ save_items: saveItems }),
-          });
-          const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
-          const currentTask = typeof res?.recording_task === 'string' ? res.recording_task : '';
-          if (currentTaskDir) {
-            App.recordingTask = currentTaskDir;
-            App.recordingChunk = null;
-            App.recordingChunksSnapshot = [];
-          } else if (currentTask) {
-            App.recordingTask = currentTask;
-            App.recordingChunk = null;
-            App.recordingChunksSnapshot = [];
-          }
-
-          App.isRecording = true;
-          if (!App.config || typeof App.config !== 'object') App.config = {};
-          if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
-          App.config.record.switch = true;
-          renderRecordingConfigTree(App.config);
-          await refreshRecordingFileList();
-          toast('Recording started.', 'ok');
-        } catch (_) { /* toasted */ }
+        await startDataRecording();
       }
       syncRecordingSwitchUI();
     });
@@ -527,13 +885,28 @@ document.addEventListener('DOMContentLoaded', function() {
   // Restore checkbox states from config and keep UI in sync
   const episodeChk = $('chk-record-episode');
   const evallogChk = $('chk-record-eval-log');
-  const autoChk = $('chk-record-auto');
+  const autoCheckRecordMode = $('chk-record-auto');
   const expDataChk = $('chk-record-expdata');
+
+  const getCoreRecordCheckboxes = () => [evallogChk, episodeChk, expDataChk].filter(Boolean);
+  const ensureCoreRecordCheckboxesValid = (changedChk) => {
+    if (!changedChk || changedChk.checked) return true;
+    const checkedCount = getCoreRecordCheckboxes().filter(chk => !!chk.checked).length;
+    if (checkedCount > 0) return true;
+
+    changedChk.checked = true;
+    if (changedChk === evallogChk && typeof setEvalLogEnabled === 'function') {
+      setEvalLogEnabled(true);
+    }
+    toast('At least chooses one of EvalLog、LeRobot、ExpeData', 'warn')
+    return false;
+  };
 
   syncRecordingCheckboxesFromConfig(App.config);
 
   if (episodeChk) {
     episodeChk.addEventListener('change', async () => {
+      if (!ensureCoreRecordCheckboxesValid(episodeChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
@@ -553,11 +926,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (evallogChk) {
     evallogChk.addEventListener('change', async () => {
+      if (!ensureCoreRecordCheckboxesValid(evallogChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
       const previousValue = !!App.config.record.is_record_eval_log;
       App.config.record.is_record_eval_log = evallogChk.checked;
+      if (typeof setEvalLogEnabled === 'function') {
+        setEvalLogEnabled(!!evallogChk.checked);
+      }
 
       try {
         await persistRecordingConfigChange({ 'record.is_record_eval_log': evallogChk.checked });
@@ -570,19 +947,19 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  if (autoChk) {
-    autoChk.addEventListener('change', async () => {
+  if (autoCheckRecordMode) {
+    autoCheckRecordMode.addEventListener('change', async () => {
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
       const previousValue = !!App.config.record.auto;
-      App.config.record.auto = autoChk.checked;
+      App.config.record.auto = autoCheckRecordMode.checked;
 
       try {
-        await persistRecordingConfigChange({ 'record.auto': autoChk.checked });
+        await persistRecordingConfigChange({ 'record.auto': autoCheckRecordMode.checked });
       } catch (e) {
         App.config.record.auto = previousValue;
-        autoChk.checked = previousValue;
+        autoCheckRecordMode.checked = previousValue;
         syncRecordingCheckboxesFromConfig(App.config);
         console.error('Failed to update auto config:', e);
       }
@@ -591,6 +968,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (expDataChk) {
     expDataChk.addEventListener('change', async () => {
+      if (!ensureCoreRecordCheckboxesValid(expDataChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
@@ -608,18 +986,18 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  $('btn-log-clear')?.addEventListener('click', () => {
-    if (typeof ExecLog === 'undefined') return;
-    if (!confirm('Clear all execution log records?')) return;
-    ExecLog.records = [];
-    ExecLog._nextId = 1;
-    if (typeof saveExecLogToStorage === 'function') saveExecLogToStorage();
-    if (typeof renderExecLog === 'function') renderExecLog();
-    if (typeof _updateScoreRow === 'function') _updateScoreRow();
-  });
+  // $('btn-log-clear')?.addEventListener('click', () => {
+  //   if (typeof ExecLog === 'undefined') return;
+  //   if (!confirm('Clear all execution log records?')) return;
+  //   ExecLog.records = [];
+  //   ExecLog._nextId = 1;
+  //   if (typeof saveExecLogToStorage === 'function') saveExecLogToStorage();
+  //   if (typeof renderExecLog === 'function') renderExecLog();
+  //   if (typeof _updateScoreRow === 'function') _updateScoreRow();
+  // });
 
   // Init: restore from localStorage
-  if (typeof loadExecLogFromStorage === 'function') loadExecLogFromStorage();
+  // if (typeof loadExecLogFromStorage === 'function') loadExecLogFromStorage();
   
   // Set initial state without triggering auto-start
   // if (execlogChk) {
@@ -627,8 +1005,8 @@ document.addEventListener('DOMContentLoaded', function() {
   //   toggleExecLog(ExecLog.enabled);
   // }
   
-  if (typeof renderExecLog === 'function') renderExecLog();
-  if (typeof syncExecLogRecButton === 'function') syncExecLogRecButton();
+  // if (typeof renderExecLog === 'function') renderExecLog();
+  // if (typeof syncExecLogRecButton === 'function') syncExecLogRecButton();
 
   // Initialization complete - allow new records to be created after a short delay
   // setTimeout(() => {
@@ -636,11 +1014,11 @@ document.addEventListener('DOMContentLoaded', function() {
   // }, 500);
 
   // On page unload, finalize any running record
-  window.addEventListener('beforeunload', () => {
-    if (typeof ExecLog === 'undefined') return;
-    const running = ExecLog.records.find(r => r.status === 'running');
-    if (!running) return;
-    _finalizeRunningRecord('interrupted');
-    saveExecLogToStorage();
-  });
+  // window.addEventListener('beforeunload', () => {
+  //   if (typeof ExecLog === 'undefined') return;
+  //   const running = ExecLog.records.find(r => r.status === 'running');
+  //   if (!running) return;
+  //   _finalizeRunningRecord('interrupted');
+  //   saveExecLogToStorage();
+  // });
 });

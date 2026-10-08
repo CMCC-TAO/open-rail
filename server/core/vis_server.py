@@ -56,6 +56,10 @@ class VISServer:
 
                     decoded_images = []
                     for key, img_bytes in images_data:
+                        if isinstance(img_bytes, (bytes, bytearray, memoryview)):
+                            img_bytes = np.frombuffer(img_bytes, dtype=np.uint8)
+                        elif not isinstance(img_bytes, np.ndarray):
+                            img_bytes = np.asarray(img_bytes, dtype=np.uint8)
                         img = cv2.imdecode(
                             img_bytes,
                             cv2.IMREAD_ANYDEPTH if "depth." in key else cv2.IMREAD_COLOR

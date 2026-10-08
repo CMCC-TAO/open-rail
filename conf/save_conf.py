@@ -30,12 +30,13 @@ def get_record_data_config() -> ConfigDict:
     # Evaluation info
     config.evaluation = ConfigDict(allow_dotted_keys=True)
     # Evaluation
-    config.evaluation.log_format = "json"  # Evaluation log save format: json | csv | both
+    # only support json to record model info into meta
+    # config.evaluation.log_format = "json"  # Evaluation log save format: json | csv | both
     config.evaluation.scores = [0, 0.5, 1]  # Score options for evaluation log scoring buttons
     # LeRobot metadata (metadata)
     config.lerobot = ConfigDict(allow_dotted_keys=True)
     config.lerobot.codebase_version = "v2.1"
-    config.lerobot.robot_type = "a2d"  # Type of robot used
+    config.lerobot.robot_type = "agibot_g1"
 
     # Data statistics (initialized to 0)
     config.lerobot.total_episodes = 0

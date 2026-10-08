@@ -155,7 +155,7 @@ def parse_args():
     parser.add_argument('--show_action_state', action='store_true', help='Show action and state visualization')
     parser.add_argument('--show_action_cams', action='store_true', help='Show action and camera images visualization')
     parser.add_argument('--record', action='store_true', help='Enable recording mode')
-    parser.add_argument('--robots_type', type=str, choices=['a2d', 'mock'], help='Robot type')
+    parser.add_argument('--robots_type', type=str, choices=['agibot_g1', 'mock'], help='Robot type')
     parser.add_argument('--task_progress_threshold', type=float, help='Probability threshold for switching language instructions')
     parser.add_argument('--preprocess', type=str, choices=['crop_and_resize', 'pad_and_resize', 'resize', 'none'], help='Image preprocessing method')
     parser.add_argument('--preprocess_size', nargs='+', type=int, help='Image preprocessing target size [height, width]')

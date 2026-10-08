@@ -244,38 +244,41 @@ class VLAWebSocketServer:
             await self.unregister_client(client)
     
     async def send_chart_data(self):
-        """发送图表数据"""
+        """发送图表数据（批量单消息）"""
         if not self.clients or not self.data_send_queue:
             return
         now = time.time()
         if now - self._last_chart_send_ts < self.chart_send_interval:
             return
         self._last_chart_send_ts = now
-        
+
         disconnected_clients = set()
-        
+
         # 获取待发送的数据
         with self.data_lock:
-            data_to_send = self.data_send_queue.copy()
+            data_to_send = list(self.data_send_queue)
             self.data_send_queue.clear()
-        
-        # 发送数据
-        for data_packet in data_to_send:
-            message = {
-                'type': 'joint_data',
-                'data': data_packet
-            }
-            message_json = json.dumps(message)
-            
-            for client in self.clients.copy():
-                try:
-                    await client.send(message_json)
-                except websockets.exceptions.ConnectionClosed:
-                    disconnected_clients.add(client)
-                except Exception as e:
-                    print(f"发送图表数据失败: {e}")
-                    disconnected_clients.add(client)
-        
+
+        if not data_to_send:
+            return
+
+        message_json = json.dumps({
+            'type': 'joint_data_batch',
+            'data': data_to_send,
+            'count': len(data_to_send),
+            'timestamp': time.time()
+        })
+
+        # 批量数据一次发送
+        for client in self.clients.copy():
+            try:
+                await client.send(message_json)
+            except websockets.exceptions.ConnectionClosed:
+                disconnected_clients.add(client)
+            except Exception as e:
+                print(f"发送图表批量数据失败: {e}")
+                disconnected_clients.add(client)
+
         # 清理断开的客户端
         for client in disconnected_clients:
             await self.unregister_client(client)

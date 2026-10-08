@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+title: OPEN-RAIL
+message: "If you use this software, please cite it as follows."
+type: software
+authors:
+  - family-names: Zhao
+    given-names: Yongsheng
+  - family-names: Zhao
+    given-names: Lei
+  - family-names: Cheng
+    given-names: Baoping
+  - family-names: Yao
+    given-names: Gongxin
+  - family-names: Wen
+    given-names: Xuanzhang
+  - family-names: Gao
+    given-names: Han
+repository-code: "https://github.com/CMCC-TAO/open-rail"
+url: "https://arxiv.org/abs/2512.24673"
+license: Apache-2.0
+preferred-citation:
+  type: article
+  title: "VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots"
+  authors:
+    - family-names: Zhao
+      given-names: Yongsheng
+    - family-names: Zhao
+      given-names: Lei
+    - family-names: Cheng
+      given-names: Baoping
+    - family-names: Yao
+      given-names: Gongxin
+    - family-names: Wen
+      given-names: Xuanzhang
+    - family-names: Gao
+      given-names: Han
+  year: 2025
+  archive: arXiv
+  identifiers:
+    - type: arxiv
+      value: "2512.24673"

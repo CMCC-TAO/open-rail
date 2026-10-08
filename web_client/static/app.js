@@ -21,7 +21,7 @@ function renderStats(data) {
   $('val-net-latency').textContent   = data.avg_comm_time != null
     ? (data.avg_comm_time * 1000).toFixed(1) + ' ms' : '–';
 
-  updateTaskProgress(data?.current_prob_progress ?? data?.info_act?.current_prob_progress, data?.sub_task_id);
+  updateTaskProgress(data?.current_prob_progress, data?.sub_task_id, data?.task_finished, data?.sub_task_finished);
 
   const cpuVal = Number(data.cpu_usage);
   const gpuVal = Number(data.gpu_usage);
@@ -52,9 +52,9 @@ function renderStats(data) {
   // Update ZMQ info panel with data from the server
   updateZmqInfoPanel(data);
   // Update ZMQ indicator based on zmq_connected status from server
-  if (typeof data.zmq_connected !== 'undefined') {
-    updateZMQIndicator(!!data.zmq_connected);
-  }
+  // if (typeof data.zmq_connected !== 'undefined') {
+  updateZMQIndicator(!!data.zmq_connected);
+  // }
 
 }
 
@@ -102,7 +102,7 @@ function renderKV(containerId, obj) {
 }
 
 
-function updateTaskProgress(rawProgress, subTaskId = null) {
+async function updateTaskProgress(rawProgress, subTaskId = null, taskFinished = false, subTaskFinished = false) {
   const fillEl = $('task-progress-fill');
   const valueEl = $('task-progress-value');
   if (!fillEl || !valueEl) return;
@@ -111,7 +111,6 @@ function updateTaskProgress(rawProgress, subTaskId = null) {
   if (!Number.isFinite(parsed)) {
     fillEl.style.width = '0%';
     valueEl.textContent = '--';
-    // App.langAuto.lastProgress = null;
     return;
   }
 
@@ -119,132 +118,84 @@ function updateTaskProgress(rawProgress, subTaskId = null) {
   fillEl.style.width = `${(clamped * 100).toFixed(1)}%`;
   valueEl.textContent = `${(clamped * 100).toFixed(1)}%`;
   renderSubTask(subTaskId);
-  handleAutoModeCompletion(clamped, subTaskId);
+  handleTaskCompletion(taskFinished);
+  handleSubTaskRecordingRefresh(subTaskFinished);
 }
 
-async function handleAutoModeCompletion(progress, subTaskId = null) {
-  const autoChk = $('chk-lang-auto-mode');
-  if (!autoChk || !autoChk.checked) return;
-  if (!App.isRunning || App.isPaused) return;
+async function handleSubTaskRecordingRefresh(subTaskFinished = false) {
+  // Log subTaskFinished right at the beginning
+  // console.log('handleSubTaskRecordingRefresh - subTaskFinished:', subTaskFinished);
 
-  if (!App.langAuto || typeof App.langAuto !== 'object') App.langAuto = {};
-  if (App.langAuto.completionInFlight) return;
+  if (!subTaskFinished) return;
 
-  const taskSel = $('lang-task-select');
-  const taskName = taskSel ? taskSel.value : null;
-  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  if (!Array.isArray(subtasks) || subtasks.length === 0) return;
+  const panelExpanded = (typeof isRecordingPanelExpanded === 'function')
+    ? isRecordingPanelExpanded()
+    : (() => {
+        const body = $('recording-body');
+        return !!body && !body.classList.contains('collapsed');
+      })();
+  
+  // Log panelExpanded after it is evaluated
+  // console.log('handleSubTaskRecordingRefresh - panelExpanded:', panelExpanded);
 
-  const latestSubTaskId = Number(subTaskId);
-  if (!Number.isFinite(latestSubTaskId)) return;
+  if (!panelExpanded || typeof refreshRecordingFileList !== 'function') return;
 
-  const lastSubTaskId = subtasks.length - 1;
-  const thresholdRaw = App.config && App.config.language ? App.config.language.task_progress_threshold : 0.9;
-  const threshold = Number.isFinite(Number(thresholdRaw)) ? Number(thresholdRaw) : 0.9;
-
-  if (latestSubTaskId !== lastSubTaskId || progress < threshold) return;
-
-  App.langAuto.completionInFlight = true;
   try {
-    const patch = { 'language.sub_task_id': 0 };
-    const patchRes = await apiFetch('/api/client/config/patch', {
-      method: 'POST',
-      body: JSON.stringify({ patch }),
-    });
-    App.config = patchRes.config || App.config;
+    await refreshRecordingFileList();
+  } catch (_) {
+    // no-op: apiFetch already handles toasts
+  }
+}
 
-    const confRes = await apiFetch('/api/client/config/path');
-    if (confRes.path) {
-      await apiFetch('/api/client/config/save', {
-        method: 'POST',
-        body: JSON.stringify({ path: confRes.path }),
-      });
+async function handleTaskCompletion(taskFinished = false) {
+  const autoCheckLangMode = $('chk-lang-auto-mode');
+  if (!autoCheckLangMode || !autoCheckLangMode.checked) return;
+  if (!App.isRunning || App.isPaused) return;
+  if (!taskFinished) return;
+
+  try {
+    if (App.isRecording) {
+      // Stop recording
+      await stopDataRecording({ silent: false, refreshList: true });
     }
-
-    if (typeof applyLangConfigSelection === 'function') {
-      applyLangConfigSelection(true);
-    }
-
     await apiFetch('/api/client/pause', {
       method: 'POST',
       timeoutMs: 3000,
       suppressAbortToast: true,
     });
 
-    toast('Auto Mode reached last sub-task, reset to 0 and paused.', 'info', 2600);
+    toast('Task finished, reset and paused.', 'info', 2600);
   } catch (_) {
     // no-op: apiFetch already handles toasts
   } finally {
-    App.langAuto.completionInFlight = false;
   }
 }
 
 async function renderSubTask(subTaskId = null) {
-  // console.log('renderSubTask called', { subTaskId });
+  const autoCheckLangMode = $('chk-lang-auto-mode');
+  if (!autoCheckLangMode || !autoCheckLangMode.checked) return;
+  if (subTaskId === null || subTaskId === undefined) return;
 
-  const autoChk = $('chk-lang-auto-mode');
-  if (!autoChk || !autoChk.checked) {
-    // console.log('renderSubTask skipped: auto mode disabled or checkbox not found');
-    return;
-  }
-
-  if (subTaskId === null || subTaskId === undefined) {
-    // console.log('renderSubTask skipped: no subTaskId provided');
-    return;
-  }
-
-  const taskSel = $('lang-task-select');
   const subtaskSel = $('lang-subtask-select');
-  const textEl = $('lang-cmd-text');
-  if (!taskSel || !subtaskSel || !textEl) {
-    // console.warn('renderSubTask aborted: missing DOM elements', { taskSel, subtaskSel, textEl });
-    return;
-  }
-
-  const taskName = taskSel.value;
-  const subtasks = (taskName && LangCmd.tasks[taskName]) ? LangCmd.tasks[taskName] : [];
-  if (!Array.isArray(subtasks) || subtasks.length === 0) {
-    // console.warn('renderSubTask aborted: no subtasks available', { taskName, subtasks });
-    return;
-  }
+  if (!subtaskSel) return;
 
   const targetIdx = Number(subTaskId);
   if (!Number.isFinite(targetIdx)) return;
 
   let curIdx = parseInt(subtaskSel.value, 10);
   if (!Number.isFinite(curIdx) || curIdx < 0) curIdx = 0;
-
-  if (targetIdx < 0 || targetIdx >= subtasks.length) {
-    console.warn('renderSubTask aborted: subTaskId out of range', { subTaskId: targetIdx, length: subtasks.length });
-    return;
-  }
+  if (targetIdx === curIdx) return;
 
   const appliedTaskIdRaw = App.config && App.config.language ? App.config.language.task_id : null;
   const appliedTaskId = appliedTaskIdRaw == null ? null : String(appliedTaskIdRaw);
 
-  if (!App.config || typeof App.config !== 'object') App.config = {};
-  if (!App.config.language || typeof App.config.language !== 'object') App.config.language = {};
   App.config.language.sub_task_id = targetIdx;
 
   if (typeof refreshLangAppliedMarkers === 'function') {
-    const markerTaskId = appliedTaskId != null ? appliedTaskId : taskName;
-    refreshLangAppliedMarkers(markerTaskId, targetIdx);
+    refreshLangAppliedMarkers(appliedTaskId, targetIdx);
   }
-
-  if (targetIdx === curIdx) {
-    // console.log('renderSubTask no-op: target subTaskId equals current', { targetIdx, curIdx });
-    return;
-  }
-
-  // console.log('renderSubTask switching subtask', { from: curIdx, to: targetIdx, taskName, subtaskText: subtasks[targetIdx] });
   subtaskSel.value = String(targetIdx);
   subtaskSel.dispatchEvent(new Event('change'));
-
-  const lang = subtasks[targetIdx];
-  if (typeof lang === 'string' && lang.trim()) {
-    textEl.value = lang;
-    await sendLanguageSet(lang);
-  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -356,6 +307,7 @@ function setRunningUI(running, paused = false) {
 
     if (!running) {
       App.isRecording = false;
+      App.isRecordingPaused = false;
     }
     syncRecordingSwitchUI();
   }
@@ -368,7 +320,7 @@ function setRunningUI(running, paused = false) {
 function isRuntimeShortcutTypingTarget(el) {
   if (!el) return false;
   const tag = (el.tagName || '').toLowerCase();
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+  return tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || tag === 'a' || el.isContentEditable;
 }
 
 function clickButtonIfReady(id) {
@@ -379,7 +331,7 @@ function clickButtonIfReady(id) {
 
 function setupRuntimeShortcuts() {
   document.addEventListener('keydown', (e) => {
-    if (e.repeat || isRuntimeShortcutTypingTarget(e.target)) return;
+    if (e.repeat || isRuntimeShortcutTypingTarget(e.target) || !$('shortcuts-popover').classList.contains('hidden')) return;
 
     const key = e.key.toLowerCase();
     const isSpace = e.code === 'Space' || key === ' ';
@@ -398,6 +350,34 @@ function setupRuntimeShortcuts() {
     if (key === 'r' && e.shiftKey) {
       e.preventDefault();
       clickButtonIfReady('btn-reset');
+    }
+  });
+}
+
+function setupShortcutHelp() {
+  const trigger = $('btn-shortcuts');
+  const popover = $('shortcuts-popover');
+  const close = $('btn-shortcuts-close');
+
+  function hide(restoreFocus = false) {
+    popover.classList.add('hidden');
+    trigger.setAttribute('aria-expanded', 'false');
+    if (restoreFocus) trigger.focus();
+  }
+
+  trigger.addEventListener('click', () => {
+    const opening = popover.classList.contains('hidden');
+    popover.classList.toggle('hidden', !opening);
+    trigger.setAttribute('aria-expanded', String(opening));
+  });
+  close.addEventListener('click', () => hide(true));
+  document.addEventListener('click', (e) => {
+    if (!popover.classList.contains('hidden') && !popover.contains(e.target) && e.target !== trigger) hide();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !popover.classList.contains('hidden')) {
+      e.preventDefault();
+      hide(true);
     }
   });
 }
@@ -479,6 +459,7 @@ async function wireEvents() {
       if (!selectedFile) return;
       
       try {
+        toast(`Loading ${selectedFile}.`, 'ok');
         const res = await apiFetch('/api/client/config/load', { 
           method: 'POST', 
           body: JSON.stringify({ path: selectedFile }) 
@@ -489,7 +470,6 @@ async function wireEvents() {
         renderConfigTree(App.config);
         renderRecordingConfigTree(App.config);
         await loadDefaultLangFile();
-        applyLangConfigSelection();
         applyVisualConfig(App.config);
         const confRes = await apiFetch('/api/client/config/path', { 
           method: 'POST', 
@@ -541,8 +521,6 @@ async function wireEvents() {
       clearPending();
       renderConfigTree(App.config);
       renderRecordingConfigTree(App.config);
-      await loadDefaultLangFile();
-      applyLangConfigSelection();
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
@@ -578,9 +556,11 @@ async function wireEvents() {
   $('btn-start').addEventListener('click', async () => {
     const btnStart = $('btn-start');
     const btnPause = $('btn-pause');
-    
+
     // Prevent duplicate rapid clicks
-    if (btnStart.dataset.pending === '1') return;
+    if (btnStart.dataset.pending === '1') {
+      return;
+    }
     btnStart.dataset.pending = '1';
     btnStart.disabled = true;
     if (btnPause) btnPause.disabled = true;
@@ -591,8 +571,8 @@ async function wireEvents() {
         const prevPaused = App.isPaused;
 
         // If data recording is active, stop recording first.
-        if (App.isRecording && typeof stopDataRecordingIfNeeded === 'function') {
-          await stopDataRecordingIfNeeded({ silent: false, refreshList: false });
+        if (App.isRecording && typeof stopDataRecording === 'function') {
+          await stopDataRecording({ silent: false, refreshList: true });
         }
 
         setRunningUI(false, false);
@@ -604,14 +584,16 @@ async function wireEvents() {
         finally {
           try {
             const json = await apiFetch('/api/client/status', { timeoutMs: 3000, suppressToast: true });
-            if (json && json.data) renderStats(json.data);
-          } catch (e) { /* ignore */ }
+            if (json && json.data) {
+              renderStats(json.data);
+            }
+          } catch (e) {
+          }
         }
         return;
       }
 
       // Apply config patch BEFORE starting
-      // const patchToApply = { ...App.pendingPatch };
       if (Object.keys(App.pendingPatch).length) {
         try {
           const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
@@ -619,7 +601,7 @@ async function wireEvents() {
           applyVisualConfig(App.config);
           App.pendingPatch = {};
           clearPending();
-        } catch (e) { 
+        } catch (e) {
           delete btnStart.dataset.pending;
           setRunningUI(App.isRunning, App.isPaused);
           return;
@@ -629,10 +611,21 @@ async function wireEvents() {
       // Now start client
       toast('Client starting…', 'info');
       await apiFetch('/api/client/start', { method: 'POST', timeoutMs: 15000 });
-    } catch (e) { /* toasted */ }
+      setRunningUI(true, false);
+
+      // Now data recording if in auto mode
+      const autoCheckRecordMode = $('chk-record-auto');
+      if (autoCheckRecordMode && autoCheckRecordMode.checked) {
+        const startStopRecordingBtn = $('btn-recording-startstop');
+        if (startStopRecordingBtn) {
+          startStopRecordingBtn.disabled = false;
+          startStopRecordingBtn.click();
+        }
+      }
+    } catch (e) {
+    }
     finally {
       delete btnStart.dataset.pending;
-      // Re-sync UI state (status broadcast will update, but unlock buttons)
       setRunningUI(App.isRunning, App.isPaused);
     }
   });
@@ -643,8 +636,25 @@ async function wireEvents() {
     try {
       if (App.isPaused) {
         await apiFetch('/api/client/resume', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
+        if (App.isRecording ) {
+          if (typeof resumeDataRecording === 'function') resumeDataRecording(silent=false, refreshList=false);
+        }
+        else {
+          const autoCheckRecordMode = $('chk-record-auto');
+          if (autoCheckRecordMode && autoCheckRecordMode.checked) {
+            const startStopRecordingBtn = $('btn-recording-startstop');
+            // Trigger the click event programmatically
+            if (startStopRecordingBtn) {
+              startStopRecordingBtn.disabled = false
+              startStopRecordingBtn.click();
+            }
+          }
+        }
       } else {
         await apiFetch('/api/client/pause', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
+        if (App.isRecording && typeof pauseDataRecording === 'function') {
+          pauseDataRecording(silent=false, refreshList=false);
+        }
       }
     } catch (e) { /* toasted */ }
     finally {
@@ -654,8 +664,19 @@ async function wireEvents() {
   });
 
   $('btn-reset').addEventListener('click',  async () => {
-    await sendControl('reset');
+    if (!(await sendControl('reset', window.getRobotControlPayload?.() || {}))) return;
     toast('Robot reset initiated.', 'info');
+    if (App.isRecording ) {
+      const autoCheckRecordMode = $('chk-record-auto');
+      if (autoCheckRecordMode && autoCheckRecordMode.checked) {
+        const startStopRecordingBtn = $('btn-recording-startstop');
+        // Trigger the click event programmatically
+        if (startStopRecordingBtn) {
+          startStopRecordingBtn.disabled = false
+          startStopRecordingBtn.click();
+        }
+      }
+    }
   });
 
   $('btn-observe').addEventListener('click', async () => {
@@ -668,6 +689,14 @@ async function wireEvents() {
       const res = await apiFetch('/api/client/observe/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       applyThreadState(res?.data);
       connectCamWS();
+      if (App.isRecording){ 
+        if (!App.isObserveRunning && !App.isRecordingPaused && typeof pauseDataRecording === 'function') {
+          pauseDataRecording(silent=false, refreshList=false);
+        }
+        if (App.isObserveRunning && App.isRecordingPaused && typeof resumeDataRecording === 'function') {
+          resumeDataRecording(silent=false, refreshList=false);
+        }
+      }
     } catch (e) {
       if (e && e.name === 'AbortError') {
         // manual abort from repeated click; keep silent.
@@ -688,6 +717,14 @@ async function wireEvents() {
       const res = await apiFetch('/api/client/infer/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       applyThreadState(res?.data);
       setThreadControlUI();
+      if (App.isRecording){ 
+        if (!App.isInferenceRunning && !App.isRecordingPaused && typeof pauseDataRecording === 'function') {
+          pauseDataRecording(silent=false, refreshList=false);
+        }
+        if (App.isInferenceRunning && App.isRecordingPaused && typeof resumeDataRecording === 'function') {
+          resumeDataRecording(silent=false, refreshList=false);
+        }
+      }
     } catch (_) { /* toasted */ }
     finally {
       if (App.currentFetchController === controller) App.currentFetchController = null;
@@ -705,6 +742,14 @@ async function wireEvents() {
       const res = await apiFetch('/api/client/control/start', { method: 'POST', timeoutMs: 3000, signal: controller.signal, suppressAbortToast: true });
       applyThreadState(res?.data);
       setThreadControlUI();
+      if (App.isRecording){ 
+        if (!App.isControlRunning && !App.isRecordingPaused && typeof pauseDataRecording === 'function') {
+          pauseDataRecording(silent=false, refreshList=false);
+        }
+        if (App.isControlRunning && App.isRecordingPaused && typeof resumeDataRecording === 'function') {
+          resumeDataRecording(silent=false, refreshList=false);
+        }
+      }
     } catch (_) { /* toasted */ }
     finally {
       if (App.currentFetchController === controller) App.currentFetchController = null;
@@ -737,10 +782,10 @@ function startStatusPoll() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  setupShortcutHelp();
   initConfDir().then(async () => {
     await loadConfigFromServer();
     await loadDefaultLangFile();
-    applyLangConfigSelection(true);
     wireEvents();
   });
   setupCameraPanel();

@@ -41,7 +41,7 @@ def get_user_config():
         
         # Nested configuration overrides - robots configuration
         'robots': {
-            'a2d': {
+            'agibot_g1': {
                 # 'hand_type': 'gripper',  # NOTE: unsupported the param
                 'gripper_freq': 40,   # Override gripper frequency
             }

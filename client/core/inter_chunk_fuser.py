@@ -19,7 +19,6 @@ class InterChunkFuser:
     def _cfg_value(self, cfg, key, default):
         return getattr(cfg, key, getattr(self.config, key, default))
 
-    @run_time_decorator
     def process(self, 
             next_action_chunk,
             next_vel_chunk,
@@ -31,10 +30,15 @@ class InterChunkFuser:
             currt_acc=None,
             joint_indices= None,
             step_indices = None):
+        mode = self.config.inter_chunk_mode
+        mode_cfg = self._mode_config(mode)
+        # self.logger.info(f"mode = {mode}")
+        # print(f"DEBUG: mode={mode}")
         # process first inference
         if joint_indices is None:
             joint_indices = list(range(next_action_chunk.shape[0]))
         if currt_action is None and currt_vel is None and currt_acc is None:
+            # print(f"DEBUG: NONE")
             next_vel_chunk = np.zeros_like(next_action_chunk)
             next_vel_chunk[:, 1:] = (next_action_chunk[:, 1:] - next_action_chunk[:, :-1]) / (next_timestamps[1] - next_timestamps[0])
             next_vel_chunk[:, 0] = next_vel_chunk[:, 1]
@@ -45,8 +49,6 @@ class InterChunkFuser:
             
             return next_action_chunk, next_vel_chunk, next_acc_chunk, target_chunk_index
 
-        mode = self.config.inter_chunk_mode
-        mode_cfg = self._mode_config(mode)
 
         if mode == 'search_action':
             action_chunk_smoothed, target_chunk_index = self._search_smooth_action(
@@ -68,12 +70,14 @@ class InterChunkFuser:
                 joint_indices=joint_indices,
                 max_vel=self._cfg_value(mode_cfg, 'max_vel', 2.0),
                 max_acc=self._cfg_value(mode_cfg, 'max_acc', 5.0),
-                kp=self._cfg_value(mode_cfg, 'kp', 5.0),
-                kd=self._cfg_value(mode_cfg, 'kd', 2.0))
+                kp=self._cfg_value(mode_cfg, 'k_p', 10.0),
+                kd=self._cfg_value(mode_cfg, 'k_d', 4.0),
+                kf_vel=self._cfg_value(mode_cfg, 'kf_vel', 2.5),
+                kf_acc=self._cfg_value(mode_cfg, 'kf_acc', 0.3))
             # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
             # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
         elif mode == 'min_jerk':
-            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition(
+            action_chunk_smoothed, target_chunk_index = self._min_jerk_chunk_transition_numpy(
                 next_action_chunk,
                 next_vel_chunk,
                 next_acc_chunk,
@@ -210,12 +214,13 @@ class InterChunkFuser:
                                     joint_indices,
                                     max_vel=2.0,
                                     max_acc=5.0,
-                                    kp=5.0,
-                                    kd=2.0):
+                                    kp=10.0,
+                                    kd=4.0,
+                                    kf_vel=2.5,
+                                    kf_acc=0.3):
         """
         This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
         Note: Under the same parameter settings, this strategy is slower than 'search_action'.
-        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
 
         This function is **accelerated by Numba** using `@njit`, which compiles the
         Python code into optimized machine code in *nopython mode*.
@@ -258,6 +263,10 @@ class InterChunkFuser:
             Proportional gain of the PD controller.
         kd : float, optional
             Derivative gain of the PD controller.
+        kf_vel: float, optional
+            Feedforward gain for target joint velocity, used to eliminate overall time lag of tracking trajectory.
+        kf_acc: float, optional
+            Feedforward gain for target joint acceleration, improves tracking accuracy at curve corners and acceleration/deceleration segments.
 
         Returns
         -------
@@ -275,6 +284,19 @@ class InterChunkFuser:
         dt = next_timestamps[1] - next_timestamps[0]
         dof, chunk_size = target_action_chunk.shape
 
+        ## Precompute target velocity and target acceleration (data source for derivative lead)
+        tar_vel = np.zeros_like(target_action_chunk)
+        tar_acc = np.zeros_like(target_action_chunk)
+        ## Compute derivatives via internal finite difference
+        for i in range(1, chunk_size):
+            tar_vel[:, i] = (target_action_chunk[:, i] - target_action_chunk[:, i-1]) / dt
+        for i in range(1, chunk_size-1):
+            tar_acc[:, i] = (tar_vel[:, i+1] - tar_vel[:, i-1]) / (2 * dt)
+        ## Fill boundary values for start and end points
+        tar_vel[:, 0] = tar_vel[:, 1]
+        tar_acc[:, 0] = tar_acc[:, 1]
+        tar_acc[:, -1] = tar_acc[:, -2]
+
         pos = init_pos.copy()
         vel = init_vel.copy()
         acc = init_acc.copy()
@@ -285,8 +307,20 @@ class InterChunkFuser:
 
         for i in range(chunk_size):
             target_action = target_action_chunk[:, i]
+            t_vel = tar_vel[:, i]
+            t_acc = tar_acc[:, i]
+            
             for j in range(dof):
-                acc[j] = kp * (target_action[j] - pos[j]) - kd * vel[j]
+                # if kf_vel == 0 and kf_acc == 0:
+                #     acc[j] = kp * (target_action[j] - pos[j]) - kd * vel[j]
+                # else:
+                #     pos_err = target_action[j] - pos[j]
+                #     ## Improved PD: Derivative lead structure + feedforward compensation
+                #     acc[j] = kp * pos_err + kd * (t_vel[j] - vel[j]) + kf_vel * t_vel[j] + kf_acc * t_acc[j]  
+
+                ## Decoupled feedforward compensation version; set both kf_vel and kf_acc to 0 will degrade to PD feedback control
+                pos_err = target_action[j] - pos[j]
+                acc[j] = kp * pos_err - kd * vel[j] + kf_vel * t_vel[j] + kf_acc * t_acc[j] 
 
                 if acc[j] > max_acc:
                     acc[j] = max_acc
@@ -311,6 +345,8 @@ class InterChunkFuser:
         action_chunk_smoothed[joint_indices, target_chunk_index:] = pos_seq
         return action_chunk_smoothed, target_chunk_index 
 
+
+    @run_time_decorator
     def _min_jerk_chunk_transition(self,
         next_action_chunk,
         next_vel_chunk,
@@ -437,6 +473,110 @@ class InterChunkFuser:
                     action_chunk_smoothed[joint_idx, target_chunk_index + i] = smoothed_pos
         return action_chunk_smoothed, target_chunk_index
 
+
+    @run_time_decorator
+    def _min_jerk_chunk_transition_numpy(self,
+        next_action_chunk,
+        next_vel_chunk,
+        next_acc_chunk,
+        next_timestamps,
+        target_chunk_index,
+        current_pos,
+        current_vel,
+        current_acc,
+        joint_indices,
+        blend_threshold=0.7,
+        adaptive_factor=-1,
+    ):
+        """
+        Vectorized NumPy version of minimum-jerk chunk transition.
+        Keeps `_min_jerk_chunk_transition` unchanged and computes
+        joint/time dimensions in parallel for better performance.
+        """
+        if current_pos is None or current_vel is None:
+            return next_action_chunk, target_chunk_index
+
+        target_pos = next_action_chunk[:, target_chunk_index].copy()
+        target_vel = next_vel_chunk[:, target_chunk_index].copy()
+        target_acc = next_acc_chunk[:, target_chunk_index].copy() if next_acc_chunk is not None else np.zeros_like(target_vel)
+
+        pos_diff = np.linalg.norm(current_pos[joint_indices] - target_pos[joint_indices])
+        vel_diff = np.linalg.norm(current_vel[joint_indices] - target_vel[joint_indices])
+        acc_diff = np.linalg.norm(current_acc[joint_indices] - target_acc[joint_indices])
+
+        base_transition = next_action_chunk.shape[1]
+        if adaptive_factor < 0:
+            adaptive_factor = min(1.0, 0.25 + pos_diff * 1.0 + vel_diff * 0.75 + acc_diff * 0.15)
+        else:
+            adaptive_factor = min(1.0, max(0.0, float(adaptive_factor)))
+        transition_length = min(int(base_transition * adaptive_factor), next_action_chunk.shape[1] - target_chunk_index)
+
+        if transition_length <= 1:
+            return next_action_chunk, target_chunk_index
+
+        action_chunk_smoothed = next_action_chunk.copy()
+
+        dt = next_timestamps[1] - next_timestamps[0] if len(next_timestamps) > 1 else 0.005
+        T = transition_length * dt
+
+        end_index = min(target_chunk_index + transition_length - 1, next_action_chunk.shape[1] - 1)
+
+        # Boundary conditions for selected joints, all in shape (num_joints, 1)
+        x0 = current_pos[joint_indices][:, None]
+        v0 = (current_vel[joint_indices] * T)[:, None]
+        a0 = (current_acc[joint_indices] * T * T)[:, None]
+
+        xf = next_action_chunk[joint_indices, end_index][:, None]
+        vf = (
+            (next_vel_chunk[joint_indices, end_index] * T)[:, None]
+            if end_index < next_vel_chunk.shape[1]
+            else np.zeros_like(xf)
+        )
+        af = (
+            (next_acc_chunk[joint_indices, end_index] * T * T)[:, None]
+            if (next_acc_chunk is not None and end_index < next_acc_chunk.shape[1])
+            else np.zeros_like(xf)
+        )
+
+        # Normalized time basis in shape (1, transition_length)
+        tau = np.linspace(0.0, 1.0, transition_length, dtype=next_action_chunk.dtype)[None, :]
+        tau2 = tau * tau
+        tau3 = tau2 * tau
+        tau4 = tau3 * tau
+        tau5 = tau4 * tau
+
+        h0 = 1 - 10 * tau3 + 15 * tau4 - 6 * tau5
+        h1 = tau - 6 * tau3 + 8 * tau4 - 3 * tau5
+        h2 = 0.5 * tau2 - 1.5 * tau3 + 1.5 * tau4 - 0.5 * tau5
+        h3 = 10 * tau3 - 15 * tau4 + 6 * tau5
+        h4 = -4 * tau3 + 7 * tau4 - 3 * tau5
+        h5 = 0.5 * tau3 - tau4 + 0.5 * tau5
+
+        # Parallel compute for (num_joints, transition_length)
+        smoothed_pos = h0 * x0 + h1 * v0 + h2 * a0 + h3 * xf + h4 * vf + h5 * af
+
+        # Blend tail with original target trajectory for seamless continuation
+        blend_mask = tau[0] > blend_threshold
+        if np.any(blend_mask):
+            blend_ratio = (tau[0, blend_mask] - blend_threshold) / (1.0 - blend_threshold)
+            target_segment = next_action_chunk[
+                joint_indices,
+                target_chunk_index : target_chunk_index + transition_length,
+            ]
+            smoothed_pos[:, blend_mask] = (
+                (1.0 - blend_ratio)[None, :] * smoothed_pos[:, blend_mask]
+                + blend_ratio[None, :] * target_segment[:, blend_mask]
+            )
+
+        action_chunk_smoothed[
+            joint_indices,
+            target_chunk_index : target_chunk_index + transition_length,
+        ] = smoothed_pos
+
+        return action_chunk_smoothed, target_chunk_index
+
+
+    @run_time_decorator
     def _search_smooth_action(self,
                             next_action_chunk,
                             target_chunk_index,

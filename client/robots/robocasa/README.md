@@ -54,3 +54,7 @@ python scripts/robocasa_eval.py \
 
 Per-task results use the same task directories. The suite summary is saved under
 `OUTPUT/evals/target/suites/target50/RUN_ID/stats.json`.
+
+The merged master uses `client/core/vla_client.py` for the Web and real-robot client. RoboCasa keeps its step-aware `VLAClientAsync` and transactional recorder under `client/simulation/`, sharing the current core action buffer, smoother, fuser, image utilities, and ZMQ transport. The former `client.core.vla_client.VLAClientAsync` import remains available.
+
+Install auxiliary simulation dependencies with `pip install -e ".[sim]"`; the local RoboCasa checkout and assets are installed separately. The retained ZMQ configuration uses port `1117`, while this evaluation CLI defaults to `5566`; pass `--server_port 1117` when using the retained server configuration.

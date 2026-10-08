@@ -7,7 +7,7 @@ import numpy as np
 from ml_collections import ConfigDict
 
 from client.core.realtime_data_manager import RealtimeDataManager
-from client.core.vla_client import VLAClientAsync
+from client.simulation.vla_client import VLAClientAsync
 from client.robots.base_robot import ObservationMode, RobotStepResult
 from client.robots.robocasa.body_robot import RobotBody
 from client.robots.robocasa.video_recorder import VideoRecorder
@@ -28,7 +28,7 @@ class RealtimeDataManagerSequentialTest(unittest.TestCase):
     def setUp(self):
         self.manager = RealtimeDataManager(make_config())
         raw = [np.array([1.0, 10.0]), np.array([2.0, 20.0]), np.array([3.0, 30.0])]
-        self.manager.action_chunks = raw
+        self.manager.update_action_chunk_raw(raw, [0.0, 0.1, 0.2])
         actions = np.array([[1.0, 2.0, 3.0], [10.0, 20.0, 30.0]])
         zeros = np.zeros_like(actions)
         self.manager.update_action_chunk_fitted(

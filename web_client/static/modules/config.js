@@ -26,7 +26,7 @@ const CONFIG_SELECT_OPTIONS = {
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['a2d', 'mock', 'ti5_t170c', 'navi_wa2'],
+  type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1'],
   eval_log_format: ['json', 'csv', 'both'],
@@ -47,6 +47,7 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'language.task_id',
   'language.sub_task_id',
   'language.auto_mode',
+  'language.auto_mode_start_sub_task_id',
   'language.task_progress_threshold',
   'language.task_progress_win_size',
   'visualize.camera.connect_when_running',
@@ -159,6 +160,58 @@ const CUSTOM_GROUP_ORDER = [
   // Add other keys here if you want to reorder them too, e.g., 'record', 'traj'
 ];
 let _cfgInputSyncing = false;
+const CFG_ENTER_IMMEDIATE_APPLY_KEYS = new Set([
+  'record.evaluation.scores',
+  // 'evaluation.scores',
+]);
+
+function shouldApplyConfigImmediatelyOnEnter(dotKey) {
+  return CFG_ENTER_IMMEDIATE_APPLY_KEYS.has(String(dotKey || '').trim());
+}
+
+async function applySingleConfigPatchImmediately(dotKey) {
+  const key = String(dotKey || '').trim();
+  if (!key) return;
+  if (!App.pendingPatch || typeof App.pendingPatch !== 'object' || !(key in App.pendingPatch)) return;
+
+  const patchValue = App.pendingPatch[key];
+  try {
+    const res = await apiFetch('/api/client/config/patch', {
+      method: 'POST',
+      body: JSON.stringify({ patch: { [key]: patchValue } }),
+    });
+
+    App.config = res.config || App.config || {};
+    delete App.pendingPatch[key];
+    if (!Object.keys(App.pendingPatch).length) clearPending();
+
+    renderConfigTree(App.config);
+    renderRecordingConfigTree(App.config);
+    applyVisualConfig(App.config);
+
+    if (key === 'record.evaluation.scores' || key === 'evaluation.scores') {
+      if (typeof renderEvaluationResults === 'function' && Array.isArray(App.evalResultsSnapshot)) {
+        renderEvaluationResults(App.evalResultsSnapshot);
+      } else if (typeof refreshRecordingFileList === 'function') {
+        await refreshRecordingFileList();
+      }
+    }
+
+    try {
+      const confRes = await apiFetch('/api/client/config/path');
+      if (confRes.path) {
+        await apiFetch('/api/client/config/save', {
+          method: 'POST',
+          body: JSON.stringify({ path: confRes.path }),
+        });
+      }
+    } catch (_) {
+      // Keep runtime config applied even if save fails.
+    }
+  } catch (_) {
+    toast(`Failed to apply ${key}.`, 'warn', 2200);
+  }
+}
 
 function getConfigValueByDotKey(cfg, dotKey) {
   if (!cfg || typeof cfg !== 'object') return undefined;
@@ -538,14 +591,14 @@ function buildTree(obj, prefix, parentEl) {
 
 /**
  * Renders the robots config group with dynamic sub-group visibility.
- * The robots.type select controls which sub-group (a2d / mock / …) is shown.
+ * The robots.type select controls which sub-group (agibot_g1 / mock / …) is shown.
  *
  * robots object structure (example):
- *   { type: 'a2d', a2d: {...}, mock: {...} }
+ *   { type: 'agibot_g1', agibot_g1: {...}, mock: {...} }
  *
  * Layout inside parentEl:
  *   ┌── type row (select)
- *   ├── [sub-group: a2d]   ← shown only when type === 'a2d'
+ *   ├── [sub-group: agibot_g1]   ← shown only when type === 'agibot_g1'
  *   └── [sub-group: mock]  ← shown only when type === 'mock'
  */
 function _buildRobotsGroup(obj, parentEl) {
@@ -956,6 +1009,13 @@ function createCfgRow(dotKey, label, value, options = {}) {
   } else {
     input.addEventListener('input',  () => onCfgChange(dotKey, input, value));
     input.addEventListener('change', () => onCfgChange(dotKey, input, value));
+    input.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      if (!shouldApplyConfigImmediatelyOnEnter(dotKey)) return;
+      e.preventDefault();
+      onCfgChange(dotKey, input, value);
+      void applySingleConfigPatchImmediately(dotKey);
+    });
   }
   valEl.appendChild(input);
   row.appendChild(keyEl);
@@ -1359,9 +1419,6 @@ async function loadConfigFromServer() {
     renderConfigTree(App.config);
     renderRecordingConfigTree(App.config);
     applyVisualConfig(App.config);
-    // Apply language-related UI state from config (task/sub-task/auto/threshold/win_size)
-    // On initial startup from YAML config, default sub-task to first entry.
-    applyLangConfigSelection(true);
     toast(`Config ${CONF_FILE} loaded.`, 'ok', 2000);
   } catch (e) { /* already toasted */ }
 }

@@ -11,7 +11,7 @@ from ml_collections import ConfigDict
 from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
 from conf.logging_conf import setup_logging
-from client.core.vla_client import VLAClientAsync
+from client.simulation.vla_client import VLAClientAsync
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -42,13 +42,13 @@ VisualizeServer.kill_port = safely_release_visualize_port
 
 def get_robot(config: ConfigDict):
     """Create and return a robot instance based on configuration
-    
+
     Args:
         config: Configuration object containing robot type and settings
-        
+
     Returns:
         RobotBody: Robot instance for the specified type
-        
+
     Raises:
         ValueError: If robot type is not supported
     """
@@ -57,8 +57,8 @@ def get_robot(config: ConfigDict):
     if robot_config is None:
         raise ValueError(f'Configuration for robot type {robot_type.value} is missing')
 
-    if robot_type == RobotType.A2D:
-        from client.robots.a2d.body_robot import RobotBody
+    if robot_type == RobotType.AGIBOT_G1:
+        from client.robots.agibot_g1.body_robot import RobotBody
         return RobotBody(robot_config)
     elif robot_type == RobotType.MOCK:
         from client.robots.mock.body_robot import RobotBody
@@ -87,7 +87,7 @@ def configure_client_for_robot(config: ConfigDict, robot):
 
 def parse_args():
     """Parse command line arguments for VLA-RAIL Client
-    
+
     Returns:
         argparse.Namespace: Parsed command line arguments
     """
@@ -111,11 +111,11 @@ def parse_args():
 
 def override_config_with_args(config, args):
     """Override configuration with command line arguments
-    
+
     Args:
         config: Original configuration object
         args: Command line arguments
-        
+
     Returns:
         config: Updated configuration object
     """
@@ -186,20 +186,20 @@ def resume_vla_client_actions(vla_client):
 
 def handle_user_input(vla_client, robot):
     """Handle user input
-    
+
     This function handles interactive command input when user presses Enter.
     It provides a menu-driven interface for robot control commands.
     """
     pause_vla_client_actions(vla_client)
     cmd = input('\nProgram paused, please enter command, press Enter to continue:\nr: reset robot\nc: control robot\nl: modify language instruction\ns: save data (if recording enabled)\nd: delete data (if recording enabled)\nq: quit\n')
     language_reset_pos = getattr(vla_client.config, 'language_reset_pos', None)
-        
+
     if cmd == 'l':
         # Show preset language options
         print("Available preset language instructions:")
         for i, lang in enumerate(vla_client.task_language_manager.task_language_map["make_coffee"], 1):
             print(f"{i}: {lang}")
-            
+
         language_input = input(f'#Current language: "{vla_client.task_language_manager.currt_language_instruction}". \nPlease enter new language instruction or preset number, press Enter to confirm: ')
         if language_input.strip().isdigit():
             index = int(language_input.strip()) - 1
@@ -242,7 +242,7 @@ def handle_user_input(vla_client, robot):
         input('Data deleted, press Enter to continue...')
     elif cmd == 'q':
         return False  # Signal to quit
-        
+
     vla_client._inference_first() # avoid pause/restart shaking
     resume_vla_client_actions(vla_client)
     return True  # Continue running
@@ -251,20 +251,20 @@ if __name__ == "__main__":
     args = parse_args()
     # Initialize logging configuration
     logger = setup_logging("client.log", __name__)
-    
+
     # Get configuration and apply command line arguments
     config = get_client_config()
-    
+
     # Load and apply user configuration if provided
     if args.user_conf:
         user_config = load_user_config(args.user_conf)
         config = apply_user_config(config, user_config)
-    
+
     config = override_config_with_args(config, args)
     # print(config)
     # The zmq client to communicate with VLA server
     vla_zmq_client = ZMQClient(config.vla_zmq)
-    
+
     robot = get_robot(config)
     configure_client_for_robot(config, robot)
     realtime_data_manager = RealtimeDataManager(config.rdm)
@@ -285,7 +285,7 @@ if __name__ == "__main__":
     if args.extra_dispatch_mode[0] != '0':
         dispatch_client = DispatchClient(vla_client, robot, args)
         dispatch_client.start()
-    
+
     try:
         vla_client.start()
 

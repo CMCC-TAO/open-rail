@@ -24,7 +24,7 @@ from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
-from client.core.vla_client import VLAClientAsync
+from client.simulation.vla_client import VLAClientAsync
 from client.core.zmq_client import ZMQClient
 from client.utils.util import apply_user_config, load_user_config
 from conf.client_conf import get_client_config
@@ -626,7 +626,7 @@ def _reset_episode(client, robot, visualize, record=False):
 
 
 def _discard_recording_episode(recording_path, episode_index):
-    from client.core.data_record_manager import LeRobotDatasetParser
+    from client.simulation.data_record_manager import LeRobotDatasetParser
 
     parser = LeRobotDatasetParser(recording_path)
     chunk_index = episode_index // max(1, parser.chunks_size)

@@ -9,7 +9,7 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from client.core.data_record_manager import DataRecordManager, LeRobotDatasetRecorder
+from client.simulation.data_record_manager import DataRecordManager, LeRobotDatasetRecorder
 from client.robots.robocasa.body_robot import RobotBody
 from conf.robots_conf import get_robocasa_config
 from conf.save_conf import get_record_data_config
