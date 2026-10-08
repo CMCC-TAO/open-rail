@@ -28,17 +28,17 @@ intra_chunk:
   head_dim: 2
   intra_chunk_mode: fitting
   joint_dim: 14
-  max_gripper_action_threshold: 0.95
+  max_gripper_action_threshold: 1000.0
   max_gripper_fitting_workers: 2
   max_head_fitting_workers: 2
   max_joint_fitting_workers: 14
-  min_gripper_action_threshold: 0.05
+  min_gripper_action_threshold: 0.00
 language:
   auto_mode: false
   auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
+  task_id: unitree_g1
   task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
@@ -579,7 +579,111 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: unitree_g1
+  unitree_g1:
+    action_layout:
+      arm:
+        start: 0
+        end: 14
+        policy: gradual
+        presets:
+          left:
+            Default:
+            - 0.3
+            - 0.15
+            - -0.15
+            - -0.3
+            - 0.0
+            - -0.3
+            - 0.0
+            Custom:
+            - 0.3
+            - 0.15
+            - -0.15
+            - -0.3
+            - 0.0
+            - -0.3
+            - 0.0
+          right:
+            Default:
+            - 0.3
+            - -0.15
+            - 0.15
+            - -0.3
+            - 0.0
+            - -0.3
+            - 0.0
+            Custom:
+            - 0.3
+            - -0.15
+            - 0.15
+            - -0.3
+            - 0.0
+            - -0.3
+            - 0.0
+      hand:
+        start: 14
+        end: 26
+        policy: stepwise
+        presets:
+          left:
+            Default:
+            - 100.0
+            - 100.0
+            - 100.0
+            - 100.0
+            - 150.0
+            - 50.0
+            Custom:
+            - 100.0
+            - 100.0
+            - 100.0
+            - 100.0
+            - 150.0
+            - 50.0
+          right:
+            Default:
+            - 100.0
+            - 100.0
+            - 100.0
+            - 100.0
+            - 150.0
+            - 50.0
+            Custom:
+            - 100.0
+            - 100.0
+            - 100.0
+            - 100.0
+            - 150.0
+            - 50.0
+    hand_type: hand
+    reset_robot_pos:
+    - 0.3
+    - 0.15
+    - -0.15
+    - -0.3
+    - 0.0
+    - -0.3
+    - 0.0
+    - 0.3
+    - -0.15
+    - 0.15
+    - -0.3
+    - 0.0
+    - -0.3
+    - -0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
 vision:
   history_frame: false
   preprocess:
@@ -611,5 +715,5 @@ vla_zmq:
   heartbeat_interval: 1000
   heartbeat_timeout: 30000
   infer_timeout: 5000
-  ip: 127.0.0.1
+  ip: 117.147.181.181
   port: '5566'
