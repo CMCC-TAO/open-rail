@@ -1,0 +1,323 @@
+"""Isolated RoboCasa evaluation jobs for the web client."""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import threading
+import time
+import uuid
+from typing import Literal
+
+import psutil
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field, model_validator
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+class EvaluationConfig(BaseModel):
+    python: str = sys.executable
+    env_name: str = ''
+    task_suite: str = ''
+    split: Literal['target', 'pretrain'] = 'target'
+    n_episodes: int = Field(10, ge=1)
+    n_envs: int = Field(1, ge=1)
+    n_action_steps: int = Field(16, ge=1)
+    seed: int = 42
+    mode: Literal['sync', 'async'] = 'sync'
+    intra_chunk_mode: Literal['raw', 'interpolation', 'fitting'] = 'raw'
+    intra_chunk_sample_ratio: float = Field(1, ge=1, allow_inf_nan=False)
+    inter_chunk_mode: Literal['sync', 'search_action', 'smooth_velocity', 'min_jerk'] = 'sync'
+    async_replenish_threshold: int | None = Field(None, ge=0)
+    max_async_observation_lag_steps: int | None = Field(None, ge=0)
+    max_episode_steps: int | None = Field(None, ge=1)
+    episode_timeout: float = Field(1800, gt=0, allow_inf_nan=False)
+    stall_timeout: float = Field(120, gt=0, allow_inf_nan=False)
+    server_ip: str = '127.0.0.1'
+    server_port: int = Field(1117, ge=1, le=65535)
+    mujoco_gl: Literal['egl', 'osmesa', 'glfw'] = 'egl'
+    preprocess: Literal['none', 'resize'] = 'none'
+    record: bool = False
+    video: bool = True
+    record_fps: int = Field(20, ge=1)
+    video_fps: int = Field(20, ge=1)
+    video_layout: Literal['grid', 'single'] = 'grid'
+
+    @model_validator(mode='after')
+    def validate_selection(self):
+        self.env_name = self.env_name.strip()
+        self.task_suite = self.task_suite.strip()
+        if bool(self.env_name) == bool(self.task_suite):
+            raise ValueError('Select exactly one environment or task suite')
+        if self.async_replenish_threshold is not None and self.async_replenish_threshold >= self.n_action_steps:
+            raise ValueError('Async threshold must be less than action steps')
+        return self
+
+
+class EvaluationJobs:
+    def __init__(self, root=ROOT):
+        self.root = Path(root)
+        self.directory = self.root / 'data/robocasa_web/jobs'
+        self.lock = threading.RLock()
+        self.jobs = {}
+        self.processes = {}
+        if self.directory.exists():
+            for path in self.directory.glob('*/job.json'):
+                try:
+                    job = json.loads(path.read_text())
+                    if job['status'] in ('running', 'stopping'):
+                        job['status'] = 'interrupted'
+                    self.jobs[path.parent.name] = job
+                except (ValueError, KeyError, OSError):
+                    continue
+
+    def _save(self, job):
+        path = self.directory / job['id'] / 'job.json'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix('.tmp')
+        temporary.write_text(json.dumps(job, ensure_ascii=False, indent=2))
+        temporary.replace(path)
+
+    def command(self, config, job_id):
+        folder = self.directory / job_id
+        command = [config.python, '-u', str(self.root / 'scripts/robocasa_eval.py')]
+        excluded = {'python', 'record', 'video', 'env_name', 'task_suite'}
+        for key, value in config.model_dump().items():
+            if key not in excluded and value is not None:
+                command.extend(['--' + key, str(value)])
+        command.extend(['--env_name' if config.env_name else '--task_suite', config.env_name or config.task_suite,
+                        '--output_dir', str(folder / 'output'), '--run_id', job_id, '--progress_interval', '5',
+                        '--record_dir', str(folder.relative_to(self.root) / 'lerobot')])
+        if config.record:
+            command.append('--record')
+        if not config.video:
+            command.append('--no_video')
+        return command
+
+    def start(self, config, job_id=None):
+        with self.lock:
+            if self.processes:
+                raise ValueError('An evaluation is already running')
+            for previous in self.jobs.values():
+                if previous['status'] != 'interrupted' or not previous.get('pid'):
+                    continue
+                try:
+                    old = psutil.Process(previous['pid'])
+                    if old.create_time() == previous.get('process_created') and old.status() != psutil.STATUS_ZOMBIE:
+                        raise ValueError('Previous evaluation process is still alive; stop the interrupted job first')
+                except psutil.NoSuchProcess:
+                    pass
+            executable = Path(config.python).expanduser().absolute()
+            if not executable.is_file() or not os.access(executable, os.X_OK):
+                raise ValueError('Python executable does not exist or is not executable')
+            config.python = str(executable)
+            check = subprocess.run([config.python, '-c', "import importlib.util; names=['robocasa','robosuite','zmq','numpy']; missing=[n for n in names if importlib.util.find_spec(n) is None]; print(', '.join(missing)); raise SystemExit(bool(missing))"], capture_output=True, text=True, timeout=20)
+            if check.returncode:
+                raise ValueError('Simulation environment unavailable: ' + (check.stdout + check.stderr)[-2000:])
+            job_id = job_id or time.strftime('%Y%m%d-%H%M%S-') + uuid.uuid4().hex[:8]
+            job = {'id': job_id, 'config': config.model_dump(), 'status': 'running', 'started': time.time(), 'returncode': None}
+            self._save(job)
+            log = open(self.directory / job_id / 'evaluation.log', 'ab', buffering=0)
+            try:
+                process = subprocess.Popen(self.command(config, job_id), cwd=self.root, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            except Exception:
+                log.close()
+                job['status'] = 'failed'
+                self._save(job)
+                self.jobs[job_id] = job
+                raise
+            log.close()
+            job['pid'] = process.pid
+            try:
+                job['process_created'] = psutil.Process(process.pid).create_time()
+            except psutil.NoSuchProcess:
+                job['process_created'] = None
+            self._save(job)
+            self.jobs[job_id] = job
+            self.processes[job_id] = process
+            threading.Thread(target=self._watch, args=(job_id, process), daemon=True).start()
+            return job.copy()
+
+    def _watch(self, job_id, process):
+        code = process.wait()
+        with self.lock:
+            job = self.jobs[job_id]
+            if job['status'] != 'stopping':
+                failed_tasks = any(s.get('num_failed_tasks', 0) for s in self._stats(job_id))
+                job['status'] = 'completed' if code == 0 and not failed_tasks else 'failed'
+                self.processes.pop(job_id, None)
+            job['returncode'] = code
+            self._save(job)
+
+    def stop(self, job_id):
+        with self.lock:
+            job = self.get(job_id)
+            process = self.processes.get(job_id)
+            recovered = None
+            if process is None and job['status'] == 'interrupted' and job.get('pid'):
+                try:
+                    candidate = psutil.Process(job['pid'])
+                    if candidate.create_time() == job.get('process_created'):
+                        recovered = candidate
+                except psutil.NoSuchProcess:
+                    pass
+            if process is None and recovered is None:
+                return job
+            self.jobs[job_id]['status'] = 'stopping'
+            self._save(self.jobs[job_id])
+            try:
+                parent = recovered or psutil.Process(process.pid)
+                children = parent.children(recursive=True)
+                targets = [parent] + children
+            except psutil.NoSuchProcess:
+                targets = []
+        for target in targets:
+            try:
+                target.terminate()
+            except psutil.NoSuchProcess:
+                pass
+        _, alive = psutil.wait_procs(targets, timeout=5)
+        for target in alive:
+            try:
+                target.kill()
+            except psutil.NoSuchProcess:
+                pass
+        psutil.wait_procs(alive, timeout=3)
+        if process is not None:
+            process.wait(timeout=5)
+        with self.lock:
+            self.processes.pop(job_id, None)
+            self.jobs[job_id]['status'] = 'cancelled'
+            self._save(self.jobs[job_id])
+            return self.get(job_id)
+
+    def close(self):
+        for job_id in list(self.processes):
+            self.stop(job_id)
+
+    def _stats(self, job_id):
+        result = []
+        for path in (self.directory / job_id / 'output').rglob('stats.json'):
+            try:
+                stats = json.loads(path.read_text())
+                if stats.get('run_id') == job_id:
+                    result.append(stats)
+            except (OSError, ValueError):
+                pass
+        return result
+
+    def get(self, job_id):
+        with self.lock:
+            if job_id not in self.jobs:
+                raise KeyError(job_id)
+            job = self.jobs[job_id].copy()
+        job['stats'] = self._stats(job_id)
+        grouped = {}
+        for stats in job['stats']:
+            if not stats.get('env_name'):
+                continue
+            episodes = grouped.setdefault(stats['env_name'], {})
+            for episode in stats.get('episodes', []):
+                episodes[episode['episode']] = episode
+        job['progress'] = [
+            {'env_name': name, 'num_episodes': len(episodes),
+             'success_rate': sum(bool(e.get('success')) for e in episodes.values()) / len(episodes) if episodes else 0}
+            for name, episodes in grouped.items()
+        ]
+        return job
+
+    def artifact(self, job_id, name):
+        self.get(job_id)
+        folder = (self.directory / job_id).resolve()
+        path = (folder / name).resolve()
+        if not path.is_relative_to(folder) or not path.is_file():
+            raise KeyError(name)
+        return path
+
+
+manager = EvaluationJobs()
+router = APIRouter(prefix='/api/simulation')
+
+
+@router.get('/options')
+def options():
+    defaults = EvaluationConfig(env_name='PnPCounterToCab').model_dump()
+    try:
+        from conf.client_conf import get_client_config
+        config = get_client_config()
+        defaults['server_port'] = int(config.vla_zmq.port)
+        defaults['server_ip'] = config.vla_zmq.ip
+    except (ImportError, AttributeError):
+        pass
+    if hasattr(manager, 'connection_defaults'):
+        defaults['server_ip'], defaults['server_port'] = manager.connection_defaults
+    return defaults
+
+
+@router.get('/jobs')
+def list_jobs():
+    with manager.lock:
+        return sorted((j.copy() for j in manager.jobs.values()), key=lambda j: j['started'], reverse=True)
+
+
+@router.post('/jobs')
+def start_job(config: EvaluationConfig):
+    try:
+        return manager.start(config)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as error:
+        raise HTTPException(400, str(error)) from error
+
+
+@router.get('/jobs/{job_id}')
+def get_job(job_id: str):
+    try:
+        return manager.get(job_id)
+    except KeyError as error:
+        raise HTTPException(404, 'Job not found') from error
+
+
+@router.post('/jobs/{job_id}/stop')
+def stop_job(job_id: str):
+    try:
+        return manager.stop(job_id)
+    except KeyError as error:
+        raise HTTPException(404, 'Job not found') from error
+
+
+@router.post('/jobs/{job_id}/resume')
+def resume_job(job_id: str):
+    job = get_job(job_id)
+    if job['status'] not in ('cancelled', 'failed', 'interrupted'):
+        raise HTTPException(409, 'Only stopped or failed jobs can resume')
+    try:
+        return manager.start(EvaluationConfig(**job['config']), job_id)
+    except (ValueError, OSError, subprocess.TimeoutExpired) as error:
+        raise HTTPException(400, str(error)) from error
+
+
+@router.get('/jobs/{job_id}/logs')
+def logs(job_id: str):
+    get_job(job_id)
+    path = manager.directory / job_id / 'evaluation.log'
+    if not path.exists():
+        return {'text': ''}
+    with path.open('rb') as handle:
+        handle.seek(max(0, path.stat().st_size - 64000))
+        return {'text': handle.read(64000).decode('utf-8', errors='replace')}
+
+
+@router.get('/jobs/{job_id}/files')
+def files(job_id: str):
+    get_job(job_id)
+    folder = manager.directory / job_id
+    return [str(p.relative_to(folder)) for p in folder.rglob('*') if p.is_file() and p.suffix in ('.json', '.mp4', '.parquet') and p.resolve().is_relative_to(folder.resolve())]
+
+
+@router.get('/jobs/{job_id}/artifact/{name:path}')
+def artifact(job_id: str, name: str):
+    try:
+        return FileResponse(manager.artifact(job_id, name))
+    except KeyError as error:
+        raise HTTPException(404, 'File not found') from error

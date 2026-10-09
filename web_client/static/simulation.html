@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>RoboCasa 仿真测评</title>
+    <link rel="stylesheet" href="/static/simulation.css" />
+  </head>
+  <body>
+    <header>
+      <a href="/">← 控制台</a>
+      <h1>RoboCasa 仿真测评</h1>
+    </header>
+    <main>
+      <section>
+        <h2>测评配置</h2>
+        <p>
+          独立运行测评脚本。Python 环境须安装 RoboCasa；模型推理服务须已启动。
+        </p>
+        <form id="config">
+          <div id="fields"></div>
+          <button type="submit" id="start">开始测评</button>
+        </form>
+        <p id="error" role="alert"></p>
+      </section>
+      <section>
+        <h2>任务与结果</h2>
+        <select id="jobs" aria-label="测评历史"></select>
+        <div class="actions">
+          <button id="stop">停止</button><button id="resume">继续测评</button>
+        </div>
+        <p>继续测评将沿用原参数与保存目录，从已保存的 episode 继续。</p>
+        <p id="status"></p>
+        <div id="results"></div>
+        <h3>结果文件与视频</h3>
+        <select id="files" aria-label="结果文件"></select
+        ><a id="download" hidden>打开文件</a
+        ><video id="video" controls hidden></video>
+        <h3>运行日志（最近 64 KB）</h3>
+        <pre id="logs"></pre>
+      </section>
+    </main>
+    <script type="module" src="/static/simulation.js"></script>
+  </body>
+</html>
