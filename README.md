@@ -99,18 +99,18 @@ Smoothing happens at the **framework level** — no model changes, no training a
 
 ### Models
 
-| Model family | Members | Status |
-| --- | --- | --- |
-| TAO(ours) | TAO 0, 0.5 | ✅ Supported |
-| ACT | ACT | ✅ Supported |
-| GR00T N1 series | GR00T N1, N1.5, N1.6 | ✅ Supported |
-| RDT | RDT-1B | ✅ Supported |
-| SmolVLA | SmolVLA | ✅ Supported |
-| GO1 | AgiBot GO-1 | ✅ Supported |
-| π series | π0, π0.5 | ✅ Supported |
-| DM0.5 | DM0.5 | ✅ Supported |
-| WALL-X | Wall-OSS-0.5 | ✅ Supported |
-| _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-model.md) |
+| Model family | Members | Status | Adapter |
+| --- | --- | --- | --- |
+| TAO(ours) | TAO 0, 0.5 | ✅ Supported | `server/models/tao/` |
+| ACT | ACT | ✅ Supported | `server/models/act/` |
+| GR00T N1 series | GR00T N1, N1.5, N1.6 | ✅ Supported | `server/models/gr00t/` |
+| RDT | RDT-1B | ✅ Supported | `server/models/rdt/` |
+| SmolVLA | SmolVLA | ✅ Supported | `server/models/smolvla/` |
+| GO1 | AgiBot GO-1 | ✅ Supported | `server/models/go1/` |
+| π series | π0, π0.5 | ✅ Supported | `server/models/openpi/` |
+| DM0.5 | DM0.5 | ✅ Supported | `server/models/dm05/` |
+| WALL-X | Wall-OSS-0.5 | ✅ Supported | `server/models/wallx/` |
+| _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-model.md) | — |
 
 ## 🚀 Quick Start
 

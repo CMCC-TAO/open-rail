@@ -228,7 +228,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `zmq` | 与 `vla_zmq` 相同的 VLA 网络字段；服务端使用其中端口绑定 ROUTER socket。 |
 | `max_infer_workers` | 最大并发推理工作线程数。设为 `1` 可禁用并发推理。 |
 | `max_decode_workers` | 最大图像解码工作线程数。 |
-| `models.type` | 选用模型：`mock`、`act`、`gr00t_n1`、`gr00t_n1_5`、`gr00t_n1_6`、`rdt`、`smolvla`、`go1`、`pi0`、`pi05` 或 `tao`。 |
+| `models.type` | 选用模型：`mock`、`act`、`gr00t_n1`、`gr00t_n1_5`、`gr00t_n1_6`、`rdt`、`smolvla`、`go1`、`pi0`、`pi05`、`tao`、`dm05` 或 `wallx`。 |
 
 各模型子段参数如下：
 
@@ -242,6 +242,8 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `models.go1` | `model_path`、`exp_path`、`data_stats_path` | GO1 权重、可导入的实验路径和归一化统计 JSON。 |
 | `models.pi0`、`models.pi05` | `config`、`model_path`、`is_hand` | OpenPI 模型配置与权重；`is_hand` 启用灵巧手动作处理。 |
 | `models.tao` | `model_path`、`embodiment_tag` | TAO 权重与 TAO 注册表中的具身类型标识。 |
+| `models.dm05` | `model_path`、`repo_path`、`action_mode`、`backend`、`vision_trt_engine_path`、`diffusion_steps`、`vision_attn_implementation`、`execute_horizon` | DM0.5 权重与代码库路径、动作模式、推理后端（含可选 TensorRT 视觉引擎）、扩散步数与每个控制周期的动作执行步数。 |
+| `models.wallx` | `model_path`、`repo_path`、`embodiment_tag`、`device`、`flow_steps` | WALL-X 权重与代码库路径、具身类型标识、推理设备与流匹配步数。 |
 
 所有路径必须在推理服务所在主机有效。`embodiment_tag` 与 `data_config_key` 是模型库注册标识，不可随意填写，应使用对应模型安装环境已注册的值。
 

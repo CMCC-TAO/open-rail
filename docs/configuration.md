@@ -234,7 +234,7 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `zmq` | Same VLA network fields as `vla_zmq`; the server binds its ROUTER socket using the configured port. |
 | `max_infer_workers` | Maximum concurrent inference workers. Set to `1` to disable concurrent inference. |
 | `max_decode_workers` | Maximum image-decoding workers. |
-| `models.type` | Selected model: `mock`, `act`, `gr00t_n1`, `gr00t_n1_5`, `gr00t_n1_6`, `rdt`, `smolvla`, `go1`, `pi0`, `pi05`, or `tao`. |
+| `models.type` | Selected model: `mock`, `act`, `gr00t_n1`, `gr00t_n1_5`, `gr00t_n1_6`, `rdt`, `smolvla`, `go1`, `pi0`, `pi05`, `tao`, `dm05`, or `wallx`. |
 
 Model-specific keys are as follows:
 
@@ -248,6 +248,8 @@ Model-specific keys are as follows:
 | `models.go1` | `model_path`, `exp_path`, `data_stats_path` | GO1 checkpoint, importable experiment path, and normalization statistics JSON. |
 | `models.pi0`, `models.pi05` | `config`, `model_path`, `is_hand` | OpenPI model configuration/checkpoint; `is_hand` enables hand-action handling. |
 | `models.tao` | `model_path`, `embodiment_tag` | TAO checkpoint and a TAO-registry embodiment identifier. |
+| `models.dm05` | `model_path`, `repo_path`, `action_mode`, `backend`, `vision_trt_engine_path`, `diffusion_steps`, `vision_attn_implementation`, `execute_horizon` | DM0.5 checkpoint and repository paths, action mode, inference backend with an optional TensorRT vision engine, diffusion-step count, and actions per control cycle. |
+| `models.wallx` | `model_path`, `repo_path`, `embodiment_tag`, `device`, `flow_steps` | WALL-X checkpoint and repository paths, embodiment identifier, inference device, and flow-matching step count. |
 
 Paths must be valid on the inference-server host. `embodiment_tag` and `data_config_key` are model-library identifiers, not arbitrary labels; use values registered by the matching model installation.
 
