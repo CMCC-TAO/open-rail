@@ -1061,6 +1061,24 @@ class VLAClientAsync():
         return f"{time.time_ns()}-{self._request_id}"
 
     def _request_inference(self, data, timeout_ms=500):
+        started = time.perf_counter()
+        result = None
+        try:
+            result = self._receive_inference(data, timeout_ms)
+            return result
+        finally:
+            if getattr(getattr(self, 'robot', None), 'DATASET_ROBOT_TYPE', None) == 'PandaOmron':
+                elapsed = time.perf_counter() - started
+                count = getattr(self, '_inference_timing_count', 0) + 1
+                self._inference_timing_count = count
+                if count == 1 or count % 16 == 0 or result is None:
+                    self.logger.info(
+                        'RoboCasa inference wait: request=%d duration=%.6fs status=%s server_avg_s=%s',
+                        count, elapsed, 'ok' if result is not None else 'failed',
+                        (result.get('meta') or {}).get('avg_infer_time') if result else None,
+                    )
+
+    def _receive_inference(self, data, timeout_ms):
         request_id = self._next_request_id()
         request_meta = {'request_id': request_id}
         observation_step = self._request_observation_step(data)

@@ -29,6 +29,37 @@ def test_validation_and_command(tmp_path):
     assert args.mode == 'async' and args.intra_chunk_mode == 'fitting'
 
 
+@pytest.mark.parametrize('gpu,expected', [('2', '2'), ('', '7')])
+def test_robocasa_gpu_environment_isolated(tmp_path, monkeypatch, gpu, expected):
+    monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '7')
+    monkeypatch.setenv('MUJOCO_EGL_DEVICE_ID', '7')
+    monkeypatch.setattr(simulation.subprocess, 'run', lambda *a, **kw: subprocess.CompletedProcess(a, 0, '', ''))
+    manager = simulation.EvaluationJobs(tmp_path)
+    output = tmp_path / 'devices.json'
+    code = (
+        'import json,os,pathlib; '
+        f'pathlib.Path({str(output)!r}).write_text(json.dumps('
+        '[os.getenv("CUDA_VISIBLE_DEVICES"),os.getenv("MUJOCO_EGL_DEVICE_ID")]))'
+    )
+    monkeypatch.setattr(manager, 'command', lambda c, i: [sys.executable, '-c', code])
+    job = manager.start(simulation.EvaluationConfig(env_name='Task', gpu=gpu))
+    deadline = time.monotonic() + 5
+    try:
+        while manager.get(job['id'])['status'] == 'running' and time.monotonic() < deadline:
+            time.sleep(.02)
+        assert json.loads(output.read_text()) == [expected, expected]
+        assert simulation.os.environ['CUDA_VISIBLE_DEVICES'] == '7'
+        assert simulation.os.environ['MUJOCO_EGL_DEVICE_ID'] == '7'
+    finally:
+        manager.close()
+
+
+@pytest.mark.parametrize('gpu', ['0,1', '-1', 'abc'])
+def test_robocasa_rejects_invalid_render_gpu(gpu):
+    with pytest.raises(ValidationError):
+        simulation.EvaluationConfig(env_name='Task', gpu=gpu)
+
+
 def test_lifecycle_api_and_artifacts(tmp_path, monkeypatch):
     manager = simulation.EvaluationJobs(tmp_path)
     monkeypatch.setattr(simulation, 'manager', manager)

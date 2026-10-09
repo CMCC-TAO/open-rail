@@ -17,7 +17,7 @@ const labels = {
   instruction_type: "任务指令类型",
   instruction: "固定任务指令（可选）",
   no_expert_check: "跳过专家检查（须填写指令）",
-  gpu: "GPU 编号（如 0 或 0,1）",
+  gpu: "GPU 编号（空为继承启动设置）",
   max_transition_steps: "块间过渡最多步数",
   max_seed_attempts: "每 episode 最大选种次数",
   seed_stride: "Episode 种子间隔",
@@ -227,7 +227,6 @@ function updatePlatform() {
     "instruction_type",
     "instruction",
     "no_expert_check",
-    "gpu",
     "max_transition_steps",
     "max_seed_attempts",
     "seed_stride",
@@ -235,6 +234,9 @@ function updatePlatform() {
   ];
   for (const key of onlyRobotwin)
     $("field-" + key).parentElement.hidden = !robotwin;
+  $("field-gpu").parentElement.firstChild.textContent = robotwin
+    ? "GPU 编号（如 0 或 0,1；空为继承）"
+    : "仿真 GPU 编号（单卡，如 2；空为继承）";
   for (const key of ["split", "mujoco_gl"])
     $("field-" + key).parentElement.hidden = robotwin;
   $("field-task_suite").parentElement.firstChild.textContent = robotwin

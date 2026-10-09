@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -65,6 +66,11 @@ class EvaluationConfig(BaseModel):
     def validate_selection(self):
         self.env_name = self.env_name.strip()
         self.task_suite = self.task_suite.strip()
+        self.gpu = self.gpu.strip()
+        if self.gpu and not re.fullmatch(r"\d+(,\d+)*", self.gpu):
+            raise ValueError("GPU must contain comma-separated indices")
+        if self.platform == "robocasa" and "," in self.gpu:
+            raise ValueError("RoboCasa requires one rendering GPU index")
         if bool(self.env_name) == bool(self.task_suite):
             raise ValueError("Select exactly one environment or task suite")
         if (
@@ -73,16 +79,12 @@ class EvaluationConfig(BaseModel):
         ):
             raise ValueError("Async threshold must be less than action steps")
         if self.platform == "robotwin":
-            import re
-
             if self.env_name and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.env_name):
                 raise ValueError("Invalid RoboTwin task name")
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.task_config):
                 raise ValueError("Invalid RoboTwin task config")
             if self.no_expert_check and not self.instruction.strip():
                 raise ValueError("Disabling expert check requires a fixed instruction")
-            if self.gpu and not re.fullmatch(r"\d+(,\d+)*", self.gpu):
-                raise ValueError("GPU must contain comma-separated indices")
             if self.max_seed_attempts > self.seed_stride:
                 raise ValueError("Seed attempts must not exceed seed stride")
             if self.seed < 0:
@@ -234,6 +236,10 @@ class EvaluationJobs:
             }
             self._save(job)
             log = open(self.directory / job_id / "evaluation.log", "ab", buffering=0)
+            environment = os.environ.copy()
+            if config.platform == "robocasa" and config.gpu:
+                environment["CUDA_VISIBLE_DEVICES"] = config.gpu
+                environment["MUJOCO_EGL_DEVICE_ID"] = config.gpu
             try:
                 process = subprocess.Popen(
                     self.command(config, job_id),
@@ -241,6 +247,7 @@ class EvaluationJobs:
                     stdout=log,
                     stderr=subprocess.STDOUT,
                     start_new_session=True,
+                    env=environment,
                 )
             except Exception:
                 log.close()
@@ -369,7 +376,7 @@ router = APIRouter(prefix="/api/simulation")
 
 @router.get("/options")
 def options():
-    defaults = EvaluationConfig(env_name="PnPCounterToCab").model_dump()
+    defaults = EvaluationConfig(env_name="PickPlaceCounterToCabinet").model_dump()
     try:
         from conf.client_conf import get_client_config
 

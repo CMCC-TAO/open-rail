@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 
 import cv2
 import numpy as np
@@ -13,6 +14,7 @@ class VideoRecorder:
         self.path = None
         self.error = None
         self._finalize_threads = []
+        self.last_write_timings = {}
 
     def start(self, env_name, episode):
         self.stop()
@@ -99,8 +101,10 @@ class VideoRecorder:
         return panel
 
     def write(self, obs, metadata=None):
+        self.last_write_timings = {'video_prepare_s': 0.0, 'video_encode_submit_s': 0.0}
         if self.writer is None:
             return
+        started = time.perf_counter()
         try:
             images = []
             height = int(self.config.get('camera_height', 256))
@@ -125,7 +129,12 @@ class VideoRecorder:
                     [np.concatenate(images[:2], axis=1), np.concatenate(images[2:4], axis=1)],
                     axis=0,
                 )
-            self.writer.append_data(frame)
+            self.last_write_timings['video_prepare_s'] = time.perf_counter() - started
+            encode_started = time.perf_counter()
+            try:
+                self.writer.append_data(frame)
+            finally:
+                self.last_write_timings['video_encode_submit_s'] = time.perf_counter() - encode_started
         except Exception as exc:
             self.error = str(exc)
             self.logger.exception('Failed to write RoboCasa video frame')

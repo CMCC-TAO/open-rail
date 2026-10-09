@@ -2,6 +2,7 @@
 # Auto-generated — edit values as needed
 
 controller:
+  action_steps: null
   gripper_offset: 5
   period: 3.75
   raw_fps: 30
@@ -42,9 +43,14 @@ language:
   task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
+  action_consume_mode: realtime
+  action_replenish_threshold: 0
+  latency_compensation: true
+  max_async_observation_lag_steps: 4
   max_len: 100
   mode: async
   observe_fps_window_size: 10
+  skip_initial_frames: 5
 record:
   auto: false
   evaluation:
@@ -88,6 +94,10 @@ record:
     codebase_version: v2.0
     data_path: data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet
     fps: 30
+    image_feature_keys:
+      hand_left: observation.images.left
+      hand_right: observation.images.right
+      head: observation.images.head
     robot_type: agibot_g1
     splits:
       valid: 0:100
@@ -224,6 +234,33 @@ robots:
     - gripper
     - head
     - waist
+  aloha_robotwin:
+    action_layout:
+      left_arm:
+        start: 0
+        end: 6
+        policy: gradual
+      left_gripper:
+        start: 6
+        end: 7
+        policy: stepwise
+        smooth: false
+      right_arm:
+        start: 7
+        end: 13
+        policy: gradual
+      right_gripper:
+        start: 13
+        end: 14
+        policy: stepwise
+        smooth: false
+    action_type: qpos
+    camera:
+      names:
+        hand_left: left_camera
+        hand_right: right_camera
+        head: head_camera
+      ref: head
   mock:
     action_layout:
       arm:
@@ -464,6 +501,53 @@ robots:
     - 0.004363323096185923
     - 0.0
     tt: 0.033
+  robocasa:
+    action_layout:
+      end_effector_position:
+        start: 0
+        end: 3
+        policy: gradual
+      end_effector_rotation:
+        start: 3
+        end: 6
+        policy: gradual
+      gripper_close:
+        start: 6
+        end: 7
+        policy: stepwise
+        smooth: false
+      base_motion:
+        start: 7
+        end: 11
+        policy: gradual
+      control_mode:
+        start: 11
+        end: 12
+        policy: stepwise
+        smooth: false
+    camera:
+      names:
+        hand_left: video.robot0_agentview_right
+        hand_right: video.robot0_eye_in_hand
+        head: video.robot0_agentview_left
+      ref: head
+    camera_height: 256
+    camera_width: 256
+    enable_render: true
+    env_name: PickPlaceCounterToCabinet
+    episode_offset: 0
+    max_episode_steps: 1000
+    seed: 42
+    split: target
+    state_keys:
+    - state.base_position
+    - state.base_rotation
+    - state.end_effector_position_relative
+    - state.end_effector_rotation_relative
+    - state.gripper_qpos
+    video_dir: ''
+    video_fps: 20
+    video_layout: grid
   ti5_t170c:
     action_layout:
       arm:

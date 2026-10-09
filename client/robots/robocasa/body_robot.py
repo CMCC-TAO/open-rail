@@ -7,6 +7,9 @@ import numpy as np
 
 from client.robots.base_robot import ObservationMode, RobotBase, RobotStepResult
 from client.robots.robocasa.video_recorder import VideoRecorder
+from client.robots.robocasa.profiling import (
+    StepTimings, install_mujoco_timing, log_render_device, measure_native,
+)
 
 
 class RobotBody(RobotBase):
@@ -35,6 +38,7 @@ class RobotBody(RobotBase):
     def __init__(self, config):
         super().__init__(config)
         self.logger = logging.getLogger(__name__)
+        self._step_timings = StepTimings(self.logger)
         self.cfg = config
         self._lock = threading.RLock()
         self._sim_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='robocasa_sim')
@@ -67,13 +71,20 @@ class RobotBody(RobotBase):
             raise ValueError('robocasa.env_name is required')
         env_id = env_name if env_name.startswith('robocasa/') else f'robocasa/{env_name}'
         try:
-            return gym.make(
+            import mujoco
+
+            install_mujoco_timing(mujoco)
+            started = time.perf_counter()
+            env = gym.make(
                 env_id,
                 split=self.config.get('split', 'target'),
                 camera_widths=int(self.config.get('camera_width', 256)),
                 camera_heights=int(self.config.get('camera_height', 256)),
                 enable_render=bool(self.config.get('enable_render', True)),
             )
+            self.logger.info('RoboCasa environment creation: %.6fs', time.perf_counter() - started)
+            log_render_device(self.logger)
+            return env
         except ImportError as exc:
             if 'EGL device display' in str(exc):
                 raise RuntimeError(
@@ -162,6 +173,10 @@ class RobotBody(RobotBase):
             action_dict[f'action.{key}'] for key in self.DATASET_ACTION_KEYS
         ]).astype(np.float32, copy=False)
 
+    def _step_env(self, action, sample):
+        with measure_native(sample):
+            return self.env.step(action)
+
     def control_robot(self, action):
         with self._lock:
             if self._episode_done:
@@ -177,9 +192,12 @@ class RobotBody(RobotBase):
             flat_action = self._to_flat_action(action)
             action_dict = self._flat_to_action_dict(flat_action)
             applied_action_step = self._episode_steps
+            started = time.perf_counter()
+            sample = {}
             obs, reward, terminated, truncated, info = self._sim_executor.submit(
-                self.env.step, action_dict
+                self._step_env, action_dict, sample
             ).result()
+            sample['env_step_s'] = time.perf_counter() - started
             self._last_obs = obs
             self._update_state(obs)
             self._episode_steps += 1
@@ -191,6 +209,7 @@ class RobotBody(RobotBase):
             max_steps = int(self.config.get('max_episode_steps', 1000))
             truncated = bool(truncated or self._episode_steps >= max_steps)
             self._episode_done = bool(self._episode_success or terminated or truncated)
+            video_started = time.perf_counter()
             self.video_recorder.write(obs, {
                 'task': self.config.env_name,
                 'episode': self._episode_index + 1,
@@ -202,6 +221,10 @@ class RobotBody(RobotBase):
                 'truncated': truncated,
                 'sim_time': sim_time,
             })
+            sample['video_write_s'] = time.perf_counter() - video_started
+            sample.update(self.video_recorder.last_write_timings)
+            sample['total_s'] = time.perf_counter() - started
+            self._step_timings.add(sample, self._episode_index + 1, self._episode_steps)
             if self._episode_done:
                 self._episode_result = {
                     'episode': self._episode_index,
@@ -219,6 +242,7 @@ class RobotBody(RobotBase):
                     self._episode_steps,
                 )
                 self.video_recorder.stop(wait=False)
+                self._step_timings.report(self._episode_index + 1, self._episode_steps)
             return RobotStepResult(
                 observation=self._to_vla_observation(
                     obs,
@@ -258,7 +282,9 @@ class RobotBody(RobotBase):
             if seed is None:
                 base_seed = self.config.get('seed')
                 seed = None if base_seed is None else int(base_seed) + self._episode_index + 1
+            reset_started = time.perf_counter()
             obs, _ = self._sim_executor.submit(self.env.reset, seed=seed).result()
+            self.logger.info('RoboCasa reset: seed=%s duration=%.6fs', seed, time.perf_counter() - reset_started)
             self._episode_index += 1
             self._episode_steps = 0
             self._episode_success = False
@@ -303,6 +329,7 @@ class RobotBody(RobotBase):
 
     def close(self):
         with self._lock:
+            self._step_timings.report(self._episode_index + 1, self._episode_steps)
             self.video_recorder.close()
             env, self.env = self.env, None
         if env is not None:
