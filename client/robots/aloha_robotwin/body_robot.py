@@ -74,6 +74,12 @@ class RobotBody(RobotBase):
         }
         if applied_action_step is not None:
             result["_applied_action_step"] = int(applied_action_step)
+        labels = [f'qpos_{i}' for i in range(self.current_state.size)]
+        for name, segment in self.config.action_layout.items():
+            start, end = int(segment['start']), int(segment['end'])
+            for i in range(start, min(end, len(labels))):
+                labels[i] = name if end - start == 1 else f'{name}_{i - start}'
+        result['_joint_trajectory'] = {'labels': labels, 'state': self.current_state.tolist()}
         cameras = obs.get("observation", {})
         for target_name, source_name in self.config.camera.names.items():
             try:

@@ -136,6 +136,8 @@ class RobotBody(RobotBase):
                 raise KeyError(f'RoboCasa observation is missing camera {obs_key!r}')
             result[f'cam.{camera_name}'] = np.asarray(obs[obs_key])[..., ::-1].copy()
         result['obs.state'] = self.current_state.copy()
+        if '_joint_trajectory' in obs:
+            result['_joint_trajectory'] = obs['_joint_trajectory']
         return result
 
     def _flat_to_action_dict(self, action):
@@ -175,7 +177,19 @@ class RobotBody(RobotBase):
 
     def _step_env(self, action, sample):
         with measure_native(sample):
-            return self.env.step(action)
+            result = self.env.step(action)
+            underlying = getattr(getattr(self.env, 'unwrapped', self.env), 'env', None)
+            labels, positions = [], []
+            for robot in getattr(underlying, 'robots', []):
+                indices = getattr(robot, '_ref_arm_joint_pos_indexes', [])
+                names = getattr(robot, 'robot_arm_joints', [])
+                if not indices or len(indices) != len(names):
+                    continue
+                labels.extend(name.removeprefix(robot.robot_model.naming_prefix) for name in names)
+                positions.extend(np.asarray(robot.sim.data.qpos[indices], dtype=np.float64).tolist())
+            if labels:
+                result[0]['_joint_trajectory'] = {'labels': labels, 'state': positions}
+            return result
 
     def control_robot(self, action):
         with self._lock:

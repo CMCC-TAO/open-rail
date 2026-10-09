@@ -1307,6 +1307,7 @@ async function applyVisualConfig(cfg = App.config) {
     camAllBtn.className = allOn ? 'btn btn-danger btn-xs' : 'btn btn-success btn-xs';
   }
 
+  if (App.traj.simulationLayout) return;
   if (typeof trajCfg.play === 'boolean') {
     App.traj.paused = !trajCfg.play;
   } else {

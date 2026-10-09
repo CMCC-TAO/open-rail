@@ -18,6 +18,7 @@ function clearCameraFrames() {
 async function applySimulationPreview(snapshot) {
   const job = snapshot.job;
   if (!job) {
+    restoreSimulationTrajectory();
     if (!simulationPreview.active) return;
     clearCameraFrames();
     simulationPreview.active = false;
@@ -41,6 +42,7 @@ async function applySimulationPreview(snapshot) {
     clearCameraFrames();
   }
   $('camera-source-label').textContent = `仿真相机 · ${job.env_name} · 环境 1`;
+  applySimulationTrajectory(snapshot.trajectory);
   if (!snapshot.frames.length) {
     clearCameraFrames();
     simulationPreview.timestamp = null;

@@ -3,6 +3,8 @@ import json
 import logging
 import threading
 import time
+import uuid
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -16,17 +18,34 @@ class CameraPreview:
         self.future = None
         self.closed = False
         self.lock = threading.Lock()
+        self.stream_id = uuid.uuid4().hex
+        self.trajectory_samples = deque(maxlen=120)
+        self.trajectory_labels = []
+        self.sequence = 0
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='camera_preview')
 
-    def publish(self, images, shapes):
+    def publish(self, images, shapes, trajectory=None):
         with self.lock:
+            if self.closed:
+                return
+            if trajectory:
+                self.sequence += 1
+                self.trajectory_labels = list(trajectory['labels'])
+                self.trajectory_samples.append({
+                    'sequence': self.sequence, 'timestamp': time.time(),
+                    'state': list(trajectory['state']),
+                })
             now = time.monotonic()
             if self.closed or now - self.last_publish < self.period or (self.future and not self.future.done()):
                 return
             self.last_publish = now
-            self.future = self.executor.submit(self._write, dict(images), dict(shapes))
+            trajectory_snapshot = {
+                'stream_id': self.stream_id, 'labels': list(self.trajectory_labels),
+                'samples': list(self.trajectory_samples),
+            }
+            self.future = self.executor.submit(self._write, dict(images), dict(shapes), trajectory_snapshot)
 
-    def _write(self, images, shapes):
+    def _write(self, images, shapes, trajectory=None):
         try:
             frames = []
             for camera_id, role in enumerate(('head', 'hand_left', 'hand_right')):
@@ -41,6 +60,8 @@ class CameraPreview:
                     'width': int(shapes[key][1]),
                 })
             payload = {'timestamp': time.time(), 'frames': frames}
+            if trajectory:
+                payload['trajectory'] = trajectory
             self.path.parent.mkdir(parents=True, exist_ok=True)
             temporary = self.path.with_suffix('.tmp')
             temporary.write_text(json.dumps(payload), encoding='utf-8')

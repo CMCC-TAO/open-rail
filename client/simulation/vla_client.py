@@ -977,7 +977,7 @@ class VLAClientAsync():
         # Send images to visualization interface
         self.visualize_server.update_image_data(encoded_imgs)
         if self.camera_preview is not None:
-            self.camera_preview.publish(encoded_imgs, self.camera_shape_dict)
+            self.camera_preview.publish(encoded_imgs, self.camera_shape_dict, frame.get('_joint_trajectory'))
         return encoded_imgs
     def _parse_prob_progress(self, action_data):
         prob_progress = None

@@ -39,7 +39,7 @@ def test_preview_drops_frames_when_writer_is_busy(tmp_path, monkeypatch):
     preview = CameraPreview(tmp_path / 'preview.json', {}, fps=1000)
     entered, release = threading.Event(), threading.Event()
     written = []
-    def write(images, shapes):
+    def write(images, shapes, trajectory=None):
         entered.set()
         release.wait(5)
         written.append(images)
@@ -53,6 +53,42 @@ def test_preview_drops_frames_when_writer_is_busy(tmp_path, monkeypatch):
         release.set()
         preview.close()
     assert written == [{'first': b'jpeg'}]
+
+
+def test_preview_keeps_bounded_trajectory_history_between_image_updates(tmp_path):
+    preview = CameraPreview(tmp_path / 'preview.json', {})
+    try:
+        for i in range(130):
+            preview.publish({}, {}, {'labels': ['joint0'], 'state': [i / 100]})
+        preview.future.result(timeout=5)
+        preview.last_publish = 0
+        preview.publish({}, {}, {'labels': ['joint0'], 'state': [1.3]})
+    finally:
+        preview.close()
+    snapshot = json.loads((tmp_path / 'preview.json').read_text())
+    trajectory = snapshot['trajectory']
+    assert trajectory['labels'] == ['joint0']
+    assert len(trajectory['samples']) == 120
+    assert trajectory['samples'][-1]['sequence'] == 131
+    assert trajectory['samples'][-1]['state'] == [1.3]
+
+
+def test_robocasa_trajectory_reads_joint_positions_not_end_effector_state():
+    from client.robots.robocasa.body_robot import RobotBody
+
+    native_robot = SimpleNamespace(
+        _ref_arm_joint_pos_indexes=[1, 2], robot_arm_joints=['robot0_right_j0', 'robot0_right_j1'],
+        robot_model=SimpleNamespace(naming_prefix='robot0_'),
+        sim=SimpleNamespace(data=SimpleNamespace(qpos=np.array([99, .1, .2, 88]))),
+    )
+    obs = {'state.end_effector_position': np.array([3, 4, 5])}
+    robot = RobotBody.__new__(RobotBody)
+    robot.env = SimpleNamespace(
+        unwrapped=SimpleNamespace(env=SimpleNamespace(robots=[native_robot])),
+        step=lambda action: (obs, 0, False, False, {}),
+    )
+    result = robot._step_env({}, {})
+    assert result[0]['_joint_trajectory'] == {'labels': ['right_j0', 'right_j1'], 'state': [.1, .2]}
 
 
 def test_observation_encoding_publishes_all_cameras(tmp_path):
