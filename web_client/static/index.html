@@ -7,7 +7,7 @@
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <link rel="stylesheet" href="/static/styles/main.css?v=20260924-shortcuts-popover-1" />
+  <link rel="stylesheet" href="/static/styles/main.css?v=20261009-simulation-link" />
 </head>
 <body>
 
@@ -16,6 +16,7 @@
     <div class="topbar-left">
       <div id="status-badge" class="status-badge stopped">STOPPED</div>
       <button class="btn btn-xs topbar-shortcuts-button" id="btn-shortcuts" type="button" aria-haspopup="dialog" aria-controls="shortcuts-popover" aria-expanded="false">⌨ Shortcuts</button>
+      <a class="topbar-simulation-link" href="/simulation" title="RoboCasa / RoboTwin 仿真测评" aria-label="仿真测评（RoboCasa / RoboTwin）"><i class="fas fa-flask" aria-hidden="true"></i><span>仿真测评</span></a>
       <div id="shortcuts-popover" class="shortcuts-popover hidden" role="dialog" aria-labelledby="shortcuts-popover-title">
         <div class="shortcuts-popover-header">
           <strong id="shortcuts-popover-title">Keyboard shortcuts</strong>
@@ -94,7 +95,6 @@
         </div>
       </div>
     </div>
-    <a href="/simulation" style="margin-left:16px">仿真测评（RoboCasa / RoboTwin）</a>
   </header>
 
   <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
