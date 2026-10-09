@@ -362,6 +362,7 @@ def _run_task(args, task_name, run_id):
     config.record.dataset_date = args._record_date or _recording_date(run_id)
     config.record.lerobot.fps = args.record_fps
     cfg = config.robots.aloha_robotwin
+    cfg.preview_worker_index = getattr(args, '_worker_index', None)
     cfg.task_name = task_name
     cfg.video_dir = "" if args.no_video else str(task_output / "videos" / run_id)
     cfg.video_fps, cfg.video_layout = args.video_fps, args.video_layout

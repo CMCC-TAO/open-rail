@@ -237,6 +237,7 @@ class EvaluationJobs:
             self._save(job)
             log = open(self.directory / job_id / "evaluation.log", "ab", buffering=0)
             environment = os.environ.copy()
+            environment['VLA_SIM_PREVIEW_PATH'] = str(self.directory / job_id / 'preview.json')
             if config.platform == "robocasa" and config.gpu:
                 environment["CUDA_VISIBLE_DEVICES"] = config.gpu
                 environment["MUJOCO_EGL_DEVICE_ID"] = config.gpu
@@ -396,6 +397,26 @@ def list_jobs():
         return sorted(
             (j.copy() for j in manager.jobs.values()), key=lambda j: j["started"], reverse=True
         )
+
+
+@router.get("/preview")
+def camera_preview():
+    with manager.lock:
+        jobs = [j.copy() for j in manager.jobs.values() if j['status'] == 'running']
+    if not jobs:
+        return {'job': None, 'frames': []}
+    job = max(jobs, key=lambda j: j['started'])
+    result = {
+        'job': {'id': job['id'], 'env_name': job['config'].get('env_name') or job['config'].get('task_suite')},
+        'frames': [],
+    }
+    try:
+        snapshot = json.loads((manager.directory / job['id'] / 'preview.json').read_text())
+        if snapshot['timestamp'] >= job['started'] and time.time() - snapshot['timestamp'] < 5:
+            result.update(snapshot)
+    except (OSError, ValueError, KeyError):
+        pass
+    return result
 
 
 @router.post("/jobs")

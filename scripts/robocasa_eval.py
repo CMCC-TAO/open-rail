@@ -400,6 +400,7 @@ def _run_task(args, env_name, run_id):
     config.robots.robocasa.split = args.split
     config.robots.robocasa.seed = args.seed
     config.robots.robocasa.episode_offset = start_episode
+    config.robots.robocasa.preview_worker_index = worker_index
     config.robots.robocasa.max_episode_steps = _task_horizon(env_name, args.max_episode_steps)
     config.robots.robocasa.video_dir = '' if args.no_video else str(task_output / 'videos' / run_id)
     config.robots.robocasa.video_fps = args.video_fps

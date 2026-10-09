@@ -1,4 +1,5 @@
 import cv2
+import os
 import time
 import logging
 import threading
@@ -54,6 +55,12 @@ class VLAClientAsync():
         self.task_language_manager = task_language_manager
         self.vla_zmq = vla_zmq_client
         self.robot = robot
+        self.camera_preview = None
+        preview_path = os.environ.get('VLA_SIM_PREVIEW_PATH')
+        if preview_path and robot.config.get('preview_worker_index') in (None, 0):
+            from client.simulation.preview import CameraPreview
+
+            self.camera_preview = CameraPreview(preview_path, dict(robot.config.camera.names))
         self.intra_chunk_smoother.set_action_layout(robot.config.action_layout)
         self.is_running = False
         self.is_observe_thread_running = False
@@ -255,6 +262,8 @@ class VLAClientAsync():
 
         if hasattr(self, 'data_record_manager') and self.data_record_manager is not None:
             self.data_record_manager.close()
+        if self.camera_preview is not None:
+            self.camera_preview.close()
 
         self.vla_zmq.close()
         self.visualize_server.stop_server()
@@ -967,6 +976,8 @@ class VLAClientAsync():
         self.image_process_time = self.image_process_time * 0.8 +  (time.perf_counter() - start_time) * 1000 * 0.2
         # Send images to visualization interface
         self.visualize_server.update_image_data(encoded_imgs)
+        if self.camera_preview is not None:
+            self.camera_preview.publish(encoded_imgs, self.camera_shape_dict)
         return encoded_imgs
     def _parse_prob_progress(self, action_data):
         prob_progress = None
