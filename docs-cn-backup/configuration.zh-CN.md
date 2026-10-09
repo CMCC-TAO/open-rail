@@ -6,12 +6,14 @@
 
 | 启动入口 | 配置加载顺序 |
 | --- | --- |
-| `run_web_client.py` | `conf/client_conf.py` 默认值 → `--conf` 指定的 YAML（默认 `conf/default_conf.yaml`）→ 运行时 load/patch 请求 |
-| `run_server.py` | `conf/server_conf.py` 默认值 → 命令行参数覆盖 |
+| `run_web_client.py` | `conf/client_conf.py` 默认值 → `--conf` 指定的 YAML（默认 `conf/default_conf.yaml`）→ 来自 Web 控制台的运行时 load/patch 请求 |
+| `run_server.py` | `conf/server_conf.py` 默认值 → 命令行参数覆盖（`--model_type`、`--model_path`、`--debug`） |
 
-Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段会被忽略。因此应按本文字段维护 `default_conf.yaml`。`conf/user_conf_example.py` 展示了 `--user_conf` 可使用的嵌套字典格式。
+Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选择的 YAML 既是启动配置，也是 Web 控制台（Setup → Apply / Save As）的保存目标；保存时 `.yaml`/`.yml` 目标写成 YAML，其他扩展名写成 Python 字典文件。
 
-除非表格中特别注明，本文的时间单位均为毫秒。
+加载配置文件或应用 patch 时仅会更新已存在的叶子参数，未知字段会被忽略，因此应按本文字段维护 `default_conf.yaml`。加载时会自动迁移两个旧键名：`inter_chunk.search_length` 会被读取为 `inter_chunk.search_action.search_length`，`robots.a2d.*` 会被读取为 `robots.agibot_g1.*`。
+
+除非表格中特别注明，本文的时间单位均为毫秒。浏览器中暴露这些参数的面板见[Web 控制台](../docs-cn-backup/web-console.zh-CN.md)。
 
 ## 客户端根参数字典
 
@@ -65,11 +67,13 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `search_action.search_length` | 正整数 | 为选取平滑衔接点向后搜索的动作数量。机器人在块边界停顿时可适当增大。 |
 | `smooth_velocity.max_vel` | 正数 | 速度平滑模式的速度上限。 |
 | `smooth_velocity.max_acc` | 正数 | 速度平滑模式的加速度上限。 |
-| `smooth_velocity.kp` | 数值 | 速度平滑使用的比例增益。 |
-| `smooth_velocity.kd` | 数值 | 速度平滑使用的微分增益。 |
+| `smooth_velocity.k_p` | 数值 | 作用于位置误差的比例反馈增益。 |
+| `smooth_velocity.k_d` | 数值 | 作用于关节速度的微分反馈增益。 |
+| `smooth_velocity.kf_vel` | 数值 | 作用于目标速度的前馈增益。 |
+| `smooth_velocity.kf_acc` | 数值 | 作用于目标加速度的前馈增益；两个前馈增益都设为 `0` 时退化为 PD 反馈控制。 |
 | `min_jerk.blend_threshold` | 数值 | 控制何时启用最小加加速度融合的阈值。 |
 | `min_jerk.adaptive_factor` | 数值 | 最小加加速度融合的自适应缩放系数；负值保留实现中的自动行为。 |
-| `sync` | 映射 | `sync` 模式预留配置，目前为空。 |
+| `sync` | 映射 | `sync` 模式预留配置，目前为空。`sync` 模式不做融合、直接使用下一个动作块；Web 控制台的模式下拉列表只提供 `search_action`、`smooth_velocity` 和 `min_jerk`。 |
 
 ### `controller`：机器人命令时序
 
@@ -98,6 +102,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `file_path` | 相对 `conf/` 的路径 | JSON 任务指令文件，通常为 `language_cmd.json`。 |
 | `task_id` | 字符串 | 语言 JSON 中的任务键。不存在时会回退到第一个可用任务。 |
 | `sub_task_id` | 从零开始的整数 | 所选任务中当前指令的索引。索引无效时回退为 `0`。 |
+| `auto_mode_start_sub_task_id` | 从零开始的整数 | Auto Mode 启动时应用的子任务索引；Web 控制台的 Language Command 面板以 Start 选择器暴露该参数。 |
 | `auto_mode` | 布尔值 | 是否根据任务进度输出自动切换到下一条语言指令。 |
 | `task_progress_threshold` | 数值 | 自动切换所需的平均任务进度概率阈值。 |
 | `task_progress_win_size` | 正整数 | 计算平均任务进度的滑动窗口长度。 |
@@ -171,7 +176,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `stepwise` | 离散或近似离散维度，通常为夹爪/灵巧手。 |
 | `manual` | 不由模型推理、由机器人或 Web 端控制的维度；应排在模型控制区间之后。 |
 
-存在 `presets` 时，它提供 UI 复位和手动控制目标。`Default` 与 `Custom` 是通用预设；AgiBot G1 夹爪还包括 `Open` 与 `Close`。
+存在 `presets` 时，它提供 UI 复位和手动控制目标。`Default` 与 `Custom` 是通用预设；AgiBot G1 夹爪还包括 `Open` 与 `Close`，其底盘还包括 `Forward`、`Backward`、`Left`、`Right`，NAVIAI-WA2 灵巧手还包括 `Open` 与 `Finger`。
 
 ### `robots.agibot_g1`
 
@@ -180,6 +185,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `hand_type` | 末端类型：`gripper`、`hand_as_gripper` 或 `hand`，会影响相机名称和本体状态布局。 |
 | `camera.ref` | 参考相机名称。 |
 | `camera.names` | 规范名称（`head`、`hand_left`、`hand_right`）到机器人相机标识的映射。 |
+| `camera.non_ref_fetch_workers` | 用于持续获取非参考相机的常驻工作线程数。 |
 | `proprio_names` | 拼接机器人状态时使用的有序本体状态组。 |
 | `gripper_freq`、`head_freq` | 夹爪、头部控制命令频率。 |
 | `manual_arm_interval` | 手动生成手臂目标之间的时间间隔，单位为秒。 |
@@ -215,6 +221,7 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | --- | --- |
 | `tt` | 舵机/控制周期，单位为秒。 |
 | `gain` | 舵机增益。 |
+| `hand_type` | 末端类型；NAVIAI-WA2 使用 `hand`，会影响本体状态布局与手部预设。 |
 | `camera.topic_dict` | 以 `head`、`hand_left`、`hand_right` 为键的压缩 ROS 图像话题。 |
 | `action_layout` | 连续手臂与步进式手部动作范围。 |
 | `reset_position` | 完整复位姿态向量，顺序必须与 NAVIAI-WA2 驱动一致。 |
@@ -228,6 +235,8 @@ Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段�
 | `zmq` | 与 `vla_zmq` 相同的 VLA 网络字段；服务端使用其中端口绑定 ROUTER socket。 |
 | `max_infer_workers` | 最大并发推理工作线程数。设为 `1` 可禁用并发推理。 |
 | `max_decode_workers` | 最大图像解码工作线程数。 |
+| `image_pad_and_resize` | 是否在服务端对解码图像做保持宽高比的填充与缩放。 |
+| `image_target_height`、`image_target_width` | `image_pad_and_resize` 启用时使用的目标图像尺寸，单位为像素。 |
 | `models.type` | 选用模型：`mock`、`act`、`gr00t_n1`、`gr00t_n1_5`、`gr00t_n1_6`、`rdt`、`smolvla`、`go1`、`pi0`、`pi05`、`tao`、`dm05` 或 `wallx`。 |
 
 各模型子段参数如下：
