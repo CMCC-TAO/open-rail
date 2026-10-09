@@ -137,7 +137,7 @@ New robot types are registered by adding one entry to the `_ROBOT_MODULES` map i
 
 ```python
 _ROBOT_MODULES: Dict[str, str] = {
-    'a2d': 'client.robots.a2d.body_robot',
+    'agibot_g1': 'client.robots.agibot_g1.body_robot',
     'mock': 'client.robots.mock.body_robot',
     'ti5_t170c': 'client.robots.ti5_t170c.body_robot',
     'navi_wa2': 'client.robots.navi_wa2.body_robot',
@@ -145,7 +145,7 @@ _ROBOT_MODULES: Dict[str, str] = {
 }
 ```
 
-No edit is needed in [`web_client/server.py`](../../web_client/server.py): `_create_robot()` (`web_client/server.py:1318`) just wraps the registered type in a `RobotProxy`, and the concrete `RobotBody` is imported from `_ROBOT_MODULES` inside the robot worker subprocess. A type that is missing from `_ROBOT_MODULES` fails with `Unsupported robot type`.
+No edit is needed in [`web_client/server.py`](../../web_client/server.py): `_create_robot()` (`web_client/server.py:1332`) just wraps the registered type in a `RobotProxy`, and the concrete `RobotBody` is imported from `_ROBOT_MODULES` inside the robot worker subprocess. A type that is missing from `_ROBOT_MODULES` fails with `Unsupported robot type`.
 
 Each client start builds a fresh `RobotProxy`, so there is no SDK-instance reuse hook to update.
 
