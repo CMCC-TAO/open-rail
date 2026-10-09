@@ -17,6 +17,7 @@ class RobotType(str, Enum):
     AGIBOT_G1 = 'agibot_g1'
     MOCK = 'mock'
     ROBOCASA = 'robocasa'
+    ALOHA_ROBOTWIN = 'aloha_robotwin'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
 
@@ -146,6 +147,28 @@ def get_robocasa_config():
         'base_motion': {'start': 7, 'end': 11, 'policy': 'gradual'},
         'control_mode': {
             'start': 11, 'end': 12, 'policy': 'stepwise', 'smooth': False,
+        },
+    })
+    return config
+
+def get_aloha_robotwin_config():
+    config = ConfigDict()
+    config.action_type = 'qpos'
+    config.camera = ConfigDict()
+    config.camera.ref = 'head'
+    config.camera.names = {
+        'head': 'head_camera',
+        'hand_left': 'left_camera',
+        'hand_right': 'right_camera',
+    }
+    config.action_layout = _ordered_config({
+        'left_arm': {'start': 0, 'end': 6, 'policy': 'gradual'},
+        'left_gripper': {
+            'start': 6, 'end': 7, 'policy': 'stepwise', 'smooth': False,
+        },
+        'right_arm': {'start': 7, 'end': 13, 'policy': 'gradual'},
+        'right_gripper': {
+            'start': 13, 'end': 14, 'policy': 'stepwise', 'smooth': False,
         },
     })
     return config
@@ -311,6 +334,7 @@ def get_robots_config():
     config.agibot_g1 = get_agibot_g1_config()
     config.mock = get_mock_config()
     config.robocasa = get_robocasa_config()
+    config.aloha_robotwin = get_aloha_robotwin_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()
     return config

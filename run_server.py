@@ -79,6 +79,8 @@ def parse_args():
     parser.add_argument('--embodiment_tag', type=str, help='Model embodiment tag')
     parser.add_argument('--data_config_key', type=str, help='GR00T data configuration key')
     parser.add_argument('--action_keys', nargs='+', help='Explicit TAO action output order')
+    parser.add_argument('--video_keys', nargs=3, help='TAO camera keys: head, left wrist, right wrist')
+    parser.add_argument('--server_port', type=int, help='Override model service port')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
     return parser.parse_args()
@@ -135,6 +137,17 @@ def override_config_with_args(config, args):
         if config.models.type != ModelType.TAO:
             raise ValueError('--action_keys is only supported by TAO')
         config.models.tao.action_keys = args.action_keys
+
+    if getattr(args, 'video_keys', None):
+        if config.models.type != ModelType.TAO:
+            raise ValueError('--video_keys is only supported by TAO')
+        if len(set(args.video_keys)) != 3:
+            raise ValueError('--video_keys must contain three distinct keys')
+        config.models.tao.video_keys = args.video_keys
+    if getattr(args, 'server_port', None) is not None:
+        if not 1 <= args.server_port <= 65535:
+            raise ValueError('--server_port must be in [1, 65535]')
+        config.zmq.port = str(args.server_port)
 
     return config
 

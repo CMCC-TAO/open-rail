@@ -765,7 +765,7 @@ class VLAClientAsync():
                 currt_vel=None,
                 currt_acc=None,
                 joint_indices=None,
-                step_indices=None,
+                step_indices=self.robot.get_step_indices(),
             )
             # Record control timestamp
             self.realtime_data_manager.set_control_time_marker()

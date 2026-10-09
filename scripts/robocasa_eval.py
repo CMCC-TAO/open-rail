@@ -1,16 +1,11 @@
 """Evaluate a VLA policy in RoboCasa through VLAClientAsync."""
 
 import argparse
-import copy
 import json
 import logging
 import os
-import signal
-import shutil
-import subprocess
 import sys
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +19,20 @@ from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
+from client.simulation.recording_exports import (
+    _array_stats as _array_stats,
+    _link_or_copy as _link_or_copy,
+    _dataset_metadata as _dataset_metadata,
+    _task_index_remap as _task_index_remap,
+    _remap_table_task_indices as _remap_table_task_indices,
+    _write_dataset_selection as _write_dataset_selection,
+    _write_dataset_partition as _write_dataset_partition,
+    _recording_result_pairs as _recording_result_pairs,
+    _resolve_recording_results as _resolve_recording_results,
+    _partition_recording_by_success as _partition_recording_by_success,
+    _merge_parallel_recordings as _merge_parallel_recordings,
+)
+
 from client.simulation.vla_client import VLAClientAsync
 from client.core.zmq_client import ZMQClient
 from client.utils.util import apply_user_config, load_user_config
@@ -79,6 +88,13 @@ def _wait_for_server(client, timeout):
     )
 
 
+def _atomic_json(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(value, indent=2), encoding='utf-8')
+    temporary.replace(path)
+
+
 def _save_stats(output_dir, metadata, episodes):
     output_dir.mkdir(parents=True, exist_ok=True)
     stats = {
@@ -130,8 +146,7 @@ def _save_suite_stats(output_dir, metadata, tasks):
         'tasks': tasks,
     }
     path = output_dir / 'stats.json'
-    with path.open('w', encoding='utf-8') as file:
-        json.dump(stats, file, indent=2)
+    _atomic_json(path, stats)
     return path, stats
 
 
@@ -211,382 +226,6 @@ def _resume_episodes(task_output, metadata, episode_start=0):
     return episodes
 
 
-def _array_stats(values):
-    values = np.asarray(values, dtype=np.float64)
-    if values.ndim == 1:
-        values = values[:, None]
-    return {
-        'mean': values.mean(axis=0).tolist(),
-        'std': values.std(axis=0).tolist(),
-        'min': values.min(axis=0).tolist(),
-        'max': values.max(axis=0).tolist(),
-        'q01': np.quantile(values, 0.01, axis=0).tolist(),
-        'q99': np.quantile(values, 0.99, axis=0).tolist(),
-    }
-
-
-def _link_or_copy(source, destination):
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.link(source, destination)
-    except OSError:
-        shutil.copy2(source, destination)
-
-
-def _dataset_metadata(source):
-    source = Path(source)
-    source_meta = source / 'meta'
-    info = json.loads((source_meta / 'info.json').read_text(encoding='utf-8'))
-    episodes = {
-        row['episode_index']: row
-        for row in (
-            json.loads(line)
-            for line in (source_meta / 'episodes.jsonl').read_text(encoding='utf-8').splitlines()
-            if line.strip()
-        )
-    }
-    tasks = (source_meta / 'tasks.jsonl').read_text(encoding='utf-8')
-    return info, episodes, tasks
-
-
-def _task_index_remap(source_tasks, template_tasks, source):
-    def parse_tasks(text):
-        rows = [json.loads(line) for line in text.splitlines() if line.strip()]
-        by_index = {int(row['task_index']): row['task'] for row in rows}
-        by_task = {row['task']: int(row['task_index']) for row in rows}
-        if len(by_index) != len(rows) or len(by_task) != len(rows):
-            raise RuntimeError(f'Invalid LeRobot task definitions: {source}')
-        return by_index, by_task
-
-    source_by_index, source_by_task = parse_tasks(source_tasks)
-    _, template_by_task = parse_tasks(template_tasks)
-    if set(source_by_task) != set(template_by_task):
-        raise RuntimeError(f'Incompatible LeRobot task definitions: {source}')
-    return {
-        source_index: template_by_task[task]
-        for source_index, task in source_by_index.items()
-    }
-
-
-def _remap_table_task_indices(table, remap, source):
-    import pyarrow as pa
-
-    columns = [
-        name for name in ('task_index', 'annotation.human.task_description')
-        if name in table.column_names
-    ]
-    for name in columns:
-        try:
-            values = [remap[int(value)] for value in table[name].to_pylist()]
-        except (KeyError, TypeError, ValueError) as exc:
-            raise RuntimeError(f'Unknown LeRobot task index in {source}') from exc
-        field_index = table.schema.get_field_index(name)
-        table = table.set_column(
-            field_index,
-            name,
-            pa.array(values, type=table.schema.field(field_index).type),
-        )
-    return table
-
-
-def _write_dataset_selection(template_source, destination, selections):
-    import pyarrow as pa
-    import pyarrow.parquet as pq
-
-    template_source = Path(template_source)
-    destination = Path(destination)
-    template_info, _, template_tasks = _dataset_metadata(template_source)
-    compatibility_keys = (
-        'codebase_version', 'robot_type', 'total_tasks', 'chunks_size', 'fps',
-        'data_path', 'video_path', 'features',
-    )
-    metadata = {}
-    task_remaps = {}
-    for source, _ in selections:
-        source = Path(source)
-        if source not in metadata:
-            metadata[source] = _dataset_metadata(source)
-            info, _, tasks = metadata[source]
-            if any(info.get(key) != template_info.get(key) for key in compatibility_keys):
-                raise RuntimeError(f'Incompatible LeRobot recording metadata: {source}')
-            task_remaps[source] = _task_index_remap(tasks, template_tasks, source)
-
-    chunk_size = int(template_info['chunks_size'])
-    video_keys = [
-        key for key, feature in template_info['features'].items()
-        if feature.get('dtype') == 'video'
-    ]
-    all_stats = {'observation.state': [], 'action': [], 'timestamp': []}
-    output_episodes = []
-    output_episode_stats = []
-    total_frames = 0
-
-    for new_index, (source, source_index) in enumerate(selections):
-        source = Path(source)
-        info, episode_rows, _ = metadata[source]
-        if source_index not in episode_rows:
-            raise RuntimeError(f'Missing episode {source_index} metadata in {source}')
-        source_chunk = source_index // int(info['chunks_size'])
-        target_chunk = new_index // chunk_size
-        source_data = source / info['data_path'].format(
-            episode_chunk=source_chunk,
-            episode_index=source_index,
-        )
-        if not source_data.is_file():
-            raise FileNotFoundError(f'Missing recorded episode: {source_data}')
-        table = pq.read_table(source_data)
-        table = _remap_table_task_indices(table, task_remaps[source], source)
-        frame_count = table.num_rows
-        table = table.set_column(
-            table.schema.get_field_index('episode_index'),
-            'episode_index',
-            pa.array([new_index] * frame_count, type=pa.int64()),
-        )
-        table = table.set_column(
-            table.schema.get_field_index('index'),
-            'index',
-            pa.array(range(total_frames, total_frames + frame_count), type=pa.int64()),
-        )
-        target_data = destination / template_info['data_path'].format(
-            episode_chunk=target_chunk,
-            episode_index=new_index,
-        )
-        target_data.parent.mkdir(parents=True, exist_ok=True)
-        pq.write_table(table, target_data)
-
-        episode_stats = {}
-        for column in all_stats:
-            values = np.asarray(table[column].to_pylist(), dtype=np.float64)
-            if values.size:
-                all_stats[column].append(values)
-                episode_stats[column] = _array_stats(values)
-        output_episode_stats.append({
-            'episode_index': new_index,
-            'stats': episode_stats,
-        })
-        output_episodes.append({
-            **episode_rows[source_index],
-            'episode_index': new_index,
-            'length': frame_count,
-        })
-
-        for video_key in video_keys:
-            source_video = source / info['video_path'].format(
-                episode_chunk=source_chunk,
-                video_key=video_key,
-                episode_index=source_index,
-            )
-            target_video = destination / template_info['video_path'].format(
-                episode_chunk=target_chunk,
-                video_key=video_key,
-                episode_index=new_index,
-            )
-            if not source_video.is_file():
-                raise FileNotFoundError(f'Missing recorded video: {source_video}')
-            _link_or_copy(source_video, target_video)
-        total_frames += frame_count
-
-    destination_meta = destination / 'meta'
-    destination_meta.mkdir(parents=True, exist_ok=True)
-    info = dict(template_info)
-    info.update({
-        'total_episodes': len(selections),
-        'total_frames': total_frames,
-        'total_videos': len(selections) * len(video_keys),
-        'total_chunks': (len(selections) + chunk_size - 1) // chunk_size,
-        'splits': {'train': f'0:{len(selections)}'},
-    })
-    (destination_meta / 'info.json').write_text(
-        json.dumps(info, indent=2, ensure_ascii=False), encoding='utf-8'
-    )
-    for filename, rows in (
-        ('episodes.jsonl', output_episodes),
-        ('episodes_stats.jsonl', output_episode_stats),
-    ):
-        (destination_meta / filename).write_text(
-            ''.join(json.dumps(row, ensure_ascii=False) + '\n' for row in rows),
-            encoding='utf-8',
-        )
-    (destination_meta / 'tasks.jsonl').write_text(template_tasks, encoding='utf-8')
-    stats = {
-        column: _array_stats(np.concatenate(chunks, axis=0))
-        for column, chunks in all_stats.items()
-        if chunks
-    }
-    (destination_meta / 'stats.json').write_text(
-        json.dumps(stats, indent=2, ensure_ascii=False), encoding='utf-8'
-    )
-
-
-def _write_dataset_partition(source, destination, source_indices):
-    selections = [(Path(source), source_index) for source_index in source_indices]
-    _write_dataset_selection(source, destination, selections)
-
-def _recording_result_pairs(source, episodes):
-    episode_rows = [
-        json.loads(line)
-        for line in (source / 'meta/episodes.jsonl').read_text(encoding='utf-8').splitlines()
-        if line.strip()
-    ]
-    if all('recording_episode_index' in result for result in episodes):
-        return [
-            (int(result['recording_episode_index']), evaluation_index)
-            for evaluation_index, result in enumerate(episodes)
-        ]
-    if len(episode_rows) == len(episodes):
-        return [
-            (int(row['episode_index']), evaluation_index)
-            for evaluation_index, row in enumerate(episode_rows)
-        ]
-    raise RuntimeError(
-        'Cannot recover recording/result mapping: '
-        f'{len(episode_rows)} episode rows, {len(episodes)} evaluation results'
-    )
-
-
-def _resolve_recording_results(source, episodes):
-    pairs = _recording_result_pairs(source, episodes)
-    resolved = {}
-    dropped = []
-    for source_index, evaluation_index in pairs:
-        if source_index in resolved:
-            dropped.append(resolved[source_index])
-        resolved[source_index] = {
-            'evaluation_episode': evaluation_index,
-            'success': bool(episodes[evaluation_index]['success']),
-        }
-    available = {
-        int(path.stem.rsplit('_', 1)[-1])
-        for path in (source / 'data').rglob('episode_*.parquet')
-    }
-    if set(resolved) != available:
-        raise RuntimeError(
-            'Cannot partition recording: resolved episode indices do not match files; '
-            f'mapping={sorted(resolved)}, files={sorted(available)}'
-        )
-    return resolved, dropped
-
-
-def _partition_recording_by_success(recording_path, episodes):
-    source = Path(recording_path)
-    resolved, dropped = _resolve_recording_results(source, episodes)
-    partitions = {
-        outcome: [
-            source_index
-            for source_index, result in sorted(
-                resolved.items(), key=lambda item: item[1]['evaluation_episode']
-            )
-            if result['success'] is success
-        ]
-        for outcome, success in (('success', True), ('failure', False))
-    }
-    temporary_paths = {name: source / f'.{name}.tmp' for name in partitions}
-    final_paths = {name: source / name for name in partitions}
-    if any(path.exists() for path in (*temporary_paths.values(), *final_paths.values())):
-        raise FileExistsError(f'Recording partitions already exist under {source}')
-    try:
-        for name, indices in partitions.items():
-            _write_dataset_partition(source, temporary_paths[name], indices)
-        for name in partitions:
-            temporary_paths[name].rename(final_paths[name])
-    except Exception:
-        for path in (*temporary_paths.values(), *final_paths.values()):
-            if path.exists():
-                shutil.rmtree(path)
-        raise
-
-    for directory in ('data', 'videos', 'meta'):
-        path = source / directory
-        if path.exists():
-            shutil.rmtree(path)
-    report = {
-        'evaluation_episodes': len(episodes),
-        'exported_episodes': len(resolved),
-        'success_episodes': len(partitions['success']),
-        'failure_episodes': len(partitions['failure']),
-        'dropped_overwritten_evaluation_episodes': [
-            item['evaluation_episode'] for item in dropped
-        ],
-    }
-    (source / 'partition_report.json').write_text(
-        json.dumps(report, indent=2, ensure_ascii=False), encoding='utf-8'
-    )
-    if dropped:
-        logging.warning(
-            'Exported %d/%d recorded episodes; overwritten evaluation episodes: %s',
-            len(resolved),
-            len(episodes),
-            report['dropped_overwritten_evaluation_episodes'],
-        )
-    return {name: str(path) for name, path in final_paths.items()}
-
-
-def _merge_parallel_recordings(results):
-    ordered_results = sorted(results, key=lambda stats: stats['worker_index'])
-    first = ordered_results[0]
-    first_source = Path(first['lerobot_dataset_path'])
-    marker = f"_env{first['worker_index']:02d}_"
-    prefix, separator, suffix = first_source.name.rpartition(marker)
-    if not separator:
-        raise RuntimeError(f'Unexpected parallel recording path: {first_source}')
-    destination = first_source.parent / f'{prefix}_{suffix}'
-    final_paths = {
-        outcome: destination / outcome for outcome in ('success', 'failure')
-    }
-    if all((path / 'meta/info.json').is_file() for path in final_paths.values()):
-        return {outcome: str(path) for outcome, path in final_paths.items()}
-
-    selections = []
-    result_pairs = []
-    sources = []
-    for stats in ordered_results:
-        source = Path(stats['lerobot_dataset_path'])
-        sources.append(source)
-        pairs = _recording_result_pairs(source, stats['episodes'])
-        resolved, _ = _resolve_recording_results(source, stats['episodes'])
-        for source_index, resolved_result in resolved.items():
-            evaluation_index = resolved_result['evaluation_episode']
-            global_episode = int(stats['episodes'][evaluation_index]['episode'])
-            selections.append((global_episode, source, source_index))
-        for source_index, evaluation_index in pairs:
-            global_episode = int(stats['episodes'][evaluation_index]['episode'])
-            result_pairs.append((global_episode, source, source_index))
-
-    selections.sort(key=lambda item: item[0])
-    selected_sources = [(source, source_index) for _, source, source_index in selections]
-    source_to_merged = {
-        (source, source_index): merged_index
-        for merged_index, (_, source, source_index) in enumerate(selections)
-    }
-    combined_episodes = {
-        int(episode['episode']): dict(episode)
-        for stats in ordered_results for episode in stats['episodes']
-    }
-    for global_episode, source, source_index in result_pairs:
-        combined_episodes[global_episode]['recording_episode_index'] = (
-            source_to_merged[(source, source_index)]
-        )
-    ordered_episodes = [combined_episodes[index] for index in sorted(combined_episodes)]
-
-    temporary = destination.parent / f'.{destination.name}.tmp'
-    if temporary.exists():
-        shutil.rmtree(temporary)
-    if not destination.exists():
-        try:
-            _write_dataset_selection(first_source, temporary, selected_sources)
-            temporary.rename(destination)
-        except Exception:
-            if temporary.exists():
-                shutil.rmtree(temporary)
-            raise
-    elif not (destination / 'meta/info.json').is_file():
-        raise FileExistsError(f'Incomplete merged recording exists: {destination}')
-
-    paths = _partition_recording_by_success(destination, ordered_episodes)
-    for source in sources:
-        if source.exists():
-            shutil.rmtree(source)
-    return paths
 
 
 def _prepare_recording(client, config, task_name, run_id):
@@ -767,36 +406,13 @@ def _run_task(args, env_name, run_id):
     config.robots.robocasa.video_layout = args.video_layout
     config.visualize.port = args.visualize_port
 
-    config.rdm.mode = args.mode
-    config.rdm.skip_initial_frames = 0
-    config.rdm.action_consume_mode = 'sequential'
-    config.rdm.latency_compensation = False
-    config.rdm.action_replenish_threshold = (
-        args.async_replenish_threshold
-        if args.async_replenish_threshold is not None
-        else max(1, args.n_action_steps // 2)
-    ) if args.mode == 'async' else 0
-    config.rdm.max_async_observation_lag_steps = (
-        args.max_async_observation_lag_steps
-        if args.max_async_observation_lag_steps is not None
-        else max(1, args.n_action_steps - 1)
-    )
-    config.intra_chunk.intra_chunk_mode = args.intra_chunk_mode or 'raw'
-    config.intra_chunk.output_sample_ratio = (
-        1.0
-        if config.intra_chunk.intra_chunk_mode == 'raw'
-        else args.intra_chunk_sample_ratio
-    )
-    config.inter_chunk.inter_chunk_mode = args.inter_chunk_mode or 'sync'
+    from client.simulation.evaluation import configure_pipeline
+    configure_pipeline(config, args)
     if args.mode == 'async' and config.inter_chunk.inter_chunk_mode == 'min_jerk':
         logging.warning(
             'RoboCasa min_jerk smooths delta/velocity command values at every async '
             'replan; compare async raw+sync first when measuring async-mode accuracy.'
         )
-    config.controller.gripper_offset = 0
-    config.controller.period = 1.0
-    config.controller.action_steps = args.n_action_steps
-    config.vision.preprocess.method = args.preprocess
     config.record.switch = args.record
     if args.record:
         config.record.save_dir = args.record_dir
@@ -946,20 +562,9 @@ def _worker_command(args, env_name, run_id, record_date):
     return command
 
 
-def _run_worker_process(command):
-    environment = os.environ.copy()
-    environment.setdefault('PYTHONFAULTHANDLER', '1')
-    process = subprocess.Popen(command, start_new_session=True, env=environment)
-    try:
-        return_code = process.wait()
-    except KeyboardInterrupt:
-        os.killpg(process.pid, signal.SIGTERM)
-        raise
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    return return_code
+def _run_worker_process(command, cancel_event=None):
+    from client.simulation.evaluation import run_isolated_worker
+    return run_isolated_worker(command, cancel_event=cancel_event)
 
 
 def _finalize_supervised_recording(args, stats):
@@ -982,129 +587,13 @@ def _finalize_supervised_recording(args, stats):
 
 
 def _run_supervised_task(args, env_name, run_id):
-    record_date = args._record_date or _recording_date(run_id)
-    consecutive_native_crashes = 0
-    crash_progress = None
-    server_unavailable_since = None
-    while True:
-        stats = _read_supervised_stats(args, env_name, run_id)
-        progress = 0 if stats is None else int(stats.get('num_episodes', 0))
-        episode_start, episode_end = _episode_bounds(args)
-        if progress >= episode_end - episode_start:
-            if getattr(args, '_defer_recording_finalize', False):
-                return stats
-            return _finalize_supervised_recording(args, stats)
-        return_code = _run_worker_process(
-            _worker_command(args, env_name, run_id, record_date)
-        )
-        stats = _read_supervised_stats(args, env_name, run_id)
-        new_progress = 0 if stats is None else int(stats.get('num_episodes', 0))
-        if return_code == 0:
-            if new_progress <= progress:
-                raise RuntimeError('RoboCasa worker exited without recording progress')
-            consecutive_native_crashes = 0
-            crash_progress = None
-            server_unavailable_since = None
-            continue
-        if return_code == SERVER_UNAVAILABLE_EXIT_CODE:
-            now = time.monotonic()
-            if server_unavailable_since is None:
-                server_unavailable_since = now
-            reconnect_timeout = getattr(args, 'server_reconnect_timeout', 0.0)
-            if (
-                reconnect_timeout > 0
-                and now - server_unavailable_since >= reconnect_timeout
-            ):
-                raise ServerUnavailableError(
-                    f'VLA server remained unavailable for {reconnect_timeout:g}s; '
-                    f'last completed episode: {new_progress}'
-                )
-            reconnect_interval = getattr(args, 'server_reconnect_interval', 10.0)
-            print(
-                'VLA server is unavailable; preserving completed episodes and '
-                f'retrying in {reconnect_interval:g}s from episode {new_progress + 1}',
-                flush=True,
-            )
-            time.sleep(reconnect_interval)
-            continue
-        native_signals = {
-            -signal.SIGSEGV,
-            -signal.SIGABRT,
-            -signal.SIGBUS,
-            -signal.SIGILL,
-        }
-        if return_code in native_signals:
-            if new_progress == crash_progress:
-                consecutive_native_crashes += 1
-            else:
-                consecutive_native_crashes = 1
-                crash_progress = new_progress
-            if consecutive_native_crashes > args.max_native_restarts:
-                raise RuntimeError(
-                    f'RoboCasa worker repeatedly crashed at episode {new_progress + 1} '
-                    f'with signal {-return_code}'
-                )
-            print(
-                f'RoboCasa worker crashed with signal {-return_code}; '
-                f'resuming from episode {new_progress + 1} '
-                f'({consecutive_native_crashes}/{args.max_native_restarts})',
-                flush=True,
-            )
-            time.sleep(1.0)
-            continue
-        raise RuntimeError(f'RoboCasa worker exited with code {return_code}')
+    from client.simulation.evaluation import EvaluationRunner
+    return EvaluationRunner(sys.modules[__name__], 'RoboCasa')._run_supervised_task(args, env_name, run_id)
 
 
 def _run_parallel_task(args, env_name, run_id):
-    ranges = _worker_ranges(args.n_episodes, args.n_envs)
-    worker_args = []
-    for worker_index, (episode_start, episode_end) in enumerate(ranges):
-        shard_args = copy.copy(args)
-        shard_args.run_id = run_id
-        shard_args._worker_index = worker_index
-        shard_args._episode_start = episode_start
-        shard_args._episode_end = episode_end
-        shard_args._defer_recording_finalize = args.record
-        worker_args.append(shard_args)
-
-    results = []
-    with ThreadPoolExecutor(max_workers=len(worker_args)) as executor:
-        futures = {
-            executor.submit(_run_supervised_task, shard_args, env_name, run_id): shard_args
-            for shard_args in worker_args
-        }
-        try:
-            for future in as_completed(futures):
-                results.append(future.result())
-        except BaseException:
-            for future in futures:
-                future.cancel()
-            raise
-
-    episodes = sorted(
-        (episode for stats in results for episode in stats['episodes']),
-        key=lambda episode: episode['episode'],
-    )
-    expected = list(range(args.n_episodes))
-    actual = [int(episode['episode']) for episode in episodes]
-    if actual != expected:
-        raise RuntimeError(f'Parallel RoboCasa workers returned episode indices {actual}')
-
-    metadata = {
-        key: value for key, value in results[0].items()
-        if key not in {
-            'num_episodes', 'success_rate', 'episodes', 'worker_index',
-            'episode_start', 'episode_end', 'lerobot_dataset_path',
-            'lerobot_dataset_paths',
-        }
-    }
-    metadata['n_envs'] = args.n_envs
-    if args.record:
-        metadata['lerobot_dataset_paths'] = _merge_parallel_recordings(results)
-    task_output = _task_stats_path(args, env_name).parent
-    stats_path, stats = _save_stats(task_output, metadata, episodes)
-    print(f'Saved merged evaluation statistics to {stats_path}', flush=True)
-    return stats
+    from client.simulation.evaluation import EvaluationRunner
+    return EvaluationRunner(sys.modules[__name__], 'RoboCasa')._run_parallel_task(args, env_name, run_id)
 
 
 def run(args):

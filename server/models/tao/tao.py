@@ -44,11 +44,15 @@ class ModelVLA:
         data = sequence[0]
         obs = data['obs'].copy()
 
+        video_keys = list(self.cfg.get('video_keys', ['base_image', 'left_wrist_image', 'right_wrist_image']))
+        if len(video_keys) != 3 or len(set(video_keys)) != 3:
+            raise ValueError('video_keys must contain three distinct camera keys')
+        head_key, left_wrist_key, right_wrist_key = video_keys
         inp_obs = {
             'video':{
-                'base_image': obs['cam.head'][None][None], # (B,T,H,W,C)
-                'left_wrist_image': obs['cam.hand_left'][None][None],
-                'right_wrist_image': obs['cam.hand_right'][None][None],
+                head_key: obs['cam.head'][None][None], # (B,T,H,W,C)
+                left_wrist_key: obs['cam.hand_left'][None][None],
+                right_wrist_key: obs['cam.hand_right'][None][None],
             },
             'state': obs['state'][None][None], # (B,T,D)
             'language':[obs['language']]

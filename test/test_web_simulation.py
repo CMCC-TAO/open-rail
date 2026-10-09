@@ -93,3 +93,41 @@ def test_missing_environment_is_reported(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match='robocasa'):
         manager.start(simulation.EvaluationConfig(python=sys.executable, env_name='Task'))
     assert not manager.processes
+
+
+def test_robotwin_command_and_validation(tmp_path):
+    from scripts.aloha_robotwin_eval import build_parser, validate_args
+    manager = simulation.EvaluationJobs(tmp_path)
+    config = simulation.EvaluationConfig(platform='robotwin', env_name='stack_bowls_three',
+        robotwin_root='/tmp/RoboTwin', no_expert_check=True, instruction='Stack bowls', gpu='0',
+        record=True, mode='async', intra_chunk_mode='fitting')
+    command = manager.command(config, 'test')
+    assert command[2].endswith('aloha_robotwin_eval.py')
+    assert '--no_expert_check' in command
+    assert '--mujoco_gl' not in command and '--split' not in command
+    args = build_parser().parse_args(command[3:])
+    validate_args(args)
+    assert args.instruction == 'Stack bowls' and args.mode == 'async'
+    assert args.record_dir == 'data/robocasa_web/jobs/test/lerobot'
+    with pytest.raises(ValidationError):
+        simulation.EvaluationConfig(platform='robotwin', env_name='Task', no_expert_check=True)
+    with pytest.raises(ValidationError):
+        simulation.EvaluationConfig(platform='robotwin', env_name='Task', intra_chunk_mode='local')
+
+
+def test_robotwin_preflight_does_not_require_robocasa(tmp_path, monkeypatch):
+    root = tmp_path / 'RoboTwin'
+    (root / 'envs').mkdir(parents=True)
+    (root / 'task_config').mkdir()
+    (root / 'envs/Task.py').write_text('')
+    (root / 'task_config/demo_clean.yml').write_text('')
+    manager = simulation.EvaluationJobs(tmp_path)
+    seen = []
+    def check(command, **kwargs):
+        seen.append(command)
+        return subprocess.CompletedProcess(command, 1, 'sapien', '')
+    monkeypatch.setattr(simulation.subprocess, 'run', check)
+    with pytest.raises(ValueError, match='sapien'):
+        manager.start(simulation.EvaluationConfig(platform='robotwin', env_name='Task', python=sys.executable,
+                                                robotwin_root=str(root)))
+    assert 'sapien' in seen[0] and 'robocasa' not in seen[0]

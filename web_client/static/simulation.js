@@ -1,5 +1,7 @@
 const $ = (id) => document.getElementById(id);
 const choices = {
+  platform: ["robocasa", "robotwin"],
+  instruction_type: ["seen", "unseen"],
   split: ["target", "pretrain"],
   mode: ["sync", "async"],
   intra_chunk_mode: ["raw", "interpolation", "fitting"],
@@ -9,6 +11,21 @@ const choices = {
   video_layout: ["grid", "single"],
 };
 const labels = {
+  platform: "仿真平台",
+  robotwin_root: "RoboTwin 项目根目录",
+  task_config: "RoboTwin 任务配置",
+  instruction_type: "任务指令类型",
+  instruction: "固定任务指令（可选）",
+  no_expert_check: "跳过专家检查（须填写指令）",
+  gpu: "GPU 编号（如 0 或 0,1）",
+  max_transition_steps: "块间过渡最多步数",
+  max_seed_attempts: "每 episode 最大选种次数",
+  seed_stride: "Episode 种子间隔",
+  seed_selection_timeout: "环境准备与选种超时（秒）",
+  worker_episodes: "每 worker 最多 episodes",
+  max_native_restarts: "同一进度崩溃重试次数",
+  server_reconnect_interval: "断连重试间隔（秒）",
+  server_reconnect_timeout: "断连等待上限（秒，0 为无限）",
   python: "Python 可执行文件",
   env_name: "单个任务（与任务集二选一）",
   task_suite: "任务集（如 target50）",
@@ -115,7 +132,13 @@ async function poll() {
     const jobs = await api("/jobs");
     const previous = selected;
     $("jobs").replaceChildren(
-      ...jobs.map((j) => new Option(j.id + " · " + j.status, j.id))
+      ...jobs.map(
+        (j) =>
+          new Option(
+            j.id + " · " + (j.config.platform || "robocasa") + " · " + j.status,
+            j.id
+          )
+      )
     );
     selected = jobs.some((j) => j.id === previous)
       ? previous
@@ -126,7 +149,11 @@ async function poll() {
     $("start").disabled = jobs.some((j) =>
       ["running", "stopping"].includes(j.status)
     );
-    if (!selected) return;
+    if (!selected) {
+      $("stop").disabled = true;
+      $("resume").disabled = true;
+      return;
+    }
     const [job, logs, files] = await Promise.all([
       api("/jobs/" + selected),
       api("/jobs/" + selected + "/logs"),
@@ -190,6 +217,34 @@ $("config").onsubmit = async (event) => {
     $("start").disabled = false;
   }
 };
+function updatePlatform() {
+  const robotwin = $("field-platform").value === "robotwin";
+  $("field-intra_chunk_sample_ratio").disabled =
+    robotwin && $("field-intra_chunk_mode").value !== "interpolation";
+  const onlyRobotwin = [
+    "robotwin_root",
+    "task_config",
+    "instruction_type",
+    "instruction",
+    "no_expert_check",
+    "gpu",
+    "max_transition_steps",
+    "max_seed_attempts",
+    "seed_stride",
+    "seed_selection_timeout",
+  ];
+  for (const key of onlyRobotwin)
+    $("field-" + key).parentElement.hidden = !robotwin;
+  for (const key of ["split", "mujoco_gl"])
+    $("field-" + key).parentElement.hidden = robotwin;
+  $("field-task_suite").parentElement.firstChild.textContent = robotwin
+    ? "任务列表（逗号分隔或 YAML 文件）"
+    : labels.task_suite;
+  $("field-task_suite").placeholder = robotwin
+    ? "task_a,task_b 或任务列表 YAML 路径"
+    : "target50";
+}
+
 async function initialize() {
   try {
     defaults = await api("/options");
@@ -213,6 +268,16 @@ async function initialize() {
       label.append(input);
       $("fields").append(label);
     }
+    $("field-platform").onchange = () => {
+      const robotwin = $("field-platform").value === "robotwin";
+      $("field-env_name").value = "";
+      $("field-task_suite").value = "";
+      $("field-n_action_steps").value = robotwin ? 50 : 16;
+      $("field-seed").value = robotwin ? 0 : 42;
+      updatePlatform();
+    };
+    $("field-intra_chunk_mode").onchange = updatePlatform;
+    updatePlatform();
     await poll();
     setInterval(() => {
       if (!document.hidden) poll();

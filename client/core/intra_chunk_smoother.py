@@ -55,6 +55,9 @@ class IntraChunkSmoother():
                 - timestamps_fitted (np.ndarray): Corresponding timestamps
         """
         
+        if len(timestamps) == 1:
+            return action_chunk.copy(), np.zeros_like(action_chunk), np.zeros_like(action_chunk), np.asarray(timestamps).copy(), task_progress
+        self._input_timestamps = np.asarray(timestamps)
         start_time = timestamps[0]
         end_time = timestamps[-1]
         time_step = time_step / 1000 # convert milliseconds to seconds
@@ -137,8 +140,9 @@ class IntraChunkSmoother():
             ) if task_progress is not None else None
         return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted
 
-    @staticmethod
-    def _sample_timestamps(start_time, end_time, time_step, output_samples=None):
+    def _sample_timestamps(self, start_time, end_time, time_step, output_samples=None):
+        if getattr(self.config, 'preserve_input_timestamps', False) and self.config.intra_chunk_mode != 'interpolation':
+            return self._input_timestamps.copy()
         if output_samples is not None:
             return np.linspace(start_time, end_time, num=max(1, int(output_samples)))
         return np.arange(start_time, end_time, time_step)

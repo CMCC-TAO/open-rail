@@ -80,7 +80,7 @@ class VideoRecorder:
         reward = metadata.get('reward')
         sim_time = metadata.get('sim_time')
         lines = [
-            ('ROBOCASA EVALUATION', (235, 235, 235)),
+            (self.config.get('video_title', 'ROBOCASA EVALUATION'), (235, 235, 235)),
             (f'Task: {task}', (190, 195, 205)),
             (f'Episode: {episode}', (190, 195, 205)),
             (f'Step: {step} / {max_steps}', (190, 195, 205)),

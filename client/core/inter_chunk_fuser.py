@@ -19,7 +19,50 @@ class InterChunkFuser:
     def _cfg_value(self, cfg, key, default):
         return getattr(cfg, key, getattr(self.config, key, default))
 
-    def process(self, 
+    def process(self, next_action_chunk, next_vel_chunk, next_acc_chunk, next_timestamps,
+                target_chunk_index, currt_action=None, currt_vel=None, currt_acc=None,
+                joint_indices=None, step_indices=None):
+        limit = getattr(self.config, 'max_transition_steps', None)
+        if limit is None:
+            return self._process(next_action_chunk, next_vel_chunk, next_acc_chunk,
+                                 next_timestamps, target_chunk_index, currt_action,
+                                 currt_vel, currt_acc, joint_indices, step_indices)
+        if limit < 0:
+            raise ValueError('max_transition_steps must be non-negative')
+        discrete = list(step_indices or [])
+        joints = [i for i in (range(next_action_chunk.shape[0]) if joint_indices is None else joint_indices)
+                  if i not in discrete]
+        stop = min(next_action_chunk.shape[1], target_chunk_index + int(limit))
+        if stop - target_chunk_index < 2 or currt_action is None or self.config.inter_chunk_mode == 'sync':
+            action, velocity, acceleration, index = (next_action_chunk.copy(), next_vel_chunk.copy(),
+                                                    next_acc_chunk.copy(), target_chunk_index)
+        else:
+            action, velocity, acceleration, index = self._process(
+                next_action_chunk[:, :stop], next_vel_chunk[:, :stop], next_acc_chunk[:, :stop],
+                next_timestamps[:stop], target_chunk_index, currt_action, currt_vel, currt_acc,
+                joints, discrete)
+            if self.config.inter_chunk_mode == 'smooth_velocity':
+                weight = np.linspace(0, 1, stop - target_chunk_index)
+                weight = weight * weight * (3 - 2 * weight)
+                action[:, target_chunk_index:stop] = (
+                    action[:, target_chunk_index:stop] * (1 - weight)
+                    + next_action_chunk[:, target_chunk_index:stop] * weight)
+            action = np.concatenate((action, next_action_chunk[:, stop:]), axis=1)
+            velocity = np.concatenate((velocity, next_vel_chunk[:, stop:]), axis=1)
+            acceleration = np.concatenate((acceleration, next_acc_chunk[:, stop:]), axis=1)
+        if discrete:
+            action[discrete] = next_action_chunk[discrete]
+            velocity[discrete] = 0
+            acceleration[discrete] = 0
+        if currt_action is not None and joints and len(next_timestamps) > 1:
+            dt = np.diff(next_timestamps, prepend=next_timestamps[0] - (next_timestamps[1] - next_timestamps[0]))
+            previous = np.concatenate((currt_action[joints, None], action[joints, index:-1]), axis=1)
+            velocity[joints, index:] = (action[joints, index:] - previous) / dt[None, index:]
+            previous_velocity = np.concatenate((currt_vel[joints, None], velocity[joints, index:-1]), axis=1)
+            acceleration[joints, index:] = (velocity[joints, index:] - previous_velocity) / dt[None, index:]
+        return action, velocity, acceleration, index
+
+    def _process(self,
             next_action_chunk,
             next_vel_chunk,
             next_acc_chunk,

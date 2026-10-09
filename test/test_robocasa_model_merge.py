@@ -95,3 +95,29 @@ def test_tao_action_order_does_not_follow_dictionary_order(monkeypatch, prefix):
     result = model.infer([frame])
     np.testing.assert_array_equal(result['pred_action'][0],
                                   [0] * 3 + [1] * 3 + [2] + [3] * 4 + [4])
+
+
+def test_tao_robotwin_camera_and_action_mapping(monkeypatch):
+    seen = {}
+    class Policy:
+        def get_action(self, observation):
+            seen.update(observation)
+            return {'action': {'right_gripper': np.full((1, 2, 1), 4),
+                               'left_arm': np.full((1, 2, 6), 1),
+                               'right_arm': np.full((1, 2, 6), 3),
+                               'left_gripper': np.full((1, 2, 1), 2)}}
+    module = load_backend(monkeypatch, Path(__file__).parents[1] / 'server/models/tao/tao.py', {
+        'torch': {}, 'tao.serving.policy': {'PolicyTao': Policy},
+    })
+    model = module.ModelVLA.__new__(module.ModelVLA)
+    model.cfg = {'video_keys': ['head_camera', 'left_camera', 'right_camera'],
+                 'action_keys': ['left_arm', 'left_gripper', 'right_arm', 'right_gripper']}
+    model.policy = Policy()
+    model._reported_action_order = False
+    frame = {'ref_timestamp': 1, 'loc_timestamp': 2, 'obs': {
+        'cam.head': np.zeros((2, 2, 3)), 'cam.hand_left': np.zeros((2, 2, 3)),
+        'cam.hand_right': np.zeros((2, 2, 3)), 'state': np.zeros(14), 'language': ['test'],
+    }}
+    result = model.infer([frame])
+    assert list(seen['video']) == model.cfg['video_keys']
+    np.testing.assert_array_equal(result['pred_action'][0], [1] * 6 + [2] + [3] * 6 + [4])
