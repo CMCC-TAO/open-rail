@@ -157,14 +157,14 @@ class RobotBody(RobotBase):
                 right_hand_target = target_pose[20:26]
 
                 for i, traj in enumerate(trajs):
-                    t = (i + 1) / n_points  # 进度 0→1
+                    t = (i + 1) / n_points  # progress 0->1
                     tmp = target_pose.copy()
                     tmp[:14] = traj
                     # Hand linear interpolation: smoothly transition from current to target values
                     tmp[14:20] = left_hand_current + t * (left_hand_target - left_hand_current)
                     tmp[20:26] = right_hand_current + t * (right_hand_target - right_hand_current)
                     self.robot.send_robot_action(tmp)
-                    time.sleep(0.01)  # 100Hz 下发
+                    time.sleep(0.01)  # send at 100Hz
             else:
                 self.robot.send_robot_action(target_pose)
         else:
@@ -181,9 +181,9 @@ class RobotBody(RobotBase):
                 tmp[14:20] = target_pose[14:20] * t
                 tmp[20:26] = target_pose[20:26] * t
                 self.robot.send_robot_action(tmp)
-                time.sleep(0.01)  # 100Hz 下发
+                time.sleep(0.01)  # send at 100Hz
 
-        # 设置手部状态
+        # Set hand states
         self.robot.current_left_hand_state = target_pose[14:20]
         self.robot.current_right_hand_state = target_pose[20:26]
 
@@ -195,22 +195,22 @@ class RobotBody(RobotBase):
     def move_arms(self, left_target=None, right_target=None,
                   max_velocity=1.5, max_acceleration=1.0, max_jerk=3.0,
                   progress_callback=None):
-        """使用 ruckig 轨迹规划将单臂或双臂移动到目标位姿，手掌保持当前值不变
+        """Move one or both arms to the target pose via ruckig trajectory planning, keeping the hands at their current values.
 
-        与固定时长线性插值的区别:
-          - 使用 ruckig 生成平滑轨迹，而非均匀线性插值
-          - 轨迹点数由距离和速度限幅决定（近则少，远则多），实现"位置到达即停"
+        Differences from fixed-duration linear interpolation:
+          - Uses ruckig to generate a smooth trajectory instead of uniform linear interpolation
+          - The number of trajectory points is determined by distance and velocity limits (fewer when near, more when far), achieving "stop as soon as the position is reached"
 
         Args:
-            left_target:  左臂目标位姿 (7,) 或 None（不动）
-            right_target: 右臂目标位姿 (7,) 或 None（不动）
-            max_velocity: 最大速度 rad/s
-            max_acceleration: 最大加速度 rad/s²
-            max_jerk: 最大加加速度 rad/s³
-            progress_callback: 可选进度回调 fn(progress_0to100_int)
+            left_target:  Left arm target pose (7,) or None (do not move)
+            right_target: Right arm target pose (7,) or None (do not move)
+            max_velocity: Maximum velocity rad/s
+            max_acceleration: Maximum acceleration rad/s^2
+            max_jerk: Maximum jerk rad/s^3
+            progress_callback: Optional progress callback fn(progress_0to100_int)
 
         Returns:
-            np.ndarray: 最后一帧 26 维动作（含目标手臂位姿 + 原始手掌值），失败返回 None
+            np.ndarray: The last frame 26-D action (target arm poses + original hand values), None on failure
         """
         current_state = self._get_reset_current_action()
         if current_state is None:
@@ -225,11 +225,11 @@ class RobotBody(RobotBase):
         if right_active:
             target[7:14] = np.array(right_target)
 
-        # 双臂都不动，直接返回
+        # Both arms stationary, return directly
         if not left_active and not right_active:
             return target
 
-        # 确定要规划的关节子集和 DOF
+        # Determine the joint subset and DOF to plan for
         if left_active and right_active:
             plan_start, plan_end, dof = 0, 14, 14
         elif left_active:
@@ -240,7 +240,7 @@ class RobotBody(RobotBase):
         current_pos = current_state[plan_start:plan_end]
         target_pos = target[plan_start:plan_end]
 
-        # 如果已经在目标附近，直接发送一次并返回
+        # If already near the target, send once and return
         dis = np.abs(current_pos - target_pos)
         if np.all(dis <= np.deg2rad(0.01)):
             self.robot.send_robot_action(target)
@@ -248,7 +248,7 @@ class RobotBody(RobotBase):
             self.robot.current_right_hand_state = target[20:26]
             return target
 
-        # ruckig 轨迹规划
+        # ruckig trajectory planning
         trajs = self.ruckig_planning(
             current_pos, target_pos, dof=dof,
             max_velocity=max_velocity, max_acceleration=max_acceleration, max_jerk=max_jerk,
@@ -262,10 +262,10 @@ class RobotBody(RobotBase):
         last_reported_pct = -1
 
         for i, traj in enumerate(trajs):
-            t = (i + 1) / n_points  # 进度 0→1
+            t = (i + 1) / n_points  # progress 0->1
             tmp = target.copy()
 
-            # 将轨迹填入对应的手臂位置
+            # Fill the trajectory into the corresponding arm positions
             if left_active and right_active:
                 tmp[:14] = traj
             elif left_active:
@@ -273,13 +273,13 @@ class RobotBody(RobotBase):
             else:
                 tmp[7:14] = traj
 
-            # 手掌线性插值：从当前值平滑过渡到目标值
+            # Hand linear interpolation: smoothly transition from current to target values
             tmp[14:20] = left_hand_current + t * (left_hand_target - left_hand_current)
             tmp[20:26] = right_hand_current + t * (right_hand_target - right_hand_current)
 
             self.robot.send_robot_action(tmp)
 
-            # 进度回调（约每 10% 触发一次，避免过于频繁）
+            # Progress callback (fires roughly every 10% to avoid being too frequent)
             if progress_callback:
                 pct = int(100 * (i + 1) / n_points)
                 if pct // 10 != last_reported_pct // 10 or i == n_points - 1:
