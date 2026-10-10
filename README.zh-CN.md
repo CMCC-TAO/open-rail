@@ -99,18 +99,18 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 ### 模型
 
-| 模型系列 | 成员 | 状态 |
-| --- | --- | --- |
-| ACT | ACT | ✅ 已支持 |
-| GR00T N1 系列 | GR00T N1、N1.5、N1.6 | ✅ 已支持 |
-| RDT | RDT-1B | ✅ 已支持 |
-| SmolVLA | SmolVLA | ✅ 已支持 |
-| GO1 | 智元 GO-1 | ✅ 已支持 |
-| π 系列 | π0、π0.5 | ✅ 已支持 |
-| TAO | TAO | ✅ 已支持 |
-| DM0.5 | DM0.5 | ✅ 已支持 |
-| WALL-X | WALL-X | ✅ 已支持 |
-| _你的模型_ | — | 🔜 [接入指南](docs-cn-backup/add-new-model.zh-CN.md) |
+| 模型系列 | 成员 | 状态 | 适配器 |
+| --- | --- | --- | --- |
+| ACT | ACT | ✅ 已支持 | `server/models/act/` |
+| GR00T N1 系列 | GR00T N1、N1.5、N1.6 | ✅ 已支持 | `server/models/gr00t/` |
+| RDT | RDT-1B | ✅ 已支持 | `server/models/rdt/` |
+| SmolVLA | SmolVLA | ✅ 已支持 | `server/models/smolvla/` |
+| GO1 | 智元 GO-1 | ✅ 已支持 | `server/models/go1/` |
+| π 系列 | π0、π0.5 | ✅ 已支持 | `server/models/openpi/` |
+| TAO | TAO | ✅ 已支持 | `server/models/tao/` |
+| DM0.5 | DM0.5 | ✅ 已支持 | `server/models/dm05/` |
+| WALL-X | WALL-X | ✅ 已支持 | `server/models/wallx/` |
+| _你的模型_ | — | 🔜 [接入指南](docs-cn-backup/add-new-model.zh-CN.md) | — |
 
 ## 🚀 快速开始
 

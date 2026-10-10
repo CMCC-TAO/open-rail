@@ -164,7 +164,7 @@ See the [Robot Adaptation Guide](guides/add-new-robot.md) for the complete inter
 
 ## Next Steps
 
-- [Project Architecture](../README.md#project-architecture): Understand the responsibilities of Client, Server, and the ZMQ communication layer.
+- [Project Architecture](../README.md#architecture): Understand the responsibilities of Client, Server, and the ZMQ communication layer.
 - [Configuration Guide](configuration.md): Complete configuration options for Client, Server, robots, and recording.
 - [Add New Model Guide](guides/add-new-model.md): Integrate new checkpoints/model implementations.
 - [Robot Adaptation Guide](guides/add-new-robot.md): Integrate physical robots.
