@@ -13,7 +13,7 @@ robot or client to the running server. Pitfalls are collected under Notes.
 
 ## Step 1 — Prerequisites
 
-- **Upstream source** — RDT ([thu-ml/RoboticsDiffusionTransformer](https://github.com/thu-ml/RoboticsDiffusionTransformer)); the adapter entry is `create_model` from the upstream module `scripts.agilex_model`. Clone the upstream checkout **inside the adapter directory** (for example `server/models/rdt/rdt_train_a2d/`) — the adapter inserts its path into `sys.path`; it is not vendored. ⚠️ The `sys.path` entry at [`rdt.py:3`](rdt.py) is currently **hard-coded to a personal machine path** — edit that line to point at your checkout before starting the server. This is the only code change this adapter requires; everything else is configuration.
+- **Upstream source** — RDT ([thu-ml/RoboticsDiffusionTransformer](https://github.com/thu-ml/RoboticsDiffusionTransformer)); the adapter entry is `create_model` from the upstream module `scripts.agilex_model`. Clone the upstream checkout **inside the adapter directory** (for example `server/models/rdt/rdt_train_a2d/`) — the adapter inserts its path into `sys.path`; it is not vendored. ⚠️ The `sys.path` entry at [`rdt.py:3`](rdt.py) is a placeholder (`/path/to/rdt_train_a2d`) — set it to your checkout path before starting the server. This is the only code change this adapter requires; everything else is configuration.
 - **Checkpoint** — a directory saved by RDT training, fine-tuned for this state/action layout, containing:
   - `config.json`
   - `pytorch_model.bin`
@@ -240,7 +240,6 @@ payload has `type=heartbeat`, `status=pong`; metadata has `action=pong`.
 
 ## Notes and known issues
 
-- **`rdt.py:3` hard-codes a personal-machine `sys.path`** (`/home/gaohan/...`) — edit it to your checkout path before starting. This is tracked as a release-blocking cleanup item.
 - **A single-observation request crashes the adapter** with an `IndexError` (`sequence[1]` does not exist) — always send the two-frame list.
 - **Language is not a runtime input.** Changing the task instruction requires regenerating the embeddings file (upstream `encode_lang_batch.py`) and updating `lang_embd_path` — a request's `language` field is ignored.
 - The server runs up to `max_infer_workers = 3` inference requests concurrently
