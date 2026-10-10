@@ -1,0 +1,58 @@
+---
+import { getUI } from '../i18n';
+const { locale = 'en' } = Astro.props;
+const d = getUI(locale).diagrams.webPanel;
+---
+
+<svg viewBox="0 0 820 440" class="w-full cap-figure" role="img" aria-label="Web Panel operator console">
+  <defs>
+    <marker id="wBlue" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#4d94ff" />
+    </marker>
+    <marker id="wPurple" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#a874ff" />
+    </marker>
+    <marker id="wGray" markerWidth="10" markerHeight="8" refX="8" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#94a3b8" class="cap-muted" />
+    </marker>
+    <linearGradient id="wg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#2478FF" />
+      <stop offset="100%" stop-color="#9254FF" />
+    </linearGradient>
+  </defs>
+
+  <!-- Left: RAIL Pipeline -->
+  <rect x="40" y="70" width="280" height="310" rx="14" fill="none" class="cap-stroke-muted" stroke-width="1.5" stroke-dasharray="6 4" />
+  <text x="60" y="96" fill="currentColor" font-size="14" font-weight="700">{d.pipeline}</text>
+  <rect x="70" y="116" width="220" height="56" rx="10" fill="#1b1e27" stroke="#4d94ff" stroke-width="1.5" />
+  <text x="180" y="149" text-anchor="middle" fill="currentColor" font-size="13" font-weight="600">{d.inference}</text>
+  <rect x="70" y="186" width="220" height="56" rx="10" fill="#1b1e27" stroke="#22c55e" stroke-width="1.5" />
+  <text x="180" y="219" text-anchor="middle" fill="currentColor" font-size="13" font-weight="600">{d.robotBody}</text>
+  <rect x="70" y="256" width="220" height="56" rx="10" fill="#1b1e27" stroke="#f59e0b" stroke-width="1.5" />
+  <text x="180" y="289" text-anchor="middle" fill="currentColor" font-size="13" font-weight="600">{d.dataMgmt}</text>
+
+  <!-- Right: Web Panel hero -->
+  <rect x="500" y="40" width="280" height="86" rx="14" fill="#1b1e27" stroke="url(#wg)" stroke-width="2" />
+  <text x="640" y="76" text-anchor="middle" fill="currentColor" font-size="18" font-weight="700">{d.panel}</text>
+  <text x="640" y="100" text-anchor="middle" class="cap-muted" font-size="11">{d.console}</text>
+
+  <!-- 4 function pills -->
+  <rect x="500" y="150" width="130" height="44" rx="10" fill="#1b1e27" stroke="#4d94ff" stroke-width="1.5" />
+  <text x="565" y="177" text-anchor="middle" fill="currentColor" font-size="13" font-weight="600">{d.monitor}</text>
+  <rect x="650" y="150" width="130" height="44" rx="10" fill="#1b1e27" stroke="#a874ff" stroke-width="1.5" />
+  <text x="715" y="177" text-anchor="middle" fill="currentColor" font-size="13" font-weight="600">{d.tune}</text>
+  <rect x="500" y="210" width="130" height="44" rx="10" fill="#1b1e27" stroke="#a874ff" stroke-width="1.5" />
+  <text x="565" y="237" text-anchor="middle" fill="currentColor" font-size="13" font-weight="600">{d.control}</text>
+  <rect x="650" y="210" width="130" height="44" rx="10" fill="#1b1e27" stroke="#94a3b8" stroke-width="1.5" />
+  <text x="715" y="237" text-anchor="middle" fill="currentColor" font-size="13" font-weight="600">{d.review}</text>
+
+  <!-- Arrows -->
+  <line x1="320" y1="144" x2="498" y2="170" stroke="#4d94ff" stroke-width="2" marker-end="url(#wBlue)" />
+  <text x="412" y="152" text-anchor="middle" class="cap-muted" font-size="11">{d.statsVideo}</text>
+  <line x1="650" y1="172" x2="322" y2="206" stroke="#a874ff" stroke-width="2" marker-end="url(#wPurple)" />
+  <text x="470" y="196" text-anchor="middle" class="cap-muted" font-size="11">{d.configInstr}</text>
+  <line x1="500" y1="232" x2="322" y2="244" stroke="#a874ff" stroke-width="2" marker-end="url(#wPurple)" />
+  <text x="420" y="262" text-anchor="middle" class="cap-muted" font-size="11">{d.runControl}</text>
+  <line x1="650" y1="254" x2="290" y2="294" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#wGray)" />
+  <text x="500" y="320" text-anchor="middle" class="cap-muted" font-size="11">{d.episodes}</text>
+</svg>

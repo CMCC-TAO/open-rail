@@ -14,16 +14,16 @@ def _ordered_config(value):
 
 
 class RobotType(str, Enum):
-    A2D = 'a2d'
+    AGIBOT_G1 = 'agibot_g1'
     MOCK = 'mock'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
 
-def get_a2d_config():
-    """Generate configuration for A2D robot.
+def get_agibot_g1_config():
+    """Generate configuration for AgiBot G1 robot.
     
     Returns:
-        ConfigDict: Configuration dictionary containing camera settings, proprioception names, and gripper frequency for A2D robot.
+        ConfigDict: Configuration dictionary containing camera settings, proprioception names, and gripper frequency for AgiBot G1 robot.
     """
     config = ConfigDict()
     config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
@@ -216,10 +216,36 @@ def get_navi_wa2_config():
         'hand_left': '/zj_humanoid/sensor/left_wrist/image_raw/compressed',
         'hand_right': '/zj_humanoid/sensor/right_wrist/image_raw/compressed',
     }
+    # config.action_layout = _ordered_config({
+    #     'arm': {'start': 0, 'end': 16, 'policy': 'gradual'},
+    #     'hand': {'start': 16, 'end': 28, 'policy': 'stepwise'}
+    #     })
+    config.hand_type = 'hand'
     config.action_layout = _ordered_config({
-        'arm': {'start': 0, 'end': 16, 'policy': 'gradual'},
-        'hand': {'start': 16, 'end': 28, 'policy': 'stepwise'}
-        })
+        'arm': {
+            'start': 0, 'end': 16, 'policy': 'gradual',
+            'presets': {
+                'left': {'Default': [0.182591655739083, 0.32575521044236666, 0.639202615644364, 0.03292066673111549, -1.9789475037079458, 0.5495126798768879, -0.1635420177877668, -0.039264356176110845], 'Custom': [0.182591655739083, 0.32575521044236666, 0.639202615644364, 0.03292066673111549, -1.9789475037079458, 0.5495126798768879, -0.1635420177877668, -0.5]},
+                'right': {'Default': [-0.22653780968994397, 0.19016568609004025, -0.6990877950829599, 0.17601231608296075, -1.888115764960776, -0.5459413807557212, -0.38742182124429064, 0.5], 'Custom': [-0.22653780968994397, 0.19016568609004025, -0.6990877950829599, 0.17601231608296075, -1.888115764960776, -0.5459413807557212, -0.38742182124429064, 0.5]},
+            },
+        },
+        'hand': {
+            'start': 16, 'end': 28, 'policy': 'stepwise',
+            'presets': {
+                'left': {'Default': [-0.6, 0.9, 0, 0, 0, 0], 'Custom': [-0.6, 0.9, 0, 0, 0, 0], 'Open': [-0.6, 0.9, 0, 0, 0, 0], 'Finger': [-0.2,0.9,0,1,1,1]},
+                'right': {'Default': [-0.6, 0.9, 0, 0, 0, 0], 'Custom': [-0.6, 0.9, 0, 0, 0, 0], 'Open': [-0.6, 0.9, 0, 0, 0, 0], 'Finger': [-0.2,0.9,0,1,1,1]},
+            },
+        },
+        # policy='manual' is robot/Web-only and must stay after all model policies.
+        'head': {
+            'start': 28, 'end': 30, 'policy': 'manual',
+            'presets': {'Default': [0, 0.25], 'Custom': [0, 0.25]},
+        },
+        'waist': {
+            'start': 30, 'end': 34, 'policy': 'manual',
+            'presets': {'Default': [-0.994804544964154, 1.0044877989571432, 0, 0.32794832366107585], 'Custom': [-0.994804544964154, 1.0044877989571432, 0, 0.32794832366107585]},
+        },
+    })
     config.reset_position = [0.182591655739083, 0.32575521044236666, 0.639202615644364, 0.03292066673111549, -1.9789475037079458, 0.5495126798768879, -0.1635420177877668, -0.039264356176110845,-0.22653780968994397, 0.19016568609004025, -0.6990877950829599, 0.17601231608296075, -1.888115764960776, -0.5459413807557212, -0.38742182124429064, -0.27196253226160444]+\
         [-0.6062110066413879, 0.9023351669311523, 0.006108652334660292, 0.006108652334660292, 0.00901753455400467, 0.015126187354326248,-0.5980661511421204, 0.8994263410568237, 0.012217304669320583, 0.006108652334660292, 0.004363323096185923, 0.0]
 
@@ -235,12 +261,12 @@ def get_robots_config():
     Returns:
         ConfigDict: Configuration dictionary containing:
             - type: Default robot type to use
-            - a2d: A2D robot configuration
+            - agibot_g1: AgiBot G1 robot configuration
             - mock: Mock robot configuration for testing
     """
     config = ConfigDict()
-    config.type = RobotType.A2D
-    config.a2d = get_a2d_config()
+    config.type = RobotType.AGIBOT_G1
+    config.agibot_g1 = get_agibot_g1_config()
     config.mock = get_mock_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()

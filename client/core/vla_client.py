@@ -147,6 +147,8 @@ class VLAClient():
         # self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
 
         self.show_thread_lock = threading.Lock()
+        self._inference_execution_lock = threading.Lock()
+        self._control_execution_lock = threading.Lock()
 
         # Raw observation queue: no frame dropping in VLA client pipeline.
         self._raw_observe_queue = Queue(maxsize=2)
@@ -158,7 +160,8 @@ class VLAClient():
         # Inference variables
         self.set_observe_period(speed=self.config.controller.speed)
         self._request_id = 0
-
+        self.inference_error = None
+        self.inference_error_count = 0
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.image_process_time = 0.0
@@ -444,7 +447,8 @@ class VLAClient():
         robot_type = self._config_get(getattr(self.config, 'robots', None), 'type', '')
         if hasattr(robot_type, 'value'):
             robot_type = robot_type.value
-        if str(robot_type) == 'a2d':
+        # 'agibot_g1' is the current name of the legacy 'a2d' robot body.
+        if str(robot_type) in ('a2d', 'agibot_g1'):
             return [
                 *(f'left_arm_joint{i}' for i in range(1, 8)),
                 *(f'right_arm_joint{i}' for i in range(1, 8)),
@@ -587,25 +591,48 @@ class VLAClient():
 
     def start_inference(self):
         self.is_running = True
-        self.is_inference_thread_running = True
         if not self.inference_thread.is_alive():
-            self.inference_thread.start()
+            # A terminated Python Thread cannot be started a second time.
+            if self.inference_thread.ident is not None:
+                self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
+            self.is_inference_thread_running = True
+            try:
+                self.inference_thread.start()
+            except Exception:
+                self.is_inference_thread_running = False
+                raise
+        else:
+            self.is_inference_thread_running = True
         self.logger.info('VLAClient inference thread started.')
 
     def stop_inference(self):
         self.is_inference_thread_running = False
+        self.realtime_data_manager.interrupt_wait_for_next()
         self.logger.info('VLAClient inference thread stopped.')
 
     def start_control(self):
         self.is_running = True
-        self.is_control_thread_running = True
+        with self._control_execution_lock:
+            resume_controls = getattr(self.robot, 'resume_controls', None)
+            if resume_controls is not None:
+                resume_controls()
+            self.is_control_thread_running = True
         if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
         # start new task in task_language manager for auto mode
         self.task_language_manager.new_task()
 
     def stop_control(self):
-        self.is_control_thread_running = False
+        with self._control_execution_lock:
+            self.is_control_thread_running = False
+            pause_controls = getattr(self.robot, 'pause_controls', None)
+            if pause_controls is not None:
+                pause_controls()
+            else:
+                clear_control_actions = getattr(self.robot, 'clear_control_actions', None)
+                if clear_control_actions is not None:
+                    clear_control_actions()
+        self.realtime_data_manager.interrupt_wait_for_next()
     
     def set_control_period(self, period) -> None:
         self.control_thread_timer.set_interval(period)
@@ -616,7 +643,7 @@ class VLAClient():
         # print(f"Debug: control speed = {speed}")
     
     def _stop_control_thread_on_error(self):
-        self.is_control_thread_running = False
+        self.stop_control()
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
 
@@ -673,15 +700,17 @@ class VLAClient():
         self.stop_inference()
         self.stop_control()
         self.stop_visualize()
-        time.sleep(self.realtime_data_manager.avg_infer_time * 1.5) # make sure inference thread is stopped.
-        self.image_process_time = 0.0
-        self.task_language_manager.reset()
-        self.action_arbiter.clear()
-        self.action_transition_filter.reset()
-        self._last_selected_source = None
-        self._set_last_executed_action(None)
-        self.realtime_data_manager.clear()
-        self._clear_raw_observe_queue()
+        # A stopped inference flag does not interrupt an in-flight request.
+        # Drain that step before clearing its timing markers and action data.
+        with self._inference_execution_lock:
+            self.image_process_time = 0.0
+            self.task_language_manager.reset()
+            self.action_arbiter.clear()
+            self.action_transition_filter.reset()
+            self._last_selected_source = None
+            self._set_last_executed_action(None)
+            self.realtime_data_manager.clear()
+            self._clear_raw_observe_queue()
         with self.show_thread_lock:
             self.current_prob_progress = 0.0
         self.logger.info('VLA client stopped.')
@@ -761,15 +790,22 @@ class VLAClient():
         self.visualize_server.stop_server()
 
         self.logger.info('VLA client closed.')
+
     def reset(self):
-        self.image_process_time = 0.0
-    
+        # Prevent an in-flight inference from publishing stale actions or timing
+        # measurements after Reset clears the data manager.
+        with self._inference_execution_lock:
+            self.realtime_data_manager.clear()
+            self._clear_raw_observe_queue()
+            self.image_process_time = 0.0
+
     @property
     def thread_status(self):
         return {
-        "observe_running": self.is_observe_thread_running,
-        "inference_running": self.is_inference_thread_running,
-        "control_running": self.is_control_thread_running
+            "observe_running": self.is_observe_thread_running,
+            "inference_running": self.is_inference_thread_running and self.inference_thread.is_alive(),
+            "inference_thread_alive": self.inference_thread.is_alive(),
+            "control_running": self.is_control_thread_running,
         }
 
     @property
@@ -782,6 +818,8 @@ class VLAClient():
             "teleop_human_active": self.is_teleop_human_active(),
             "last_selected_source": self._last_selected_source.value if self._last_selected_source is not None else None,
             "teleop_policy_handoff_active": self._teleop_policy_handoff_active,
+            "inference_error": self.inference_error,
+            "inference_error_count": self.inference_error_count,
         }
         status.update(self.realtime_data_manager.runtime_status)
         return status
@@ -873,7 +911,11 @@ class VLAClient():
                 if decoded_observations is None:
                     continue
                 infer_data, encoded_imgs = self._process_data(decoded_observations)
-                self.realtime_data_manager.add_observe_data(infer_data)
+                if not self.realtime_data_manager.add_observe_data(
+                    infer_data,
+                    source_time=decoded_observations.get('_worker_publish_time'),
+                ):
+                    continue
                 self.visualize_server.update_image_data(encoded_imgs)
                 # record_data = self.shared_memory_manager.encode_observation(record_data)
 
@@ -913,20 +955,37 @@ class VLAClient():
                 self._raw_observe_queue.task_done()
     
     def _inference_thread_fun(self):
+        consecutive_errors = 0
         while self.is_running:
             if not self.is_inference_thread_running:
                 time.sleep(0.001)
                 continue
 
-            if self.realtime_data_manager.infer_count == 0:
-                self._inference_first()
-                self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
-                # self.realtime_data_manager.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
-            else:
-                self._inference_step()
-                # self.inferenceFirstThreadFun()
-                self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
-                # self.realtime_data_manager.wait_for_next(mode='sync', wait_time=self.config.controller.wait_time/1000)
+            try:
+                with self._inference_execution_lock:
+                    if not self.is_inference_thread_running:
+                        continue
+                    if self.realtime_data_manager.infer_count == 0:
+                        self._inference_first()
+                    else:
+                        self._inference_step()
+
+                consecutive_errors = 0
+                self.inference_error = None
+                if self.is_inference_thread_running:
+                    self.realtime_data_manager.wait_for_next(
+                        mode=self.config.rdm.mode if self.is_control_thread_running else 'async',
+                        wait_time=self.config.controller.wait_time / 1000,
+                    )
+            except Exception as exc:
+                consecutive_errors += 1
+                self.inference_error_count += 1
+                self.inference_error = f'{type(exc).__name__}: {exc}'
+                self.logger.exception('Inference step failed; clearing stale actions and retrying')
+                self.stop_control()
+                with self._inference_execution_lock:
+                    self.realtime_data_manager.clear()
+                time.sleep(min(0.1 * 2 ** min(consecutive_errors - 1, 4), 1.6))
             # print(f'\rInference count: {self.realtime_data_manager.infer_count}, current infer time: {self.realtime_data_manager.start_intra_traj_marker-self.realtime_data_manager.start_infer_marker:.4f}s, current traj time: {self.realtime_data_manager.start_ctrl_marker-self.realtime_data_manager.start_intra_traj_marker:.4f}s', end='', flush=True)
             # symbol = '=' * 10
     def _control_thread_fun(self):
@@ -948,16 +1007,11 @@ class VLAClient():
             return
 
         teleop_enabled = self._use_teleop_enabled()
-        # Do not advance the policy chunk index while handoff is holding the last
-        # human action. get_action_fitted() pre-increments the index, so calling
-        # it here would make the first post-handoff control tick skip a frame.
+        # Values shared with the visualization helper below.
         action_fitted, action_raw, vel_fitted, acc_fitted = (None, None, None, None)
-        if not (teleop_enabled and self._teleop_policy_handoff_active):
-            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
-
         selected_source = ActionSource.POLICY
-        action_to_execute = action_fitted
-        policy_action_for_record = action_fitted
+        action_to_execute = None
+        policy_action_for_record = None
         action_np = None
 
         def update_visualization(action_override=None):
@@ -972,94 +1026,107 @@ class VLAClient():
                 control_period=self.config.controller.period / 1000
                 )
 
-        if teleop_enabled:
-            now = time.perf_counter()
-            handled_handoff = False
-            if self._teleop_policy_handoff_active:
-                new_teleop_after_handoff = (
-                    self._last_teleop_action_s is not None
-                    and self._teleop_policy_handoff_started_s is not None
-                    and self._last_teleop_action_s > self._teleop_policy_handoff_started_s
-                )
-                if new_teleop_after_handoff:
-                    self.logger.info("Fresh teleop input interrupted teleop-to-policy handoff.")
-                    self._reset_teleop_policy_handoff()
-                else:
-                    action_to_execute, selected_source, policy_action_for_record = self._select_teleop_policy_handoff_action(
-                        action_fitted,
-                        now,
-                    )
-                    if action_to_execute is None:
-                        update_visualization()
-                        return
-                    self._last_selected_source = selected_source
-                    handled_handoff = True
-            elif action_fitted is not None:
-                self.action_arbiter.submit(ActionSource.POLICY, action_fitted, now)
-
-            if not handled_handoff and not self._teleop_policy_handoff_active:
-                selected = self.action_arbiter.select(now=now)
-                if selected is None:
-                    update_visualization()
+        try:
+            # Serialize action retrieval and submission with stop/start. A timer
+            # callback from before Pause cannot submit an old action after Reset
+            # or after controls are re-enabled on Resume.
+            with self._control_execution_lock:
+                if not self.is_control_thread_running:
                     return
-                if (
-                    self._last_selected_source == ActionSource.TELEOP
-                    and selected.source != ActionSource.TELEOP
-                ):
-                    last_executed_action = self._get_last_executed_action()
-                    hold_action = last_executed_action if last_executed_action is not None else selected.action
-                    if self._start_teleop_policy_handoff(hold_action):
-                        action_to_execute, selected_source, policy_action_for_record = self._select_teleop_policy_handoff_action(
-                            None,
-                            now,
+
+                # Do not advance the policy chunk index while handoff is holding
+                # the last human action. get_action_fitted() pre-increments the
+                # index, so calling it here would make the first post-handoff
+                # control tick skip a frame.
+                if not (teleop_enabled and self._teleop_policy_handoff_active):
+                    action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
+
+                action_to_execute = action_fitted
+                policy_action_for_record = action_fitted
+
+                if teleop_enabled:
+                    now = time.perf_counter()
+                    handled_handoff = False
+                    if self._teleop_policy_handoff_active:
+                        new_teleop_after_handoff = (
+                            self._last_teleop_action_s is not None
+                            and self._teleop_policy_handoff_started_s is not None
+                            and self._last_teleop_action_s > self._teleop_policy_handoff_started_s
                         )
-                        if action_to_execute is None:
+                        if new_teleop_after_handoff:
+                            self.logger.info("Fresh teleop input interrupted teleop-to-policy handoff.")
+                            self._reset_teleop_policy_handoff()
+                        else:
+                            action_to_execute, selected_source, policy_action_for_record = self._select_teleop_policy_handoff_action(
+                                action_fitted,
+                                now,
+                            )
+                            if action_to_execute is None:
+                                update_visualization()
+                                return
+                            self._last_selected_source = selected_source
+                            handled_handoff = True
+                    elif action_fitted is not None:
+                        self.action_arbiter.submit(ActionSource.POLICY, action_fitted, now)
+
+                    if not handled_handoff and not self._teleop_policy_handoff_active:
+                        selected = self.action_arbiter.select(now=now)
+                        if selected is None:
                             update_visualization()
                             return
-                    else:
-                        action_to_execute = self._action_for_selected_source(selected)
-                        selected_source = selected.source
-                        policy_action_for_record = action_fitted
-                else:
-                    action_to_execute = self._action_for_selected_source(selected)
-                    selected_source = selected.source
-                    policy_action_for_record = action_fitted
-                self._last_selected_source = selected_source
-                if now - self._action_select_last_debug_s >= 1.0:
-                    self._action_select_last_debug_s = now
-                    self.logger.debug("Action arbiter selected source=%s", selected_source.value)
+                        if (
+                            self._last_selected_source == ActionSource.TELEOP
+                            and selected.source != ActionSource.TELEOP
+                        ):
+                            last_executed_action = self._get_last_executed_action()
+                            hold_action = last_executed_action if last_executed_action is not None else selected.action
+                            if self._start_teleop_policy_handoff(hold_action):
+                                action_to_execute, selected_source, policy_action_for_record = self._select_teleop_policy_handoff_action(
+                                    None,
+                                    now,
+                                )
+                                if action_to_execute is None:
+                                    update_visualization()
+                                    return
+                            else:
+                                action_to_execute = self._action_for_selected_source(selected)
+                                selected_source = selected.source
+                                policy_action_for_record = action_fitted
+                        else:
+                            action_to_execute = self._action_for_selected_source(selected)
+                            selected_source = selected.source
+                            policy_action_for_record = action_fitted
+                        self._last_selected_source = selected_source
+                        if now - self._action_select_last_debug_s >= 1.0:
+                            self._action_select_last_debug_s = now
+                            self.logger.debug("Action arbiter selected source=%s", selected_source.value)
 
-        if action_to_execute is not None:
-            action_np = np.asarray(action_to_execute)
-            try:
-                if (
-                    selected_source in (ActionSource.TELEOP, ActionSource.HOLD)
-                    and hasattr(self.robot, 'control_robot_open_loop')
-                ):
-                    # Human control is open-loop: forward the latest command
-                    # without waiting for the robot worker acknowledgement.
-                    self.robot.control_robot_open_loop(action_np)
-                else:
+                if action_to_execute is not None:
+                    action_np = np.asarray(action_to_execute)
+                    # Teleop/hold commands keep their open-loop semantics: the
+                    # robot proxy control queue is non-blocking and latest-wins,
+                    # so the control timer never waits on the robot worker.
                     self.robot.control_robot(action_np)
-            except Exception as exc:
-                self._stop_control_thread_on_error()
-                self.logger.error("Robot control failed: %s", exc)
-                raise
-            self._set_last_executed_action(action_np)
-            if (
-                self._teleop_bridge_running
-                and self.teleop_bridge is not None
-                and not self.is_teleop_human_active()
-            ):
-                try:
-                    self.teleop_bridge.publish_joint_state()
-                except Exception:
-                    self.logger.warning("Failed to publish teleop anchor state", exc_info=True)
+                    self._set_last_executed_action(action_np)
+                    if (
+                        self._teleop_bridge_running
+                        and self.teleop_bridge is not None
+                        and not self.is_teleop_human_active()
+                    ):
+                        try:
+                            self.teleop_bridge.publish_joint_state()
+                        except Exception:
+                            self.logger.warning("Failed to publish teleop anchor state", exc_info=True)
 
-            # Data recording remains unchanged: the existing recorder continues
-            # to receive the policy action exactly as before this handoff change.
-            if self.config.record.switch and action_fitted is not None:
-                self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
+                    # Data recording remains unchanged: the existing recorder
+                    # continues to receive the policy action exactly as before
+                    # this handoff change.
+                    if self.config.record.switch and action_fitted is not None:
+                        self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
+        except Exception as exc:
+            self._stop_control_thread_on_error()
+            self.logger.error("Robot control failed: %s", exc)
+            raise
 
         # Only use alignment processing if prob_progress array length > 1
         prob_progress = self.realtime_data_manager.get_prob_progress()
@@ -1463,6 +1530,14 @@ class VLAClient():
         return f"{time.time_ns()}-{self._request_id}"
 
     def _request_inference(self, data, timeout_ms=500):
+        # Observations may have been queued before a manual language switch.
+        # Apply the current instruction when the inference request is sent.
+        if not self.config.language.auto_mode:
+            language = self.task_language_manager.get_current_language()
+            frames = data if isinstance(data, list) else [data]
+            for frame in frames:
+                if isinstance(frame, dict) and isinstance(frame.get('obs'), dict):
+                    frame['obs']['language'] = [language]
         request_id = self._next_request_id()
         # start_time = time.time()
         if not self.vla_zmq.sendMessage(data, meta={'request_id': request_id}):

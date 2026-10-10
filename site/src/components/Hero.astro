@@ -1,0 +1,96 @@
+---
+import { site } from '../data/site';
+import { platformIcons as icons } from '../data/icons';
+import { getUI } from '../i18n';
+import HeroVideo from './HeroVideo.astro';
+const BASE = import.meta.env.BASE_URL;
+const { locale = 'en' } = Astro.props;
+const t = getUI(locale);
+// Color the first letter of each word in the suffix (except the leading
+// article) with the gradient style — spells out RAIL (Real-time Asynchronous
+// Inference Linker) matching the titleHighlight style.
+const suffixWords = (t.hero.titleSuffix || '').split(' ');
+// Color the first letter of the RAIL acronym words (Real-time Asynchronous
+// Inference Linker) with the gradient style, matching titleHighlight.
+const railWords = new Set(['real-time', 'asynchronous', 'inference', 'linker']);
+// Highlight markers:
+//   **text** → bold, *text* → italic, ==text== → red highlight.
+function highlight(text: string) {
+  const re = /(\*\*[^*]+\*\*|\*[^*\n]+\*|==[^=]+==)/g;
+  return text
+    .split(re)
+    .filter((p) => p !== '')
+    .map((p) => {
+      let m = p.match(/^\*\*([^*]+)\*\*$/);
+      if (m) return { text: m[1], style: 'bold' as const };
+      m = p.match(/^\*([^*]+)\*$/);
+      if (m) return { text: m[1], style: 'italic' as const };
+      m = p.match(/^==([^=]+)==$/);
+      if (m) return { text: m[1], style: 'red' as const };
+      return { text: p, style: 'normal' as const };
+    });
+}
+---
+
+<section id="overview" class="relative overflow-hidden">
+  <div class="pointer-events-none absolute inset-0 bg-ink"></div>
+  <div class="pointer-events-none absolute -top-32 left-1/4 h-96 w-96 rounded-full bg-brand/20 blur-3xl"></div>
+  <div class="pointer-events-none absolute -bottom-32 right-1/4 h-96 w-96 rounded-full bg-accent/20 blur-3xl"></div>
+  <div class="pointer-events-none absolute inset-0 opacity-[0.06]" style="background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);background-size:40px 40px;"></div>
+
+  <div class="container-wide relative pt-8 text-center sm:pt-11 pb-12 sm:pb-16">
+    <p class="eyebrow">{t.hero.eyebrow}</p>
+    <h1 class="mx-auto max-w-4xl text-2xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl">
+      <span class="gradient-text">{t.hero.titleHighlight}</span>{' '}
+      {suffixWords.map((w, i) => (
+        <span>
+          {railWords.has(w.toLowerCase())
+            ? <><span class="gradient-text">{w.charAt(0)}</span>{w.slice(1)}</>
+            : w}{i < suffixWords.length - 1 ? ' ' : ''}
+        </span>
+      ))}
+    </h1>
+    <p class="mt-5 text-lg font-semibold text-brand-light">{t.hero.sub}</p>
+    <HeroVideo />
+    <p class="mx-auto mt-4 max-w-[54rem] text-base text-slate-300">
+      {highlight(t.hero.desc).map((s) =>
+        s.style === 'bold'
+          ? <strong class="font-semibold">{s.text}</strong>
+          : s.style === 'italic'
+            ? <em class="italic">{s.text}</em>
+            : s.style === 'red'
+              ? <span class="text-red-400">{s.text}</span>
+              : s.text
+      )}
+    </p>
+    <h3 class="mx-auto mt-8 max-w-[54rem] text-left text-xl font-bold tracking-tight text-white sm:text-2xl">{t.hero.featuresTitle}</h3>
+    <ul class="mx-auto mt-4 max-w-[54rem] list-disc space-y-1 pl-5 text-left text-sm text-slate-300">
+      {t.hero.features.map((f) => (
+        <li>
+          {highlight(f).map((s) =>
+            s.style === 'bold'
+              ? <strong class="font-semibold">{s.text}</strong>
+              : s.style === 'italic'
+                ? <em class="italic">{s.text}</em>
+                : s.style === 'red'
+                  ? <span class="text-red-400">{s.text}</span>
+                  : s.text
+          )}
+        </li>
+      ))}
+    </ul>
+
+    <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+      {site.platforms.map((p) => (
+        <a class="btn-ghost px-3 py-2" href={p.href} title={p.label} aria-label={p.label}>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><Fragment set:html={icons[p.icon]} /></svg>
+          <span>{p.label}</span>
+        </a>
+      ))}
+      <a class="btn-ghost" href={site.whitepaper}>{t.hero.btnPaper}</a>
+      <a class="btn-primary" href={`${BASE}#quickstart`}>{t.hero.btnStart}</a>
+    </div>
+
+    <p class="mt-10 text-xs text-slate-500">{t.footer.org}{t.hero.presented}{t.footer.author}</p>
+  </div>
+</section>

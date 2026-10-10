@@ -70,8 +70,10 @@ class InterChunkFuser:
                 joint_indices=joint_indices,
                 max_vel=self._cfg_value(mode_cfg, 'max_vel', 2.0),
                 max_acc=self._cfg_value(mode_cfg, 'max_acc', 5.0),
-                kp=self._cfg_value(mode_cfg, 'kp', 5.0),
-                kd=self._cfg_value(mode_cfg, 'kd', 2.0))
+                kp=self._cfg_value(mode_cfg, 'k_p', 10.0),
+                kd=self._cfg_value(mode_cfg, 'k_d', 4.0),
+                kf_vel=self._cfg_value(mode_cfg, 'kf_vel', 2.5),
+                kf_acc=self._cfg_value(mode_cfg, 'kf_acc', 0.3))
             # vel_chunk_fitted[joint_indices, target_chunk_index:] = sim_vel
             # acc_chunk_fitted[joint_indices, target_chunk_index:] = sim_acc 
         elif mode == 'min_jerk':
@@ -212,12 +214,13 @@ class InterChunkFuser:
                                     joint_indices,
                                     max_vel=2.0,
                                     max_acc=5.0,
-                                    kp=5.0,
-                                    kd=2.0):
+                                    kp=10.0,
+                                    kd=4.0,
+                                    kf_vel=2.5,
+                                    kf_acc=0.3):
         """
         This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
         Note: Under the same parameter settings, this strategy is slower than 'search_action'.
-        Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
 
         This function is **accelerated by Numba** using `@njit`, which compiles the
         Python code into optimized machine code in *nopython mode*.
@@ -260,6 +263,10 @@ class InterChunkFuser:
             Proportional gain of the PD controller.
         kd : float, optional
             Derivative gain of the PD controller.
+        kf_vel: float, optional
+            Feedforward gain for target joint velocity, used to eliminate overall time lag of tracking trajectory.
+        kf_acc: float, optional
+            Feedforward gain for target joint acceleration, improves tracking accuracy at curve corners and acceleration/deceleration segments.
 
         Returns
         -------
@@ -277,6 +284,19 @@ class InterChunkFuser:
         dt = next_timestamps[1] - next_timestamps[0]
         dof, chunk_size = target_action_chunk.shape
 
+        ## Precompute target velocity and target acceleration (data source for derivative lead)
+        tar_vel = np.zeros_like(target_action_chunk)
+        tar_acc = np.zeros_like(target_action_chunk)
+        ## Compute derivatives via internal finite difference
+        for i in range(1, chunk_size):
+            tar_vel[:, i] = (target_action_chunk[:, i] - target_action_chunk[:, i-1]) / dt
+        for i in range(1, chunk_size-1):
+            tar_acc[:, i] = (tar_vel[:, i+1] - tar_vel[:, i-1]) / (2 * dt)
+        ## Fill boundary values for start and end points
+        tar_vel[:, 0] = tar_vel[:, 1]
+        tar_acc[:, 0] = tar_acc[:, 1]
+        tar_acc[:, -1] = tar_acc[:, -2]
+
         pos = init_pos.copy()
         vel = init_vel.copy()
         acc = init_acc.copy()
@@ -287,8 +307,20 @@ class InterChunkFuser:
 
         for i in range(chunk_size):
             target_action = target_action_chunk[:, i]
+            t_vel = tar_vel[:, i]
+            t_acc = tar_acc[:, i]
+            
             for j in range(dof):
-                acc[j] = kp * (target_action[j] - pos[j]) - kd * vel[j]
+                # if kf_vel == 0 and kf_acc == 0:
+                #     acc[j] = kp * (target_action[j] - pos[j]) - kd * vel[j]
+                # else:
+                #     pos_err = target_action[j] - pos[j]
+                #     ## Improved PD: Derivative lead structure + feedforward compensation
+                #     acc[j] = kp * pos_err + kd * (t_vel[j] - vel[j]) + kf_vel * t_vel[j] + kf_acc * t_acc[j]  
+
+                ## Decoupled feedforward compensation version; set both kf_vel and kf_acc to 0 will degrade to PD feedback control
+                pos_err = target_action[j] - pos[j]
+                acc[j] = kp * pos_err - kd * vel[j] + kf_vel * t_vel[j] + kf_acc * t_acc[j] 
 
                 if acc[j] > max_acc:
                     acc[j] = max_acc

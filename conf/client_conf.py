@@ -101,10 +101,12 @@ def get_search_action_config() -> ConfigDict:
 
 def get_smooth_velocity_config() -> ConfigDict:
     config = ConfigDict()
-    config.max_vel = 2.0
-    config.max_acc = 5.0
-    config.kp = 5.0
-    config.kd = 2.0
+    # config.max_vel = 2.0
+    # config.max_acc = 5.0
+    config.k_p = 10.0
+    config.k_d = 4.0
+    config.kf_vel = 2.5
+    config.kf_acc = 0.3
     return config
 
 def get_min_jerk_config() -> ConfigDict:
@@ -225,6 +227,8 @@ def get_teleop_config() -> ConfigDict:
     config.devices.quest3 = ConfigDict()
     config.devices.quest3.auto_config_path = True
     config.devices.quest3.config_path_by_robot = {
+        # 'a2d' is kept as a legacy alias of the AgiBot G1 robot body.
+        'agibot_g1': 'teleop/quest3/config/a2d.yaml',
         'a2d': 'teleop/quest3/config/a2d.yaml',
         'mock': 'teleop/quest3/config/a2d.yaml',
         'ti5_t170c': 'teleop/quest3/config/ti5_t170c.yaml',

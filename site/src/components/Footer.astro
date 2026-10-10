@@ -1,0 +1,128 @@
+---
+import { site, paper, contributors } from '../data/site';
+import { getUI } from '../i18n';
+import Highlight from './Highlight.astro';
+const BASE = import.meta.env.BASE_URL;
+const { locale = 'en' } = Astro.props;
+const t = getUI(locale);
+---
+
+<footer class="border-t border-ink-border bg-ink py-10">
+  <div class="container-wide flex flex-col gap-8">
+    <!-- Brand -->
+    <div>
+      <p class="text-lg font-extrabold gradient-text">Open-RAIL</p>
+      <p class="mt-2 text-sm text-slate-400"><Highlight text={t.footer.tagline} /></p>
+    </div>
+
+    <!-- Paper & Citation -->
+    <div class="grid gap-8 lg:grid-cols-2">
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.paperHeading}</p>
+        <a class="mt-3 block text-base font-semibold text-white hover:text-brand" href={paper.url}>
+          <Highlight text={paper.title} />
+        </a>
+        <p class="mt-2 text-sm text-slate-400"><Highlight text={`${paper.authors} · ${paper.venue}`} /></p>
+        <a class="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-light hover:text-brand" href={paper.pdf}>
+          {t.footer.paperLabel}
+          <span aria-hidden="true">&rarr;</span>
+        </a>
+      </div>
+      <div>
+        <div class="flex items-center justify-between">
+          <p class="text-sm font-semibold text-slate-300">BibTeX</p>
+          <button id="copy-bibtex" class="btn-ghost px-2 py-1 text-xs" type="button">Copy</button>
+        </div>
+        <pre id="bibtex" class="mt-2 overflow-x-auto rounded-xl border border-ink-border bg-white/5 p-3 text-xs leading-relaxed text-slate-300"><code>{paper.bibtex}</code></pre>
+      </div>
+    </div>
+
+    <!-- Contributors. The invitation to join them belongs to this block rather than to
+         the grid below: it is the same subject, and it reads better directly under the
+         names than as a column beside the repository links. -->
+    <div>
+      <p class="text-sm font-semibold text-slate-300">Contributors</p>
+      <div class="mt-4 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {contributors.map((group) => (
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-wide text-brand-light"><Highlight text={group.role} /></p>
+            <ul class="mt-2 space-y-1 text-sm text-slate-400">
+              {group.members.map((m) => <li><Highlight text={m} /></li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p class="mt-4 text-sm text-slate-400">
+        {t.footer.contribInvite}<a class="font-semibold text-brand-light hover:text-brand" href={`${BASE}#get-involved`}>{t.footer.contribSeeHow} <span aria-hidden="true">&rarr;</span></a>
+      </p>
+    </div>
+
+    <!-- Repositories, contact, and org. The repo links also appear in the Hero and in the
+         Get Involved entry block, and are repeated here on purpose: readers look for the
+         code at the bottom of the page. -->
+    <div class="grid gap-8 border-t border-ink-border pt-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.repoLabel}</p>
+        <ul class="mt-3 space-y-2 text-sm text-slate-400">
+          {site.platforms.map((p) => (
+            <li><a class="hover:text-brand" href={p.href}>{p.label}</a></li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-slate-300">{t.footer.contactLabel}</p>
+        <p class="mt-3 text-sm text-slate-400">{site.email}</p>
+        <p class="mt-3 text-xs text-slate-500"><Highlight text={t.footer.emailNote} /></p>
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-slate-300"><Highlight text={t.footer.org} /></p>
+        <p class="mt-3 text-sm text-slate-400"><Highlight text={t.footer.author} /></p>
+      </div>
+    </div>
+
+    <!-- Bottom bar: copyright on one side, licence and back-to-top on the other. -->
+    <div class="flex flex-col items-center gap-4 border-t border-ink-border pt-4 text-center text-xs text-slate-500 sm:flex-row sm:justify-between sm:text-left">
+      <p><Highlight text={t.footer.copyright} /></p>
+      <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+        <span class="inline-flex items-center gap-1.5">
+          {t.footer.licenseLabel}
+          <span class="text-slate-600" aria-hidden="true">&middot;</span>
+          <a class="font-semibold text-slate-300 hover:text-brand" href={site.license.url}>{site.license.name}</a>
+        </span>
+        <button id="back-to-top" class="btn-ghost px-3 py-1 text-xs" type="button">
+          {t.footer.backToTop}
+          <span aria-hidden="true">&uarr;</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+  const btn = document.getElementById('copy-bibtex');
+  const code = document.querySelector('#bibtex code')?.textContent ?? '';
+  btn?.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      const old = btn.textContent;
+      btn.textContent = 'Copied';
+      setTimeout(() => (btn.textContent = old), 1500);
+    } catch {
+      /* clipboard not available */
+    }
+  });
+
+  // Back to top. Scroll smoothly unless the visitor asked for less motion, and
+  // hand focus to the top of the page so keyboard and screen-reader users do not
+  // stay parked on a button that is now off-screen.
+  const toTop = document.getElementById('back-to-top');
+  toTop?.addEventListener('click', () => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+    const top = document.querySelector('main') as HTMLElement | null;
+    if (top) {
+      top.setAttribute('tabindex', '-1');
+      top.focus({ preventScroll: true });
+    }
+  });
+</script>

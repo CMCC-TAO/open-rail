@@ -15,6 +15,7 @@ class RobotBody(RobotBase):
         super().__init__(config)
         self.n = 0
         self.closed = False
+        self.control_actions = []
 
     def retrieve_observation(self):
         time.sleep(0.02)
@@ -30,7 +31,14 @@ class RobotBody(RobotBase):
         }
 
     def control_robot(self, action):
-        return len(np.asarray(action).ravel())
+        action = np.asarray(action).copy()
+        if action.size and action.flat[0] == -999:
+            raise RuntimeError('injected control failure')
+        self.control_actions.append(action)
+        return len(action.ravel())
+
+    def get_control_actions(self):
+        return [action.tolist() for action in self.control_actions]
 
     def execute_action(self, data):
         return 'exec-ok'

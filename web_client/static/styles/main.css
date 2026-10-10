@@ -2,7 +2,7 @@
 @import url('./base/reset.css');
 @import url('./base/variables.css');
 
-@import url('./layout/topbar.css');
+@import url('./layout/topbar.css?v=20260924-shortcuts-popover-1');
 @import url('./layout/footer.css');
 @import url('./layout/grid.css');
 
