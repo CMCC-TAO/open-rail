@@ -198,8 +198,8 @@ def get_robotE_config():
 
 def get_dispatch_config(target='robotC'):
     config = ConfigDict()
-    config.server_task_address = "tcp://192.168.0.188:5555"
-    config.server_response_address = "tcp://192.168.0.188:5556"
+    config.server_task_address = "tcp://<server-ip>:5555"
+    config.server_response_address = "tcp://<server-ip>:5556"
     if target == 'robotB':
         config.robot = get_robotB_config()
     elif target == 'robotC':

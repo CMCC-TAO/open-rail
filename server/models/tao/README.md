@@ -3,7 +3,7 @@
 This guide describes `run_server.py --model_type tao`, using the `a2d_gripper`
 embodiment with two 7-joint arms and two grippers as an example. open-rail
 handles ZMQ transport and image decoding; the adapter (`tao.py`) calls the TAO
-policy backend through the sibling TAO checkout. The camera fields, state/action
+policy backend through the sibling TAO source directory. The camera fields, state/action
 dimensions, and client code below describe this example. For another
 embodiment, align the interface and checkpoint with its training layout.
 
