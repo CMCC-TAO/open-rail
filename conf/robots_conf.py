@@ -104,8 +104,8 @@ def get_mock_config():
     })
     config.manual_arm_interval = 0.01
     config.state_action_range = [[0, 16], [58, 70]]
-    config.dataset_path = '/home/robot/Music/task_39_only1'
-    # config.dataset_path = '/home/robot/Music'
+    config.dataset_path = '/path/to/dataset'
+    # config.dataset_path = '/path/to/dataset'
     return config
 
 def get_ti5_t170c_config():

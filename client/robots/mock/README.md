@@ -10,7 +10,7 @@ Start the Server：
 
 ```bash
 conda activate gr00t
-python run_server.py --model_type gr00t_n1_5 --model_path /mnt/models/pnp_bottle/checkpoint-60000
+python run_server.py --model_type gr00t_n1_5 --model_path /path/to/checkpoint
 ```
 
 Start the Client：

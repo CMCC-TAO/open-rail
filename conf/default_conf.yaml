@@ -286,7 +286,7 @@ robots:
         hand_right: observation.images.hand_right
         head: observation.images.top_head
       ref: head
-    dataset_path: /home/zl/zl/mdata/task_1196
+    dataset_path: /path/to/dataset
     manual_arm_interval: 0.01
     state_action_range:
     - - 0
