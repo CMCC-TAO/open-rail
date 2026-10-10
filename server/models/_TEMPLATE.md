@@ -14,7 +14,7 @@ robot or client to the running server. Pitfalls are collected under Notes.
 
 ## Step 1 — Prerequisites
 
-- **Upstream source** — {{UPSTREAM_PROJECT_NAME}}; its adapter entry is the module `{{ENTRY_MODULE}}`. Depending on the model, the upstream is either a checkout to clone (as a sibling of this repository, or wherever `repo_path` points — the adapter inserts that path into `sys.path`; it is not vendored), a pip-installed package, or code that lives inside this repository — describe whichever applies.
+- **Upstream source** — {{UPSTREAM_PROJECT_NAME}}; its adapter entry is the module `{{ENTRY_MODULE}}`. Depending on the model, the upstream is either a source directory to clone (as a sibling of this repository, or wherever `repo_path` points — the adapter inserts that path into `sys.path`; it is not vendored), a pip-installed package, or code that lives inside this repository — describe whichever applies.
 - **Checkpoint** — a directory fine-tuned for this state/action layout, containing:
   - {{CHECKPOINT_FILE_1}}
   - {{CHECKPOINT_FILE_2}}

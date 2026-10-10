@@ -4,7 +4,7 @@ This guide describes `run_server.py --model_type pi0` (and `--model_type pi05`),
 using the A2D configuration with two 7-joint arms and two grippers as an
 example. open-rail handles ZMQ transport and image decoding; the adapter
 (`pi0.py` / `pi05.py`) calls the openpi policy backend through the sibling
-openpi checkout. The camera fields, state/action dimensions, and client code
+openpi source directory. The camera fields, state/action dimensions, and client code
 below describe this example. For another configuration, align the interface and
 checkpoint with its training layout.
 

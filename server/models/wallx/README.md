@@ -3,7 +3,7 @@
 This guide describes `run_server.py --model_type wallx`, using the `agibot_g1`
 configuration with two 7-joint arms and two grippers as an example. open-rail
 handles ZMQ transport and image decoding; the adapter calls the policy backend
-in the sibling Wall-X checkout. The camera fields, state/action dimensions, and
+in the sibling Wall-X source directory. The camera fields, state/action dimensions, and
 client code below describe this example. For another configuration, align the
 interface and checkpoint with its training layout.
 
@@ -30,7 +30,7 @@ Fields of `get_wallx_config()` in [`conf/models_conf.py`](../../../conf/models_c
 | Field | Required | Meaning | Default |
 | --- | --- | --- | --- |
 | `model_path` | yes | Checkpoint directory | `/path/to/model`; overridden by `--model_path` |
-| `repo_path` | yes | Path to the `wall-x` checkout, inserted into `sys.path` | `<parent-of-open-rail>/wall-x` |
+| `repo_path` | yes | Path to the `wall-x` source directory, inserted into `sys.path` | `<parent-of-open-rail>/wall-x` |
 | `device` | no | Torch device for the policy | `cuda:0` |
 | `flow_steps` | no | Flow-matching iterations. **Not** the returned chunk length | `10` |
 
@@ -261,4 +261,4 @@ Implementation references:
 - [Shared server](../../../core/vla_server.py): image decoding, responses, exception handling.
 - [ZMQ server](../../../core/zmq_server.py): framing and heartbeats.
 - [Real client](../../../client/core/vla_client.py): `_process_data()` request format.
-- Policy backend: `wall_x.serving/a2d.py` in the Wall-X checkout (sibling directory, outside this repository).
+- Policy backend: `wall_x.serving/a2d.py` in the Wall-X source directory (sibling directory, outside this repository).

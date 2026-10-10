@@ -13,7 +13,7 @@ robot or client to the running server. Pitfalls are collected under Notes.
 
 ## Step 1 — Prerequisites
 
-- **Upstream source** — RDT ([thu-ml/RoboticsDiffusionTransformer](https://github.com/thu-ml/RoboticsDiffusionTransformer)); the adapter entry is `create_model` from the upstream module `scripts.agilex_model`. Clone the upstream checkout **inside the adapter directory** (for example `server/models/rdt/rdt_train_a2d/`) — the adapter inserts its path into `sys.path`; it is not vendored. ⚠️ The `sys.path` entry at [`rdt.py:3`](rdt.py) is a placeholder (`/path/to/rdt_train_a2d`) — set it to your checkout path before starting the server. This is the only code change this adapter requires; everything else is configuration.
+- **Upstream source** — RDT ([thu-ml/RoboticsDiffusionTransformer](https://github.com/thu-ml/RoboticsDiffusionTransformer)); the adapter entry is `create_model` from the upstream module `scripts.agilex_model`. Clone the upstream RDT source code **inside the adapter directory** (for example `server/models/rdt/rdt_train_a2d/`) — the adapter inserts its path into `sys.path`; it is not vendored. ⚠️ The `sys.path` entry at [`rdt.py:3`](rdt.py) is a placeholder (`/path/to/rdt_train_a2d`) — set it to the RDT source directory you cloned before starting the server. This is the only code change this adapter requires; everything else is configuration.
 - **Checkpoint** — a directory saved by RDT training, fine-tuned for this state/action layout, containing:
   - `config.json`
   - `pytorch_model.bin`
@@ -30,7 +30,7 @@ robot or client to the running server. Pitfalls are collected under Notes.
   pip install torch==2.1.0 torchvision==0.16.0 --index-url https://download.pytorch.org/whl/cu121
   pip install packaging==24.0
   pip install flash-attn --no-build-isolation
-  pip install -r requirements.txt   # from the upstream RDT checkout
+  pip install -r requirements.txt   # from the cloned RDT source directory
 
   # From the open-rail root: installs the shared runtime dependencies,
   # including pyzmq, numpy, opencv-python, ml-collections, and rich —
@@ -45,7 +45,7 @@ Fields of `get_rdt_config()` in [`conf/models_conf.py`](../../../conf/models_con
 | Field | Required | Meaning | Default |
 | --- | --- | --- | --- |
 | `model_path` | yes | Checkpoint directory (`config.json` + `pytorch_model.bin`) | `/path/to/model`; overridden by `--model_path` |
-| `config_path` | yes | The upstream RDT model config YAML (e.g. `configs/base.yaml` from the checkout); defines the chunk size and architecture | `/path/to/config` |
+| `config_path` | yes | The upstream RDT model config YAML (e.g. `configs/base.yaml` from the cloned source directory); defines the chunk size and architecture | `/path/to/config` |
 | `vision_encoder_name_or_path` | yes | SigLIP vision encoder directory | `/path/to/vision_encoder` |
 | `lang_embd_path` | yes | Pre-generated language-embedding `.pt` file | `/path/to/lang_embds/place_bottle.pt` |
 
