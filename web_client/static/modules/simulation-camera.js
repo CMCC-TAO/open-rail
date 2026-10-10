@@ -10,7 +10,7 @@ function clearCameraFrames() {
     image.removeAttribute('src');
     image.classList.remove('loaded');
     const placeholder = $(`cam-placeholder-${i}`);
-    placeholder.textContent = '等待相机画面…';
+    placeholder.textContent = 'Waiting for camera frames…';
     placeholder.style.display = App.camOpen[i] ? '' : 'none';
   }
 }
@@ -41,7 +41,7 @@ async function applySimulationPreview(snapshot) {
     }
     clearCameraFrames();
   }
-  $('camera-source-label').textContent = `仿真相机 · ${job.env_name} · 环境 1`;
+  $('camera-source-label').textContent = `Simulation Cameras · ${job.env_name} · Environment 1`;
   applySimulationTrajectory(snapshot.trajectory);
   if (!snapshot.frames.length) {
     clearCameraFrames();

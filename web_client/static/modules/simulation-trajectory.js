@@ -44,7 +44,7 @@ function applySimulationTrajectory(trajectory) {
     resetSimulationTrajectoryBuffer();
     syncTrajLayoutFromConfig();
     syncSimulationTrajectoryControls();
-    $('trajectory-source-label').textContent = '仿真关节轨迹 · 环境 1';
+    $('trajectory-source-label').textContent = 'Simulation Joint Trajectories · Environment 1';
   }
   for (const sample of trajectory.samples) {
     if (sample.sequence <= simulationTrajectory.sequence) continue;

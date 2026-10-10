@@ -11,47 +11,47 @@ const choices = {
   video_layout: ["grid", "single"],
 };
 const labels = {
-  platform: "仿真平台",
-  robotwin_root: "RoboTwin 项目根目录",
-  task_config: "RoboTwin 任务配置",
-  instruction_type: "任务指令类型",
-  instruction: "固定任务指令（可选）",
-  no_expert_check: "跳过专家检查（须填写指令）",
-  gpu: "GPU 编号（空为继承启动设置）",
-  max_transition_steps: "块间过渡最多步数",
-  max_seed_attempts: "每 episode 最大选种次数",
-  seed_stride: "Episode 种子间隔",
-  seed_selection_timeout: "环境准备与选种超时（秒）",
-  worker_episodes: "每 worker 最多 episodes",
-  max_native_restarts: "同一进度崩溃重试次数",
-  server_reconnect_interval: "断连重试间隔（秒）",
-  server_reconnect_timeout: "断连等待上限（秒，0 为无限）",
-  python: "Python 可执行文件",
-  env_name: "单个任务（与任务集二选一）",
-  task_suite: "任务集（如 target50）",
-  split: "任务划分",
-  n_episodes: "每任务 episode 数",
-  n_envs: "并行环境数",
-  n_action_steps: "动作块长度",
-  seed: "随机种子",
-  mode: "同步 / 异步",
-  intra_chunk_mode: "块内平滑算法",
-  intra_chunk_sample_ratio: "平滑采样倍率",
-  inter_chunk_mode: "块间融合算法",
-  async_replenish_threshold: "异步补充阈值（空为默认）",
-  max_async_observation_lag_steps: "最大观测滞后步数（空为默认）",
-  max_episode_steps: "最大 episode 步数（空为默认）",
-  episode_timeout: "Episode 超时（秒）",
-  stall_timeout: "无进展超时（秒）",
-  server_ip: "模型服务地址",
-  server_port: "模型服务端口",
-  mujoco_gl: "渲染后端",
-  preprocess: "图像预处理",
-  record: "保存 LeRobot 数据集",
-  video: "保存测评视频",
-  record_fps: "数据集帧率",
-  video_fps: "视频帧率",
-  video_layout: "视频布局",
+  platform: "Simulation Platform",
+  robotwin_root: "RoboTwin Root Directory",
+  task_config: "RoboTwin Task Configuration",
+  instruction_type: "Instruction Type",
+  instruction: "Fixed Instruction (Optional)",
+  no_expert_check: "Skip Expert Check (Instruction Required)",
+  gpu: "GPU Indices (Blank to Inherit)",
+  max_transition_steps: "Maximum Chunk Transition Steps",
+  max_seed_attempts: "Maximum Seed Attempts per Episode",
+  seed_stride: "Episode Seed Stride",
+  seed_selection_timeout: "Environment Setup and Seed Selection Timeout (Seconds)",
+  worker_episodes: "Episodes per Worker",
+  max_native_restarts: "Crash Retries at the Same Checkpoint",
+  server_reconnect_interval: "Reconnect Interval (Seconds)",
+  server_reconnect_timeout: "Reconnect Timeout (Seconds; 0 for Unlimited)",
+  python: "Python Executable",
+  env_name: "Single Task (Choose Task or Suite)",
+  task_suite: "Task Suite (e.g. target50)",
+  split: "Task Split",
+  n_episodes: "Episodes per Task",
+  n_envs: "Parallel Environments",
+  n_action_steps: "Action Chunk Length",
+  seed: "Random Seed",
+  mode: "Execution Mode",
+  intra_chunk_mode: "Intra-chunk Smoothing",
+  intra_chunk_sample_ratio: "Output Sampling Ratio",
+  inter_chunk_mode: "Inter-chunk Fusion",
+  async_replenish_threshold: "Async Replenishment Threshold (Blank for Default)",
+  max_async_observation_lag_steps: "Maximum Observation Lag Steps (Blank for Default)",
+  max_episode_steps: "Maximum Episode Steps (Blank for Default)",
+  episode_timeout: "Episode Timeout (Seconds)",
+  stall_timeout: "Stall Timeout (Seconds)",
+  server_ip: "Model Server Address",
+  server_port: "Model Server Port",
+  mujoco_gl: "Rendering Backend",
+  preprocess: "Image Preprocessing",
+  record: "Save LeRobot Dataset",
+  video: "Save Evaluation Videos",
+  record_fps: "Dataset Frame Rate",
+  video_fps: "Video Frame Rate",
+  video_layout: "Video Layout",
 };
 let defaults,
   selected = "",
@@ -97,7 +97,7 @@ function table(stats) {
   const source = tasks.length ? tasks : stats.filter((s) => s.env_name);
   const table = document.createElement("table");
   for (const values of [
-    ["任务", "已保存 episodes", "成功率"],
+    ["Task", "Saved Episodes", "Success Rate"],
     ...source.map((s) => [
       s.env_name,
       s.num_episodes != null ? s.num_episodes : (s.episodes || []).length,
@@ -160,7 +160,7 @@ async function poll() {
       api("/jobs/" + selected + "/files"),
     ]);
     $("status").textContent =
-      "状态：" + job.status + " ｜ 保存目录：data/robocasa_web/jobs/" + job.id;
+      "Status: " + job.status + " | Output Directory: data/robocasa_web/jobs/" + job.id;
     $("stop").disabled = !["running", "interrupted"].includes(job.status);
     $("resume").disabled =
       !["cancelled", "failed", "interrupted"].includes(job.status) ||
@@ -235,15 +235,15 @@ function updatePlatform() {
   for (const key of onlyRobotwin)
     $("field-" + key).parentElement.hidden = !robotwin;
   $("field-gpu").parentElement.firstChild.textContent = robotwin
-    ? "GPU 编号（如 0 或 0,1；空为继承）"
-    : "仿真 GPU 编号（单卡，如 2；空为继承）";
+    ? "GPU Indices (e.g. 0 or 0,1; Blank to Inherit)"
+    : "Simulation GPU Index (e.g. 2; Blank to Inherit)";
   for (const key of ["split", "mujoco_gl"])
     $("field-" + key).parentElement.hidden = robotwin;
   $("field-task_suite").parentElement.firstChild.textContent = robotwin
-    ? "任务列表（逗号分隔或 YAML 文件）"
+    ? "Task List (Comma-separated or YAML File)"
     : labels.task_suite;
   $("field-task_suite").placeholder = robotwin
-    ? "task_a,task_b 或任务列表 YAML 路径"
+    ? "task_a,task_b or path to a task-list YAML file"
     : "target50";
 }
 
