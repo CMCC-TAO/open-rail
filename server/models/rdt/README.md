@@ -1,7 +1,8 @@
 # RDT (Robotics Diffusion Transformer) Adapter
 
-This guide describes `run_server.py --model_type rdt`, using the `a2d_gripper`
-configuration (two 7-joint arms and two grippers) as the worked example. The
+This guide describes `run_server.py --model_type rdt`, using the dual-arm
+gripper layout — model-side identifier `a2d`, served by the `agibot_g1` robot
+adapter (two 7-joint arms and two grippers) — as the worked example. The
 camera fields, state/action dimensions, and client code below describe this
 example. For another configuration, align the interface and checkpoint with its
 training layout.
@@ -31,8 +32,9 @@ robot or client to the running server. Pitfalls are collected under Notes.
   pip install flash-attn --no-build-isolation
   pip install -r requirements.txt   # from the upstream RDT checkout
 
-  # From the open-rail root: server-core dependencies (zmq, numpy, opencv,
-  # ml_collections, rich) — the shared server imports them at startup
+  # From the open-rail root: installs the shared runtime dependencies,
+  # including pyzmq, numpy, opencv-python, ml-collections, and rich —
+  # the shared server imports them at startup
   pip install -e .
   ```
 
@@ -71,9 +73,11 @@ The client half runs on the robot side — see the root [Quick Start](../../../R
 Before wiring a robot, verify the server answers a single inference request.
 **This adapter requires a two-frame request** — a JSON list holding the
 *current* and the *previous* observation (see Step 5 for why). Prepare
-`head.jpg` (current frame) and `state.npy` from real observations; random state
-values are unsuitable for evaluating policy behavior. `cam.hand_left` /
-`cam.hand_right` may be `None`. Requires `numpy` and `pyzmq`.
+`head.jpg`, `hand_left.jpg`, `hand_right.jpg`, and `state.npy` from real
+observations; random state values are unsuitable for evaluating policy
+behavior. All three camera keys are required: a `None` value fails in the
+shared server's decoder, and an omitted key raises `KeyError` in this adapter.
+Requires `numpy` and `pyzmq`.
 
 ```python
 import json
@@ -96,8 +100,8 @@ def observation(head_jpeg: bytes, state: np.ndarray):
         "loc_timestamp": time.perf_counter(),
         "obs": {
             "cam.head": head_jpeg,
-            "cam.hand_left": None,   # optional; this adapter accepts None
-            "cam.hand_right": None,  # optional; this adapter accepts None
+            "cam.hand_left": Path("hand_left.jpg").read_bytes(),
+            "cam.hand_right": Path("hand_right.jpg").read_bytes(),
             "state": state,
             "language": ["put the bottle into the box"],  # ignored by this adapter
         },
@@ -119,8 +123,6 @@ try:
         response, meta = pickle.loads(payload), json.loads(metadata)
         if response.get("type") == "heartbeat":
             continue
-        if response.get("type") == "error":
-            raise RuntimeError(response.get("error"))
         assert response["type"] == "vla_action"
         actions = np.asarray(response["pred_action"])
         assert actions.ndim == 2 and actions.shape[1] == 16 and np.isfinite(actions).all()
@@ -150,8 +152,8 @@ client must send and what the returned chunk means.
 
 | Item | Expected | Where it is checked |
 | --- | --- | --- |
-| Camera keys | `cam.head`, `cam.hand_left`, `cam.hand_right` | must match `robots.a2d.camera.names` ([`conf/robots_conf.py:34`](../../../conf/robots_conf.py)) |
-| Image encoding | encoded JPEG/PNG **bytes**; BGR before `cv2.imencode`; a camera may be `None` | the shared server calls `cv2.imdecode` and hands the adapter RGB arrays ([`server/core/vla_server.py:126`](../../core/vla_server.py)) |
+| Camera keys | `cam.head`, `cam.hand_left`, `cam.hand_right` | must match `robots.agibot_g1.camera.names` ([`conf/robots_conf.py:34-36`](../../../conf/robots_conf.py)); legacy `robots.a2d.*` keys are migrated automatically on load |
+| Image encoding | encoded JPEG/PNG **bytes**; BGR before `cv2.imencode` | the shared server calls `cv2.imdecode` and hands the adapter RGB arrays ([`server/core/vla_server.py:121-128`](../../core/vla_server.py)) |
 | Request body | a **list of two observations** `[current, previous]`, not a single dictionary | [`rdt.py:32-33`](rdt.py) reads `sequence[0]` / `sequence[1]` |
 | State layout | `float32`, 16 meaningful dims: `[0:7]` left arm, `[7:14]` right arm, `[14:15]` left gripper, `[15:16]` right gripper; dims beyond 16 are ignored | [`rdt.py:50-56`](rdt.py) |
 | Action output | `float32 (T, 16)` in the same joint order as state; `T` = chunk size from the checkpoint's config; no batch dimension | [`rdt.py:70-76`](rdt.py) |
@@ -173,8 +175,8 @@ request = [
         "loc_timestamp": time.perf_counter(),
         "obs": {
             "cam.head": head_jpeg_bytes,
-            "cam.hand_left": left_jpeg_bytes,    # or None
-            "cam.hand_right": right_jpeg_bytes,  # or None
+            "cam.hand_left": left_jpeg_bytes,    # all three are required
+            "cam.hand_right": right_jpeg_bytes,
             "state": state,        # np.ndarray, float32, 16 meaningful dims
             "language": ["..."],   # ignored by this adapter
         },
@@ -194,8 +196,8 @@ meta = {"request_id": 0}
 | Field | Requirement |
 | --- | --- |
 | `type` | Must be `vla_obs` in each frame |
-| `ref_timestamp` / `loc_timestamp` | The **current** frame's values are returned unchanged; the real client uses monotonic nanoseconds / `time.perf_counter()` seconds |
-| `cam.*` | JPEG/PNG-encoded image **bytes**, or a contiguous encoded `uint8` array. **Do not send raw `(H, W, 3)` pixel arrays** — the shared server calls `cv2.imdecode`. Convert `memoryview` to `bytes` before pickling, and convert RGB sources to BGR before encoding; the server decodes and converts back to RGB ([`server/core/vla_server.py:126`](../../core/vla_server.py)). `None` is accepted for a missing camera. |
+| `ref_timestamp` / `loc_timestamp` | The **current** frame's values are returned unchanged ([`rdt.py:79`](rdt.py)); `ref_timestamp` should be your observation timestamp, `loc_timestamp` the send-time clock — the real client uses `time.perf_counter()` ([`client/core/vla_client.py:908`](../../../client/core/vla_client.py)) |
+| `cam.*` | JPEG/PNG-encoded image **bytes**, or a contiguous encoded `uint8` array. **Do not send raw `(H, W, 3)` pixel arrays** — the shared server calls `cv2.imdecode`. Convert `memoryview` to `bytes` before pickling, and convert RGB sources to BGR before encoding; the server decodes and converts back to RGB ([`server/core/vla_server.py:121-128`](../../core/vla_server.py)). All three camera keys must be present with valid image data — `None` fails in the server decoder, an omitted key raises `KeyError` in this adapter ([`rdt.py:39-45`](rdt.py)). |
 | `state` | Finite one-dimensional values, preferably `float32 (16,)`. The 16 dims are consumed in the layout above; extra dimensions are ignored. Do not add a batch dimension. |
 | `language` | **Ignored by this adapter** — semantics come from the `lang_embd_path` file. The shared server only surfaces it in heartbeat status info. Send it or not; it changes nothing. |
 
@@ -241,7 +243,10 @@ payload has `type=heartbeat`, `status=pong`; metadata has `action=pong`.
 - **`rdt.py:3` hard-codes a personal-machine `sys.path`** (`/home/gaohan/...`) — edit it to your checkout path before starting. This is tracked as a release-blocking cleanup item.
 - **A single-observation request crashes the adapter** with an `IndexError` (`sequence[1]` does not exist) — always send the two-frame list.
 - **Language is not a runtime input.** Changing the task instruction requires regenerating the embeddings file (upstream `encode_lang_batch.py`) and updating `lang_embd_path` — a request's `language` field is ignored.
-- The adapter serializes policy calls with the shared server's inference lock; start with one outstanding request at a time.
+- The server runs up to `max_infer_workers = 3` inference requests concurrently
+  ([`conf/server_conf.py:23`](../../../conf/server_conf.py)); the RDT adapter has
+  no internal lock and the upstream `policy.step` is not guaranteed thread-safe.
+  Start with one outstanding request at a time, or set `max_infer_workers = 1`.
 - A bad `config_path`, `vision_encoder_name_or_path`, or `lang_embd_path` raises in the **server** log; the shared server prints a traceback and does not guarantee an error response. Set a client timeout and inspect server logs.
 - `avg_infer_time` is the shared server's smoothed inference duration in seconds, not the full request round-trip time.
 - **Dataset replay checks protocol behavior and action curves, not closed-loop robot task success.** Do not read a clean replay as proof the policy can do the task.
