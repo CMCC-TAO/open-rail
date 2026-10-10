@@ -2,32 +2,38 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 121,
-    "uniques": 66
+    "count": 115,
+    "uniques": 65
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
     "title": "/blob/main/README.zh-CN.md",
-    "count": 27,
-    "uniques": 12
+    "count": 30,
+    "uniques": 14
   },
   {
     "path": "/CMCC-TAO/open-rail/graphs/traffic",
     "title": "/graphs/traffic",
-    "count": 17,
+    "count": 14,
     "uniques": 1
   },
   {
     "path": "/CMCC-TAO/open-rail/pulse",
     "title": "/pulse",
-    "count": 11,
+    "count": 8,
     "uniques": 1
+  },
+  {
+    "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/add-new-model.zh-CN.md",
+    "title": "/blob/main/docs-cn-backup/add-new-model.zh-CN.md",
+    "count": 5,
+    "uniques": 4
   },
   {
     "path": "/CMCC-TAO/open-rail/issues",
     "title": "/issues",
-    "count": 6,
-    "uniques": 5
+    "count": 5,
+    "uniques": 4
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.md",
@@ -42,21 +48,15 @@
     "uniques": 4
   },
   {
-    "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/add-new-model.zh-CN.md",
-    "title": "/blob/main/docs-cn-backup/add-new-model.zh-CN.md",
-    "count": 4,
-    "uniques": 3
-  },
-  {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
     "count": 4,
     "uniques": 3
   },
   {
-    "path": "/CMCC-TAO/open-rail/blob/main/docs/guides/add-new-model.md",
-    "title": "/blob/main/docs/guides/add-new-model.md",
+    "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/add-new-inter-chunk-fuser.zh-CN.md",
+    "title": "/blob/main/docs-cn-backup/add-new-inter-chunk-fuser.zh-CN.md",
     "count": 3,
-    "uniques": 3
+    "uniques": 1
   }
 ]
