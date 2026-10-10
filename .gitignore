@@ -1,6 +1,8 @@
 # C extensions
 *.so
 /run_client.py
+/conf/default_conf.yaml
+/extra/dispatch/
 python3.10.INFO
 .codebuddy/
 .marscode/
