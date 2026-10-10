@@ -147,6 +147,6 @@ Implementation references:
 
 - [Model configuration](../../../conf/models_conf.py): `get_{{MODEL_TYPE}}_config()`.
 - [Adapter]({{MODEL_TYPE}}.py): policy invocation and serialized inference.
-- [Shared server](../../../core/vla_server.py): image decoding, responses, exception handling.
-- [ZMQ server](../../../core/zmq_server.py): framing and heartbeats.
+- [Shared server](../../core/vla_server.py): image decoding, responses, exception handling.
+- [ZMQ server](../../core/zmq_server.py): framing and heartbeats.
 - [Real client](../../../client/core/vla_client.py): `_process_data()` request format.
