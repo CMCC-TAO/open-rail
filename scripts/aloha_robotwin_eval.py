@@ -419,9 +419,9 @@ def _run_task(args, task_name, run_id):
                 casa._configure_recording_for_robot(config, robot)
                 client = casa.VLAClientAsync(
                     config=config,
-                    realtime_data_manager=casa.RealtimeDataManager(config.rdm),
-                    inter_chunk_fuser=casa.InterChunkFuser(config.inter_chunk),
-                    intra_chunk_smoother=casa.IntraChunkSmoother(config.intra_chunk),
+                    realtime_data_manager=casa.RealtimeDataManager(config.rdm, simulation_mode=True),
+                    inter_chunk_fuser=casa.InterChunkFuser(config.inter_chunk, simulation_mode=True),
+                    intra_chunk_smoother=casa.IntraChunkSmoother(config.intra_chunk, simulation_mode=True),
                     task_language_manager=casa.TaskLanguageManager(config.language),
                     vla_zmq_client=zmq,
                     robot=robot,

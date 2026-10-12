@@ -1,16 +1,7 @@
 """User Configuration Example
 
-This file demonstrates how to create custom user configurations that can override
-default client configurations. The configuration supports both flat and nested
-parameter overrides.
-
-Usage:
-    python run_client.py --user_conf conf/user_conf_example.py
-
-Configuration Priority (highest to lowest):
-    1. Command line arguments (--fps, --wait_time, etc.)
-    2. User configuration file (--user_conf)
-    3. Default client configuration (client_conf.py)
+Example Python overrides for commands that support --user_conf, such as
+scripts/robocasa_eval.py. The Web client loads YAML through --conf instead.
 """
 
 def get_user_config():

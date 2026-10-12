@@ -15,7 +15,7 @@ description: "Configuration sources, precedence, and reference tables for Open-R
 | `run_web_client.py` | `conf/client_conf.py` defaults → `--conf` YAML file (default: `conf/default_conf.yaml`) → runtime load/patch requests |
 | `run_server.py` | `conf/server_conf.py` defaults → command-line overrides |
 
-Only existing leaf keys are updated when a Web-client YAML file is loaded; unknown keys are ignored. Keep `default_conf.yaml` synchronized with the fields below. `conf/user_conf_example.py` shows the nested dictionary format accepted by `--user_conf`.
+Only existing leaf keys are updated when a Web-client YAML file is loaded; unknown keys are ignored. Keep `default_conf.yaml` synchronized with the fields below. `conf/user_conf_example.py` shows Python overrides for commands that support `--user_conf`, such as `scripts/robocasa_eval.py`; the Web client uses YAML through `--conf`.
 
 All durations in the following tables are milliseconds unless another unit is shown explicitly.
 

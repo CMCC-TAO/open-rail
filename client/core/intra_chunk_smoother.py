@@ -11,7 +11,7 @@ class IntraChunkSmoother():
     This class provides functionality for fitting and generating smooth trajectories
     for robot joints and grippers using polynomial fitting and filtering techniques.
     """
-    def __init__(self, config: ConfigDict):
+    def __init__(self, config: ConfigDict, simulation_mode: bool = False):
         """Initialize the trajectory generator.
         
         Args:
@@ -19,6 +19,7 @@ class IntraChunkSmoother():
         """
         self.logger = logging.getLogger(__name__)
         self.config = config
+        self.simulation_mode = simulation_mode
         # Create thread pools for parallel trajectory fitting
         # self.joint_fitting_executor = ThreadPoolExecutor(max_workers=config.max_joint_fitting_workers,
         #                                                 thread_name_prefix="joint_fitting_thread")
@@ -55,14 +56,14 @@ class IntraChunkSmoother():
                 - timestamps_fitted (np.ndarray): Corresponding timestamps
         """
         
-        if len(timestamps) == 1:
+        if self.simulation_mode and len(timestamps) == 1:
             return action_chunk.copy(), np.zeros_like(action_chunk), np.zeros_like(action_chunk), np.asarray(timestamps).copy(), task_progress
         self._input_timestamps = np.asarray(timestamps)
         start_time = timestamps[0]
         end_time = timestamps[-1]
         time_step = time_step / 1000 # convert milliseconds to seconds
-        output_sample_ratio = getattr(self.config, 'output_sample_ratio', None)
-        if output_sample_ratio is None and getattr(self.config, 'preserve_action_count', False):
+        output_sample_ratio = getattr(self.config, 'output_sample_ratio', None) if self.simulation_mode else None
+        if self.simulation_mode and output_sample_ratio is None and getattr(self.config, 'preserve_action_count', False):
             output_sample_ratio = 1.0
         if output_sample_ratio is not None and float(output_sample_ratio) <= 0:
             raise ValueError('output_sample_ratio must be positive')
@@ -141,7 +142,7 @@ class IntraChunkSmoother():
         return action_chunk_fitted, vel_chunk_fitted, acc_chunk_fitted, timestamps_fitted, task_progress_fitted
 
     def _sample_timestamps(self, start_time, end_time, time_step, output_samples=None):
-        if getattr(self.config, 'preserve_input_timestamps', False) and self.config.intra_chunk_mode != 'interpolation':
+        if self.simulation_mode and getattr(self.config, 'preserve_input_timestamps', False) and self.config.intra_chunk_mode != 'interpolation':
             return self._input_timestamps.copy()
         if output_samples is not None:
             return np.linspace(start_time, end_time, num=max(1, int(output_samples)))
@@ -382,7 +383,7 @@ class IntraChunkSmoother():
                 final_acceleration_results[seg['start']:seg['end']] = a_fitted
             elif seg['policy'] == 'stepwise':
                 gripper_chunks = np.array(action_chunk[seg['start']:seg['end'], :])
-                if seg.get('smooth', True):
+                if not self.simulation_mode or seg.get('smooth', True):
                     g_fitted, g_vel_fitted, g_acc_fitted = self._gripper_traj_fitting_batch(
                         timestamps, gripper_chunks, start_time, end_time,
                         time_step, output_samples,

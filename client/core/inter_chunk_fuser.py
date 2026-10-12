@@ -8,9 +8,10 @@ from client.utils.util import run_time_decorator
 class InterChunkFuser:
     """Independent inter-chunk fusion utilities for action trajectory transition."""
 
-    def __init__(self, config: ConfigDict):
+    def __init__(self, config: ConfigDict, simulation_mode: bool = False):
         self.logger = logging.getLogger(__name__)
         self.config = config
+        self.simulation_mode = simulation_mode
 
     def _mode_config(self, mode):
         cfg = getattr(self.config, mode, None)
@@ -22,7 +23,7 @@ class InterChunkFuser:
     def process(self, next_action_chunk, next_vel_chunk, next_acc_chunk, next_timestamps,
                 target_chunk_index, currt_action=None, currt_vel=None, currt_acc=None,
                 joint_indices=None, step_indices=None):
-        limit = getattr(self.config, 'max_transition_steps', None)
+        limit = getattr(self.config, 'max_transition_steps', None) if self.simulation_mode else None
         if limit is None:
             return self._process(next_action_chunk, next_vel_chunk, next_acc_chunk,
                                  next_timestamps, target_chunk_index, currt_action,

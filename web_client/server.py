@@ -1,6 +1,6 @@
 """
 VLA Web Client Server
-FastAPI-based web server that wraps run_client.py logic for browser-based control.
+FastAPI-based web server for browser-based robot control.
 
 Architecture:
     - REST API  : config load/save/update, client start/stop

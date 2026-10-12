@@ -15,7 +15,7 @@ class RealtimeDataManager():
     It also handles trajectory fitting and timing synchronization between observation and control.
     """
     
-    def __init__(self, rdm_config: ConfigDict):
+    def __init__(self, rdm_config: ConfigDict, simulation_mode: bool = False):
         """Initialize the RealtimeDataManager.
         
         Args:
@@ -23,6 +23,7 @@ class RealtimeDataManager():
         """
         self.logger = logging.getLogger(__name__)
         self.rdm_config = rdm_config
+        self.simulation_mode = simulation_mode
         self.observe_buffer = deque(maxlen=max(10, rdm_config.max_len))
         self.observe_add_timestamps = deque(maxlen=max(2, rdm_config.observe_fps_window_size))
         self.observe_fps = 0.0
@@ -182,7 +183,8 @@ class RealtimeDataManager():
                 return False
             self.frame_count += 1
             # Skip the first few frames as they may be unstable
-            if self.frame_count > int(getattr(self.rdm_config, 'skip_initial_frames', 5)):
+            warmup = int(getattr(self.rdm_config, 'skip_initial_frames', 5)) if self.simulation_mode else 5
+            if self.frame_count > warmup:
                 now = time.perf_counter()
                 self.observe_buffer.append(frame)
                 self.observe_add_timestamps.append(now)
@@ -310,7 +312,7 @@ class RealtimeDataManager():
             action_chunk_smoothed, step_indices, gripper_offset
         )
         with self.action_lock:
-            if getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential':
+            if self._sequential_actions():
                 self.action_chunk_index = int(target_chunk_index) - 1
                 self.action_executed_index = int(target_chunk_index) - 1
             else:
@@ -327,7 +329,7 @@ class RealtimeDataManager():
             self.action_cond.notify_all()
 
     def get_start_chunk_index(self, next_timestamps):
-        if not getattr(self.rdm_config, 'latency_compensation', True):
+        if self.simulation_mode and not getattr(self.rdm_config, 'latency_compensation', True):
             return 0
         start_chunk_index = 0
         time_offset = self.start_inter_traj_marker - self.observe_marker
@@ -373,7 +375,7 @@ class RealtimeDataManager():
                 # print(f"Switching to control mode, current action_chunk_index={self.action_chunk_index}, reset action_chunk_index to 0.")
                 self.action_chunk_index = 0
             self.mode = mode
-            sequential = getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential'
+            sequential = self._sequential_actions()
             last_index = self.action_chunk_fitted.shape[1] - 1
             if sequential and self.action_executed_index is not None and self.action_executed_index >= last_index:
                 return None, None, None, None
@@ -410,6 +412,9 @@ class RealtimeDataManager():
                 self.action_executed_index = self.action_chunk_index
             self.action_cond.notify_all()
 
+    def _sequential_actions(self):
+        return self.simulation_mode and getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential'
+
 
     def needs_action_replenishment(self, min_remaining=0):
         """Return True when the fitted action chunk is close to being consumed."""
@@ -420,7 +425,7 @@ class RealtimeDataManager():
             if self.action_chunk_fitted.shape[1] == 0:
                 return True
             last_index = self.action_chunk_fitted.shape[1] - 1
-            sequential = getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential'
+            sequential = self._sequential_actions()
             index = self.action_executed_index if sequential else self.action_chunk_index
             if index is None:
                 return True
@@ -564,7 +569,7 @@ class RealtimeDataManager():
                 else:
                     generation = self._action_generation
                     target_index = max(0, self.action_chunk_fitted.shape[1] - 1)
-                    sequential = getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential'
+                    sequential = self._sequential_actions()
                     self.action_cond.wait_for(
                         lambda: self._action_generation != generation
                         or (self.action_chunk_fitted is not None

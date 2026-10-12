@@ -9,7 +9,7 @@
 | `run_web_client.py` | `conf/client_conf.py` 默认值 → `--conf` 指定的 YAML（默认 `conf/default_conf.yaml`）→ 运行时 load/patch 请求 |
 | `run_server.py` | `conf/server_conf.py` 默认值 → 命令行参数覆盖 |
 
-Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段会被忽略。因此应按本文字段维护 `default_conf.yaml`。`conf/user_conf_example.py` 展示了 `--user_conf` 可使用的嵌套字典格式。
+Web 客户端加载 YAML 时仅会更新已存在的叶子参数，未知字段会被忽略。因此应按本文字段维护 `default_conf.yaml`。`conf/user_conf_example.py` 展示了 `scripts/robocasa_eval.py` 等支持 `--user_conf` 的命令可使用的 Python 配置；Web 客户端通过 `--conf` 加载 YAML。
 
 除非表格中特别注明，本文的时间单位均为毫秒。
 

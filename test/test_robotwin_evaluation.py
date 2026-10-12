@@ -99,9 +99,9 @@ def test_threaded_pipeline(monkeypatch, mode, intra, inter):
     )
     client = VLAClientAsync(
         config,
-        RealtimeDataManager(config.rdm),
-        InterChunkFuser(config.inter_chunk),
-        IntraChunkSmoother(config.intra_chunk),
+        RealtimeDataManager(config.rdm, simulation_mode=True),
+        InterChunkFuser(config.inter_chunk, simulation_mode=True),
+        IntraChunkSmoother(config.intra_chunk, simulation_mode=True),
         TaskLanguageManager(config.language),
         transport,
         robot,
@@ -124,7 +124,7 @@ def test_sampling_and_gripper_semantics(mode):
     config.intra_chunk.intra_chunk_mode = mode
     config.intra_chunk.output_sample_ratio = 1
     config.intra_chunk.preserve_input_timestamps = True
-    smoother = IntraChunkSmoother(config.intra_chunk)
+    smoother = IntraChunkSmoother(config.intra_chunk, simulation_mode=True)
     smoother.set_action_layout(config.robots.aloha_robotwin.action_layout)
     timestamps = np.array([0, 0.01, 0.03, 0.04, 0.07])
     actions = np.arange(70, dtype=float).reshape(14, 5) / 100
@@ -152,7 +152,7 @@ def test_transition_limit(mode):
     config = get_client_config().inter_chunk
     config.inter_chunk_mode = mode
     config.max_transition_steps = 5
-    fuser = InterChunkFuser(config)
+    fuser = InterChunkFuser(config, simulation_mode=True)
     actions = np.arange(140, dtype=float).reshape(14, 10) / 100
     zeros = np.zeros_like(actions)
     output, velocity, acceleration, index = fuser.process(
@@ -475,7 +475,7 @@ def test_robotwin_pipeline_scopes_resampling_to_interpolation(mode, ratio):
     config = twin.configure_pipeline(get_client_config(), args)
     assert config.intra_chunk.preserve_input_timestamps
     assert config.intra_chunk.output_sample_ratio == (ratio if mode == "interpolation" else 1)
-    smoother = IntraChunkSmoother(config.intra_chunk)
+    smoother = IntraChunkSmoother(config.intra_chunk, simulation_mode=True)
     smoother.set_action_layout(config.robots.aloha_robotwin.action_layout)
     action = np.zeros((14, 5))
     result = smoother.process(

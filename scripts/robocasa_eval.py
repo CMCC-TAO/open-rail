@@ -174,9 +174,9 @@ def _build_client(config, server_wait_timeout):
         _configure_recording_for_robot(config, robot)
         client = VLAClientAsync(
             config=config,
-            realtime_data_manager=RealtimeDataManager(config.rdm),
-            inter_chunk_fuser=InterChunkFuser(config.inter_chunk),
-            intra_chunk_smoother=IntraChunkSmoother(config.intra_chunk),
+            realtime_data_manager=RealtimeDataManager(config.rdm, simulation_mode=True),
+            inter_chunk_fuser=InterChunkFuser(config.inter_chunk, simulation_mode=True),
+            intra_chunk_smoother=IntraChunkSmoother(config.intra_chunk, simulation_mode=True),
             task_language_manager=TaskLanguageManager(config.language),
             vla_zmq_client=zmq_client,
             robot=robot,

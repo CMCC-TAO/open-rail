@@ -125,25 +125,15 @@ def get_robots_config():
     return config
 ```
 
-### 3. 注册两个构造入口
+### 3. 注册机器人模块
 
-命令行入口：在 [`run_client.py`](../../run_client.py) 的 `get_robot()` 中增加：
-
-```python
-elif robot_type == RobotType.MY_ROBOT:
-    from client.robots.my_robot.body_robot import RobotBody
-    return RobotBody(robot_config)
-```
-
-Web 入口：在 [`web_client/server.py`](../../web_client/server.py) 的 `_get_robot()` 中增加创建分支：
+在 [`client/robots/robot_proxy.py`](../../client/robots/robot_proxy.py) 的 `_ROBOT_MODULES` 中，将机器人类型映射到提供 `RobotBody` 的模块：
 
 ```python
-elif robot_type == RobotType.MY_ROBOT:
-    from client.robots.my_robot.body_robot import RobotBody
-    robot_instance = RobotBody(robot_config)
+_ROBOT_MODULES['my_robot'] = 'client.robots.my_robot.body_robot'
 ```
 
-如需 Web 停止后复用同一个 SDK 实例，还要在 `_get_robot()` 前部增加对应的类型/模块匹配分支；否则切换或重启时会先关闭再重建。
+[`web_client/server.py`](../../web_client/server.py) 的 `_create_robot()` 会创建 `RobotProxy`，由其工作进程加载注册的模块。每次启动客户端都会创建新的代理。
 
 `RobotBody` 接收的是 `config.robots.my_robot` 子配置，不是完整 Client 配置。当前基类构造函数保存为 `self.config`，但 Web 手动控制读取 `self.cfg`，因此新适配器需要像模板一样设置别名。
 
@@ -152,9 +142,10 @@ elif robot_type == RobotType.MY_ROBOT:
 先断开执行器或降低速度，验证维度、方向、单位和限位，然后运行：
 
 ```bash
-python run_client.py --robots_type my_robot
 python run_web_client.py
 ```
+
+在配置中将 `robots.type` 设为 `my_robot`。
 
 ## 当前分支的数据规则
 
@@ -237,5 +228,5 @@ python run_web_client.py
 - [ ] Default presets 能安全复位所有配置段。
 - [ ] 图像、时间戳、`obs.state` 与 `current_state` 正确且同步。
 - [ ] 关节顺序、单位、正负方向和限位正确。
-- [ ] `run_client.py` 和 `run_web_client.py` 均能创建该机器人。
+- [ ] `python run_web_client.py` 启动后能创建该机器人。
 - [ ] 断网、设备掉线及退出时进入安全状态，并能重复调用 `close()`。

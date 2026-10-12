@@ -26,7 +26,7 @@ def make_config():
 
 class RealtimeDataManagerSequentialTest(unittest.TestCase):
     def setUp(self):
-        self.manager = RealtimeDataManager(make_config())
+        self.manager = RealtimeDataManager(make_config(), simulation_mode=True)
         raw = [np.array([1.0, 10.0]), np.array([2.0, 20.0]), np.array([3.0, 30.0])]
         self.manager.update_action_chunk_raw(raw, [0.0, 0.1, 0.2])
         actions = np.array([[1.0, 2.0, 3.0], [10.0, 20.0, 30.0]])

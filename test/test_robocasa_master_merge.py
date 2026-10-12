@@ -94,8 +94,9 @@ def test_threaded_simulation_with_upstream_algorithms(monkeypatch, mode, intra, 
     robot = RobotBody(config.robots.robocasa)
     transport = FakeTransport()
     client = VLAClientAsync(
-        config, RealtimeDataManager(config.rdm), InterChunkFuser(config.inter_chunk),
-        IntraChunkSmoother(config.intra_chunk), TaskLanguageManager(config.language),
+        config, RealtimeDataManager(config.rdm, simulation_mode=True),
+        InterChunkFuser(config.inter_chunk, simulation_mode=True),
+        IntraChunkSmoother(config.intra_chunk, simulation_mode=True), TaskLanguageManager(config.language),
         transport, robot,
     )
     try:
@@ -121,7 +122,7 @@ def test_smoothing_preserves_sample_count_and_discrete_controls(ratio, mode):
     config = get_client_config()
     config.intra_chunk.intra_chunk_mode = mode
     config.intra_chunk.output_sample_ratio = ratio
-    smoother = IntraChunkSmoother(config.intra_chunk)
+    smoother = IntraChunkSmoother(config.intra_chunk, simulation_mode=True)
     smoother.set_action_layout(config.robots.robocasa.action_layout)
     timestamps = np.linspace(0, 0.35, 8)
     actions = np.tile(np.linspace(0, 0.2, 8), (12, 1))
@@ -164,8 +165,9 @@ def test_recording_commits_real_parquet_and_videos(monkeypatch, tmp_path):
     robot = RobotBody(config.robots.robocasa)
     _configure_recording_for_robot(config, robot)
     client = VLAClientAsync(
-        config, RealtimeDataManager(config.rdm), InterChunkFuser(config.inter_chunk),
-        IntraChunkSmoother(config.intra_chunk), TaskLanguageManager(config.language),
+        config, RealtimeDataManager(config.rdm, simulation_mode=True),
+        InterChunkFuser(config.inter_chunk, simulation_mode=True),
+        IntraChunkSmoother(config.intra_chunk, simulation_mode=True), TaskLanguageManager(config.language),
         FakeTransport(), robot,
     )
     try:
