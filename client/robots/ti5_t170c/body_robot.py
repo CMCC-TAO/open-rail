@@ -5,7 +5,6 @@ from typing import Callable, Optional, Sequence
 import numpy as np
 import pandas as pd
 from ti5_t170c_sdk import Ti5Robot, create_camera
-from ti5_t170c_sdk.camera import depth_config_key_to_obs_key
 
 from ..base_robot import RobotBase
 
@@ -159,7 +158,6 @@ class RobotBody(RobotBase):
     def retrieve_observation(self):
         try:
             cam_names = dict(self.cfg["camera"]["names"])
-            depth_names = dict(self.cfg["camera"].get("depth_names", {}))
             cam_ref = self.cfg["camera"]["ref"]
             ref_stream = cam_names[cam_ref]
 
@@ -182,14 +180,6 @@ class RobotBody(RobotBase):
                     self.logger.warning("missing camera stream: %s", stream)
                     continue
                 result[f"cam.{key}"] = image[:, :, ::-1] if image.ndim == 3 else image
-
-            for key, stream in depth_names.items():
-                obs_key = depth_config_key_to_obs_key(key)
-                depth_img, _ = self._safe_image_nearest(stream, ref_timestamp)
-                if depth_img is None:
-                    self.logger.warning("missing depth stream: %s", stream)
-                    continue
-                result[f"cam.{obs_key}"] = depth_img
 
             result["obs.state"] = self.current_state[: self.action_dim].copy()
             return result

@@ -123,11 +123,9 @@ def get_ti5_t170c_config():
         'hand_left': 'hand_left/color',
         'hand_right': 'hand_right/color',
     }
-    config.camera.depth_names = {
-        'depth_head': 'head/depth',
-        'depth_hand_left': 'hand_left/depth',
-        'depth_hand_right': 'hand_right/depth',
-    }
+    # Depth is not consumed by VLA inference. Leave this empty so the
+    # forwarder depth topics are neither subscribed nor sent to the server.
+    config.camera.depth_names = {}
     config.proprio_names = ['arm', 'hand']
     # 1 = every control tick (same as arm); 40 was A2D gripper-style downsample (~6.7Hz).
     config.hand_freq = 1
