@@ -8,6 +8,7 @@ on:
       # site/src/content/config.ts), so they must trigger a rebuild too.
       - 'docs/**'
       - 'site/**'
+      - 'data/media/**'
       - '.github/workflows/deploy-site.yml'
   workflow_dispatch:
 

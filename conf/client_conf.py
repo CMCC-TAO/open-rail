@@ -98,10 +98,12 @@ def get_search_action_config() -> ConfigDict:
 
 def get_smooth_velocity_config() -> ConfigDict:
     config = ConfigDict()
-    config.max_vel = 2.0
-    config.max_acc = 5.0
-    config.kp = 5.0
-    config.kd = 2.0
+    # config.max_vel = 2.0
+    # config.max_acc = 5.0
+    config.k_p = 10.0
+    config.k_d = 4.0
+    config.kf_vel = 2.5
+    config.kf_acc = 0.3
     return config
 
 def get_min_jerk_config() -> ConfigDict:

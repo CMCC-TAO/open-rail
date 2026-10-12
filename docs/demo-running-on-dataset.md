@@ -5,6 +5,8 @@ description: "Run the GR00T-N1.5 pretrained model on the AgiBotWorld 2026 datase
 
 # Running the GR00T‑N1.5 Pretrained Model on the AgiBotWorld 2026 Dataset with RAIL
 
+[中文版](../docs-cn-backup/demo-running-on-dataset.zh-CN.md)
+
 > 
 > Complete deployment pipeline: source code download, dataset preparation, AV1-to-H.264 video transcoding, multiple configuration modifications, server/client startup.
 > All `Path/To/xxx` placeholders in this document must be replaced with the real **absolute paths** on your machine.
@@ -140,8 +142,8 @@ def get_mock_config():
     })
     config.manual_arm_interval = 0.01
     config.state_action_range = [[0, 16], [58, 70]]
-    config.dataset_path = '/home/robot/Music/task_39_only1'
-    # config.dataset_path = '/home/robot/Music'
+    config.dataset_path = '/path/to/dataset'
+    # config.dataset_path = '/path/to/dataset'
     return config
 ```
 
@@ -237,13 +239,13 @@ Access in a browser: `http://localhost:9000`
 Click `Browse`, and change `robots-mock-dataset_path` on the left side to the actual dataset path:
 `Path/To/Dataset/509995_510027/data`
 
-![选择mock模式的数据集路径](../data/media/select_dataset_path.png)
+![Select the dataset path for mock mode](../data/media/select_dataset_path.png)
 
 ## 12. Start Inference
 
 Click the `Start` button on the top bar of the page to run inference on the AgiBotWorld2026 subset.
 
-![mock模式demo](../data/media/mock_demo.png)
+![Mock mode demo](../data/media/mock_demo.png)
 
 ### Key Notes
 

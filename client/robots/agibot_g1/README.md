@@ -42,7 +42,7 @@ python robot_service.py -s -c ./conf/copilot.pbtxt
 - **Prompt `lib/libstdc++.so.6: version GLIBCXX_3.4.30 not found` error**
     
     - Check if the system global library meets the requirements: `strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX_3.4.30`
-    - If the requirements are met, you only need to re-soft link. `cd /home/zl/apps/miniconda3/envs/gr00t/lib`，clear `rm libstdc++.so.6`，then `ln -s /usr/lib/x86_64-linux-gnu/libstdc++.so.6 libstdc++.so.6`。
+    - If the requirements are met, you only need to re-soft link. `cd /path/to/miniconda3/envs/gr00t/lib`，clear `rm libstdc++.so.6`，then `ln -s /usr/lib/x86_64-linux-gnu/libstdc++.so.6 libstdc++.so.6`。
 
 ## 4. Configuration
 

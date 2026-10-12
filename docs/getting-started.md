@@ -1,9 +1,11 @@
 ---
 title: "Getting Started"
-description: "Complete environment setup and feature integration for VLA-RAIL."
+description: "Complete environment setup and feature integration for Open-RAIL."
 ---
 
 # Getting Started
+
+[中文版](../docs-cn-backup/getting-started.zh-CN.md)
 
 > 📌 This document is for **complete environment setup and feature integration**.  
 > If you just want to verify the Web service is accessible, you can **only execute Step 2**; Server is not required, but client business status, robot status, and inference results may be unavailable.  
@@ -84,7 +86,7 @@ Without arguments, the program reads `conf/default_conf.yaml` by default and lis
 python run_web_client.py --conf custom_conf.yaml
 ```
 
-Open your browser and visit `http://localhost:9000`. You should see the VLA-RAIL Web console, client status, and configuration panel; inference results and robot status may be empty until Server is connected and the robot is properly configured.
+Open your browser and visit `http://localhost:9000`. You should see the Open-RAIL Web console, client status, and configuration panel; inference results and robot status may be empty until Server is connected and the robot is properly configured.
 
 > **Port Details**:
 > - `9000`: Main Web service port (provides REST API and WebSocket via `uvicorn`).
@@ -117,7 +119,7 @@ PYTHONPATH=/path/to/TAO/src:$PYTHONPATH python run_server.py --model_type tao --
 ```
 
 > **Model Types**: See the registered model list in `conf/server_conf.py`.  
-> **Adding New Models**: Refer to the [Add New VLA Model Guide](guides/add-new-vla-model.md).
+> **Adding New Models**: Refer to the [Add New Model Guide](guides/add-new-model.md).
 
 ---
 
@@ -162,9 +164,10 @@ See the [Robot Adaptation Guide](guides/add-new-robot.md) for the complete inter
 
 ## Next Steps
 
-- [Project Architecture](../README.md#project-architecture): Understand the responsibilities of Client, Server, and the ZMQ communication layer.
+- [Project Architecture](../README.md#architecture): Understand the responsibilities of Client, Server, and the ZMQ communication layer.
 - [Configuration Guide](configuration.md): Complete configuration options for Client, Server, robots, and recording.
-- [Add New VLA Model Guide](guides/add-new-vla-model.md): Integrate new checkpoints/model implementations.
+- [Add New Model Guide](guides/add-new-model.md): Integrate new checkpoints/model implementations.
 - [Robot Adaptation Guide](guides/add-new-robot.md): Integrate physical robots.
+- [Inter-Chunk Fuser Guide](guides/add-new-inter-chunk-fuser.md): Add a custom action-chunk smoothing strategy.
 - [Troubleshooting](troubleshooting.md): Common runtime issues.
 - [Mock Robot Documentation](../client/robots/mock/README.md): Configure offline dataset replay.

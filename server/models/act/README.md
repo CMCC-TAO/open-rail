@@ -1,13 +1,19 @@
-# ACT Server 推理模块
+# ACT Server Inference Module
 
-这是 ACT 模型的服务端推理代码，支持 **离线推理** 和 **真机推理**。
+This directory contains the server-side inference code for the ACT model. It
+supports **offline inference** and **real-robot inference**.
 
-## 功能说明
+## Features
 
-- ✅ 支持从本地图像或数据进行离线推理
-- ✅ 可接入机器人真机，实现端到端推理调用
+- ✅ Run offline inference from local images or datasets.
+- ✅ Connect to a real robot for end-to-end inference.
 
-## 使用方式
+## Usage
+
+```bash
 git clone -b act_infer --single-branch http://36.140.17.36:10000/git/embodiedai/act.git
-### 安装依赖
-运行环境同gr00t
+```
+
+### Install dependencies
+
+Use the same environment as the GR00T model.

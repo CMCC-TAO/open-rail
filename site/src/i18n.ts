@@ -3,7 +3,7 @@ export type Locale = 'en';
 export const ui = {
   en: {
     nav: {
-      tagline: 'Where inference ends, real robots begin',
+      tagline: 'Where model inference ends, real-robot execution begins',
       overview: 'Overview',
       capabilities: 'Capabilities',
       architecture: 'Architecture',
@@ -23,7 +23,7 @@ export const ui = {
       features: [
         '**Asynchronous Pipeline** — decouples **5‑10 Hz** VLA inference from **200‑500 Hz** motor control, removes inference‑control waiting latency.',
         '**Two‑stage Trajectory Smoothing** — achieves near *C²* continuity and motion jitter drastically suppressed with *acceleration std* reduces **~100×** *( 10+ → 0.1 rad/s²)*.',
-        '**Drop‑in Compatibility** — supports more than **20 VLA/WAM models** & **4 heterogeneous robots**; new model adaptation needs only **50‑100 lines** of code without retraining.',
+        '**Drop‑in Compatibility** — supports **12 VLA/WAM models** across **9 families** & **3 heterogeneous robots** in this release (Unitree G1 **coming soon**); new model adaptation needs only **50‑100 lines** of code without retraining.',
         '**Cloud‑Edge‑End Deployment** — Server‑Client architecture supports robot‑local, edge and cloud execution over **wired/Wi‑Fi/5G** with respective latency of end‑side **3‑5** ms, edge **35‑45** ms, cloud **80‑120** ms, requiring zero upper‑level code modification.',
         '**Enhanced Execution Throughput** — achieves up to **2.09×** speedup against raw policy output, outperforming tele‑operation speed with no need for recollecting training data.',
         '**Universal Task Success Boost** — lifts model success rate up to **0.95**, with absolute gain Δ from **+0.10 to +0.725** (evaluated on *π₀.₅* and *GR00T‑N1.5*).',
@@ -98,13 +98,13 @@ export const ui = {
           summary:
             'RobotBase unified hardware interface, standardized inference interface, and Server-Client distributed architecture collapse robot swaps, VLA-model swaps, and deployment swaps into low-level configuration.',
           metrics: [
-            { value: '4+', label: 'Heterogeneous humanoid robots adapted' },
-            { value: '20+', label: 'Mainstream VLA/WAM models supported' },
+            { value: '3', label: 'Heterogeneous humanoid robots in this release' },
+            { value: '12', label: 'Mainstream VLA/WAM models supported (9 families)' },
             { value: '<100', label: 'Lines of code to integrate a new model' },
           ],
           details: [
-            'Switch robots: RobotBase unified hardware interface, action_layout unified action mapping; already adapted Unitree G1, AgiBot G1, China Mobile Lingxi, Zhejiang humanoid.',
-            'Switch VLA models: standardized input/output inference interface; already supports more than 20 models including GR00T, TAO, RDT, DreamZero, PI, ACT; integrating a new model needs only 50–100 lines of business code.',
+            'Switch robots: RobotBase unified hardware interface, action_layout unified action mapping; AgiBot G1, China Mobile Lingxi and NAVIAI-WA2 ship in this release, with Unitree G1 coming soon.',
+            'Switch VLA models: standardized input/output inference interface; already supports 12 models across 9 families — GR00T N1 / N1.5 / N1.6, π0, π0.5, TAO, GO1, SmolVLA, ACT, RDT, DM0.5, WALL-X; integrating a new model needs only 50–100 lines of business code.',
             'Switch deployments: Server-Client end-edge-cloud distributed architecture; Server can run on local body / edge / cloud, Client on the robot; switch deployment by changing only the comms address with zero upper-logic changes and auto-reconnect heartbeat.',
           ],
         },
@@ -130,23 +130,64 @@ export const ui = {
     },
     community: {
       eyebrow: 'OPEN COMMUNITY',
-      title: 'Open and Collaborative Open-Source Community',
-      vision:
-        'Open-sourcing the proven model-to-robot engineering pipeline so developers focus on model innovation, robot bodies, and scenarios instead of rebuilding deployment plumbing.',
-      templates: [
-        { title: 'Model Template', body: 'Observation input, inference interface, action output specs; 20 VLA models adapted.' },
-        { title: 'Robot Template', body: 'Body parameters, action layout, comms adaptation templates; 4 heterogeneous robots referenced.' },
-        { title: 'Evaluation Template', body: 'Scoring rules, metric logging, analysis export scripts.' },
-        { title: 'Deployment Template', body: 'End-edge-cloud distributed deployment examples.' },
+      title: 'Build it once.',
+      titleGrad: 'Run it everywhere.',
+      note: '**Everything here is ready to use, and what comes next is still unwritten** — bring your **model**, your **robot**, your **patch**, or just **what you learned**. Questions and pull requests are welcome.',
+      whoTitle: "Who it's for",
+      whoSub: 'Pick the one that sounds like you.',
+      who: [
+        {
+          name: 'Robot manufacturers',
+          body: 'Ship **one integration**, and every model we have adapted runs on your robot — %%20 models%%, plus every model the community adds later. You integrate once, **not once per model**.',
+        },
+        {
+          name: 'Model developers',
+          body: 'Integrate **once**, and your model runs on every robot we have adapted — %%4%% **heterogeneous robots**, with **no robot-specific code**. Each one means one more team that can run your model and **reproduce your results**.',
+        },
+        {
+          name: 'Research institutions',
+          body: 'Swap the model, the robot or the config — collection, evaluation and recording **stay on the same path**, so every combination is measured **the same way**, in **the same data format**. A comparison is **one config change away**, not another integration.',
+        },
+        {
+          name: 'Solution integrators',
+          body: 'A scenario you tune **once** is a scenario you can deploy **again** — next site, next customer, **same config**. On-device, edge, or cloud: **same code, one endpoint to change**.',
+        },
       ],
-      entryLabel: 'Open-source entry',
-      paperLabel: 'Technical Paper',
-      resourcesLabel: 'Resources: full docs · hands-on video tutorials · API manual · troubleshooting guide',
-      values: [
-        { who: 'Model teams', value: 'Skip real-robot deployment dev, focus on algorithm innovation' },
-        { who: 'Robot teams', value: 'Reuse execution, smoothing, and data-collection base, focus on body control' },
-        { who: 'Application teams', value: 'Lower scenario-deployment barrier, accelerate from sim demo to physical robots' },
+      waysTitle: 'Ways to contribute',
+      ways: [
+        {
+          tier: 'Integrations',
+          title: 'Bring your robot or model',
+          body: 'Robots use **URI**, models use **UMI** — both already defined, and everything on the compatibility list is wired through one of them: %%20 models%% and %%4 robots%%. **One integration** — your model on every robot, every model on your robot. **Model side needs no hardware: develop against recorded data.**',
+          ctas: [
+            { label: 'Add a model', href: '{DOC_ADD_MODEL}' },
+            { label: 'Add a robot', href: '{DOC_ADD_ROBOT}' },
+          ],
+        },
+        {
+          tier: 'Shared runtime',
+          title: 'Improve the shared core',
+          body: 'Smoothing, evaluation, data recording and transport sit in the shared runtime — the same path every model and every robot runs on. **Change one module here, and every model–robot pair gets it.**',
+          ctas: [
+            { label: 'Add a smoother', href: '{DOC_ADD_SMOOTHER}' },
+            { label: 'Read the architecture', href: '{ARCH}' },
+          ],
+        },
+        {
+          tier: 'Tooling & docs',
+          title: 'Share what you learned',
+          body: 'The docs, the Web Panel, visualization, config — all open, all ready to use today. A better config, a pitfall you hit, a tip worth passing on: that is a contribution, and **most first PRs land here**. Not sure where to start? Come talk to us first — asking counts too.',
+          ctas: [
+            { label: 'Browse the docs', href: '{DOCS}' },
+            { label: 'Ask a question', href: '{DISCUSSIONS}' },
+            { label: 'Report a problem', href: '{ISSUES}' },
+          ],
+        },
       ],
+      entryTitle: 'Get the code',
+      entryNote: 'Ready to contribute?',
+      entryContrib: 'Read CONTRIBUTING.md',
+      entryPr: 'Open a pull request',
     },
     quick: {
       eyebrow: 'GET STARTED',
@@ -157,7 +198,7 @@ export const ui = {
           substeps: [
             { title: 'Prepare the Environment', body: 'Install the required dependencies and set up the Open-RAIL runtime environment.' },
             { title: 'Start the Model Server', body: 'Select the VLA/WAM model and checkpoint, then launch the inference server.' },
-            { title: 'Launch the Web Client｜启动 Web Client', body: 'Start the Web Client and open the Open-RAIL interface in your browser.' },
+            { title: 'Launch the Web Client', body: 'Start the Web Client and open the Open-RAIL interface in your browser.' },
           ],
         },
         {
@@ -184,15 +225,24 @@ export const ui = {
         { label: 'Getting Started', href: 'getting-started/' },
         { label: 'Architecture', href: 'architecture/' },
         { label: 'Configuration', href: 'configuration/' },
+        { label: 'Dataset Demo', href: 'demo-running-on-dataset/' },
+        { label: 'Add a Model', href: 'guides/add-new-model/' },
+        { label: 'Add a Robot', href: 'guides/add-new-robot/' },
+        { label: 'Add a Smoother', href: 'guides/add-new-inter-chunk-fuser/' },
         { label: 'Troubleshooting', href: 'troubleshooting/' },
       ],
     },
     footer: {
-      tagline: 'Where inference ends, real robots begin',
-      repoLabel: 'Open-source Repos',
+      tagline: 'Where model inference ends, real-robot execution begins',
+      repoLabel: 'Repositories',
+      paperHeading: 'Paper',
       paperLabel: 'Technical PDF',
       contactLabel: 'Contact & Collaboration',
       emailNote: 'Partnership inquiries · technical proposals · community contribution portal',
+      contribInvite: 'Your name could be here — ',
+      contribSeeHow: 'see how',
+      licenseLabel: 'License',
+      backToTop: 'Back to top',
       copyright: '© 2026 China Mobile Embodied Intelligence Industry Innovation Center. All Rights Reserved',
       org: 'China Mobile Embodied Intelligence Industry Innovation Center',
       author: 'Embodied Model Team (TAO Team)',
@@ -228,7 +278,7 @@ export const ui = {
         ctrlNote: 'frequency scaling',
         ctrlNote2: 'interrupt handling',
         uri: 'Unified Robot Interface',
-        robots: ['Unitree G1', 'AgiBot G1', 'Lingxi', 'ZJ Humanoid'],
+        robots: ['Unitree G1', 'AgiBot G1', 'Lingxi', 'NAVIAI-WA2'],
       },
       flywheel: {
         title: 'Train-Collect',

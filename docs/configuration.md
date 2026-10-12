@@ -1,21 +1,25 @@
 ---
 title: "Configuration Reference"
-description: "Configuration sources, precedence, and reference tables for VLA-RAIL."
+description: "Configuration sources, precedence, and reference tables for Open-RAIL."
 ---
 
 # Configuration Reference
+
+[中文版](../docs-cn-backup/configuration.zh-CN.md)
 
 
 ## Configuration sources and precedence
 
 | Entry point | Configuration load order |
 | --- | --- |
-| `run_web_client.py` | `conf/client_conf.py` defaults → `--conf` YAML file (default: `conf/default_conf.yaml`) → runtime load/patch requests |
-| `run_server.py` | `conf/server_conf.py` defaults → command-line overrides |
+| `run_web_client.py` | `conf/client_conf.py` defaults → `--conf` YAML file (default: `conf/default_conf.yaml`) → runtime load/patch requests from the Web console |
+| `run_server.py` | `conf/server_conf.py` defaults → command-line overrides (`--model_type`, `--model_path`, `--debug`) |
 
-Only existing leaf keys are updated when a Web-client YAML file is loaded; unknown keys are ignored. Keep `default_conf.yaml` synchronized with the fields below. `conf/user_conf_example.py` shows the nested dictionary format accepted by `--user_conf`.
+The Web client accepts `--host`, `--port`, `--conf`, and `--reload`. The YAML file selected by `--conf` is both the startup configuration and the save target used by the Web console (Setup → Apply / Save As). When saving, `.yaml`/`.yml` targets are written as YAML and any other extension as a Python dictionary file.
 
-All durations in the following tables are milliseconds unless another unit is shown explicitly.
+Only existing leaf keys are updated when a configuration file or patch is applied; unknown keys are ignored. Keep `default_conf.yaml` synchronized with the fields below. Two legacy key names are migrated automatically on load: `inter_chunk.search_length` is read as `inter_chunk.search_action.search_length`, and `robots.a2d.*` is read as `robots.agibot_g1.*`.
+
+All durations in the following tables are milliseconds unless another unit is shown explicitly. The panels that expose these parameters in the browser are described in [Web Console](./web-console.md).
 
 ## Client root dictionary
 
@@ -67,13 +71,15 @@ These dimensions must match the selected robot's action layout and the model out
 | --- | --- | --- |
 | `inter_chunk_mode` | `search_action`, `smooth_velocity`, `min_jerk`, or `sync` | Method used to join consecutive action chunks. |
 | `search_action.search_length` | positive integer | Number of future actions inspected while choosing a smooth join. Increase it if the robot visibly pauses at chunk boundaries. |
-| `smooth_velocity.max_vel` | positive number | Velocity limit for velocity-smoothing fusion. |
-| `smooth_velocity.max_acc` | positive number | Acceleration limit for velocity-smoothing fusion. |
-| `smooth_velocity.kp` | number | Proportional gain used by velocity smoothing. |
-| `smooth_velocity.kd` | number | Derivative gain used by velocity smoothing. |
+| `smooth_velocity.max_vel` | positive number | Velocity clamp used by velocity-smoothing fusion. |
+| `smooth_velocity.max_acc` | positive number | Acceleration clamp used by velocity-smoothing fusion. |
+| `smooth_velocity.k_p` | number | Proportional feedback gain applied to the position error. |
+| `smooth_velocity.k_d` | number | Derivative feedback gain applied to the joint velocity. |
+| `smooth_velocity.kf_vel` | number | Feedforward gain applied to the target velocity. |
+| `smooth_velocity.kf_acc` | number | Feedforward gain applied to the target acceleration. Setting both feedforward gains to `0` degrades the fuser to PD feedback control. |
 | `min_jerk.blend_threshold` | number | Threshold controlling when minimum-jerk blending is applied. |
 | `min_jerk.adaptive_factor` | number | Adaptive scaling factor for minimum-jerk blending. A negative value keeps the implementation's automatic behavior. |
-| `sync` | mapping | Reserved configuration section for `sync` mode; currently empty. |
+| `sync` | mapping | Reserved configuration section for `sync` mode; currently empty. In `sync` mode the next action chunk is used directly without blending, and the Web console mode dropdown lists only `search_action`, `smooth_velocity`, and `min_jerk`. |
 
 ### `controller`: robot command timing
 
@@ -102,6 +108,7 @@ These dimensions must match the selected robot's action layout and the model out
 | `file_path` | path relative to `conf/` | JSON task-instruction file, normally `language_cmd.json`. |
 | `task_id` | string | Task key in the language JSON file. If absent, the first available task is used. |
 | `sub_task_id` | zero-based integer | Index of the active instruction in the selected task. Invalid indices fall back to `0`. |
+| `auto_mode_start_sub_task_id` | zero-based integer | Sub-task index applied when Auto Mode starts. The Web console exposes it as the Start selector of the Language Command panel. |
 | `auto_mode` | boolean | Automatically move to the next language instruction according to task-progress output. |
 | `task_progress_threshold` | number | Mean progress probability required before automatic switching. |
 | `task_progress_win_size` | positive integer | Sliding-window length used to average task progress. |
@@ -175,7 +182,7 @@ An `action_layout` section divides a flat action vector into named segments. Eve
 | `stepwise` | Discrete or near-discrete dimensions, normally grippers/hands. |
 | `manual` | Robot/Web-controlled dimensions that are not inferred by the model. Place these after model-controlled segments. |
 
-Where available, `presets` provides UI reset/manual targets. `Default` and `Custom` are general presets; AgiBot G1 grippers also provide `Open` and `Close`.
+Where available, `presets` provides UI reset/manual targets. `Default` and `Custom` are general presets; AgiBot G1 grippers also provide `Open` and `Close`, its wheels provide `Forward`, `Backward`, `Left`, and `Right`, and NAVIAI-WA2 hands provide `Open` and `Finger`.
 
 ### `robots.agibot_g1`
 
@@ -184,6 +191,7 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `hand_type` | End-effector mode: `gripper`, `hand_as_gripper`, or `hand`. It selects camera names and proprioception layout. |
 | `camera.ref` | Reference camera name. |
 | `camera.names` | Mapping from canonical names (`head`, `hand_left`, `hand_right`) to robot camera identifiers. |
+| `camera.non_ref_fetch_workers` | Number of persistent worker threads used to fetch non-reference cameras. |
 | `proprio_names` | Ordered proprioception groups used to assemble robot state. |
 | `gripper_freq`, `head_freq` | Command frequencies for gripper and head control. |
 | `manual_arm_interval` | Time interval in seconds between manually generated arm targets. |
@@ -219,9 +227,10 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | --- | --- |
 | `tt` | Servo/control period in seconds. |
 | `gain` | Servo gain. |
+| `hand_type` | End-effector mode; NAVIAI-WA2 uses `hand`. It selects proprioception layout and hand presets. |
 | `camera.topic_dict` | Compressed ROS image topics keyed by `head`, `hand_left`, and `hand_right`. |
 | `action_layout` | Continuous arm and stepwise hand action ranges. |
-| `reset_position` | Full reset pose vector; ordering must match the Navi WA2 driver. |
+| `reset_position` | Full reset pose vector; ordering must match the NAVIAI-WA2 driver. |
 
 ## Server and model dictionary
 
@@ -232,7 +241,9 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `zmq` | Same VLA network fields as `vla_zmq`; the server binds its ROUTER socket using the configured port. |
 | `max_infer_workers` | Maximum concurrent inference workers. Set to `1` to disable concurrent inference. |
 | `max_decode_workers` | Maximum image-decoding workers. |
-| `models.type` | Selected model: `mock`, `act`, `gr00t_n1`, `gr00t_n1_5`, `gr00t_n1_6`, `rdt`, `smolvla`, `go1`, `pi0`, `pi05`, or `tao`. |
+| `image_pad_and_resize` | Enable aspect-ratio-preserving padding and resizing of decoded images on the server. |
+| `image_target_height`, `image_target_width` | Target image dimensions in pixels used when `image_pad_and_resize` is enabled. |
+| `models.type` | Selected model: `mock`, `act`, `gr00t_n1`, `gr00t_n1_5`, `gr00t_n1_6`, `rdt`, `smolvla`, `go1`, `pi0`, `pi05`, `tao`, `dm05`, or `wallx`. |
 
 Model-specific keys are as follows:
 
@@ -246,6 +257,8 @@ Model-specific keys are as follows:
 | `models.go1` | `model_path`, `exp_path`, `data_stats_path` | GO1 checkpoint, importable experiment path, and normalization statistics JSON. |
 | `models.pi0`, `models.pi05` | `config`, `model_path`, `is_hand` | OpenPI model configuration/checkpoint; `is_hand` enables hand-action handling. |
 | `models.tao` | `model_path`, `embodiment_tag` | TAO checkpoint and a TAO-registry embodiment identifier. |
+| `models.dm05` | `model_path`, `repo_path`, `action_mode`, `backend`, `vision_trt_engine_path`, `diffusion_steps`, `vision_attn_implementation`, `execute_horizon` | DM0.5 checkpoint and repository paths, action mode, inference backend with an optional TensorRT vision engine, diffusion-step count, and actions per control cycle. |
+| `models.wallx` | `model_path`, `repo_path`, `embodiment_tag`, `device`, `flow_steps` | WALL-X checkpoint and repository paths, embodiment identifier, inference device, and flow-matching step count. |
 
 Paths must be valid on the inference-server host. `embodiment_tag` and `data_config_key` are model-library identifiers, not arbitrary labels; use values registered by the matching model installation.
 

@@ -120,6 +120,8 @@ class VLAClient():
         # self.visualize_thread_timer = MultiThreadTimer(self.config.controller.period, self._visualize_thread_fun)
 
         self.show_thread_lock = threading.Lock()
+        self._inference_execution_lock = threading.Lock()
+        self._control_execution_lock = threading.Lock()
 
         # Raw observation queue: no frame dropping in VLA client pipeline.
         self._raw_observe_queue = Queue(maxsize=2)
@@ -137,7 +139,8 @@ class VLAClient():
         # Inference variables
         self.set_observe_period(speed=self.config.controller.speed)
         self._request_id = 0
-
+        self.inference_error = None
+        self.inference_error_count = 0
 
         # Information for monitoring current action and state (left arm 7 + right arm 7 + left gripper 1 + right gripper 1)
         self.image_process_time = 0.0
@@ -171,28 +174,48 @@ class VLAClient():
 
     def start_inference(self):
         self.is_running = True
-        self.is_inference_thread_running = True
         if not self.inference_thread.is_alive():
-            self.inference_thread.start()
+            # A terminated Python Thread cannot be started a second time.
+            if self.inference_thread.ident is not None:
+                self.inference_thread = threading.Thread(target=self._inference_thread_fun, daemon=True)
+            self.is_inference_thread_running = True
+            try:
+                self.inference_thread.start()
+            except Exception:
+                self.is_inference_thread_running = False
+                raise
+        else:
+            self.is_inference_thread_running = True
         self.logger.info('VLAClient inference thread started.')
 
     def stop_inference(self):
         self.is_inference_thread_running = False
+        self.realtime_data_manager.interrupt_wait_for_next()
         self.logger.info('VLAClient inference thread stopped.')
 
     def start_control(self):
         self.is_running = True
-        self.is_control_thread_running = True
+        with self._control_execution_lock:
+            resume_controls = getattr(self.robot, 'resume_controls', None)
+            if resume_controls is not None:
+                resume_controls()
+            self.is_control_thread_running = True
         if not self.control_thread_timer.is_alive():
             self.control_thread_timer.start()
         # start new task in task_language manager for auto mode
         self.task_language_manager.new_task()
 
     def stop_control(self):
-        self.is_control_thread_running = False
-        clear_control_actions = getattr(self.robot, 'clear_control_actions', None)
-        if clear_control_actions is not None:
-            clear_control_actions()
+        with self._control_execution_lock:
+            self.is_control_thread_running = False
+            pause_controls = getattr(self.robot, 'pause_controls', None)
+            if pause_controls is not None:
+                pause_controls()
+            else:
+                clear_control_actions = getattr(self.robot, 'clear_control_actions', None)
+                if clear_control_actions is not None:
+                    clear_control_actions()
+        self.realtime_data_manager.interrupt_wait_for_next()
     
     def set_control_period(self, period) -> None:
         self.control_thread_timer.set_interval(period)
@@ -203,10 +226,7 @@ class VLAClient():
         # print(f"Debug: control speed = {speed}")
     
     def _stop_control_thread_on_error(self):
-        self.is_control_thread_running = False
-        clear_control_actions = getattr(self.robot, 'clear_control_actions', None)
-        if clear_control_actions is not None:
-            clear_control_actions()
+        self.stop_control()
         if self.control_thread_timer.is_alive():
             self.control_thread_timer.stop(timeout=1.0)
 
@@ -296,15 +316,15 @@ class VLAClient():
         self.stop_inference()
         self.stop_control()
         self.stop_visualize()
-        # Park the inference thread before clearing the state it is reading.
-        # This replaces a fixed sleep on avg_infer_time: it returns as soon as
-        # the thread is idle, and is bounded so web callers never hang.
+        # The inference thread owns the ZMQ socket. Wait until it is parked,
+        # then take the execution lock so an in-flight step cannot race the clear.
         if not self.wait_inference_parked(timeout=1.0):
             self.logger.warning('Inference thread did not park before stop(); state is cleared anyway.')
-        self.image_process_time = 0.0
-        self.task_language_manager.reset()
-        self.realtime_data_manager.clear()
-        self._clear_raw_observe_queue()
+        with self._inference_execution_lock:
+            self.image_process_time = 0.0
+            self.task_language_manager.reset()
+            self.realtime_data_manager.clear()
+            self._clear_raw_observe_queue()
         with self.show_thread_lock:
             self.current_prob_progress = 0.0
         self.logger.info('VLA client stopped.')
@@ -392,22 +412,31 @@ class VLAClient():
         self.visualize_server.stop_server()
 
         self.logger.info('VLA client closed.')
+
     def reset(self):
-        self.image_process_time = 0.0
-    
+        # Prevent an in-flight inference from publishing stale actions or timing
+        # measurements after Reset clears the data manager.
+        with self._inference_execution_lock:
+            self.realtime_data_manager.clear()
+            self._clear_raw_observe_queue()
+            self.image_process_time = 0.0
+
     @property
     def thread_status(self):
         return {
-        "observe_running": self.is_observe_thread_running,
-        "inference_running": self.is_inference_thread_running,
-        "control_running": self.is_control_thread_running
+            "observe_running": self.is_observe_thread_running,
+            "inference_running": self.is_inference_thread_running and self.inference_thread.is_alive(),
+            "inference_thread_alive": self.inference_thread.is_alive(),
+            "control_running": self.is_control_thread_running,
         }
 
     @property
     def runtime_status(self):
         status = {
             "img_proc_time": self.image_process_time,
-            "current_prob_progress": self.current_prob_progress
+            "current_prob_progress": self.current_prob_progress,
+            "inference_error": self.inference_error,
+            "inference_error_count": self.inference_error_count,
         }
         status.update(self.realtime_data_manager.runtime_status)
         return status
@@ -499,7 +528,11 @@ class VLAClient():
                 if decoded_observations is None:
                     continue
                 infer_data, encoded_imgs = self._process_data(decoded_observations)
-                self.realtime_data_manager.add_observe_data(infer_data)
+                if not self.realtime_data_manager.add_observe_data(
+                    infer_data,
+                    source_time=decoded_observations.get('_worker_publish_time'),
+                ):
+                    continue
                 self.visualize_server.update_image_data(encoded_imgs)
                 # record_data = self.shared_memory_manager.encode_observation(record_data)
 
@@ -544,24 +577,45 @@ class VLAClient():
         It claims the socket on first use and releases it on the way out, so no
         other thread ever creates, uses or closes it.
         """
+        consecutive_errors = 0
         try:
             while self.is_running:
                 # Commands are served even while parked: that is how other
                 # threads get inference work done without touching the socket.
-                self._drain_inference_commands()
-
                 if not self.is_inference_thread_running:
                     self._inference_parked.set()
+                    with self._inference_execution_lock:
+                        self._drain_inference_commands()
                     time.sleep(0.001)
                     continue
 
                 self._inference_parked.clear()
-                if self.realtime_data_manager.infer_count == 0:
-                    self._inference_first()
-                    self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
-                else:
-                    self._inference_step()
-                    self.realtime_data_manager.wait_for_next(mode=self.config.rdm.mode, wait_time=self.config.controller.wait_time/1000)
+                try:
+                    with self._inference_execution_lock:
+                        self._drain_inference_commands()
+                        if not self.is_inference_thread_running:
+                            continue
+                        if self.realtime_data_manager.infer_count == 0:
+                            self._inference_first()
+                        else:
+                            self._inference_step()
+
+                    consecutive_errors = 0
+                    self.inference_error = None
+                    if self.is_inference_thread_running:
+                        self.realtime_data_manager.wait_for_next(
+                            mode=self.config.rdm.mode if self.is_control_thread_running else 'async',
+                            wait_time=self.config.controller.wait_time / 1000,
+                        )
+                except Exception as exc:
+                    consecutive_errors += 1
+                    self.inference_error_count += 1
+                    self.inference_error = f'{type(exc).__name__}: {exc}'
+                    self.logger.exception('Inference step failed; clearing stale actions and retrying')
+                    self.stop_control()
+                    with self._inference_execution_lock:
+                        self.realtime_data_manager.clear()
+                    time.sleep(min(0.1 * 2 ** min(consecutive_errors - 1, 4), 1.6))
         finally:
             self._inference_parked.set()
             try:
@@ -603,15 +657,22 @@ class VLAClient():
             else:
                 self.visualize_server.vis_global_step += 1
         else:
-            action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
+            try:
+                # Serialize action retrieval and submission with stop/start.
+                # A timer callback from before Pause cannot submit an old action
+                # after Reset or after controls are re-enabled on Resume.
+                with self._control_execution_lock:
+                    if not self.is_control_thread_running:
+                        return
+                    action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
+                    if action_fitted is not None:
+                        self.robot.control_robot(action_fitted)
+            except Exception as exc:
+                self._stop_control_thread_on_error()
+                self.logger.error("Robot control failed: %s", exc)
+                raise
 
             if action_fitted is not None:
-                try:
-                    self.robot.control_robot(action_fitted)
-                except Exception as exc:
-                    self._stop_control_thread_on_error()
-                    self.logger.error("Robot control failed: %s", exc)
-                    raise
                 # with self.show_thread_lock:
                     # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
                 

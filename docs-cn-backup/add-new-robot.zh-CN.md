@@ -1,12 +1,12 @@
 # 新机器人接入指南
 
-[English Version](add-new-robot.md)
+[English Version](../docs/guides/add-new-robot.md)
 
 ## 快速开始
 
-下面以双臂机器人 `my_robot` 为例：双臂 14 维、双夹爪 2 维，头部 2 维只供手动控制。
+示例机器人 `my_robot` 有两条 7 自由度手臂、两维夹爪，以及一个仅用于手动控制的 2 自由度头部。
 
-### 1. 创建机器人适配器
+### 1. 创建适配器
 
 ```text
 client/robots/my_robot/
@@ -14,7 +14,7 @@ client/robots/my_robot/
 └── body_robot.py
 ```
 
-`body_robot.py` 最小模板：
+最小化的 `body_robot.py`：
 
 ```python
 import numpy as np
@@ -25,14 +25,14 @@ from .driver import MyRobotDriver, MyCameraDriver
 
 class RobotBody(RobotBase):
     def __init__(self, config):
-        super().__init__(config)  # 必须调用：解析 action_layout 和动作索引
-        self.cfg = config  # 当前基类的 Web 手动控制从 self.cfg 读取参数
+        super().__init__(config)  # 必需：解析动作布局与索引。
+        self.cfg = config  # 当前 Web 手动控制从 self.cfg 读取参数。
         self.robot = MyRobotDriver(config)
         self.camera = MyCameraDriver(config.camera)
         self.current_timestamp = None
 
     def control_robot(self, action):
-        """执行模型输出；action 只包含 gradual/stepwise 段。"""
+        """执行模型输出，其中只包含 gradual/stepwise 区间。"""
         action = np.asarray(action, dtype=float).reshape(-1)
         if action.size != self.action_dim:
             raise ValueError(f"action dim={action.size}, expected={self.action_dim}")
@@ -44,7 +44,7 @@ class RobotBody(RobotBase):
             self.execute_action({name: action[start:end].tolist()})
 
     def execute_action(self, data):
-        """执行已经分段的底层命令。"""
+        """执行已切分好的底层命令。"""
         if "arm" in data:
             self.robot.move_arm(data["arm"])
         if "gripper" in data:
@@ -74,11 +74,11 @@ class RobotBody(RobotBase):
         self.robot.close()
 ```
 
-如果 `action_layout` 已配置 `presets.Default`，通常可直接继承基类的 `reset_robot()` 和 Web 手动控制 `_control_robot()`，无需重复实现。
+当 `action_layout` 含有 `presets.Default` 时，适配器通常可以直接继承 `RobotBase` 的 `reset_robot()` 与 Web 端 `_control_robot()`。
 
 ### 2. 添加配置
 
-修改 [`conf/robots_conf.py`](../../conf/robots_conf.py)：
+编辑 [`conf/robots_conf.py`](../../conf/robots_conf.py)：
 
 ```python
 class RobotType(str, Enum):
@@ -108,7 +108,7 @@ def get_my_robot_config():
                 "right": {"Default": [0.0], "Open": [0.0], "Close": [1.0]},
             },
         },
-        # manual 段必须位于所有模型动作段之后。
+        # manual 区间必须排在所有模型动作区间之后。
         "head": {
             "start": 16, "end": 18, "policy": "manual",
             "presets": {"Default": [0.0, 0.0]},
@@ -120,39 +120,36 @@ def get_my_robot_config():
 def get_robots_config():
     config = ConfigDict()
     config.type = RobotType.MY_ROBOT
-    # 保留已有配置……
+    # 保留既有配置……
     config.my_robot = get_my_robot_config()
     return config
 ```
 
-### 3. 注册两个构造入口
+### 3. 注册 Web 工厂
 
-命令行入口：在 [`run_client.py`](../../run_client.py) 的 `get_robot()` 中增加：
-
-```python
-elif robot_type == RobotType.MY_ROBOT:
-    from client.robots.my_robot.body_robot import RobotBody
-    return RobotBody(robot_config)
-```
-
-Web 入口：在 [`web_client/server.py`](../../web_client/server.py) 的 `_get_robot()` 中增加创建分支：
+新机器人类型通过在 [`client/robots/robot_proxy.py`](../../client/robots/robot_proxy.py) 的 `_ROBOT_MODULES` 映射中添加一条记录完成注册，该映射把每个 `RobotType` 取值对应到暴露其 `RobotBody` 的模块：
 
 ```python
-elif robot_type == RobotType.MY_ROBOT:
-    from client.robots.my_robot.body_robot import RobotBody
-    robot_instance = RobotBody(robot_config)
+_ROBOT_MODULES: Dict[str, str] = {
+    'agibot_g1': 'client.robots.agibot_g1.body_robot',
+    'mock': 'client.robots.mock.body_robot',
+    'ti5_t170c': 'client.robots.ti5_t170c.body_robot',
+    'navi_wa2': 'client.robots.navi_wa2.body_robot',
+    'my_robot': 'client.robots.my_robot.body_robot',
+}
 ```
 
-如需 Web 停止后复用同一个 SDK 实例，还要在 `_get_robot()` 前部增加对应的类型/模块匹配分支；否则切换或重启时会先关闭再重建。
+[`web_client/server.py`](../../web_client/server.py) 无需改动：`_create_robot()`（`web_client/server.py:1332`）只是把注册的类型包进 `RobotProxy`，具体的 `RobotBody` 在机器人工作子进程中从 `_ROBOT_MODULES` 导入。未在 `_ROBOT_MODULES` 中注册的类型会报 `Unsupported robot type`。
 
-`RobotBody` 接收的是 `config.robots.my_robot` 子配置，不是完整 Client 配置。当前基类构造函数保存为 `self.config`，但 Web 手动控制读取 `self.cfg`，因此新适配器需要像模板一样设置别名。
+每次客户端启动都会新建一个 `RobotProxy`，因此不存在需要更新的 SDK 实例复用钩子。
+
+`RobotBody` 接收的是 `config.robots.my_robot` 子段，而不是完整的客户端配置。基类构造函数把它存为 `self.config`，而当前 Web 手动控制读取的是 `self.cfg`，因此适配器应按模板所示建立这个别名。
 
 ### 4. 运行
 
-先断开执行器或降低速度，验证维度、方向、单位和限位，然后运行：
+先断开执行器动力或降低速度，再核对维度、方向、单位与限位。机器人类型从配置中的 `robots.type` 读取（见第 2 步），因此在 Web 配置面板中选择即可，无需命令行参数：
 
 ```bash
-python run_client.py --robots_type my_robot
 python run_web_client.py
 ```
 
@@ -160,36 +157,36 @@ python run_web_client.py
 
 ### `action_layout`
 
-每段必须包含 `start`、`end`、`policy`，可选 `presets`。
+每个区间必须有 `start`、`end` 和 `policy`；`presets` 可选。
 
-| policy | 用途 | 是否进入模型 action |
+| policy | 用途 | 是否计入模型动作 |
 |---|---|---|
-| `gradual` | 连续关节，如机械臂 | 是 |
-| `stepwise` | 夹爪、离散/快速变化维度 | 是 |
-| `manual` | 头、腰、轮子等 Web-only 维度 | 否 |
+| `gradual` | 手臂等连续关节 | 是 |
+| `stepwise` | 夹爪等快速/离散维度 | 是 |
+| `manual` | 仅 Web 端控制的头部、腰部或底盘 | 否 |
 
-关键约束：
+约束：
 
-- 区间使用 `[start, end)`，不能重叠。
-- 所有 `manual` 段必须放在 `gradual/stepwise` 段之后，否则 `parse_action_layout()` 会报错。
-- `self.action_dim` 只计算模型动作段；`self.state_dim` 是所有段最大 `end`。
-- `self.joint_indices` 来自 `gradual`；`self.step_indices` 来自 `stepwise`，供轨迹平滑使用。
-- 模型、驱动和 `obs.state` 的维度顺序必须与布局一致。
+- 区间为 `[start, end)`，彼此不得重叠。
+- 所有 `manual` 区间必须排在全部 `gradual/stepwise` 区间之后，否则 `parse_action_layout()` 会报错。
+- `self.action_dim` 只覆盖模型区间；`self.state_dim` 取所有区间中最大的 `end`。
+- `self.joint_indices` 包含 `gradual` 索引；`self.step_indices` 包含用于轨迹处理的 `stepwise` 索引。
+- 模型、驱动与 `obs.state` 的顺序必须与布局一致。
 
 ### Web 手动控制
 
-基类 `_control_robot()` 已支持：
+基类 `_control_robot()` 支持：
 
-- `l_arm/r_arm`、`l_gripper/r_gripper`、`l_hand/r_hand`。
-- `head`、`waist`、`body`、`wheel`、`leg`。
-- 数值 `-1000` 表示保持该维当前位置。
-- 机械臂通过 Ruckig 插值，周期由 `manual_arm_interval` 控制。
+- `l_arm/r_arm`、`l_gripper/r_gripper` 和 `l_hand/r_hand`。
+- `head`、`waist`、`body`、`wheel` 和 `leg`。
+- 用 `-1000` 表示保持某一维度的当前值。
+- 使用 `manual_arm_interval` 做 Ruckig 手臂插值。
 
-左右控制的 action 总维度必须是正偶数。使用基类手动控制前，`retrieve_observation()` 必须正确更新 `current_state`，且 `execute_action()` 必须支持相应 key。
+左右合并后的维度必须为正偶数。使用基类手动控制前，`retrieve_observation()` 必须更新 `current_state`，且 `execute_action()` 必须能处理对应的键。
 
-### Reset presets
+### 复位预设
 
-基类 `reset_robot()` 从每段的 `presets.Default` 生成手动控制命令。双侧动作使用：
+基类 `reset_robot()` 依据各区间的 `presets.Default` 构造手动命令。双侧动作使用这种形式：
 
 ```python
 "presets": {
@@ -198,15 +195,15 @@ python run_web_client.py
 }
 ```
 
-非双侧动作使用：
+非双侧动作使用这种形式：
 
 ```python
 "presets": {"Default": [...]}
 ```
 
-也可传入完整 `target_pose`；基类会按 `action_layout` 切片。只有硬件需要特殊复位顺序时才覆盖 `reset_robot()`。
+也可以提供完整的 `target_pose`，它会按 `action_layout` 切分。只有当硬件要求特殊复位顺序时才需要重写 `reset_robot()`。
 
-### Observation
+### 观测
 
 最小格式：
 
@@ -218,24 +215,24 @@ python run_web_client.py
 }
 ```
 
-- 无新参考帧时返回 `None`，不要重复提交同一帧。
-- 普通图像使用 C-contiguous `uint8 H×W×3`，按 OpenCV BGR 约定。
-- 多相机按参考时间戳取最近帧。
-- `obs.state` 建议覆盖全部布局（包括 `manual` 段），并同步写入 `current_state`。
-- 不要在 `retrieve_observation()` 内重连设备、同步写盘或等待机器人动作完成。
+- 参考帧未变化时返回 `None`，不要重复提交。
+- 图像使用 C 连续的 `uint8 H×W×3`，OpenCV BGR 顺序。
+- 以参考时间戳选取多相机中最近的帧。
+- `obs.state` 应覆盖完整布局（含 `manual` 区间），并且必须更新 `current_state`。
+- 不要在 `retrieve_observation()` 里重连设备、同步写盘或等待运动完成。
 
-## 录制要求
+## 记录要求
 
-观测的 key、dtype 和 shape 必须稳定，`obs.state` 顺序固定，模型 action 维度等于 `self.action_dim`，相机名称同时存在于观测和录制配置。当前分支记录控制线程的 `action_fitted`，驱动侧额外映射不会自动反映到 action 文件中。
+保持观测键、数据类型和形状稳定；保持 `obs.state` 顺序固定；确保模型动作维度等于 `self.action_dim`；相机名称要同时出现在观测与记录配置中。本分支记录的是控制线程的 `action_fitted`，因此驱动侧的映射不会自动体现在记录的动作里。
 
-## 验证清单
+## 验收清单
 
-- [ ] `RobotBody(config)` 能创建，且 `super().__init__(config)` 已调用。
-- [ ] `action_dim`、`state_dim`、joint/step indices 符合预期。
-- [ ] 模型 action 各段能路由到正确驱动。
-- [ ] Web 左右控制及 `-1000` 保持位置有效。
-- [ ] Default presets 能安全复位所有配置段。
+- [ ] `RobotBody(config)` 可构造，并调用了 `super().__init__(config)`。
+- [ ] `action_dim`、`state_dim` 与关节/步进索引正确。
+- [ ] 每个模型动作区间都能到达预期驱动。
+- [ ] Web 左右控制与 `-1000` 保持值工作正常。
+- [ ] Default 预设能安全复位所有已配置区间。
 - [ ] 图像、时间戳、`obs.state` 与 `current_state` 正确且同步。
-- [ ] 关节顺序、单位、正负方向和限位正确。
-- [ ] `run_client.py` 和 `run_web_client.py` 均能创建该机器人。
-- [ ] 断网、设备掉线及退出时进入安全状态，并能重复调用 `close()`。
+- [ ] 关节顺序、单位、符号与限位正确。
+- [ ] `python run_web_client.py` 能启动并构造机器人。
+- [ ] 网络/设备掉线与关机进入安全状态；`close()` 可重复调用。

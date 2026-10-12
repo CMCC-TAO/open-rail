@@ -2,19 +2,14 @@
 requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
-# TODO(OPEN-RAIL 更名)：开源前完成仓库与包名替换
-#   1. 仓库目录 vla_infer → open_rail；项目名 vla-rail → open-rail；description 与 README 内标题同步
-#   2. 新增 open_rail/__init__.py 定义 __version__，并把本文件内所有 vla_rail 引用改为 open_rail。
-#      当前 vla_rail 包在仓库中不存在，动态版本解析失败会直接中断 pip install -e .
-#   3. CLI 入口名 vla-server / vla-web-client 是否一并改为 open-rail-*，改则须与 README 快速开始同步
-
 [project]
-name = "vla-rail"
-dynamic = ["version"]
-description = "A real-time asynchronous inference linker for VLA models and robots"
+name = "open-rail"
+description = "A universal substrate for asynchronously linking VLA/WAM model inference and robot execution"
+# The project has not adopted formal release versioning yet.
+version = "0.0.0"
 readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
-license = "Apache-2.0"
+license = { file = "LICENSE" }
 authors = [
   { name = "Yongsheng Zhao" },
   { name = "Lei Zhao" },
@@ -27,6 +22,7 @@ dependencies = [
   "fastapi>=0.110.0",
   "uvicorn[standard]>=0.46.0",
   "python-multipart>=0.0.9",
+  "orjson>=3.10.0",
   "ml-collections==1.1.0",
   "numpy==1.26.4",
   "opencv-python==4.11.0.86",
@@ -44,24 +40,28 @@ dependencies = [
 dev = [
   "build>=1.2.2",
   "pytest>=8.0.0",
+  "ruff>=0.11.0",
   "twine>=5.1.1",
+]
+# Optional desktop viewers under client/utils/ (action/camera plots).
+# Not required by the core runtime; install with: pip install -e ".[viz]"
+viz = [
+  "PyQt5==5.15.11",
+  "pyqtgraph==0.14.0",
+  "matplotlib==3.10.9",
 ]
 
 [project.scripts]
-vla-web-client = "run_web_client:main"
-vla-server = "run_server:main"
+open-rail-web-client = "run_web_client:main"
+open-rail-server = "run_server:main"
 
 [tool.setuptools]
 include-package-data = true
 py-modules = ["run_web_client", "run_server"]
 
-[tool.setuptools.dynamic]
-# TODO(OPEN-RAIL 更名)：改为 open_rail.__version__，并确保 open_rail/__init__.py 已提供该属性
-version = { attr = "vla_rail.__version__" }
-
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["client*", "conf*", "server*", "web_client*", "vla_rail*"]
+include = ["client*", "conf*", "server*", "web_client*"]
 namespaces = true
 
 [tool.setuptools.package-data]
@@ -69,7 +69,6 @@ conf = ["*.json", "*.yaml", "*.yml"]
 web_client = ["static/**/*"]
 server = ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.md", "**/*.txt"]
 client = ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.md", "**/*.txt"]
-vla_rail = []
 
 [tool.ruff]
 line-length = 100

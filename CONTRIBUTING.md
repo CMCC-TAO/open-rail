@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for contributing code, model adapters, robot adapters, smoothing strategies, tests, or documentation to OPEN-RAIL.
+Thank you for contributing code, model adapters, robot adapters, smoothing strategies, tests, or documentation to Open-RAIL.
 
 ## Before you start
 
@@ -10,7 +10,8 @@ Please read the following first:
 - [Architecture guide](docs/architecture.md)
 - [Configuration guide](docs/configuration.md)
 - [Robot integration guide](docs/guides/add-new-robot.md)
-- [VLA model integration guide](docs/guides/add-new-vla-model.md)
+- [VLA/WAM model integration guide](docs/guides/add-new-model.md)
+- [Inter-chunk fuser guide](docs/guides/add-new-inter-chunk-fuser.md)
 
 For new robots or model adapters, it is recommended to open an issue first and describe the use case, dependencies, input/output contract, and validation method.
 
@@ -25,7 +26,7 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev]"
 ```
 
-`pyproject.toml` defines OPEN-RAIL’s own dependencies and CLI entry points. Launching a OPEN-RAIL server also requires the dependencies of the model it serves, which should be installed in the server-side environment. Running a OPEN-RAIL client requires the relevant robot SDK or ROS dependencies, which should be installed in the client-side environment. Keeping these dependencies separate avoids unnecessarily coupling and dependency conflicts.
+`pyproject.toml` defines Open-RAIL’s own dependencies and CLI entry points. Launching a Open-RAIL server also requires the dependencies of the model it serves, which should be installed in the server-side environment. Running a Open-RAIL client requires the relevant robot SDK or ROS dependencies, which should be installed in the client-side environment. Keeping these dependencies separate avoids unnecessarily coupling and dependency conflicts.
 
 ## How to contribute
 
@@ -70,7 +71,7 @@ Also complete the following:
 
 See the [robot integration guide](docs/guides/add-new-robot.md) for the detailed interface requirements.
 
-## Adding a VLA model adapter
+## Adding a VLA/WAM model adapter
 
 Create a model directory under `server/models/` and implement `ModelVLA` with initialization and `infer(sequence)` interfaces:
 
@@ -80,13 +81,17 @@ Create a model directory under `server/models/` and implement `ModelVLA` with in
 - Register the model type in `run_server.py:get_model()` and `conf/models_conf.py`.
 - Record the checkpoint, upstream source, and model-specific dependency requirements in the model environment.
 
-Model code should not directly operate the ZMQ socket, robot SDK, or client API. See the [VLA model integration guide](docs/guides/add-new-vla-model.md) for the detailed contract.
+Model code should not directly operate the ZMQ socket, robot SDK, or client API. See the [VLA/WAM model integration guide](docs/guides/add-new-model.md) for the detailed contract.
 
 ## Testing and style checks
 
-The repository does not yet have a dedicated test suite. Formatting and linting checks are, however, configured in `.pre-commit-config.yaml`.
+The repository does not yet have a dedicated test suite. `pytest` and `ruff` are declared in the `dev` extra in `pyproject.toml` and are installed by `python -m pip install -e ".[dev]"`; `ruff` uses a line length of 100 (see `[tool.ruff]` in `pyproject.toml`).
 
-For document modifications, also check Markdown fences, relative links, and `git diff --check`:
+For document modifications, also check the following before opening a pull request:
+
+- Markdown code fences are opened and closed correctly.
+- Relative links resolve to files that exist.
+- `git diff --check` reports no whitespace errors.
 
 For all code changes, include enough information in your pull request for reviewers to run and verify your changes, as applicable:
 - Python environment setup and key dependency versions
