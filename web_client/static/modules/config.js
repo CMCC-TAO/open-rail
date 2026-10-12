@@ -35,6 +35,11 @@ const CONFIG_SELECT_OPTIONS = {
   speed: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0],
 };
 
+const ROBOT_TYPE_LABELS = {
+  robocasa: 'RoboCasa_Panda (Simulation)',
+  aloha_robotwin: 'RoboTwin_ALOHA (Simulation)',
+};
+
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
   'fitting_num_samples', 'search_length', 'gripper_offset',
@@ -649,7 +654,7 @@ function _buildRobotsGroup(obj, parentEl) {
       input = document.createElement('select');
       knownTypes.forEach(opt => {
         const o = document.createElement('option');
-        o.value = opt; o.textContent = opt;
+        o.value = opt; o.textContent = ROBOT_TYPE_LABELS[opt] || opt;
         if (opt === currentType) o.selected = true;
         input.appendChild(o);
       });
@@ -972,7 +977,8 @@ function createCfgRow(dotKey, label, value, options = {}) {
     input = document.createElement('select');
     CONFIG_SELECT_OPTIONS[bareKey].forEach(opt => {
       const o = document.createElement('option');
-      o.value = opt; o.textContent = opt;
+      o.value = opt;
+      o.textContent = dotKey === 'robots.type' ? ROBOT_TYPE_LABELS[opt] || opt : opt;
       if (String(value) === String(opt)) o.selected = true;
       input.appendChild(o);
     });

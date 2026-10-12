@@ -109,7 +109,8 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     assert page.locator('#sim-field-server_ip').count() == 0
     assert page.locator('#sim-field-record_fps').count() == 0
     assert page.locator('#sim-field-no_expert_check').count() == 0
-    assert page.locator('#sim-fields input, #sim-fields select').count() == 5
+    assert page.locator('#sim-fields input, #sim-fields select').count() == 6
+    page.locator('#sim-field-n_envs').fill('3')
     assert page.locator('#sim-field-mode').count() == 0
     assert page.locator('#sim-field-intra_chunk_mode').count() == 0
     page.locator('#sim-task-selection').select_option(selection)
@@ -118,6 +119,8 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.locator('#sim-start').click()
     page.wait_for_function('document.getElementById("sim-stop").disabled === false')
     assert requests[0]['platform'] == 'robotwin'
+    assert requests[0]['n_envs'] == 3
+    assert requests[0]['client_config']['robots']['aloha_robotwin']['n_envs'] == 3
     assert requests[0]['record'] is True
     assert requests[0]['mode'] == ('async' if selection == 'suite' else 'sync')
     assert requests[0]['async_replenish_threshold'] == (0 if selection == 'suite' else None)

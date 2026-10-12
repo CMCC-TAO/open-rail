@@ -27,10 +27,11 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     instruction_type: "Instruction Type",
     split: "Task Split",
   };
-  const basicFields = getClientConfig ? ["n_episodes", "record", "video"]
+  const basicFields = getClientConfig ? ["n_episodes", "n_envs", "record", "video"]
     : ["platform", "n_episodes", "mode", "record", "video"];
   const dashboardLabels = {
     n_episodes: "Episodes / Task",
+    n_envs: "Parallel Envs",
     record: "Save Dataset",
     video: "Save Videos",
   };
@@ -45,6 +46,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     ready = false,
     submitting = false,
     profileGeneration = 0,
+    environmentPlatform = null,
     lastError = "",
     artifactJob = "";
   const platformForConfig = (config) => ({robocasa: "robocasa", aloha_robotwin: "robotwin"})[config.robots?.type];
@@ -217,6 +219,10 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
           ? input.value === "" ? null : Number(input.value)
           : input.value;
       }
+      if (snapshot) {
+        const type = snapshot.robots.type;
+        snapshot.robots[type] = { ...snapshot.robots[type], n_envs: config.n_envs };
+      }
       const suite = $("task-selection").value === "suite";
       config.env_name = suite ? "" : $("task-name").value.trim();
       config.task_suite = suite ? $("task-name").value.trim() : "";
@@ -278,6 +284,11 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     if (typeof value === "boolean") input.checked = value;
     else input.value = value == null ? "" : value;
     if (input.type === "number") input.step = "any";
+    if (key === "n_envs") {
+      input.min = "1";
+      input.step = "1";
+      input.required = true;
+    }
     label.append(input);
     $(group).append(label);
   }
@@ -331,6 +342,10 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         error(e);
         return;
       }
+    }
+    if (environmentPlatform !== platform) {
+      $("field-n_envs").value = config.robots[config.robots.type]?.n_envs ?? defaults.n_envs;
+      environmentPlatform = platform;
     }
     updateControls();
     ready = true;

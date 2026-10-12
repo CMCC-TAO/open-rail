@@ -7,11 +7,12 @@ connection there. Robot-specific settings include Python, GPU, parallel environm
 seed, and RoboTwin root/task settings. Blank environment paths use the backend presets.
 Blank action chunk length uses the platform default: 16 for RoboCasa, 50 for RoboTwin.
 
-Expand **Simulation Evaluation**, choose a single task or task suite, episodes per task,
+Expand **Simulation Evaluation**, choose a single task or task suite, episodes per task, parallel environments,
 and dataset/video saving, then select **Start**. Robot selection alone starts no process.
 The evaluation captures the current Configuration, including pending edits; **Apply**
 is only needed to persist those edits to the main client configuration. Runtime Monitor's
 client launch buttons do not launch a simulator in this mode.
+Parallel environments initially uses the selected robot's Configuration value; the evaluation panel value applies to the new job and its saved snapshot.
 
 Jobs save their complete resolved configuration, `client_config.json`, `client_config.py`,
 logs, statistics, videos, and optional LeRobot datasets under
