@@ -12,11 +12,53 @@ import uuid
 from typing import Literal
 
 import psutil
+import yaml
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 
 ROOT = Path(__file__).resolve().parent.parent
+DEFAULTS_PATH = ROOT / "conf" / "web_simulation.yaml"
+
+
+def client_evaluation_values(config):
+    if not isinstance(config, dict):
+        raise ValueError("Configuration snapshot must be an object")
+    robots = config.get("robots", {})
+    robot_type = robots.get("type")
+    platforms = {"robocasa": "robocasa", "aloha_robotwin": "robotwin"}
+    if robot_type not in platforms:
+        raise ValueError("Select robocasa or aloha_robotwin in Configuration")
+    robot = robots.get(robot_type, {})
+    values = {"platform": platforms[robot_type]}
+    mappings = {
+        "mode": ("rdm", "mode"),
+        "n_action_steps": ("controller", "action_steps"),
+        "control_period_ms": ("controller", "period"),
+        "intra_chunk_mode": ("intra_chunk", "intra_chunk_mode"),
+        "intra_chunk_sample_ratio": ("intra_chunk", "output_sample_ratio"),
+        "inter_chunk_mode": ("inter_chunk", "inter_chunk_mode"),
+        "max_transition_steps": ("inter_chunk", "max_transition_steps"),
+        "server_ip": ("vla_zmq", "ip"),
+        "server_port": ("vla_zmq", "port"),
+    }
+    for key, (group, field) in mappings.items():
+        value = config.get(group, {}).get(field)
+        if value is not None and value != "":
+            values[key] = value
+    for key in ("python", "robotwin_root", "gpu", "n_envs", "seed", "split", "task_config", "instruction_type"):
+        value = robot.get(key)
+        if value is not None and (value != "" or key == "gpu"):
+            values[key] = value
+    preprocess = config.get("vision", {}).get("preprocess", {}).get("method")
+    if preprocess is not None:
+        values["preprocess"] = preprocess
+    for key, field in (("async_replenish_threshold", "action_replenish_threshold"),
+                       ("max_async_observation_lag_steps", "max_async_observation_lag_steps")):
+        values[key] = config.get("rdm", {}).get(field) if values.get("mode") == "async" else None
+    if robot_type == "aloha_robotwin" and values.get("intra_chunk_mode") != "interpolation":
+        values["intra_chunk_sample_ratio"] = 1
+    return values
 
 
 class EvaluationConfig(BaseModel):
@@ -42,6 +84,7 @@ class EvaluationConfig(BaseModel):
     n_episodes: int = Field(10, ge=1)
     n_envs: int = Field(1, ge=1)
     n_action_steps: int = Field(16, ge=1)
+    control_period_ms: float = Field(1, gt=0, allow_inf_nan=False)
     seed: int = 42
     mode: Literal["sync", "async"] = "sync"
     intra_chunk_mode: Literal["raw", "interpolation", "fitting"] = "raw"
@@ -61,6 +104,14 @@ class EvaluationConfig(BaseModel):
     record_fps: int = Field(20, ge=1)
     video_fps: int = Field(20, ge=1)
     video_layout: Literal["grid", "single"] = "grid"
+    client_config: dict | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def use_client_configuration(cls, data):
+        if isinstance(data, dict) and data.get("client_config") is not None:
+            data = {**data, **client_evaluation_values(data["client_config"])}
+        return data
 
     @model_validator(mode="after")
     def validate_selection(self):
@@ -140,6 +191,7 @@ class EvaluationJobs:
             "env_name",
             "task_suite",
             "no_expert_check",
+            "client_config",
         }
         excluded |= {"split", "mujoco_gl"} if robotwin else robotwin_fields
         for key, value in config.model_dump().items():
@@ -165,6 +217,8 @@ class EvaluationJobs:
             command.append("--no_video")
         if robotwin and config.no_expert_check:
             command.append("--no_expert_check")
+        if config.client_config is not None:
+            command.extend(["--user_conf", str(folder / "client_config.py")])
         return command
 
     def start(self, config, job_id=None):
@@ -235,6 +289,12 @@ class EvaluationJobs:
                 "returncode": None,
             }
             self._save(job)
+            if config.client_config is not None:
+                snapshot = json.dumps(config.client_config, ensure_ascii=True, indent=2)
+                (self.directory / job_id / "client_config.json").write_text(snapshot)
+                (self.directory / job_id / "client_config.py").write_text(
+                    "import json\n\ndef get_user_config():\n    return json.loads(" + repr(snapshot) + ")\n"
+                )
             log = open(self.directory / job_id / "evaluation.log", "ab", buffering=0)
             environment = os.environ.copy()
             environment['VLA_SIM_PREVIEW_PATH'] = str(self.directory / job_id / 'preview.json')
@@ -376,8 +436,19 @@ router = APIRouter(prefix="/api/simulation")
 
 
 @router.get("/options")
-def options():
+def options(platform: Literal["robocasa", "robotwin"] = "robocasa"):
     defaults = EvaluationConfig(env_name="PickPlaceCounterToCabinet").model_dump()
+    if platform == "robotwin":
+        defaults.update(n_action_steps=50, seed=0)
+    else:
+        defaults.update(gpu="2")
+    if DEFAULTS_PATH.exists():
+        settings = yaml.safe_load(DEFAULTS_PATH.read_text()) or {}
+        defaults.update(settings.get("defaults", {}))
+        defaults.update(settings.get("platforms", {}).get(platform, {}))
+    if not defaults.get("python"):
+        defaults["python"] = sys.executable
+    defaults["platform"] = platform
     try:
         from conf.client_conf import get_client_config
 
@@ -386,9 +457,11 @@ def options():
         defaults["server_ip"] = config.vla_zmq.ip
     except (ImportError, AttributeError):
         pass
-    if hasattr(manager, "connection_defaults"):
+    if hasattr(manager, "connection_provider"):
+        defaults["server_ip"], defaults["server_port"] = manager.connection_provider()
+    elif hasattr(manager, "connection_defaults"):
         defaults["server_ip"], defaults["server_port"] = manager.connection_defaults
-    return defaults
+    return EvaluationConfig(**defaults).model_dump()
 
 
 @router.get("/jobs")

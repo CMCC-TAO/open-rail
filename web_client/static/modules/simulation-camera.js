@@ -1,4 +1,4 @@
-const simulationPreview = { active: false, jobId: null, timestamp: null, savedOpen: null };
+const simulationPreview = { active: false, enabled: true, jobId: null, timestamp: null, savedOpen: null };
 
 function clearCameraFrames() {
   camState.displayGeneration = (camState.displayGeneration || 0) + 1;
@@ -62,11 +62,19 @@ async function pollSimulationPreview() {
     setTimeout(pollSimulationPreview, 1000);
     return;
   }
+  if (!simulationPreview.enabled) {
+    await applySimulationPreview({ job: null, frames: [] });
+    setTimeout(pollSimulationPreview, 1000);
+    return;
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 3000);
   try {
     const response = await fetch('/api/simulation/preview', { cache: 'no-store', signal: controller.signal });
-    if (response.ok) await applySimulationPreview(await response.json());
+    if (response.ok) {
+      const snapshot = await response.json();
+      await applySimulationPreview(simulationPreview.enabled ? snapshot : { job: null, frames: [] });
+    }
   } catch (_) {
     if (simulationPreview.active) clearCameraFrames();
   } finally {

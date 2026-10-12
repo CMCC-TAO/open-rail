@@ -36,7 +36,9 @@ section {
   border: 1px solid #dce1eb;
   border-radius: 10px;
 }
-#fields {
+#fields,
+#recording-fields,
+#advanced-fields {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
@@ -113,7 +115,9 @@ a {
     grid-template-columns: 1fr;
     padding: 12px;
   }
-  #fields {
+  #fields,
+  #recording-fields,
+  #advanced-fields {
     grid-template-columns: 1fr;
   }
 }
@@ -121,3 +125,6 @@ a {
 [hidden] {
   display: none !important;
 }
+
+details { margin: 12px 0; }
+summary { cursor: pointer; }

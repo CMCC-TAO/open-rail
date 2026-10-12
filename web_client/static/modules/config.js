@@ -21,12 +21,14 @@ const BASIC_SUBGROUPS = {
 
 // Select options for specific keys
 const CONFIG_SELECT_OPTIONS = {
-  inter_chunk_mode: ['search_action', 'smooth_velocity', 'min_jerk'],
+  inter_chunk_mode: ['sync', 'search_action', 'smooth_velocity', 'min_jerk'],
   intra_chunk_mode: ['raw', 'interpolation', 'fitting'],
+  instruction_type: ['seen', 'unseen'],
+  split: ['target', 'pretrain'],
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2'],
+  type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2', 'robocasa', 'aloha_robotwin'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1'],
   eval_log_format: ['json', 'csv', 'both'],
@@ -36,7 +38,7 @@ const CONFIG_SELECT_OPTIONS = {
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
   'fitting_num_samples', 'search_length', 'gripper_offset',
-  'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
+  'action_steps', 'n_envs', 'seed', 'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
 
 const CONFIG_NUMBER_RANGES = {
@@ -136,6 +138,7 @@ const CONFIG_READONLY_DOT_KEYS = new Set([
 const DEFAULT_MAIN_PARAMETER_KEYS = {
   'robots.type': 'Robot Type',
   'rdm.mode': 'Mode',
+  'controller.action_steps': 'Action Chunk Length',
   'controller.wait_time': 'Wait Time[ms]',
   'controller.period': 'Control Period[ms]',
   'controller.speed': 'Control Speed',
@@ -1065,6 +1068,8 @@ function onCfgChange(dotKey, input, originalValue) {
       input.style.borderColor = 'var(--danger)';
       return;
     }
+  } else if (dotKey === 'controller.action_steps' && raw === '') {
+    parsed = null;
   } else if (CONFIG_INT_KEYS.has(bareKey)) {
     parsed = parseInt(raw, 10);
     if (isNaN(parsed)) { input.style.borderColor = 'var(--danger)'; return; }
@@ -1092,10 +1097,34 @@ function onCfgChange(dotKey, input, originalValue) {
 }
 
 /** Mark pending changes: show badge + highlight Apply button */
+function blockSimulationClientStart() {
+  const robotType = getSimulationClientConfig().robots?.type;
+  if (!App.isRunning && ['robocasa', 'aloha_robotwin'].includes(robotType)) {
+    toast('Use Start in Simulation Evaluation to run simulation tasks.', 'info');
+    return true;
+  }
+  return false;
+}
+
+function getSimulationClientConfig() {
+  const config = JSON.parse(JSON.stringify(App.config || {}));
+  for (const [path, value] of Object.entries(App.pendingPatch || {})) {
+    const keys = path.split('.');
+    let target = config;
+    for (const key of keys.slice(0, -1)) {
+      if (!target[key] || typeof target[key] !== 'object') target[key] = {};
+      target = target[key];
+    }
+    target[keys[keys.length - 1]] = value;
+  }
+  return config;
+}
+
 function markPending() {
   $('pending-badge').classList.remove('hidden');
   const btn = $('btn-apply-config');
   if (btn) btn.classList.add('btn-primary');
+  document.dispatchEvent(new CustomEvent('app-config-updated'));
 }
 
 /** Clear pending state: hide badge + restore Apply button to normal */

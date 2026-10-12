@@ -80,6 +80,7 @@ def get_intra_chunk_config() -> ConfigDict:
     config.max_gripper_fitting_workers = 2
     config.max_head_fitting_workers = 2
     config.fitting_num_samples = 64
+    config.output_sample_ratio = 1.0
     config.fitting_deg = 4  # Polynomial fitting degree
     config.intra_chunk_mode = 'fitting'  # intra-chunk processing mode, choices = ('raw', 'interpolation', 'fitting')
     config.joint_dim = 14  # Degrees of freedom for dual arms
@@ -89,6 +90,7 @@ def get_intra_chunk_config() -> ConfigDict:
 
 def get_inter_chunk_config() -> ConfigDict:
     config = ConfigDict()
+    config.max_transition_steps = 5
     config.inter_chunk_mode = 'min_jerk'  # choices = ('search_action', 'smooth_velocity', 'min_jerk', 'sync')
     config.search_action = get_search_action_config()
     config.smooth_velocity = get_smooth_velocity_config()

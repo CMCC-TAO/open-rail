@@ -162,3 +162,81 @@ def test_robotwin_preflight_does_not_require_robocasa(tmp_path, monkeypatch):
         manager.start(simulation.EvaluationConfig(platform='robotwin', env_name='Task', python=sys.executable,
                                                 robotwin_root=str(root)))
     assert 'sapien' in seen[0] and 'robocasa' not in seen[0]
+
+
+def test_options_use_platform_presets_and_current_model_connection(tmp_path, monkeypatch):
+    path = tmp_path / 'web_simulation.yaml'
+    path.write_text('defaults:\n  video_fps: 15\nplatforms:\n  robotwin:\n    python: ""\n    robotwin_root: /configured/RoboTwin\n')
+    monkeypatch.setattr(simulation, 'DEFAULTS_PATH', path)
+    manager = simulation.EvaluationJobs(tmp_path)
+    connection = ['192.0.2.10', 5566]
+    manager.connection_provider = lambda: tuple(connection)
+    monkeypatch.setattr(simulation, 'manager', manager)
+    app = FastAPI()
+    app.include_router(simulation.router)
+    client = TestClient(app)
+    casa = client.get('/api/simulation/options').json()
+    twin = client.get('/api/simulation/options?platform=robotwin').json()
+    assert casa['n_action_steps'] == 16 and casa['seed'] == 42
+    assert twin['n_action_steps'] == 50 and twin['seed'] == 0
+    assert twin['robotwin_root'] == '/configured/RoboTwin'
+    assert twin['python'] == sys.executable
+    assert twin['video_fps'] == 15
+    assert twin['server_port'] == 5566
+    connection[:] = ['192.0.2.20', 1117]
+    updated = client.get('/api/simulation/options').json()
+    assert updated['server_ip'] == '192.0.2.20' and updated['server_port'] == 1117
+
+
+def test_client_configuration_drives_evaluation_and_rejects_invalid_shared_values():
+    snapshot = {
+        'robots': {'type': 'robocasa', 'robocasa': {'seed': 7, 'n_envs': 2}},
+        'rdm': {'mode': 'async', 'action_replenish_threshold': 3, 'max_async_observation_lag_steps': 6},
+        'controller': {'action_steps': 12, 'period': 4.5},
+        'intra_chunk': {'intra_chunk_mode': 'fitting', 'fitting_deg': 3},
+        'inter_chunk': {'inter_chunk_mode': 'min_jerk', 'min_jerk': {'blend_threshold': .6}},
+        'vla_zmq': {'ip': '192.0.2.10', 'port': '5566'},
+    }
+    config = simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
+    assert config.mode == 'async' and config.n_action_steps == 12
+    assert config.control_period_ms == 4.5 and config.intra_chunk_mode == 'fitting'
+    assert config.async_replenish_threshold == 3 and config.seed == 7 and config.n_envs == 2
+    assert config.server_ip == '192.0.2.10' and config.server_port == 5566
+    snapshot['rdm']['action_replenish_threshold'] = 12
+    with pytest.raises(ValidationError):
+        simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
+    snapshot['robots']['type'] = 'mock'
+    with pytest.raises(ValidationError, match='Select robocasa or aloha_robotwin'):
+        simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
+
+
+def test_job_saves_and_reloads_configuration_snapshot(tmp_path, monkeypatch):
+    import runpy
+    from conf.client_conf import get_client_config
+    from client.utils.util import apply_user_config
+    snapshot = {
+        'robots': {'type': 'robocasa'},
+        'rdm': {'mode': 'sync'},
+        'intra_chunk': {'intra_chunk_mode': 'fitting', 'fitting_deg': 3},
+        'inter_chunk': {'inter_chunk_mode': 'min_jerk', 'min_jerk': {'blend_threshold': .6}},
+    }
+    config = simulation.EvaluationConfig(env_name='Task', python=sys.executable, client_config=snapshot)
+    manager = simulation.EvaluationJobs(tmp_path)
+    command = manager.command(config, 'saved')
+    assert '--client_config' not in command and '--user_conf' in command
+    from scripts.robocasa_eval import build_parser
+    assert build_parser().parse_args(command[3:]).control_period_ms == 1
+    monkeypatch.setattr(simulation.subprocess, 'run', lambda *a, **kw: subprocess.CompletedProcess(a, 0, '', ''))
+    monkeypatch.setattr(manager, 'command', lambda *args: [sys.executable, '-c', 'pass'])
+    try:
+        job = manager.start(config, 'saved')
+        folder = manager.directory / job['id']
+        loaded = runpy.run_path(str(folder / 'client_config.py'))['get_user_config']()
+        assert loaded == snapshot == json.loads((folder / 'client_config.json').read_text())
+        pipeline = apply_user_config(get_client_config(), loaded)
+        assert pipeline.intra_chunk.fitting_deg == 3
+        assert pipeline.inter_chunk.min_jerk.blend_threshold == .6
+        restored = simulation.EvaluationConfig(**json.loads((folder / 'job.json').read_text())['config'])
+        assert restored.client_config == snapshot and restored.intra_chunk_mode == 'fitting'
+    finally:
+        manager.close()

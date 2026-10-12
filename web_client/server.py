@@ -89,6 +89,9 @@ async def _lifespan(_: FastAPI):
             logger.warning(f"Failed to apply yaml conf: {e}")
     client_state.config = client_config
     simulation_manager.connection_defaults = (client_config.vla_zmq.ip, int(client_config.vla_zmq.port))
+    simulation_manager.connection_provider = lambda: (
+        str(client_state.config.vla_zmq.ip), int(client_state.config.vla_zmq.port)
+    )
     # print(f"Debug: config_file = {client_state.conf_file}")
     # print(f"Initial client.record config: {client_state.config.record}")
     # print(f"Visualize trajectory config: {client_state.config.visualize.trajectory}")

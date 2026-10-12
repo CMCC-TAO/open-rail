@@ -554,6 +554,7 @@ async function wireEvents() {
 
   // Client control
   $('btn-start').addEventListener('click', async () => {
+    if (blockSimulationClientStart()) return;
     const btnStart = $('btn-start');
     const btnPause = $('btn-pause');
 
@@ -680,6 +681,7 @@ async function wireEvents() {
   });
 
   $('btn-observe').addEventListener('click', async () => {
+    if (blockSimulationClientStart()) return;
     const btnObserve = $('btn-observe');
     if (!btnObserve) return;
 
@@ -708,6 +710,7 @@ async function wireEvents() {
   });
 
   $('btn-infer').addEventListener('click', async () => {
+    if (blockSimulationClientStart()) return;
     const btnInfer = $('btn-infer');
     if (!btnInfer || !App.isObserveRunning) return;
 
@@ -733,6 +736,7 @@ async function wireEvents() {
   });
 
   $('btn-control').addEventListener('click', async () => {
+    if (blockSimulationClientStart()) return;
     const btnControl = $('btn-control');
     if (!btnControl || !App.isObserveRunning || !App.isInferenceRunning) return;
 

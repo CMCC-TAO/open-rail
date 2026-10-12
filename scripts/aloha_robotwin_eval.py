@@ -67,7 +67,6 @@ def build_parser():
     parser.add_argument("--instruction")
     parser.add_argument("--no_expert_check", action="store_true")
     parser.add_argument("--gpu", help="GPU index or comma-separated GPU indices")
-    parser.add_argument("--control_period_ms", type=float, default=1.0)
     parser.add_argument("--max_transition_steps", type=int, default=5)
     parser.add_argument("--max_seed_attempts", type=int, default=100)
     parser.add_argument("--seed_stride", type=int, default=10000)

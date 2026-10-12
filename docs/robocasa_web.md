@@ -1,20 +1,37 @@
-# RoboCasa Web 测评
+# Web Simulation Evaluation
 
-使用现有 Web 启动入口：
+Start `python run_web_client.py --port 9000` and open `http://localhost:9000/`.
+In **Configuration**, select Robot Type `robocasa` or `aloha_robotwin`.
+Configure mode, action chunk length, smoothing, fusion, image preprocessing, and the model
+connection there. Robot-specific settings include Python, GPU, parallel environments,
+seed, and RoboTwin root/task settings. Blank environment paths use the backend presets.
+Blank action chunk length uses the platform default: 16 for RoboCasa, 50 for RoboTwin.
 
-```bash
-python run_web_client.py --port 9000
-```
+Expand **Simulation Evaluation**, choose a single task or task suite, episodes per task,
+and dataset/video saving, then select **Start**. Robot selection alone starts no process.
+The evaluation captures the current Configuration, including pending edits; **Apply**
+is only needed to persist those edits to the main client configuration. Runtime Monitor's
+client launch buttons do not launch a simulator in this mode.
 
-访问 `http://localhost:9000/simulation`，或从控制台的 RoboCasa 仿真测评链接进入。
+Jobs save their complete resolved configuration, `client_config.json`, `client_config.py`,
+logs, statistics, videos, and optional LeRobot datasets under
+`data/robocasa_web/jobs/<job ID>/`. The worker loads the snapshot through the existing
+`--user_conf` mechanism. Later Configuration edits do not alter the running job;
+Resume uses its saved configuration. One evaluation runs at a time and may use parallel
+environments. Start the model inference service separately.
 
-1. 设置已安装项目依赖、RoboCasa、robosuite 及资源文件的 Python 可执行文件路径。
-2. 填写单个任务或任务集（二选一），设置模型推理服务地址。模型服务须单独启动。
-3. 选择同步/异步、块内平滑、块间融合，以及视频和 LeRobot 数据集保存选项。
-4. 开始测评，在页面查看日志、已保存 episode 数、成功率和结果文件。
+Environment paths and hidden defaults come from `conf/web_simulation.yaml`.
+This local file is ignored by Git. For another installation, copy
+`conf/web_simulation.example.yml` and set the installed RoboTwin path.
+The `defaults` mapping applies to both platforms; `platforms.robocasa` and
+`platforms.robotwin` override individual values using `EvaluationConfig` field names.
+An empty `python` uses the Web service's interpreter. Configuration overrides the presets
+for shared settings. Simulation task selection and saving switches belong to the
+Evaluation panel; hardware-specific controller settings may be normalized by the existing
+evaluation pipeline.
 
-每次测评保存到 `data/robocasa_web/jobs/<任务 ID>/`，包含参数、日志、统计结果、视频及可选数据集。同一 Web 服务一次运行一个测评任务，任务内部可以使用多个并行环境。结果进度根据已写入的统计文件更新。
-
-停止会结束后台测评进程及其子进程；继续测评使用原参数和 run ID，复用 CLI 的已保存 episode 恢复逻辑。尚未完成或尚未提交保存的 episode 会重跑。服务正常退出会停止当前测评；异常退出后的历史任务标为 interrupted，若原进程仍存活，先点击停止。
-
-页面提供已保存视频回放，不提供实时仿真画面。现有真实机器人控制和录制入口保持独立。测试使用模拟测评进程；实际 RoboCasa 渲染及模型推理需在配置的环境中验证。
+The standalone `/simulation` page retains its independent configuration form.
+Shared cameras and trajectories display the running simulation or robot client.
+Robot Control and Data Recording continue to control the robot client. Results, saved
+videos, and logs are available inside the evaluation panel. Tests use simulated processes
+and browser API responses; real rendering and inference require the configured simulators.

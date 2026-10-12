@@ -1,0 +1,80 @@
+.panel-simulation { flex: 0 0 auto; min-height: 0; container-type: inline-size; }
+.panel-simulation .panel-body.collapsed { display: none; }
+.panel-simulation .panel-body { padding: 8px; gap: 8px; min-height: 0; overflow-x: hidden; }
+.panel-simulation form { display: flex; flex-direction: column; gap: 6px; }
+.panel-simulation .simulation-section {
+  flex-shrink: 0;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 6px;
+}
+.panel-simulation summary, .panel-simulation .simulation-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-size-2);
+  font-weight: var(--font-weight-4);
+  line-height: 1.5;
+}
+.panel-simulation summary { cursor: pointer; list-style: none; }
+.panel-simulation summary::-webkit-details-marker { display: none; }
+.panel-simulation summary::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  margin-right: 3px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: rotate(-45deg);
+  flex-shrink: 0;
+}
+.panel-simulation details[open] > summary::after { transform: rotate(45deg); }
+.panel-simulation summary:hover { color: var(--accent); }
+.panel-simulation summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.panel-simulation .simulation-section-body { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; }
+.panel-simulation .simulation-fields { display: flex; flex-direction: column; gap: 2px; }
+.panel-simulation .simulation-field {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-size: var(--font-size-2);
+  line-height: 1.4;
+  overflow-wrap: normal;
+}
+.panel-simulation .simulation-field:hover { background: var(--bg3); }
+.panel-simulation .simulation-preview-source { padding: 6px; }
+.panel-simulation .input-text { min-width: 0; width: 100%; padding: 3px 6px; }
+.panel-simulation input[type="checkbox"] { margin: 0; justify-self: start; accent-color: var(--accent); cursor: pointer; }
+.panel-simulation .simulation-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.panel-simulation .simulation-actions .btn { padding: 2px 8px; min-height: 30px; flex: 1 1 auto; }
+.panel-simulation .simulation-toolbar { position: sticky; top: -8px; z-index: 2; padding: 4px 0; background: var(--bg2); }
+.panel-simulation p { margin: 0; overflow-wrap: anywhere; }
+.panel-simulation .simulation-hint { color: var(--text-muted); font-size: var(--font-size-1); line-height: 1.5; }
+.panel-simulation #sim-error { color: var(--danger); font-size: var(--font-size-2); white-space: pre-wrap; }
+.panel-simulation #sim-error:empty, .panel-simulation #sim-results:empty, .panel-simulation #sim-status:empty { display: none; }
+.panel-simulation #sim-status { color: var(--text-muted); font-size: var(--font-size-2); }
+.panel-simulation #sim-results { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); }
+.panel-simulation table { width: 100%; min-width: 220px; table-layout: fixed; border-collapse: collapse; font-size: var(--font-size-2); }
+.panel-simulation td:first-child { width: 38%; }
+.panel-simulation td:nth-child(2) { width: 30%; }
+.panel-simulation td { padding: 4px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.panel-simulation td:not(:first-child) { text-align: center; }
+.panel-simulation tr:first-child { color: var(--text-muted); font-weight: var(--font-weight-3); background: var(--bg3); }
+.panel-simulation tr:first-child td { font-size: var(--font-size-1); overflow-wrap: normal; }
+.panel-simulation tr:last-child td { border-bottom: 0; }
+.panel-simulation tr:not(:first-child):hover { background: var(--accent-soft); }
+.panel-simulation pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 6px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg2); font-size: var(--font-size-1); line-height: 1.5; }
+.panel-simulation #sim-download { align-self: flex-start; text-decoration: none; }
+.panel-simulation video { width: 100%; border-radius: var(--radius); background: var(--bg2); }
+.panel-simulation [hidden] { display: none !important; }
+@container (max-width: 240px) {
+  .panel-simulation .simulation-field:not(:has(input[type="checkbox"])) { grid-template-columns: minmax(0, 1fr); }
+}

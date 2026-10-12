@@ -699,6 +699,7 @@ def build_parser():
     parser.add_argument('--n_episodes', type=int, default=50)
     parser.add_argument('--n_envs', type=int, default=10)
     parser.add_argument('--n_action_steps', type=int, default=16)
+    parser.add_argument('--control_period_ms', type=float, default=1.0)
     parser.add_argument('--mode', choices=['sync', 'async'], default='sync')
     parser.add_argument(
         '--async_replenish_threshold',
@@ -801,6 +802,7 @@ def main():
         args.n_envs,
         args.n_action_steps,
         args.infer_timeout_ms,
+        args.control_period_ms,
         args.episode_timeout,
         args.stall_timeout,
         args.progress_interval,

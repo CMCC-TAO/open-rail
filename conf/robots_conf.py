@@ -113,6 +113,9 @@ def get_mock_config():
 
 def get_robocasa_config():
     config = ConfigDict()
+    config.python = ''
+    config.gpu = '2'
+    config.n_envs = 1
     config.env_name = 'PickPlaceCounterToCabinet'
     config.split = 'target'
     config.seed = 42
@@ -153,6 +156,13 @@ def get_robocasa_config():
 
 def get_aloha_robotwin_config():
     config = ConfigDict()
+    config.python = ''
+    config.robotwin_root = ''
+    config.gpu = ''
+    config.n_envs = 1
+    config.seed = 0
+    config.task_config = 'demo_clean'
+    config.instruction_type = 'unseen'
     config.action_type = 'qpos'
     config.camera = ConfigDict()
     config.camera.ref = 'head'
