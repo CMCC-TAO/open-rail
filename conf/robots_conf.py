@@ -18,6 +18,7 @@ class RobotType(str, Enum):
     MOCK = 'mock'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
+    UNITREE_G1 = 'unitree_g1'
 
 def get_agibot_g1_config():
     """Generate configuration for AgiBot G1 robot.
@@ -240,6 +241,47 @@ def get_navi_wa2_config():
 
     return config
 
+
+def get_unitree_g1_config():
+    """Generate configuration for Unitree G1 robot.
+
+    Returns:
+        ConfigDict: Configuration dictionary for Unitree G1 robot.
+    """
+    config = ConfigDict()
+    config.hand_type = 'hand'
+    config.reset_robot_pos = [0.0] * 26
+    config.action_layout = _ordered_config({
+        'arm': {
+            'start': 0, 'end': 14, 'policy': 'gradual',
+            'presets': {
+                'left': {
+                    'Default': [0.3, 0.15, -0.15, -0.3, 0.0, -0.3, 0.0],
+                    'Custom': [0.3, 0.15, -0.15, -0.3, 0.0, -0.3, 0.0],
+                },
+                'right': {
+                    'Default': [0.3, -0.15, 0.15, -0.3, 0.0, -0.3, 0.0],
+                    'Custom': [0.3, -0.15, 0.15, -0.3, 0.0, -0.3, 0.0],
+                },
+            },
+        },
+        'hand': {
+            'start': 14, 'end': 26, 'policy': 'stepwise',
+            'presets': {
+                'left': {
+                    'Default': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                    'Custom': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                },
+                'right': {
+                    'Default': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                    'Custom': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                },
+            },
+        },
+    })
+    return config
+
+
 def get_robots_config():
     """Generate configuration for all supported robot types.
     
@@ -254,11 +296,12 @@ def get_robots_config():
             - mock: Mock robot configuration for testing
     """
     config = ConfigDict()
-    config.type = RobotType.AGIBOT_G1
+    config.type = RobotType.UNITREE_G1
     config.agibot_g1 = get_agibot_g1_config()
     config.mock = get_mock_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()
+    config.unitree_g1 = get_unitree_g1_config()
     return config
 
 if __name__ == '__main__':

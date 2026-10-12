@@ -49,6 +49,7 @@ _ROBOT_MODULES: Dict[str, str] = {
     'mock': 'client.robots.mock.body_robot',
     'ti5_t170c': 'client.robots.ti5_t170c.body_robot',
     'navi_wa2': 'client.robots.navi_wa2.body_robot',
+    'unitree_g1': 'client.robots.unitree_g1.body_robot',
 }
 
 # Small wait used when the observation queue is empty inside the worker loop.
