@@ -131,8 +131,13 @@ def get_ti5_t170c_config():
     # 1 = every control tick (same as arm); 40 was A2D gripper-style downsample (~6.7Hz).
     config.hand_freq = 1
     config.head_freq = 1
-    # homing pose from tj_arm_config + open hands (26-dim: arm+hand; VLA only)
+    # Keep aligned with default_conf.yaml reset_robot_pos[0:14] and arm Default presets.
     _arm_reset = (
+        [2.135607, -1.506890, -1.575035, -1.839900, -0.377856, -0.194309, -0.382639]
+        + [-2.135409, -1.479260, 1.552336, -1.839900, 0.393200, -0.211972, 0.355065]
+    )
+    # Custom stays on the previous homing pose; Reset uses Default.
+    _arm_custom = (
         [-1.3119088393316176, 1.4473110065281325, 1.6156086726673602, -1.665472635653567,
          -0.4101313352460489, -0.21850174207321, -0.3232027944991513]
         + [1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567,
@@ -153,11 +158,11 @@ def get_ti5_t170c_config():
             'presets': {
                 'left': {
                     'Default': list(_arm_reset[:7]),
-                    'Custom': list(_arm_reset[:7]),
+                    'Custom': list(_arm_custom[:7]),
                 },
                 'right': {
                     'Default': list(_arm_reset[7:14]),
-                    'Custom': list(_arm_reset[7:14]),
+                    'Custom': list(_arm_custom[7:14]),
                 },
             },
         },
