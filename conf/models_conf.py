@@ -116,8 +116,7 @@ def get_tao_config():
     """
     config = ConfigDict()
     config.model_path = '/path/to/model'
-    config.embodiment_tag = 'unitree_g1'
-
+    config.embodiment_tag = 'ti5_hand'
     return config
 
 def get_dm05_config():
