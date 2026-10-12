@@ -29,6 +29,7 @@ def get_agibot_g1_config():
     config = ConfigDict()
     config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
     config.camera = ConfigDict()
+    config.camera.color_order = 'rgb'  # Pixel order returned by retrieve_observation()
     config.camera.ref = 'head'
     # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
     
@@ -80,6 +81,7 @@ def get_mock_config():
     """
     config = ConfigDict()
     config.camera = ConfigDict()
+    config.camera.color_order = 'bgr'  # OpenCV VideoCapture output
     # config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
     config.camera.ref = 'head'
     config.camera.names = {'head': 'observation.images.head_rgb',
@@ -114,6 +116,7 @@ def get_ti5_t170c_config():
     config = ConfigDict()
     config.hand_type = 'hand'
     config.camera = ConfigDict()
+    config.camera.color_order = 'rgb'  # Adapter converts camera frames to RGB
     config.camera.backend = 'remote_forwarder'
     config.camera.forwarder_uri = 'tcp://192.168.1.100:9100'
     config.camera.ref = 'head'
@@ -199,6 +202,7 @@ def get_navi_wa2_config():
     config.tt = 0.033
     config.gain = 900
     config.camera = ConfigDict()
+    config.camera.color_order = 'bgr'  # cv_bridge uses bgr8
     config.camera.topic_dict = {
         'head': '/zj_humanoid/sensor/realsense_head/color/image_raw/compressed',
         'hand_left': '/zj_humanoid/sensor/left_wrist/image_raw/compressed',
@@ -247,6 +251,7 @@ def get_unitree_g1_config():
         ConfigDict: Configuration dictionary for Unitree G1 robot.
     """
     config = ConfigDict()
+    config.camera = ConfigDict({'color_order': 'bgr'})  # cv_bridge uses bgr8
     config.hand_type = 'hand'
     config.reset_robot_pos = [0.0] * 26
     config.action_layout = _ordered_config({
