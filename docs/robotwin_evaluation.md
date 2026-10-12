@@ -12,15 +12,14 @@ uv pip install -e '.[sim]'
 
 RoboTwin、SAPIEN、cuRobo、机器人资源和任务资源按 RoboTwin 自身的安装说明准备。本项目不自动安装或修改它们。
 
-模型推理服务单独启动。模型应输出 14 维绝对 qpos，顺序为左臂 6 维、左夹爪、右臂 6 维、右夹爪。使用与 checkpoint 一致的相机、状态和动作字段。TAO 支持通过 `video_keys` 配置三路相机名称，并通过 `action_keys` 显式指定拼接顺序；默认相机名称保持原配置。
+模型推理服务单独启动。模型应输出 14 维绝对 qpos，顺序为左臂 6 维、左夹爪、右臂 6 维、右夹爪。使用与 checkpoint 一致的相机、状态和动作字段。TAO 支持通过 `video_keys` 配置三路相机名称；当输出字段为 `left_arm`、`left_gripper`、`right_arm`、`right_gripper` 时，会自动按该顺序拼接动作。其他字段名可通过 `--action_keys` 显式指定顺序。
 
-TAO 服务可以显式设置相机名称和输出顺序；下面的字段名须替换为 checkpoint 的实际名称：
+TAO 服务可以显式设置相机名称；下面的字段名须替换为 checkpoint 的实际名称：
 
 ```bash
 python run_server.py --model_type tao --model_path /path/to/checkpoint \
   --embodiment_tag YOUR_TAG --server_port 5566 \
-  --video_keys head_camera left_camera right_camera \
-  --action_keys left_arm left_gripper right_arm right_gripper
+  --video_keys head_camera left_camera right_camera
 ```
 
 ## CLI

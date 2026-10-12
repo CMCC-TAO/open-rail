@@ -70,17 +70,20 @@ class ModelVLA:
             del predicted_action['progress']
         action_dict = predicted_action['action']
         action_keys = list(self.cfg.get('action_keys', []))
-        robocasa_keys = [
-            'end_effector_position',
-            'end_effector_rotation',
-            'gripper_close',
-            'base_motion',
-            'control_mode',
-        ]
-        if not action_keys and all(key in action_dict for key in robocasa_keys):
-            action_keys = robocasa_keys
-        if not action_keys and all(f'action.{key}' in action_dict for key in robocasa_keys):
-            action_keys = [f'action.{key}' for key in robocasa_keys]
+        known_orders = (
+            ('end_effector_position', 'end_effector_rotation', 'gripper_close',
+             'base_motion', 'control_mode'),
+            ('left_arm', 'left_gripper', 'right_arm', 'right_gripper'),
+        )
+        if not action_keys:
+            for order in known_orders:
+                for prefix in ('', 'action.'):
+                    candidate = [prefix + key for key in order]
+                    if all(key in action_dict for key in candidate):
+                        action_keys = candidate
+                        break
+                if action_keys:
+                    break
         if action_keys:
             missing = [key for key in action_keys if key not in action_dict]
             if missing:

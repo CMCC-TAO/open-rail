@@ -21,7 +21,6 @@ server_command=(
     --model_path /data/users/huangkai/checkpoints/KEEP/Robocasa/20260623_pretrainbase_model_20260624_090504_n8_b64_s120000/checkpoint-120000
     --model_type tao
     --embodiment_tag robocasa_panda_omron
-    --action_keys end_effector_position end_effector_rotation gripper_close base_motion control_mode
 )
 
 while (( ! stopping )); do
