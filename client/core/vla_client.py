@@ -937,7 +937,13 @@ class VLAClient():
         ext = '.png' if 'depth.' in key else '.jpg'
         img_for_infer = self._preprocess_func(value) if self._preprocess_func else value
         if 'depth.' not in key and getattr(img_for_infer, 'ndim', 0) == 3 and img_for_infer.shape[2] == 3:
-            img_for_infer = img_for_infer[:, :, ::-1]
+            robot_config = self.config.robots[self.config.robots.type]
+            color_order = str(robot_config.get('camera', {}).get('color_order', 'rgb')).lower()
+            if color_order == 'rgb':
+                # OpenCV encodes BGR; the viewer and inference share these JPEG bytes.
+                img_for_infer = img_for_infer[:, :, ::-1]
+            elif color_order != 'bgr':
+                raise ValueError(f'Unsupported camera color_order: {color_order}')
         encode_params = [cv2.IMWRITE_JPEG_QUALITY, 80] if ext == '.jpg' else []
         encode_result, img_encoded = cv2.imencode(ext, img_for_infer, encode_params)
         if not encode_result:
