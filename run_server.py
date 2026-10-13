@@ -37,6 +37,12 @@ def get_model(config):
     elif config.type == ModelType.GR00T_N1_6:
         from server.models.gr00t.gr00t_n1_6 import ModelVLA as GR00T_N1_6
         return GR00T_N1_6(config.gr00t)
+    elif config.type == ModelType.GR00T_N1_7_EEF:
+        from server.models.gr00t.gr00t_n1_7_eef import ModelVLA as GR00T_N1_7_EEF
+        return GR00T_N1_7_EEF(config.gr00t_n1_7_eef)
+    elif config.type == ModelType.XVLA_EEF:
+        from server.models.xvla.xvla_eef import ModelVLA as XVLA_EEF
+        return XVLA_EEF(config.xvla_eef)
     elif config.type == ModelType.RDT:
         from server.models.rdt import ModelVLA as RDT
         return RDT(config.rdt)
@@ -73,9 +79,14 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao', 'dm05', 'wallx'],
+    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'gr00t_n1_7_eef', 'xvla_eef', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao', 'dm05', 'wallx'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
+    parser.add_argument('--urdf_path', type=str, help='Path to the EEF robot URDF')
+    parser.add_argument('--rotation_type', choices=['rpy_euler', 'axis_angle', 'quat', 'rot6d'],
+                        help='EEF rotation representation')
+    parser.add_argument('--rot6d_convention', choices=['rows', 'columns'],
+                        help='Rot6D row or column blocks for EEF IK')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
     return parser.parse_args()
@@ -98,6 +109,10 @@ def override_config_with_args(config, args):
     if args.model_path:
         if config.models.type == ModelType.GR00T_N1 or config.models.type == ModelType.GR00T_N1_5 or config.models.type == ModelType.GR00T_N1_6:
             config.models.gr00t.model_path = args.model_path
+        elif config.models.type == ModelType.GR00T_N1_7_EEF:
+            config.models.gr00t_n1_7_eef.model_path = args.model_path
+        elif config.models.type == ModelType.XVLA_EEF:
+            config.models.xvla_eef.model_path = args.model_path
         elif config.models.type == ModelType.ACT:
             config.models.act.model_path = args.model_path
         elif config.models.type == ModelType.RDT:
@@ -116,6 +131,19 @@ def override_config_with_args(config, args):
             config.models.dm05.model_path = args.model_path
         elif config.models.type == ModelType.WALLX:
             config.models.wallx.model_path = args.model_path
+
+    if config.models.type in (ModelType.GR00T_N1_7_EEF, ModelType.XVLA_EEF):
+        model_config = (
+            config.models.gr00t_n1_7_eef
+            if config.models.type == ModelType.GR00T_N1_7_EEF
+            else config.models.xvla_eef
+        )
+        if getattr(args, 'urdf_path', None):
+            model_config.urdf_path = args.urdf_path
+        if getattr(args, 'rotation_type', None):
+            model_config.rotation_type = args.rotation_type
+        if getattr(args, 'rot6d_convention', None):
+            model_config.rot6d_convention = args.rot6d_convention
 
     return config
 
