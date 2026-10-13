@@ -63,7 +63,7 @@ class RobotBody(RobotBase):
 
     def execute_action(self, data: dict) -> None:
         if "arm" in data:
-            self.logger.info("execute_action arm=%s", data["arm"])
+            self.logger.debug("execute_action arm=%s", data["arm"])
             self.robot.move_arm(data["arm"])
         if "hand" in data:
             self.logger.info("execute_action hand=%s", data["hand"])
