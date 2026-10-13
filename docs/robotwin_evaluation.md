@@ -74,6 +74,6 @@ data/aloha_robotwin_eval/evals/<seen或unseen>/<task>/<run_id>/
 python run_web_client.py --port 9000
 ```
 
-访问 `/simulation`，选择 `robotwin`，填写安装了 RoboTwin 的 Python 可执行文件、RoboTwin 根目录、任务与模型服务地址。页面支持启动、停止、续跑、日志、统计和保存视频回放。历史目录沿用 `data/robocasa_web/jobs/`，原 RoboCasa 任务继续可用。
+访问 `/simulation`，选择 `robotwin`，填写安装了 RoboTwin 的 Python 可执行文件、RoboTwin 根目录、任务与模型服务地址。页面支持启动、停止、续跑、日志、统计和保存视频回放。两个平台的新任务统一保存到 `data/simulation_web/jobs/`；`data/robocasa_web/jobs/` 中的历史任务仍可查看，并在原目录续跑。
 
 自动化验证使用模拟 RoboTwin 环境与模型传输，并实际写入 Parquet 和视频；真实 SAPIEN 渲染、GPU 并行资源需求及 checkpoint 成功率需要在对应环境中验证。

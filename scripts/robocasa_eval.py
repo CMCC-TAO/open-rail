@@ -68,6 +68,11 @@ def _task_horizon(env_name, fallback):
 def _task_suite(task_suite):
     from robocasa.utils.dataset_registry import TASK_SET_REGISTRY
 
+    if ',' in task_suite:
+        tasks = [task.strip() for task in task_suite.split(',')]
+        if len(tasks) != len(set(tasks)) or any(task not in TASK_SET_REGISTRY['all_tasks'] for task in tasks):
+            raise ValueError('Custom RoboCasa task list contains duplicate or unknown tasks')
+        return tasks
     if task_suite not in TASK_SET_REGISTRY:
         available = ', '.join(sorted(TASK_SET_REGISTRY))
         raise ValueError(f'Unknown RoboCasa task suite {task_suite!r}; available: {available}')
@@ -611,9 +616,8 @@ def run(args):
     if args.split != 'target' and args.task_suite == 'target50':
         raise ValueError('target50 must be evaluated with --split target')
     task_names = _task_suite(args.task_suite)
-    suite_output = (
-        Path(args.output_dir) / 'evals' / args.split / 'suites' / args.task_suite / run_id
-    )
+    suite_name = 'custom' if ',' in args.task_suite else args.task_suite
+    suite_output = Path(args.output_dir) / 'evals' / args.split / 'suites' / suite_name / run_id
     suite_metadata = {
         'task_suite': args.task_suite,
         'split': args.split,

@@ -22,7 +22,7 @@ def test_validation_and_command(tmp_path):
     config = simulation.EvaluationConfig(env_name='Task', record=True, video=False, mode='async', intra_chunk_mode='fitting')
     command = manager.command(config, 'test')
     assert '--record' in command and '--no_video' in command
-    assert command[command.index('--record_dir') + 1] == 'data/robocasa_web/jobs/test/lerobot'
+    assert command[command.index('--record_dir') + 1] == 'data/simulation_web/jobs/test/lerobot'
     assert command[command.index('--run_id') + 1] == 'test'
     from scripts.robocasa_eval import build_parser
     args = build_parser().parse_args(command[3:])
@@ -139,7 +139,7 @@ def test_robotwin_command_and_validation(tmp_path):
     args = build_parser().parse_args(command[3:])
     validate_args(args)
     assert args.instruction == 'Stack bowls' and args.mode == 'async'
-    assert args.record_dir == 'data/robocasa_web/jobs/test/lerobot'
+    assert args.record_dir == 'data/simulation_web/jobs/test/lerobot'
     with pytest.raises(ValidationError):
         simulation.EvaluationConfig(platform='robotwin', env_name='Task', no_expert_check=True)
     with pytest.raises(ValidationError):
@@ -171,11 +171,15 @@ def test_robotwin_render_mode_from_web_snapshot_reaches_cli(tmp_path, render_mod
     assert '--render_observation_mode' not in casa
 
 
-def test_robotwin_preflight_does_not_require_robocasa(tmp_path, monkeypatch):
+@pytest.mark.parametrize('suite', [False, True])
+def test_robotwin_preflight_does_not_require_robocasa(tmp_path, monkeypatch, suite):
     root = tmp_path / 'RoboTwin'
     (root / 'envs').mkdir(parents=True)
     (root / 'task_config').mkdir()
     (root / 'envs/Task.py').write_text('')
+    tasks = [f'task_name_{index:02}' for index in range(50)]
+    for task in tasks:
+        (root / 'envs' / f'{task}.py').write_text('')
     (root / 'task_config/demo_clean.yml').write_text('')
     manager = simulation.EvaluationJobs(tmp_path)
     seen = []
@@ -184,7 +188,8 @@ def test_robotwin_preflight_does_not_require_robocasa(tmp_path, monkeypatch):
         return subprocess.CompletedProcess(command, 1, 'sapien', '')
     monkeypatch.setattr(simulation.subprocess, 'run', check)
     with pytest.raises(ValueError, match='sapien'):
-        manager.start(simulation.EvaluationConfig(platform='robotwin', env_name='Task', python=sys.executable,
+        manager.start(simulation.EvaluationConfig(platform='robotwin', env_name='' if suite else 'Task',
+                                                task_suite=','.join(tasks) if suite else '', python=sys.executable,
                                                 robotwin_root=str(root)))
     assert 'sapien' in seen[0] and 'robocasa' not in seen[0]
 
@@ -233,6 +238,36 @@ def test_client_configuration_drives_evaluation_and_rejects_invalid_shared_value
     snapshot['robots']['type'] = 'mock'
     with pytest.raises(ValidationError, match='Select robocasa or aloha_robotwin'):
         simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
+
+
+@pytest.mark.parametrize('storage', ['robocasa_web', 'simulation_web'])
+def test_history_storage_preserves_artifacts_and_resume_paths(tmp_path, monkeypatch, storage):
+    folder = tmp_path / 'data' / storage / 'jobs' / 'saved'
+    output = folder / 'output'
+    output.mkdir(parents=True)
+    config = simulation.EvaluationConfig(env_name='Task')
+    (folder / 'job.json').write_text(json.dumps({
+        'id': 'saved', 'status': 'failed', 'started': time.time(), 'config': config.model_dump(),
+    }))
+    stats = {'run_id': 'saved', 'env_name': 'Task', 'episodes': [{'episode': 0, 'success': True}]}
+    (output / 'stats.json').write_text(json.dumps(stats))
+    (folder / 'evaluation.log').write_text('saved evaluation log')
+    manager = simulation.EvaluationJobs(tmp_path)
+    monkeypatch.setattr(simulation, 'manager', manager)
+    command = manager.command(config, 'saved')
+    assert command[command.index('--output_dir') + 1] == str(output)
+    assert command[command.index('--record_dir') + 1] == f'data/{storage}/jobs/saved/lerobot'
+    assert manager.get('saved')['directory'] == f'data/{storage}/jobs/saved'
+    assert manager.get('saved')['progress'][0]['num_episodes'] == 1
+    app = FastAPI()
+    app.include_router(simulation.router)
+    with TestClient(app) as client:
+        assert client.get('/api/simulation/jobs/saved/logs').json()['text'] == 'saved evaluation log'
+        assert 'output/stats.json' in client.get('/api/simulation/jobs/saved/files').json()
+        assert client.get('/api/simulation/jobs/saved/artifact/output/stats.json').json() == stats
+    manager._save(manager.jobs['saved'])
+    assert json.loads((folder / 'job.json').read_text())['status'] == 'failed'
+    assert manager.job_directory('new') == tmp_path / 'data/simulation_web/jobs/new'
 
 
 def test_job_saves_and_reloads_configuration_snapshot(tmp_path, monkeypatch):

@@ -55,6 +55,8 @@
 .panel-simulation input[type="checkbox"] { margin: 0; justify-self: start; accent-color: var(--accent); cursor: pointer; }
 .panel-simulation .simulation-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .panel-simulation .simulation-actions .btn { padding: 2px 8px; min-height: 30px; flex: 1 1 auto; }
+.panel-simulation .simulation-stop { border-color: var(--danger); color: var(--danger); background: transparent; box-shadow: none; }
+.panel-simulation .simulation-stop:hover { background: var(--danger-soft); }
 .panel-simulation .simulation-toolbar { position: sticky; top: -8px; z-index: 2; padding: 4px 0; background: var(--bg2); }
 .panel-simulation p { margin: 0; overflow-wrap: anywhere; }
 .panel-simulation .simulation-hint { color: var(--text-muted); font-size: var(--font-size-1); line-height: 1.5; }
@@ -78,3 +80,11 @@
 @container (max-width: 240px) {
   .panel-simulation .simulation-field:not(:has(input[type="checkbox"])) { grid-template-columns: minmax(0, 1fr); }
 }
+
+.simulation-task-picker { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.simulation-task-toolbar { display: flex; align-items: center; gap: 4px; }
+.simulation-task-toolbar input { flex: 1; min-width: 0; }
+.simulation-task-list { max-height: 180px; overflow-y: auto; border: 1px solid var(--border); border-radius: 4px; }
+.simulation-task-list label { display: flex; align-items: flex-start; gap: 6px; padding: 4px; font-size: 12px; overflow-wrap: anywhere; }
+.simulation-task-list input[type="checkbox"] { width: auto; flex-shrink: 0; margin-top: 3px; }
+.simulation-task-picker[hidden] { display: none; }

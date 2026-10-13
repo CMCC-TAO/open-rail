@@ -32,6 +32,7 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     defaults = EvaluationConfig(env_name='PickPlaceCounterToCabinet').model_dump()
     client_config = json.loads(json.dumps(get_client_config().to_dict(), default=lambda value: value.value))
     client_config['robots']['type'] = 'mock'
+    client_config['robots']['robocasa']['split'] = 'pretrain'
     client_config['controller']['action_steps'] = 48
     client_config['vla_zmq'].update(ip='192.0.2.10', port='5566')
     page.on('pageerror', lambda error: errors.append(str(error)))
@@ -49,6 +50,11 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
                         'server_ip': '192.0.2.10', 'server_port': 5566}
                 if platform == 'robotwin':
                     data.update(n_action_steps=50, seed=0)
+            elif path == '/api/simulation/task-catalog':
+                platform = parse_qs(urlparse(request.url).query)['platform'][0]
+                names = ['Task', 'OtherTask'] + [f'ExampleTask{i:02}' for i in range(48)]
+                data = {'tasks': names, 'suites': [{'id': 'target50' if platform == 'robocasa' else 'all_tasks',
+                        'tasks': names, 'split': 'target' if platform == 'robocasa' else None}]}
             elif path == '/api/simulation/jobs':
                 if request.method == 'POST':
                     config = json.loads(request.post_data)
@@ -89,6 +95,8 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     robot_selector = page.locator('.cfg-row[data-key="robots.type"] select').first
     robot_selector.wait_for()
     assert page.locator('#sim-start').is_disabled()
+    assert page.locator('#btn-start').is_enabled()
+    assert page.locator('#btn-observe').is_enabled()
     robot_selector.select_option('robocasa')
     page.wait_for_function('document.getElementById("sim-start").disabled === false')
     assert page.locator('#sim-field-platform').count() == 0
@@ -112,15 +120,36 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     assert page.locator('#sim-field-server_ip').count() == 0
     assert page.locator('#sim-field-record_fps').count() == 0
     assert page.locator('#sim-field-no_expert_check').count() == 0
-    assert page.locator('#sim-fields input, #sim-fields select').count() == 6
+    assert page.locator('#sim-fields > label input, #sim-fields > label select').count() == 6
     page.locator('#sim-field-n_envs').fill('3')
     assert page.locator('#sim-field-mode').count() == 0
     assert page.locator('#sim-field-intra_chunk_mode').count() == 0
     page.locator('#sim-task-selection').select_option(selection)
-    page.locator('#sim-task-name').fill('Task' if selection == 'single' else 'Task,OtherTask')
+    if selection == 'single':
+        page.locator('#sim-task-name').select_option('Task')
+    else:
+        assert page.locator('#sim-task-name').input_value() == 'all_tasks'
+        assert page.locator('#sim-task-list input:checked').count() == 50
+        page.locator('#sim-task-none').click()
+        page.locator('#sim-task-search').fill('OtherTask')
+        assert page.locator('#sim-task-list input').count() == 1
+        page.locator('#sim-task-all').click()
+        page.locator('#sim-task-search').fill('')
+        page.locator('#sim-task-list input[value="Task"]').check()
+        assert '2 tasks × 10 episodes = 20 total' in page.locator('#sim-task-summary').inner_text()
+        box = page.locator('#sim-task-list').bounding_box()
+        assert box['height'] <= 182
+        assert page.locator('#sim-task-list').evaluate('(node) => node.scrollHeight > node.clientHeight')
     page.locator('#sim-field-record').check()
     page.locator('#sim-start').click()
     page.wait_for_function('document.getElementById("sim-stop").disabled === false')
+    runtime_buttons = ['start', 'pause', 'reset', 'observe', 'infer', 'control']
+    for button in runtime_buttons:
+        assert page.locator('#btn-' + button).is_disabled()
+    page.evaluate('setRunningUI(true, false); setThreadControlUI()')
+    for button in runtime_buttons:
+        assert page.locator('#btn-' + button).is_disabled()
+    page.evaluate('setRunningUI(false, false)')
     assert requests[0]['platform'] == 'robotwin'
     assert requests[0]['n_envs'] == 3
     assert requests[0]['client_config']['robots']['aloha_robotwin']['n_envs'] == 3
@@ -167,19 +196,58 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.locator('#sim-files').select_option('output/episode.mp4')
     assert page.locator('#sim-video').is_visible()
     assert page.locator('#sim-video').get_attribute('src').endswith('/output/episode.mp4')
+    page.screenshot(path=str(tmp_path / 'task-selection.png'))
     page.locator('#sim-config summary').filter(has_text='Evaluation Configuration').click()
     page.screenshot(path=str(tmp_path / 'simulation-dashboard.png'))
     page.locator('#sim-stop').click()
     page.wait_for_function('document.getElementById("sim-resume").disabled === false')
+    assert page.locator('#btn-start').is_enabled()
+    assert page.locator('#btn-observe').is_enabled()
+    assert page.locator('#btn-infer').is_disabled()
     page.locator('#sim-resume').click()
     page.wait_for_function('document.getElementById("sim-stop").disabled === false')
+    assert page.locator('#btn-start').is_disabled()
+    assert page.locator('#btn-observe').is_disabled()
+    page.locator('#panel-config-header > span').click()
+    robot_selector.select_option('robocasa')
+    page.locator('#panel-simulation-header > span').click()
+    page.locator('#sim-config summary').filter(has_text='Evaluation Configuration').click()
+    page.wait_for_function('document.querySelector("#sim-task-name option[value=target50]") !== null || document.querySelector("#sim-task-name option[value=Task]") !== null')
+    page.locator('#sim-task-selection').select_option('suite')
+    page.locator('#sim-task-name').select_option('target50')
+    assert page.locator('#sim-task-list input:checked').count() == 50
+    page.locator('#sim-task-none').click()
+    page.locator('#sim-stop').click()
+    page.wait_for_function('document.getElementById("sim-start").disabled === false')
+    page.locator('#sim-start').click()
+    page.wait_for_function('document.getElementById("sim-error").textContent.includes("Select at least one task")')
+    page.wait_for_function('document.getElementById("sim-start").disabled === false')
+    assert len(requests) == 1
+    assert page.locator('#btn-start').is_enabled()
+    page.locator('#sim-task-list input[value="Task"]').check()
+    page.locator('#sim-task-list input[value="OtherTask"]').check()
+    page.locator('#sim-start').click()
+    page.wait_for_function('document.getElementById("sim-stop").disabled === false')
+    assert requests[1]['platform'] == 'robocasa'
+    assert requests[1]['task_suite'] == 'Task,OtherTask'
+    assert requests[1]['split'] == 'target'
+    assert requests[1]['client_config']['robots']['robocasa']['split'] == 'target'
     page.locator('#panel-config-header > span').click()
     robot_selector.select_option('mock')
     assert page.locator('#sim-start').is_disabled()
-    assert len(requests) == 1
+    assert len(requests) == 2
     page.locator('#panel-recording-header > span').click()
     assert page.locator('#simulation-body').is_hidden()
     assert page.locator('#recording-body').is_visible()
+    page.reload()
+    page.wait_for_function('App.simulationEvaluationActive === true')
+    for button in runtime_buttons:
+        assert page.locator('#btn-' + button).is_disabled()
+    jobs[-1]['status'] = 'completed'
+    page.wait_for_function('App.simulationEvaluationActive === false')
+    assert page.locator('#btn-start').is_enabled()
+    assert page.locator('#btn-observe').is_enabled()
+    assert page.locator('#btn-infer').is_disabled()
     page.goto('http://dashboard.test/simulation')
     page.wait_for_function('document.getElementById("field-platform") !== null')
     assert page.locator('#task-name').is_visible()

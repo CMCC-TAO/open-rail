@@ -21,6 +21,16 @@ from scripts.robocasa_eval import _start_episode, _wait_for_episode
 from test_robocasa_master_merge import FakeTransport as CasaTransport
 
 
+def test_task_names_accepts_long_inline_list_and_yaml(tmp_path):
+    tasks = [f'task_name_{index:02}' for index in range(50)]
+    selection = ','.join(tasks)
+    assert len(selection) > 255
+    assert twin._task_names(selection) == tasks
+    path = tmp_path / 'tasks.yaml'
+    path.write_text('tasks:\n' + ''.join(f'  - {name}\n' for name in tasks))
+    assert twin._task_names(str(path)) == tasks
+
+
 class FakeTask:
     def __init__(self):
         self.take_action_cnt = 0

@@ -501,7 +501,7 @@ def _run_task(args, task_name, run_id):
 
 def _task_names(selection):
     path = Path(selection).expanduser()
-    if path.is_file():
+    if ',' not in selection and path.is_file():
         import yaml
 
         data = yaml.safe_load(path.read_text())

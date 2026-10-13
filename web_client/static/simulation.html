@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>RoboCasa / RoboTwin Simulation Evaluation</title>
-    <link rel="stylesheet" href="/static/simulation.css" />
+    <link rel="stylesheet" href="/static/simulation.css?v=20261013-task-selection" />
   </head>
   <body>
     <header>
@@ -21,7 +21,7 @@
         <form id="config">
           <div id="fields"></div>
           <details><summary>Advanced Settings</summary><div id="advanced-fields"></div></details>
-          <button type="submit" id="start" disabled>Start Evaluation</button>
+          <button type="submit" id="start" disabled><svg width="14" height="16" viewBox="0 0 16 20" fill="currentColor" aria-hidden="true"><path d="M5 0h6v2h-1v5l6 10v3H0v-3L6 7V2H5zm3 7-4 7h8L8 7z" /></svg> Run Evaluation</button>
         </form>
         <p id="error" role="alert"></p>
       </section>
@@ -29,7 +29,7 @@
         <h2>Jobs and Results</h2>
         <select id="jobs" aria-label="Evaluation History"></select>
         <div class="actions">
-          <button id="stop">Stop</button><button id="resume">Resume Evaluation</button>
+          <button id="stop">Stop Evaluation</button><button id="resume">Resume Evaluation</button>
         </div>
         <p>Resume uses the original parameters and output directory, continuing from saved episodes.</p>
         <p id="status"></p>
@@ -42,6 +42,6 @@
         <pre id="logs"></pre>
       </section>
     </main>
-    <script type="module" src="/static/simulation.js?v=20261013-render-mode"></script>
+    <script type="module" src="/static/simulation.js?v=20261013-runtime-lock"></script>
   </body>
 </html>

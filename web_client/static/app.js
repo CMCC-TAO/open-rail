@@ -224,9 +224,9 @@ function setThreadControlUI() {
   const inferenceRunning = !!App.isInferenceRunning;
   const controlRunning = !!App.isControlRunning;
 
-  btnObserve.disabled = false;
-  btnInfer.disabled = !running || !observeRunning;
-  btnControl.disabled = !running || !observeRunning || !inferenceRunning;
+  btnObserve.disabled = !!App.simulationEvaluationActive;
+  btnInfer.disabled = !!App.simulationEvaluationActive || !running || !observeRunning;
+  btnControl.disabled = !!App.simulationEvaluationActive || !running || !observeRunning || !inferenceRunning;
 
   btnObserve.className = `btn btn-xs${observeRunning ? ' btn-active' : ''}`;
   btnInfer.className = `btn btn-xs${inferenceRunning ? ' btn-active' : ''}`;
@@ -271,8 +271,8 @@ function syncStartPauseButtons(running, paused = false) {
     btnPause.className = 'btn btn-danger  btn-sm';
   }
 
-  btnStart.disabled = btnStart.dataset.pending === '1';
-  btnPause.disabled = (btnPause.dataset.pending === '1') || !running;
+  btnStart.disabled = !!App.simulationEvaluationActive || btnStart.dataset.pending === '1';
+  btnPause.disabled = !!App.simulationEvaluationActive || (btnPause.dataset.pending === '1') || !running;
 }
 
 function setRunningUI(running, paused = false) {
@@ -313,9 +313,16 @@ function setRunningUI(running, paused = false) {
   }
 
   syncStartPauseButtons(running, paused);
-  $('btn-reset').disabled = !running;             // available in both running states
+  $('btn-reset').disabled = !!App.simulationEvaluationActive || !running;
   setThreadControlUI();
 }
+
+document.addEventListener('simulation-evaluation-state', event => {
+  App.simulationEvaluationActive = event.detail.active;
+  syncStartPauseButtons(App.isRunning, App.isPaused);
+  $('btn-reset').disabled = App.simulationEvaluationActive || !App.isRunning;
+  setThreadControlUI();
+});
 
 function isRuntimeShortcutTypingTarget(el) {
   if (!el) return false;

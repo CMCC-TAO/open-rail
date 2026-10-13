@@ -1,4 +1,4 @@
-"""Isolated RoboCasa evaluation jobs for the web client."""
+"""Isolated simulation evaluation jobs for the web client."""
 
 import json
 import os
@@ -147,12 +147,13 @@ class EvaluationConfig(BaseModel):
 class EvaluationJobs:
     def __init__(self, root=ROOT):
         self.root = Path(root)
-        self.directory = self.root / "data/robocasa_web/jobs"
+        self.directory = self.root / "data/simulation_web/jobs"
+        self.legacy_directory = self.root / "data/robocasa_web/jobs"
         self.lock = threading.RLock()
         self.jobs = {}
         self.processes = {}
-        if self.directory.exists():
-            for path in self.directory.glob("*/job.json"):
+        for directory in (self.legacy_directory, self.directory):
+            for path in directory.glob("*/job.json"):
                 try:
                     job = json.loads(path.read_text())
                     if job["status"] in ("running", "stopping"):
@@ -161,15 +162,20 @@ class EvaluationJobs:
                 except (ValueError, KeyError, OSError):
                     continue
 
+    def job_directory(self, job_id):
+        folder = self.directory / job_id
+        legacy = self.legacy_directory / job_id
+        return legacy if not folder.exists() and legacy.is_dir() else folder
+
     def _save(self, job):
-        path = self.directory / job["id"] / "job.json"
+        path = self.job_directory(job["id"]) / "job.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(".tmp")
         temporary.write_text(json.dumps(job, ensure_ascii=False, indent=2))
         temporary.replace(path)
 
     def command(self, config, job_id):
-        folder = self.directory / job_id
+        folder = self.job_directory(job_id)
         robotwin = config.platform == "robotwin"
         script = "aloha_robotwin_eval.py" if robotwin else "robocasa_eval.py"
         command = [config.python, "-u", str(self.root / "scripts" / script)]
@@ -264,7 +270,7 @@ class EvaluationJobs:
                     from scripts.aloha_robotwin_eval import _task_names
 
                     selection = Path(config.task_suite).expanduser()
-                    if selection.is_file():
+                    if ',' not in config.task_suite and selection.is_file():
                         config.task_suite = str(selection.resolve())
                     task_names = _task_names(config.task_suite)
                     config.task_suite = ",".join(task_names)
@@ -291,15 +297,16 @@ class EvaluationJobs:
                 "returncode": None,
             }
             self._save(job)
+            folder = self.job_directory(job_id)
             if config.client_config is not None:
                 snapshot = json.dumps(config.client_config, ensure_ascii=True, indent=2)
-                (self.directory / job_id / "client_config.json").write_text(snapshot)
-                (self.directory / job_id / "client_config.py").write_text(
+                (folder / "client_config.json").write_text(snapshot)
+                (folder / "client_config.py").write_text(
                     "import json\n\ndef get_user_config():\n    return json.loads(" + repr(snapshot) + ")\n"
                 )
-            log = open(self.directory / job_id / "evaluation.log", "ab", buffering=0)
+            log = open(folder / "evaluation.log", "ab", buffering=0)
             environment = os.environ.copy()
-            environment['VLA_SIM_PREVIEW_PATH'] = str(self.directory / job_id / 'preview.json')
+            environment['VLA_SIM_PREVIEW_PATH'] = str(folder / 'preview.json')
             if config.platform == "robocasa" and config.gpu:
                 environment["CUDA_VISIBLE_DEVICES"] = config.gpu
                 environment["MUJOCO_EGL_DEVICE_ID"] = config.gpu
@@ -389,7 +396,7 @@ class EvaluationJobs:
 
     def _stats(self, job_id):
         result = []
-        for path in (self.directory / job_id / "output").rglob("stats.json"):
+        for path in (self.job_directory(job_id) / "output").rglob("stats.json"):
             try:
                 stats = json.loads(path.read_text())
                 if stats.get("run_id") == job_id:
@@ -403,6 +410,7 @@ class EvaluationJobs:
             if job_id not in self.jobs:
                 raise KeyError(job_id)
             job = self.jobs[job_id].copy()
+        job["directory"] = str(self.job_directory(job_id).relative_to(self.root))
         job["stats"] = self._stats(job_id)
         grouped = {}
         for stats in job["stats"]:
@@ -426,7 +434,7 @@ class EvaluationJobs:
 
     def artifact(self, job_id, name):
         self.get(job_id)
-        folder = (self.directory / job_id).resolve()
+        folder = self.job_directory(job_id).resolve()
         path = (folder / name).resolve()
         if not path.is_relative_to(folder) or not path.is_file():
             raise KeyError(name)
@@ -466,6 +474,17 @@ def options(platform: Literal["robocasa", "robotwin"] = "robocasa"):
     return EvaluationConfig(**defaults).model_dump()
 
 
+@router.get("/task-catalog")
+def get_task_catalog(platform: Literal["robocasa", "robotwin"]):
+    from web_client.task_catalog import task_catalog
+
+    config = options(platform)
+    try:
+        return task_catalog(platform, config['python'], config['robotwin_root'], str(ROOT))
+    except (OSError, ValueError, KeyError, SyntaxError, subprocess.SubprocessError) as error:
+        raise HTTPException(400, str(error)) from error
+
+
 @router.get("/jobs")
 def list_jobs():
     with manager.lock:
@@ -486,7 +505,7 @@ def camera_preview():
         'frames': [],
     }
     try:
-        snapshot = json.loads((manager.directory / job['id'] / 'preview.json').read_text())
+        snapshot = json.loads((manager.job_directory(job['id']) / 'preview.json').read_text())
         if snapshot['timestamp'] >= job['started'] and time.time() - snapshot['timestamp'] < 5:
             result.update(snapshot)
     except (OSError, ValueError, KeyError):
@@ -532,7 +551,7 @@ def resume_job(job_id: str):
 @router.get("/jobs/{job_id}/logs")
 def logs(job_id: str):
     get_job(job_id)
-    path = manager.directory / job_id / "evaluation.log"
+    path = manager.job_directory(job_id) / "evaluation.log"
     if not path.exists():
         return {"text": ""}
     with path.open("rb") as handle:
@@ -543,7 +562,7 @@ def logs(job_id: str):
 @router.get("/jobs/{job_id}/files")
 def files(job_id: str):
     get_job(job_id)
-    folder = manager.directory / job_id
+    folder = manager.job_directory(job_id)
     return [
         str(p.relative_to(folder))
         for p in folder.rglob("*")

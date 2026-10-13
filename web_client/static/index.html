@@ -8,7 +8,7 @@
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
   <link rel="stylesheet" href="/static/styles/main.css?v=20261013-compact-joints" />
-  <link rel="stylesheet" href="/static/styles/modules/simulation.css?v=20261012-panel-style" />
+  <link rel="stylesheet" href="/static/styles/modules/simulation.css?v=20261013-runtime-lock" />
 </head>
 <body>
 
@@ -167,9 +167,9 @@
         </div>
         <div class="panel-body collapsed" id="simulation-body">
           <div class="simulation-actions simulation-toolbar">
-            <button type="submit" form="sim-config" class="btn btn-sm btn-success" id="sim-start" disabled><i class="fas fa-play"></i> Start</button>
-            <button type="button" class="btn btn-sm btn-danger" id="sim-stop" disabled><i class="fas fa-stop"></i> Stop</button>
-            <button type="button" class="btn btn-sm" id="sim-resume" disabled><i class="fas fa-redo"></i> Resume</button>
+            <button type="submit" form="sim-config" class="btn btn-sm btn-success" id="sim-start" disabled><i class="fas fa-flask" aria-hidden="true"></i> Run Evaluation</button>
+            <button type="button" class="btn btn-sm simulation-stop" id="sim-stop" disabled><i class="fas fa-stop" aria-hidden="true"></i> Stop Evaluation</button>
+            <button type="button" class="btn btn-sm" id="sim-resume" disabled><i class="fas fa-redo" aria-hidden="true"></i> Resume Evaluation</button>
           </div>
           <p class="simulation-hint">Select a simulation robot in Configuration and start its model service.</p>
           <form id="sim-config">
@@ -179,12 +179,6 @@
             </details>
           </form>
           <p id="sim-error" role="alert"></p>
-          <label class="simulation-section simulation-field simulation-preview-source" title="Shared source for Camera Viewer and Trajectory Viewer">Preview Source
-            <select id="sim-preview-source" class="input-text">
-              <option value="simulation">Simulation</option>
-              <option value="robot">Robot Client</option>
-            </select>
-          </label>
           <section class="simulation-section" aria-labelledby="sim-jobs-heading">
             <div class="simulation-section-heading" id="sim-jobs-heading"><i class="fas fa-list" aria-hidden="true"></i> Jobs and Results</div>
             <div class="simulation-section-body">
@@ -194,6 +188,12 @@
               <p class="simulation-hint">Resume keeps the original settings and saved episodes.</p>
             </div>
           </section>
+          <label class="simulation-section simulation-field simulation-preview-source" title="Shared source for Camera Viewer and Trajectory Viewer">Preview Source
+            <select id="sim-preview-source" class="input-text">
+              <option value="simulation">Simulation</option>
+              <option value="robot">Robot Client</option>
+            </select>
+          </label>
           <details class="simulation-section" open>
             <summary><i class="fas fa-film" aria-hidden="true"></i> Result Files and Videos</summary>
             <div class="simulation-section-body">
@@ -733,7 +733,7 @@
   <script src="/static/modules/language.js?v=20260924-shortcuts-popover-1"></script>
   <script src="/static/modules/recording.js?v=20261010-config-linked"></script>
   <script src="/static/modules/manual-control.js?v=20260924-preset-selection-2"></script>
-  <script src="/static/app.js?v=20261010-config-linked"></script>
-  <script type="module" src="/static/modules/simulation-dashboard.js?v=20261013-render-mode"></script>
+  <script src="/static/app.js?v=20261013-runtime-lock"></script>
+  <script type="module" src="/static/modules/simulation-dashboard.js?v=20261013-runtime-lock"></script>
 </body>
 </html>

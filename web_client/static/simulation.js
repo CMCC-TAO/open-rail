@@ -49,11 +49,20 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     submitting = false,
     profileGeneration = 0,
     environmentPlatform = null,
+    catalog = null,
+    catalogPlatform = null,
+    catalogGeneration = 0,
+    chosenTasks = new Set(),
     lastError = "",
     artifactJob = "";
   const platformForConfig = (config) => ({robocasa: "robocasa", aloha_robotwin: "robotwin"})[config.robots?.type];
   const currentPlatform = () => getClientConfig
     ? platformForConfig(getClientConfig()) : $("field-platform").value;
+  function notifyRuntimeLock(active) {
+    if (getClientConfig) document.dispatchEvent(new CustomEvent('simulation-evaluation-state', {
+      detail: { active },
+    }));
+  }
   async function api(path, method = "GET", body) {
     const response = await fetch("/api/simulation" + path, {
       method,
@@ -131,6 +140,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     busy = true;
     try {
       const jobs = await api("/jobs");
+      notifyRuntimeLock(submitting || jobs.some(job => ["running", "stopping"].includes(job.status)));
       const previous = selected;
       $("jobs").replaceChildren(
         ...jobs.map(
@@ -160,7 +170,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         api("/jobs/" + selected + "/logs"),
         api("/jobs/" + selected + "/files"),
       ]);
-      const directory = "data/robocasa_web/jobs/" + job.id;
+      const directory = job.directory || "data/simulation_web/jobs/" + job.id;
       $("status").textContent = "Status: " + job.status +
         (prefix ? "" : " | Output Directory: " + directory);
       $("status").title = "Output Directory: " + directory;
@@ -190,12 +200,14 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     $(action).onclick = async () => {
       try {
         $(action).disabled = true;
+        if (action === "resume") notifyRuntimeLock(true);
         await api("/jobs/" + selected + "/" + action, "POST");
         if (prefix && typeof window.toast === "function")
           window.toast(action === "stop" ? "Evaluation stop requested." : "Evaluation resumed.", "ok");
-        await poll();
       } catch (e) {
         error(e);
+      } finally {
+        await poll();
       }
     };
   $("config").onsubmit = async (event) => {
@@ -204,6 +216,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     try {
       if (!ready || submitting) return;
       submitting = true;
+      notifyRuntimeLock(true);
       $("config").inert = true;
       $("start").disabled = true;
       const platform = currentPlatform();
@@ -226,8 +239,17 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         snapshot.robots[type] = { ...snapshot.robots[type], n_envs: config.n_envs };
       }
       const suite = $("task-selection").value === "suite";
-      config.env_name = suite ? "" : $("task-name").value.trim();
-      config.task_suite = suite ? $("task-name").value.trim() : "";
+      const group = catalog?.suites.find(item => item.id === $("task-name").value);
+      const tasks = suite ? group?.tasks.filter(task => chosenTasks.has(task)) || [] : [$("task-name").value];
+      if (!tasks.length || !tasks[0]) throw new Error("Select at least one task.");
+      config.env_name = tasks.length === 1 ? tasks[0] : "";
+      config.task_suite = tasks.length === 1 ? "" : platform === "robocasa" && tasks.length === group.tasks.length
+        ? group.id : tasks.join(',');
+      if (suite && group.split) {
+        config.split = group.split;
+        if (snapshot && platform === "robocasa") snapshot.robots[snapshot.robots.type].split = group.split;
+        if (!getClientConfig) $("field-split").value = group.split;
+      }
       if (!getClientConfig && config.mode !== "async") {
         config.async_replenish_threshold = null;
         config.max_async_observation_lag_steps = null;
@@ -263,13 +285,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       $("field-intra_chunk_sample_ratio").parentElement.hidden =
         robotwin && $("field-intra_chunk_mode").value !== "interpolation";
     }
-    const suite = $("task-selection").value === "suite";
-    $("task-name").parentElement.firstChild.textContent = suite
-      ? robotwin ? "Task List" : "Task Suite"
-      : "Task";
-    $("task-name").placeholder = suite
-      ? robotwin ? "task_a,task_b or task-list YAML path" : "target50"
-      : robotwin ? "Task name" : "PickPlaceCounterToCabinet";
+
   }
 
   function createField(key, value, group) {
@@ -299,29 +315,124 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     $(group).append(label);
   }
 
+  function taskSummary() {
+    const suite = $("task-selection").value === "suite";
+    const count = suite ? chosenTasks.size : Number(Boolean($("task-name").value));
+    const episodes = Number($("field-n_episodes")?.value || defaults.n_episodes);
+    $("task-summary").textContent = `${count} tasks × ${episodes} episodes = ${count * episodes} total`;
+  }
+
+  function renderTaskList() {
+    const group = catalog?.suites.find(item => item.id === $("task-name").value);
+    const query = $("task-search").value.trim().toLowerCase();
+    const rows = (group?.tasks || []).filter(task => task.toLowerCase().includes(query)).map(task => {
+      const row = document.createElement("label");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = task;
+      checkbox.checked = chosenTasks.has(task);
+      checkbox.onchange = () => {
+        if (checkbox.checked) chosenTasks.add(task);
+        else chosenTasks.delete(task);
+        taskSummary();
+      };
+      row.append(checkbox, document.createTextNode(task));
+      return row;
+    });
+    $("task-list").replaceChildren(...rows);
+    taskSummary();
+  }
+
+  function chooseTask() {
+    const suite = $("task-selection").value === "suite";
+    $("task-picker").hidden = !suite;
+    chosenTasks = new Set(catalog?.suites.find(item => item.id === $("task-name").value)?.tasks || []);
+    $("task-search").value = "";
+    renderTaskList();
+  }
+
+  function populateTasks() {
+    const suite = $("task-selection").value === "suite";
+    const options = suite ? (catalog?.suites || []).map(item => new Option(item.id, item.id))
+      : (catalog?.tasks || []).map(task => new Option(task, task));
+    $("task-name").replaceChildren(...options);
+    const preferred = suite ? defaults.task_suite || 'target50' : defaults.env_name;
+    if (options.some(option => option.value === preferred)) $("task-name").value = preferred;
+    updateControls();
+    chooseTask();
+  }
+
+  async function loadTasks(platform) {
+    const generation = ++catalogGeneration;
+    catalog = null;
+    catalogPlatform = null;
+    $("task-name").replaceChildren(new Option("Loading tasks…", ""));
+    $("task-name").disabled = true;
+    $("task-picker").hidden = true;
+    const data = await api("/task-catalog?platform=" + platform);
+    if (generation !== catalogGeneration || currentPlatform() !== platform) return false;
+    catalog = data;
+    catalogPlatform = platform;
+    $("task-name").disabled = false;
+    populateTasks();
+    return true;
+  }
+
   function createTaskSelection() {
     for (const [id, text] of [["task-selection", "Task Selection"], ["task-name", "Task"]]) {
       const label = document.createElement("label");
       label.textContent = text;
       if (getClientConfig) label.className = "simulation-field";
-      const input = document.createElement(id === "task-selection" ? "select" : "input");
+      const input = document.createElement("select");
       input.id = prefix + id;
       input.className = "input-text";
       if (id === "task-selection") {
-        input.append(new Option("Single Task", "single"), new Option("Task Suite / List", "suite"));
+        input.append(new Option("Single Task", "single"), new Option("Task Set", "suite"));
         input.value = defaults.task_suite ? "suite" : "single";
-      } else {
-        input.type = "text";
-        input.required = true;
-        input.value = defaults.env_name || defaults.task_suite;
-      }
+      } else input.required = true;
       label.append(input);
       $("fields").append(label);
     }
-    $("task-selection").onchange = () => {
-      $("task-name").value = "";
-      updateControls();
-    };
+    const picker = document.createElement("div");
+    picker.id = prefix + "task-picker";
+    picker.className = "simulation-task-picker";
+    picker.hidden = true;
+    const toolbar = document.createElement("div");
+    toolbar.className = "simulation-task-toolbar";
+    const search = document.createElement("input");
+    search.id = prefix + "task-search";
+    search.type = "search";
+    search.className = "input-text";
+    search.placeholder = "Search tasks…";
+    search.setAttribute("aria-label", "Search tasks");
+    search.oninput = renderTaskList;
+    toolbar.append(search);
+    for (const [id, text] of [["task-all", "All"], ["task-none", "None"]]) {
+      const button = document.createElement("button");
+      button.id = prefix + id;
+      button.type = "button";
+      button.className = "btn btn-xs";
+      button.textContent = text;
+      button.onclick = () => {
+        if (id === 'task-none') chosenTasks.clear();
+        else $("task-list").querySelectorAll("input").forEach(input => chosenTasks.add(input.value));
+        renderTaskList();
+      };
+      toolbar.append(button);
+    }
+    const list = document.createElement("div");
+    list.id = prefix + "task-list";
+    list.className = "simulation-task-list";
+    picker.append(toolbar, list);
+    const summary = document.createElement("p");
+    summary.id = prefix + "task-summary";
+    summary.className = "simulation-hint";
+    $("fields").append(picker, summary);
+    $("task-selection").onchange = populateTasks;
+    $("task-name").onchange = chooseTask;
+    $("fields").addEventListener("input", event => {
+      if (event.target.id === prefix + "field-n_episodes") taskSummary();
+    });
   }
 
   async function syncClientConfiguration() {
@@ -344,6 +455,15 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         if (generation !== profileGeneration || platform !== currentPlatform()) return;
         defaults = profile;
         $("task-name").value = "";
+      } catch (e) {
+        error(e);
+        return;
+      }
+    }
+    if (catalogPlatform !== platform) {
+      ready = false;
+      try {
+        if (!await loadTasks(platform)) return;
       } catch (e) {
         error(e);
         return;
@@ -373,6 +493,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         if (key === "platform") createTaskSelection();
       }
       for (const key of advancedFields) createField(key, defaults[key], "advanced-fields");
+      await poll();
       if (!getClientConfig) {
         $("field-platform").onchange = async () => {
           ready = false;
@@ -388,6 +509,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
             $("field-instruction_type").value = defaults.instruction_type;
             $("field-render_observation_mode").value = defaults.render_observation_mode;
             $("task-name").value = "";
+            if (!await loadTasks(currentPlatform())) return;
             updateControls();
             ready = true;
             await poll();
@@ -397,6 +519,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         };
         $("field-intra_chunk_mode").onchange = updateControls;
         $("field-mode").onchange = updateControls;
+        await loadTasks(currentPlatform());
         updateControls();
         ready = true;
         await poll();
