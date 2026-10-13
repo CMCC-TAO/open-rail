@@ -137,6 +137,7 @@ class ClientState:
         self.running = False
         self.starting = False
         self.stopping = False
+        self.config_switching = False
         self.paused = False
         self.lock = threading.Lock()
         self.ws_clients: set[WebSocket] = set()
@@ -542,7 +543,8 @@ def _collect_stats() -> dict:
     }
     with client_state.lock:
         vla_client = client_state.vla_client
-        # base["running"] = client_state.running,
+        base["running"] = client_state.running
+        base["starting"] = client_state.starting
         # base["paused"] = bool(client_state.running and (client_state.paused_thread_state is not None))
         base["paused"] = client_state.paused
     base.update(_collect_resource_stats())
@@ -589,9 +591,10 @@ async def favicon():
 # ─────────────────────────────────────────────────────────────────────────────
 @app.get("/api/client/config/path")
 async def get_conf_dir():
-    """Return the absolute path of the project conf/ directory."""
-    # conf_dir = ROOT / "conf" / client_state.conf_file
-    return {"status": "ok", "path": str(client_state.conf_file)}
+    """Return the active configuration filename and whether it exists."""
+    with client_state.lock:
+        name = client_state.conf_file or 'default_conf.yaml'
+    return {"status": "ok", "path": name, "exists": _config_path(name).is_file()}
 
 class ConfigFileRequest(BaseModel):
     path: str
@@ -599,8 +602,8 @@ class ConfigFileRequest(BaseModel):
 @app.post("/api/client/config/path")
 async def set_conf_dir(req: ConfigFileRequest):
     """Load a yaml conf file and apply it. Effective immediately when possible."""
-    client_state.conf_file = req.path
-    return {"status": "ok", "path": str(client_state.conf_file)}
+    # A current-file change must load the same file, not just redirect saves.
+    return await load_config_file(req)
 
 @app.get("/api/client/robot/select_directory")
 async def select_directory(path: Optional[str] = None):
@@ -888,6 +891,18 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
+    if 'robots.type' in flat:
+        requested_type = _robot_type(flat['robots.type'])
+        with client_state.lock:
+            if client_state.config_switching:
+                raise HTTPException(409, 'Configuration is switching. Please wait.')
+            original = client_state.config
+            old_type = original.robots.type
+            candidate = original.copy_and_resolve_references() if requested_type != old_type else None
+        if requested_type != old_type:
+            flat['robots.type'] = requested_type
+            _apply_flat_patch_new(candidate, flat)
+            return await _replace_client_config(candidate, expected_config=original)
     vision_preprocess_keys = []
     dataset_path_changed = False
     robot_type_changed = False
@@ -902,6 +917,8 @@ async def patch_config(req: ConfigPatchRequest):
     if not acquired:
         raise HTTPException(503, "Config is busy. Please retry.")
     try:
+        if client_state.config_switching:
+            raise HTTPException(409, 'Configuration is switching. Please wait.')
         client_conf = client_state.config
         current_vla_client = client_state.vla_client
         current_robot = client_state.robot
@@ -949,17 +966,6 @@ async def patch_config(req: ConfigPatchRequest):
                 logger.error(f"Failed to update preprocess function: {e}")
     finally:
         client_state.lock.release()
-    if (
-        robot_type_changed
-        and is_running
-        and current_vla_client is not None
-        and prev_robot_type != next_robot_type
-    ):
-        logger.warning(
-            f"Robot type changed: {prev_robot_type} -> {next_robot_type}. "
-            "Runtime robot recreation is disabled; restart client to take effect."
-        )
-
     if dataset_path_changed and not (robot_type_changed and prev_robot_type != next_robot_type):
         if current_robot is not None:
             module_name = getattr(current_robot.__class__, "__module__", "")
@@ -984,28 +990,84 @@ async def patch_config(req: ConfigPatchRequest):
 
 
 
+def _config_path(name):
+    path = Path(name)
+    if not path.is_absolute():
+        path = ROOT / 'conf' / path
+    path = path.resolve()
+    try:
+        path.relative_to(ROOT.resolve())
+    except ValueError:
+        raise HTTPException(400, 'Path is outside the allowed project directory.')
+    return path
+
+
+def _config_name(path):
+    try:
+        return str(path.relative_to((ROOT / 'conf').resolve()))
+    except ValueError:
+        return str(path)
+
+
+def _robot_type(value):
+    from conf.robots_conf import RobotType
+    value = getattr(value, 'value', value)
+    if value == 'a2d':
+        value = 'agibot_g1'
+    try:
+        return RobotType(value)
+    except (ValueError, TypeError):
+        raise HTTPException(400, f'Unsupported robot type: {value}')
+
+
+async def _replace_client_config(candidate, path=None, expected_config=None):
+    """Commit validated config and file together; defer hardware init to Observe."""
+    async with reset_resume_lock:
+        with client_state.lock:
+            if expected_config is not None and client_state.config is not expected_config:
+                raise HTTPException(409, 'Configuration changed. Reload before applying edits.')
+            if client_state.starting or client_state.stopping or client_state.config_switching:
+                raise HTTPException(409, 'Client is busy. Please wait before switching configuration.')
+            had_runtime = client_state.vla_client is not None
+            client_state.config_switching = True
+        try:
+            # Cleanup can wait for threads/SDK shutdown; do not block the API loop.
+            await asyncio.to_thread(_shutdown_stop_if_running)
+            await asyncio.to_thread(_cleanup)
+            with client_state.lock:
+                client_state.config = candidate
+                if path is not None:
+                    client_state.conf_file = _config_name(path)
+                name = client_state.conf_file
+        finally:
+            with client_state.lock:
+                client_state.config_switching = False
+        await _broadcast_to_web({"type": "status", "data": {
+            "running": False, "paused": False,
+            "observe_running": False, "inference_running": False, "control_running": False,
+            "message": "Configuration changed. Start Observe again when ready.",
+        }})
+        return {"status": "ok", "config": _config_to_dict(candidate),
+                "path": name, "requires_restart": had_runtime}
+
+
 @app.post("/api/client/config/load")
 async def load_config_file(req: ConfigFileRequest):
     """Load a yaml conf file and apply it. Effective immediately when possible."""
-    # Guard against path-traversal
-    conf_path = Path(req.path)
-    if not conf_path.is_absolute():
-        conf_path = ROOT / "conf" / conf_path
+    conf_path = _config_path(req.path)
+    if not conf_path.is_file():
+        raise HTTPException(404, f'Configuration file not found: {req.path}')
+    if conf_path.suffix.lower() not in ('.yaml', '.yml'):
+        raise HTTPException(400, 'Configuration file must be YAML.')
+    # Fresh defaults prevent omitted fields leaking in from the previous file.
+    candidate = get_client_config()
     try:
-        conf_path.resolve().relative_to(ROOT.resolve())
-    except ValueError:
-        raise HTTPException(400, "Path is outside the allowed project directory.")
-
-    # print(f"DEBUG: load yaml conf: {conf_path}")
-    _shutdown_stop_if_running()
-    _cleanup()
-
-    with client_state.lock:
-        _apply_yaml_config(client_state.config, conf_path)
-        client_conf = client_state.config
-    await asyncio.to_thread(_ensure_vla_client_created)
-
-    return {"status": "ok", "config": client_conf}
+        _apply_yaml_config(candidate, conf_path)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(400, f'Invalid configuration file: {exc}') from exc
+    return await _replace_client_config(candidate, conf_path)
 
 
 @app.post("/api/client/config/save")
@@ -1016,26 +1078,21 @@ async def save_config_file(req: ConfigFileRequest):
       .yaml / .yml  →  YAML  (via _dict_to_user_conf_yaml)
     """
     with client_state.lock:
-        client_conf = client_state.config
+        if client_state.config_switching:
+            raise HTTPException(409, 'Configuration is switching. Please wait.')
+        client_conf = _config_to_dict(client_state.config) if client_state.config is not None else None
     if client_conf is None:
         raise HTTPException(400, "No config loaded.")
     # print(f"DEBUG: save path = {req.path}")
-    save_path = Path(req.path)
-    if not save_path.is_absolute():
-        save_path = ROOT / 'conf' / save_path
-    # Guard against path-traversal: resolved path must stay inside ROOT
-    try:
-        save_path.resolve().relative_to(ROOT.resolve())
-    except ValueError:
-        raise HTTPException(400, "Path is outside the allowed project directory.")
-    client_conf = _config_to_dict(client_conf)
-    if save_path.suffix in (".yaml", ".yml"):
-        content = _dict_to_user_conf_yaml(client_conf)
-    else:
-        content = _dict_to_user_conf_py(client_conf)
+    save_path = _config_path(req.path)
+    if save_path.suffix.lower() not in ('.yaml', '.yml'):
+        raise HTTPException(400, 'Configuration file must be YAML.')
+    content = _dict_to_user_conf_yaml(client_conf)
     save_path.parent.mkdir(parents=True, exist_ok=True)
     save_path.write_text(content, encoding="utf-8")
-    return {"status": "ok", "path": str(save_path)}
+    with client_state.lock:
+        client_state.conf_file = _config_name(save_path)
+    return {"status": "ok", "path": str(save_path), "active_path": _config_name(save_path)}
 
 
 def _sanitize_language_sub_task_id(language_cfg, task_cmd_data) -> int:
@@ -1154,7 +1211,7 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
     text = yaml_conf_path.read_text(encoding="utf-8")
     data = _yaml.safe_load(text)
     if not isinstance(data, dict):
-        return
+        raise ValueError('YAML must contain a configuration mapping')
 
     def _flatten(d, prefix=""):
         out = {}
@@ -1167,6 +1224,8 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
         return out
 
     flat = _flatten(data)
+    if 'robots.type' in flat:
+        flat['robots.type'] = _robot_type(flat['robots.type'])
     # print(f"config patch: {flat}")
     # cam_head = config.record.lerobot.features.get('cam.head')
     # print(f"config before flat patch: {config.record.lerobot.features.keys()}")
@@ -1283,6 +1342,8 @@ def _dict_to_user_conf_yaml(d: dict) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 def _ensure_vla_client_created():
     with client_state.lock:
+        if client_state.config_switching:
+            raise RuntimeError('Configuration is switching. Please wait.')
         if client_state.vla_client is not None:
             return client_state.vla_client
         client_config = client_state.config
@@ -1364,13 +1425,13 @@ async def _start_client():
         return
 
     try:
-        vla_client.start()
-        await _broadcast_to_web({"type": "status", "data": {"running": True, "paused": False, "message": "Client started."}})
+        await asyncio.to_thread(vla_client.start)
     except Exception as e:
         logger.exception(f"Client start error: {e}")
         with client_state.lock:
             client_state.running = False
-            _broadcast_to_web({"type": "error", "data": {"message": str(e)}})
+            client_state.starting = False
+        await _broadcast_to_web({"type": "error", "data": {"message": str(e)}})
         return
     lock_acquired = client_state.lock.acquire(timeout=2.0)
     if lock_acquired:
@@ -1381,12 +1442,15 @@ async def _start_client():
             client_state.lock.release()
     else:
         raise RuntimeError("Timeout acquiring client_state.lock in _start_client.")
+    await _broadcast_to_web({"type": "status", "data": _status_payload(vla_client, "Client started.", running=True, paused=False)})
     # main_thread.start()
 
 @app.post("/api/client/start")
 async def start_client():
     """Create vla_client if needed, then run it in worker thread (non-blocking)."""
     with client_state.lock:
+        if client_state.config_switching:
+            raise HTTPException(409, 'Configuration is switching. Please wait.')
         if client_state.running:
             return {"status": "ok", "message": "Client already started."}
         if getattr(client_state, "stopping", False):
@@ -1619,6 +1683,8 @@ async def start_control_only():
 async def stop_client():
     """Stop client quickly; release heavy native resources in background."""
     with client_state.lock:
+        if client_state.config_switching:
+            raise HTTPException(409, 'Configuration is switching. Please wait.')
         is_active = client_state.running
         if not is_active:
             raise HTTPException(400, "Client is not running.")
@@ -1744,6 +1810,8 @@ class EvalResultCRUDRequest(BaseModel):
     note: str = ""
 
 def _require_runtime(command_name: str):
+    if client_state.config_switching:
+        raise HTTPException(409, 'Configuration is switching. Please wait.')
     vla_client = client_state.vla_client
     robot = client_state.robot
     if vla_client is None:
@@ -1754,6 +1822,11 @@ def _require_runtime(command_name: str):
 
 
 async def _run_web_control(command: str, req: ManualControlRequest):
+    async with reset_resume_lock:
+        return await _execute_web_control(command, req)
+
+
+async def _execute_web_control(command: str, req: ManualControlRequest):
     _, robot = _require_runtime(command)
     if robot.current_state is None:
         raise HTTPException(400, 'Current robot state is unavailable. Start observation first.')
@@ -1901,7 +1974,9 @@ async def client_language_set(req: LanguageSetRequest):
 async def client_record_start(req: RecordStartRequest):
     try:
         vla_client, _ = _require_runtime('start_recording')
-        task_dir = vla_client.start_recording()
+        # Camera readiness / recorder initialization may wait; do not block
+        # status requests or WebSocket messages on the asyncio event loop.
+        task_dir = await asyncio.to_thread(vla_client.start_recording)
         return {
             'status': 'ok',
             'command': 'start_recording',

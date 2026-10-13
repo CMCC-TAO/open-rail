@@ -109,6 +109,9 @@ class VLAClient():
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
         self.is_control_thread_running = False
+        # A proxy starts its worker during robot creation. Until Observe is
+        # requested, it must not consume Mock episodes in the background.
+        self.stop_observe()
         
         # Define image preprocess function
         self.update_preprocess_func()
@@ -160,6 +163,9 @@ class VLAClient():
         Returns:
             None
         """
+        start_observe = getattr(self.robot, 'start_observe', None)
+        if callable(start_observe):
+            start_observe()
         self.is_running = True
         self.is_observe_thread_running = True
         if not self.observe_thread.is_alive():
@@ -170,6 +176,9 @@ class VLAClient():
 
     def stop_observe(self):
         self.is_observe_thread_running = False
+        stop_observe = getattr(self.robot, 'stop_observe', None)
+        if callable(stop_observe):
+            stop_observe()
         self.logger.info('VLAClient observe thread stopped.')
 
     def start_inference(self):

@@ -206,6 +206,7 @@ async function startDataRecording({} = {}) {
     const res = await apiFetch('/api/client/record/start', {
       method: 'POST',
       body: JSON.stringify({}),
+      timeoutMs: 30000,
     });
     const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
     if (currentTaskDir) {
