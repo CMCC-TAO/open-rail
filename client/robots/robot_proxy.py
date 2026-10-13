@@ -56,7 +56,7 @@ _ROBOT_MODULES: Dict[str, str] = {
 _IDLE_SLEEP_S = 0.0005
 
 # Queues owned by the proxy; each one holds three semaphores that must be
-# released on shutdown (see RobotProxy._close_queues).
+# released on shutdown (see RobotProxy._close_ipc).
 _QUEUE_ATTRS = (
     '_obs_queue',
     '_cmd_queue',
@@ -117,6 +117,7 @@ class _RobotWorker:
         self._robot = None
         self._shm: Optional[SharedMemoryManager] = None
         self._stop = False
+        self._observation_enabled = True
         self._control_stop = threading.Event()
         self._control_failed = threading.Event()
         self._control_thread = None
@@ -214,6 +215,10 @@ class _RobotWorker:
                 self._drain_commands()
                 if self._stop:
                     break
+                if not self._observation_enabled:
+                    # Keep serving manual/reset RPCs without consuming frames.
+                    time.sleep(0.01)
+                    continue
                 try:
                     observation = self._robot.retrieve_observation()
                 except Exception:
@@ -244,9 +249,15 @@ class _RobotWorker:
             return
         _, cmd_id, method, args, kwargs = command
         try:
-            target = getattr(self._robot, method)
-            with self._robot_command_lock:
-                result = target(*args, **kwargs)
+            if method == '_set_observation_enabled':
+                # Commands run between reads: the reply also acknowledges that
+                # any in-flight observation has finished before pausing.
+                self._observation_enabled = bool(args[0])
+                result = None
+            else:
+                target = getattr(self._robot, method)
+                with self._robot_command_lock:
+                    result = target(*args, **kwargs)
         except (KeyboardInterrupt, SystemExit):
             # Never convert an interrupt into a command error; let _loop shut down.
             raise
@@ -459,6 +470,8 @@ class RobotProxy:
         self._rpc_timeout = rpc_timeout
         self._cmd_id = 0
         self._closed = False
+        self._observation_enabled = True
+        self._observation_min_time = 0.0
         self._shm_cache: Dict[str, Any] = {}
         # Names of the worker-owned shared memory blocks seen in observations;
         # used to unlink any survivor if the worker was killed before cleaning up.
@@ -547,13 +560,30 @@ class RobotProxy:
     # ------------------------------------------------------------------
     # observation
     # ------------------------------------------------------------------
+    def start_observe(self):
+        """Resume worker reads, rejecting queued observations from before resume."""
+        if self._observation_enabled:
+            return
+        self._observation_min_time = time.perf_counter()
+        self._rpc('_set_observation_enabled', True)
+        self._observation_enabled = True
+
+    def stop_observe(self):
+        """Pause worker reads and wait for any in-flight read to finish."""
+        self._observation_enabled = False
+        self._rpc('_set_observation_enabled', False)
+
     def retrieve_observation(self):
         """Return the newest observation, or None when no new frame is available."""
-        if self._closed:
+        if self._closed or not self._observation_enabled:
             return None
         try:
             payload = self._obs_queue.get_nowait()
         except queue.Empty:
+            return None
+
+        self._track_remote_shm(payload.get('observation'))
+        if payload['t_send'] < self._observation_min_time:
             return None
 
         state = payload.get('state')
@@ -561,7 +591,6 @@ class RobotProxy:
             self.current_state = state
 
         observation = payload.get('observation')
-        self._track_remote_shm(observation)
         decoded = SharedMemoryManager.decode_observation(
             observation, self._shm_cache, copy=False
         )
@@ -632,6 +661,8 @@ class RobotProxy:
     def pause_controls(self):
         """Invalidate queued and dequeued trajectory points before robot reset."""
         with self._control_submit_lock:
+            if self._closed:
+                return
             self._control_enabled = False
             with self._control_epoch.get_lock():
                 self._control_epoch.value += 1
@@ -732,7 +763,7 @@ class RobotProxy:
             # Always detach from the worker-owned blocks, even if we are interrupted.
             SharedMemoryManager.close_reader(self._shm_cache)
             self._unlink_remote_shm()
-            self._close_queues()
+            self._close_ipc()
             self.logger.info('Robot worker stopped (type=%s)', self._robot_type)
 
     def _track_remote_shm(self, observation) -> None:
@@ -773,16 +804,17 @@ class RobotProxy:
                         pass
                 self._remote_shm_names.discard(name)
 
-    def _close_queues(self) -> None:
-        """Close the IPC queues so their semaphores are unregistered.
+    def _close_ipc(self) -> None:
+        """Release queues and the shared control lock after the worker exits.
 
         Every ``multiprocessing.Queue`` owns three semaphores (``_rlock``,
         ``_wlock`` and ``_sem``). They are only unregistered with the resource
         tracker when the underlying ``SemLock`` objects are collected or when the
         atexit finalizers run to completion - neither happens reliably on a
         Ctrl-C shutdown, and resource_tracker then reports them as leaked
-        ("There appear to be N leaked semaphore objects"). Closing the queues and
-        dropping the references lets the semaphores be released deterministically.
+        ("There appear to be N leaked semaphore objects"). Drop our references
+        here; feeder threads may still retain locks briefly, so the entry point
+        also runs IPC finalizers before its forced exit.
         """
         for name in _QUEUE_ATTRS:
             pipe = getattr(self, name, None)
@@ -797,6 +829,9 @@ class RobotProxy:
             except Exception:
                 self.logger.debug('Failed to close %s', name, exc_info=True)
             setattr(self, name, None)
+        # Value('Q', ...) owns a named RLock too. The entry point uses os._exit,
+        # so it cannot rely on interpreter finalizers to release this reference.
+        self._control_epoch = None
 
     def _terminate(self) -> None:
         """Best-effort teardown used when startup fails."""
@@ -809,7 +844,7 @@ class RobotProxy:
                 process.kill()
                 process.join(timeout=1.0)
         SharedMemoryManager.close_reader(self._shm_cache)
-        self._close_queues()
+        self._close_ipc()
 
     def __del__(self):  # pragma: no cover - best effort
         try:
