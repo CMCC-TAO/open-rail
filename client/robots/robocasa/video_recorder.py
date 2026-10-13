@@ -79,15 +79,12 @@ class VideoRecorder:
         episode = metadata.get('episode', '-')
         step = metadata.get('step', '-')
         max_steps = metadata.get('max_steps', '-')
-        reward = metadata.get('reward')
         sim_time = metadata.get('sim_time')
         lines = [
             (self.config.get('video_title', 'ROBOCASA EVALUATION'), (235, 235, 235)),
             (f'Task: {task}', (190, 195, 205)),
             (f'Episode: {episode}', (190, 195, 205)),
             (f'Step: {step} / {max_steps}', (190, 195, 205)),
-            (f'Reward: {float(reward):.3f}' if reward is not None else 'Reward: -', (190, 195, 205)),
-            (f'Success: {"YES" if success else "NO"}', (190, 195, 205)),
             (f'State: {state}', state_color),
             (f'Sim time: {float(sim_time):.3f} s' if sim_time is not None else 'Sim time: -', (190, 195, 205)),
         ]

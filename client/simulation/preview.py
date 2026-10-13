@@ -21,20 +21,32 @@ class CameraPreview:
         self.stream_id = uuid.uuid4().hex
         self.trajectory_samples = deque(maxlen=120)
         self.trajectory_labels = []
+        self.trajectory_sources = set()
         self.sequence = 0
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='camera_preview')
+
+    def _append_trajectory(self, trajectory):
+        self.sequence += 1
+        self.trajectory_labels = list(trajectory['labels'])
+        sample = {'sequence': self.sequence, 'timestamp': time.time()}
+        for key in ('state', 'action_fitted', 'action_raw'):
+            values = trajectory.get(key)
+            if values is not None and len(values) == len(self.trajectory_labels):
+                sample[key] = [float(value) for value in values]
+                self.trajectory_sources.add(key)
+        self.trajectory_samples.append(sample)
+
+    def publish_trajectory(self, trajectory):
+        with self.lock:
+            if not self.closed:
+                self._append_trajectory(trajectory)
 
     def publish(self, images, shapes, trajectory=None):
         with self.lock:
             if self.closed:
                 return
             if trajectory:
-                self.sequence += 1
-                self.trajectory_labels = list(trajectory['labels'])
-                self.trajectory_samples.append({
-                    'sequence': self.sequence, 'timestamp': time.time(),
-                    'state': list(trajectory['state']),
-                })
+                self._append_trajectory(trajectory)
             now = time.monotonic()
             if self.closed or now - self.last_publish < self.period or (self.future and not self.future.done()):
                 return
@@ -42,6 +54,7 @@ class CameraPreview:
             trajectory_snapshot = {
                 'stream_id': self.stream_id, 'labels': list(self.trajectory_labels),
                 'samples': list(self.trajectory_samples),
+                'sources': sorted(self.trajectory_sources),
             }
             self.future = self.executor.submit(self._write, dict(images), dict(shapes), trajectory_snapshot)
 

@@ -47,6 +47,8 @@ class RobotBody(RobotBase):
         self._episode_done = False
         self._episode_result = None
         self._instruction = ""
+        self._chunk_rendering = False
+        self._chunk_boundary = True
         self.video_recorder = VideoRecorder(config, self.logger)
         self.reset(task_env, instruction, episode_index=episode_index, seed=seed)
 
@@ -74,12 +76,7 @@ class RobotBody(RobotBase):
         }
         if applied_action_step is not None:
             result["_applied_action_step"] = int(applied_action_step)
-        labels = [f'qpos_{i}' for i in range(self.current_state.size)]
-        for name, segment in self.config.action_layout.items():
-            start, end = int(segment['start']), int(segment['end'])
-            for i in range(start, min(end, len(labels))):
-                labels[i] = name if end - start == 1 else f'{name}_{i - start}'
-        result['_joint_trajectory'] = {'labels': labels, 'state': self.current_state.tolist()}
+        result['_joint_trajectory'] = self.get_joint_trajectory()
         cameras = obs.get("observation", {})
         for target_name, source_name in self.config.camera.names.items():
             try:
@@ -90,6 +87,19 @@ class RobotBody(RobotBase):
             if image.ndim != 3 or image.shape[-1] != 3:
                 raise ValueError(f"RoboTwin camera {source_name} must be HxWx3, got {image.shape}")
             result[f"cam.{target_name}"] = image[..., ::-1].copy()
+        return result
+
+    def get_joint_trajectory(self, action_fitted=None, action_raw=None):
+        labels = [f'qpos_{i}' for i in range(self.current_state.size)]
+        for name, segment in self.config.action_layout.items():
+            start, end = int(segment['start']), int(segment['end'])
+            for i in range(start, min(end, len(labels))):
+                labels[i] = name if end - start == 1 else f'{name}_{i - start}'
+        result = {'labels': labels, 'state': self.current_state.tolist()}
+        if self.config.get('action_type', 'qpos') == 'qpos':
+            for key, action in (('action_fitted', action_fitted), ('action_raw', action_raw)):
+                if action is not None:
+                    result[key] = self._normalize_action(action).tolist()
         return result
 
     def _normalize_action(self, action):
@@ -134,6 +144,34 @@ class RobotBody(RobotBase):
             },
         )
 
+    def configure_chunk_rendering(self, enabled):
+        self._chunk_rendering = bool(enabled)
+
+    def set_action_chunk_boundary(self, boundary):
+        self._chunk_boundary = bool(boundary)
+
+    def _take_action(self, action):
+        env = self.task_env
+        saved = {}
+        if self._chunk_rendering:
+            for name, replacement in (
+                ("_update_render", lambda: None),
+                ("get_obs", lambda: self._last_obs),
+                ("render_freq", 0),
+            ):
+                if hasattr(env, name):
+                    saved[name] = getattr(env, name)
+                    setattr(env, name, replacement)
+        try:
+            env.take_action(action, action_type=str(self.config.get("action_type", "qpos")))
+            if self._chunk_rendering:
+                self.current_state = np.concatenate((
+                    env.robot.get_left_arm_jointState(), env.robot.get_right_arm_jointState(),
+                )).astype(np.float64, copy=False)
+        finally:
+            for name, value in saved.items():
+                setattr(env, name, value)
+
     def control_robot(self, action):
         with self._lock:
             if self.task_env is None:
@@ -150,24 +188,22 @@ class RobotBody(RobotBase):
 
             action = self._normalize_action(action)
             applied_action_step = self._episode_steps
-            self._sim_executor.submit(
-                self.task_env.take_action,
-                action,
-                action_type=str(self.config.get("action_type", "qpos")),
-            ).result()
-            obs = self._sim_executor.submit(self.task_env.get_obs).result()
-            self._last_obs = obs
-            self.current_state = self._state(obs)
+            self._sim_executor.submit(self._take_action, action).result()
             self._episode_steps = int(self.task_env.take_action_cnt)
             success = bool(self.task_env.eval_success)
             truncated = self._episode_steps >= int(self.task_env.step_lim)
             self._episode_done = success or truncated
-            self._write_video(
-                obs,
-                success=success,
-                terminated=success,
-                truncated=truncated and not success,
-            )
+            obs = None
+            if not self._chunk_rendering or self._chunk_boundary or self._episode_done:
+                obs = self._sim_executor.submit(self.task_env.get_obs).result()
+                self._last_obs = obs
+                self.current_state = self._state(obs)
+                self._write_video(
+                    obs,
+                    success=success,
+                    terminated=success,
+                    truncated=truncated and not success,
+                )
             if self._episode_done:
                 self._episode_result = {
                     "episode": self._episode_index,
@@ -193,7 +229,7 @@ class RobotBody(RobotBase):
                     observation_step=self._episode_steps,
                     applied_action_step=applied_action_step,
                     observation_source=ObservationMode.STEP_RESULT.value,
-                ),
+                ) if obs is not None else None,
                 success=success,
                 terminated=success,
                 truncated=truncated and not success,

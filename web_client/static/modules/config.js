@@ -24,6 +24,7 @@ const CONFIG_SELECT_OPTIONS = {
   inter_chunk_mode: ['sync', 'search_action', 'smooth_velocity', 'min_jerk'],
   intra_chunk_mode: ['raw', 'interpolation', 'fitting'],
   instruction_type: ['seen', 'unseen'],
+  render_observation_mode: ['chunk_boundary', 'per_action'],
   split: ['target', 'pretrain'],
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
@@ -143,7 +144,6 @@ const CONFIG_READONLY_DOT_KEYS = new Set([
 const DEFAULT_MAIN_PARAMETER_KEYS = {
   'robots.type': 'Robot Type',
   'rdm.mode': 'Mode',
-  'controller.action_steps': 'Action Chunk Length',
   'controller.wait_time': 'Wait Time[ms]',
   'controller.period': 'Control Period[ms]',
   'controller.speed': 'Control Speed',
@@ -837,6 +837,10 @@ function createCfgRow(dotKey, label, value, options = {}) {
 
   const keyEl = document.createElement('div');
   keyEl.className = 'cfg-key'; keyEl.title = dotKey; keyEl.textContent = label;
+  if (dotKey === 'robots.aloha_robotwin.render_observation_mode') {
+    keyEl.textContent = 'Camera rendering (sync)';
+    keyEl.title = 'Async mode always renders every action.';
+  }
 
   const valEl = document.createElement('div');
   valEl.className = 'cfg-value';
@@ -978,7 +982,9 @@ function createCfgRow(dotKey, label, value, options = {}) {
     CONFIG_SELECT_OPTIONS[bareKey].forEach(opt => {
       const o = document.createElement('option');
       o.value = opt;
-      o.textContent = dotKey === 'robots.type' ? ROBOT_TYPE_LABELS[opt] || opt : opt;
+      o.textContent = dotKey === 'robots.type' ? ROBOT_TYPE_LABELS[opt] || opt
+        : bareKey === 'render_observation_mode'
+        ? {chunk_boundary: 'Chunk boundaries', per_action: 'Every action'}[opt] : opt;
       if (String(value) === String(opt)) o.selected = true;
       input.appendChild(o);
     });

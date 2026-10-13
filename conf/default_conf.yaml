@@ -3,7 +3,7 @@
 
 controller:
   action_steps: null
-  gripper_offset: 5
+  gripper_offset: 0
   period: 3.75
   raw_fps: 30
   speed: 1.0
@@ -60,9 +60,9 @@ record:
     - 0
     - 0.5
     - 1
-  is_record_episode: true
-  is_record_eval_log: true
-  is_record_expe_data: false
+  is_record_episode: false
+  is_record_eval_log: false
+  is_record_expe_data: true
   lerobot:
     action_shape: 22
     cam.hand_left:
@@ -263,10 +263,11 @@ robots:
         hand_right: right_camera
         head: head_camera
       ref: head
-    gpu: ''
-    instruction_type: unseen
+    gpu: '2'
+    instruction_type: seen
     n_envs: 1
     python: ''
+    render_observation_mode: chunk_boundary
     robotwin_root: ''
     seed: 0
     task_config: demo_clean
@@ -545,7 +546,7 @@ robots:
     enable_render: true
     env_name: PickPlaceCounterToCabinet
     episode_offset: 0
-    gpu: '2'
+    gpu: '6'
     max_episode_steps: 1000
     n_envs: 1
     python: ''
@@ -675,7 +676,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: robocasa
+  type: aloha_robotwin
 vision:
   history_frame: false
   preprocess:
@@ -698,22 +699,10 @@ visualize:
     selected_joints:
     - 0
     - 1
-    - 2
-    - 3
-    - 4
-    - 5
-    - 6
-    - 7
-    - 8
-    - 9
-    - 10
-    - 11
-    - 12
-    - 13
     source:
-    - ActionRaw
-    - ActionFitted
     - State
+    - ActionFitted
+    - ActionRaw
     window_span_sec: 5.0
   updata_fps: 30
 vla_zmq:

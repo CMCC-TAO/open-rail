@@ -244,7 +244,12 @@ async function renderJointSelector() {
     const chip = document.createElement('span');
     const color = getTrajJointColor(i);
     chip.className = 'joint-sel-chip' + (t.selectedJoints.has(i) ? ' active' : '');
-    chip.textContent = labels[i] ?? `J${i}`;
+    const label = labels[i] ?? `J${i}`;
+    chip.textContent = t.simulationLayout
+      ? label.replace(/^left_arm_(\d+)$/, 'L$1').replace(/^right_arm_(\d+)$/, 'R$1')
+        .replace(/^left_gripper$/, 'LG').replace(/^right_gripper$/, 'RG')
+      : label;
+    chip.title = label;
     chip.dataset.idx = i;
     _applyChipColor(chip, t.selectedJoints.has(i), color);
     chip.addEventListener('click', async () => {
@@ -620,7 +625,8 @@ async function setupTrajPanel() {
     });
     if (btnAllSource) {
       const s = App.traj.source;
-      const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
+      const sources = App.traj.simulationLayout?.sources || ['state', 'action_fitted', 'action_raw'];
+      const allSelected = sources.every(source => s.has(source));
       btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
     if (updateConfig && !App.traj.simulationLayout) {
@@ -679,10 +685,11 @@ async function setupTrajPanel() {
   if (btnAllSource) {
     btnAllSource.addEventListener('click', () => {
       const s = App.traj.source;
-      const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
+      const sources = App.traj.simulationLayout?.sources || ['state', 'action_fitted', 'action_raw'];
+      const allSelected = sources.every(source => s.has(source));
       App.traj.source = allSelected
         ? new Set()
-        : new Set(['state', 'action_fitted', 'action_raw']);
+        : new Set(sources);
       if (App.traj.source.size > 0) recomputeTrajXWindow();
       App.traj.dirty = true;
       syncSrcButtons();

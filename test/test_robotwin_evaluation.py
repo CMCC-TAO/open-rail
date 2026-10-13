@@ -28,8 +28,14 @@ class FakeTask:
         self.eval_success = False
         self.state = np.zeros(14)
         self.actions = []
+        self.observations_taken = 0
+        self.robot = SimpleNamespace(
+            get_left_arm_jointState=lambda: self.state[:7].tolist(),
+            get_right_arm_jointState=lambda: self.state[7:].tolist(),
+        )
 
     def get_obs(self):
+        self.observations_taken += 1
         return {
             "joint_action": {"vector": self.state.copy()},
             "observation": {
@@ -67,11 +73,62 @@ class Transport(CasaTransport):
         }
 
 
+@pytest.mark.parametrize("boundary_only", [True, False])
+def test_chunk_rendering_keeps_state_and_captures_terminal_frame(boundary_only):
+    class RenderTask(FakeTask):
+        def __init__(self):
+            super().__init__()
+            self.step_lim = 5
+            self.captures = 0
+            self.render_updates = 0
+            self.render_freq = 0
+
+        def _update_render(self):
+            self.render_updates += 1
+
+        def get_obs(self):
+            self._update_render()
+            self.captures += 1
+            return super().get_obs()
+
+        def take_action(self, action, action_type):
+            for _ in range(3):
+                self._update_render()
+            super().take_action(action, action_type)
+            if self.take_action_cnt == self.step_lim:
+                self.eval_success = True
+                self.get_obs()
+
+    env = RenderTask()
+    robot = RobotBody(get_client_config().robots.aloha_robotwin, env, "Stack bowls")
+    robot.configure_chunk_rendering(boundary_only)
+    try:
+        results = []
+        for step in range(1, 6):
+            robot.set_action_chunk_boundary(step % 3 == 0)
+            results.append(robot.control_robot(np.full(14, step / 10)))
+            np.testing.assert_allclose(robot.current_state, step / 10)
+        if boundary_only:
+            assert [result.observation is not None for result in results] == [False, False, True, False, True]
+            assert env.captures == 3 and env.render_updates == 3
+        else:
+            assert all(result.observation is not None for result in results)
+            assert env.captures == 7
+        assert results[-1].success and results[-1].observation_step == 5
+        env.get_obs()
+        assert env.captures == (4 if boundary_only else 8)
+    finally:
+        robot.close()
+
+
 @pytest.mark.parametrize("mode", ["sync", "async"])
+@pytest.mark.parametrize("render_mode", ["chunk_boundary", "per_action"])
 @pytest.mark.parametrize("intra", ["raw", "interpolation", "fitting"])
 @pytest.mark.parametrize("inter", ["sync", "search_action", "smooth_velocity", "min_jerk"])
-def test_threaded_pipeline(monkeypatch, mode, intra, inter):
+def test_threaded_pipeline(monkeypatch, tmp_path, mode, render_mode, intra, inter):
+    monkeypatch.setenv('VLA_SIM_PREVIEW_PATH', str(tmp_path / 'preview.json'))
     config = get_client_config()
+    config.robots.aloha_robotwin.render_observation_mode = render_mode
     args = twin.build_parser().parse_args(
         [
             "--task_name",
@@ -84,6 +141,8 @@ def test_threaded_pipeline(monkeypatch, mode, intra, inter):
             inter,
             "--n_action_steps",
             "8",
+            "--intra_chunk_sample_ratio",
+            "2" if intra == "interpolation" else "1",
         ]
     )
     twin.configure_pipeline(config, args)
@@ -91,6 +150,7 @@ def test_threaded_pipeline(monkeypatch, mode, intra, inter):
     config.inter_chunk.max_transition_steps = 5
     config.record.switch = False
     robot = RobotBody(config.robots.aloha_robotwin, FakeTask(), "Move the object")
+    robot.task_env.step_lim = 12
     config.rdm.action_layout = robot.config.action_layout
     transport = Transport()
     monkeypatch.setattr(
@@ -110,9 +170,18 @@ def test_threaded_pipeline(monkeypatch, mode, intra, inter):
         _start_episode(client, robot, False)
         assert _wait_for_episode(client, 0, 10, 5, 30)
         assert client.pipeline_error is None
-        assert robot.get_episode_result()["steps"] == 8
-        assert len(robot.task_env.actions) == 8
+        assert robot.get_episode_result()["steps"] == 12
+        assert len(robot.task_env.actions) == 12
+        boundary_only = mode == "sync" and render_mode == "chunk_boundary"
+        expected_captures = (2 if intra == "interpolation" else 3) if boundary_only else 13
+        assert robot.task_env.observations_taken == expected_captures
         assert all(a.shape == (14,) and np.isfinite(a).all() for a in robot.task_env.actions)
+        samples = [s for s in client.camera_preview.trajectory_samples if 'action_fitted' in s]
+        assert len(samples) == 12
+        np.testing.assert_allclose([s['action_fitted'] for s in samples], robot.task_env.actions)
+        np.testing.assert_allclose([s['state'] for s in samples], robot.task_env.actions)
+        assert all(len(s['action_raw']) == 14 for s in samples)
+        assert all(a['timestamp'] <= b['timestamp'] for a, b in zip(samples, samples[1:]))
     finally:
         client.close()
         robot.close()
@@ -208,6 +277,7 @@ def make_fake_root(folder):
     (folder / "task_config/_camera_config.yml").write_text("test: {h: 16, w: 16}\n")
     (folder / "embodiment/config.yml").write_text("{}\n")
     (folder / "envs/Task.py").write_text("""import numpy as np
+from types import SimpleNamespace
 class Task:
     def setup_demo(self, now_ep_num, seed, **kwargs):
         self.seed=seed
@@ -215,6 +285,7 @@ class Task:
         self.step_lim=4
         self.eval_success=False
         self.state=np.zeros(14)
+        self.robot=SimpleNamespace(get_left_arm_jointState=lambda: self.state[:7].tolist(), get_right_arm_jointState=lambda: self.state[7:].tolist())
     def set_instruction(self, instruction): self.instruction=instruction
     def get_obs(self):
         return {'joint_action': {'vector': self.state}, 'observation': {k: {'rgb': np.zeros((16,16,3),np.uint8)} for k in ('head_camera','left_camera','right_camera')}}
@@ -373,6 +444,52 @@ def test_checkpoint_reuses_actual_seed_and_instruction(tmp_path, monkeypatch):
         assert checked == [0, 1]
         with pytest.raises(RuntimeError, match="No valid"):
             select_episode(executor, Environment, {}, "Task", 1, 0, "unseen", True, None, 1, 5)
+
+
+@pytest.mark.parametrize("message", ["target_pose cannot be None for move action.", "unexpected assertion"])
+def test_expert_missing_grasp_skips_seed_only_for_known_assertion(monkeypatch, message):
+    import types
+    from client.robots.aloha_robotwin.environment import select_episode
+
+    actor = types.ModuleType("envs.utils.create_actor")
+    actor.UnStableError = type("UnStableError", (Exception,), {})
+    descriptions = types.ModuleType("generate_episode_instructions")
+    descriptions.generate_episode_descriptions = lambda *args: [{"unseen": ["Stack bowls"]}]
+    monkeypatch.setitem(sys.modules, actor.__name__, actor)
+    monkeypatch.setitem(sys.modules, descriptions.__name__, descriptions)
+    checked, closed = [], []
+
+    class Environment(FakeTask):
+        def setup_demo(self, now_ep_num, seed, **kwargs):
+            self.seed = seed
+
+        def play_once(self):
+            checked.append(self.seed)
+            if self.seed == 0:
+                raise AssertionError(message)
+            self.plan_success = True
+            return {"info": {}}
+
+        def check_success(self):
+            return self.plan_success
+
+        def set_instruction(self, instruction):
+            self.instruction = instruction
+
+        def close_env(self):
+            closed.append(self.seed)
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        args = (executor, Environment, {}, "Task", 0, 0, "unseen", True, "Stack bowls", 2, 5)
+        if message == "unexpected assertion":
+            with pytest.raises(AssertionError, match=message):
+                select_episode(*args)
+            assert checked == [0] and closed == [0]
+        else:
+            env, instruction, seed = select_episode(*args)
+            assert seed == 1 and instruction == "Stack bowls"
+            assert checked == [0, 1] and closed == [0, 1]
+            env.close_env()
 
 
 def test_isolation_deadline_kills_nested_session(tmp_path):

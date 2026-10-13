@@ -46,7 +46,7 @@ def client_evaluation_values(config):
         value = config.get(group, {}).get(field)
         if value is not None and value != "":
             values[key] = value
-    for key in ("python", "robotwin_root", "gpu", "n_envs", "seed", "split", "task_config", "instruction_type"):
+    for key in ("python", "robotwin_root", "gpu", "n_envs", "seed", "split", "task_config", "instruction_type", "render_observation_mode"):
         value = robot.get(key)
         if value is not None and (value != "" or key == "gpu"):
             values[key] = value
@@ -67,13 +67,14 @@ class EvaluationConfig(BaseModel):
     robotwin_root: str = str(ROOT.parent / "RoboTwin")
     task_config: str = "demo_clean"
     instruction_type: Literal["seen", "unseen"] = "unseen"
+    render_observation_mode: Literal["chunk_boundary", "per_action"] = "chunk_boundary"
     instruction: str = ""
     no_expert_check: bool = False
     gpu: str = ""
     max_transition_steps: int = Field(5, ge=0)
     max_seed_attempts: int = Field(100, ge=1)
-    seed_stride: int = Field(10000, ge=1)
-    seed_selection_timeout: float = Field(300, gt=0, allow_inf_nan=False)
+    seed_stride: int = Field(100, ge=1)
+    seed_selection_timeout: float = Field(900, gt=0, allow_inf_nan=False)
     worker_episodes: int = Field(100, ge=1)
     max_native_restarts: int = Field(3, ge=0)
     server_reconnect_interval: float = Field(10, gt=0, allow_inf_nan=False)
@@ -173,6 +174,7 @@ class EvaluationJobs:
         script = "aloha_robotwin_eval.py" if robotwin else "robocasa_eval.py"
         command = [config.python, "-u", str(self.root / "scripts" / script)]
         robotwin_fields = {
+            "render_observation_mode",
             "robotwin_root",
             "task_config",
             "instruction_type",

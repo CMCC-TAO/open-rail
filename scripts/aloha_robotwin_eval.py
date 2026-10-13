@@ -64,13 +64,14 @@ def build_parser():
     parser.add_argument("--robotwin_root", default=str(PROJECT_ROOT.parent / "RoboTwin"))
     parser.add_argument("--task_config", default="demo_clean")
     parser.add_argument("--instruction_type", choices=["seen", "unseen"], default="unseen")
+    parser.add_argument("--render_observation_mode", choices=["chunk_boundary", "per_action"], default="chunk_boundary")
     parser.add_argument("--instruction")
     parser.add_argument("--no_expert_check", action="store_true")
     parser.add_argument("--gpu", help="GPU index or comma-separated GPU indices")
     parser.add_argument("--max_transition_steps", type=int, default=5)
     parser.add_argument("--max_seed_attempts", type=int, default=100)
-    parser.add_argument("--seed_stride", type=int, default=10000)
-    parser.add_argument("--seed_selection_timeout", type=float, default=300)
+    parser.add_argument("--seed_stride", type=int, default=100)
+    parser.add_argument("--seed_selection_timeout", type=float, default=900)
     parser.add_argument(
         "--interpolation_sample_ratio",
         dest="intra_chunk_sample_ratio",
@@ -196,6 +197,7 @@ def _identity(args, task_name):
         "robotwin_root",
     )
     values = {key: getattr(args, key) for key in names}
+    values["render_observation_mode"] = "per_action" if args.mode == "async" else args.render_observation_mode
     values["task_name"] = task_name
     if args.user_conf:
         values["user_conf"] = Path(args.user_conf).read_text()
@@ -361,6 +363,7 @@ def _run_task(args, task_name, run_id):
     config.record.dataset_date = args._record_date or _recording_date(run_id)
     config.record.lerobot.fps = args.record_fps
     cfg = config.robots.aloha_robotwin
+    cfg.render_observation_mode = args.render_observation_mode
     cfg.preview_worker_index = getattr(args, '_worker_index', None)
     cfg.task_name = task_name
     cfg.video_dir = "" if args.no_video else str(task_output / "videos" / run_id)
@@ -368,6 +371,7 @@ def _run_task(args, task_name, run_id):
     cfg.video_title = "ROBOTWIN EVALUATION"
     metadata.update(
         mode=args.mode,
+        render_observation_mode="per_action" if args.mode == "async" else args.render_observation_mode,
         n_action_steps=args.n_action_steps,
         intra_chunk_mode=config.intra_chunk.intra_chunk_mode,
         intra_chunk_sample_ratio=config.intra_chunk.output_sample_ratio,

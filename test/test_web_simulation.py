@@ -146,6 +146,31 @@ def test_robotwin_command_and_validation(tmp_path):
         simulation.EvaluationConfig(platform='robotwin', env_name='Task', intra_chunk_mode='local')
 
 
+@pytest.mark.parametrize('render_mode', ['chunk_boundary', 'per_action'])
+def test_robotwin_render_mode_from_web_snapshot_reaches_cli(tmp_path, render_mode):
+    from scripts import aloha_robotwin_eval as twin
+
+    snapshot = {
+        'robots': {'type': 'aloha_robotwin', 'aloha_robotwin': {'render_observation_mode': render_mode}},
+        'rdm': {'mode': 'sync'},
+    }
+    config = simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
+    assert config.render_observation_mode == render_mode
+    command = simulation.EvaluationJobs(tmp_path).command(config, 'test')
+    args = twin.build_parser().parse_args(command[3:])
+    assert args.render_observation_mode == render_mode
+    snapshot_path = Path(args.user_conf)
+    snapshot_path.parent.mkdir(parents=True)
+    snapshot_path.write_text(f'def get_user_config():\n    return {snapshot!r}\n')
+    initial_identity = twin._identity(args, 'Task')
+    args.render_observation_mode = 'per_action' if render_mode == 'chunk_boundary' else 'chunk_boundary'
+    assert twin._identity(args, 'Task') != initial_identity
+    casa = simulation.EvaluationJobs(tmp_path).command(
+        simulation.EvaluationConfig(env_name='Task'), 'casa'
+    )
+    assert '--render_observation_mode' not in casa
+
+
 def test_robotwin_preflight_does_not_require_robocasa(tmp_path, monkeypatch):
     root = tmp_path / 'RoboTwin'
     (root / 'envs').mkdir(parents=True)

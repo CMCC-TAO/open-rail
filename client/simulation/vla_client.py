@@ -55,6 +55,11 @@ class VLAClientAsync():
         self.task_language_manager = task_language_manager
         self.vla_zmq = vla_zmq_client
         self.robot = robot
+        if hasattr(robot, 'configure_chunk_rendering'):
+            robot.configure_chunk_rendering(
+                config.rdm.mode != 'async'
+                and robot.config.get('render_observation_mode', 'chunk_boundary') == 'chunk_boundary'
+            )
         self.camera_preview = None
         preview_path = os.environ.get('VLA_SIM_PREVIEW_PATH')
         if preview_path and robot.config.get('preview_worker_index') in (None, 0):
@@ -359,12 +364,23 @@ class VLAClientAsync():
                 self.realtime_data_manager.get_action_fitted()
             )
             self._control_in_flight = action_fitted is not None
+            if action_fitted is not None and hasattr(self.robot, 'set_action_chunk_boundary'):
+                with self.realtime_data_manager.action_lock:
+                    self.robot.set_action_chunk_boundary(
+                        self.realtime_data_manager.action_chunk_index
+                        == self.realtime_data_manager.action_chunk_fitted.shape[1] - 1
+                    )
 
         if action_fitted is not None:
             episode_done = False
             recorded_step = False
             try:
                 step_result = self.robot.control_robot(action_fitted)
+                preview = getattr(self, 'camera_preview', None)
+                if preview is not None and hasattr(self.robot, 'get_joint_trajectory'):
+                    preview.publish_trajectory(
+                        self.robot.get_joint_trajectory(action_fitted, action_raw)
+                    )
                 if isinstance(step_result, RobotStepResult):
                     self.last_step_result = step_result
                     self._track_step_result(step_result)

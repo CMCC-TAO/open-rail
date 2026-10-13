@@ -73,6 +73,25 @@ def test_preview_keeps_bounded_trajectory_history_between_image_updates(tmp_path
     assert trajectory['samples'][-1]['state'] == [1.3]
 
 
+def test_preview_preserves_actions_between_camera_frames(tmp_path):
+    path = tmp_path / 'preview.json'
+    preview = CameraPreview(path, {})
+    try:
+        for value in (.1, .2, .3):
+            preview.publish_trajectory({
+                'labels': ['left_arm_0'], 'state': np.array([value - .01]),
+                'action_fitted': np.array([value]), 'action_raw': np.array([.5]),
+            })
+        preview.publish({}, {})
+    finally:
+        preview.close()
+    trajectory = json.loads(path.read_text())['trajectory']
+    assert trajectory['sources'] == ['action_fitted', 'action_raw', 'state']
+    assert [s['action_fitted'] for s in trajectory['samples']] == [[.1], [.2], [.3]]
+    assert [s['action_raw'] for s in trajectory['samples']] == [[.5]] * 3
+    np.testing.assert_allclose([s['state'] for s in trajectory['samples']], [[.09], [.19], [.29]])
+
+
 def test_robocasa_trajectory_reads_joint_positions_not_end_effector_state():
     from client.robots.robocasa.body_robot import RobotBody
 

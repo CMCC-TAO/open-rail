@@ -2,6 +2,7 @@
 
 import importlib
 import json
+import logging
 from pathlib import Path
 import re
 import sys
@@ -123,10 +124,20 @@ def select_episode(
             expert = None
             try:
                 expert = _setup_env(executor, env_class, env_args, episode, candidate)
-                episode_info = executor.submit(expert.play_once).result()
-                valid = executor.submit(
-                    lambda: bool(expert.plan_success and expert.check_success())
-                ).result()
+                try:
+                    episode_info = executor.submit(expert.play_once).result()
+                except AssertionError as error:
+                    if str(error) != "target_pose cannot be None for move action.":
+                        raise
+                    logging.warning(
+                        "RoboTwin task %s seed %s has no expert grasp pose; skipping",
+                        task_name, candidate,
+                    )
+                    valid = False
+                else:
+                    valid = executor.submit(
+                        lambda: bool(expert.plan_success and expert.check_success())
+                    ).result()
             except UnStableError:
                 valid = False
             finally:

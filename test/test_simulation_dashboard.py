@@ -32,6 +32,7 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     defaults = EvaluationConfig(env_name='PickPlaceCounterToCabinet').model_dump()
     client_config = json.loads(json.dumps(get_client_config().to_dict(), default=lambda value: value.value))
     client_config['robots']['type'] = 'mock'
+    client_config['controller']['action_steps'] = 48
     client_config['vla_zmq'].update(ip='192.0.2.10', port='5566')
     page.on('pageerror', lambda error: errors.append(str(error)))
 
@@ -60,6 +61,8 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
                     data = jobs
             elif path == '/api/simulation/preview':
                 data = {'job': {'id': 'test-job', 'env_name': 'Task'} if jobs and jobs[-1]['status'] == 'running' else None, 'frames': [], 'trajectory': {'stream_id': 'test-stream', 'labels': ['left_joint', 'right_joint'], 'samples': [{'sequence': 1, 'timestamp': 1.0, 'state': [.1, .2]}]}}
+                if selection == 'single':
+                    data['trajectory']['samples'][0].update(action_fitted=[.3, .4], action_raw=[.5, .6])
             elif path.endswith('/stop'):
                 jobs[-1]['status'] = 'cancelled'
             elif path.endswith('/resume'):
@@ -94,7 +97,7 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.wait_for_function('document.getElementById("sim-start").disabled === false')
     page.locator('.cfg-row[data-key="rdm.mode"] select').first.select_option('async' if selection == 'suite' else 'sync')
     page.locator('.cfg-row[data-key="intra_chunk.intra_chunk_mode"] select').first.select_option('raw')
-    page.locator('.cfg-row[data-key="controller.action_steps"] input').first.fill('48')
+    assert page.locator('#main-params-tree .cfg-row[data-key="controller.action_steps"]').count() == 0
     page.locator('.cfg-row[data-key="controller.period"] input').first.fill('4.5')
     ids = page.locator('[id]').evaluate_all('(nodes) => nodes.map(node => node.id)')
     assert len(ids) == len(set(ids))
@@ -141,6 +144,20 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     assert '2 / 10' in page.locator('#sim-results').inner_text()
     page.wait_for_function('simulationPreview.active === true')
     assert 'Simulation Trajectories' in page.locator('#trajectory-source-label').inner_text()
+    if selection == 'single':
+        assert page.locator('#chk-traj-action-fitted').is_enabled()
+        assert page.locator('#chk-traj-action-fitted').is_checked()
+        assert page.evaluate('App.traj.buffer.action_fitted[0].joints_y') == [.3, .4]
+        assert page.evaluate('App.traj.buffer.action_raw[0].joints_y') == [.5, .6]
+        page.locator('#chk-traj-action-raw').check()
+        assert page.evaluate("App.traj.source.has('action_raw')")
+        page.locator('#btn-traj-all').click()
+        assert page.evaluate('App.traj.source.size') == 0
+        page.locator('#btn-traj-all').click()
+        assert page.evaluate('App.traj.source.size') == 3
+    else:
+        assert page.locator('#chk-traj-action-fitted').is_disabled()
+        assert page.locator('#chk-traj-action-raw').is_disabled()
     page.locator('#sim-preview-source').select_option('robot')
     page.wait_for_function('simulationPreview.active === false')
     assert page.locator('#camera-source-label').inner_text() == 'Camera Viewer'

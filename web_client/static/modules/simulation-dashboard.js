@@ -1,4 +1,4 @@
-import { initializeSimulation } from "/static/simulation.js?v=20261012-parallel-envs";
+import { initializeSimulation } from "/static/simulation.js?v=20261013-render-mode";
 
 const panel = document.getElementById("panel-simulation");
 const source = document.getElementById("sim-preview-source");

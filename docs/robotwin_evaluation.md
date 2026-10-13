@@ -39,6 +39,8 @@ python scripts/aloha_robotwin_eval.py \
 
 `fitting` 保留输入动作数量和时间戳；`interpolation` 使用 `--intra_chunk_sample_ratio` 调整动作数量，兼容 `--interpolation_sample_ratio`。夹爪维度不参与连续平滑。改变采样倍率会改变动作执行次数，比较成功率时需保持实验参数一致。
 
+同步模式默认使用 `--render_observation_mode chunk_boundary`：三种平滑方式均只在初始观测、处理后的 action chunk 结束和 episode 提前结束时采集相机图像。中间动作保留物理步进、关节状态和成功判定，并跳过动作内部的渲染更新。前一块的结束观测作为下一块的初始观测。视频和数据集相机观测也只在这些边界更新。需要中间画面时选择 `per_action`；异步模式始终逐动作采集。Web 首页对应 `robots.aloha_robotwin.render_observation_mode`，独立测评页在 Advanced Settings 中提供相同选项。
+
 任务列表使用 `--tasks task_a,task_b`，也可提供 YAML 文件，内容为列表或 `tasks: [...]`。它与 `--task_name` 二选一。`--env_name` 和 `--task_suite` 为兼容别名。
 
 默认专家检查生成 `seen/unseen` 指令。跳过专家检查时必须提供固定指令：
@@ -58,7 +60,7 @@ python scripts/aloha_robotwin_eval.py \
 data/aloha_robotwin_eval/evals/<seen或unseen>/<task>/<run_id>/
 ```
 
-每个 episode 的种子搜索从 `seed + episode × seed_stride` 开始，默认间隔 10000；最大尝试次数不能超过间隔。这样并行环境不会因跳过无效 seed 而使用重叠的种子范围。实际 seed 和指令在执行前保存，中断后复用该清单。这与源脚本连续递增 seed 的序列不同，比较旧实验时需核对实际 seed。
+每个 episode 的种子搜索从 `seed + episode × seed_stride` 开始，默认间隔 100；最大尝试次数不能超过间隔。这样并行环境不会因跳过无效 seed 而使用重叠的种子范围。实际 seed 和指令在执行前保存，中断后复用该清单。这与源脚本连续递增 seed 的序列不同，比较旧实验时需核对实际 seed。
 
 默认使用独立 worker；`--worker_episodes` 控制每次 worker 完成的 episode 数量。重复使用原命令及相同 `run_id` 会恢复已保存进度。影响测评的配置发生变化会拒绝续测，应使用新 `run_id`。
 

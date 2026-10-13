@@ -3,6 +3,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
   const choices = {
     platform: ["robocasa", "robotwin"],
     instruction_type: ["seen", "unseen"],
+    render_observation_mode: ["chunk_boundary", "per_action"],
     split: ["target", "pretrain"],
     mode: ["sync", "async"],
     intra_chunk_mode: ["raw", "interpolation", "fitting"],
@@ -25,6 +26,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     max_async_observation_lag_steps: "Maximum Observation Lag Steps (Blank for Default)",
     task_config: "RoboTwin Task Configuration",
     instruction_type: "Instruction Type",
+    render_observation_mode: "Camera Rendering (Sync Mode)",
     split: "Task Split",
   };
   const basicFields = getClientConfig ? ["n_episodes", "n_envs", "record", "video"]
@@ -38,7 +40,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
   const advancedFields = getClientConfig ? [] : [
     "n_envs", "gpu", "n_action_steps", "seed", "intra_chunk_mode", "inter_chunk_mode",
     "intra_chunk_sample_ratio", "async_replenish_threshold", "max_async_observation_lag_steps",
-    "task_config", "instruction_type", "split",
+    "task_config", "instruction_type", "render_observation_mode", "split",
   ];
   let defaults,
     selected = "",
@@ -248,9 +250,11 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
   function updateControls() {
     const robotwin = currentPlatform() === "robotwin";
     if (!getClientConfig) {
-      for (const key of ["task_config", "instruction_type"])
+      for (const key of ["task_config", "instruction_type", "render_observation_mode"])
         $("field-" + key).parentElement.hidden = !robotwin;
       $("field-split").parentElement.hidden = robotwin;
+      $("field-render_observation_mode").disabled = $("field-mode").value === "async";
+      $("field-render_observation_mode").title = "Async mode always renders every action.";
       $("field-gpu").parentElement.firstChild.textContent = robotwin
         ? "GPU Indices (e.g. 0 or 0,1; Blank to Inherit)"
         : "Simulation GPU Index (e.g. 2; Blank to Inherit)";
@@ -277,7 +281,9 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     }
     const input = document.createElement(choices[key] ? "select" : "input");
     input.id = prefix + "field-" + key;
-    if (choices[key]) input.append(...choices[key].map((v) => new Option(v, v)));
+    if (choices[key]) input.append(...choices[key].map((v) => new Option(
+      key === "render_observation_mode" ? {chunk_boundary: "Chunk boundaries", per_action: "Every action"}[v] : v, v
+    )));
     else input.type = typeof value === "boolean" ? "checkbox"
       : typeof value === "number" || value === null ? "number" : "text";
     if (input.type !== "checkbox") input.className = "input-text";
@@ -380,6 +386,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
             $("field-seed").value = defaults.seed;
             $("field-task_config").value = defaults.task_config;
             $("field-instruction_type").value = defaults.instruction_type;
+            $("field-render_observation_mode").value = defaults.render_observation_mode;
             $("task-name").value = "";
             updateControls();
             ready = true;

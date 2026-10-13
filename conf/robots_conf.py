@@ -163,6 +163,7 @@ def get_aloha_robotwin_config():
     config.seed = 0
     config.task_config = 'demo_clean'
     config.instruction_type = 'unseen'
+    config.render_observation_mode = 'chunk_boundary'
     config.action_type = 'qpos'
     config.camera = ConfigDict()
     config.camera.ref = 'head'
