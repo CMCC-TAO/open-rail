@@ -1,12 +1,12 @@
 [
   {
     "referrer": "cmcc-tao.github.io",
-    "count": 31,
-    "uniques": 20
+    "count": 32,
+    "uniques": 19
   },
   {
     "referrer": "Google",
-    "count": 13,
+    "count": 12,
     "uniques": 8
   },
   {
@@ -31,11 +31,6 @@
   },
   {
     "referrer": "lcnnwa8es0bc.feishu.cn",
-    "count": 1,
-    "uniques": 1
-  },
-  {
-    "referrer": "t.co",
     "count": 1,
     "uniques": 1
   }
