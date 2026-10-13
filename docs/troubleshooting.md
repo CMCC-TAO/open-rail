@@ -20,7 +20,7 @@ description: "Common issues with the web client, server, and robots and how to r
 	python run_web_client.py
 	```
 
-- The default configuration is `conf/default_conf.yaml`. Put custom configuration files under `conf/` and select one with `--conf custom_conf.yaml`.
+- The default configuration file is `conf/default_conf.yaml`. It is git-ignored and may not exist on a fresh clone; the Web console creates it on the first config save. Put custom configuration files under `conf/` and select one with `--conf custom_conf.yaml`.
 
 ### The port is occupied or the browser cannot connect
 
