@@ -1,4 +1,4 @@
-import { initializeSimulation } from "/static/simulation.js?v=20261013-runtime-lock";
+import { initializeSimulation } from "/static/simulation.js?v=20261014-poll-recovery";
 
 const panel = document.getElementById("panel-simulation");
 const source = document.getElementById("sim-preview-source");

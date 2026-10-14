@@ -29,6 +29,7 @@ def dashboard_browser():
 def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp_path, selection):
     page = dashboard_browser.new_page(viewport={'width': 1600, 'height': 1000})
     errors, requests, jobs = [], [], []
+    polling_failure = {"enabled": False}
     defaults = EvaluationConfig(env_name='PickPlaceCounterToCabinet').model_dump()
     client_config = json.loads(json.dumps(get_client_config().to_dict(), default=lambda value: value.value))
     client_config['robots']['type'] = 'mock'
@@ -56,6 +57,9 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
                 data = {'tasks': names, 'suites': [{'id': 'target50' if platform == 'robocasa' else 'all_tasks',
                         'tasks': names, 'split': 'target' if platform == 'robocasa' else None}]}
             elif path == '/api/simulation/jobs':
+                if request.method == 'GET' and polling_failure['enabled']:
+                    route.abort('failed')
+                    return
                 if request.method == 'POST':
                     config = json.loads(request.post_data)
                     config = EvaluationConfig(**config).model_dump()
@@ -94,9 +98,19 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.goto('http://dashboard.test/')
     robot_selector = page.locator('.cfg-row[data-key="robots.type"] select').first
     robot_selector.wait_for()
+    simulation_rows = page.locator('#config-tree .cfg-row').filter(
+        has=page.locator('[title="intra_chunk.output_sample_ratio"], [title="rdm.latency_compensation"]')
+    )
+    assert simulation_rows.count() == 2
+    assert simulation_rows.evaluate_all('(rows) => rows.every(row => row.style.display === "none")')
     assert page.locator('#sim-start').is_disabled()
     assert page.locator('#btn-start').is_enabled()
     assert page.locator('#btn-observe').is_enabled()
+    robot_selector.select_option('robocasa')
+    assert simulation_rows.evaluate_all('(rows) => rows.every(row => row.style.display === "")')
+    robot_selector.select_option('mock')
+    assert simulation_rows.evaluate_all('(rows) => rows.every(row => row.style.display === "none")')
+    assert page.evaluate('App.config.intra_chunk.output_sample_ratio === 1 && App.config.rdm.latency_compensation === true')
     robot_selector.select_option('robocasa')
     page.wait_for_function('document.getElementById("sim-start").disabled === false')
     assert page.locator('#sim-field-platform').count() == 0
@@ -143,6 +157,10 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.locator('#sim-field-record').check()
     page.locator('#sim-start').click()
     page.wait_for_function('document.getElementById("sim-stop").disabled === false')
+    polling_failure['enabled'] = True
+    page.wait_for_function('document.getElementById("sim-error").textContent.includes("Failed to fetch")')
+    polling_failure['enabled'] = False
+    page.wait_for_function('document.getElementById("sim-error").textContent === ""')
     runtime_buttons = ['start', 'pause', 'reset', 'observe', 'infer', 'control']
     for button in runtime_buttons:
         assert page.locator('#btn-' + button).is_disabled()
@@ -185,8 +203,24 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
         page.locator('#btn-traj-all').click()
         assert page.evaluate('App.traj.source.size') == 3
     else:
-        assert page.locator('#chk-traj-action-fitted').is_disabled()
-        assert page.locator('#chk-traj-action-raw').is_disabled()
+        assert page.locator('#chk-traj-action-fitted').is_enabled()
+        assert page.locator('#chk-traj-action-raw').is_enabled()
+        assert page.evaluate('App.traj.buffer.action_fitted.length') == 0
+        assert page.evaluate('App.traj.buffer.action_raw.length') == 0
+        page.locator('#chk-traj-action-raw').check()
+        page.evaluate("applySimulationTrajectory({stream_id: 'test-stream', labels: ['left_joint', 'right_joint'], samples: [{sequence: 2, timestamp: 2, state: [.2, .3]}]})")
+        assert page.locator('#chk-traj-action-raw').is_checked()
+        page.locator('#chk-traj-state').uncheck()
+        page.locator('#btn-traj-all').click()
+        assert page.evaluate('App.traj.source.size') == 3
+        page.locator('#btn-traj-all').click()
+        assert page.evaluate('App.traj.source.size') == 0
+        page.locator('#btn-traj-all').click()
+        page.evaluate("applySimulationTrajectory({stream_id: 'test-stream', labels: ['left_joint', 'right_joint'], samples: [{sequence: 3, timestamp: 3, state: [.2, .3], action_fitted: [.4, .5], action_raw: [.6, .7]}]})")
+        assert page.locator('#chk-traj-action-fitted').is_checked()
+        assert page.locator('#chk-traj-action-raw').is_checked()
+        assert page.evaluate('App.traj.buffer.action_fitted[0].joints_y') == [.4, .5]
+        assert page.evaluate('App.traj.buffer.action_raw[0].joints_y') == [.6, .7]
     page.locator('#sim-preview-source').select_option('robot')
     page.wait_for_function('simulationPreview.active === false')
     assert page.locator('#camera-source-label').inner_text() == 'Camera Viewer'

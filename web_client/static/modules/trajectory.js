@@ -625,7 +625,7 @@ async function setupTrajPanel() {
     });
     if (btnAllSource) {
       const s = App.traj.source;
-      const sources = App.traj.simulationLayout?.sources || ['state', 'action_fitted', 'action_raw'];
+      const sources = ['state', 'action_fitted', 'action_raw'];
       const allSelected = sources.every(source => s.has(source));
       btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
@@ -685,7 +685,7 @@ async function setupTrajPanel() {
   if (btnAllSource) {
     btnAllSource.addEventListener('click', () => {
       const s = App.traj.source;
-      const sources = App.traj.simulationLayout?.sources || ['state', 'action_fitted', 'action_raw'];
+      const sources = ['state', 'action_fitted', 'action_raw'];
       const allSelected = sources.every(source => s.has(source));
       App.traj.source = allSelected
         ? new Set()

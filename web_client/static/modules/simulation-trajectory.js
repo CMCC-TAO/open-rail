@@ -14,15 +14,15 @@ function syncSimulationTrajectoryControls() {
   for (const [id, source] of [['chk-traj-state', 'state'], ['chk-traj-action-fitted', 'action_fitted'], ['chk-traj-action-raw', 'action_raw']]) {
     const checkbox = $(id);
     if (checkbox) {
-      checkbox.disabled = !!App.traj.simulationLayout && !App.traj.simulationLayout.sources.includes(source);
-      checkbox.checked = !checkbox.disabled && App.traj.source.has(source);
+      checkbox.disabled = false;
+      checkbox.checked = App.traj.source.has(source);
     }
   }
   const button = $('btn-traj-pause');
   const allSources = $('btn-traj-all');
   if (allSources) {
     allSources.disabled = false;
-    const sources = App.traj.simulationLayout?.sources || ['state', 'action_fitted', 'action_raw'];
+    const sources = ['state', 'action_fitted', 'action_raw'];
     allSources.textContent = sources.every(source => App.traj.source.has(source)) ? 'None' : 'All';
   }
   if (button) button.innerHTML = App.traj.paused

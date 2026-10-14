@@ -13,6 +13,28 @@ const CONFIG_EXCLUDED_SUB_GROUP_KEYS = new Set([
   'visualize.trajectory',
 ]);
 
+const SIMULATION_CONFIG_KEYS = new Set([
+  'intra_chunk.output_sample_ratio',
+  'intra_chunk.preserve_input_timestamps',
+  'controller.action_steps',
+  'inter_chunk.max_transition_steps',
+  'rdm.skip_initial_frames',
+  'rdm.action_consume_mode',
+  'rdm.latency_compensation',
+  'rdm.action_replenish_threshold',
+  'rdm.max_async_observation_lag_steps',
+]);
+
+function updateSimulationConfigVisibility() {
+  const robotType = getSimulationClientConfig().robots?.type;
+  const simulation = ['robocasa', 'aloha_robotwin'].includes(robotType);
+  $('config-tree').querySelectorAll('.cfg-row[data-key]').forEach(row => {
+    if (SIMULATION_CONFIG_KEYS.has(row.dataset.key)) {
+      row.style.display = simulation ? '' : 'none';
+    }
+  });
+}
+
 // Sub-group definitions for root-level leaf keys in the BASIC section
 const BASIC_SUBGROUPS = {
   intra_chunk: ['intra_chunk_mode', 'fitting_deg', 'fitting_num_samples'],
@@ -486,6 +508,7 @@ function renderConfigTree(cfg) {
   root.innerHTML = '';
   renderMainParameters(cfg);
   buildTree(cfg, '', root);
+  updateSimulationConfigVisibility();
   restoreConfigTreeUiState(uiState);
   document.dispatchEvent(new CustomEvent('app-config-updated'));
 }
@@ -1136,6 +1159,7 @@ function markPending() {
   $('pending-badge').classList.remove('hidden');
   const btn = $('btn-apply-config');
   if (btn) btn.classList.add('btn-primary');
+  updateSimulationConfigVisibility();
   document.dispatchEvent(new CustomEvent('app-config-updated'));
 }
 

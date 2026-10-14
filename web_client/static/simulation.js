@@ -54,6 +54,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     catalogGeneration = 0,
     chosenTasks = new Set(),
     lastError = "",
+    lastErrorSource = "",
     artifactJob = "";
   const platformForConfig = (config) => ({robocasa: "robocasa", aloha_robotwin: "robotwin"})[config.robots?.type];
   const currentPlatform = () => getClientConfig
@@ -78,11 +79,18 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       );
     return data;
   }
-  function error(e) {
+  function error(e, source = "action") {
     $("error").textContent = e.message;
     if (prefix && lastError !== e.message && typeof window.toast === "function")
       window.toast(e.message, "error");
     lastError = e.message;
+    lastErrorSource = source;
+  }
+  function clearPollingError() {
+    if (lastErrorSource !== "poll") return;
+    $("error").textContent = "";
+    lastError = "";
+    lastErrorSource = "";
   }
   function fileChanged() {
     const name = $("files").value;
@@ -163,6 +171,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       if (!selected) {
         $("stop").disabled = true;
         $("resume").disabled = true;
+        clearPollingError();
         return;
       }
       const [job, logs, files] = await Promise.all([
@@ -185,8 +194,9 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       $("files").replaceChildren(...files.map((f) => new Option(f, f)));
       if (files.includes(old)) $("files").value = old;
       fileChanged();
+      clearPollingError();
     } catch (e) {
-      error(e);
+      error(e, "poll");
     } finally {
       busy = false;
     }
