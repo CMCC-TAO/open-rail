@@ -194,9 +194,21 @@ async function persistRecordingConfigChange(patch) {
 function renderRecordingConfigTree(cfg = App.config) {
   const root = $('recording-config-tree');
   if (!root) return;
+  const scrollTop = root.scrollTop;
+  const openGroups = new Set([...root.querySelectorAll('.cfg-group-header.open')].map(_cfgGroupHeaderPath));
   root.innerHTML = '';
   const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : {};
-  buildTree(recordCfg, 'record', root);
+  const recordTreeCfg = { ...recordCfg };
+  delete recordTreeCfg.image_overlay;
+  buildTree(recordTreeCfg, 'record', root);
+  root.appendChild(buildImageOverlayGroup(cfg));
+  root.querySelectorAll('.cfg-group-header').forEach(header => {
+    const open = openGroups.has(_cfgGroupHeaderPath(header));
+    header.classList.toggle('open', open);
+    header.nextElementSibling.style.display = open ? '' : 'none';
+  });
+  syncImageOverlay(cfg);
+  root.scrollTop = scrollTop;
   syncRecordingCheckboxesFromConfig(cfg);
   syncRecordingSwitchUI();
 }

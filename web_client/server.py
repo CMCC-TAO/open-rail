@@ -22,7 +22,7 @@ import time
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 from conf import client_conf
 
@@ -40,10 +40,10 @@ except ImportError:
     _HAS_YAML = False
 
 import uvicorn
-from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import Body, FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ── project root on sys.path ────────────────────────────────────────────────
 ROOT = Path(__file__).resolve().parent.parent
@@ -149,6 +149,7 @@ class ClientState:
 client_state = ClientState()
 select_directory_lock = asyncio.Lock()
 reset_resume_lock = asyncio.Lock()
+overlay_capture_lock = asyncio.Lock()
 
 _RESOURCE_CACHE = {
     "ts": 0.0,
@@ -672,6 +673,118 @@ def _ask_directory_with_tk(initial_dir: str) -> str:
     selected = filedialog.askdirectory(title="Select Dataset Directory", initialdir=initial_dir) or ""
     root.destroy()
     return selected
+
+
+OVERLAY_CAMERAS = ("cam.head", "cam.hand_left", "cam.hand_right")
+OVERLAY_IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", "")
+
+
+class OverlayCaptureRequest(BaseModel):
+    path: str
+    index: Optional[int] = Field(default=None, ge=0)
+
+
+def _overlay_root(path: str) -> Path:
+    if not path.strip():
+        raise HTTPException(400, "Image overlay path is required.")
+    root = Path(path.strip()).expanduser()
+    if not root.is_absolute():
+        root = ROOT / root
+    return root / "overlay"
+
+
+def _overlay_image_path(root: Path, index: int, camera: str) -> Optional[Path]:
+    folder = root / f"{index:06d}"
+    for suffix in OVERLAY_IMAGE_SUFFIXES:
+        image = folder / f"{camera}{suffix}"
+        if image.is_file():
+            return image
+    return None
+
+
+def _overlay_indices(root: Path) -> list[int]:
+    if not root.is_dir():
+        return []
+    return sorted(
+        int(folder.name) for folder in root.iterdir()
+        if folder.is_dir() and folder.name.isascii() and folder.name.isdecimal()
+        and folder.name == f"{int(folder.name):06d}"
+    )
+
+
+def _read_overlay_frames(path: str, index: int) -> dict:
+    root = _overlay_root(path)
+    indices = _overlay_indices(root)
+    cameras = [camera for camera in OVERLAY_CAMERAS if _overlay_image_path(root, index, camera)]
+    return {"status": "ok", "indices": indices, "cameras": cameras}
+
+
+@app.get("/api/client/overlay/frames")
+async def get_overlay_frames(path: str, index: int = Query(ge=0)):
+    try:
+        return await asyncio.to_thread(_read_overlay_frames, path, index)
+    except OSError as e:
+        raise HTTPException(500, f"Failed to read overlay images: {e}") from e
+
+
+@app.get("/api/client/overlay/image")
+async def get_overlay_image(
+    path: str,
+    camera: Literal["cam.head", "cam.hand_left", "cam.hand_right"],
+    index: int = Query(ge=0),
+):
+    image = await asyncio.to_thread(_overlay_image_path, _overlay_root(path), index, camera)
+    if image is None:
+        raise HTTPException(404, f"Overlay image not found: {camera}")
+    return FileResponse(image, headers={"Cache-Control": "no-store"})
+
+
+def _save_overlay_capture(path: str, images: dict) -> Path:
+    root = _overlay_root(path)
+    root.mkdir(parents=True, exist_ok=True)
+    index = max(_overlay_indices(root), default=-1) + 1
+    while True:
+        folder = root / f"{index:06d}"
+        try:
+            folder.mkdir()
+            break
+        except FileExistsError:
+            index += 1
+    try:
+        for camera in OVERLAY_CAMERAS:
+            (folder / f"{camera}.jpg").write_bytes(images[camera])
+    except Exception:
+        shutil.rmtree(folder)
+        raise
+    return folder
+
+
+@app.post("/api/client/overlay/capture")
+async def capture_overlay(req: OverlayCaptureRequest):
+    _overlay_root(req.path)
+    async with overlay_capture_lock:
+        with client_state.lock:
+            visualizer = getattr(client_state.vla_client, "visualize_server", None)
+            snapshot = getattr(visualizer, "latest_imgs_snapshot", None)
+            if not snapshot:
+                raise HTTPException(400, "No camera frames available. Start Observe first.")
+            frames = snapshot[1]
+            missing = [camera for camera in OVERLAY_CAMERAS if camera not in frames]
+            if missing:
+                raise HTTPException(400, f"Camera frames unavailable: {', '.join(missing)}")
+            images = {camera: bytes(frames[camera]) for camera in OVERLAY_CAMERAS}
+            if not all(images.values()):
+                raise HTTPException(400, "Camera frames are empty.")
+        try:
+            folder = await asyncio.to_thread(_save_overlay_capture, req.path, images)
+        except OSError as e:
+            raise HTTPException(500, f"Failed to capture overlay images: {e}") from e
+        index = int(folder.name)
+        with client_state.lock:
+            overlay = client_state.config.record.image_overlay
+            overlay.path = req.path.strip()
+            overlay.index = index
+        return {"status": "ok", "path": str(folder), "index": index, "next_index": index + 1}
 
 
 @app.get("/api/client/record/episodes")
