@@ -75,6 +75,18 @@ def _ensure_dds_env(conf_name: str) -> None:
         pass
 
 
+def _finalize_multiprocessing_resources() -> None:
+    """Run CPython's IPC finalizers before bypassing interpreter shutdown.
+
+    Queue feeder threads can retain semaphore references even after close().
+    Only non-blocking finalizers (priority >= 0) are run: SDK destructors and
+    unbounded process/thread joins must not be invoked here.
+    """
+    from multiprocessing import util
+
+    util._run_finalizers(0)
+
+
 def main():
     args = parse_args()
     kill_port(port=args.port)
@@ -118,6 +130,7 @@ def main():
         # Some native robot SDK resources may segfault during CPython finalization.
         # After uvicorn shutdown completes, force immediate process exit to avoid it.
         if not args.reload:
+            _finalize_multiprocessing_resources()
             try:
                 sys.stdout.flush()
                 sys.stderr.flush()

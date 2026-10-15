@@ -317,6 +317,22 @@ function setRunningUI(running, paused = false) {
   setThreadControlUI();
 }
 
+async function waitForClientStart(timeoutMs = 180000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await apiFetch('/api/client/status', { timeoutMs: 3000 });
+    const state = res?.data;
+    if (state?.running && !state?.starting) return state;
+    if (state?.starting === false) {
+      toast('Client failed to start. Check the initialization error.', 'error');
+      throw new Error('Client failed to start');
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  toast('Client startup timed out. Recording was not started.', 'error');
+  throw new Error('Client startup timed out');
+}
+
 function isRuntimeShortcutTypingTarget(el) {
   if (!el) return false;
   const tag = (el.tagName || '').toLowerCase();
@@ -434,21 +450,7 @@ async function wireEvents() {
   if (confSelect) {
     // Load available yaml files
     try {
-      const res = await apiFetch('/api/client/config/yaml_files');
-      const files = res.files || [];
-      // confSelect.innerHTML = '<option value="">-- Select Config File --</option>';
-      files.forEach(file => {
-        const option = document.createElement('option');
-        option.value = file;
-        option.textContent = file;
-        confSelect.appendChild(option);
-      });
-      
-      // Set default value from CONF_FILE
-      const defaultFile = String(CONF_FILE).split('/').pop();
-      if (files.includes(defaultFile)) {
-        confSelect.value = defaultFile;
-      }
+      await refreshConfigFileSelect();
     } catch (e) {
       console.error('Failed to load yaml files:', e);
     }
@@ -456,14 +458,18 @@ async function wireEvents() {
     // Handle config file selection change
     confSelect.addEventListener('change', async (e) => {
       const selectedFile = e.target.value;
-      if (!selectedFile) return;
+      if (!selectedFile || configOperationBusy) return;
+      const previousFile = CONF_FILE;
+      setConfigOperationBusy(true);
       
       try {
         toast(`Loading ${selectedFile}.`, 'ok');
         const res = await apiFetch('/api/client/config/load', { 
           method: 'POST', 
-          body: JSON.stringify({ path: selectedFile }) 
+          body: JSON.stringify({ path: selectedFile }),
+          timeoutMs: CONFIG_REQUEST_TIMEOUT_MS,
         });
+        CONF_FILE = res.path || selectedFile;
         App.config = res.config || {}; 
         App.pendingPatch = {};
         clearPending();
@@ -471,14 +477,16 @@ async function wireEvents() {
         renderRecordingConfigTree(App.config);
         await loadDefaultLangFile();
         applyVisualConfig(App.config);
-        const confRes = await apiFetch('/api/client/config/path', { 
-          method: 'POST', 
-          body: JSON.stringify({ path: selectedFile }) 
-        });
+        await refreshConfigFileSelect();
         toast(`Config ${selectedFile} loaded.`, 'ok');
+        if (res.requires_restart) toast('Configuration changed. Start Observe again.', 'info');
       } catch (e) {
+        confSelect.value = [...confSelect.options].some(option => option.value === previousFile)
+          ? previousFile : '';
         toast('Failed to load config file.', 'error');
         console.error(e);
+      } finally {
+        setConfigOperationBusy(false);
       }
     });
   }
@@ -496,12 +504,16 @@ async function wireEvents() {
   });
   $('btn-saveas-confirm').addEventListener('click', async () => {
     const path = $('saveas-path').value.trim();
-    if (!path) return;
+    if (!path || configOperationBusy) return;
     $('modal-saveas').classList.add('hidden');
+    setConfigOperationBusy(true);
     try {
-      await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: path }) });
+      const res = await apiFetch('/api/client/config/save', { method: 'POST', body: JSON.stringify({ path: path }) });
+      CONF_FILE = res.active_path || path;
+      await refreshConfigFileSelect();
       toast(`Saved as ${path}`, 'ok');
     } catch (e) { /* toasted */ }
+    finally { setConfigOperationBusy(false); }
   });
   $('btn-saveas-cancel').addEventListener('click', () => $('modal-saveas').classList.add('hidden'));
 
@@ -509,13 +521,19 @@ async function wireEvents() {
   setupMainParamsResize();
 
   $('btn-apply-config').addEventListener('click', async () => {
+    if (configOperationBusy) return;
     if (!Object.keys(App.pendingPatch).length) { toast('No pending changes.', 'warn', 2000); return; }
+    const pending = { ...App.pendingPatch };
+    setConfigOperationBusy(true);
 
     const uiState = captureConfigTreeUiState();
     const restoreConfigTreeState = () => restoreConfigTreeUiState(uiState);
 
     try {
-      const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
+      const res = await apiFetch('/api/client/config/patch', {
+        method: 'POST', body: JSON.stringify({ patch: pending }), timeoutMs: CONFIG_REQUEST_TIMEOUT_MS,
+      });
+      if (res.path) CONF_FILE = res.path;
       App.config = res.config || {};
       App.pendingPatch = {};
       clearPending();
@@ -524,17 +542,25 @@ async function wireEvents() {
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
+      if (res.requires_restart) toast('Robot type changed. Start Observe again.', 'info');
       // Auto-save after apply
       const confRes = await apiFetch('/api/client/config/path');
       if (confRes.path) {
         toast(`Config ${confRes.path} applied.`, 'ok');
-        await apiFetch('/api/client/config/save', {
+        const saved = await apiFetch('/api/client/config/save', {
           method: 'POST',
           body: JSON.stringify({ path: confRes.path }),
         });
+        CONF_FILE = saved.active_path || confRes.path;
+        await refreshConfigFileSelect();
         toast(`Saved to ${confRes.path}`, 'ok');
       }
-    } catch (e) { /* toasted */ }
+    } catch (e) {
+      App.pendingPatch = { ...pending, ...App.pendingPatch };
+      markPending();
+    } finally {
+      setConfigOperationBusy(false);
+    }
   });
 
   // Left column collapse / reveal
@@ -611,16 +637,16 @@ async function wireEvents() {
       // Now start client
       toast('Client starting…', 'info');
       await apiFetch('/api/client/start', { method: 'POST', timeoutMs: 15000 });
-      setRunningUI(true, false);
+      // /start only schedules initialization; a successful response is not
+      // evidence that the runtime exists yet (especially after Ctrl+C).
+      const startedState = await waitForClientStart();
+      applyThreadState(startedState);
+      setRunningUI(true, startedState.paused ?? false);
 
       // Now data recording if in auto mode
       const autoCheckRecordMode = $('chk-record-auto');
-      if (autoCheckRecordMode && autoCheckRecordMode.checked) {
-        const startStopRecordingBtn = $('btn-recording-startstop');
-        if (startStopRecordingBtn) {
-          startStopRecordingBtn.disabled = false;
-          startStopRecordingBtn.click();
-        }
+      if (autoCheckRecordMode && autoCheckRecordMode.checked && !App.isRecording) {
+        await startDataRecording();
       }
     } catch (e) {
     }
