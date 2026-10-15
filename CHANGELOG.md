@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [20261015]
+
+- Added image overlays to the Camera Viewer, with multi-camera reference capture, indexed image selection, configurable storage paths, and adjustable opacity.
+- Allowed EvalLog, LeRobot, and ExpeData to all be unchecked; require at least one selection only when starting manual or automatic recording, with validation on both the frontend and backend.
+
 ## [20261013]
 
 - Fixed web-client configuration switching and robot-type changes while observation is active; validate configurations before releasing the current runtime and require observation to be restarted after switching.
