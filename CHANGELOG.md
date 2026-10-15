@@ -1,5 +1,19 @@
 # CHANGELOG
 
+## [20261015]
+
+- Added image overlays to the Camera Viewer, with multi-camera reference capture, indexed image selection, configurable storage paths, and adjustable opacity.
+- Allowed EvalLog, LeRobot, and ExpeData to all be unchecked; require at least one selection only when starting manual or automatic recording, with validation on both the frontend and backend.
+
+## [20261013]
+
+- Fixed web-client configuration switching and robot-type changes while observation is active; validate configurations before releasing the current runtime and require observation to be restarted after switching.
+- Kept the active YAML configuration selection synchronized across loading, Apply, Save As, and page refreshes.
+- Removed implicit selection of the first YAML file when `default_conf.yaml` is missing, and kept repeated Apply operations on the selected file.
+- Made Stop and Pause suspend observation reads in the robot subprocess, preventing Mock episode playback from continuing in the background and rejecting stale frames on resume.
+- Made automatic recording wait for successful client startup, cleared startup state on failure, and moved recording initialization off the web server's event loop.
+- Fixed shutdown semaphore leaks by releasing the shared control lock and finalizing IPC resources before forced process exit.
+
 ## [20260924]
 
 - Fixed intermittent language instruction switching in the web client and inference requests.

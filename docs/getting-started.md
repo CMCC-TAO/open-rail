@@ -80,7 +80,7 @@ Run in the terminal:
 python run_web_client.py
 ```
 
-Without arguments, the program reads `conf/default_conf.yaml` by default and listens on `0.0.0.0:9000`. To use a custom config file, pass the filename via `--conf`, and place it in the `conf/` directory:
+Without arguments, the program reads `conf/default_conf.yaml` if present and listens on `0.0.0.0:9000`. The file is git-ignored: a fresh clone has none, and the Web console creates it on the first config save. To use a custom config file, pass the filename via `--conf`, and place it in the `conf/` directory:
 
 ```bash
 python run_web_client.py --conf custom_conf.yaml
@@ -138,7 +138,7 @@ The Mock Robot replays historical observations from LeRobot-format datasets, sui
 ```
 
 **Steps**:
-1. In `conf/default_conf.yaml`, fill in `dataset_path` under `robots.mock`.
+1. Point `robots.mock.dataset_path` to the dataset — edit it in the Web console configuration tree and **Apply** (saved to `conf/default_conf.yaml`), or set it in that file manually.
 2. Ensure camera names match the video directory names.
 3. In the Web console configuration panel, select **Mock Robot**.
 4. Start the client task; you should see observation replay and action responses.

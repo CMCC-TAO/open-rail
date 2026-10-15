@@ -15,8 +15,8 @@ except:
 '''
 # Different models need to modify model path and obs mapping at TODO locations in the code
 python vis_eval.py \
---model_path /hy0505/checkpoints/gr00t_finetune/pickbottle_499_chunk64_20250507_192258_b24/checkpoint-60000 \
---gt_root /hy0505/dataset/A2d_zyhy_data/gr00t/task_158284_depth_test/task_158284_test \
+--model_path /path/to/checkpoint \
+--gt_root /path/to/dataset \
 --lookahead_idx 64 \
 --episode_id 0 \
 --chunk_id 0 \

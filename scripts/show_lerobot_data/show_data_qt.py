@@ -459,7 +459,7 @@ class MainWindow(QMainWindow):
     def parse_args(self):
         import argparse
         parser = argparse.ArgumentParser()
-        parser.add_argument("-p","--data-path", type=str, default="/home/rm/wxz/EmbodiedAI/dataset/task_all/task_776_first_10_episodes")
+        parser.add_argument("-p","--data-path", type=str, default="/path/to/dataset")
         parser.add_argument("-id","--episode-id", type=int, default=2)
         parser.add_argument("-text","--using_text", type=int, default=True)
         parser.add_argument("-mode","--using_model", type=int, default=1)

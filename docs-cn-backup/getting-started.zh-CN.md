@@ -69,7 +69,7 @@ python -m pip install -r requirements.txt
 python run_web_client.py
 ```
 
-不带参数时，程序默认读取 `conf/default_conf.yaml`，并监听 `0.0.0.0:9000`。如果使用自定义配置文件，文件名通过 `--conf` 传入，并放在 `conf/` 目录下：
+不带参数时，程序读取 `conf/default_conf.yaml`（若存在）并监听 `0.0.0.0:9000`。该文件不随仓库分发，克隆后本地并不存在，首次在 Web 控制台保存配置时才会生成。如果使用自定义配置文件，请将文件放在 `conf/` 目录下，并通过 `--conf` 传入文件名：
 
 ```bash
 python run_web_client.py --conf custom_conf.yaml
@@ -123,7 +123,7 @@ Mock 机器人会从 LeRobot 格式的数据集中回放历史观测，适合演
 ```
 
 **操作步骤**：
-1. 在 `conf/default_conf.yaml` 的 `robots.mock` 中填写 `dataset_path`。
+1. 把 `robots.mock.dataset_path` 指向数据集——在 Web 控制台配置树中修改并点 **Apply**（保存到 `conf/default_conf.yaml`），或直接在该文件中手动填写。
 2. 确保相机名称与视频目录名一致。
 3. 在 Web 控制台的配置面板中选择 **Mock 机器人**。
 4. 启动客户端任务，即可看到观测回放和随机动作响应。

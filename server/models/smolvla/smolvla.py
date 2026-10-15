@@ -77,7 +77,7 @@ class ModelVLA:
         path = config["model_path"]
         dataset_root = config["root_path"]
         if path is None:
-            model_path = '/home/rm/wxz/EmbodiedAI/vla_infer_remote/vla_infer/model/checkpoint_5w5/055000/pretrained_model'
+            model_path = '/path/to/pretrained_model'
         else:
             model_path = path
         cfg = TrainPipelineConfig(dataset = DatasetConfig(...))
@@ -105,7 +105,7 @@ class ModelVLA:
         )
         print('policy load finished!!')
         print('policy load finished!!')
-        # file_path = '/home/robot/Downloads/lerobot/task_158284_depth_test/task_158284_test/data/chunk-000/episode_000000.parquet'
+        # file_path = '/path/to/dataset/data/chunk-000/episode_000000.parquet'
         # df = pd.read_parquet(file_path)
         # self.init_state = df.iloc[0, 0]
         # self.policy.eval()
@@ -203,9 +203,9 @@ def save_observation(observation,predicted_action, output_dir):
 
 if __name__ == "__main__":
     # 其它vla模型参照下面的代码，测试通过即可
-    # model = ModelVLA('/home/zhangjian/zhangjian/lerobot/070000/pretrained_model')
-    model = ModelVLA('/home/rm/wxz/EmbodiedAI/vla_infer_remote/vla_infer/model/checkpoint_5w5/055000/pretrained_model')
-    # model = ModelVLA('/home/rm/wxz/EmbodiedAI/lerobot/model/smol_vla/task_138_8w/pretrained_model')
+    # model = ModelVLA('/path/to/pretrained_model')
+    model = ModelVLA('/path/to/pretrained_model')
+    # model = ModelVLA('/path/to/pretrained_model')
     obs = {
         'cam.head': np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),
         'cam.hand_left': np.random.randint(0, 256, (480, 640, 3), dtype=np.uint8),

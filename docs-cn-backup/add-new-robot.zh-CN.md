@@ -127,7 +127,7 @@ def get_robots_config():
 
 ### 3. 注册 Web 工厂
 
-新机器人类型通过在 [`client/robots/robot_proxy.py`](../../client/robots/robot_proxy.py) 的 `_ROBOT_MODULES` 映射中添加一条记录完成注册，该映射把每个 `RobotType` 取值对应到暴露其 `RobotBody` 的模块：
+新机器人类型通过在 [`client/robots/robot_proxy.py`](../../client/robots/robot_proxy.py) 的 `_ROBOT_MODULES` 映射中添加一条记录完成注册，该映射把每个 `RobotType` 取值对应到定义其 `RobotBody` 的模块：
 
 ```python
 _ROBOT_MODULES: Dict[str, str] = {

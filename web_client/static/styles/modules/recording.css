@@ -175,6 +175,34 @@
   min-width: 112px;
 }
 
+#image-overlay-enable { width: auto; margin: 0; }
+#image-overlay-group .cfg-key { min-width: 88px; }
+#image-overlay-group .cfg-row:first-child {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+}
+.image-overlay-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 4px;
+}
+.image-overlay-actions label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-size-2);
+  cursor: pointer;
+}
+.image-overlay-status {
+  color: var(--text-muted);
+  font-size: var(--font-size-2);
+  overflow-wrap: anywhere;
+}
+
 .recording-file-section {
   display: flex;
   flex-direction: column;

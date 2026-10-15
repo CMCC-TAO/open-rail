@@ -1,256 +1,352 @@
+import logging
 import time
-import cv2
+from typing import Callable, Optional, Sequence
+
 import numpy as np
 import pandas as pd
-from .Ti5Robot import Ti5Robot as Robot
-from .Ti5Camera import Ti5Camera as Camera
+from ti5_t170c_sdk import Ti5Robot, create_camera
 
 from ..base_robot import RobotBase
 
-import logging
-import rclpy
-import threading
 
 class RobotBody(RobotBase):
+    """TI5 T170c VLA adapter (26-DOF: arm + hand; matches VLA training)."""
+
     def __init__(self, config):
-        """Initialize the Ti5_T170C robot body with camera and robot instances.
-        
-        Args:
-            config (dict): Configuration dictionary containing robot and camera settings
-        """
         super().__init__(config)
-        self.cfg = config
         self.logger = logging.getLogger(__name__)
-        
-        # ============================================
-        # Initialize rclpy and then create a ROS node
-        # ============================================
-        if not rclpy.ok():
-            rclpy.init()
+        self.cfg = config
+        # Keep model action_dim from parse_action_layout (arm+hand=26).
+        # state_dim may be larger when manual segments (e.g. head) are present.
+        if not self.action_dim:
+            self.action_dim = 26
 
-        # ============================================
-        # Initialize Ti5 Robot & Camera Nodes
-        # ============================================
-        self.camera = Camera(self.cfg)
-        self.robot = Robot(self.cfg)
+        cam_cfg = self.cfg.get("camera", {})
+        # Initialize DDS before ZMQ camera traffic so joint discovery is not starved.
+        self.robot = Ti5Robot()
+        self._wait_for_joint_state(timeout_s=float(cam_cfg.get("joint_warmup_s", 5.0)))
+        self.camera = create_camera(cam_cfg)
 
-        # =========================
-        # Unified ROS Spinning
-        # =========================
-        self.running = True
-        self._start_spin_thread()
-
-        # =========================
-        # Gripper State Cache
-        # =========================
-        self.gripper_cmd = np.zeros(2)
-        self.gripper_count = 0
+        self.current_state = np.zeros(self.state_dim or self.action_dim, dtype=np.float32)
+        state, _ = self.robot.full_joint_states()
+        self.current_state = self._trim_state(state)
         self.current_timestamp = 0
-        self.current_state = None
-        
-        self.logger.info("RobotBody initialization completed!")
-        time.sleep(2.0)
+        self.hand_count = 0
 
-
-    def _start_spin_thread(self):
-        def spin_worker():
-            while self.running:
-                rclpy.spin_once(self.camera, timeout_sec=0.005)
-                rclpy.spin_once(self.robot, timeout_sec=0.005)
-        spin_thread = threading.Thread(target=spin_worker, daemon=True)
-        spin_thread.start()
-
-    # ==================================================================
-    # Control robot (receives 26-dimensional actions!)
-    # ==================================================================
     def control_robot(self, action):
+        """Apply VLA action chunk to the robot.
+
+        Only gradual/stepwise segments inside the model action vector are driven
+        here (arm + hand, dim=26). Segments with policy='manual' (e.g. head) are
+        Web Robot Control only via execute_action / _control_robot.
         """
-        Action sequence concatenation order:
-        action = 26-dimensional vector
-        0~7    left_arm
-        7~14   right_arm
-        14~20  left_hand
-        20~26  right_hand
-        """
-        action = np.array(action).flatten()
-        assert len(action) == 26, "Action must be 26-dimensional"
-        
-        # Send commands directly to the new version robot
-        self.robot.send_robot_action(action)
+        action = np.asarray(action, dtype=np.float32)
+        segments = {
+            name: action[v["start"] : v["end"]]
+            for name, v in self.action_layout.items()
+            if v.get("policy") != "manual" and v["end"] <= action.size
+        }
 
-    # ==================================================================
-    # Control partial joints of the robot
-    # ==================================================================
-    def control_robot_partial(self, name="default", action=[0.0]):
+        if "arm" in segments:
+            self.execute_action({"arm": segments["arm"].tolist()})
 
-        action = np.array(action).flatten()
-        
-        # Send commands directly to the new version robot
-        self.robot.send_partial_action(name, action)
+        hand_freq = int(self.cfg.get("hand_freq", 1))
+        if "hand" in segments and self.hand_count % hand_freq == 0:
+            self.hand_count = 0
+            # Hand uses Inspire hardware units [0, 1000] (matches TAO / training).
+            hand_cmd = np.clip(segments["hand"], 0.0, 1000.0)
+            self.execute_action({"hand": hand_cmd.tolist()})
+        self.hand_count += 1
 
-    # ==================================================================
-    # # Reset robot (uses 26-dimensional action)
-    # ==================================================================
-    def reset_robot(self, target_pose=None, mode='default'):
+        if "waist" in segments:
+            self.execute_action({"waist": segments["waist"].tolist()})
+
+    def execute_action(self, data: dict) -> None:
+        if "arm" in data:
+            self.logger.debug("execute_action arm=%s", data["arm"])
+            self.robot.move_arm(data["arm"])
+        if "hand" in data:
+            self.logger.info("execute_action hand=%s", data["hand"])
+            self.robot.move_hand(data["hand"])
+        if "head" in data:
+            self.logger.info("execute_action head=%s", data["head"])
+            self.robot.move_head(data["head"])
+        if "waist" in data:
+            self.robot.move_waist(data["waist"])
+
+    def reset_robot(self, target_pose=None, mode="default"):
         if target_pose is None:
-            if mode == 'default':
-                target_pose = np.array(self.cfg['reset_robot_pos'])
-            elif mode == 'zero':
-                target_pose = np.zeros(26)
+            if mode == "default":
+                target_pose = np.array(self.cfg["reset_robot_pos"], dtype=np.float32)
+            elif mode == "zero":
+                target_pose = np.zeros(self.action_dim, dtype=np.float32)
             else:
-                self.logger.warning("[WARN] target_pose is None, cannot execute reset_robot")
+                self.logger.warning("reset_robot skipped: unknown mode=%s", mode)
                 return
+        else:
+            target_pose = np.asarray(target_pose, dtype=np.float32)
 
-        target_pose = np.array(target_pose)
-        self.robot.send_robot_action(target_pose[:26])
-        time.sleep(1.0)
-        self.logger.info("Robot reset completed")
+        # reset_robot_pos is arm+hand (26); skip slices that do not fit the pose.
+        segments = {
+            name: target_pose[v["start"] : v["end"]]
+            for name, v in self.action_layout.items()
+            if v["end"] <= target_pose.size
+        }
 
-    # ==================================================================
-    # # Get observation (image + aligned joint angles)
-    # ==================================================================
+        current_obs = self.retrieve_observation()
+        if current_obs is None:
+            current_positions = self.current_state[:14]
+        else:
+            current_positions = np.asarray(current_obs["obs.state"][:14], dtype=np.float32)
+
+        target_positions = np.asarray(segments.get("arm", target_pose[:14]), dtype=np.float32)
+        dis = np.abs(current_positions - target_positions)
+        mask = dis > np.deg2rad(0.01)
+
+        if not np.any(mask):
+            if "arm" in segments:
+                self.execute_action({"arm": target_positions.tolist()})
+        else:
+            trajs = self.ruckig_planning(current_positions, target_positions)
+            for i, traj in enumerate(trajs):
+                print(f"\r{i}", end="")
+                self.execute_action({"arm": traj})
+                time.sleep(0.01)
+
+        if "hand" in segments:
+            self.execute_action({"hand": segments["hand"].tolist()})
+        if "head" in segments and segments["head"].size > 0:
+            self.execute_action({"head": segments["head"].tolist()})
+        if "waist" in segments and segments["waist"].size > 0:
+            self.execute_action({"waist": segments["waist"].tolist()})
+
+    def _safe_image_nearest(self, stream: str, ref_timestamp: int):
+        try:
+            return self.camera.get_image_nearest(stream, ref_timestamp)
+        except (RuntimeError, KeyError):
+            return None, None
+
+    def _wait_for_joint_state(self, timeout_s: float = 3.0) -> None:
+        if self._wait_for_arm_samples(timeout_s):
+            return
+
+        self.logger.warning(
+            "Arm joint state not received within %.1fs; resetting DDS bridge once.",
+            timeout_s,
+        )
+        from ti5_t170c_sdk._dds_bridge import shutdown_bridge
+        from ti5_t170c_sdk._network import ensure_cyclonedds_uri, parse_host_from_uri
+
+        peer_ip = parse_host_from_uri(self.cfg.get("camera", {}).get("forwarder_uri"))
+        ensure_cyclonedds_uri(peer_ip=peer_ip, force=True)
+        shutdown_bridge()
+        self.robot = Ti5Robot()
+        if not self._wait_for_arm_samples(min(timeout_s, 2.0)):
+            self.logger.warning(
+                "Arm joint state still unavailable after DDS bridge reset."
+            )
+
+    def _wait_for_arm_samples(self, timeout_s: float) -> bool:
+        deadline = time.monotonic() + max(0.0, timeout_s)
+        while time.monotonic() < deadline:
+            _, ts = self.robot.arm_joint_states()
+            if ts > 0:
+                return True
+            time.sleep(0.05)
+        return False
+
     def retrieve_observation(self):
         try:
-            result = {}
-            cam_data = self.camera.get_latest_image()
-            if not cam_data:
+            cam_names = dict(self.cfg["camera"]["names"])
+            cam_ref = self.cfg["camera"]["ref"]
+            ref_stream = cam_names[cam_ref]
+
+            state, _ = self.robot.full_joint_states()
+            self.current_state = self._trim_state(state)
+
+            image, ref_timestamp = self.camera.get_latest_image(ref_stream)
+            if self.current_timestamp == ref_timestamp:
                 return None
+            self.current_timestamp = ref_timestamp
 
-            head_img, head_ts, left_img, left_ts, right_img, right_ts = cam_data
-            if self.current_timestamp == head_ts:
-                return None
+            result = {"ref_timestamp": ref_timestamp}
+            result[f"cam.{cam_ref}"] = image[:, :, ::-1] if image.ndim == 3 else image
 
-            self.current_timestamp = head_ts
+            for key, stream in cam_names.items():
+                if key == cam_ref:
+                    continue
+                image, _ = self._safe_image_nearest(stream, ref_timestamp)
+                if image is None:
+                    self.logger.warning("missing camera stream: %s", stream)
+                    continue
+                result[f"cam.{key}"] = image[:, :, ::-1] if image.ndim == 3 else image
 
-            # camera images
-            result['cam.head'] = head_img
-            result['cam.hand_left'] = left_img
-            result['cam.hand_right'] = right_img
-            result['ref_timestamp'] = head_ts
-
-            # Robot State Alignment
-            robot_state = self.robot.get_arm_hand_states_nearest_func(head_ts)
-
-            # Concatenate into state vector
-            state = []
-            
-            # Left Arm
-            if robot_state['left_arm'] is not None:
-                state.extend(robot_state['left_arm'].position)
-            else:
-                state.extend([0]*7)
-
-            # Right Arm
-            if robot_state['right_arm'] is not None:
-                state.extend(robot_state['right_arm'].position)
-            else:
-                state.extend([0]*7)
-
-            # Left Hand
-            if robot_state['left_hand'] is not None:
-                state.extend(robot_state['left_hand'].position)
-            else:
-                state.extend([0]*6)
-
-            # Right Hand
-            if robot_state['right_hand'] is not None:
-                state.extend(robot_state['right_hand'].position)
-            else:
-                state.extend([0]*6)
-
-            result['obs.state'] = np.array(state)
-            self.current_state = result['obs.state']
+            result["obs.state"] = self.current_state[: self.action_dim].copy()
             return result
-
-        except Exception as e:
-            self.logger.error(f"Failed to get observation: {e}")
+        except Exception as exc:
+            self.logger.exception("retrieve_observation failed: %s", exc)
             return None
 
-    # ==================================================================
-    # Close Robot
-    # ==================================================================
     def close(self):
-        self.running = False
-        self.logger.info("RobotBody safely shut down")
+        self.camera.close()
+        self.robot.shutdown()
+        self.logger.info("TI5 T170c robot closed")
 
+    def load_action_data(self, parquet_path, key="action"):
+        """Load trajectory frames from parquet and normalize to action_dim.
 
-# ======================================================
-# # Joint test of robot camera and joint control
-# ======================================================
-def test_robot_body():
-    # rclpy.init()
-    print("=" * 60)
-    print("Start testing RobotBody + Ti5Camera + Ti5Robot")
-    print("=" * 60)
+        Supported source layouts:
+        - >=action_dim: truncate to action_dim (26 = arm+hand)
+        - >=16: arm + 2-dim gripper expanded to 12-dim hand
+        - >=14: arm only, remaining segments padded from reset_robot_pos
+        """
+        df = pd.read_parquet(parquet_path)
+        raw = df[key].tolist()
+        default = np.asarray(
+            self.cfg.get("reset_robot_pos", [0.0] * self.action_dim),
+            dtype=np.float32,
+        )
+        if default.shape[0] < self.action_dim:
+            default = np.resize(default, self.action_dim)
+        else:
+            default = default[: self.action_dim].copy()
 
-    default_action = [
-        -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
-      ] + \
-      [
-        1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567, 0.4101313352460489, -0.2251850174207321, 0.3232027944991513
-      ] + \
-      [
-        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
-      ] + \
-      [
-        650.0, 650.0, 650.0, 650.0, 650.0, 250.0
-      ]
+        arm_s = self.action_layout["arm"]["start"]
+        arm_e = self.action_layout["arm"]["end"]
+        hand_s = self.action_layout["hand"]["start"]
+        hand_e = self.action_layout["hand"]["end"]
+        head = self.action_layout.get("head")
+        waist = self.action_layout.get("waist")
 
-    # Simulation config (loaded from config file in real run)
-    mock_config = {
-        'robots': {
-            'ti5_t170c': {
-                'reset_robot_pos': default_action,
-                'gripper_freq': 5
-            }
-        }
-    }
+        processed_data = []
+        for ele in raw:
+            src = np.asarray(ele, dtype=np.float32).reshape(-1)
+            out = default.copy()
 
-    # RobotBody Initialization
-    robot_body = RobotBody(mock_config)
-    time.sleep(1.0)
+            if src.shape[0] >= self.action_dim:
+                out = src[: self.action_dim].copy()
+            else:
+                if src.shape[0] >= arm_e:
+                    out[arm_s:arm_e] = src[arm_s:arm_e]
+                if src.shape[0] >= hand_e:
+                    out[hand_s:hand_e] = np.clip(src[hand_s:hand_e], 0.0, 1000.0)
+                elif src.shape[0] >= arm_e + 2:
+                    out[hand_s : hand_s + 6] = src[arm_e]
+                    out[hand_s + 6 : hand_e] = src[arm_e + 1]
+                elif src.shape[0] > arm_e:
+                    n = min(hand_e - hand_s, src.shape[0] - arm_e)
+                    out[hand_s : hand_s + n] = np.clip(
+                        src[arm_e : arm_e + n], 0.0, 1000.0
+                    )
 
-    # ----------------------------------------------------------
-    # Test 1: Get observation (image + 26-dimensional state)
-    # ----------------------------------------------------------
-    print("\n Test 1: Retrieving observation data...")
-    for _ in range(10):
-        obs = robot_body.retrieve_observation()
-        if obs is not None:
-            print("Observation retrieved successfully!")
-            print(f"   Timestamp: {obs['ref_timestamp']:.6f}")
-            print(f"   State dimension: {obs['obs.state'].shape} (Expected=26)")
-            print(f"   Head camera image shape: {obs['cam.head'].shape}")
-            print(f"   Left hand camera image shape: {obs['cam.hand_left'].shape}")
-            print(f"   Right hand camera image shape: {obs['cam.hand_right'].shape}")
-            break
-        time.sleep(0.1)
-    else:
-        print("Failed to retrieve observation data")
+                if head is not None and waist is not None:
+                    head_s, head_e = head["start"], head["end"]
+                    waist_s, waist_e = waist["start"], waist["end"]
+                    if src.shape[0] >= waist_e:
+                        out[head_s:waist_e] = src[head_s:waist_e]
+                    elif src.shape[0] >= head_e:
+                        out[head_s:head_e] = src[head_s:head_e]
+                    elif src.shape[0] >= arm_e + 4:
+                        out[head_s : head_s + 2] = src[arm_e + 2 : arm_e + 4]
+                        out[waist_s : waist_s + 2] = src[arm_e + 4 : arm_e + 6]
 
-    # --------------------------------------------
-    # Test 2: Action control (right hand grasp)
-    # --------------------------------------------
-    print("\nTest 2: Send 26-dimensional action - right hand grasp...")
-    action = np.zeros(26)
-    action[20:26] = [650.0, 650.0, 650.0, 650.0, 650.0, 250.0]
-    robot_body.control_robot(action)
-    print("Right hand grasp command sent!")
-    time.sleep(1.5)
+            processed_data.append(out)
+        return processed_data
 
-    # ----------------------
-    # Test 3: Reset robot
-    # ----------------------
-    print("\n Test 3: Resetting robot...")
-    robot_body.reset_robot(mode='default')
-    time.sleep(0.5)
+    def default_replay_trajectories(
+        self,
+        parquet_path,
+        accelerate: bool = True,
+        accelerate_times: int = 2,
+        sleep_s: float = 0.05,
+    ) -> None:
+        """Replay arm + hand only (default fast path)."""
+        trajs = self.load_action_data(parquet_path=parquet_path)
+        if not accelerate:
+            accelerate_times = 1
 
-    # End of test
-    robot_body.close()
-    print("\n" + "=" * 60)
-    print("All tests passed!")
-    print("=" * 60)
+        arm_e = self.action_layout["arm"]["end"]
+        hand_s = self.action_layout["hand"]["start"]
+        hand_e = self.action_layout["hand"]["end"]
 
+        for idx, traj in enumerate(trajs):
+            if idx % accelerate_times != 0:
+                continue
+            frame = np.asarray(traj, dtype=np.float32)
+            self.execute_action({"arm": frame[:arm_e].tolist()})
+            self.execute_action(
+                {"hand": np.clip(frame[hand_s:hand_e], 0.0, 1000.0).tolist()}
+            )
+            time.sleep(sleep_s)
 
-if __name__ == '__main__':
-    test_robot_body()
+    def replay_trajectories(
+        self,
+        parquet_path,
+        use_default: bool = True,
+        accelerate: bool = True,
+        accelerate_times: int = 2,
+        exclude_path: Sequence[str] = ("place",),
+        progress_fn: Optional[Callable] = None,
+        sleep_s: float = 0.05,
+    ) -> None:
+        """Replay teleoperation trajectory on real hardware."""
+        try:
+            if self.cfg.get("hand_type") == "hand":
+                use_default = False
+
+            if use_default:
+                self.default_replay_trajectories(
+                    parquet_path=parquet_path,
+                    accelerate=accelerate,
+                    accelerate_times=accelerate_times,
+                    sleep_s=sleep_s,
+                )
+                return
+
+            trajs = self.load_action_data(parquet_path=parquet_path)
+            path_str = str(parquet_path)
+            for token in exclude_path:
+                if token in path_str:
+                    accelerate = False
+                    break
+
+            if not accelerate:
+                accelerate_times = 1
+
+            for idx, traj in enumerate(trajs):
+                if progress_fn is not None:
+                    progress_fn(idx, len(trajs), traj)
+                if idx % accelerate_times != 0:
+                    continue
+                self._execute_replay_frame(traj)
+                time.sleep(sleep_s)
+        except Exception as exc:
+            self.logger.exception("Replay %s failed: %s", parquet_path, exc)
+
+    def _execute_replay_frame(self, traj) -> None:
+        """Dispatch one normalized frame for segments present in action_layout."""
+        frame = np.asarray(traj, dtype=np.float32).reshape(-1)
+        arm_e = self.action_layout["arm"]["end"]
+        hand_s = self.action_layout["hand"]["start"]
+        hand_e = self.action_layout["hand"]["end"]
+        head = self.action_layout.get("head")
+        waist = self.action_layout.get("waist")
+
+        self.execute_action({"arm": frame[:arm_e].tolist()})
+        if frame.shape[0] >= hand_e:
+            self.execute_action(
+                {"hand": np.clip(frame[hand_s:hand_e], 0.0, 1000.0).tolist()}
+            )
+        if head is not None and frame.shape[0] >= head["end"]:
+            self.execute_action(
+                {"head": frame[head["start"] : head["end"]].tolist()}
+            )
+        if waist is not None and frame.shape[0] >= waist["end"]:
+            self.execute_action(
+                {"waist": frame[waist["start"] : waist["end"]].tolist()}
+            )
+
+    def _trim_state(self, state) -> np.ndarray:
+        """Trim SDK full_joint_states (32) to state_dim (arm+hand[+manual head])."""
+        n = self.state_dim or self.action_dim
+        return np.asarray(state, dtype=np.float32)[:n].copy()

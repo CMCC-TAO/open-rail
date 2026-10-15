@@ -18,6 +18,7 @@ class RobotType(str, Enum):
     MOCK = 'mock'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
+    UNITREE_G1 = 'unitree_g1'
 
 def get_agibot_g1_config():
     """Generate configuration for AgiBot G1 robot.
@@ -28,6 +29,7 @@ def get_agibot_g1_config():
     config = ConfigDict()
     config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
     config.camera = ConfigDict()
+    config.camera.color_order = 'bgr'  # Pixel order returned by retrieve_observation()
     config.camera.ref = 'head'
     # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
     
@@ -79,6 +81,7 @@ def get_mock_config():
     """
     config = ConfigDict()
     config.camera = ConfigDict()
+    config.camera.color_order = 'bgr'  # OpenCV VideoCapture output
     # config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
     config.camera.ref = 'head'
     config.camera.names = {'head': 'observation.images.head_rgb',
@@ -104,113 +107,102 @@ def get_mock_config():
     })
     config.manual_arm_interval = 0.01
     config.state_action_range = [[0, 16], [58, 70]]
-    config.dataset_path = '/home/robot/Music/task_39_only1'
-    # config.dataset_path = '/home/robot/Music'
+    config.dataset_path = '/path/to/dataset'
+    # config.dataset_path = '/path/to/dataset'
     return config
 
 def get_ti5_t170c_config():
-    """Generate configuration for Ti5 T170C robot (ROS2 bridge)."""
+    """Configuration for TI5 T170c (26-DOF arm+hand; matches VLA training)."""
     config = ConfigDict()
-
+    config.hand_type = 'hand'
     config.camera = ConfigDict()
-    config.camera.head_camera_topic = "/camera/d435i/color/image_raw"
-    config.camera.left_hand_camera_topic = "/camera/d405_1/color/image_raw"
-    config.camera.right_hand_camera_topic = "/camera/d405_2/color/image_raw"
-
-    config.arms = ConfigDict()
-    config.arms.left_arm_joint_cmd_topic = "/left_arm/joint_cmd"
-    config.arms.right_arm_joint_cmd_topic = "/right_arm/joint_cmd"
-    config.arms.left_arm_joint_states_topic = "/left_arm/joint_states"
-    config.arms.right_arm_joint_states_topic = "/right_arm/joint_states"
-
-    config.arms.left_arm_joint_names = [
-        "L_SHOULDER_P_JOINT",
-        "L_SHOULDER_R_JOINT",
-        "L_SHOULDER_Y_JOINT",
-        "L_ELBOW_JOINT",
-        "L_WRIST_Y_JOINT",
-        "L_WRIST_R_JOINT",
-        "L_WRIST_P_JOINT",
-    ]
-    config.arms.right_arm_joint_names = [
-        "R_SHOULDER_P_JOINT",
-        "R_SHOULDER_R_JOINT",
-        "R_SHOULDER_Y_JOINT",
-        "R_ELBOW_JOINT",
-        "R_WRIST_Y_JOINT",
-        "R_WRIST_R_JOINT",
-        "R_WRIST_P_JOINT",
-    ]
-
-    config.hands = ConfigDict()
-    config.hands.left_hand_joint_cmd_topic = "/left_hand/angle_cmd"
-    config.hands.right_hand_joint_cmd_topic = "/right_hand/angle_cmd"
-    config.hands.left_hand_joint_states_topic = "/left_hand/angle_state"
-    config.hands.right_hand_joint_states_topic = "/right_hand/angle_state"
-
-    config.hands.hand_joint_names = [
-        "pinky", "ring", "middle", "index", "thumb", "thumb_rot"
-    ]
-
-    config.waist = ConfigDict()
-    config.waist.waist_joint_cmd_topic = "/waist_motor/joint_cmd"
-    config.waist.waist_joint_states_topic = "/waist_motor/joint_states"
-
-    config.waist.waist_joint_names = [
-        "WAIST_Y_JOINT", "WAIST_R_JOINT", "WAIST_P_JOINT"
-    ]
-
-    config.head = ConfigDict()
-    config.head.head_joint_cmd_topic = "/head_motor/joint_cmd"
-    config.head.head_joint_states_topic = "/head_motor/joint_states"
-
-    config.head.head_joint_names = [
-        "NECK_Y_JOINT", "NECK_P_JOINT", "NECK_R_JOINT"
-    ]
-
-    config.reset_robot_pos = \
-      [
-        -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
-      ] + \
-      [
-        1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567, 0.4101313352460489, -0.2251850174207321, 0.3232027944991513
-      ] + \
-      [
-        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
-      ] + \
-      [
-        650.0, 650.0, 650.0, 650.0, 650.0, 250.0
-      ]
-
-    config.zero_pos = \
-      [
-        -1.681951211214541, 1.5263110171042418, 2.2737134617553534, -0.23620356347006893, -0.5204031154482495, 0.1292378813793631, 0.19059726269759902
-      ] + \
-      [
-        1.4875488405961936, 1.5339806547275607, -1.4787018194549504, -0.32055631145539876, 0.1102380912144111, -0.05337579029191015, 0.20508064790415614
-      ] + \
-      [
-        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
-      ] + \
-      [
-        1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0
-      ]
-
-    config.action_layout = _ordered_config({
-        'arm': {'start': 0, 'end': 14, 'policy': 'gradual'},
-        'gripper': {'start': 14, 'end': 26, 'policy': 'gradual'},
-        # 'head': {'start': 16, 'end': 18, 'policy': 'gripper'},
-        # 'waist': {'start': 18, 'end': 20, 'policy': 'gripper'},
-    })
-
+    config.camera.color_order = 'rgb'  # Adapter converts camera frames to RGB
+    config.camera.backend = 'remote_forwarder'
+    config.camera.forwarder_uri = 'tcp://192.168.1.100:9100'
+    config.camera.ref = 'head'
+    config.camera.warmup_s = 3.0
+    config.camera.names = {
+        'head': 'head/color',
+        'hand_left': 'hand_left/color',
+        'hand_right': 'hand_right/color',
+    }
+    # Depth is not consumed by VLA inference. Leave this empty so the
+    # forwarder depth topics are neither subscribed nor sent to the server.
+    config.camera.depth_names = {}
+    config.proprio_names = ['arm', 'hand']
+    # 1 = every control tick (same as arm); 40 was A2D gripper-style downsample (~6.7Hz).
+    config.hand_freq = 1
+    config.head_freq = 1
+    # Keep aligned with default_conf.yaml reset_robot_pos[0:14] and arm Default presets.
+    _arm_reset = (
+        [2.135607, -1.506890, -1.575035, -1.839900, -0.377856, -0.194309, -0.382639]
+        + [-2.135409, -1.479260, 1.552336, -1.839900, 0.393200, -0.211972, 0.355065]
+    )
+    # Custom stays on the previous homing pose; Reset uses Default.
+    _arm_custom = (
+        [-1.3119088393316176, 1.4473110065281325, 1.6156086726673602, -1.665472635653567,
+         -0.4101313352460489, -0.21850174207321, -0.3232027944991513]
+        + [1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567,
+           0.4101313352460489, -0.2251850174207321, 0.3232027944991513]
+    )
+    # Hand open pose in Inspire hardware units [0, 1000]
+    config.reset_robot_pos = _arm_reset + [1000.0] * 12
+    config.manual_arm_interval = 0.01
+    _hand_open = [1000.0] * 6
+    # Head: NECK_Y / NECK_P / NECK_R (rad). policy=manual → Web-only, not in VLA action_dim.
+    _head_default = [0.0, 0.0, 0.0]
+    config.action_layout = {
+        'arm': {
+            'start': 0,
+            'end': 14,
+            'policy': 'gradual',
+            # Web Robot Control requires presets; without them UI stays disabled.
+            'presets': {
+                'left': {
+                    'Default': list(_arm_reset[:7]),
+                    'Custom': list(_arm_custom[:7]),
+                },
+                'right': {
+                    'Default': list(_arm_reset[7:14]),
+                    'Custom': list(_arm_custom[7:14]),
+                },
+            },
+        },
+        'hand': {
+            'start': 14,
+            'end': 26,
+            'policy': 'gradual',
+            # Web presets: Default/Custom only (edit Custom for open/close values).
+            'presets': {
+                'left': {
+                    'Default': list(_hand_open),
+                    'Custom': list(_hand_open),
+                },
+                'right': {
+                    'Default': list(_hand_open),
+                    'Custom': list(_hand_open),
+                },
+            },
+        },
+        # policy='manual' is robot/Web-only and must stay after all model policies.
+        'head': {
+            'start': 26,
+            'end': 29,
+            'policy': 'manual',
+            'presets': {
+                'Default': list(_head_default),
+                'Custom': list(_head_default),
+            },
+        },
+    }
     return config
-
 
 def get_navi_wa2_config():
     config = ConfigDict()
     config.tt = 0.033
     config.gain = 900
     config.camera = ConfigDict()
+    config.camera.color_order = 'bgr'  # cv_bridge uses bgr8
     config.camera.topic_dict = {
         'head': '/zj_humanoid/sensor/realsense_head/color/image_raw/compressed',
         'hand_left': '/zj_humanoid/sensor/left_wrist/image_raw/compressed',
@@ -251,6 +243,48 @@ def get_navi_wa2_config():
 
     return config
 
+
+def get_unitree_g1_config():
+    """Generate configuration for Unitree G1 robot.
+
+    Returns:
+        ConfigDict: Configuration dictionary for Unitree G1 robot.
+    """
+    config = ConfigDict()
+    config.camera = ConfigDict({'color_order': 'bgr'})  # cv_bridge uses bgr8
+    config.hand_type = 'hand'
+    config.reset_robot_pos = [0.0] * 26
+    config.action_layout = _ordered_config({
+        'arm': {
+            'start': 0, 'end': 14, 'policy': 'gradual',
+            'presets': {
+                'left': {
+                    'Default': [0.3, 0.15, -0.15, -0.3, 0.0, -0.3, 0.0],
+                    'Custom': [0.3, 0.15, -0.15, -0.3, 0.0, -0.3, 0.0],
+                },
+                'right': {
+                    'Default': [0.3, -0.15, 0.15, -0.3, 0.0, -0.3, 0.0],
+                    'Custom': [0.3, -0.15, 0.15, -0.3, 0.0, -0.3, 0.0],
+                },
+            },
+        },
+        'hand': {
+            'start': 14, 'end': 26, 'policy': 'stepwise',
+            'presets': {
+                'left': {
+                    'Default': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                    'Custom': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                },
+                'right': {
+                    'Default': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                    'Custom': [100.0, 100.0, 100.0, 100.0, 150.0, 50.0],
+                },
+            },
+        },
+    })
+    return config
+
+
 def get_robots_config():
     """Generate configuration for all supported robot types.
     
@@ -265,11 +299,12 @@ def get_robots_config():
             - mock: Mock robot configuration for testing
     """
     config = ConfigDict()
-    config.type = RobotType.AGIBOT_G1
+    config.type = RobotType.UNITREE_G1
     config.agibot_g1 = get_agibot_g1_config()
     config.mock = get_mock_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()
+    config.unitree_g1 = get_unitree_g1_config()
     return config
 
 if __name__ == '__main__':

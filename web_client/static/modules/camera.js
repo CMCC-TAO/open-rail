@@ -82,7 +82,43 @@ const camState = {
   lastUpdateTime: 0,
   updateInterval: 33,
   updateTimer: null,
+  expandedView: null,
 };
+
+function restoreExpandedCamera() {
+  const view = camState.expandedView;
+  if (!view) return;
+  view.placeholder.replaceWith(view.item);
+  view.preview.title = 'Double-click to expand';
+  view.preview.setAttribute('aria-expanded', 'false');
+  $('camera-body').scrollTop = view.scrollTop;
+  view.preview.focus({ preventScroll: true });
+  camState.expandedView = null;
+}
+
+function closeExpandedCamera() {
+  $('camera-expanded').close();
+  restoreExpandedCamera();
+}
+
+function toggleExpandedCamera(idx) {
+  const dialog = $('camera-expanded');
+  if (dialog.open) {
+    closeExpandedCamera();
+    return;
+  }
+  const preview = $(`cam-preview-${idx}`);
+  const item = preview.closest('.cam-item');
+  const placeholder = document.createComment('camera position');
+  camState.expandedView = { item, preview, placeholder, scrollTop: $('camera-body').scrollTop };
+  item.replaceWith(placeholder);
+  dialog.appendChild(item);
+  dialog.setAttribute('aria-label', `${CAM_NAMES[idx]} live camera`);
+  preview.title = 'Double-click or press Esc to return';
+  preview.setAttribute('aria-expanded', 'true');
+  dialog.showModal();
+  item.querySelector('.cam-exit-expanded').focus();
+}
 
 function updateCameraAspectRatio(idx, width, height) {
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
@@ -133,6 +169,10 @@ function updateLayoutColumns() {
 }
 
 function setupCameraPanel() {
+  const expanded = $('camera-expanded');
+  expanded.addEventListener('close', restoreExpandedCamera);
+  expanded.addEventListener('keydown', event => event.stopPropagation());
+
   // Collapse / expand the whole camera panel
   $('btn-visual-collapse').addEventListener('click', () => {
     const panel = $('panel-visual');
@@ -150,6 +190,28 @@ function setupCameraPanel() {
 
   // Individual open/close buttons
   for (let i = 0; i < 3; i++) {
+    const preview = $(`cam-preview-${i}`);
+    preview.title = 'Double-click to expand';
+    preview.tabIndex = 0;
+    preview.setAttribute('role', 'button');
+    preview.setAttribute('aria-label', `${CAM_NAMES[i]} camera, toggle expanded view`);
+    preview.setAttribute('aria-haspopup', 'dialog');
+    preview.setAttribute('aria-controls', 'camera-expanded');
+    preview.setAttribute('aria-expanded', 'false');
+    preview.addEventListener('dblclick', () => toggleExpandedCamera(i));
+    preview.addEventListener('keydown', event => {
+      if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      event.stopPropagation();
+      toggleExpandedCamera(i);
+    });
+    const exit = document.createElement('button');
+    exit.type = 'button';
+    exit.className = 'btn btn-xs cam-exit-expanded';
+    exit.textContent = 'Exit (Esc)';
+    exit.setAttribute('aria-label', 'Exit expanded camera view');
+    exit.addEventListener('click', closeExpandedCamera);
+    $(`cam-row-${i}`).appendChild(exit);
     $(`btn-cam-${i}`).addEventListener('click', () => {
       toggleCamera(i);
       updateAllToggleBtn();
