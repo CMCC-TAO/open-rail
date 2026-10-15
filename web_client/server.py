@@ -2087,6 +2087,10 @@ async def client_language_set(req: LanguageSetRequest):
 async def client_record_start(req: RecordStartRequest):
     try:
         vla_client, _ = _require_runtime('start_recording')
+        if not any(vla_client.config.record.get(key, False) for key in (
+            'is_record_eval_log', 'is_record_episode', 'is_record_expe_data',
+        )):
+            raise HTTPException(400, 'Select at least one of EvalLog, LeRobot, or ExpeData before starting recording.')
         # Camera readiness / recorder initialization may wait; do not block
         # status requests or WebSocket messages on the asyncio event loop.
         task_dir = await asyncio.to_thread(vla_client.start_recording)

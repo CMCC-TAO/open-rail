@@ -29,7 +29,7 @@ def get_agibot_g1_config():
     config = ConfigDict()
     config.hand_type = 'gripper' # 'gripper' or 'hand_as_gripper' or 'hand'
     config.camera = ConfigDict()
-    config.camera.color_order = 'rgb'  # Pixel order returned by retrieve_observation()
+    config.camera.color_order = 'bgr'  # Pixel order returned by retrieve_observation()
     config.camera.ref = 'head'
     # ConfigDict cannot use dotted keys, so 'cam.head' becomes 'head'
     

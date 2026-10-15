@@ -214,6 +214,11 @@ function renderRecordingConfigTree(cfg = App.config) {
 }
 
 async function startDataRecording({} = {}) {
+  const recordCfg = App.config?.record;
+  if (!['is_record_eval_log', 'is_record_episode', 'is_record_expe_data'].some(key => !!recordCfg?.[key])) {
+    toast('Select at least one of EvalLog, LeRobot, or ExpeData before starting recording.', 'warn');
+    return false;
+  }
   try {
     const res = await apiFetch('/api/client/record/start', {
       method: 'POST',
@@ -901,25 +906,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const autoCheckRecordMode = $('chk-record-auto');
   const expDataChk = $('chk-record-expdata');
 
-  const getCoreRecordCheckboxes = () => [evallogChk, episodeChk, expDataChk].filter(Boolean);
-  const ensureCoreRecordCheckboxesValid = (changedChk) => {
-    if (!changedChk || changedChk.checked) return true;
-    const checkedCount = getCoreRecordCheckboxes().filter(chk => !!chk.checked).length;
-    if (checkedCount > 0) return true;
-
-    changedChk.checked = true;
-    if (changedChk === evallogChk && typeof setEvalLogEnabled === 'function') {
-      setEvalLogEnabled(true);
-    }
-    toast('At least chooses one of EvalLog、LeRobot、ExpeData', 'warn')
-    return false;
-  };
-
   syncRecordingCheckboxesFromConfig(App.config);
 
   if (episodeChk) {
     episodeChk.addEventListener('change', async () => {
-      if (!ensureCoreRecordCheckboxesValid(episodeChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
@@ -939,7 +929,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (evallogChk) {
     evallogChk.addEventListener('change', async () => {
-      if (!ensureCoreRecordCheckboxesValid(evallogChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
@@ -981,7 +970,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (expDataChk) {
     expDataChk.addEventListener('change', async () => {
-      if (!ensureCoreRecordCheckboxesValid(expDataChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
