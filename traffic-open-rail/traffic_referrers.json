@@ -1,13 +1,18 @@
 [
   {
     "referrer": "cmcc-tao.github.io",
-    "count": 26,
+    "count": 27,
     "uniques": 17
   },
   {
     "referrer": "github.com",
-    "count": 8,
-    "uniques": 8
+    "count": 9,
+    "uniques": 9
+  },
+  {
+    "referrer": "Bing",
+    "count": 4,
+    "uniques": 4
   },
   {
     "referrer": "lcnnwa8es0bc.feishu.cn",
@@ -16,21 +21,11 @@
   },
   {
     "referrer": "Google",
-    "count": 3,
-    "uniques": 2
-  },
-  {
-    "referrer": "Bing",
     "count": 2,
     "uniques": 2
   },
   {
     "referrer": "DuckDuckGo",
-    "count": 1,
-    "uniques": 1
-  },
-  {
-    "referrer": "teams.public.onecdn.static.microsoft",
     "count": 1,
     "uniques": 1
   }

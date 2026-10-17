@@ -2,8 +2,8 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 81,
-    "uniques": 46
+    "count": 78,
+    "uniques": 48
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
@@ -20,19 +20,19 @@
   {
     "path": "/CMCC-TAO/open-rail/issues",
     "title": "/issues",
-    "count": 12,
-    "uniques": 8
+    "count": 13,
+    "uniques": 9
   },
   {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
-    "count": 12,
+    "count": 13,
     "uniques": 4
   },
   {
     "path": "/CMCC-TAO/open-rail/pulse",
     "title": "/pulse",
-    "count": 9,
+    "count": 7,
     "uniques": 3
   },
   {
