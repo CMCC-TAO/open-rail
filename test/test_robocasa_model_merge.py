@@ -7,7 +7,7 @@ from types import ModuleType, SimpleNamespace
 import numpy as np
 import pytest
 
-from conf.models_conf import get_gr00t_config
+from conf.models_conf import get_gr00t_config, get_tao_config
 
 
 ACTION_SIZES = {'end_effector_position': 3, 'end_effector_rotation': 3,
@@ -95,6 +95,39 @@ def test_tao_action_order_does_not_follow_dictionary_order(monkeypatch, prefix):
     result = model.infer([frame])
     np.testing.assert_array_equal(result['pred_action'][0],
                                   [0] * 3 + [1] * 3 + [2] + [3] * 4 + [4])
+
+
+@pytest.mark.parametrize('tag', ['a2d_gripper', 'robocasa_panda_omron', 'aloha_robotwin'])
+@pytest.mark.parametrize('explicit', [False, True])
+def test_tao_default_camera_mapping(monkeypatch, tag, explicit):
+    seen = {}
+
+    class Policy:
+        def get_action(self, observation):
+            seen.update(observation)
+            return {'action': {'test': np.zeros((1, 2, 1))}}
+
+    module = load_backend(monkeypatch, Path(__file__).parents[1] / 'server/models/tao/tao.py', {
+        'torch': {}, 'tao.serving.policy': {'PolicyTao': Policy},
+    })
+    model = module.ModelVLA.__new__(module.ModelVLA)
+    model.cfg = get_tao_config()
+    model.cfg.embodiment_tag = tag
+    if explicit:
+        model.cfg.video_keys = ['custom_head', 'custom_left', 'custom_right']
+    model.policy = Policy()
+    model._reported_action_order = False
+    obs = {key: np.full((2, 2, 3), index) for index, key in enumerate(
+        ['cam.head', 'cam.hand_left', 'cam.hand_right'])}
+    obs.update(state=np.zeros(14), language=['test'])
+    model.infer([{'ref_timestamp': 1, 'loc_timestamp': 2, 'obs': obs}])
+    expected = (['custom_head', 'custom_left', 'custom_right'] if explicit else
+                ['cam_top_head', 'cam_left_wrist', 'cam_right_wrist']
+                if tag == 'aloha_robotwin' else
+                ['base_image', 'left_wrist_image', 'right_wrist_image'])
+    assert list(seen['video']) == expected
+    for index, key in enumerate(expected):
+        np.testing.assert_array_equal(seen['video'][key], np.full((1, 1, 2, 2, 3), index))
 
 
 @pytest.mark.parametrize('prefix', ['', 'action.'])

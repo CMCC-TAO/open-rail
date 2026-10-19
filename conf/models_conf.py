@@ -118,7 +118,7 @@ def get_tao_config():
     config.model_path = '/path/to/model'
     config.embodiment_tag = 'a2d_gripper'
     config.action_keys = []
-    config.video_keys = ['base_image', 'left_wrist_image', 'right_wrist_image']
+    config.video_keys = []
 
     return config
 

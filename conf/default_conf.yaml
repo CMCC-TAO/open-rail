@@ -9,7 +9,7 @@ controller:
   speed: 1.0
   wait_time: 10
 inter_chunk:
-  inter_chunk_mode: sync
+  inter_chunk_mode: min_jerk
   max_transition_steps: 5
   min_jerk:
     adaptive_factor: -1.0
@@ -24,11 +24,11 @@ inter_chunk:
   sync: {}
 intra_chunk:
   filter_window_size: 4
-  fitting_deg: 4
+  fitting_deg: 5
   fitting_num_samples: 64
   gripper_dim: 2
   head_dim: 2
-  intra_chunk_mode: raw
+  intra_chunk_mode: fitting
   joint_dim: 14
   max_gripper_action_threshold: 0.95
   max_gripper_fitting_workers: 2
@@ -50,7 +50,7 @@ rdm:
   latency_compensation: true
   max_async_observation_lag_steps: 4
   max_len: 100
-  mode: sync
+  mode: async
   observe_fps_window_size: 10
   skip_initial_frames: 5
 record:
@@ -236,41 +236,6 @@ robots:
     - gripper
     - head
     - waist
-  aloha_robotwin:
-    action_layout:
-      left_arm:
-        start: 0
-        end: 6
-        policy: gradual
-      left_gripper:
-        start: 6
-        end: 7
-        policy: stepwise
-        smooth: false
-      right_arm:
-        start: 7
-        end: 13
-        policy: gradual
-      right_gripper:
-        start: 13
-        end: 14
-        policy: stepwise
-        smooth: false
-    action_type: qpos
-    camera:
-      names:
-        hand_left: left_camera
-        hand_right: right_camera
-        head: head_camera
-      ref: head
-    gpu: '2'
-    instruction_type: seen
-    n_envs: 1
-    python: ''
-    render_observation_mode: chunk_boundary
-    robotwin_root: ''
-    seed: 0
-    task_config: demo_clean
   mock:
     action_layout:
       arm:
@@ -511,7 +476,7 @@ robots:
     - 0.004363323096185923
     - 0.0
     tt: 0.033
-  robocasa:
+  robocasa_pandas:
     action_layout:
       end_effector_position:
         start: 0
@@ -561,6 +526,41 @@ robots:
     video_dir: ''
     video_fps: 20
     video_layout: grid
+  robotwin_aloha:
+    action_layout:
+      left_arm:
+        start: 0
+        end: 6
+        policy: gradual
+      left_gripper:
+        start: 6
+        end: 7
+        policy: stepwise
+        smooth: false
+      right_arm:
+        start: 7
+        end: 13
+        policy: gradual
+      right_gripper:
+        start: 13
+        end: 14
+        policy: stepwise
+        smooth: false
+    action_type: qpos
+    camera:
+      names:
+        hand_left: left_camera
+        hand_right: right_camera
+        head: head_camera
+      ref: head
+    gpu: '2'
+    instruction_type: seen
+    n_envs: 1
+    python: ''
+    render_observation_mode: per_action
+    robotwin_root: ''
+    seed: 0
+    task_config: demo_clean
   ti5_t170c:
     action_layout:
       arm:
@@ -676,7 +676,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: aloha_robotwin
+  type: robotwin_aloha
 vision:
   history_frame: false
   preprocess:
@@ -701,8 +701,8 @@ visualize:
     - 1
     source:
     - State
-    - ActionFitted
     - ActionRaw
+    - ActionFitted
     window_span_sec: 5.0
   updata_fps: 30
 vla_zmq:

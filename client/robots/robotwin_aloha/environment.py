@@ -37,7 +37,7 @@ def _prepare_robotwin(robotwin_root, task_name, task_config):
     args["eval_video_save_dir"] = None
     embodiment = args.get("embodiment")
     if embodiment != ["aloha-agilex"]:
-        raise ValueError(f"aloha_robotwin requires embodiment [aloha-agilex], got {embodiment}")
+        raise ValueError(f"robotwin_aloha requires embodiment [aloha-agilex], got {embodiment}")
 
     configs_path = Path(CONFIGS_PATH)
     if not configs_path.is_absolute():

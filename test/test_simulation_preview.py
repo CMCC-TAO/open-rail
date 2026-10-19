@@ -93,7 +93,7 @@ def test_preview_preserves_actions_between_camera_frames(tmp_path):
 
 
 def test_robocasa_trajectory_reads_joint_positions_not_end_effector_state():
-    from client.robots.robocasa.body_robot import RobotBody
+    from client.robots.robocasa_pandas.body_robot import RobotBody
 
     native_robot = SimpleNamespace(
         _ref_arm_joint_pos_indexes=[1, 2], robot_arm_joints=['robot0_right_j0', 'robot0_right_j1'],

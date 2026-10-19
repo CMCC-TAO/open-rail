@@ -13,7 +13,7 @@ from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
-from client.robots.aloha_robotwin.body_robot import RobotBody
+from client.robots.robotwin_aloha.body_robot import RobotBody
 from client.simulation.vla_client import VLAClientAsync
 from conf.client_conf import get_client_config
 from scripts import aloha_robotwin_eval as twin
@@ -110,7 +110,7 @@ def test_chunk_rendering_keeps_state_and_captures_terminal_frame(boundary_only):
                 self.get_obs()
 
     env = RenderTask()
-    robot = RobotBody(get_client_config().robots.aloha_robotwin, env, "Stack bowls")
+    robot = RobotBody(get_client_config().robots.robotwin_aloha, env, "Stack bowls")
     robot.configure_chunk_rendering(boundary_only)
     try:
         results = []
@@ -138,7 +138,7 @@ def test_chunk_rendering_keeps_state_and_captures_terminal_frame(boundary_only):
 def test_threaded_pipeline(monkeypatch, tmp_path, mode, render_mode, intra, inter):
     monkeypatch.setenv('VLA_SIM_PREVIEW_PATH', str(tmp_path / 'preview.json'))
     config = get_client_config()
-    config.robots.aloha_robotwin.render_observation_mode = render_mode
+    config.robots.robotwin_aloha.render_observation_mode = render_mode
     args = twin.build_parser().parse_args(
         [
             "--task_name",
@@ -159,7 +159,7 @@ def test_threaded_pipeline(monkeypatch, tmp_path, mode, render_mode, intra, inte
     config.intra_chunk.preserve_input_timestamps = True
     config.inter_chunk.max_transition_steps = 5
     config.record.switch = False
-    robot = RobotBody(config.robots.aloha_robotwin, FakeTask(), "Move the object")
+    robot = RobotBody(config.robots.robotwin_aloha, FakeTask(), "Move the object")
     robot.task_env.step_lim = 12
     config.rdm.action_layout = robot.config.action_layout
     transport = Transport()
@@ -204,7 +204,7 @@ def test_sampling_and_gripper_semantics(mode):
     config.intra_chunk.output_sample_ratio = 1
     config.intra_chunk.preserve_input_timestamps = True
     smoother = IntraChunkSmoother(config.intra_chunk, simulation_mode=True)
-    smoother.set_action_layout(config.robots.aloha_robotwin.action_layout)
+    smoother.set_action_layout(config.robots.robotwin_aloha.action_layout)
     timestamps = np.array([0, 0.01, 0.03, 0.04, 0.07])
     actions = np.arange(70, dtype=float).reshape(14, 5) / 100
     actions[6] = [0, 0, 1, 1, 0]
@@ -417,7 +417,7 @@ if __name__ == '__main__':
 
 def test_checkpoint_reuses_actual_seed_and_instruction(tmp_path, monkeypatch):
     import types
-    from client.robots.aloha_robotwin.environment import select_episode
+    from client.robots.robotwin_aloha.environment import select_episode
 
     actor = types.ModuleType("envs.utils.create_actor")
     actor.UnStableError = type("UnStableError", (Exception,), {})
@@ -459,7 +459,7 @@ def test_checkpoint_reuses_actual_seed_and_instruction(tmp_path, monkeypatch):
 @pytest.mark.parametrize("message", ["target_pose cannot be None for move action.", "unexpected assertion"])
 def test_expert_missing_grasp_skips_seed_only_for_known_assertion(monkeypatch, message):
     import types
-    from client.robots.aloha_robotwin.environment import select_episode
+    from client.robots.robotwin_aloha.environment import select_episode
 
     actor = types.ModuleType("envs.utils.create_actor")
     actor.UnStableError = type("UnStableError", (Exception,), {})
@@ -603,7 +603,7 @@ def test_robotwin_pipeline_scopes_resampling_to_interpolation(mode, ratio):
     assert config.intra_chunk.preserve_input_timestamps
     assert config.intra_chunk.output_sample_ratio == (ratio if mode == "interpolation" else 1)
     smoother = IntraChunkSmoother(config.intra_chunk, simulation_mode=True)
-    smoother.set_action_layout(config.robots.aloha_robotwin.action_layout)
+    smoother.set_action_layout(config.robots.robotwin_aloha.action_layout)
     action = np.zeros((14, 5))
     result = smoother.process(
         np.arange(5) * 0.01, action, joint_indices=robot_joints(), step_indices=[6, 13]

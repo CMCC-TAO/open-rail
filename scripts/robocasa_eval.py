@@ -171,11 +171,11 @@ def _build_client(config, server_wait_timeout):
     robot = None
     try:
         _wait_for_server(zmq_client, server_wait_timeout)
-        from client.robots.robocasa.body_robot import RobotBody
+        from client.robots.robocasa_pandas.body_robot import RobotBody
 
-        robot = RobotBody(config.robots.robocasa)
-        config.rdm.action_layout = config.robots.robocasa.action_layout
-        config.intra_chunk.action_layout = config.robots.robocasa.action_layout
+        robot = RobotBody(config.robots.robocasa_pandas)
+        config.rdm.action_layout = config.robots.robocasa_pandas.action_layout
+        config.intra_chunk.action_layout = config.robots.robocasa_pandas.action_layout
         _configure_recording_for_robot(config, robot)
         client = VLAClientAsync(
             config=config,
@@ -235,12 +235,12 @@ def _resume_episodes(task_output, metadata, episode_start=0):
 
 def _prepare_recording(client, config, task_name, run_id):
     recorder = client.data_record_manager
-    recorder.set_task(_recording_name(config.robots.robocasa.split, task_name, run_id))
-    height = int(config.robots.robocasa.camera_height)
-    width = int(config.robots.robocasa.camera_width)
+    recorder.set_task(_recording_name(config.robots.robocasa_pandas.split, task_name, run_id))
+    height = int(config.robots.robocasa_pandas.camera_height)
+    width = int(config.robots.robocasa_pandas.camera_width)
     camera_shapes = {
         f'cam.{camera_name}': (height, width, 3)
-        for camera_name in config.robots.robocasa.camera.names
+        for camera_name in config.robots.robocasa_pandas.camera.names
     }
     recorder.update_camera_shape_dict(camera_shapes)
     return recorder.save_path
@@ -400,16 +400,16 @@ def _run_task(args, env_name, run_id):
     config.vla_zmq.ip = args.server_ip
     config.vla_zmq.port = str(args.server_port)
     config.vla_zmq.infer_timeout = args.infer_timeout_ms
-    config.robots.type = RobotType.ROBOCASA
-    config.robots.robocasa.env_name = env_name
-    config.robots.robocasa.split = args.split
-    config.robots.robocasa.seed = args.seed
-    config.robots.robocasa.episode_offset = start_episode
-    config.robots.robocasa.preview_worker_index = worker_index
-    config.robots.robocasa.max_episode_steps = _task_horizon(env_name, args.max_episode_steps)
-    config.robots.robocasa.video_dir = '' if args.no_video else str(task_output / 'videos' / run_id)
-    config.robots.robocasa.video_fps = args.video_fps
-    config.robots.robocasa.video_layout = args.video_layout
+    config.robots.type = RobotType.ROBOCASA_PANDAS
+    config.robots.robocasa_pandas.env_name = env_name
+    config.robots.robocasa_pandas.split = args.split
+    config.robots.robocasa_pandas.seed = args.seed
+    config.robots.robocasa_pandas.episode_offset = start_episode
+    config.robots.robocasa_pandas.preview_worker_index = worker_index
+    config.robots.robocasa_pandas.max_episode_steps = _task_horizon(env_name, args.max_episode_steps)
+    config.robots.robocasa_pandas.video_dir = '' if args.no_video else str(task_output / 'videos' / run_id)
+    config.robots.robocasa_pandas.video_fps = args.video_fps
+    config.robots.robocasa_pandas.video_layout = args.video_layout
     config.visualize.port = args.visualize_port
 
     from client.simulation.evaluation import configure_pipeline

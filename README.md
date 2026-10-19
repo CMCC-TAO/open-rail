@@ -35,7 +35,7 @@ VLA/WAM models keep multiplying, and real-robot deployment is now the accepted a
 
 **Open-RAIL is exactly that link** — a lightweight server-client framework that connects any VLA/WAM model to any adapted robot and wires the closed loop of **infer** (real-robot inference and execution) → **collect** (capture data as it runs) → **evaluate** (data-driven iteration) end-to-end into every run.
 
-It currently adapts **4 heterogeneous robots** (including a LeRobot simulation backend) and supports **12 mainstream VLA/WAM models** (9 families), with joint acceleration standard deviation reduced from **10+ to 0.1 rad/s²**.
+It currently provides **6 robot adapters** (including RoboCasa, RoboTwin, and a LeRobot simulation backend) and supports **12 mainstream VLA/WAM models** (9 families), with joint acceleration standard deviation reduced from **10+ to 0.1 rad/s²**.
 
 - 🤖 **VLA researchers** — a ready-to-use real-robot deployment environment; focus on model innovation, not on building the pipeline
 - 🔧 **Robotics engineers** — a toolkit for fast algorithm validation, without reimplementing drivers and plumbing
@@ -93,6 +93,8 @@ Smoothing happens at the **framework level** — no model changes, no training a
 | China Mobile Lingxi (ours) | Folding wheeled dual-arm humanoid (ROS 2) | ✅ Adapted | `client/robots/ti5_t170c/` |
 | AgiBot G1 | Bimanual humanoid (head + waist + wheeled base) | ✅ Adapted | `client/robots/agibot_g1/` |
 | NAVIAI-WA2 (Zhejiang Humanoid) | Dual-arm wheeled humanoid (ROS 1) | ✅ Adapted | `client/robots/navi_wa2/` |
+| RoboCasa / PandaOmron | Physics simulation evaluation | ✅ Adapted | [Guide](client/robots/robocasa_pandas/README.md) |
+| RoboTwin / Aloha | Bimanual physics simulation evaluation | ✅ Adapted | [Guide](client/robots/robotwin_aloha/README.md) |
 | Mock | LeRobot-based simulation backend | ✅ Adapted | `client/robots/mock/` |
 | Unitree G1 | Bimanual bipedal humanoid | 🔜 Coming soon | — |
 | _Your robot_ | — | 🔜 Planned | [Integration guide](docs/guides/add-new-robot.md) |
@@ -192,6 +194,10 @@ Configuration entry points at a glance:
 | `conf/*.yaml` | Main config: `robots.type` selects the robot adapter, plus camera topics, `action_layout`, and proprioception parameters |
 | `conf/robots_conf.py` | Robot hardware parameters; set `dataset_path` here for the Mock backend |
 | Server network address | The only thing that changes between device / edge / cloud deployments; field name in [docs/configuration.md](docs/configuration.md) |
+
+### Physics simulation evaluation
+
+Use [RoboCasa / PandaOmron](client/robots/robocasa_pandas/README.md) or [RoboTwin / Aloha](client/robots/robotwin_aloha/README.md) for physics simulation. Each robot README covers environment setup, model startup, evaluation, and recording. The [shared Web simulation guide](docs/robocasa_web.md) covers task selection, configuration snapshots, and resume.
 
 ### Simulation loop (no real robot needed)
 
@@ -366,7 +372,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 
 **Adapt — multi-model and multi-robot control**
 
-- [x] 4 heterogeneous robots (AgiBot G1 / China Mobile Lingxi (Ti5 T170C) / NAVIAI-WA2 + a LeRobot simulation backend)
+- [x] 6 robot adapters (3 hardware adapters + RoboCasa / RoboTwin / Mock)
 - [ ] Unitree G1 adapter — adapted, shipping in the next release
 - [x] 12 VLA/WAM models across 9 families
 - [x] Visualization abstracted as its own layer — a control entry for non-developers
@@ -374,7 +380,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
   - [ ] dreamzero
   - [ ] cosmos
 - [ ] Multi-robot orchestration — one server scheduling multiple clients
-- [ ] Simulator integration
+- [x] RoboCasa / RoboTwin simulator integration
 
 Legend: ✅ released · (October) opening in October.
 

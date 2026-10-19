@@ -10,8 +10,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from client.simulation.data_record_manager import DataRecordManager, LeRobotDatasetRecorder
-from client.robots.robocasa.body_robot import RobotBody
-from conf.robots_conf import get_robocasa_config
+from client.robots.robocasa_pandas.body_robot import RobotBody
+from conf.robots_conf import get_robocasa_pandas_config
 from conf.save_conf import get_record_data_config
 from scripts.robocasa_eval import (
     SERVER_UNAVAILABLE_EXIT_CODE,
@@ -156,7 +156,7 @@ class RobocasaEvalRecordingTest(unittest.TestCase):
         robocasa = SimpleNamespace(
             split='target', camera_height=256, camera_width=320, camera=camera
         )
-        config = SimpleNamespace(robots=SimpleNamespace(robocasa=robocasa))
+        config = SimpleNamespace(robots=SimpleNamespace(robocasa_pandas=robocasa))
 
         path = _prepare_recording(client, config, 'PnPCounterToCab', 'run-1')
 
@@ -512,7 +512,7 @@ class RobocasaEvalRecordingTest(unittest.TestCase):
     def test_robocasa_action_is_reordered_for_tao_dataset(self):
         robot = RobotBody.__new__(RobotBody)
         robot.action_dim = 12
-        robot.action_layout = dict(get_robocasa_config().action_layout)
+        robot.action_layout = dict(get_robocasa_pandas_config().action_layout)
         action = np.arange(12, dtype=np.float32) / 20
 
         dataset_action = robot.to_dataset_action(action)

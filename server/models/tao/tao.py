@@ -44,7 +44,11 @@ class ModelVLA:
         data = sequence[0]
         obs = data['obs'].copy()
 
-        video_keys = list(self.cfg.get('video_keys', ['base_image', 'left_wrist_image', 'right_wrist_image']))
+        video_keys = list(self.cfg.get('video_keys') or (
+            ['cam_top_head', 'cam_left_wrist', 'cam_right_wrist']
+            if self.cfg.get('embodiment_tag') == 'aloha_robotwin'
+            else ['base_image', 'left_wrist_image', 'right_wrist_image']
+        ))
         if len(video_keys) != 3 or len(set(video_keys)) != 3:
             raise ValueError('video_keys must contain three distinct camera keys')
         head_key, left_wrist_key, right_wrist_key = video_keys

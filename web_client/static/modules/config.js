@@ -27,7 +27,7 @@ const SIMULATION_CONFIG_KEYS = new Set([
 
 function updateSimulationConfigVisibility() {
   const robotType = getSimulationClientConfig().robots?.type;
-  const simulation = ['robocasa', 'aloha_robotwin'].includes(robotType);
+  const simulation = ['robocasa_pandas', 'robotwin_aloha'].includes(robotType);
   $('config-tree').querySelectorAll('.cfg-row[data-key]').forEach(row => {
     if (SIMULATION_CONFIG_KEYS.has(row.dataset.key)) {
       row.style.display = simulation ? '' : 'none';
@@ -51,7 +51,7 @@ const CONFIG_SELECT_OPTIONS = {
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2', 'robocasa', 'aloha_robotwin'],
+  type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2', 'robocasa_pandas', 'robotwin_aloha'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1'],
   eval_log_format: ['json', 'csv', 'both'],
@@ -59,8 +59,8 @@ const CONFIG_SELECT_OPTIONS = {
 };
 
 const ROBOT_TYPE_LABELS = {
-  robocasa: 'RoboCasa_Panda (Simulation)',
-  aloha_robotwin: 'RoboTwin_ALOHA (Simulation)',
+  robocasa_pandas: 'RoboCasa_Pandas (Simulation)',
+  robotwin_aloha: 'RoboTwin_ALOHA (Simulation)',
 };
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
@@ -860,7 +860,7 @@ function createCfgRow(dotKey, label, value, options = {}) {
 
   const keyEl = document.createElement('div');
   keyEl.className = 'cfg-key'; keyEl.title = dotKey; keyEl.textContent = label;
-  if (dotKey === 'robots.aloha_robotwin.render_observation_mode') {
+  if (dotKey === 'robots.robotwin_aloha.render_observation_mode') {
     keyEl.textContent = 'Camera rendering (sync)';
     keyEl.title = 'Async mode always renders every action.';
   }
@@ -1134,7 +1134,7 @@ function onCfgChange(dotKey, input, originalValue) {
 /** Mark pending changes: show badge + highlight Apply button */
 function blockSimulationClientStart() {
   const robotType = getSimulationClientConfig().robots?.type;
-  if (!App.isRunning && ['robocasa', 'aloha_robotwin'].includes(robotType)) {
+  if (!App.isRunning && ['robocasa_pandas', 'robotwin_aloha'].includes(robotType)) {
     toast('Use Start in Simulation Evaluation to run simulation tasks.', 'info');
     return true;
   }

@@ -26,9 +26,9 @@ def client_evaluation_values(config):
         raise ValueError("Configuration snapshot must be an object")
     robots = config.get("robots", {})
     robot_type = robots.get("type")
-    platforms = {"robocasa": "robocasa", "aloha_robotwin": "robotwin"}
+    platforms = {"robocasa_pandas": "robocasa", "robotwin_aloha": "robotwin"}
     if robot_type not in platforms:
-        raise ValueError("Select robocasa or aloha_robotwin in Configuration")
+        raise ValueError("Select robocasa_pandas or robotwin_aloha in Configuration")
     robot = robots.get(robot_type, {})
     values = {"platform": platforms[robot_type]}
     mappings = {
@@ -56,7 +56,7 @@ def client_evaluation_values(config):
     for key, field in (("async_replenish_threshold", "action_replenish_threshold"),
                        ("max_async_observation_lag_steps", "max_async_observation_lag_steps")):
         values[key] = config.get("rdm", {}).get(field) if values.get("mode") == "async" else None
-    if robot_type == "aloha_robotwin" and values.get("intra_chunk_mode") != "interpolation":
+    if robot_type == "robotwin_aloha" and values.get("intra_chunk_mode") != "interpolation":
         values["intra_chunk_sample_ratio"] = 1
     return values
 

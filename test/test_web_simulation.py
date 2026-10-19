@@ -151,7 +151,7 @@ def test_robotwin_render_mode_from_web_snapshot_reaches_cli(tmp_path, render_mod
     from scripts import aloha_robotwin_eval as twin
 
     snapshot = {
-        'robots': {'type': 'aloha_robotwin', 'aloha_robotwin': {'render_observation_mode': render_mode}},
+        'robots': {'type': 'robotwin_aloha', 'robotwin_aloha': {'render_observation_mode': render_mode}},
         'rdm': {'mode': 'sync'},
     }
     config = simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
@@ -220,7 +220,7 @@ def test_options_use_platform_presets_and_current_model_connection(tmp_path, mon
 
 def test_client_configuration_drives_evaluation_and_rejects_invalid_shared_values():
     snapshot = {
-        'robots': {'type': 'robocasa', 'robocasa': {'seed': 7, 'n_envs': 2}},
+        'robots': {'type': 'robocasa_pandas', 'robocasa_pandas': {'seed': 7, 'n_envs': 2}},
         'rdm': {'mode': 'async', 'action_replenish_threshold': 3, 'max_async_observation_lag_steps': 6},
         'controller': {'action_steps': 12, 'period': 4.5},
         'intra_chunk': {'intra_chunk_mode': 'fitting', 'fitting_deg': 3},
@@ -236,7 +236,7 @@ def test_client_configuration_drives_evaluation_and_rejects_invalid_shared_value
     with pytest.raises(ValidationError):
         simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
     snapshot['robots']['type'] = 'mock'
-    with pytest.raises(ValidationError, match='Select robocasa or aloha_robotwin'):
+    with pytest.raises(ValidationError, match='Select robocasa_pandas or robotwin_aloha'):
         simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
 
 
@@ -275,7 +275,7 @@ def test_job_saves_and_reloads_configuration_snapshot(tmp_path, monkeypatch):
     from conf.client_conf import get_client_config
     from client.utils.util import apply_user_config
     snapshot = {
-        'robots': {'type': 'robocasa'},
+        'robots': {'type': 'robocasa_pandas'},
         'rdm': {'mode': 'sync'},
         'intra_chunk': {'intra_chunk_mode': 'fitting', 'fitting_deg': 3},
         'inter_chunk': {'inter_chunk_mode': 'min_jerk', 'min_jerk': {'blend_threshold': .6}},

@@ -56,7 +56,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     lastError = "",
     lastErrorSource = "",
     artifactJob = "";
-  const platformForConfig = (config) => ({robocasa: "robocasa", aloha_robotwin: "robotwin"})[config.robots?.type];
+  const platformForConfig = (config) => ({robocasa_pandas: "robocasa", robotwin_aloha: "robotwin"})[config.robots?.type];
   const currentPlatform = () => getClientConfig
     ? platformForConfig(getClientConfig()) : $("field-platform").value;
   function notifyRuntimeLock(active) {
@@ -232,7 +232,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       const platform = currentPlatform();
       const snapshot = getClientConfig ? getClientConfig() : null;
       if (getClientConfig && !platformForConfig(snapshot))
-        throw new Error("Select robocasa or aloha_robotwin in Configuration.");
+        throw new Error("Select robocasa_pandas or robotwin_aloha in Configuration.");
       const config = await api("/options?platform=" + platform);
       if (snapshot) config.client_config = snapshot;
       for (const key of [...basicFields, ...advancedFields]) {
@@ -452,7 +452,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     if (!platform) {
       ready = false;
       $("start").disabled = true;
-      summary.textContent = "Select robocasa or aloha_robotwin in Configuration.";
+      summary.textContent = "Select robocasa_pandas or robotwin_aloha in Configuration.";
       return;
     }
     summary.textContent = "Configuration: " + config.robots.type + " · " + (config.rdm?.mode || "sync");

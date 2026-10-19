@@ -1,7 +1,7 @@
 # Web Simulation Evaluation
 
 Start `python run_web_client.py --port 9000` and open `http://localhost:9000/`.
-In **Configuration**, select Robot Type `robocasa` or `aloha_robotwin`.
+In **Configuration**, select Robot Type `robocasa_pandas` or `robotwin_aloha`.
 Configure mode, action chunk length, smoothing, fusion, image preprocessing, and the model
 connection there. Robot-specific settings include Python, GPU, parallel environments,
 seed, and RoboTwin root/task settings. Blank environment paths use the backend presets.
@@ -26,6 +26,12 @@ The worker loads the snapshot through the existing
 `--user_conf` mechanism. Later Configuration edits do not alter the running job;
 Resume uses its saved configuration. One evaluation runs at a time and may use parallel
 environments. Start the model inference service separately.
+
+Environment setup, model server commands, and platform CLI options are maintained
+in the robot READMEs:
+
+- [RoboCasa / PandaOmron](../client/robots/robocasa_pandas/README.md)
+- [RoboTwin / Aloha](../client/robots/robotwin_aloha/README.md)
 
 Environment paths and hidden defaults come from `conf/web_simulation.yaml`.
 This local file is ignored by Git. For another installation, copy

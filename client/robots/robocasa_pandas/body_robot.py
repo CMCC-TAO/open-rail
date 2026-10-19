@@ -6,8 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from client.robots.base_robot import ObservationMode, RobotBase, RobotStepResult
-from client.robots.robocasa.video_recorder import VideoRecorder
-from client.robots.robocasa.profiling import (
+from client.robots.robocasa_pandas.video_recorder import VideoRecorder
+from client.robots.robocasa_pandas.profiling import (
     StepTimings, install_mujoco_timing, log_render_device, measure_native,
 )
 
@@ -68,7 +68,7 @@ class RobotBody(RobotBase):
 
         env_name = str(self.config.get('env_name', '')).strip()
         if not env_name:
-            raise ValueError('robocasa.env_name is required')
+            raise ValueError('robocasa_pandas.env_name is required')
         env_id = env_name if env_name.startswith('robocasa/') else f'robocasa/{env_name}'
         try:
             import mujoco
@@ -100,7 +100,7 @@ class RobotBody(RobotBase):
                 raise KeyError(f'RoboCasa observation is missing {key!r}')
             values.append(np.asarray(obs[key], dtype=np.float32).reshape(-1))
         if not values:
-            raise ValueError('robocasa.state_keys must not be empty')
+            raise ValueError('robocasa_pandas.state_keys must not be empty')
         self.current_state = np.concatenate(values)
 
     def _sim_time(self):

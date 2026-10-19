@@ -33,7 +33,7 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     defaults = EvaluationConfig(env_name='PickPlaceCounterToCabinet').model_dump()
     client_config = json.loads(json.dumps(get_client_config().to_dict(), default=lambda value: value.value))
     client_config['robots']['type'] = 'mock'
-    client_config['robots']['robocasa']['split'] = 'pretrain'
+    client_config['robots']['robocasa_pandas']['split'] = 'pretrain'
     client_config['controller']['action_steps'] = 48
     client_config['vla_zmq'].update(ip='192.0.2.10', port='5566')
     page.on('pageerror', lambda error: errors.append(str(error)))
@@ -106,16 +106,16 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     assert page.locator('#sim-start').is_disabled()
     assert page.locator('#btn-start').is_enabled()
     assert page.locator('#btn-observe').is_enabled()
-    robot_selector.select_option('robocasa')
+    robot_selector.select_option('robocasa_pandas')
     assert simulation_rows.evaluate_all('(rows) => rows.every(row => row.style.display === "")')
     robot_selector.select_option('mock')
     assert simulation_rows.evaluate_all('(rows) => rows.every(row => row.style.display === "none")')
     assert page.evaluate('App.config.intra_chunk.output_sample_ratio === 1 && App.config.rdm.latency_compensation === true')
-    robot_selector.select_option('robocasa')
+    robot_selector.select_option('robocasa_pandas')
     page.wait_for_function('document.getElementById("sim-start").disabled === false')
     assert page.locator('#sim-field-platform').count() == 0
     assert 'robocasa' in page.locator('#sim-configuration-summary').inner_text()
-    robot_selector.select_option('aloha_robotwin')
+    robot_selector.select_option('robotwin_aloha')
     page.wait_for_function('document.getElementById("sim-start").disabled === false')
     page.locator('.cfg-row[data-key="rdm.mode"] select').first.select_option('async' if selection == 'suite' else 'sync')
     page.locator('.cfg-row[data-key="intra_chunk.intra_chunk_mode"] select').first.select_option('raw')
@@ -170,13 +170,13 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.evaluate('setRunningUI(false, false)')
     assert requests[0]['platform'] == 'robotwin'
     assert requests[0]['n_envs'] == 3
-    assert requests[0]['client_config']['robots']['aloha_robotwin']['n_envs'] == 3
+    assert requests[0]['client_config']['robots']['robotwin_aloha']['n_envs'] == 3
     assert requests[0]['record'] is True
     assert requests[0]['mode'] == ('async' if selection == 'suite' else 'sync')
     assert requests[0]['async_replenish_threshold'] == (0 if selection == 'suite' else None)
     assert requests[0]['n_action_steps'] == 48
     assert requests[0]['control_period_ms'] == 4.5
-    assert requests[0]['client_config']['robots']['type'] == 'aloha_robotwin'
+    assert requests[0]['client_config']['robots']['type'] == 'robotwin_aloha'
     assert requests[0]['client_config']['intra_chunk']['intra_chunk_mode'] == 'raw'
     assert requests[0]['intra_chunk_mode'] == 'raw'
     assert requests[0]['seed'] == 0
@@ -243,7 +243,7 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     assert page.locator('#btn-start').is_disabled()
     assert page.locator('#btn-observe').is_disabled()
     page.locator('#panel-config-header > span').click()
-    robot_selector.select_option('robocasa')
+    robot_selector.select_option('robocasa_pandas')
     page.locator('#panel-simulation-header > span').click()
     page.locator('#sim-config summary').filter(has_text='Evaluation Configuration').click()
     page.wait_for_function('document.querySelector("#sim-task-name option[value=target50]") !== null || document.querySelector("#sim-task-name option[value=Task]") !== null')
@@ -265,7 +265,7 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     assert requests[1]['platform'] == 'robocasa'
     assert requests[1]['task_suite'] == 'Task,OtherTask'
     assert requests[1]['split'] == 'target'
-    assert requests[1]['client_config']['robots']['robocasa']['split'] == 'target'
+    assert requests[1]['client_config']['robots']['robocasa_pandas']['split'] == 'target'
     page.locator('#panel-config-header > span').click()
     robot_selector.select_option('mock')
     assert page.locator('#sim-start').is_disabled()

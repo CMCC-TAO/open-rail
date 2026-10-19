@@ -22,8 +22,8 @@ from client.simulation.evaluation import (
     configure_pipeline as configure_shared_pipeline,
 )
 from client.simulation import recording_exports
-from client.robots.aloha_robotwin.body_robot import RobotBody
-from client.robots.aloha_robotwin.environment import (
+from client.robots.robotwin_aloha.body_robot import RobotBody
+from client.robots.robotwin_aloha.environment import (
     _prepare_robotwin,
     select_episode,
     validate_name,
@@ -354,7 +354,7 @@ def _run_task(args, task_name, run_id):
     if args.user_conf:
         config = casa.apply_user_config(config, casa.load_user_config(args.user_conf))
     configure_pipeline(config, args)
-    config.robots.type = RobotType.ALOHA_ROBOTWIN
+    config.robots.type = RobotType.ROBOTWIN_ALOHA
     config.vla_zmq.ip, config.vla_zmq.port = args.server_ip, str(args.server_port)
     config.vla_zmq.infer_timeout = args.infer_timeout_ms
     config.visualize.port = args.visualize_port
@@ -362,7 +362,7 @@ def _run_task(args, task_name, run_id):
     config.record.save_dir = args.record_dir
     config.record.dataset_date = args._record_date or _recording_date(run_id)
     config.record.lerobot.fps = args.record_fps
-    cfg = config.robots.aloha_robotwin
+    cfg = config.robots.robotwin_aloha
     cfg.render_observation_mode = args.render_observation_mode
     cfg.preview_worker_index = getattr(args, '_worker_index', None)
     cfg.task_name = task_name

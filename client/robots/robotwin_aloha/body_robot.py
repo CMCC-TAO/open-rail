@@ -6,11 +6,11 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 
 from client.robots.base_robot import ObservationMode, RobotBase, RobotStepResult
-from client.robots.robocasa.video_recorder import VideoRecorder
+from client.robots.robocasa_pandas.video_recorder import VideoRecorder
 
 
 class RobotBody(RobotBase):
-    DATASET_ROBOT_TYPE = "aloha_robotwin"
+    DATASET_ROBOT_TYPE = "robotwin_aloha"
     DATASET_CAMERA_KEYS = {
         "head": "observation.images.head",
         "hand_left": "observation.images.hand_left",
@@ -37,7 +37,7 @@ class RobotBody(RobotBase):
         self._lock = threading.RLock()
         self._owns_sim_executor = sim_executor is None
         self._sim_executor = sim_executor or ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="aloha_robotwin_sim"
+            max_workers=1, thread_name_prefix="robotwin_aloha_sim"
         )
         self.task_env = None
         self._last_obs = None
@@ -106,10 +106,10 @@ class RobotBody(RobotBase):
         action = np.asarray(action, dtype=np.float64).reshape(-1)
         if action.size != self.action_dim:
             raise ValueError(
-                f"aloha_robotwin action must contain {self.action_dim} values, got {action.size}"
+                f"robotwin_aloha action must contain {self.action_dim} values, got {action.size}"
             )
         if not np.all(np.isfinite(action)):
-            raise ValueError("aloha_robotwin action must contain only finite values")
+            raise ValueError("robotwin_aloha action must contain only finite values")
         return action
 
     def _video_observation(self, obs):

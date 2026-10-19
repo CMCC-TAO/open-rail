@@ -8,7 +8,7 @@ from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
-from client.robots.robocasa.body_robot import RobotBody
+from client.robots.robocasa_pandas.body_robot import RobotBody
 from client.simulation.vla_client import VLAClientAsync
 from conf.client_conf import get_client_config
 from scripts.robocasa_eval import _start_episode, _wait_for_episode
@@ -86,12 +86,12 @@ def test_threaded_simulation_with_upstream_algorithms(monkeypatch, mode, intra, 
     config.controller.action_steps = 8
     config.controller.gripper_offset = 0
     config.vision.preprocess.method = 'none'
-    config.robots.robocasa.max_episode_steps = 24
-    env = FakeEnvironment(config.robots.robocasa)
+    config.robots.robocasa_pandas.max_episode_steps = 24
+    env = FakeEnvironment(config.robots.robocasa_pandas)
     monkeypatch.setattr(RobotBody, '_create_env', lambda self: env)
     monkeypatch.setattr('client.simulation.vla_client.DataRecordManager',
                         lambda **kwargs: SimpleNamespace(close=lambda: None))
-    robot = RobotBody(config.robots.robocasa)
+    robot = RobotBody(config.robots.robocasa_pandas)
     transport = FakeTransport()
     client = VLAClientAsync(
         config, RealtimeDataManager(config.rdm, simulation_mode=True),
@@ -123,7 +123,7 @@ def test_smoothing_preserves_sample_count_and_discrete_controls(ratio, mode):
     config.intra_chunk.intra_chunk_mode = mode
     config.intra_chunk.output_sample_ratio = ratio
     smoother = IntraChunkSmoother(config.intra_chunk, simulation_mode=True)
-    smoother.set_action_layout(config.robots.robocasa.action_layout)
+    smoother.set_action_layout(config.robots.robocasa_pandas.action_layout)
     timestamps = np.linspace(0, 0.35, 8)
     actions = np.tile(np.linspace(0, 0.2, 8), (12, 1))
     actions[6] = np.where(np.arange(8) % 2, 1, -1)
@@ -157,12 +157,12 @@ def test_recording_commits_real_parquet_and_videos(monkeypatch, tmp_path):
     config.vision.preprocess.method = 'none'
     config.record.switch = True
     config.record.save_dir = str(tmp_path)
-    config.robots.robocasa.camera_width = 16
-    config.robots.robocasa.camera_height = 16
-    config.robots.robocasa.max_episode_steps = 8
-    env = FakeEnvironment(config.robots.robocasa)
+    config.robots.robocasa_pandas.camera_width = 16
+    config.robots.robocasa_pandas.camera_height = 16
+    config.robots.robocasa_pandas.max_episode_steps = 8
+    env = FakeEnvironment(config.robots.robocasa_pandas)
     monkeypatch.setattr(RobotBody, '_create_env', lambda self: env)
-    robot = RobotBody(config.robots.robocasa)
+    robot = RobotBody(config.robots.robocasa_pandas)
     _configure_recording_for_robot(config, robot)
     client = VLAClientAsync(
         config, RealtimeDataManager(config.rdm, simulation_mode=True),

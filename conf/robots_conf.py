@@ -16,8 +16,8 @@ def _ordered_config(value):
 class RobotType(str, Enum):
     AGIBOT_G1 = 'agibot_g1'
     MOCK = 'mock'
-    ROBOCASA = 'robocasa'
-    ALOHA_ROBOTWIN = 'aloha_robotwin'
+    ROBOCASA_PANDAS = 'robocasa_pandas'
+    ROBOTWIN_ALOHA = 'robotwin_aloha'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
 
@@ -111,7 +111,7 @@ def get_mock_config():
     return config
 
 
-def get_robocasa_config():
+def get_robocasa_pandas_config():
     config = ConfigDict()
     config.python = ''
     config.gpu = '2'
@@ -154,7 +154,7 @@ def get_robocasa_config():
     })
     return config
 
-def get_aloha_robotwin_config():
+def get_robotwin_aloha_config():
     config = ConfigDict()
     config.python = ''
     config.robotwin_root = ''
@@ -344,8 +344,8 @@ def get_robots_config():
     config.type = RobotType.AGIBOT_G1
     config.agibot_g1 = get_agibot_g1_config()
     config.mock = get_mock_config()
-    config.robocasa = get_robocasa_config()
-    config.aloha_robotwin = get_aloha_robotwin_config()
+    config.robocasa_pandas = get_robocasa_pandas_config()
+    config.robotwin_aloha = get_robotwin_aloha_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()
     return config

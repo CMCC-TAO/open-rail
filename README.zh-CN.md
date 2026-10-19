@@ -35,7 +35,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 **Open-RAIL 就是这段链路**：一套轻量级服务端-客户端框架，把任意 VLA/WAM 模型接到任意已适配机器人上，并把「**推**（真机推理执行）→ **采**（运行即采集）→ **评**（数据驱动迭代）」的闭环端到端接进每一次运行。
 
-目前已适配 **4 款异构机器人**（含 LeRobot 仿真后端）、支持 **12 个主流 VLA/WAM 模型**（9 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
+目前已适配 **6 种机器人适配器**（含 RoboCasa、RoboTwin 和 LeRobot 仿真后端）、支持 **12 个主流 VLA/WAM 模型**（9 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
 
 - 🤖 **VLA/WAM 模型研究人员** — 开箱即用的真机部署环境，专注模型创新，不搭工程管线
 - 🔧 **机器人工程师** — 快速验证算法的工具集，无需重复实现驱动与管线
@@ -93,6 +93,8 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | AgiBot G1 | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/agibot_g1/` |
 | 中国移动灵犀（Ti5 T170C） | 折叠轮式双臂人形（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
 | NAVIAI-WA2（浙江人形） | 双臂轮式人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
+| RoboCasa / PandaOmron | 物理仿真测评 | ✅ 已适配 | [使用说明](client/robots/robocasa_pandas/README.md) |
+| RoboTwin / Aloha | 双臂物理仿真测评 | ✅ 已适配 | [使用说明](client/robots/robotwin_aloha/README.md) |
 | Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
 | Unitree G1 | 双臂双足人形 | 🔜 即将支持 | — |
 | _你的机器人_ | — | 🔜 计划中 | [接入指南](docs-cn-backup/add-new-robot.zh-CN.md) |
@@ -192,6 +194,10 @@ python run_web_client.py --conf custom_conf.yaml
 | `conf/*.yaml` | 主配置：`robots.type` 选择机器人适配器，相机话题、`action_layout` 与本体感知参数 |
 | `conf/robots_conf.py` | 机器人硬件参数；Mock 后端在此设置 `dataset_path` |
 | 服务端网络地址 | 端 / 边 / 云切换只需修改此项，字段名见 [docs-cn-backup/configuration.zh-CN.md](docs-cn-backup/configuration.zh-CN.md) |
+
+### 物理仿真测评
+
+物理仿真使用 [RoboCasa / PandaOmron](client/robots/robocasa_pandas/README.md) 或 [RoboTwin / Aloha](client/robots/robotwin_aloha/README.md)，对应 README 包含环境配置、模型启动、测评和录制流程。[公共 Web 仿真说明](docs/robocasa_web.md) 介绍任务选择、配置快照和续跑。
 
 ### 仿真闭环（无真机起步）
 
@@ -366,7 +372,7 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 
 **兼容——多模型与多机器人控制**
 
-- [x] 4 款异构机器人（AgiBot G1 / 中国移动灵犀（Ti5 T170C）/ NAVIAI-WA2 + 一套 LeRobot 仿真后端）
+- [x] 6 种机器人适配器（3 种真机 + RoboCasa / RoboTwin / Mock）
 - [ ] Unitree G1 适配器——已适配，下个版本放出
 - [x] 12 个 VLA/WAM 模型（9 系列）
 - [x] 可视化抽象为独立层——面向非开发人员的控制入口
@@ -374,7 +380,7 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
   - [ ] dreamzero
   - [ ] cosmos
 - [ ] 多机器人编排——一个服务端调度多个客户端
-- [ ] 仿真器对接
+- [x] RoboCasa / RoboTwin 仿真器接入
 
 图例：✅ 已发布；（10 月）为 10 月放出。
 
