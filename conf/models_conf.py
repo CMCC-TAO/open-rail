@@ -14,6 +14,7 @@ class ModelType(str, Enum):
     GO1 = 'go1'
     PI0 = 'pi0'
     PI05 = 'pi05'
+    PI05_PYTORCH = 'pi05_pytorch'
     TAO = 'tao'
     DM05 = 'dm05'
     WALLX = 'wallx'
@@ -108,6 +109,16 @@ def get_pi05_config():
     return config
 
 
+def get_pi05_pytorch_config():
+    """PyTorch pi0.5 with the training config from pi05_base."""
+    config = ConfigDict()
+    config.config = 'pi05_a2d'
+    config.model_path = '/path/to/model'  # Contains model.safetensors and assets/.
+    config.compile_mode = 'max-autotune'  # Options: None (off, no quotes), 'default', 'reduce-overhead', 'max-autotune', 'max-autotune-no-cudagraphs'.
+    config.execute_horizon = 50
+    return config
+
+
 def get_tao_config():
     """Generate configuration for TAO model.
     
@@ -171,6 +182,7 @@ def get_models_config():
     config.smolvla = get_smolvla_config()
     config.pi0 = get_pi0_config()
     config.pi05 = get_pi05_config()
+    config.pi05_pytorch = get_pi05_pytorch_config()
     config.tao = get_tao_config()
     config.dm05 = get_dm05_config()
     config.wallx = get_wallx_config()

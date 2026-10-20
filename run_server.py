@@ -52,6 +52,9 @@ def get_model(config):
     elif config.type == ModelType.PI05:
         from server.models.openpi.pi05 import ModelVLA as PI05
         return PI05(config.pi05)
+    elif config.type == ModelType.PI05_PYTORCH:
+        from server.models.openpi.pi05_pytorch import ModelVLA as PI05_PYTORCH
+        return PI05_PYTORCH(config.pi05_pytorch)
     elif config.type == ModelType.TAO:
         from server.models.tao import ModelVLA as TAO
         return TAO(config.tao)
@@ -73,7 +76,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao', 'dm05', 'wallx'],
+    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'pi05_pytorch', 'tao', 'dm05', 'wallx'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
@@ -110,6 +113,8 @@ def override_config_with_args(config, args):
             config.models.pi0.model_path = args.model_path
         elif config.models.type == ModelType.PI05:
             config.models.pi05.model_path = args.model_path
+        elif config.models.type == ModelType.PI05_PYTORCH:
+            config.models.pi05_pytorch.model_path = args.model_path
         elif config.models.type == ModelType.TAO:
             config.models.tao.model_path = args.model_path
         elif config.models.type == ModelType.DM05:
