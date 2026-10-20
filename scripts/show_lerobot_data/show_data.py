@@ -354,7 +354,7 @@ class DatasetVisualizer:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Visualize dataset, supports specifying path and episode ID")
-    parser.add_argument("--data-path", type=str, default="/home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test",
+    parser.add_argument("--data-path", type=str, default="/path/to/dataset",
                         help="Data root directory path")
     parser.add_argument("--episode-id", type=int, default=2,
                         help="Episode ID to display")

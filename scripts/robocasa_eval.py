@@ -18,6 +18,7 @@ from client.simulation.evaluation import (
     SERVER_UNAVAILABLE_EXIT_CODE, ServerUnavailableError,
     build_parser as build_simulation_parser,
     build_client as build_simulation_client,
+    get_simulation_config,
     configure_mujoco_gpu, worker_gpu,
     sample_ratio as _sample_ratio,
     wait_for_server as _wait_for_server,
@@ -51,7 +52,6 @@ from client.simulation.recording_exports import (
 
 from client.core.zmq_client import ZMQClient
 from client.utils.util import apply_user_config, load_user_config
-from conf.client_conf import get_client_config
 from conf.robots_conf import RobotType
 
 
@@ -121,7 +121,7 @@ def _run_task(args, env_name, run_id):
     device = configure_mujoco_gpu(args.gpu, getattr(args, '_worker_index', None))
     if device is not None:
         logging.info('RoboCasa worker %s uses GPU %s', getattr(args, '_worker_index', None), device)
-    config = get_client_config()
+    config = get_simulation_config()
     if args.user_conf:
         config = apply_user_config(config, load_user_config(args.user_conf))
 

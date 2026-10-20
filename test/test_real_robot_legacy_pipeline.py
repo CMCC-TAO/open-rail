@@ -1,4 +1,5 @@
 import unittest
+import threading
 
 import numpy as np
 from ml_collections import ConfigDict
@@ -6,9 +7,38 @@ from ml_collections import ConfigDict
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
+from client.simulation.evaluation import get_simulation_config
+from conf.client_conf import get_client_config
 
 
 class RealRobotLegacyPipelineTest(unittest.TestCase):
+    def test_simulation_recording_defaults_do_not_change_real_recording(self):
+        real = get_client_config().record.lerobot
+        simulation = get_simulation_config().record.lerobot
+
+        self.assertEqual(real.codebase_version, 'v2.0')
+        self.assertEqual(simulation.codebase_version, 'v2.1')
+        for key in ('cam.head', 'cam.hand_left', 'cam.hand_right'):
+            self.assertEqual(real[key].encode.codec, 'mp4v')
+            self.assertEqual(simulation[key].encode.codec, 'h264')
+
+    def test_real_sync_wait_is_bounded_without_control(self):
+        manager = RealtimeDataManager(get_client_config().rdm)
+        manager.action_chunk_fitted = np.zeros((2, 3))
+        manager.action_chunk_index = 0
+        completed = []
+        waiter = threading.Thread(
+            target=lambda: completed.append(manager.wait_for_next('sync')), daemon=True,
+        )
+        waiter.start()
+        try:
+            waiter.join(timeout=3.0)
+            self.assertFalse(waiter.is_alive())
+            self.assertEqual(completed, [False])
+        finally:
+            manager.interrupt_wait_for_next()
+            waiter.join(timeout=1.0)
+
     def test_simulation_sampling_options_do_not_change_real_trajectory(self):
         config = ConfigDict({
             'intra_chunk_mode': 'fitting',

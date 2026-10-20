@@ -20,6 +20,7 @@ from client.simulation.evaluation import (
     SERVER_UNAVAILABLE_EXIT_CODE, ServerUnavailableError, EvaluationRunner,
     build_parser as build_simulation_parser,
     build_client as build_simulation_client,
+    get_simulation_config,
     configure_pipeline as configure_shared_pipeline,
     worker_gpu,
     sample_ratio as _sample_ratio,
@@ -38,7 +39,6 @@ from client.simulation.evaluation import (
 )
 from client.core.zmq_client import ZMQClient
 from client.utils.util import apply_user_config, load_user_config
-from conf.client_conf import get_client_config
 from client.simulation import recording_exports
 from client.robots.robotwin_aloha.body_robot import RobotBody
 from client.robots.robotwin_aloha.environment import (
@@ -353,7 +353,7 @@ def _run_task(args, task_name, run_id):
         return json.loads((task_output / "stats.json").read_text())
     if args._worker:
         end = min(end, start + args.worker_episodes)
-    config = get_client_config()
+    config = get_simulation_config()
     if args.user_conf:
         config = apply_user_config(config, load_user_config(args.user_conf))
     configure_pipeline(config, args)

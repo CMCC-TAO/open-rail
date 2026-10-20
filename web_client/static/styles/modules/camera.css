@@ -51,7 +51,39 @@
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
+  cursor: zoom-in;
 }
+.cam-preview:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.cam-preview img { user-select: none; -webkit-user-drag: none; }
+.cam-exit-expanded { display: none; }
+
+.camera-expanded {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--text);
+  background: var(--bg);
+  overflow: hidden;
+}
+.camera-expanded[open] { display: flex; }
+.camera-expanded .cam-item { flex: 1; min-width: 0; min-height: 0; border: 0; border-radius: 0; }
+.camera-expanded .cam-row { padding: 8px; }
+.camera-expanded .cam-exit-expanded { display: inline-flex; }
+.camera-expanded .cam-preview {
+  flex: 1;
+  min-height: 0;
+  aspect-ratio: auto !important;
+  cursor: zoom-out;
+}
+.camera-expanded .cam-preview,
+.camera-expanded .cam-preview > img:not(.cam-overlay) { background: #000; }
+
 /* Closed state: dim the image with an overlay, don't hide the box */
 .cam-preview.closed::after {
   content: 'CLOSED';
@@ -61,6 +93,7 @@
   font-size: var(--font-size-3); font-weight: var(--font-weight-4); letter-spacing: 2px;
   color: var(--overlay-light);
   pointer-events: none;
+  z-index: 2;
 }
 .cam-preview img {
   width: 100%; height: 100%; object-fit: contain; background: var(--bg3);
@@ -68,6 +101,14 @@
 }
 /* Hide broken-image icon before stream arrives */
 .cam-preview img:not(.loaded) { visibility: hidden; }
+.cam-preview img.cam-overlay {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  pointer-events: none;
+  z-index: 1;
+}
+.cam-preview img.cam-overlay[hidden] { display: none; }
 .cam-preview-placeholder {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;

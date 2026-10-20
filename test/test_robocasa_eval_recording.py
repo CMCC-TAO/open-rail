@@ -13,6 +13,7 @@ from client.simulation.data_record_manager import DataRecordManager, LeRobotData
 from client.robots.robocasa_pandas.body_robot import RobotBody
 from conf.robots_conf import get_robocasa_pandas_config
 from conf.save_conf import get_record_data_config
+from client.simulation.evaluation import get_simulation_config
 from scripts.robocasa_eval import (
     SERVER_UNAVAILABLE_EXIT_CODE,
     ServerUnavailableError,
@@ -469,7 +470,7 @@ class RobocasaEvalRecordingTest(unittest.TestCase):
             _reconcile_recording_progress(manager, '/recording', 3)
 
     def test_record_config_matches_lerobot_v21_image_keys(self):
-        config = get_record_data_config().lerobot
+        config = get_simulation_config().record.lerobot
 
         self.assertEqual(config.codebase_version, 'v2.1')
         self.assertEqual(config.image_feature_keys.head, 'observation.images.head')

@@ -570,13 +570,15 @@ class RealtimeDataManager():
                     generation = self._action_generation
                     target_index = max(0, self.action_chunk_fitted.shape[1] - 1)
                     sequential = self._sequential_actions()
-                    self.action_cond.wait_for(
+                    # Sequential simulation waits for execution; pause/stop cancels it.
+                    result = self.action_cond.wait_for(
                         lambda: self._action_generation != generation
                         or (self.action_chunk_fitted is not None
                             and (self.action_executed_index if sequential else self.action_chunk_index) is not None
-                            and (self.action_executed_index if sequential else self.action_chunk_index) >= target_index)
+                            and (self.action_executed_index if sequential else self.action_chunk_index) >= target_index),
+                        timeout=None if sequential else max(wait_time, 2.0)
                     )
-                    result = self._action_generation == generation
+                    result = result and self._action_generation == generation
         else:
             raise ValueError("mode must be 'async' or 'sync'")
 

@@ -21,6 +21,22 @@ class ServerUnavailableError(RuntimeError):
     pass
 
 
+def get_simulation_config():
+    from conf.client_conf import get_client_config
+
+    config = get_client_config()
+    record = config.record.lerobot
+    record.codebase_version = 'v2.1'
+    record.image_feature_keys = {
+        'head': 'observation.images.head',
+        'hand_left': 'observation.images.left',
+        'hand_right': 'observation.images.right',
+    }
+    for key in ('cam.head', 'cam.hand_left', 'cam.hand_right'):
+        record[key].encode.codec = 'h264'
+    return config
+
+
 def sample_ratio(value):
     ratio = float(value)
     if ratio < 1.0:

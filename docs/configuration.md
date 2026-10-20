@@ -12,12 +12,16 @@ description: "Configuration sources, precedence, and reference tables for Open-R
 
 | Entry point | Configuration load order |
 | --- | --- |
-| `run_web_client.py` | `conf/client_conf.py` defaults → `--conf` YAML file (default: `conf/default_conf.yaml`) → runtime load/patch requests |
-| `run_server.py` | `conf/server_conf.py` defaults → command-line overrides |
+| `run_web_client.py` | `conf/client_conf.py` defaults → `--conf` YAML file (default: `conf/default_conf.yaml`) → runtime load/patch requests from the Web console |
+| `run_server.py` | `conf/server_conf.py` defaults → command-line overrides (`--model_type`, `--model_path`, `--debug`) |
 
-Only existing leaf keys are updated when a Web-client YAML file is loaded; unknown keys are ignored. Keep `default_conf.yaml` synchronized with the fields below. `conf/user_conf_example.py` shows Python overrides for commands that support `--user_conf`, such as `scripts/robocasa_eval.py`; the Web client uses YAML through `--conf`.
+The Web client accepts `--host`, `--port`, `--conf`, and `--reload`. The YAML file selected by `--conf` is both the startup configuration and the save target used by the Web console (Setup → Apply / Save As). Configuration load/save accepts `.yaml` and `.yml` files only.
 
-All durations in the following tables are milliseconds unless another unit is shown explicitly.
+`conf/user_conf_example.py` shows Python overrides for commands that support `--user_conf`, such as `scripts/robocasa_eval.py`; the Web client loads YAML through `--conf`.
+
+Only existing leaf keys are updated when a configuration file or patch is applied; unknown keys are ignored. The default file `conf/default_conf.yaml` is **git-ignored**: it does not exist in a fresh clone and is created by the first save from the Web console; on startup it is applied only if present. Two legacy key names are migrated automatically on load: `inter_chunk.search_length` is read as `inter_chunk.search_action.search_length`, and `robots.a2d.*` is read as `robots.agibot_g1.*`.
+
+All durations in the following tables are milliseconds unless another unit is shown explicitly. The panels that expose these parameters in the browser are described in [Web Console](./web-console.md).
 
 ## Client root dictionary
 
@@ -69,13 +73,15 @@ These dimensions must match the selected robot's action layout and the model out
 | --- | --- | --- |
 | `inter_chunk_mode` | `search_action`, `smooth_velocity`, `min_jerk`, or `sync` | Method used to join consecutive action chunks. |
 | `search_action.search_length` | positive integer | Number of future actions inspected while choosing a smooth join. Increase it if the robot visibly pauses at chunk boundaries. |
-| `smooth_velocity.max_vel` | positive number | Velocity limit for velocity-smoothing fusion. |
-| `smooth_velocity.max_acc` | positive number | Acceleration limit for velocity-smoothing fusion. |
-| `smooth_velocity.kp` | number | Proportional gain used by velocity smoothing. |
-| `smooth_velocity.kd` | number | Derivative gain used by velocity smoothing. |
+| `smooth_velocity.max_vel` | positive number | Velocity clamp used by velocity-smoothing fusion. |
+| `smooth_velocity.max_acc` | positive number | Acceleration clamp used by velocity-smoothing fusion. |
+| `smooth_velocity.k_p` | number | Proportional feedback gain applied to the position error. |
+| `smooth_velocity.k_d` | number | Derivative feedback gain applied to the joint velocity. |
+| `smooth_velocity.kf_vel` | number | Feedforward gain applied to the target velocity. |
+| `smooth_velocity.kf_acc` | number | Feedforward gain applied to the target acceleration. Setting both feedforward gains to `0` degrades the fuser to PD feedback control. |
 | `min_jerk.blend_threshold` | number | Threshold controlling when minimum-jerk blending is applied. |
 | `min_jerk.adaptive_factor` | number | Adaptive scaling factor for minimum-jerk blending. A negative value keeps the implementation's automatic behavior. |
-| `sync` | mapping | Reserved configuration section for `sync` mode; currently empty. |
+| `sync` | mapping | Reserved configuration section for `sync` mode; currently empty. In `sync` mode the next action chunk is used directly without blending, and the Web console mode dropdown lists only `search_action`, `smooth_velocity`, and `min_jerk`. |
 
 ### `controller`: robot command timing
 
@@ -104,6 +110,7 @@ These dimensions must match the selected robot's action layout and the model out
 | `file_path` | path relative to `conf/` | JSON task-instruction file, normally `language_cmd.json`. |
 | `task_id` | string | Task key in the language JSON file. If absent, the first available task is used. |
 | `sub_task_id` | zero-based integer | Index of the active instruction in the selected task. Invalid indices fall back to `0`. |
+| `auto_mode_start_sub_task_id` | zero-based integer | Sub-task index applied when Auto Mode starts. The Web console exposes it as the Start selector of the Language Command panel. |
 | `auto_mode` | boolean | Automatically move to the next language instruction according to task-progress output. |
 | `task_progress_threshold` | number | Mean progress probability required before automatic switching. |
 | `task_progress_win_size` | positive integer | Sliding-window length used to average task progress. |
@@ -165,7 +172,7 @@ Supported video codecs include `mp4v`, `avc1`, `XVID`, and `MJPG`. Camera shapes
 
 ## `robots`: robot adapters
 
-`robots.type` selects `agibot_g1`, `mock`, `ti5_t170c`, or `navi_wa2`. Configure only the subsection for the selected adapter unless preparing reusable profiles.
+`robots.type` selects `unitree_g1` (default), `agibot_g1`, `mock`, `ti5_t170c`, or `navi_wa2`. Configure only the subsection for the selected adapter unless preparing reusable profiles.
 
 ### Shared action-layout convention
 
@@ -177,15 +184,17 @@ An `action_layout` section divides a flat action vector into named segments. Eve
 | `stepwise` | Discrete or near-discrete dimensions, normally grippers/hands. |
 | `manual` | Robot/Web-controlled dimensions that are not inferred by the model. Place these after model-controlled segments. |
 
-Where available, `presets` provides UI reset/manual targets. `Default` and `Custom` are general presets; AgiBot G1 grippers also provide `Open` and `Close`.
+Where available, `presets` provides UI reset/manual targets. `Default` and `Custom` are general presets; AgiBot G1 grippers also provide `Open` and `Close`, its wheels provide `Forward`, `Backward`, `Left`, and `Right`, and NAVIAI-WA2 hands provide `Open` and `Finger`.
 
 ### `robots.agibot_g1`
 
 | Key | Meaning |
 | --- | --- |
 | `hand_type` | End-effector mode: `gripper`, `hand_as_gripper`, or `hand`. It selects camera names and proprioception layout. |
+| `camera.color_order` | Pixel order returned by `retrieve_observation()` (`rgb`). |
 | `camera.ref` | Reference camera name. |
 | `camera.names` | Mapping from canonical names (`head`, `hand_left`, `hand_right`) to robot camera identifiers. |
+| `camera.non_ref_fetch_workers` | Number of persistent worker threads used to fetch non-reference cameras. |
 | `proprio_names` | Ordered proprioception groups used to assemble robot state. |
 | `gripper_freq`, `head_freq` | Command frequencies for gripper and head control. |
 | `manual_arm_interval` | Time interval in seconds between manually generated arm targets. |
@@ -205,15 +214,18 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 
 | Key | Meaning |
 | --- | --- |
-| `camera.*_camera_topic` | ROS image topics for the head and hand cameras. |
-| `arms.*_joint_cmd_topic`, `arms.*_joint_states_topic` | ROS command/state topics for both arms. |
-| `arms.*_arm_joint_names` | Ordered seven-joint names for each arm. |
-| `hands.*_hand_joint_cmd_topic`, `hands.*_hand_joint_states_topic` | ROS command/state topics for both hands. |
-| `hands.hand_joint_names` | Ordered six-joint hand names. |
-| `waist.*`, `head.*` | ROS command/state topics and ordered joint names for waist and head. |
-| `reset_robot_pos` | Full robot reset target vector; its ordering must match the bridge implementation. |
-| `zero_pos` | Full robot zero/reference target vector; ordering must match the bridge implementation. |
-| `action_layout` | Arm and multi-finger gripper action ranges. |
+| `hand_type` | End-effector mode; China Mobile Lingxi uses `hand`. It selects camera names and proprioception layout. |
+| `camera.color_order` | Pixel order returned by `retrieve_observation()` (`rgb`; the adapter converts camera frames). |
+| `camera.backend` | Camera transport; `remote_forwarder` subscribes to a video forwarder. |
+| `camera.forwarder_uri` | ZMQ URI of the video forwarder (default `tcp://192.168.1.100:9100`). |
+| `camera.ref`, `camera.names` | Reference camera and mapping to forwarder topics (`head/color`, `hand_left/color`, `hand_right/color`). |
+| `camera.warmup_s` | Seconds to wait for camera streams after connecting. |
+| `camera.depth_names` | Depth topic mapping. Kept empty: depth frames are not consumed by VLA inference and are neither subscribed nor sent to the server. |
+| `proprio_names` | Ordered proprioception groups (`arm`, `hand`) used to assemble robot state. |
+| `hand_freq`, `head_freq` | Command frequencies for hand and head control; `1` means every control tick. |
+| `reset_robot_pos` | Full robot reset target vector (arms at the reset pose, hands open). Kept aligned with the arm `Default` preset and the console reset position. |
+| `manual_arm_interval` | Time interval in seconds between manually generated arm targets. |
+| `action_layout` | Arm (`gradual`, presets `Default` = reset pose / `Custom` = previous homing pose), hand (`stepwise`, `Default`/`Custom`), and head (`manual`, NECK joints, Web-only) action ranges and UI presets. |
 
 ### `robots.navi_wa2`
 
@@ -221,9 +233,20 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | --- | --- |
 | `tt` | Servo/control period in seconds. |
 | `gain` | Servo gain. |
+| `hand_type` | End-effector mode; NAVIAI-WA2 uses `hand`. It selects proprioception layout and hand presets. |
+| `camera.color_order` | Pixel order of incoming frames (`bgr`; cv_bridge uses bgr8). |
 | `camera.topic_dict` | Compressed ROS image topics keyed by `head`, `hand_left`, and `hand_right`. |
 | `action_layout` | Continuous arm and stepwise hand action ranges. |
 | `reset_position` | Full reset pose vector; ordering must match the NAVIAI-WA2 driver. |
+
+### `robots.unitree_g1`
+
+| Key | Meaning |
+| --- | --- |
+| `camera.color_order` | Pixel order of incoming frames (`bgr`; cv_bridge uses bgr8). |
+| `hand_type` | End-effector mode; Unitree G1 uses `hand`. It selects camera names and proprioception layout. |
+| `reset_robot_pos` | Full robot reset target vector (26 dimensions, all zeros). |
+| `action_layout` | Arm (`gradual`, `Default`/`Custom` presets) and hand (`stepwise`, six-finger values, `Default`/`Custom` presets) action ranges. |
 
 ## Server and model dictionary
 
@@ -234,7 +257,9 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `zmq` | Same VLA network fields as `vla_zmq`; the server binds its ROUTER socket using the configured port. |
 | `max_infer_workers` | Maximum concurrent inference workers. Set to `1` to disable concurrent inference. |
 | `max_decode_workers` | Maximum image-decoding workers. |
-| `models.type` | Selected model: `mock`, `act`, `gr00t_n1`, `gr00t_n1_5`, `gr00t_n1_6`, `rdt`, `smolvla`, `go1`, `pi0`, `pi05`, or `tao`. |
+| `image_pad_and_resize` | Enable aspect-ratio-preserving padding and resizing of decoded images on the server. |
+| `image_target_height`, `image_target_width` | Target image dimensions in pixels used when `image_pad_and_resize` is enabled. |
+| `models.type` | Selected model: `mock`, `act`, `gr00t_n1`, `gr00t_n1_5`, `gr00t_n1_6`, `rdt`, `smolvla`, `go1`, `pi0`, `pi05`, `tao`, `dm05`, or `wallx`. |
 
 Model-specific keys are as follows:
 
@@ -248,6 +273,8 @@ Model-specific keys are as follows:
 | `models.go1` | `model_path`, `exp_path`, `data_stats_path` | GO1 checkpoint, importable experiment path, and normalization statistics JSON. |
 | `models.pi0`, `models.pi05` | `config`, `model_path`, `is_hand` | OpenPI model configuration/checkpoint; `is_hand` enables hand-action handling. |
 | `models.tao` | `model_path`, `embodiment_tag` | TAO checkpoint and a TAO-registry embodiment identifier. |
+| `models.dm05` | `model_path`, `repo_path`, `action_mode`, `backend`, `vision_trt_engine_path`, `diffusion_steps`, `vision_attn_implementation`, `execute_horizon` | DM0.5 checkpoint and repository paths, action mode, inference backend with an optional TensorRT vision engine, diffusion-step count, and actions per control cycle. |
+| `models.wallx` | `model_path`, `repo_path`, `embodiment_tag`, `device`, `flow_steps` | WALL-X checkpoint and repository paths, embodiment identifier, inference device, and flow-matching step count. |
 
 Paths must be valid on the inference-server host. `embodiment_tag` and `data_config_key` are model-library identifiers, not arbitrary labels; use values registered by the matching model installation.
 

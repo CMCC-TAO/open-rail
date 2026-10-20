@@ -257,7 +257,10 @@ class VLAClientAsync():
         if self.observe_thread.is_alive():
             self.observe_thread.join(timeout=1.0)
         if self.inference_thread.is_alive():
-            self.inference_thread.join(timeout=1.0)
+            timeout = self.config.vla_zmq.infer_timeout * 4 / 1000.0 + 1.0
+            self.inference_thread.join(timeout=timeout)
+            if self.inference_thread.is_alive():
+                self.logger.warning('Inference thread did not exit within %.1fs', timeout)
 
         # Stop and join timer threads
         if self.control_thread_timer.is_alive():
@@ -319,6 +322,17 @@ class VLAClientAsync():
                 time.sleep(0.001)
 
     def _inference_thread_fun(self):
+        try:
+            self._inference_loop()
+        finally:
+            release = getattr(self.vla_zmq, 'release_data_socket', None)
+            if callable(release):
+                try:
+                    release()
+                except Exception:
+                    self.logger.exception('Failed to release the inference data socket')
+
+    def _inference_loop(self):
         while self.is_running:
             if not self.is_inference_thread_running:
                 time.sleep(0.001)

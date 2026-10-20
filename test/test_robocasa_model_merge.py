@@ -158,3 +158,33 @@ def test_tao_robotwin_camera_and_action_mapping(monkeypatch, prefix, explicit):
     assert list(seen['video']) == model.cfg['video_keys']
     expected = ([4] + [3] * 6 + [2] + [1] * 6) if explicit else ([1] * 6 + [2] + [3] * 6 + [4])
     np.testing.assert_array_equal(result['pred_action'][0], expected)
+
+
+@pytest.mark.parametrize('prefix', ['', 'action.'])
+@pytest.mark.parametrize('hand_key', ['hand', 'gripper'])
+def test_tao_unitree_expansion_keeps_both_arms_before_hands(monkeypatch, prefix, hand_key):
+    class Policy:
+        def get_action(self, observation):
+            return {'action': {
+                prefix + 'right_arm': np.full((1, 2, 7), 2),
+                prefix + 'left_' + hand_key: np.full((1, 2, 1), 400),
+                prefix + 'left_arm': np.full((1, 2, 7), 1),
+                prefix + 'right_' + hand_key: np.full((1, 2, 1), 200),
+            }}
+
+    module = load_backend(monkeypatch, Path(__file__).parents[1] / 'server/models/tao/tao.py', {
+        'torch': {}, 'tao.serving.policy': {'PolicyTao': Policy},
+    })
+    model = module.ModelVLA.__new__(module.ModelVLA)
+    model.cfg = {'embodiment_tag': 'unitree_g1'}
+    model.policy = Policy()
+    model._reported_action_order = False
+    frame = {'ref_timestamp': 1, 'loc_timestamp': 2, 'obs': {
+        'cam.head': np.zeros((2, 2, 3)), 'cam.hand_left': np.zeros((2, 2, 3)),
+        'cam.hand_right': np.zeros((2, 2, 3)), 'state': np.zeros(26), 'language': ['test'],
+    }}
+    result = model.infer([frame])
+    np.testing.assert_array_equal(result['pred_action'], np.tile(
+        [1] * 7 + [2] * 7 + [300, 400, 400, 400, 400, 750]
+        + [200, 200, 200, 200, 200, 750], (2, 1),
+    ))

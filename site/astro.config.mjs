@@ -44,6 +44,7 @@ export default defineConfig({
         // docs root. Without this entry the header wordmark is the only way back.
         { label: 'Project Home', link: '/' },
         { label: 'Getting Started', link: '/getting-started/' },
+        { label: 'Web Console', link: '/web-console/' },
         { label: 'Architecture', link: '/architecture/' },
         { label: 'Configuration', link: '/configuration/' },
         { label: 'Troubleshooting', link: '/troubleshooting/' },

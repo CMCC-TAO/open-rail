@@ -64,6 +64,8 @@ class RealtimeDataManagerSequentialTest(unittest.TestCase):
         self.assertTrue(waiter.is_alive())
 
         self.manager.get_action_fitted()
+        time.sleep(2.1)
+        self.assertTrue(waiter.is_alive())
         self.manager.mark_action_executed()
         waiter.join(timeout=1.0)
         self.assertEqual(completed, [True])
