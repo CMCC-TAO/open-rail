@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [20261019]
+
+- Added a PyTorch pi0.5 (`pi05_pytorch`) adapter with CLI/configuration support, configurable execution horizons, and optional `torch.compile`.
+- Added low-memory checkpoint loading that preserves mixed precision and shared weights.
+
 ## [20261015]
 
 - Added image overlays to the Camera Viewer, with multi-camera reference capture, indexed image selection, configurable storage paths, and adjustable opacity.
