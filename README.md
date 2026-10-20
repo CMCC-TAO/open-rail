@@ -197,7 +197,7 @@ Configuration entry points at a glance:
 
 ### Physics simulation evaluation
 
-Use [RoboCasa / PandaOmron](client/robots/robocasa_pandas/README.md) or [RoboTwin / Aloha](client/robots/robotwin_aloha/README.md) for physics simulation. Each robot README covers environment setup, model startup, evaluation, and recording. The [shared Web simulation guide](docs/robocasa_web.md) covers task selection, configuration snapshots, and resume.
+Use [RoboCasa / PandaOmron](client/robots/robocasa_pandas/README.md) or [RoboTwin / Aloha](client/robots/robotwin_aloha/README.md) for physics simulation. Each robot README covers environment setup, model startup, evaluation, and recording. The [shared Web simulation guide](docs/simulation_evalution.md) covers task selection, configuration snapshots, and resume.
 
 ### Simulation loop (no real robot needed)
 

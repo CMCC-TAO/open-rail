@@ -22,12 +22,23 @@ class CameraPreview:
         self.trajectory_samples = deque(maxlen=120)
         self.trajectory_labels = []
         self.trajectory_sources = set()
+        self.trajectory_action_semantics = None
         self.sequence = 0
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='camera_preview')
 
     def _append_trajectory(self, trajectory):
+        labels = list(trajectory['labels'])
+        if not labels:
+            return
+        if self.trajectory_labels and labels != self.trajectory_labels:
+            self.stream_id = uuid.uuid4().hex
+            self.trajectory_samples.clear()
+            self.trajectory_sources.clear()
+            self.trajectory_action_semantics = None
         self.sequence += 1
-        self.trajectory_labels = list(trajectory['labels'])
+        self.trajectory_labels = labels
+        if 'action_semantics' in trajectory:
+            self.trajectory_action_semantics = trajectory['action_semantics']
         sample = {'sequence': self.sequence, 'timestamp': time.time()}
         for key in ('state', 'action_fitted', 'action_raw'):
             values = trajectory.get(key)
@@ -55,6 +66,7 @@ class CameraPreview:
                 'stream_id': self.stream_id, 'labels': list(self.trajectory_labels),
                 'samples': list(self.trajectory_samples),
                 'sources': sorted(self.trajectory_sources),
+                'action_semantics': self.trajectory_action_semantics,
             }
             self.future = self.executor.submit(self._write, dict(images), dict(shapes), trajectory_snapshot)
 

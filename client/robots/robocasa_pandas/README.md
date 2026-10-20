@@ -1,25 +1,27 @@
 # RoboCasa / PandaOmron
 
-`robocasa_pandas` 用于 RoboCasa 仿真测评，支持单任务、任务集、并行环境、同步／异步推理、动作平滑、视频与数据集保存。以下命令均在本项目根目录执行，路径按实际安装位置替换。
+`robocasa_pandas` supports RoboCasa evaluation with single tasks, task suites, parallel environments, synchronous or asynchronous inference, action smoothing, video recording, and dataset export. Run the commands below from the project root and replace paths with your local installation paths.
 
-## 环境配置
+## Environment Setup
 
-模型服务和仿真客户端可以使用独立环境：
+This adapter uses **RoboCasa365**.
 
-- 模型环境：安装所用模型及其依赖，准备 RoboCasa 对应的 checkpoint。
-- 仿真环境：安装 RoboCasa、robosuite、MuJoCo 和所需资源，安装方式见 [RoboCasa 安装说明](https://github.com/robocasa/robocasa#installation)。当前适配器使用 RoboCasa 的 Gymnasium 任务接口。
+The model server and simulation client can use separate environments:
 
-在仿真环境中安装本项目：
+- Model environment: install the model and its dependencies, and prepare a checkpoint for RoboCasa.
+- Simulation environment: install **RoboCasa365**, robosuite, MuJoCo, and the required assets. See the [RoboCasa installation guide](https://github.com/robocasa/robocasa#installation). This adapter uses RoboCasa365's Gymnasium task interface.
+
+Install this project in the simulation environment:
 
 ```bash
 uv pip install -e '.[sim]'
 ```
 
-`sim` 扩展提供本项目使用的仿真辅助依赖，不包含 RoboCasa 和模型本身。机器人默认配置位于 [conf/robots_conf.py](../../../conf/robots_conf.py) 的 `get_robocasa_pandas_config()`。
+The `sim` extra provides simulation utilities used by this project; it does not include RoboCasa or the model. Robot defaults are defined in `get_robocasa_pandas_config()` in [conf/robots_conf.py](../../../conf/robots_conf.py).
 
-## 启动模型服务
+## Start the Model Server
 
-在模型环境中启动 TAO：
+Start TAO in the model environment:
 
 ```bash
 python run_server.py \
@@ -28,9 +30,9 @@ python run_server.py \
   --embodiment_tag robocasa_panda_omron
 ```
 
-默认服务端口为 `5566`。相机映射和动作顺序由适配器处理，无需传入 `--video_keys` 和 `--action_keys`。
+The default server port is `5566`. The adapter handles camera mapping and action ordering, so `--video_keys` and `--action_keys` are not required.
 
-使用 GR00T N1.5 时：
+For GR00T N1.5:
 
 ```bash
 python run_server.py \
@@ -40,28 +42,59 @@ python run_server.py \
   --embodiment_tag robocasa_panda_omron
 ```
 
-GR00T 环境需包含对应的 `panda_omron` 数据配置。
+The GR00T environment must include the corresponding `panda_omron` data configuration.
 
-## Web 测评
+## Web Evaluation
 
-启动 Web 客户端：
+Start the Web client:
 
 ```bash
 python run_web_client.py --port 9000
 ```
 
-打开 `http://localhost:9000/`：
+Open `http://localhost:9000/`:
 
-1. 在 Configuration 中选择 Robot Type `robocasa_pandas`，设置仿真环境的 Python 路径、GPU、并行环境数和模型服务地址。
-2. 设置动作块长度、同步／异步模式、块内平滑和块间衔接方式。动作块长度留空时使用 RoboCasa 默认值 16。
-3. 在 Simulation Evaluation 中选择任务或任务集，设置每任务 episode 数、视频和数据集保存选项，启动测评。
-4. 在测评面板查看日志、统计和视频，或停止、续跑已有任务。
+1. In Configuration, select Robot Type `robocasa_pandas`, then set the simulation Python path, GPU, and model server address.
+2. Configure action chunk length, execution mode, smoothing, and fusion. A blank action chunk length uses the RoboCasa default of 16.
+3. In Simulation Evaluation, select tasks or a task suite, set episodes per task, parallel environments, and video/dataset saving options, then start evaluation.
+4. View logs, statistics, and videos in the evaluation panel, or stop and resume existing jobs.
 
-测评使用启动时的配置快照，后续修改配置不会影响正在运行的任务。公共页面操作与配置文件说明见 [Web 仿真测评](../../../docs/robocasa_web.md)。
+GPU, split, and seed are in Configuration. Camera dimensions, the optional Python path, and the episode step limit are under Advanced. A blank step limit uses the task registry default. Task selection, parallel environment count, and recording options are managed in Simulation Evaluation.
 
-## CLI 测评
+Evaluation captures the configuration at startup; later edits do not affect a running job. See the [Web simulation guide](../../../docs/simulation_evalution.md) for shared page controls and configuration files.
 
-在仿真环境中运行单任务：
+### Web Parameters
+
+| Parameter | Description |
+| --- | --- |
+| Python | Simulation Python interpreter path; it can use a separate environment from the model server. |
+| GPU | Simulation GPU indices, such as `0,1`; does not change the model server's GPU. |
+| Model Server Address | IP and port of the running model server. |
+| Task / Task Selection | Select a single task or tasks from a suite. |
+| Episodes / Task | Total evaluation episodes per task. |
+| Parallel Envs | Number of concurrent environments; episodes are distributed among them. |
+| Action Chunk Length | Number of actions executed per chunk; shorter chunks request inference more often. |
+| Execution Mode | `sync` requests inference after a chunk finishes; `async` requests the next chunk in advance. |
+| Intra-chunk Smoothing | `raw` keeps original actions; `interpolation` interpolates; `fitting` fits a polynomial. |
+| Output Sampling Ratio | Action output sampling multiplier; 1 preserves the action count. |
+| Inter-chunk Fusion | How action chunks connect; `sync` joins directly, while other modes search or smooth the transition. |
+| Async Replenishment Threshold | Number of remaining actions that triggers the next inference request in async mode. |
+| Maximum Observation Lag Steps | Maximum allowed observation lag in async mode, measured in steps. |
+| Save Dataset | Save a LeRobot dataset. |
+| Save Videos | Save evaluation replay videos, independently of dataset saving. |
+| Video FPS / Layout | Playback frame rate and layout; `grid` shows multiple views, while `single` shows one view. |
+| Split | Environment data split: `target` or `pretrain`. |
+| Seed | Starting random seed for episodes. |
+| Camera Width / Height | Width and height of each camera image, in pixels. |
+| Max Episode Steps | Maximum actions per episode; leave blank to use the task default. |
+
+A blank action chunk length defaults to 16. Sampling ratios above 1 increase the number of executed samples. Video FPS does not determine simulation speed.
+
+The trajectory viewer shows arm joints only, in radians. State is measured joint position. With the default OSC controller, Act Fit and Act Raw are joint-angle estimates from fitted and raw Cartesian commands, using damped differential IK from the same pre-step state. These estimates are for visualization, not controller joint targets or predicted motion; they do not change evaluation control. Select the three sources to compare them.
+
+## CLI Evaluation
+
+Run a single task in the simulation environment:
 
 ```bash
 python scripts/robocasa_eval.py \
@@ -70,24 +103,27 @@ python scripts/robocasa_eval.py \
   --run_id example-run
 ```
 
-任务名按所用 RoboCasa 环境选择。运行任务集时，将 `--env_name` 替换为 `--task_suite target50`，两者二选一。
+Choose a task supported by your RoboCasa installation. To run a suite, replace `--env_name` with `--task_suite target50`; these options are mutually exclusive.
 
-| 功能 | 参数 |
+| Feature | Options |
 | --- | --- |
-| 模型连接 | `--server_ip`、`--server_port`，默认 `127.0.0.1:5566` |
-| 测评规模 | `--n_episodes` 为每任务总 episode 数；`--n_envs` 为并行环境数 |
-| 动作块长度 | `--n_action_steps`，默认 16 |
-| 同步／异步 | `--mode sync/async`，默认 `sync` |
-| 块内处理 | `--intra_chunk_mode raw/interpolation/fitting`，默认 `raw` |
-| 块间衔接 | `--inter_chunk_mode sync/search_action/smooth_velocity/min_jerk`，默认 `sync` |
-| 数据集保存 | `--record` 开启；`--record_dir` 设置目录 |
-| 视频保存 | 默认开启；`--no_video` 关闭展示视频，`--video_layout grid/single` 设置布局 |
-| 渲染后端 | `--mujoco_gl egl/osmesa/glfw`，按已安装环境选择 |
+| Model connection | `--server_ip`, `--server_port`; default `127.0.0.1:5566` |
+| Evaluation size | `--n_episodes`: total episodes per task; `--n_envs`: parallel environments |
+| GPU assignment | `--gpu 0,2` assigns workers in round-robin order; omit to inherit the environment |
+| Action chunk length | `--n_action_steps`; default 16 |
+| Execution mode | `--mode sync/async`; default `sync` |
+| Intra-chunk processing | `--intra_chunk_mode raw/interpolation/fitting`; default `raw` |
+| Inter-chunk fusion | `--inter_chunk_mode sync/search_action/smooth_velocity/min_jerk`; default `sync` |
+| Dataset saving | Enable with `--record`; set the directory with `--record_dir` |
+| Video saving | Enabled by default; `--no_video` disables replay videos; `--video_layout grid/single` sets the layout |
+| Rendering backend | `--mujoco_gl egl/osmesa/glfw`, depending on installed dependencies |
 
-展示视频与数据集相机视频分别控制。其他参数见 `python scripts/robocasa_eval.py --help`。
+For example, `--gpu 0,2 --n_envs 4` assigns four workers to GPUs `0,2,0,2`. A single environment uses the first GPU in the list. Each worker configures its own CUDA and EGL devices.
 
-## 结果与续跑
+Replay videos and dataset camera videos are controlled separately. See `python scripts/robocasa_eval.py --help` for additional options.
 
-CLI 默认结果目录为 `data/robocasa_eval/`，可用 `--output_dir` 修改；单任务统计位于 `evals/<split>/<task>/stats.json`，任务集汇总位于 `evals/<split>/suites/<suite>/<run_id>/stats.json`。数据集保存位置由 `--record_dir` 单独指定，统计文件中记录实际路径，并提供成功、失败分区。
+## Results and Resume
 
-续跑保留原输出目录、`run_id` 和测评配置。独立实验使用不同输出目录，避免复用单任务统计路径。Web 任务统一保存在 `data/simulation_web/jobs/`，通过面板续跑时使用该任务的配置快照。
+CLI results default to `data/robocasa_eval/`; override this with `--output_dir`. Single-task statistics are saved to `evals/<split>/<task>/stats.json`, and suite summaries to `evals/<split>/suites/<suite>/<run_id>/stats.json`. Set the dataset directory separately with `--record_dir`. Statistics include the actual dataset paths, with separate success and failure partitions.
+
+To resume, keep the original output directory, `run_id`, and evaluation configuration. Use separate output directories for independent experiments to avoid reusing single-task statistics paths. Web jobs are stored under `data/simulation_web/jobs/`; resuming through the panel uses the job's saved configuration snapshot.

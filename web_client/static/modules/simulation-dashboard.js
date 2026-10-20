@@ -1,4 +1,4 @@
-import { initializeSimulation } from "/static/simulation.js?v=20261014-poll-recovery";
+import { initializeSimulation } from "/static/simulation.js?v=20261020-simulation-registry";
 
 const panel = document.getElementById("panel-simulation");
 const source = document.getElementById("sim-preview-source");

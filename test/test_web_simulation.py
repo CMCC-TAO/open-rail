@@ -11,6 +11,9 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from web_client import simulation
+from client.simulation.benchmarks import (
+    BENCHMARKS, BenchmarkSpec, COMMON_CLI_FIELDS, COMMON_CLIENT_FIELDS, register_benchmark,
+)
 
 
 def test_validation_and_command(tmp_path):
@@ -29,8 +32,86 @@ def test_validation_and_command(tmp_path):
     assert args.mode == 'async' and args.intra_chunk_mode == 'fitting'
 
 
-@pytest.mark.parametrize('gpu,expected', [('2', '2'), ('', '7')])
-def test_robocasa_gpu_environment_isolated(tmp_path, monkeypatch, gpu, expected):
+def test_registered_benchmark_reuses_discovery_configuration_and_job_lifecycle(tmp_path, monkeypatch):
+    catalog_calls = []
+
+    def catalog(*args):
+        catalog_calls.append(args)
+        return {'tasks': ['Task'], 'suites': []}
+
+    spec = BenchmarkSpec(
+        id='tinybench', robot_type='tiny_arm', label='Tiny benchmark',
+        script='tiny_eval.py', dependencies=('numpy',), catalog=catalog,
+        defaults={'n_action_steps': 3},
+        cli_fields=COMMON_CLI_FIELDS | {'model_variant'},
+        client_fields=COMMON_CLIENT_FIELDS + ('model_variant',),
+    )
+    # Restore the registration after the test, including assertion failures.
+    monkeypatch.setitem(BENCHMARKS, spec.id, spec)
+    BENCHMARKS.pop(spec.id)
+    register_benchmark(spec)
+    with pytest.raises(ValueError, match='already registered'):
+        register_benchmark(spec)
+    scripts = tmp_path / 'scripts'
+    scripts.mkdir()
+    (scripts / spec.script).write_text('''
+import argparse, json
+from pathlib import Path
+parser = argparse.ArgumentParser()
+for key in ('output_dir', 'run_id', 'model_variant', 'env_name'):
+    parser.add_argument('--' + key)
+args, _ = parser.parse_known_args()
+path = Path(args.output_dir)
+path.mkdir(parents=True, exist_ok=True)
+(path / 'stats.json').write_text(json.dumps({
+    'run_id': args.run_id, 'env_name': args.env_name, 'model_variant': args.model_variant,
+    'episodes': [{'episode': 0, 'success': True}], 'num_episodes': 1, 'success_rate': 1,
+}))
+''')
+    manager = simulation.EvaluationJobs(tmp_path)
+    monkeypatch.setattr(simulation, 'manager', manager)
+    monkeypatch.setattr(simulation, 'DEFAULTS_PATH', tmp_path / 'absent.yaml')
+    app = FastAPI()
+    app.include_router(simulation.router)
+    with TestClient(app) as client:
+        assert spec.describe() in client.get('/api/simulation/benchmarks').json()
+        options = client.get('/api/simulation/options?platform=tinybench').json()
+        assert options['platform'] == spec.id and options['n_action_steps'] == 3
+        assert client.get('/api/simulation/task-catalog?platform=tinybench').json()['tasks'] == ['Task']
+        assert len(catalog_calls) == 1
+        config = simulation.EvaluationConfig(env_name='Task', client_config={
+            'robots': {'type': 'tiny_arm', 'tiny_arm': {'model_variant': 'small'}},
+        })
+        assert config.platform == spec.id and config.benchmark_options == {'model_variant': 'small'}
+        command = manager.command(config, 'tiny')
+        assert command[2].endswith(spec.script)
+        assert command[command.index('--model_variant') + 1] == 'small'
+        assert '--split' not in command and '--robotwin_root' not in command
+        try:
+            response = client.post('/api/simulation/jobs', json=config.model_dump())
+            assert response.status_code == 200, response.text
+            job_id = response.json()['id']
+            deadline = time.monotonic() + 5
+            while manager.get(job_id)['status'] == 'running' and time.monotonic() < deadline:
+                time.sleep(.02)
+            job = client.get('/api/simulation/jobs/' + job_id).json()
+            assert job['status'] == 'completed'
+            assert job['stats'][0]['model_variant'] == 'small'
+        finally:
+            manager.close()
+
+
+def test_registry_rejects_unknown_benchmarks_and_unregistered_cli_options():
+    with pytest.raises(ValidationError, match='Unknown simulation benchmark'):
+        simulation.EvaluationConfig(platform='missing', env_name='Task')
+    with pytest.raises(ValidationError, match='Unsupported benchmark options'):
+        simulation.EvaluationConfig(env_name='Task', benchmark_options={'unexpected': 'value'})
+    with pytest.raises(ValidationError, match='standard configuration fields'):
+        simulation.EvaluationConfig(env_name='Task', benchmark_options={'seed': 17})
+
+
+@pytest.mark.parametrize('gpu', ['2', '', '0,2'])
+def test_robocasa_supervisor_inherits_gpu_environment(tmp_path, monkeypatch, gpu):
     monkeypatch.setenv('CUDA_VISIBLE_DEVICES', '7')
     monkeypatch.setenv('MUJOCO_EGL_DEVICE_ID', '7')
     monkeypatch.setattr(simulation.subprocess, 'run', lambda *a, **kw: subprocess.CompletedProcess(a, 0, '', ''))
@@ -47,14 +128,14 @@ def test_robocasa_gpu_environment_isolated(tmp_path, monkeypatch, gpu, expected)
     try:
         while manager.get(job['id'])['status'] == 'running' and time.monotonic() < deadline:
             time.sleep(.02)
-        assert json.loads(output.read_text()) == [expected, expected]
+        assert json.loads(output.read_text()) == ['7', '7']
         assert simulation.os.environ['CUDA_VISIBLE_DEVICES'] == '7'
         assert simulation.os.environ['MUJOCO_EGL_DEVICE_ID'] == '7'
     finally:
         manager.close()
 
 
-@pytest.mark.parametrize('gpu', ['0,1', '-1', 'abc'])
+@pytest.mark.parametrize('gpu', ['-1', 'abc', '0,,1', '0,', '0, 1'])
 def test_robocasa_rejects_invalid_render_gpu(gpu):
     with pytest.raises(ValidationError):
         simulation.EvaluationConfig(env_name='Task', gpu=gpu)
@@ -236,8 +317,52 @@ def test_client_configuration_drives_evaluation_and_rejects_invalid_shared_value
     with pytest.raises(ValidationError):
         simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
     snapshot['robots']['type'] = 'mock'
-    with pytest.raises(ValidationError, match='Select robocasa_pandas or robotwin_aloha'):
+    with pytest.raises(ValidationError, match='Select a simulation robot'):
         simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
+
+
+@pytest.mark.parametrize('limit,expected', [(321, 321), (None, 432)])
+def test_robocasa_snapshot_settings_reach_evaluation(tmp_path, monkeypatch, limit, expected):
+    from unittest.mock import Mock
+    from scripts import robocasa_eval as casa
+
+    snapshot = {'robots': {'type': 'robocasa_pandas', 'robocasa_pandas': {
+        'max_episode_steps': limit, 'video_fps': 12, 'video_layout': 'single',
+        'camera_width': 320, 'camera_height': 240, 'enable_render': False,
+    }}}
+    config = simulation.EvaluationConfig(env_name='Task', n_episodes=1, client_config=snapshot)
+    command = simulation.EvaluationJobs(tmp_path).command(config, 'settings')
+    args = casa.build_parser().parse_args(command[3:])
+    assert args.max_episode_steps == limit
+    assert args.video_fps == 12 and args.video_layout == 'single'
+    monkeypatch.setattr(casa, 'load_user_config', lambda path: snapshot)
+    monkeypatch.setattr(casa, '_task_horizon', lambda task, value: 432 if value is None else value)
+    robot = Mock()
+    robot.get_episode_result.return_value = {'success': True, 'steps': 1}
+    client = Mock(pipeline_error=None)
+    captured = []
+
+    def build_client(pipeline, timeout):
+        captured.append(pipeline.robots.robocasa_pandas)
+        return client, robot
+
+    monkeypatch.setattr(casa, '_build_client', build_client)
+    monkeypatch.setattr(casa, '_start_episode', lambda *args: None)
+    monkeypatch.setattr(casa, '_wait_for_episode', lambda *args: True)
+    casa._run_task(args, 'Task', 'settings')
+    applied = captured[0]
+    assert applied.max_episode_steps == expected
+    assert applied.video_fps == 12 and applied.video_layout == 'single'
+    assert applied.camera_width == 320 and applied.camera_height == 240
+    assert applied.enable_render is True
+
+
+@pytest.mark.parametrize('limit', [0, -1])
+def test_robocasa_snapshot_rejects_invalid_step_limits(limit):
+    with pytest.raises(ValidationError):
+        simulation.EvaluationConfig(env_name='Task', client_config={
+            'robots': {'type': 'robocasa_pandas', 'robocasa_pandas': {'max_episode_steps': limit}},
+        })
 
 
 @pytest.mark.parametrize('storage', ['robocasa_web', 'simulation_web'])
@@ -300,3 +425,24 @@ def test_job_saves_and_reloads_configuration_snapshot(tmp_path, monkeypatch):
         assert restored.client_config == snapshot and restored.intra_chunk_mode == 'fitting'
     finally:
         manager.close()
+
+
+def test_robocasa_multigpu_snapshot_reaches_workers(tmp_path, monkeypatch):
+    from scripts import robocasa_eval as casa
+
+    snapshot = {'robots': {'type': 'robocasa_pandas', 'robocasa_pandas': {
+        'gpu': '0,2', 'n_envs': 4,
+    }}}
+    config = simulation.EvaluationConfig(env_name='Task', client_config=snapshot)
+    command = simulation.EvaluationJobs(tmp_path).command(config, 'multigpu')
+    args = casa.build_parser().parse_args(command[3:])
+    assert args.gpu == '0,2' and args.n_envs == 4
+    monkeypatch.setattr(sys, 'argv', command[2:])
+    for index, expected in enumerate(['0', '2', '0', '2']):
+        args._worker_index = index
+        args._episode_start, args._episode_end = index, index + 1
+        worker_command = casa._worker_command(args, 'Task', 'multigpu', '20261020')
+        worker = casa.build_parser().parse_args(worker_command[2:])
+        assert worker.gpu == expected
+        assert worker._worker_index == index
+        assert (worker._episode_start, worker._episode_end) == (index, index + 1)

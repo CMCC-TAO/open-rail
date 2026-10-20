@@ -17,6 +17,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, model_validator
 
+from client.simulation.benchmarks import BENCHMARKS, benchmark_for_robot, get_benchmark
+
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULTS_PATH = ROOT / "conf" / "web_simulation.yaml"
 
@@ -26,11 +28,9 @@ def client_evaluation_values(config):
         raise ValueError("Configuration snapshot must be an object")
     robots = config.get("robots", {})
     robot_type = robots.get("type")
-    platforms = {"robocasa_pandas": "robocasa", "robotwin_aloha": "robotwin"}
-    if robot_type not in platforms:
-        raise ValueError("Select robocasa_pandas or robotwin_aloha in Configuration")
+    benchmark = benchmark_for_robot(robot_type)
     robot = robots.get(robot_type, {})
-    values = {"platform": platforms[robot_type]}
+    values = {"platform": benchmark.id}
     mappings = {
         "mode": ("rdm", "mode"),
         "n_action_steps": ("controller", "action_steps"),
@@ -46,23 +46,31 @@ def client_evaluation_values(config):
         value = config.get(group, {}).get(field)
         if value is not None and value != "":
             values[key] = value
-    for key in ("python", "robotwin_root", "gpu", "n_envs", "seed", "split", "task_config", "instruction_type", "render_observation_mode"):
+    for key in benchmark.client_fields:
         value = robot.get(key)
         if value is not None and (value != "" or key == "gpu"):
-            values[key] = value
+            if key in EvaluationConfig.model_fields:
+                values[key] = value
+            else:
+                values.setdefault('benchmark_options', {})[key] = value
+    for key in ("video_fps", "video_layout"):
+        if key in robot:
+            values[key] = robot[key]
+    if 'max_episode_steps' in benchmark.client_fields and 'max_episode_steps' in robot:
+        values["max_episode_steps"] = robot["max_episode_steps"]
     preprocess = config.get("vision", {}).get("preprocess", {}).get("method")
     if preprocess is not None:
         values["preprocess"] = preprocess
     for key, field in (("async_replenish_threshold", "action_replenish_threshold"),
                        ("max_async_observation_lag_steps", "max_async_observation_lag_steps")):
         values[key] = config.get("rdm", {}).get(field) if values.get("mode") == "async" else None
-    if robot_type == "robotwin_aloha" and values.get("intra_chunk_mode") != "interpolation":
+    if values.get('intra_chunk_mode') not in benchmark.resampling_modes:
         values["intra_chunk_sample_ratio"] = 1
     return values
 
 
 class EvaluationConfig(BaseModel):
-    platform: Literal["robocasa", "robotwin"] = "robocasa"
+    platform: str = "robocasa"
     python: str = sys.executable
     robotwin_root: str = str(ROOT.parent / "RoboTwin")
     task_config: str = "demo_clean"
@@ -106,6 +114,7 @@ class EvaluationConfig(BaseModel):
     video_fps: int = Field(20, ge=1)
     video_layout: Literal["grid", "single"] = "grid"
     client_config: dict | None = None
+    benchmark_options: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -116,13 +125,18 @@ class EvaluationConfig(BaseModel):
 
     @model_validator(mode="after")
     def validate_selection(self):
+        benchmark = get_benchmark(self.platform)
+        unsupported = self.benchmark_options.keys() - benchmark.cli_fields
+        if unsupported:
+            raise ValueError(f'Unsupported benchmark options: {", ".join(sorted(unsupported))}')
+        reserved = self.benchmark_options.keys() & (type(self).model_fields.keys() - {'benchmark_options'})
+        if reserved:
+            raise ValueError(f'Use the standard configuration fields for: {", ".join(sorted(reserved))}')
         self.env_name = self.env_name.strip()
         self.task_suite = self.task_suite.strip()
         self.gpu = self.gpu.strip()
         if self.gpu and not re.fullmatch(r"\d+(,\d+)*", self.gpu):
             raise ValueError("GPU must contain comma-separated indices")
-        if self.platform == "robocasa" and "," in self.gpu:
-            raise ValueError("RoboCasa requires one rendering GPU index")
         if bool(self.env_name) == bool(self.task_suite):
             raise ValueError("Select exactly one environment or task suite")
         if (
@@ -130,17 +144,8 @@ class EvaluationConfig(BaseModel):
             and self.async_replenish_threshold >= self.n_action_steps
         ):
             raise ValueError("Async threshold must be less than action steps")
-        if self.platform == "robotwin":
-            if self.env_name and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.env_name):
-                raise ValueError("Invalid RoboTwin task name")
-            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", self.task_config):
-                raise ValueError("Invalid RoboTwin task config")
-            if self.no_expert_check and not self.instruction.strip():
-                raise ValueError("Disabling expert check requires a fixed instruction")
-            if self.max_seed_attempts > self.seed_stride:
-                raise ValueError("Seed attempts must not exceed seed stride")
-            if self.seed < 0:
-                raise ValueError("RoboTwin seed must be non-negative")
+        if benchmark.validate:
+            benchmark.validate(self)
         return self
 
 
@@ -176,35 +181,15 @@ class EvaluationJobs:
 
     def command(self, config, job_id):
         folder = self.job_directory(job_id)
-        robotwin = config.platform == "robotwin"
-        script = "aloha_robotwin_eval.py" if robotwin else "robocasa_eval.py"
-        command = [config.python, "-u", str(self.root / "scripts" / script)]
-        robotwin_fields = {
-            "render_observation_mode",
-            "robotwin_root",
-            "task_config",
-            "instruction_type",
-            "instruction",
-            "gpu",
-            "max_transition_steps",
-            "max_seed_attempts",
-            "seed_stride",
-            "seed_selection_timeout",
-        }
-        excluded = {
-            "platform",
-            "python",
-            "record",
-            "video",
-            "env_name",
-            "task_suite",
-            "no_expert_check",
-            "client_config",
-        }
-        excluded |= {"split", "mujoco_gl"} if robotwin else robotwin_fields
-        for key, value in config.model_dump().items():
-            if key not in excluded and value is not None and value != "":
-                command.extend(["--" + key, str(value)])
+        benchmark = get_benchmark(config.platform)
+        command = [config.python, "-u", str(self.root / 'scripts' / benchmark.script)]
+        for key, value in {**config.model_dump(), **config.benchmark_options}.items():
+            if key in benchmark.cli_fields and value is not None and value != '':
+                if isinstance(value, bool):
+                    if value:
+                        command.append('--' + key)
+                else:
+                    command.extend(['--' + key, str(value)])
         command.extend(
             [
                 "--env_name" if config.env_name else "--task_suite",
@@ -223,8 +208,6 @@ class EvaluationJobs:
             command.append("--record")
         if not config.video:
             command.append("--no_video")
-        if robotwin and config.no_expert_check:
-            command.append("--no_expert_check")
         if config.client_config is not None:
             command.extend(["--user_conf", str(folder / "client_config.py")])
         return command
@@ -251,32 +234,10 @@ class EvaluationJobs:
             if not executable.is_file() or not os.access(executable, os.X_OK):
                 raise ValueError("Python executable does not exist or is not executable")
             config.python = str(executable)
-            dependencies = (
-                ["zmq", "numpy", "sapien", "torch", "yaml", "curobo"]
-                if config.platform == "robotwin"
-                else ["robocasa", "robosuite", "zmq", "numpy"]
-            )
-            if config.platform == "robotwin":
-                root = Path(config.robotwin_root).expanduser().resolve()
-                if (
-                    not (root / "envs").is_dir()
-                    or not (root / "task_config" / (config.task_config + ".yml")).is_file()
-                ):
-                    raise ValueError("RoboTwin root or task config is unavailable")
-                if config.env_name and not (root / "envs" / (config.env_name + ".py")).is_file():
-                    raise ValueError("RoboTwin task is unavailable")
-                config.robotwin_root = str(root)
-                if config.task_suite:
-                    from scripts.aloha_robotwin_eval import _task_names
-
-                    selection = Path(config.task_suite).expanduser()
-                    if ',' not in config.task_suite and selection.is_file():
-                        config.task_suite = str(selection.resolve())
-                    task_names = _task_names(config.task_suite)
-                    config.task_suite = ",".join(task_names)
-                    for name in task_names:
-                        if not (root / "envs" / (name + ".py")).is_file():
-                            raise ValueError(f"RoboTwin task is unavailable: {name}")
+            benchmark = get_benchmark(config.platform)
+            dependencies = benchmark.dependencies
+            if benchmark.prepare:
+                benchmark.prepare(config)
             check_code = "import importlib.util,sys; missing=[n for n in sys.argv[1:] if importlib.util.find_spec(n) is None]; print(', '.join(missing)); raise SystemExit(bool(missing))"
             check = subprocess.run(
                 [config.python, "-c", check_code, *dependencies],
@@ -307,9 +268,6 @@ class EvaluationJobs:
             log = open(folder / "evaluation.log", "ab", buffering=0)
             environment = os.environ.copy()
             environment['VLA_SIM_PREVIEW_PATH'] = str(folder / 'preview.json')
-            if config.platform == "robocasa" and config.gpu:
-                environment["CUDA_VISIBLE_DEVICES"] = config.gpu
-                environment["MUJOCO_EGL_DEVICE_ID"] = config.gpu
             try:
                 process = subprocess.Popen(
                     self.command(config, job_id),
@@ -445,13 +403,19 @@ manager = EvaluationJobs()
 router = APIRouter(prefix="/api/simulation")
 
 
+@router.get('/benchmarks')
+def benchmarks():
+    return [spec.describe() for spec in BENCHMARKS.values()]
+
+
 @router.get("/options")
-def options(platform: Literal["robocasa", "robotwin"] = "robocasa"):
+def options(platform: str = "robocasa"):
+    try:
+        benchmark = get_benchmark(platform)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
     defaults = EvaluationConfig(env_name="PickPlaceCounterToCabinet").model_dump()
-    if platform == "robotwin":
-        defaults.update(n_action_steps=50, seed=0)
-    else:
-        defaults.update(gpu="2")
+    defaults.update(benchmark.defaults)
     if DEFAULTS_PATH.exists():
         settings = yaml.safe_load(DEFAULTS_PATH.read_text()) or {}
         defaults.update(settings.get("defaults", {}))
@@ -475,12 +439,15 @@ def options(platform: Literal["robocasa", "robotwin"] = "robocasa"):
 
 
 @router.get("/task-catalog")
-def get_task_catalog(platform: Literal["robocasa", "robotwin"]):
+def get_task_catalog(platform: str):
     from web_client.task_catalog import task_catalog
 
     config = options(platform)
     try:
-        return task_catalog(platform, config['python'], config['robotwin_root'], str(ROOT))
+        return task_catalog(
+            platform, config['python'], config['robotwin_root'], str(ROOT),
+            json.dumps(config, sort_keys=True),
+        )
     except (OSError, ValueError, KeyError, SyntaxError, subprocess.SubprocessError) as error:
         raise HTTPException(400, str(error)) from error
 

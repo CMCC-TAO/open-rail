@@ -10,7 +10,7 @@ from client.core.realtime_data_manager import RealtimeDataManager
 from client.simulation.vla_client import VLAClientAsync
 from client.robots.base_robot import ObservationMode, RobotStepResult
 from client.robots.robocasa_pandas.body_robot import RobotBody
-from client.robots.robocasa_pandas.video_recorder import VideoRecorder
+from client.simulation.video_recorder import VideoRecorder
 from conf.robots_conf import get_robocasa_pandas_config
 
 

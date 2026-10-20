@@ -5,14 +5,16 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-from client.robots.base_robot import ObservationMode, RobotBase, RobotStepResult
-from client.robots.robocasa_pandas.video_recorder import VideoRecorder
-from client.robots.robocasa_pandas.profiling import (
+from client.robots.base_robot import ObservationMode, RobotStepResult
+from client.simulation.profiling import (
     StepTimings, install_mujoco_timing, log_render_device, measure_native,
 )
+from client.simulation.robot_runtime import DampedJointProjection, EpisodeState, SimulationRobot, build_observation
+from client.simulation.video_recorder import VideoRecorder
 
 
-class RobotBody(RobotBase):
+class RobotBody(SimulationRobot):
+    joint_action_semantics = 'estimated_joint_angles'
     ACTION_KEYS = (
         'end_effector_position',
         'end_effector_rotation',
@@ -38,7 +40,7 @@ class RobotBody(RobotBase):
     def __init__(self, config):
         super().__init__(config)
         self.logger = logging.getLogger(__name__)
-        self._step_timings = StepTimings(self.logger)
+        self._step_timings = StepTimings(self.logger, label='RoboCasa')
         self.cfg = config
         self._lock = threading.RLock()
         self._sim_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix='robocasa_sim')
@@ -49,11 +51,7 @@ class RobotBody(RobotBase):
             raise
         self._last_obs = None
         self._initial_observation_pending = False
-        self._episode_index = int(config.get('episode_offset', 0)) - 1
-        self._episode_steps = 0
-        self._episode_success = False
-        self._episode_done = False
-        self._episode_result = None
+        self._episode = EpisodeState(index=int(config.get('episode_offset', 0)) - 1)
         self._last_action = np.zeros(self.action_dim, dtype=np.float32)
         self.observation_mode = ObservationMode.STEP_RESULT
         self.video_recorder = VideoRecorder(config, self.logger)
@@ -119,26 +117,74 @@ class RobotBody(RobotBase):
         observation_source=None,
         sim_time=None,
     ):
-        result = {
-            'ref_timestamp': time.clock_gettime_ns(time.CLOCK_MONOTONIC),
-            '_observation_mode': self.observation_mode.value,
-        }
-        if observation_step is not None:
-            result['_observation_step'] = int(observation_step)
-        if applied_action_step is not None:
-            result['_applied_action_step'] = int(applied_action_step)
-        if observation_source is not None:
-            result['_observation_source'] = observation_source
-        if sim_time is not None:
-            result['_sim_time'] = float(sim_time)
+        cameras = {}
         for camera_name, obs_key in self.config.camera.names.items():
             if obs_key not in obs:
                 raise KeyError(f'RoboCasa observation is missing camera {obs_key!r}')
-            result[f'cam.{camera_name}'] = np.asarray(obs[obs_key])[..., ::-1].copy()
-        result['obs.state'] = self.current_state.copy()
-        if '_joint_trajectory' in obs:
-            result['_joint_trajectory'] = obs['_joint_trajectory']
-        return result
+            cameras[camera_name] = obs[obs_key]
+        return build_observation(
+            self.current_state, cameras, mode=self.observation_mode,
+            observation_step=observation_step, applied_action_step=applied_action_step,
+            observation_source=observation_source, sim_time=sim_time,
+            joint_trajectory=obs.get('_joint_trajectory'),
+        )
+
+    def joint_state(self):
+        joints = (self._last_obs or {}).get('_joint_trajectory', {})
+        return joints.get('labels', []), joints.get('state', [])
+
+    def joint_action(self, action):
+        projection = getattr(self, '_joint_projection', None)
+        if projection is None:
+            return None
+        return self._estimate_joint_action(action, projection)
+
+    def _capture_joint_projection(self, robots):
+        if len(robots) != 1:
+            return None
+        robot = robots[0]
+        controllers = getattr(getattr(robot, 'composite_controller', None), 'part_controllers', {})
+        controller = controllers.get('right')
+        if (controller is None or getattr(controller, 'name', None) != 'OSC_POSE'
+                or controller.input_type != 'delta' or controller.impedance_mode != 'fixed'
+                or list(controller.qpos_index) != list(robot._ref_arm_joint_pos_indexes)):
+            return None
+        data = robot.sim.data
+        jacobian = np.vstack([
+            data.get_site_jacp(controller.ref_name).reshape(3, -1)[:, controller.qvel_index],
+            data.get_site_jacr(controller.ref_name).reshape(3, -1)[:, controller.qvel_index],
+        ])
+        site_id = robot.sim.model.site_name2id(controller.ref_name)
+        position = np.array(data.site_xpos[site_id])
+        orientation = np.array(data.site_xmat[site_id]).reshape(3, 3)
+        if controller.input_ref_frame == 'base':
+            origin = np.array(controller.origin_pos)
+            rotation = np.array(controller.origin_ori)
+        elif controller.input_ref_frame == 'world':
+            origin, rotation = np.zeros(3), np.eye(3)
+        else:
+            return None
+        goal_pos = position if controller.goal_pos is None else origin + rotation @ controller.goal_pos
+        goal_ori = orientation if controller.goal_ori is None else rotation @ controller.goal_ori
+        return {
+            'projection': DampedJointProjection(
+                qpos=np.array(data.qpos[controller.qpos_index]), jacobian=jacobian,
+                rotation=rotation, position_error=goal_pos - position,
+                orientation=orientation.copy(), goal_orientation=goal_ori.copy(),
+                joint_limits=np.array(robot.sim.model.jnt_range[controller.joint_index]),
+            ),
+            'input_min': np.array(controller.input_min), 'input_max': np.array(controller.input_max),
+            'output_min': np.array(controller.output_min), 'output_max': np.array(controller.output_max),
+        }
+
+    def _estimate_joint_action(self, action, projection):
+        command = self._flat_to_action_dict(self._to_flat_action(action))
+        arm = np.concatenate([command['action.end_effector_position'], command['action.end_effector_rotation']])
+        low, high = projection['input_min'], projection['input_max']
+        out_low, out_high = projection['output_min'], projection['output_max']
+        delta = (np.clip(arm, low, high) - (low + high) / 2) * abs((out_high - out_low) / (high - low))
+        delta += (out_low + out_high) / 2
+        return projection['projection'].estimate(delta, desired=command['action.control_mode'][0] >= 0.5)
 
     def _flat_to_action_dict(self, action):
         action = np.asarray(action, dtype=np.float32).reshape(-1)
@@ -177,13 +223,15 @@ class RobotBody(RobotBase):
 
     def _step_env(self, action, sample):
         with measure_native(sample):
-            result = self.env.step(action)
             underlying = getattr(getattr(self.env, 'unwrapped', self.env), 'env', None)
+            robots = getattr(underlying, 'robots', [])
+            self._joint_projection = self._capture_joint_projection(robots)
+            result = self.env.step(action)
             labels, positions = [], []
-            for robot in getattr(underlying, 'robots', []):
+            for robot in robots:
                 indices = getattr(robot, '_ref_arm_joint_pos_indexes', [])
                 names = getattr(robot, 'robot_arm_joints', [])
-                if not indices or len(indices) != len(names):
+                if not len(indices) or len(indices) != len(names):
                     continue
                 labels.extend(name.removeprefix(robot.robot_model.naming_prefix) for name in names)
                 positions.extend(np.asarray(robot.sim.data.qpos[indices], dtype=np.float64).tolist())
@@ -193,19 +241,19 @@ class RobotBody(RobotBase):
 
     def control_robot(self, action):
         with self._lock:
-            if self._episode_done:
+            if self._episode.done:
                 return RobotStepResult(
-                    success=self._episode_success,
+                    success=self._episode.success,
                     terminated=True,
-                    observation_step=self._episode_steps,
-                    applied_action_step=max(0, self._episode_steps - 1),
+                    observation_step=self._episode.steps,
+                    applied_action_step=max(0, self._episode.steps - 1),
                     sim_time=self._sim_time(),
                     observation_source=ObservationMode.STEP_RESULT.value,
-                    info=dict(self._episode_result or {}),
+                    info=dict(self._episode.result or {}),
                 )
             flat_action = self._to_flat_action(action)
             action_dict = self._flat_to_action_dict(flat_action)
-            applied_action_step = self._episode_steps
+            applied_action_step = self._episode.steps
             started = time.perf_counter()
             sample = {}
             obs, reward, terminated, truncated, info = self._sim_executor.submit(
@@ -214,23 +262,24 @@ class RobotBody(RobotBase):
             sample['env_step_s'] = time.perf_counter() - started
             self._last_obs = obs
             self._update_state(obs)
-            self._episode_steps += 1
-            observation_step = self._episode_steps
+            self._episode.steps += 1
+            observation_step = self._episode.steps
             sim_time = self._sim_time()
             self._last_action = flat_action.copy()
             success = bool(info.get('success', False) or reward > 0)
-            self._episode_success |= success
-            max_steps = int(self.config.get('max_episode_steps', 1000))
-            truncated = bool(truncated or self._episode_steps >= max_steps)
-            self._episode_done = bool(self._episode_success or terminated or truncated)
+            self._episode.success |= success
+            max_steps = int(self.config.get('max_episode_steps') or 1000)
+            truncated = bool(truncated or self._episode.steps >= max_steps)
+            self._episode.terminated = bool(terminated)
+            self._episode.truncated = truncated
             video_started = time.perf_counter()
             self.video_recorder.write(obs, {
                 'task': self.config.env_name,
-                'episode': self._episode_index + 1,
-                'step': self._episode_steps,
+                'episode': self._episode.index + 1,
+                'step': self._episode.steps,
                 'max_steps': max_steps,
                 'reward': reward,
-                'success': self._episode_success,
+                'success': self._episode.success,
                 'terminated': bool(terminated),
                 'truncated': truncated,
                 'sim_time': sim_time,
@@ -238,25 +287,16 @@ class RobotBody(RobotBase):
             sample['video_write_s'] = time.perf_counter() - video_started
             sample.update(self.video_recorder.last_write_timings)
             sample['total_s'] = time.perf_counter() - started
-            self._step_timings.add(sample, self._episode_index + 1, self._episode_steps)
-            if self._episode_done:
-                self._episode_result = {
-                    'episode': self._episode_index,
-                    'success': self._episode_success,
-                    'steps': self._episode_steps,
-                    'terminated': bool(terminated),
-                    'truncated': truncated,
-                    'video_path': self.video_recorder.path,
-                    'video_error': self.video_recorder.error,
-                }
+            self._step_timings.add(sample, self._episode.index + 1, self._episode.steps)
+            if self._episode.done:
+                self._episode.finish(self.video_recorder)
                 self.logger.info(
                     'RoboCasa episode %d finished: success=%s, steps=%d',
-                    self._episode_index,
-                    self._episode_success,
-                    self._episode_steps,
+                    self._episode.index,
+                    self._episode.success,
+                    self._episode.steps,
                 )
-                self.video_recorder.stop(wait=False)
-                self._step_timings.report(self._episode_index + 1, self._episode_steps)
+                self._step_timings.report(self._episode.index + 1, self._episode.steps)
             return RobotStepResult(
                 observation=self._to_vla_observation(
                     obs,
@@ -265,7 +305,7 @@ class RobotBody(RobotBase):
                     observation_source=ObservationMode.STEP_RESULT.value,
                     sim_time=sim_time,
                 ),
-                success=self._episode_success,
+                success=self._episode.success,
                 terminated=bool(terminated),
                 truncated=truncated,
                 observation_step=observation_step,
@@ -274,9 +314,6 @@ class RobotBody(RobotBase):
                 observation_source=ObservationMode.STEP_RESULT.value,
                 info=dict(info),
             )
-
-    def execute_action(self, data):
-        return self.control_robot(data)
 
     def retrieve_observation(self):
         with self._lock:
@@ -295,31 +332,28 @@ class RobotBody(RobotBase):
             self.video_recorder.stop()
             if seed is None:
                 base_seed = self.config.get('seed')
-                seed = None if base_seed is None else int(base_seed) + self._episode_index + 1
+                seed = None if base_seed is None else int(base_seed) + self._episode.index + 1
             reset_started = time.perf_counter()
             obs, _ = self._sim_executor.submit(self.env.reset, seed=seed).result()
             self.logger.info('RoboCasa reset: seed=%s duration=%.6fs', seed, time.perf_counter() - reset_started)
-            self._episode_index += 1
-            self._episode_steps = 0
-            self._episode_success = False
-            self._episode_done = False
-            self._episode_result = None
+            self._episode.reset(self._episode.index + 1)
             self._last_action.fill(0.0)
+            self._joint_projection = None
             self._last_obs = obs
             self._initial_observation_pending = True
             self._update_state(obs)
-            self.video_recorder.start(self.config.env_name, self._episode_index)
+            self.video_recorder.start(self.config.env_name, self._episode.index)
             self.video_recorder.write(obs, {
                 'task': self.config.env_name,
-                'episode': self._episode_index + 1,
+                'episode': self._episode.index + 1,
                 'step': 0,
-                'max_steps': int(self.config.get('max_episode_steps', 1000)),
+                'max_steps': int(self.config.get('max_episode_steps') or 1000),
                 'reward': 0.0,
                 'success': False,
                 'state': 'RESET',
                 'sim_time': self._sim_time(),
             })
-            self.logger.info('RoboCasa episode %d reset complete', self._episode_index)
+            self.logger.info('RoboCasa episode %d reset complete', self._episode.index)
             return self._to_vla_observation(
                 obs,
                 observation_step=0,
@@ -337,13 +371,9 @@ class RobotBody(RobotBase):
                 return ''
             return str(self._last_obs.get('annotation.human.task_description', ''))
 
-    def get_episode_result(self):
-        with self._lock:
-            return None if self._episode_result is None else dict(self._episode_result)
-
     def close(self):
         with self._lock:
-            self._step_timings.report(self._episode_index + 1, self._episode_steps)
+            self._step_timings.report(self._episode.index + 1, self._episode.steps)
             self.video_recorder.close()
             env, self.env = self.env, None
         if env is not None:

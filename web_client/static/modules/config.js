@@ -24,10 +24,33 @@ const SIMULATION_CONFIG_KEYS = new Set([
   'rdm.action_replenish_threshold',
   'rdm.max_async_observation_lag_steps',
 ]);
+const SIMULATION_ROBOT_TYPES = new Set();
+
+window.registerSimulationBenchmarks = function(profiles) {
+  for (const profile of profiles) {
+    SIMULATION_ROBOT_TYPES.add(profile.robot_type);
+    if (!CONFIG_SELECT_OPTIONS.type.includes(profile.robot_type))
+      CONFIG_SELECT_OPTIONS.type.push(profile.robot_type);
+    ROBOT_TYPE_LABELS[profile.robot_type] = profile.label + ' (Simulation)';
+  }
+  document.querySelectorAll('.cfg-row[data-key="robots.type"] select').forEach(select => {
+    const selected = getSimulationClientConfig().robots?.type;
+    for (const profile of profiles) {
+      let option = [...select.options].find(item => item.value === profile.robot_type);
+      if (!option) {
+        option = new Option('', profile.robot_type);
+        select.append(option);
+      }
+      option.textContent = ROBOT_TYPE_LABELS[profile.robot_type];
+    }
+    if (selected) select.value = selected;
+  });
+  updateSimulationConfigVisibility();
+};
 
 function updateSimulationConfigVisibility() {
   const robotType = getSimulationClientConfig().robots?.type;
-  const simulation = ['robocasa_pandas', 'robotwin_aloha'].includes(robotType);
+  const simulation = SIMULATION_ROBOT_TYPES.has(robotType);
   $('config-tree').querySelectorAll('.cfg-row[data-key]').forEach(row => {
     if (SIMULATION_CONFIG_KEYS.has(row.dataset.key)) {
       row.style.display = simulation ? '' : 'none';
@@ -46,25 +69,26 @@ const CONFIG_SELECT_OPTIONS = {
   inter_chunk_mode: ['sync', 'search_action', 'smooth_velocity', 'min_jerk'],
   intra_chunk_mode: ['raw', 'interpolation', 'fitting'],
   instruction_type: ['seen', 'unseen'],
+  action_type: ['qpos', 'ee'],
+  task_config: ['demo_clean', 'demo_randomized'],
   render_observation_mode: ['chunk_boundary', 'per_action'],
   split: ['target', 'pretrain'],
   fitting_deg: [3, 4, 5, 6],
   // preprocess: ['crop_and_resize', 'pad_and_resize', 'resize', 'none'],
   method: ['resize', 'none'],
-  type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2', 'robocasa_pandas', 'robotwin_aloha'],
+  type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2'],
   mode: ['async', 'sync'],
   codec: ['mp4v', 'avc1'],
+  video_layout: ['grid', 'single'],
   eval_log_format: ['json', 'csv', 'both'],
   speed: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75, 3.0],
 };
 
-const ROBOT_TYPE_LABELS = {
-  robocasa_pandas: 'RoboCasa_Pandas (Simulation)',
-  robotwin_aloha: 'RoboTwin_ALOHA (Simulation)',
-};
+const ROBOT_TYPE_LABELS = {};
 
 // Keys that must be treated as integers (rendered as number input, parsed with parseInt)
 const CONFIG_INT_KEYS = new Set([
+  'camera_width', 'camera_height', 'max_episode_steps', 'video_fps',
   'fitting_num_samples', 'search_length', 'gripper_offset',
   'action_steps', 'n_envs', 'seed', 'fps', 'height', 'width', 'update_interval_ms', 'max_len', 'observe_fps_window_size', 'filter_window_size', 'gripper_dim', 'head_dim', 'joint_dim', 'state_shape', 'action_shape', 'chunk_size', 'channel'
 ]);
@@ -701,7 +725,17 @@ function _buildRobotsGroup(obj, parentEl) {
     const dotKey = `robots.${k}`;
     const body = document.createElement('div');
     body.className = 'cfg-group-body';
-    buildTree(v, dotKey, body);
+    if (k === 'robocasa_pandas') {
+      for (const name of ['gpu', 'split', 'seed']) {
+        if (name in v) body.appendChild(createCfgRow(`${dotKey}.${name}`, name, v[name]));
+      }
+      const advanced = ['camera_width', 'camera_height', 'python', 'max_episode_steps']
+        .filter(name => name in v)
+        .map(name => createCfgRow(`${dotKey}.${name}`, name, v[name]));
+      body.appendChild(buildGroup('Advanced', advanced));
+    } else {
+      buildTree(v, dotKey, body);
+    }
     const groupEl = buildGroupFromEl(k, body);
     groupEl.dataset.robotType = k;
     // Show only the group matching current type
@@ -864,6 +898,13 @@ function createCfgRow(dotKey, label, value, options = {}) {
     keyEl.textContent = 'Camera rendering (sync)';
     keyEl.title = 'Async mode always renders every action.';
   }
+  const isSimulationPython = SIMULATION_ROBOT_TYPES.has(dotKey.split('.')[1]) && dotKey.endsWith('.python');
+  if (isSimulationPython) {
+    keyEl.textContent = 'Python (optional)';
+    keyEl.title = 'Leave blank to use the web server Python. Set an interpreter path for a separate simulation environment.';
+  }
+  const isSimulationGpu = SIMULATION_ROBOT_TYPES.has(dotKey.split('.')[1]) && dotKey.endsWith('.gpu');
+  if (isSimulationGpu) keyEl.title = 'Comma-separated GPU indices, assigned to workers in order. Leave blank to inherit the environment.';
 
   const valEl = document.createElement('div');
   valEl.className = 'cfg-value';
@@ -1002,13 +1043,22 @@ function createCfgRow(dotKey, label, value, options = {}) {
   } else if (CONFIG_SELECT_OPTIONS[bareKey]) {
     // Predefined select options
     input = document.createElement('select');
-    CONFIG_SELECT_OPTIONS[bareKey].forEach(opt => {
+    const choices = [...CONFIG_SELECT_OPTIONS[bareKey]];
+    if ((bareKey === 'task_config' || dotKey === 'robots.type') && value && !choices.includes(String(value))) {
+      choices.push(String(value));
+    }
+    choices.forEach(opt => {
       const o = document.createElement('option');
       o.value = opt;
       o.textContent = dotKey === 'robots.type' ? ROBOT_TYPE_LABELS[opt] || opt
         : bareKey === 'render_observation_mode'
         ? {chunk_boundary: 'Chunk boundaries', per_action: 'Every action'}[opt] : opt;
       if (String(value) === String(opt)) o.selected = true;
+      if (dotKey === 'robots.robotwin_aloha.action_type' && opt === 'ee') {
+        o.disabled = true;
+        o.textContent = 'ee (not supported)';
+        o.title = 'The current Aloha adapter uses 14-dimensional qpos actions.';
+      }
       input.appendChild(o);
     });
   } else if (typeof value === 'boolean') {
@@ -1039,6 +1089,20 @@ function createCfgRow(dotKey, label, value, options = {}) {
   }
 
   input.className = 'input-text';
+  if (isSimulationGpu) {
+    input.placeholder = 'e.g. 0,2';
+    input.title = keyEl.title;
+  }
+  if (isSimulationPython) {
+    input.placeholder = 'Current environment';
+    input.title = keyEl.title;
+  }
+  if (dotKey === 'robots.robocasa_pandas.max_episode_steps') {
+    input.placeholder = 'Task default';
+    input.title = 'Leave blank to use the task registry horizon.';
+    input.min = '1';
+  }
+  if (/^robots\.robocasa_pandas\.camera_(width|height)$/.test(dotKey)) input.min = '1';
   const isActionLayout = /^robots\.[^.]+\.action_layout(?:\.|$)/.test(dotKey);
   if (CONFIG_READONLY_DOT_KEYS.has(dotKey) || isActionLayout) {
     row.classList.add('cfg-row-readonly');
@@ -1103,8 +1167,16 @@ function onCfgChange(dotKey, input, originalValue) {
       input.style.borderColor = 'var(--danger)';
       return;
     }
-  } else if (dotKey === 'controller.action_steps' && raw === '') {
+  } else if (['controller.action_steps', 'robots.robocasa_pandas.max_episode_steps'].includes(dotKey) && raw === '') {
     parsed = null;
+  } else if (['max_episode_steps', 'camera_width', 'camera_height'].some(
+    key => dotKey === `robots.robocasa_pandas.${key}`
+  )) {
+    parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+      input.style.borderColor = 'var(--danger)';
+      return;
+    }
   } else if (CONFIG_INT_KEYS.has(bareKey)) {
     parsed = parseInt(raw, 10);
     if (isNaN(parsed)) { input.style.borderColor = 'var(--danger)'; return; }
@@ -1134,7 +1206,7 @@ function onCfgChange(dotKey, input, originalValue) {
 /** Mark pending changes: show badge + highlight Apply button */
 function blockSimulationClientStart() {
   const robotType = getSimulationClientConfig().robots?.type;
-  if (!App.isRunning && ['robocasa_pandas', 'robotwin_aloha'].includes(robotType)) {
+  if (!App.isRunning && SIMULATION_ROBOT_TYPES.has(robotType)) {
     toast('Use Start in Simulation Evaluation to run simulation tasks.', 'info');
     return true;
   }

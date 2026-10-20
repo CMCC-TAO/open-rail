@@ -557,10 +557,10 @@ robots:
     instruction_type: seen
     n_envs: 1
     python: ''
-    render_observation_mode: per_action
+    render_observation_mode: chunk_boundary
     robotwin_root: ''
     seed: 0
-    task_config: demo_clean
+    task_config: demo_randomized
   ti5_t170c:
     action_layout:
       arm:

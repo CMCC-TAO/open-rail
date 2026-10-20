@@ -17,7 +17,9 @@ from client.robots.robotwin_aloha.body_robot import RobotBody
 from client.simulation.vla_client import VLAClientAsync
 from conf.client_conf import get_client_config
 from scripts import aloha_robotwin_eval as twin
-from scripts.robocasa_eval import _start_episode, _wait_for_episode
+from client.simulation.evaluation import (
+    start_episode as _start_episode, wait_for_episode as _wait_for_episode,
+)
 from test_robocasa_master_merge import FakeTransport as CasaTransport
 
 
@@ -322,7 +324,7 @@ sys.path.insert(0, {str(project / "test")!r})
 from scripts import aloha_robotwin_eval as twin
 from test_robotwin_evaluation import Transport
 if __name__ == '__main__':
-    twin.casa.ZMQClient = lambda config: Transport()
+    twin.ZMQClient = lambda config: Transport()
     original = twin._worker_command
     def command(*args):
         value = original(*args)

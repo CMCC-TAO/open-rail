@@ -1,4 +1,4 @@
-# Web Simulation Evaluation
+# Simulation Evaluation
 
 Start `python run_web_client.py --port 9000` and open `http://localhost:9000/`.
 In **Configuration**, select Robot Type `robocasa_pandas` or `robotwin_aloha`.
@@ -48,3 +48,7 @@ Shared cameras and trajectories display the running simulation or robot client.
 Robot Control and Data Recording continue to control the robot client. Results, saved
 videos, and logs are available inside the evaluation panel. Tests use simulated processes
 and browser API responses; real rendering and inference require the configured simulators.
+
+Both pages discover supported benchmarks from the shared registry. Adapter
+interfaces, trajectory semantics, and the steps for adding a benchmark are
+documented in [Simulation adapters](../client/simulation/README.md).

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import cv2
 import numpy as np
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -92,6 +93,26 @@ def test_preview_preserves_actions_between_camera_frames(tmp_path):
     np.testing.assert_allclose([s['state'] for s in trajectory['samples']], [[.09], [.19], [.29]])
 
 
+def test_preview_switches_joint_layout_without_reusing_old_sources(tmp_path):
+    preview = CameraPreview(tmp_path / 'preview.json', {})
+    try:
+        original_stream = preview.stream_id
+        preview.publish_trajectory({
+            'labels': ['a', 'b'], 'state': [1, 2], 'action_raw': [3, 4],
+            'action_semantics': 'estimated_joint_angles',
+        })
+        preview.publish_trajectory({'labels': [], 'state': []})
+        assert preview.trajectory_labels == ['a', 'b']
+        preview.publish_trajectory({'labels': ['c'], 'state': [5]})
+        assert preview.stream_id != original_stream
+        assert list(preview.trajectory_samples)[0]['state'] == [5]
+        assert len(preview.trajectory_samples) == 1
+        assert preview.trajectory_sources == {'state'}
+        assert preview.trajectory_action_semantics is None
+    finally:
+        preview.close()
+
+
 def test_robocasa_trajectory_reads_joint_positions_not_end_effector_state():
     from client.robots.robocasa_pandas.body_robot import RobotBody
 
@@ -108,6 +129,101 @@ def test_robocasa_trajectory_reads_joint_positions_not_end_effector_state():
     )
     result = robot._step_env({}, {})
     assert result[0]['_joint_trajectory'] == {'labels': ['right_j0', 'right_j1'], 'state': [.1, .2]}
+
+
+@pytest.fixture
+def robocasa_joint_robot():
+    from client.robots.robocasa_pandas.body_robot import RobotBody
+    from conf.robots_conf import get_robocasa_pandas_config
+
+    robot = RobotBody.__new__(RobotBody)
+    robot.action_layout = get_robocasa_pandas_config().action_layout
+    robot.action_dim = 12
+    robot._last_action = np.zeros(12)
+    jacobian = np.eye(6, 7)
+    data = SimpleNamespace(
+        qpos=np.full(7, .1), site_xpos=np.zeros((1, 3)), site_xmat=np.eye(3)[None],
+        get_site_jacp=lambda name: jacobian[:3], get_site_jacr=lambda name: jacobian[3:],
+    )
+    controller = SimpleNamespace(
+        name='OSC_POSE', input_type='delta', impedance_mode='fixed',
+        input_ref_frame='base', qpos_index=list(range(7)), qvel_index=list(range(7)),
+        joint_index=list(range(7)), ref_name='eef', origin_pos=np.zeros(3),
+        origin_ori=np.array([[0., -1., 0.], [1., 0., 0.], [0., 0., 1.]]),
+        goal_pos=np.zeros(3), goal_ori=np.array([[0., 1., 0.], [-1., 0., 0.], [0., 0., 1.]]),
+        input_min=-np.ones(6), input_max=np.ones(6),
+        output_min=-np.array([.05] * 3 + [.5] * 3), output_max=np.array([.05] * 3 + [.5] * 3),
+    )
+    native = SimpleNamespace(
+        _ref_arm_joint_pos_indexes=list(range(7)), robot_arm_joints=[f'robot0_joint{i}' for i in range(7)],
+        robot_model=SimpleNamespace(naming_prefix='robot0_'),
+        composite_controller=SimpleNamespace(part_controllers={'right': controller}),
+        sim=SimpleNamespace(data=data, model=SimpleNamespace(
+            site_name2id=lambda name: 0, jnt_range=np.array([[-2., 2.]] * 7))),
+    )
+
+    def step(action):
+        data.qpos += .5
+        return {}, 0, False, False, {}
+
+    robot.env = SimpleNamespace(unwrapped=SimpleNamespace(env=SimpleNamespace(robots=[native])), step=step)
+    return robot, native, controller, jacobian
+
+
+def test_robocasa_publishes_joint_only_sources_from_same_pre_step_state(robocasa_joint_robot, tmp_path):
+    robot, native, controller, jacobian = robocasa_joint_robot
+    robot._last_obs = robot._step_env({}, {})[0]
+    fitted, raw = np.zeros(12), np.zeros(12)
+    fitted[0], raw[0] = 1., -.5
+    fitted[5] = 1.
+    trajectory = robot.get_joint_trajectory(fitted, raw)
+    assert trajectory['labels'] == [f'joint{i}' for i in range(7)]
+    np.testing.assert_allclose(trajectory['state'], [.6] * 7)
+    expected_fitted, expected_raw = np.full(7, .1), np.full(7, .1)
+    expected_fitted[1] += .05 / 1.0025
+    expected_fitted[5] += .5 / 1.0025
+    expected_raw[1] -= .025 / 1.0025
+    np.testing.assert_allclose(trajectory['action_fitted'], expected_fitted)
+    np.testing.assert_allclose(trajectory['action_raw'], expected_raw)
+    np.testing.assert_allclose(native.sim.data.qpos, [.6] * 7)
+    np.testing.assert_allclose(controller.goal_pos, np.zeros(3))
+    np.testing.assert_allclose(jacobian, np.eye(6, 7))
+    preview = CameraPreview(tmp_path / 'preview.json', {})
+    try:
+        preview.publish_trajectory(trajectory)
+        preview.publish({}, {}, robot.get_joint_trajectory())
+    finally:
+        preview.close()
+    published = json.loads((tmp_path / 'preview.json').read_text())['trajectory']
+    assert published['action_semantics'] == 'estimated_joint_angles'
+    assert published['sources'] == ['action_fitted', 'action_raw', 'state']
+    assert len(published['labels']) == 7
+
+
+def test_robocasa_joint_estimates_respect_base_mode_and_singularities(robocasa_joint_robot):
+    robot, native, controller, jacobian = robocasa_joint_robot
+    controller.goal_pos = np.array([.2, 0., 0.])
+    controller.goal_ori = np.eye(3)
+    robot._last_obs = robot._step_env({}, {})[0]
+    action = np.zeros(12)
+    action[-1] = 1.
+    estimate = robot.get_joint_trajectory(action, action)['action_fitted']
+    assert estimate[1] == pytest.approx(.1 + .2 / 1.0025)
+    assert estimate[5] == pytest.approx(.1 + np.pi / 2 / 1.0025)
+    jacobian[:] = 0
+    robot._last_obs = robot._step_env({}, {})[0]
+    np.testing.assert_allclose(robot.get_joint_trajectory(action)['action_fitted'], [.6] * 7)
+
+
+def test_robocasa_joint_estimates_respect_controller_and_joint_limits(robocasa_joint_robot):
+    robot, native, controller, _ = robocasa_joint_robot
+    native.sim.model.jnt_range[:, 1] = .12
+    robot._last_obs = robot._step_env({}, {})[0]
+    action = np.zeros(12)
+    action[0] = 100
+    estimate = robot.get_joint_trajectory(action)['action_fitted']
+    assert estimate[1] == .12
+    np.testing.assert_allclose(estimate[:1] + estimate[2:], [.1] * 6)
 
 
 def test_observation_encoding_publishes_all_cameras(tmp_path):

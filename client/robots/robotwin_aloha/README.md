@@ -1,27 +1,29 @@
 # RoboTwin / Aloha
 
-`robotwin_aloha` 用于 RoboTwin 的 Aloha 双臂仿真测评，支持单任务、任务列表、并行环境、同步／异步推理、动作平滑、视频与数据集保存。以下命令均在本项目根目录执行，路径按实际安装位置替换。
+`robotwin_aloha` supports RoboTwin evaluation for the Aloha bimanual robot, including single tasks, task lists, parallel environments, synchronous or asynchronous inference, action smoothing, video recording, and dataset export. Run the commands below from the project root and replace paths with your local installation paths.
 
-## 环境配置
+## Environment Setup
 
-模型服务和仿真客户端可以使用独立环境：
+This adapter uses **RoboTwin 2.0**.
 
-- 模型环境：安装 TAO 及其依赖，准备 `aloha_robotwin` 对应的 checkpoint。
-- 仿真环境：安装 RoboTwin、SAPIEN、PyTorch、cuRobo 和任务资源，安装方式见 [RoboTwin 安装说明](https://robotwin-platform.github.io/doc/usage/robotwin-install.html)。
+The model server and simulation client can use separate environments:
 
-在仿真环境中安装本项目：
+- Model environment: install TAO and its dependencies, and prepare a checkpoint for `aloha_robotwin`.
+- Simulation environment: install **RoboTwin 2.0**, SAPIEN, PyTorch, cuRobo, and the required task assets. See the [RoboTwin installation guide](https://robotwin-platform.github.io/doc/usage/robotwin-install.html).
+
+Install this project in the simulation environment:
 
 ```bash
 uv pip install -e '.[sim]'
 ```
 
-`sim` 扩展提供本项目使用的仿真辅助依赖，不包含 RoboTwin 和模型本身。`--robotwin_root` 指向 RoboTwin 根目录；任务配置从 `task_config/<配置名>.yml` 加载，当前支持 `embodiment: [aloha-agilex]`。
+The `sim` extra provides simulation utilities used by this project; it does not include RoboTwin or the model. `--robotwin_root` points to the RoboTwin root directory. Task configurations are loaded from `task_config/<name>.yml`; the current adapter supports `embodiment: [aloha-agilex]`.
 
-机器人默认配置位于 [conf/robots_conf.py](../../../conf/robots_conf.py) 的 `get_robotwin_aloha_config()`。
+Robot defaults are defined in `get_robotwin_aloha_config()` in [conf/robots_conf.py](../../../conf/robots_conf.py).
 
-## 启动模型服务
+## Start the Model Server
 
-在模型环境中启动：
+Start the server in the model environment:
 
 ```bash
 python run_server.py \
@@ -31,30 +33,58 @@ python run_server.py \
   --action_keys left_arm left_hand right_arm right_hand
 ```
 
-默认服务端口为 `5566`。三路相机默认使用 `cam_top_head`、`cam_left_wrist`、`cam_right_wrist`，无需传入 `--video_keys`。
+The default server port is `5566`. The three camera keys default to `cam_top_head`, `cam_left_wrist`, and `cam_right_wrist`, so `--video_keys` is not required.
 
-动作按左臂 6 维、左夹爪、右臂 6 维、右夹爪排列，共 14 维绝对 qpos。上述命令对应 `left_hand/right_hand` 动作字段；模型输出为 `left_gripper/right_gripper` 时，可省略 `--action_keys`，由适配器自动排序。
+Actions contain 14 absolute qpos values in this order: six left-arm joints, left gripper, six right-arm joints, and right gripper. The command above uses the `left_hand/right_hand` action fields. If the model returns `left_gripper/right_gripper`, omit `--action_keys` to use automatic ordering.
 
-## Web 测评
+## Web Evaluation
 
-启动 Web 客户端：
+Start the Web client:
 
 ```bash
 python run_web_client.py --port 9000
 ```
 
-打开 `http://localhost:9000/`：
+Open `http://localhost:9000/`:
 
-1. 在 Configuration 中选择 Robot Type `robotwin_aloha`，填写仿真环境的 Python 路径、RoboTwin 根目录、GPU 和模型服务地址。
-2. 设置并行环境数、任务配置、指令类型、同步／异步模式和动作处理方式。动作块长度留空时使用 RoboTwin 默认值 50。
-3. 在 Simulation Evaluation 中选择任务或任务集，设置每任务 episode 数、视频和数据集保存选项，启动测评。
-4. 在测评面板查看日志、统计和视频，或停止、续跑已有任务。
+1. In Configuration, select Robot Type `robotwin_aloha`, then set the simulation Python path, RoboTwin root directory, GPU, and model server address.
+2. Configure the task configuration, instruction type, execution mode, and action processing. A blank action chunk length uses the RoboTwin default of 50.
+3. In Simulation Evaluation, select tasks or a task suite, set episodes per task, parallel environments, and video/dataset saving options, then start evaluation.
+4. View logs, statistics, and videos in the evaluation panel, or stop and resume existing jobs.
 
-测评使用启动时的配置快照，后续修改配置不会影响正在运行的任务。公共页面操作与配置文件说明见 [Web 仿真测评](../../../docs/robocasa_web.md)。
+Evaluation captures the configuration at startup; later edits do not affect a running job. See the [Web simulation guide](../../../docs/simulation_evalution.md) for shared page controls and configuration files.
 
-## CLI 测评
+### Web Parameters
 
-在仿真环境中运行单任务：
+| Parameter | Description |
+| --- | --- |
+| Python | Simulation Python interpreter path; it can use a separate environment from the model server. |
+| GPU | Simulation GPU indices, such as `0,1`; does not change the model server's GPU. |
+| Model Server Address | IP and port of the running model server. |
+| Task / Task Selection | Select a single task or tasks from a suite. |
+| Episodes / Task | Total evaluation episodes per task. |
+| Parallel Envs | Number of concurrent environments; episodes are distributed among them. |
+| Action Chunk Length | Number of actions executed per chunk; shorter chunks request inference more often. |
+| Execution Mode | `sync` requests inference after a chunk finishes; `async` requests the next chunk in advance. |
+| Intra-chunk Smoothing | `raw` keeps original actions; `interpolation` interpolates; `fitting` fits a polynomial. |
+| Output Sampling Ratio | Action output sampling multiplier; 1 preserves the action count. |
+| Inter-chunk Fusion | How action chunks connect; `sync` joins directly, while other modes search or smooth the transition. |
+| Async Replenishment Threshold | Number of remaining actions that triggers the next inference request in async mode. |
+| Maximum Observation Lag Steps | Maximum allowed observation lag in async mode, measured in steps. |
+| Save Dataset | Save a LeRobot dataset. |
+| Save Videos | Save evaluation replay videos, independently of dataset saving. |
+| Video FPS / Layout | Playback frame rate and layout; `grid` shows multiple views, while `single` shows one view. |
+| RoboTwin Root | Root directory of the RoboTwin installation. |
+| Task Configuration | Task configuration, such as `demo_clean` or `demo_randomized`. |
+| Instruction Type | Language instruction split: `seen` or `unseen`. |
+| Seed | Starting seed for episode candidates. |
+| Camera Rendering | `chunk_boundary` captures images at action chunk boundaries; `per_action` captures after every action. Async mode always captures after every action. |
+
+A blank action chunk length defaults to 50. Only interpolation mode allows sampling ratios above 1. Video FPS does not determine simulation speed.
+
+## CLI Evaluation
+
+Run a single task in the simulation environment:
 
 ```bash
 python scripts/aloha_robotwin_eval.py \
@@ -64,26 +94,26 @@ python scripts/aloha_robotwin_eval.py \
   --run_id example-run
 ```
 
-任务名与任务配置按所用 RoboTwin 环境选择。任务列表使用 `--tasks task_a,task_b` 或 `--tasks /path/to/tasks.yml`，与 `--task_name` 二选一。YAML 支持任务名列表或 `tasks: [...]`。
+Choose tasks and task configurations supported by your RoboTwin installation. Use `--tasks task_a,task_b` or `--tasks /path/to/tasks.yml` for a task list; this option is mutually exclusive with `--task_name`. YAML accepts a list of task names or `tasks: [...]`.
 
-| 功能 | 参数 |
+| Feature | Options |
 | --- | --- |
-| 模型连接 | `--server_ip`、`--server_port`，默认 `127.0.0.1:5566` |
-| 测评规模 | `--n_episodes` 为每任务总 episode 数；`--n_envs` 为并行环境数 |
-| GPU 分配 | `--gpu 0` 指定仿真 GPU；多个编号如 `--gpu 0,1` 按 worker 分配 |
-| 动作块长度 | `--n_action_steps`，默认 50 |
-| 同步／异步 | `--mode sync/async`，默认 `sync` |
-| 块内处理 | `--intra_chunk_mode raw/interpolation/fitting`，默认 `raw` |
-| 块间衔接 | `--inter_chunk_mode sync/search_action/smooth_velocity/min_jerk`，默认 `sync` |
-| 指令类型 | `--instruction_type seen/unseen`，默认 `unseen` |
-| 观测渲染 | `--render_observation_mode chunk_boundary/per_action`，同步默认在动作块边界采集图像，异步逐动作采集 |
-| 数据集保存 | `--record` 开启；`--record_dir` 设置目录 |
-| 视频保存 | 默认开启；`--no_video` 关闭展示视频，数据集相机视频由录制开关控制 |
+| Model connection | `--server_ip`, `--server_port`; default `127.0.0.1:5566` |
+| Evaluation size | `--n_episodes`: total episodes per task; `--n_envs`: parallel environments |
+| GPU assignment | `--gpu 0` selects the simulation GPU; lists such as `--gpu 0,1` distribute workers across GPUs |
+| Action chunk length | `--n_action_steps`; default 50 |
+| Execution mode | `--mode sync/async`; default `sync` |
+| Intra-chunk processing | `--intra_chunk_mode raw/interpolation/fitting`; default `raw` |
+| Inter-chunk fusion | `--inter_chunk_mode sync/search_action/smooth_velocity/min_jerk`; default `sync` |
+| Instruction type | `--instruction_type seen/unseen`; default `unseen` |
+| Observation rendering | `--render_observation_mode chunk_boundary/per_action`; sync defaults to chunk boundaries, while async captures after every action |
+| Dataset saving | Enable with `--record`; set the directory with `--record_dir` |
+| Video saving | Enabled by default; `--no_video` disables replay videos; dataset camera videos are controlled by the dataset recording switch |
 
-默认执行专家检查并生成指令。使用固定指令时，传入 `--no_expert_check --instruction '任务指令'`。其他参数见 `python scripts/aloha_robotwin_eval.py --help`。
+Expert checks and instruction generation are enabled by default. To use a fixed instruction, pass `--no_expert_check --instruction 'task instruction'`. See `python scripts/aloha_robotwin_eval.py --help` for additional options.
 
-## 结果与续跑
+## Results and Resume
 
-CLI 默认结果位于 `data/aloha_robotwin_eval/evals/<seen或unseen>/<task>/<run_id>/`，包含统计、视频和 episode 选种清单。`--output_dir` 修改结果根目录，`--record_dir` 单独指定数据集目录；统计文件记录实际数据集路径，并提供成功、失败分区。
+CLI results default to `data/aloha_robotwin_eval/evals/<seen-or-unseen>/<task>/<run_id>/`, including statistics, videos, and episode seed selections. Override the result root with `--output_dir`, and set the dataset directory separately with `--record_dir`. Statistics include the actual dataset paths, with separate success and failure partitions.
 
-续跑使用原输出目录、`run_id` 和测评配置，复用已保存的 seed、指令和 episode 进度。更改测评配置时使用新的 `run_id`。Web 任务统一保存在 `data/simulation_web/jobs/`，通过面板续跑时使用该任务的配置快照。
+To resume, keep the original output directory, `run_id`, and evaluation configuration. Saved seeds, instructions, and episode progress are reused. Use a new `run_id` when changing the evaluation configuration. Web jobs are stored under `data/simulation_web/jobs/`; resuming through the panel uses the job's saved configuration snapshot.

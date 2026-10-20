@@ -581,12 +581,12 @@ def _collect_stats() -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 @app.get("/")
 async def index():
-    return FileResponse(str(STATIC_DIR / "index.html"))
+    return FileResponse(str(STATIC_DIR / "index.html"), headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/simulation")
 async def simulation_page():
-    return FileResponse(str(STATIC_DIR / "simulation.html"))
+    return FileResponse(str(STATIC_DIR / "simulation.html"), headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/favicon.ico")
@@ -866,14 +866,14 @@ async def get_config():
 
 @app.get("/api/client/config/yaml_files")
 async def list_yaml_configs():
-    """List all .yaml files in the conf directory."""
+    """List client configs, excluding simulation presets and their template."""
     conf_dir = ROOT / "conf"
     yaml_files = []
     if conf_dir.exists():
-        for f in sorted(conf_dir.glob("*.yaml")):
-            yaml_files.append(f.name)
-        for f in sorted(conf_dir.glob("*.yml")):
-            yaml_files.append(f.name)
+        for f in sorted(conf_dir.iterdir()):
+            if (f.is_file() and f.suffix in (".yaml", ".yml")
+                    and f.stem not in {"web_simulation", "web_simulation.example"}):
+                yaml_files.append(f.name)
     return {"status": "ok", "files": yaml_files}
 
 

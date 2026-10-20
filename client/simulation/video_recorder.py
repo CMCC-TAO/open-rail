@@ -37,7 +37,7 @@ class VideoRecorder:
         except Exception as exc:
             self.error = str(exc)
             self.writer = None
-            self.logger.exception('Failed to start RoboCasa video recording')
+            self.logger.exception('Failed to start Simulation video recording')
 
     @staticmethod
     def _fit_text(text, width, font, scale, thickness):
@@ -81,7 +81,7 @@ class VideoRecorder:
         max_steps = metadata.get('max_steps', '-')
         sim_time = metadata.get('sim_time')
         lines = [
-            (self.config.get('video_title', 'ROBOCASA EVALUATION'), (235, 235, 235)),
+            (self.config.get('video_title', 'SIMULATION EVALUATION'), (235, 235, 235)),
             (f'Task: {task}', (190, 195, 205)),
             (f'Episode: {episode}', (190, 195, 205)),
             (f'Step: {step} / {max_steps}', (190, 195, 205)),
@@ -134,7 +134,7 @@ class VideoRecorder:
                 self.last_write_timings['video_encode_submit_s'] = time.perf_counter() - encode_started
         except Exception as exc:
             self.error = str(exc)
-            self.logger.exception('Failed to write RoboCasa video frame')
+            self.logger.exception('Failed to write Simulation video frame')
             self.stop()
 
     def _close_writer(self, writer):
@@ -142,7 +142,7 @@ class VideoRecorder:
             writer.close()
         except Exception as exc:
             self.error = self.error or str(exc)
-            self.logger.exception('Failed to finalize RoboCasa video')
+            self.logger.exception('Failed to finalize Simulation video')
 
     def stop(self, wait=True):
         writer, self.writer = self.writer, None
@@ -155,7 +155,7 @@ class VideoRecorder:
             target=self._close_writer,
             args=(writer,),
             daemon=True,
-            name='robocasa_video_finalize',
+            name='simulation_video_finalize',
         )
         self._finalize_threads.append(thread)
         thread.start()

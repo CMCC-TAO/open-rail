@@ -16,11 +16,29 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts import robocasa_eval as casa
 from client.simulation.evaluation import (
-    EvaluationRunner,
+    SERVER_UNAVAILABLE_EXIT_CODE, ServerUnavailableError, EvaluationRunner,
+    build_parser as build_simulation_parser,
+    build_client as build_simulation_client,
     configure_pipeline as configure_shared_pipeline,
+    worker_gpu,
+    sample_ratio as _sample_ratio,
+    wait_for_server as _wait_for_server,
+    atomic_json as _atomic_json,
+    save_stats as _save_stats,
+    episode_bounds as _episode_bounds,
+    worker_ranges as _worker_ranges,
+    save_suite_stats as _save_suite_stats,
+    configure_recording_for_robot as _configure_recording_for_robot,
+    recording_date as _recording_date,
+    resume_episodes as _resume_episodes,
+    start_episode as _start_episode,
+    reconcile_recording_progress as _reconcile_recording_progress,
+    wait_for_episode as _wait_for_episode,
 )
+from client.core.zmq_client import ZMQClient
+from client.utils.util import apply_user_config, load_user_config
+from conf.client_conf import get_client_config
 from client.simulation import recording_exports
 from client.robots.robotwin_aloha.body_robot import RobotBody
 from client.robots.robotwin_aloha.environment import (
@@ -30,18 +48,11 @@ from client.robots.robotwin_aloha.environment import (
 )
 from conf.robots_conf import RobotType
 
-SERVER_UNAVAILABLE_EXIT_CODE = casa.SERVER_UNAVAILABLE_EXIT_CODE
-ServerUnavailableError = casa.ServerUnavailableError
-_episode_bounds = casa._episode_bounds
-_worker_ranges = casa._worker_ranges
-_recording_date = casa._recording_date
 _merge_parallel_recordings = recording_exports._merge_parallel_recordings
-_save_stats = casa._save_stats
 
 
 def build_parser():
-    parser = casa.build_parser()
-    parser.description = __doc__
+    parser = build_simulation_parser(__doc__)
     parser.set_defaults(
         n_envs=1,
         n_action_steps=50,
@@ -54,12 +65,6 @@ def build_parser():
         action.option_strings.append(alias)
         parser._option_string_actions[alias] = action
     parser._option_string_actions["--tasks"].help = "Comma-separated tasks or a YAML task-list file"
-    for option in ("--split", "--mujoco_gl"):
-        action = parser._option_string_actions.pop(option)
-        parser._remove_action(action)
-        for group in parser._action_groups:
-            if action in group._group_actions:
-                group._group_actions.remove(action)
     parser.set_defaults(split="unseen")
     parser.add_argument("--robotwin_root", default=str(PROJECT_ROOT.parent / "RoboTwin"))
     parser.add_argument("--task_config", default="demo_clean")
@@ -67,7 +72,6 @@ def build_parser():
     parser.add_argument("--render_observation_mode", choices=["chunk_boundary", "per_action"], default="chunk_boundary")
     parser.add_argument("--instruction")
     parser.add_argument("--no_expert_check", action="store_true")
-    parser.add_argument("--gpu", help="GPU index or comma-separated GPU indices")
     parser.add_argument("--max_transition_steps", type=int, default=5)
     parser.add_argument("--max_seed_attempts", type=int, default=100)
     parser.add_argument("--seed_stride", type=int, default=100)
@@ -75,7 +79,7 @@ def build_parser():
     parser.add_argument(
         "--interpolation_sample_ratio",
         dest="intra_chunk_sample_ratio",
-        type=casa._sample_ratio,
+        type=_sample_ratio,
         default=argparse.SUPPRESS,
     )
     parser.add_argument("--verbose_dependencies", action="store_true")
@@ -261,7 +265,7 @@ def _run_worker_process(command, cancel_event=None):
 
 def _phase(task_output, stage, timeout):
     now = time.time()
-    casa._atomic_json(
+    _atomic_json(
         task_output / "phase.json", {"stage": stage, "started": now, "deadline": now + timeout}
     )
 
@@ -289,8 +293,7 @@ def _worker_command(args, env_name, run_id, record_date):
     if args.task_suite:
         command += ["--task_suite", args.task_suite]
     if args.gpu and args._worker_index is not None:
-        devices = args.gpu.split(",")
-        command += ["--gpu", devices[args._worker_index % len(devices)]]
+        command += ["--gpu", worker_gpu(args.gpu, args._worker_index)]
     if args._worker_index is not None:
         command += [
             "--_worker_index",
@@ -326,7 +329,7 @@ def _run_task(args, task_name, run_id):
         "config": identity,
     }:
         raise ValueError("Existing run directory belongs to a different evaluation")
-    casa._atomic_json(identity_path, {"run_id": run_id, "config": identity})
+    _atomic_json(identity_path, {"run_id": run_id, "config": identity})
     metadata = {
         "env_name": task_name,
         "task_name": task_name,
@@ -344,15 +347,15 @@ def _run_task(args, task_name, run_id):
     start, end = _episode_bounds(args)
     if args._worker_index is not None:
         metadata.update(worker_index=args._worker_index, episode_start=start, episode_end=end)
-    episodes = casa._resume_episodes(task_output, metadata, start)
+    episodes = _resume_episodes(task_output, metadata, start)
     start += len(episodes)
     if start >= end:
         return json.loads((task_output / "stats.json").read_text())
     if args._worker:
         end = min(end, start + args.worker_episodes)
-    config = casa.get_client_config()
+    config = get_client_config()
     if args.user_conf:
-        config = casa.apply_user_config(config, casa.load_user_config(args.user_conf))
+        config = apply_user_config(config, load_user_config(args.user_conf))
     configure_pipeline(config, args)
     config.robots.type = RobotType.ROBOTWIN_ALOHA
     config.vla_zmq.ip, config.vla_zmq.port = args.server_ip, str(args.server_port)
@@ -386,8 +389,8 @@ def _run_task(args, task_name, run_id):
     recording_path = None
     previous_cwd = Path.cwd()
     try:
-        zmq = casa.ZMQClient(config.vla_zmq)
-        casa._wait_for_server(zmq, args.server_wait_timeout)
+        zmq = ZMQClient(config.vla_zmq)
+        _wait_for_server(zmq, args.server_wait_timeout)
         _phase(task_output, "environment setup", args.seed_selection_timeout)
         os.chdir(args.robotwin_root)
         env_args, env_class = _prepare_robotwin(
@@ -418,18 +421,7 @@ def _run_task(args, task_name, run_id):
                 env.step_lim = args.max_episode_steps
             if robot is None:
                 robot = RobotBody(cfg, env, instruction, episode, seed, executor)
-                config.rdm.action_layout = cfg.action_layout
-                config.intra_chunk.action_layout = cfg.action_layout
-                casa._configure_recording_for_robot(config, robot)
-                client = casa.VLAClientAsync(
-                    config=config,
-                    realtime_data_manager=casa.RealtimeDataManager(config.rdm, simulation_mode=True),
-                    inter_chunk_fuser=casa.InterChunkFuser(config.inter_chunk, simulation_mode=True),
-                    intra_chunk_smoother=casa.IntraChunkSmoother(config.intra_chunk, simulation_mode=True),
-                    task_language_manager=casa.TaskLanguageManager(config.language),
-                    vla_zmq_client=zmq,
-                    robot=robot,
-                )
+                client = build_simulation_client(config, robot, zmq)
                 if args.record:
                     record_id = (
                         run_id
@@ -447,13 +439,13 @@ def _run_task(args, task_name, run_id):
                     }
                     recorder.update_camera_shape_dict(shapes)
                     recording_path = recorder.save_path
-                    casa._reconcile_recording_progress(recorder, recording_path, len(episodes))
+                    _reconcile_recording_progress(recorder, recording_path, len(episodes))
                     metadata["lerobot_dataset_path"] = recording_path
             else:
                 robot.reset(env, instruction, episode, seed)
             _phase(task_output, "episode execution", args.episode_timeout + 10)
-            casa._start_episode(client, robot, args.visualize, args.record)
-            completed = casa._wait_for_episode(
+            _start_episode(client, robot, args.visualize, args.record)
+            completed = _wait_for_episode(
                 client, episode, args.episode_timeout, args.stall_timeout, args.progress_interval
             )
             if client.pipeline_error:
@@ -535,7 +527,7 @@ def run(args):
     identity_path = output / "identity.json"
     if identity_path.exists() and json.loads(identity_path.read_text()) != identity:
         raise ValueError("Task suite resume configuration differs from saved evaluation")
-    casa._atomic_json(identity_path, identity)
+    _atomic_json(identity_path, identity)
     metadata = {
         "platform": "robotwin",
         "task_suite": "robotwin",
@@ -567,11 +559,11 @@ def run(args):
             results.append(
                 {"env_name": name, "status": "failed", "error": f"{type(error).__name__}: {error}"}
             )
-            casa._save_suite_stats(output, metadata, results)
+            _save_suite_stats(output, metadata, results)
             if isinstance(error, ServerUnavailableError):
                 raise
-        casa._save_suite_stats(output, metadata, results)
-    return casa._save_suite_stats(output, metadata, results)[1]
+        _save_suite_stats(output, metadata, results)
+    return _save_suite_stats(output, metadata, results)[1]
 
 
 def main():

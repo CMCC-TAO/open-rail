@@ -1,5 +1,6 @@
 import json
 import mimetypes
+import os
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -7,6 +8,7 @@ import pytest
 
 from web_client.simulation import EvaluationConfig
 from conf.client_conf import get_client_config
+from client.simulation.benchmarks import BENCHMARKS, BenchmarkSpec
 
 playwright = pytest.importorskip('playwright.sync_api')
 ROOT = Path(__file__).resolve().parents[1]
@@ -16,7 +18,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def dashboard_browser():
     with playwright.sync_playwright() as runtime:
         try:
-            browser = runtime.chromium.launch(headless=True, args=['--no-sandbox'])
+            browser = runtime.chromium.launch(
+                headless=True, args=['--no-sandbox'],
+                executable_path=os.environ.get('PLAYWRIGHT_CHROMIUM_EXECUTABLE'),
+            )
         except playwright.Error as error:
             if "Executable doesn't exist" in str(error):
                 pytest.skip('Install Chromium with: python -m playwright install chromium --only-shell')
@@ -36,6 +41,10 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     client_config['robots']['robocasa_pandas']['split'] = 'pretrain'
     client_config['controller']['action_steps'] = 48
     client_config['vla_zmq'].update(ip='192.0.2.10', port='5566')
+    extra_benchmark = BenchmarkSpec(
+        id='tinybench', robot_type='tiny_arm', label='Tiny benchmark', script='tiny_eval.py',
+        dependencies=(), catalog=lambda *args: {},
+    )
     page.on('pageerror', lambda error: errors.append(str(error)))
 
     def route_request(route):
@@ -45,6 +54,8 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
             data = {}
             if path == '/api/client/config':
                 data = {'config': client_config}
+            elif path == '/api/simulation/benchmarks':
+                data = [spec.describe() for spec in BENCHMARKS.values()] + [extra_benchmark.describe()]
             elif path == '/api/simulation/options':
                 platform = parse_qs(urlparse(request.url).query).get('platform', ['robocasa'])[0]
                 data = {**defaults, 'platform': platform, 'robotwin_root': '/configured/RoboTwin',
@@ -98,6 +109,7 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.goto('http://dashboard.test/')
     robot_selector = page.locator('.cfg-row[data-key="robots.type"] select').first
     robot_selector.wait_for()
+    page.wait_for_function('document.querySelector(".cfg-row[data-key=\\"robots.type\\"] option[value=tiny_arm]") !== null')
     simulation_rows = page.locator('#config-tree .cfg-row').filter(
         has=page.locator('[title="intra_chunk.output_sample_ratio"], [title="rdm.latency_compensation"]')
     )
@@ -108,6 +120,25 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     assert page.locator('#btn-observe').is_enabled()
     robot_selector.select_option('robocasa_pandas')
     assert simulation_rows.evaluate_all('(rows) => rows.every(row => row.style.display === "")')
+    casa_group = page.locator('[data-robot-type="robocasa_pandas"]')
+    assert casa_group.locator(':scope > .cfg-group-body > .cfg-row').evaluate_all(
+        '(rows) => rows.map(row => row.dataset.key)'
+    ) == ['robots.robocasa_pandas.gpu', 'robots.robocasa_pandas.split', 'robots.robocasa_pandas.seed']
+    gpu_input = casa_group.locator('[data-key="robots.robocasa_pandas.gpu"] input')
+    assert gpu_input.get_attribute('placeholder') == 'e.g. 0,2'
+    gpu_input.evaluate("input => { input.value = '0,2'; input.dispatchEvent(new Event('input')); }")
+    assert page.evaluate('getSimulationClientConfig().robots.robocasa_pandas.gpu') == '0,2'
+    assert casa_group.locator('.cfg-row').count() == 7
+    assert casa_group.locator('[data-key="robots.robocasa_pandas.max_episode_steps"] input').get_attribute('placeholder') == 'Task default'
+    assert casa_group.locator('[data-key="robots.robocasa_pandas.state_keys"]').count() == 0
+    assert page.evaluate('App.config.robots.robocasa_pandas.state_keys.length > 0')
+    limit_input = casa_group.locator('[data-key="robots.robocasa_pandas.max_episode_steps"] input')
+    limit_input.evaluate("input => { input.value = '250'; input.dispatchEvent(new Event('input')); }")
+    assert page.evaluate('getSimulationClientConfig().robots.robocasa_pandas.max_episode_steps') == 250
+    limit_input.evaluate("input => { input.value = '0'; input.dispatchEvent(new Event('input')); }")
+    assert page.evaluate('getSimulationClientConfig().robots.robocasa_pandas.max_episode_steps') == 250
+    limit_input.evaluate("input => { input.value = ''; input.dispatchEvent(new Event('input')); }")
+    assert page.evaluate('getSimulationClientConfig().robots.robocasa_pandas.max_episode_steps') is None
     robot_selector.select_option('mock')
     assert simulation_rows.evaluate_all('(rows) => rows.every(row => row.style.display === "none")')
     assert page.evaluate('App.config.intra_chunk.output_sample_ratio === 1 && App.config.rdm.latency_compensation === true')
@@ -154,6 +185,13 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
         box = page.locator('#sim-task-list').bounding_box()
         assert box['height'] <= 182
         assert page.locator('#sim-task-list').evaluate('(node) => node.scrollHeight > node.clientHeight')
+    page.locator('#sim-video-settings summary').click()
+    page.locator('#sim-field-video_fps').fill('12')
+    page.locator('#sim-field-video_layout').select_option('single')
+    page.locator('#sim-field-video').uncheck()
+    assert page.locator('#sim-video-settings').is_hidden()
+    page.locator('#sim-field-video').check()
+    assert page.locator('#sim-video-settings').is_visible()
     page.locator('#sim-field-record').check()
     page.locator('#sim-start').click()
     page.wait_for_function('document.getElementById("sim-stop").disabled === false')
@@ -186,7 +224,8 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     assert requests[0]['server_ip'] == '192.0.2.10'
     assert requests[0]['server_port'] == 5566
     assert requests[0]['record_fps'] == 20
-    assert requests[0]['video_layout'] == 'grid'
+    assert requests[0]['video_fps'] == 12 and requests[0]['video_layout'] == 'single'
+    assert requests[0]['client_config']['robots']['robotwin_aloha']['video_fps'] == 12
     assert requests[0]['no_expert_check'] is False
     assert '2 / 10' in page.locator('#sim-results').inner_text()
     page.wait_for_function('simulationPreview.active === true')
@@ -198,6 +237,15 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
         assert page.evaluate('App.traj.buffer.action_raw[0].joints_y') == [.5, .6]
         page.locator('#chk-traj-action-raw').check()
         assert page.evaluate("App.traj.source.has('action_raw')")
+        page.evaluate("""applySimulationTrajectory({
+            stream_id: 'test-stream', labels: ['left_joint', 'right_joint'],
+            action_semantics: 'estimated_joint_angles', samples: [
+                {sequence: 2, timestamp: 2, state: [.2, .3], action_fitted: [.4, .5], action_raw: [.6, .7]}
+            ]
+        })""")
+        assert 'Act Fit / Act Raw: estimated joints' in page.locator('#trajectory-source-label').inner_text()
+        assert page.evaluate("['state', 'action_fitted', 'action_raw'].every(source => App.traj.source.has(source))")
+        assert page.evaluate('getTrajJointLabels()') == ['left_joint', 'right_joint']
         page.locator('#btn-traj-all').click()
         assert page.evaluate('App.traj.source.size') == 0
         page.locator('#btn-traj-all').click()
@@ -263,6 +311,8 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.locator('#sim-start').click()
     page.wait_for_function('document.getElementById("sim-stop").disabled === false')
     assert requests[1]['platform'] == 'robocasa'
+    assert requests[1]['gpu'] == '0,2'
+    assert requests[1]['client_config']['robots']['robocasa_pandas']['gpu'] == '0,2'
     assert requests[1]['task_suite'] == 'Task,OtherTask'
     assert requests[1]['split'] == 'target'
     assert requests[1]['client_config']['robots']['robocasa_pandas']['split'] == 'target'
@@ -286,5 +336,10 @@ def test_dashboard_evaluation_controls_and_shared_preview(dashboard_browser, tmp
     page.wait_for_function('document.getElementById("field-platform") !== null')
     assert page.locator('#task-name').is_visible()
     assert page.locator('#field-python').count() == 0
+    page.locator('#field-platform').select_option('tinybench')
+    page.wait_for_function('document.getElementById("start").disabled === false')
+    assert page.locator('#task-name option[value="Task"]').count() == 1
+    for key in ('split', 'task_config', 'instruction_type', 'render_observation_mode'):
+        assert page.locator('#field-' + key).is_hidden()
     assert not errors
     page.close()

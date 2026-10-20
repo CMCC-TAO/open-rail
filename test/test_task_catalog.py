@@ -19,7 +19,7 @@ def test_robotwin_catalog_excludes_helpers(tmp_path):
 
 
 def test_robocasa_catalog_does_not_import_simulator(tmp_path, monkeypatch):
-    monkeypatch.setattr('web_client.task_catalog.subprocess.run',
+    monkeypatch.setattr('client.simulation.benchmarks.subprocess.run',
                         lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, '', ''))
     project = tmp_path / 'project'
     registry = tmp_path / 'robocasa/robocasa/utils/dataset_registry.py'

@@ -52,8 +52,10 @@ function applySimulationTrajectory(trajectory) {
     resetSimulationTrajectoryBuffer();
     syncTrajLayoutFromConfig();
     syncSimulationTrajectoryControls();
-    $('trajectory-source-label').textContent = 'Simulation Trajectories · Env 1';
   }
+  $('trajectory-source-label').textContent = trajectory.action_semantics === 'estimated_joint_angles'
+    ? 'Simulation Trajectories · Env 1 · Act Fit / Act Raw: estimated joints'
+    : 'Simulation Trajectories · Env 1';
   t.simulationLayout.sources = sources;
   syncSimulationTrajectoryControls();
   for (const sample of trajectory.samples) {

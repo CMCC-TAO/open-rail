@@ -123,7 +123,7 @@ def get_robocasa_pandas_config():
     config.camera_width = 256
     config.camera_height = 256
     config.enable_render = True
-    config.max_episode_steps = 1000
+    config.max_episode_steps = None
     config.video_dir = ''
     config.video_fps = 20
     config.video_layout = 'grid'

@@ -197,7 +197,7 @@ python run_web_client.py --conf custom_conf.yaml
 
 ### 物理仿真测评
 
-物理仿真使用 [RoboCasa / PandaOmron](client/robots/robocasa_pandas/README.md) 或 [RoboTwin / Aloha](client/robots/robotwin_aloha/README.md)，对应 README 包含环境配置、模型启动、测评和录制流程。[公共 Web 仿真说明](docs/robocasa_web.md) 介绍任务选择、配置快照和续跑。
+物理仿真使用 [RoboCasa / PandaOmron](client/robots/robocasa_pandas/README.md) 或 [RoboTwin / Aloha](client/robots/robotwin_aloha/README.md)，对应 README 包含环境配置、模型启动、测评和录制流程。[公共 Web 仿真说明](docs/simulation_evalution.md) 介绍任务选择、配置快照和续跑。
 
 ### 仿真闭环（无真机起步）
 

@@ -1,8 +1,10 @@
 export async function initializeSimulation(root, prefix = "", getClientConfig = null) {
   const $ = (id) => root.querySelector("#" + prefix + id);
   const choices = {
-    platform: ["robocasa", "robotwin"],
+    platform: [],
     instruction_type: ["seen", "unseen"],
+    task_config: ["demo_clean", "demo_randomized"],
+    video_layout: ["grid", "single"],
     render_observation_mode: ["chunk_boundary", "per_action"],
     split: ["target", "pretrain"],
     mode: ["sync", "async"],
@@ -15,6 +17,8 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     mode: "Execution Mode",
     record: "Save LeRobot Dataset",
     video: "Save Evaluation Videos",
+    video_fps: "Video FPS",
+    video_layout: "Video Layout",
     n_envs: "Parallel Environments",
     gpu: "GPU Indices (Blank to Inherit)",
     n_action_steps: "Action Chunk Length",
@@ -37,12 +41,13 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     record: "Save Dataset",
     video: "Save Videos",
   };
-  const advancedFields = getClientConfig ? [] : [
+  const advancedFields = getClientConfig ? ["video_fps", "video_layout"] : [
     "n_envs", "gpu", "n_action_steps", "seed", "intra_chunk_mode", "inter_chunk_mode",
     "intra_chunk_sample_ratio", "async_replenish_threshold", "max_async_observation_lag_steps",
     "task_config", "instruction_type", "render_observation_mode", "split",
+    "video_fps", "video_layout",
   ];
-  let defaults,
+  let benchmarkProfiles = [], defaults,
     selected = "",
     busy = false,
     ready = false,
@@ -56,7 +61,8 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     lastError = "",
     lastErrorSource = "",
     artifactJob = "";
-  const platformForConfig = (config) => ({robocasa_pandas: "robocasa", robotwin_aloha: "robotwin"})[config.robots?.type];
+  const platformForConfig = (config) => benchmarkProfiles.find(spec => spec.robot_type === config.robots?.type)?.id;
+  const currentBenchmark = () => benchmarkProfiles.find(spec => spec.id === currentPlatform());
   const currentPlatform = () => getClientConfig
     ? platformForConfig(getClientConfig()) : $("field-platform").value;
   function notifyRuntimeLock(active) {
@@ -232,7 +238,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       const platform = currentPlatform();
       const snapshot = getClientConfig ? getClientConfig() : null;
       if (getClientConfig && !platformForConfig(snapshot))
-        throw new Error("Select robocasa_pandas or robotwin_aloha in Configuration.");
+        throw new Error("Select a simulation robot in Configuration.");
       const config = await api("/options?platform=" + platform);
       if (snapshot) config.client_config = snapshot;
       for (const key of [...basicFields, ...advancedFields]) {
@@ -246,25 +252,28 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       }
       if (snapshot) {
         const type = snapshot.robots.type;
-        snapshot.robots[type] = { ...snapshot.robots[type], n_envs: config.n_envs };
+        snapshot.robots[type] = {
+          ...snapshot.robots[type], n_envs: config.n_envs,
+          video_fps: config.video_fps, video_layout: config.video_layout,
+        };
       }
       const suite = $("task-selection").value === "suite";
       const group = catalog?.suites.find(item => item.id === $("task-name").value);
       const tasks = suite ? group?.tasks.filter(task => chosenTasks.has(task)) || [] : [$("task-name").value];
       if (!tasks.length || !tasks[0]) throw new Error("Select at least one task.");
       config.env_name = tasks.length === 1 ? tasks[0] : "";
-      config.task_suite = tasks.length === 1 ? "" : platform === "robocasa" && tasks.length === group.tasks.length
+      config.task_suite = tasks.length === 1 ? "" : currentBenchmark()?.named_suites && tasks.length === group.tasks.length
         ? group.id : tasks.join(',');
       if (suite && group.split) {
         config.split = group.split;
-        if (snapshot && platform === "robocasa") snapshot.robots[snapshot.robots.type].split = group.split;
+        if (snapshot) snapshot.robots[snapshot.robots.type].split = group.split;
         if (!getClientConfig) $("field-split").value = group.split;
       }
       if (!getClientConfig && config.mode !== "async") {
         config.async_replenish_threshold = null;
         config.max_async_observation_lag_steps = null;
       }
-      if (!getClientConfig && platform === "robotwin" && config.intra_chunk_mode !== "interpolation")
+      if (!getClientConfig && !currentBenchmark()?.resampling_modes.includes(config.intra_chunk_mode))
         config.intra_chunk_sample_ratio = 1;
       const job = await api("/jobs", "POST", config);
       selected = job.id;
@@ -280,20 +289,20 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     }
   };
   function updateControls() {
-    const robotwin = currentPlatform() === "robotwin";
+    const benchmark = currentBenchmark();
+    for (const key of ["video_fps", "video_layout"])
+      $("field-" + key).parentElement.hidden = !$("field-video").checked;
+    if (getClientConfig) $("video-settings").hidden = !$("field-video").checked;
     if (!getClientConfig) {
-      for (const key of ["task_config", "instruction_type", "render_observation_mode"])
-        $("field-" + key).parentElement.hidden = !robotwin;
-      $("field-split").parentElement.hidden = robotwin;
+      for (const key of ["task_config", "instruction_type", "render_observation_mode", "split"])
+        $("field-" + key).parentElement.hidden = !benchmark?.form_fields.includes(key);
       $("field-render_observation_mode").disabled = $("field-mode").value === "async";
       $("field-render_observation_mode").title = "Async mode always renders every action.";
-      $("field-gpu").parentElement.firstChild.textContent = robotwin
-        ? "GPU Indices (e.g. 0 or 0,1; Blank to Inherit)"
-        : "Simulation GPU Index (e.g. 2; Blank to Inherit)";
+      $("field-gpu").parentElement.firstChild.textContent = "GPU Indices (e.g. 0 or 0,1; Blank to Inherit)";
       for (const key of ["async_replenish_threshold", "max_async_observation_lag_steps"])
         $("field-" + key).parentElement.hidden = $("field-mode").value !== "async";
       $("field-intra_chunk_sample_ratio").parentElement.hidden =
-        robotwin && $("field-intra_chunk_mode").value !== "interpolation";
+        !benchmark?.resampling_modes.includes($("field-intra_chunk_mode").value);
     }
 
   }
@@ -312,11 +321,19 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     )));
     else input.type = typeof value === "boolean" ? "checkbox"
       : typeof value === "number" || value === null ? "number" : "text";
+    if (key === "task_config" && value && !choices[key].includes(value)) {
+      input.append(new Option(value, value));
+    }
     if (input.type !== "checkbox") input.className = "input-text";
     if (typeof value === "boolean") input.checked = value;
     else input.value = value == null ? "" : value;
     if (input.type === "number") input.step = "any";
     if (key === "n_envs") {
+      input.min = "1";
+      input.step = "1";
+      input.required = true;
+    }
+    if (key === "video_fps") {
       input.min = "1";
       input.step = "1";
       input.required = true;
@@ -452,7 +469,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     if (!platform) {
       ready = false;
       $("start").disabled = true;
-      summary.textContent = "Select robocasa_pandas or robotwin_aloha in Configuration.";
+      summary.textContent = "Select a simulation robot in Configuration.";
       return;
     }
     summary.textContent = "Configuration: " + config.robots.type + " · " + (config.rdm?.mode || "sync");
@@ -480,7 +497,9 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       }
     }
     if (environmentPlatform !== platform) {
-      $("field-n_envs").value = config.robots[config.robots.type]?.n_envs ?? defaults.n_envs;
+      const robot = config.robots[config.robots.type] || {};
+      for (const key of ["n_envs", "video_fps", "video_layout"])
+        $("field-" + key).value = robot[key] ?? defaults[key];
       environmentPlatform = platform;
     }
     updateControls();
@@ -490,6 +509,10 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
 
   async function initialize() {
     try {
+      benchmarkProfiles = await api('/benchmarks');
+      choices.platform = benchmarkProfiles.map(spec => spec.id);
+      if (prefix && typeof window.registerSimulationBenchmarks === 'function')
+        window.registerSimulationBenchmarks(benchmarkProfiles);
       defaults = await api("/options");
       if (getClientConfig) {
         const summary = document.createElement("p");
@@ -503,6 +526,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         if (key === "platform") createTaskSelection();
       }
       for (const key of advancedFields) createField(key, defaults[key], "advanced-fields");
+      $("field-video").onchange = updateControls;
       await poll();
       if (!getClientConfig) {
         $("field-platform").onchange = async () => {
@@ -518,6 +542,8 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
             $("field-task_config").value = defaults.task_config;
             $("field-instruction_type").value = defaults.instruction_type;
             $("field-render_observation_mode").value = defaults.render_observation_mode;
+            $("field-video_fps").value = defaults.video_fps;
+            $("field-video_layout").value = defaults.video_layout;
             $("task-name").value = "";
             if (!await loadTasks(currentPlatform())) return;
             updateControls();

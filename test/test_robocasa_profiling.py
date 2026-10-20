@@ -3,11 +3,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from client.robots.robocasa_pandas.profiling import install_mujoco_timing, log_render_device, measure_native
+from client.simulation.profiling import install_mujoco_timing, log_render_device, measure_native
 
 
 def test_native_timing_is_thread_local_and_does_not_double_count(monkeypatch):
-    import client.robots.robocasa_pandas.profiling as profiling
+    import client.simulation.profiling as profiling
 
     ticks = iter(range(100))
     monkeypatch.setattr(profiling.time, 'perf_counter', lambda: next(ticks))
@@ -46,7 +46,7 @@ def test_native_timing_restores_context_after_failure():
 
 def test_render_device_reports_actual_process_gpu(monkeypatch, caplog):
     import logging
-    import client.robots.robocasa_pandas.profiling as profiling
+    import client.simulation.profiling as profiling
 
     monkeypatch.setattr(profiling.os, 'getpid', lambda: 123)
     xml = '<nvidia_smi_log><gpu><uuid>other</uuid></gpu><gpu><uuid>actual</uuid><product_name>H100</product_name><processes><process_info><pid>123</pid></process_info></processes></gpu></nvidia_smi_log>'
@@ -60,7 +60,7 @@ def test_render_device_reports_actual_process_gpu(monkeypatch, caplog):
 
 def test_render_device_query_failure_is_nonfatal(monkeypatch, caplog):
     import logging
-    import client.robots.robocasa_pandas.profiling as profiling
+    import client.simulation.profiling as profiling
 
     def unavailable(*args, **kwargs):
         raise FileNotFoundError('nvidia-smi missing')

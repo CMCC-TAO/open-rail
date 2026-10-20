@@ -1,3 +1,5 @@
+"""Step timing and optional MuJoCo diagnostics."""
+
 import functools
 import os
 import subprocess
@@ -5,6 +7,43 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from contextlib import contextmanager
+
+
+class StepTimings:
+    def __init__(self, logger, interval=30, label='Simulation'):
+        self.logger = logger
+        self.label = label
+        self.interval = interval
+        self.count = 0
+        self.totals = {}
+        self.maxima = {}
+        self.last_report = 0.0
+
+    def add(self, sample, episode, step):
+        self.count += 1
+        for key, value in sample.items():
+            self.totals[key] = self.totals.get(key, 0.0) + value
+            self.maxima[key] = max(self.maxima.get(key, 0.0), value)
+        now = time.monotonic()
+        if self.count >= self.interval or step == 1 or (
+            sample.get('total_s', 0) >= 1 and now - self.last_report >= 5
+        ):
+            self.report(episode, step)
+
+    def report(self, episode, step):
+        if not self.count:
+            return
+        self.logger.info(
+            '%s step timings: episode=%d step=%d samples=%d avg=%s max=%s',
+            self.label,
+            episode, step, self.count,
+            {k: round(v / self.count, 6) for k, v in self.totals.items()},
+            {k: round(v, 6) for k, v in self.maxima.items()},
+        )
+        self.count = 0
+        self.totals.clear()
+        self.maxima.clear()
+        self.last_report = time.monotonic()
 
 
 _local = threading.local()
@@ -23,7 +62,7 @@ def install_mujoco_timing(module):
     with _install_lock:
         for name, phase in _phases.items():
             original = getattr(module, name, None)
-            if original is None or getattr(original, '_robocasa_timing', False):
+            if original is None or getattr(original, '_simulation_mujoco_timing', False):
                 continue
 
             @functools.wraps(original)
@@ -39,7 +78,7 @@ def install_mujoco_timing(module):
                     sample[_phase] = sample.get(_phase, 0.0) + time.perf_counter() - started
                     _local.active.remove(_phase)
 
-            timed._robocasa_timing = True
+            timed._simulation_mujoco_timing = True
             setattr(module, name, timed)
 
 
@@ -72,39 +111,4 @@ def log_render_device(logger):
         device['process_gpus'] = gpus
     except (OSError, subprocess.SubprocessError, ET.ParseError) as exc:
         device['gpu_query_error'] = str(exc)
-    logger.info('RoboCasa render device: %s', device)
-
-
-class StepTimings:
-    def __init__(self, logger, interval=30):
-        self.logger = logger
-        self.interval = interval
-        self.count = 0
-        self.totals = {}
-        self.maxima = {}
-        self.last_report = 0.0
-
-    def add(self, sample, episode, step):
-        self.count += 1
-        for key, value in sample.items():
-            self.totals[key] = self.totals.get(key, 0.0) + value
-            self.maxima[key] = max(self.maxima.get(key, 0.0), value)
-        now = time.monotonic()
-        if self.count >= self.interval or step == 1 or (
-            sample.get('total_s', 0) >= 1 and now - self.last_report >= 5
-        ):
-            self.report(episode, step)
-
-    def report(self, episode, step):
-        if not self.count:
-            return
-        self.logger.info(
-            'RoboCasa step timings: episode=%d step=%d samples=%d avg=%s max=%s',
-            episode, step, self.count,
-            {k: round(v / self.count, 6) for k, v in self.totals.items()},
-            {k: round(v, 6) for k, v in self.maxima.items()},
-        )
-        self.count = 0
-        self.totals.clear()
-        self.maxima.clear()
-        self.last_report = time.monotonic()
+    logger.info('MuJoCo render device: %s', device)

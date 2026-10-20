@@ -278,6 +278,7 @@ class RobocasaEvalRecordingTest(unittest.TestCase):
     def test_supervisor_restarts_after_sigsegv_and_resumes(self):
         args = SimpleNamespace(
             _record_date=None,
+            gpu=None,
             n_episodes=2,
             max_native_restarts=3,
             record=False,
@@ -299,6 +300,7 @@ class RobocasaEvalRecordingTest(unittest.TestCase):
     def test_supervisor_waits_for_server_and_keeps_progress(self):
         args = SimpleNamespace(
             _record_date=None,
+            gpu=None,
             n_episodes=4,
             max_native_restarts=3,
             record=False,
@@ -328,6 +330,7 @@ class RobocasaEvalRecordingTest(unittest.TestCase):
     def test_supervisor_does_not_retry_unrelated_worker_error(self):
         args = SimpleNamespace(
             _record_date=None,
+            gpu=None,
             n_episodes=1,
             max_native_restarts=3,
             record=False,
@@ -341,6 +344,7 @@ class RobocasaEvalRecordingTest(unittest.TestCase):
     def test_supervisor_server_reconnect_timeout_is_finite_when_configured(self):
         args = SimpleNamespace(
             _record_date=None,
+            gpu=None,
             n_episodes=1,
             max_native_restarts=3,
             record=False,
@@ -444,7 +448,7 @@ class RobocasaEvalRecordingTest(unittest.TestCase):
             'chunks_size': 1000,
         }
         with patch(
-            'scripts.robocasa_eval._discard_recording_episode',
+            'client.simulation.evaluation.discard_recording_episode',
             return_value=restored_info,
         ) as discard:
             _reconcile_recording_progress(manager, '/recording', 3)
