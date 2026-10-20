@@ -51,6 +51,42 @@ def kill_port(port):
         if value.isdigit() and int(value) != os.getpid():
             os.kill(int(value), signal.SIGKILL)
 
+def _ensure_dds_env(conf_name: str) -> None:
+    """Bind Cyclone DDS to the robot subnet before any DomainParticipant is created."""
+    try:
+        from pathlib import Path
+
+        import yaml
+
+        from ti5_t170c_sdk._network import ensure_cyclonedds_uri, parse_host_from_uri
+
+        conf_path = Path(__file__).resolve().parent / "conf" / conf_name
+        if not conf_path.is_file():
+            return
+        data = yaml.safe_load(conf_path.read_text(encoding="utf-8")) or {}
+        robots = data.get("robots") or {}
+        if robots.get("type") != "ti5_t170c":
+            return
+        ti5 = robots.get("ti5_t170c") or {}
+        camera = ti5.get("camera") or {}
+        peer_ip = parse_host_from_uri(camera.get("forwarder_uri"))
+        ensure_cyclonedds_uri(peer_ip=peer_ip)
+    except Exception:
+        pass
+
+
+def _finalize_multiprocessing_resources() -> None:
+    """Run CPython's IPC finalizers before bypassing interpreter shutdown.
+
+    Queue feeder threads can retain semaphore references even after close().
+    Only non-blocking finalizers (priority >= 0) are run: SDK destructors and
+    unbounded process/thread joins must not be invoked here.
+    """
+    from multiprocessing import util
+
+    util._run_finalizers(0)
+
+
 def main():
     args = parse_args()
     kill_port(port=args.port)
@@ -60,13 +96,27 @@ def main():
     try:
         logger = setup_logging("client.log", "run_web_client")
         os.environ['conf_file'] = args.conf
-        uvicorn.run(
-            "web_client.server:app",
-            host=args.host,
-            port=args.port,
-            reload=args.reload,
-            log_level="info",
-        )
+        _ensure_dds_env(args.conf)
+        # Pass the app object directly to avoid uvicorn spawning a child import process,
+        # which can leave CycloneDDS participants in a broken state on this host.
+        if args.reload:
+            uvicorn.run(
+                "web_client.server:app",
+                host=args.host,
+                port=args.port,
+                reload=True,
+                log_level="info",
+            )
+        else:
+            from web_client.server import app
+
+            uvicorn.run(
+                app,
+                host=args.host,
+                port=args.port,
+                reload=False,
+                log_level="info",
+            )
     except KeyboardInterrupt:
         exit_code = 0
     except Exception as e:
@@ -80,6 +130,7 @@ def main():
         # Some native robot SDK resources may segfault during CPython finalization.
         # After uvicorn shutdown completes, force immediate process exit to avoid it.
         if not args.reload:
+            _finalize_multiprocessing_resources()
             try:
                 sys.stdout.flush()
                 sys.stderr.flush()

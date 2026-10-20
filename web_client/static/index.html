@@ -7,7 +7,7 @@
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <link rel="stylesheet" href="/static/styles/main.css?v=20260924-shortcuts-popover-1" />
+  <link rel="stylesheet" href="/static/styles/main.css?v=20261014-camera-expand-1" />
 </head>
 <body>
 
@@ -645,6 +645,8 @@
   <!-- ═══════════════════ TOAST ═══════════════════ -->
   <div id="toast-container" class="toast-container"></div>
 
+  <dialog id="camera-expanded" class="camera-expanded" aria-label="Expanded camera view"></dialog>
+
   <!-- ═══════════════════ MODAL: Save As ═══════════════════ -->
   <div id="modal-saveas" class="modal hidden">
     <div class="modal-box">
@@ -674,13 +676,14 @@
   <script src="/visual/vlib/hammer.min.js"></script>
   <script src="/visual/vlib/chartjs-plugin-zoom.min.js"></script>
   <script src="/static/constants.js"></script>
-  <script src="/static/modules/utils.js"></script>
+  <script src="/static/modules/utils.js?v=20261014-request-timeout-1"></script>
   <script src="/static/modules/websocket.js"></script>
-  <script src="/static/modules/camera.js"></script>
+  <script src="/static/modules/camera.js?v=20261014-camera-expand-1"></script>
   <script src="/static/modules/trajectory.js"></script>
   <script src="/static/modules/config.js"></script>
+  <script src="/static/modules/image-overlay.js?v=20261014-overlay-retry-5"></script>
   <script src="/static/modules/language.js?v=20260924-shortcuts-popover-1"></script>
-  <script src="/static/modules/recording.js"></script>
+  <script src="/static/modules/recording.js?v=20261014-overlay-controls-2"></script>
   <script src="/static/modules/manual-control.js?v=20260924-preset-selection-2"></script>
   <script src="/static/app.js?v=20260924-shortcuts-popover-1"></script>
 </body>

@@ -1223,6 +1223,40 @@ function filterConfigTree(query) {
 
 // Conf directory path (absolute), fetched once from server
 let CONF_FILE = 'default_conf.yaml';
+const CONFIG_REQUEST_TIMEOUT_MS = 60000;
+let configOperationBusy = false;
+
+function setConfigOperationBusy(busy) {
+  configOperationBusy = busy;
+  ['conf-file-select', 'btn-apply-config', 'btn-saveas-file', 'btn-saveas-confirm'].forEach(id => {
+    const element = $(id);
+    if (element) element.disabled = busy;
+  });
+}
+
+async function refreshConfigFileSelect() {
+  const [active, listing] = await Promise.all([
+    apiFetch('/api/client/config/path'), apiFetch('/api/client/config/yaml_files'),
+  ]);
+  if (active.path) CONF_FILE = active.path;
+  const select = $('conf-file-select');
+  if (!select) return;
+  select.innerHTML = '';
+  const placeholder = document.createElement('option');
+  placeholder.value = '';
+  placeholder.textContent = '-- Select Config File --';
+  select.appendChild(placeholder);
+  const files = [...(listing.files || [])];
+  if (active.exists && !files.includes(CONF_FILE)) files.push(CONF_FILE);
+  files.forEach(file => {
+    const option = document.createElement('option');
+    option.value = file;
+    option.textContent = file;
+    select.appendChild(option);
+  });
+  // A missing default file must not make another file LOOK loaded.
+  select.value = active.exists ? CONF_FILE : '';
+}
 
 async function initConfDir() {
   try {

@@ -11,9 +11,9 @@
 
 Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选择的 YAML 既是启动配置，也是 Web 控制台（Setup → Apply / Save As）的保存目标；保存时 `.yaml`/`.yml` 目标写成 YAML，其他扩展名写成 Python 字典文件。
 
-加载配置文件或应用 patch 时仅会更新已存在的叶子参数，未知字段会被忽略，因此应按本文字段维护 `default_conf.yaml`。加载时会自动迁移两个旧键名：`inter_chunk.search_length` 会被读取为 `inter_chunk.search_action.search_length`，`robots.a2d.*` 会被读取为 `robots.agibot_g1.*`。
+加载配置文件或应用 patch 时仅会更新已存在的叶子参数，未知字段会被忽略。默认配置文件 `conf/default_conf.yaml` 不随仓库分发（已列入 `.gitignore`），克隆后本地并无此文件；首次在 Web 控制台保存配置时会自动生成，启动时也只有该文件存在才会加载。加载时会自动迁移两个旧键名：`inter_chunk.search_length` 会被读取为 `inter_chunk.search_action.search_length`，`robots.a2d.*` 会被读取为 `robots.agibot_g1.*`。
 
-除非表格中特别注明，本文的时间单位均为毫秒。浏览器中暴露这些参数的面板见[Web 控制台](../docs-cn-backup/web-console.zh-CN.md)。
+除非表格中特别注明，本文的时间单位均为毫秒。在浏览器中编辑这些参数的面板见[Web 控制台](../docs-cn-backup/web-console.zh-CN.md)。
 
 ## 客户端根参数字典
 
@@ -83,7 +83,7 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 | `period` | 数值，ms | 控制定时器和轨迹时间轴使用的机器人命令周期。 |
 | `speed` | 正数 | 相对于遥操作速度的执行速度。 |
 | `raw_fps` | 正数，Hz | VLA/WAM 训练数据集 FPS，作为时序基准。 |
-| `gripper_offset` | 整数，帧 | 对步进式夹爪命令施加的前移偏移。夹爪反应偏慢时可增大正值。 |
+| `gripper_offset` | 整数，帧 | 对步进式夹爪命令施加的前移偏移。夹爪反应偏慢时可适当调大该值。 |
 
 ### `vision`：观测预处理
 
@@ -102,7 +102,7 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 | `file_path` | 相对 `conf/` 的路径 | JSON 任务指令文件，通常为 `language_cmd.json`。 |
 | `task_id` | 字符串 | 语言 JSON 中的任务键。不存在时会回退到第一个可用任务。 |
 | `sub_task_id` | 从零开始的整数 | 所选任务中当前指令的索引。索引无效时回退为 `0`。 |
-| `auto_mode_start_sub_task_id` | 从零开始的整数 | Auto Mode 启动时应用的子任务索引；Web 控制台的 Language Command 面板以 Start 选择器暴露该参数。 |
+| `auto_mode_start_sub_task_id` | 从零开始的整数 | Auto Mode 启动时应用的子任务索引；对应 Web 控制台 Language Command 面板中的 Start 选择器。 |
 | `auto_mode` | 布尔值 | 是否根据任务进度输出自动切换到下一条语言指令。 |
 | `task_progress_threshold` | 数值 | 自动切换所需的平均任务进度概率阈值。 |
 | `task_progress_win_size` | 正整数 | 计算平均任务进度的滑动窗口长度。 |
@@ -128,7 +128,7 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 | `max_size` | 整数，字节 | 可接收的最大 WebSocket 消息大小。 |
 | `ping_interval` | 数值，秒 | WebSocket Ping 间隔。 |
 | `ping_timeout` | 数值，秒 | 等待 Ping 响应的最长时间。 |
-| `updata_fps` | 正数，Hz | 可视化更新频率；字段拼写为兼容性原因保留。 |
+| `updata_fps` | 正数，Hz | 可视化更新频率；这一拼写为兼容旧配置而保留。 |
 | `camera.open_head` | 布尔值 | 是否显示头部相机。 |
 | `camera.open_wrist_left` | 布尔值 | 是否显示左腕相机。 |
 | `camera.open_wrist_right` | 布尔值 | 是否显示右腕相机。 |
@@ -164,7 +164,7 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 
 ## `robots`：机器人适配器
 
-`robots.type` 可选择 `agibot_g1`、`mock`、`ti5_t170c` 或 `navi_wa2`。运行时通常只需要配置当前选用适配器的子段。
+`robots.type` 可选择 `unitree_g1`（默认）、`agibot_g1`、`mock`、`ti5_t170c` 或 `navi_wa2`。运行时通常只需要配置当前选用适配器的子段。
 
 ### 通用动作布局约定
 
@@ -183,6 +183,7 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 | 字段 | 含义 |
 | --- | --- |
 | `hand_type` | 末端类型：`gripper`、`hand_as_gripper` 或 `hand`，会影响相机名称和本体状态布局。 |
+| `camera.color_order` | `retrieve_observation()` 返回的像素通道顺序（`rgb`）。 |
 | `camera.ref` | 参考相机名称。 |
 | `camera.names` | 规范名称（`head`、`hand_left`、`hand_right`）到机器人相机标识的映射。 |
 | `camera.non_ref_fetch_workers` | 用于持续获取非参考相机的常驻工作线程数。 |
@@ -205,15 +206,18 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 
 | 字段 | 含义 |
 | --- | --- |
-| `camera.*_camera_topic` | 头部和手部相机的 ROS 图像话题。 |
-| `arms.*_joint_cmd_topic`、`arms.*_joint_states_topic` | 双臂 ROS 命令/状态话题。 |
-| `arms.*_arm_joint_names` | 双臂各七个关节的有序名称。 |
-| `hands.*_hand_joint_cmd_topic`、`hands.*_hand_joint_states_topic` | 双手 ROS 命令/状态话题。 |
-| `hands.hand_joint_names` | 六个手部关节的有序名称。 |
-| `waist.*`、`head.*` | 腰部和头部的 ROS 命令/状态话题及有序关节名称。 |
-| `reset_robot_pos` | 机器人完整复位目标向量，顺序必须与桥接实现一致。 |
-| `zero_pos` | 机器人完整零位/参考目标向量，顺序必须与桥接实现一致。 |
-| `action_layout` | 手臂与多指夹爪的动作范围。 |
+| `hand_type` | 末端类型；中国移动灵犀使用 `hand`，会影响相机名称和本体状态布局。 |
+| `camera.color_order` | `retrieve_observation()` 返回的像素通道顺序（`rgb`；适配器负责转换相机帧）。 |
+| `camera.backend` | 相机传输方式；`remote_forwarder` 订阅视频转发器。 |
+| `camera.forwarder_uri` | 视频转发器的 ZMQ 地址（默认 `tcp://192.168.1.100:9100`）。 |
+| `camera.ref`、`camera.names` | 参考相机及到转发器话题（`head/color`、`hand_left/color`、`hand_right/color`）的映射。 |
+| `camera.warmup_s` | 连接后等待相机出流的秒数。 |
+| `camera.depth_names` | 深度话题映射。保持为空：VLA 推理不使用深度帧，因此既不订阅也不向服务端发送。 |
+| `proprio_names` | 拼接机器人状态时使用的有序本体状态组（`arm`、`hand`）。 |
+| `hand_freq`、`head_freq` | 手部、头部控制命令频率；`1` 表示每个控制周期一次。 |
+| `reset_robot_pos` | 机器人完整复位目标向量（手臂为复位位、手部张开）。与手臂 `Default` 预设及控制台复位位置保持一致。 |
+| `manual_arm_interval` | 手动生成手臂目标之间的时间间隔，单位为秒。 |
+| `action_layout` | 手臂（`gradual`，预设 `Default`＝复位位 / `Custom`＝此前 homing 位）、手部（`stepwise`，`Default`/`Custom`）与头部（`manual`，NECK 关节，仅机器人/网页控制）的动作范围及 UI 预设。 |
 
 ### `robots.navi_wa2`
 
@@ -222,9 +226,19 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 | `tt` | 舵机/控制周期，单位为秒。 |
 | `gain` | 舵机增益。 |
 | `hand_type` | 末端类型；NAVIAI-WA2 使用 `hand`，会影响本体状态布局与手部预设。 |
+| `camera.color_order` | 输入帧的像素通道顺序（`bgr`；cv_bridge 使用 bgr8）。 |
 | `camera.topic_dict` | 以 `head`、`hand_left`、`hand_right` 为键的压缩 ROS 图像话题。 |
 | `action_layout` | 连续手臂与步进式手部动作范围。 |
 | `reset_position` | 完整复位姿态向量，顺序必须与 NAVIAI-WA2 驱动一致。 |
+
+### `robots.unitree_g1`
+
+| 字段 | 含义 |
+| --- | --- |
+| `camera.color_order` | 输入帧的像素通道顺序（`bgr`；cv_bridge 使用 bgr8）。 |
+| `hand_type` | 末端类型；Unitree G1 使用 `hand`，会影响相机名称和本体状态布局。 |
+| `reset_robot_pos` | 机器人完整复位目标向量（26 维，全零）。 |
+| `action_layout` | 手臂（`gradual`，`Default`/`Custom` 预设）与手部（`stepwise`，六指数值，`Default`/`Custom` 预设）的动作范围。 |
 
 ## 服务端与模型参数字典
 
@@ -232,7 +246,7 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 
 | 字段 | 含义 |
 | --- | --- |
-| `zmq` | 与 `vla_zmq` 相同的 VLA 网络字段；服务端使用其中端口绑定 ROUTER socket。 |
+| `zmq` | 与 `vla_zmq` 相同的 VLA 网络字段；服务端使用其中的端口绑定 ROUTER socket。 |
 | `max_infer_workers` | 最大并发推理工作线程数。设为 `1` 可禁用并发推理。 |
 | `max_decode_workers` | 最大图像解码工作线程数。 |
 | `image_pad_and_resize` | 是否在服务端对解码图像做保持宽高比的填充与缩放。 |

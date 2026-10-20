@@ -190,7 +190,10 @@ class RobotBase():
         """
         return self.step_indices
 
-    def ruckig_planning(self, current_pose, target_pose, dof=14, interval=0.01):
+    def ruckig_planning(
+        self, current_pose, target_pose, dof=14, interval=0.01, *,
+        max_velocity=2.0, max_acceleration=1.0, max_jerk=5.0,
+    ):
         """
         Trajectory planning using Ruckig
         Args:
@@ -198,12 +201,28 @@ class RobotBase():
             target_pose: target joint pose
             dof: degrees of freedom
             interval: time interval
+            max_velocity/max_acceleration/max_jerk: positive scalar limits
+                shared by all joints, or one limit per joint
         Returns:
             list of trajectory points
         """
         if ruckig is None:
             raise RuntimeError('ruckig is required for manual arm trajectory planning')
         dof = int(dof)
+
+        def motion_limit(value, name):
+            values = np.asarray(value, dtype=float)
+            if values.ndim == 0:
+                values = np.full(dof, float(values))
+            if values.ndim != 1 or values.size != dof:
+                raise ValueError(f'{name} must be a scalar or contain {dof} values')
+            if not np.all(np.isfinite(values)) or np.any(values <= 0):
+                raise ValueError(f'{name} must contain positive finite values')
+            return values.tolist()
+
+        velocity = motion_limit(max_velocity, 'max_velocity')
+        acceleration = motion_limit(max_acceleration, 'max_acceleration')
+        jerk = motion_limit(max_jerk, 'max_jerk')
         rk = ruckig.Ruckig(dof, interval)
         rk_input = ruckig.InputParameter(dof)
         rk_output = ruckig.OutputParameter(dof)
@@ -219,9 +238,9 @@ class RobotBase():
         rk_input.target_acceleration = [0.0] * dof
         
         # Set motion constraints
-        rk_input.max_velocity = [2.0] * dof
-        rk_input.max_acceleration = [1.0] * dof
-        rk_input.max_jerk = [5.0] * dof
+        rk_input.max_velocity = velocity
+        rk_input.max_acceleration = acceleration
+        rk_input.max_jerk = jerk
         
         # Generate trajectory
         trajs = []

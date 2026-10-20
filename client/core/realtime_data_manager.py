@@ -505,13 +505,18 @@ class RealtimeDataManager():
                 else:
                     generation = self._action_generation
                     target_index = max(0, self.action_chunk_fitted.shape[1] - 1)
-                    self.action_cond.wait_for(
+                    # Bounded wait: an unbounded one parks the inference thread
+                    # forever once the control thread stops consuming, which in
+                    # turn makes shutdown and pause handshakes time out.
+                    # A generation change is how pause and stop interrupt the wait.
+                    result = self.action_cond.wait_for(
                         lambda: self._action_generation != generation
                         or (self.action_chunk_index is not None
                             and self.action_chunk_fitted is not None
-                            and self.action_chunk_index >= target_index)
+                            and self.action_chunk_index >= target_index),
+                        timeout=max(wait_time, 2.0)
                     )
-                    result = self._action_generation == generation
+                    result = result and self._action_generation == generation
         else:
             raise ValueError("mode must be 'async' or 'sync'")
 

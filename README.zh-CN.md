@@ -35,7 +35,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 **Open-RAIL 就是这段链路**：一套轻量级服务端-客户端框架，把任意 VLA/WAM 模型接到任意已适配机器人上，并把「**推**（真机推理执行）→ **采**（运行即采集）→ **评**（数据驱动迭代）」的闭环端到端接进每一次运行。
 
-目前已适配 **4 款异构机器人**（含 LeRobot 仿真后端）、支持 **12 个主流 VLA/WAM 模型**（9 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
+目前已适配 **5 款异构机器人**（含 LeRobot 仿真后端）、支持 **12 个主流 VLA/WAM 模型**（9 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
 
 - 🤖 **VLA/WAM 模型研究人员** — 开箱即用的真机部署环境，专注模型创新，不搭工程管线
 - 🔧 **机器人工程师** — 快速验证算法的工具集，无需重复实现驱动与管线
@@ -66,7 +66,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 ## 📰 更新日志
 
-- **2026-09-16 · 首次公开** — 项目更名为 **Open-RAIL**（原 VLA-RAIL），首次开放 **推 / 采 / 评 / 兼容** 四层：三线程异步流水与两级在线平滑、推理即采集、评估数据随每次运行落盘、4 款异构机器人与 10 个 VLA/WAM 模型适配
+- **2026-09-16 · 首次公开** — 项目更名为 **Open-RAIL**（原 VLA-RAIL），首次开放 **推 / 采 / 评 / 兼容** 四层：三线程异步流水与两级在线平滑、推理即采集、评估数据随每次运行自动保存、4 款异构机器人与 10 个 VLA/WAM 模型适配
 - **2025-12 · 预印本发布** — [VLA-RAIL: A Real-Time Asynchronous Inference Linker for VLA Models and Robots](https://arxiv.org/abs/2512.24673)：异步推理与块内 / 块间两级在线平滑
 
 <!-- TODO：为首次公开版本确定并记录正式版本号；此后每次发版在本节顶部补一条，并注明拓宽了哪条轴（模型 / 硬件 / 场景）。 -->
@@ -77,7 +77,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | --- | --- | --- |
 | ⚡ 推理跟不上控制周期，动作又卡又抖 | 三线程异步流水（观测 / 推理 / 控制）+ 块内/块间两级在线平滑 | 关节加速度标准差 **10+ → 0.1 rad/s²**，消除 **30–50 倍**频率差 |
 | ☁️ 机器人端算力跑不动大模型 | 服务端-客户端分离，两侧依赖树互不干涉 | 嵌入式设备也能驱动大模型；端 / 边 / 云**代码零改动**切换 |
-| 🔌 换一台机器人就要重做接口 | 轻量硬件抽象层 `RobotBase` + 统一 `action_layout` 索引 | 已适配 **4 款异构机器人**；新机器人接入**从周级降到小时级** |
+| 🔌 换一台机器人就要重做接口 | 轻量硬件抽象层 `RobotBase` + 统一 `action_layout` 索引 | 已适配 **5 款异构机器人**；新机器人接入**从周级降到小时级** |
 | 🧩 每接一个新模型都要重写工程管线 | 统一模型接入约定 + 服务端自动路由 | 已支持 **12 个模型**；新模型接入 **≤ 100 行** |
 | 📊 推理与数采割裂，数据进不了训练管线 | 采集内置于每次推理，LeRobot 风格 Parquet，episode 可追加 | 每次运行产出可用训练数据，**零额外成本** |
 | 🎮 模型推理跑偏，没法及时纠正 | 三模式（纯推理 / 纯遥操 / 混合）+ 暂停-介入-恢复与状态预对齐（10 月开源） | 每次人工纠偏即**高质量教学样本**，无需后处理 |
@@ -93,8 +93,8 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | AgiBot G1 | 双臂人形（头 + 腰 + 轮式底盘） | ✅ 已适配 | `client/robots/agibot_g1/` |
 | 中国移动灵犀（Ti5 T170C） | 折叠轮式双臂人形（ROS 2） | ✅ 已适配 | `client/robots/ti5_t170c/` |
 | NAVIAI-WA2（浙江人形） | 双臂轮式人形（ROS 1） | ✅ 已适配 | `client/robots/navi_wa2/` |
+| Unitree G1 | 双臂双足人形（ROS 2） | ✅ 已适配 | `client/robots/unitree_g1/` |
 | Mock | 基于 LeRobot 的仿真后端 | ✅ 已适配 | `client/robots/mock/` |
-| Unitree G1 | 双臂双足人形 | 🔜 即将支持 | — |
 | _你的机器人_ | — | 🔜 计划中 | [接入指南](docs-cn-backup/add-new-robot.zh-CN.md) |
 
 ### 模型
@@ -120,7 +120,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 - **Python ≥ 3.10**
 - **服务端（Server）**：所选模型所需的 NVIDIA 显卡、CUDA、PyTorch，以及该模型特有的依赖；各组件的版本要求以对应模型的官方文档为准。
-- **客户端（Client）**：取决于所接入的机器人：AgiBot G1 需安装厂商 SDK；中国移动灵犀（Ti5 T170C）需 ROS 2；NAVIAI-WA2 需 ROS 1；若使用 Mock 仿真机器人，则无需额外硬件。
+- **客户端（Client）**：取决于所接入的机器人——AgiBot G1 需安装厂商 SDK；中国移动灵犀（Ti5 T170C）需 ROS 2；NAVIAI-WA2 需 ROS 1；Unitree G1 需 ROS 2；若使用 Mock 仿真机器人，则无需额外硬件。
 - **网络**：服务端与客户端通过 ZMQ 通信，两者处于同一局域网或网络互通即可。
 - **操作系统**：目前仅支持 Ubuntu（暂不支持 macOS）。
 
@@ -166,7 +166,7 @@ python run_server.py --model_type tao \
 python run_web_client.py
 ```
 
-默认读取 `conf/default_conf.yaml`，监听 `0.0.0.0:9000`。自定义配置文件需要放在 `conf/` 目录下，并通过 `--conf` 参数指定文件名：
+默认读取 `conf/default_conf.yaml`（若存在）并监听 `0.0.0.0:9000`；该文件不随仓库分发，首次在 Web 控制台保存配置时会自动生成。自定义配置文件需要放在 `conf/` 目录下，并通过 `--conf` 参数指定文件名：
 
 ```bash
 python run_web_client.py --conf custom_conf.yaml
@@ -366,8 +366,8 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 
 **兼容——多模型与多机器人控制**
 
-- [x] 4 款异构机器人（AgiBot G1 / 中国移动灵犀（Ti5 T170C）/ NAVIAI-WA2 + 一套 LeRobot 仿真后端）
-- [ ] Unitree G1 适配器——已适配，下个版本放出
+- [x] 5 款异构机器人（AgiBot G1 / 中国移动灵犀（Ti5 T170C）/ NAVIAI-WA2 / Unitree G1 + 一套 LeRobot 仿真后端）
+- [x] Unitree G1 适配器（ROS 2）
 - [x] 12 个 VLA/WAM 模型（9 系列）
 - [x] 可视化抽象为独立层——面向非开发人员的控制入口
 - [ ] WAM 模型接入（10 月）
@@ -445,7 +445,7 @@ Apache License 2.0，详见 [LICENSE](LICENSE)。
 - 数据集格式与工具链借鉴 [LeRobot](https://github.com/huggingface/lerobot) 的 Parquet 与视频组织约定
 - 模型适配基于各模型官方实现：GR00T（[NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)）、RDT（[thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)）、ACT、SmolVLA、GO1、π 系列、TAO
 - ACT 适配中的 DETR 部分修改自 [facebookresearch/detr](https://github.com/facebookresearch/detr)（Apache 2.0），扩散策略相关实现参考 [real-stanford/diffusion_policy](https://github.com/real-stanford/diffusion_policy)
-- 机器人适配依赖各厂商 SDK 与驱动：AgiBot G1、NAVIAI-WA2（浙江人形）、中国移动
+- 机器人适配依赖各厂商 SDK 与驱动：AgiBot G1、中国移动灵犀（Ti5 T170C）、NAVIAI-WA2（浙江人形）、Unitree G1
 
 ---
 
