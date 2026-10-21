@@ -9,6 +9,8 @@ class ModelType(str, Enum):
     GR00T_N1 = 'gr00t_n1'
     GR00T_N1_5 = 'gr00t_n1_5'
     GR00T_N1_6 = 'gr00t_n1_6'
+    GR00T_N1_7_EEF = 'gr00t_n1_7_eef'
+    XVLA_EEF = 'xvla_eef'
     RDT = 'rdt'
     SMOLVLA = 'smolvla'
     GO1 = 'go1'
@@ -40,6 +42,61 @@ def get_gr00t_config():
     config.embodiment_tag = 'a2d'
     config.data_config_key = 'a2d_arms_only'
     return config
+
+
+def _get_a2d_eef_config():
+    config = ConfigDict()
+    config.model_path = '/path/to/model'
+    config.ref_frame = 'world'
+    config.joint_action_key = {
+        'left_arm': [0, 9], 'right_arm': [9, 18],
+        'left_hand': [18, 19], 'right_hand': [19, 20],
+    }
+    config.joint_state_key = {
+        'left_arm': [0, 7], 'right_arm': [7, 14],
+        'left_hand': [14, 15], 'right_hand': [15, 16],
+    }
+    config.link_name = {
+        'left_base': 'base_link_l', 'left_tip': 'gripper_center',
+        'right_base': 'base_link_r', 'right_tip': 'right_gripper_center',
+    }
+    config.q_left_init = [-1.0748, 0.6107, 0.2816, -1.2823, 0.7292, 1.4957, -0.1869]
+    config.q_right_init = [1.0720, -0.6103, -0.2780, 1.2822, -0.7299, -1.4929, 0.1873]
+    # Full URDF order: body, left arm/hand, right arm/hand, head.
+    config.reset_position = (
+        [0.19999335706233978, 0.2967000901699066]
+        + config.q_left_init + [0.0] * 8
+        + config.q_right_init + [0.0] * 8
+        + [0.0, 0.4362976849079132]
+    )
+    return config
+
+
+def get_gr00t_n1_7_eef_config():
+    config = _get_a2d_eef_config()
+    config.embodiment_tag = 'new_embodiment'
+    config.urdf_path = str(
+        Path(__file__).resolve().parents[1]
+        / 'server/utils/eef_utils/urdf/a2d_vla_zero_state.urdf'
+    )
+    config.rotation_type = 'rot6d'
+    config.rot6d_convention = 'rows'
+    return config
+
+
+def get_xvla_eef_config():
+    config = _get_a2d_eef_config()
+    config.eef_action_key = config.joint_action_key
+    config.urdf_path = str(
+        Path(__file__).resolve().parents[1]
+        / 'server/utils/eef_utils/urdf/a2d_vla_zero_state.urdf'
+    )
+    config.rotation_type = 'rot6d'
+    config.rot6d_convention = 'rows'
+    config.domain_id = 0  # task_261 checkpoint
+    config.denoising_steps = 10
+    return config
+
 
 def get_act_config():
     """Generate configuration for ACT model.
@@ -176,6 +233,8 @@ def get_models_config():
     config.type = ModelType.GR00T_N1_5
     config.mock = get_mock_config()
     config.gr00t = get_gr00t_config()
+    config.gr00t_n1_7_eef = get_gr00t_n1_7_eef_config()
+    config.xvla_eef = get_xvla_eef_config()
     config.act = get_act_config()
     config.rdt = get_rdt_config()
     config.go1 = get_go1_config()
