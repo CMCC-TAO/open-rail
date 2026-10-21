@@ -102,13 +102,14 @@ def override_config_with_args(config, args):
     # Override model type
     if args.model_type:
         config.models.type = ModelType(args.model_type)
-    
+
     # Override model path
     if args.model_path:
         if config.models.type == ModelType.GR00T_N1 or config.models.type == ModelType.GR00T_N1_5 or config.models.type == ModelType.GR00T_N1_6:
             config.models.gr00t.model_path = args.model_path
         elif config.models.type == ModelType.GR00T_N1_7_EEF:
             config.models.gr00t_n1_7_eef.model_path = args.model_path
+            config.image_pad_and_resize = True
         elif config.models.type == ModelType.XVLA_EEF:
             config.models.xvla_eef.model_path = args.model_path
         elif config.models.type == ModelType.ACT:

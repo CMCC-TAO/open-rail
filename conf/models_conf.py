@@ -86,17 +86,15 @@ def get_gr00t_n1_7_eef_config():
 
 def get_xvla_eef_config():
     config = _get_a2d_eef_config()
-    config.processor_path = None
     config.eef_action_key = config.joint_action_key
     config.urdf_path = str(
         Path(__file__).resolve().parents[1]
         / 'server/utils/eef_utils/urdf/a2d_vla_zero_state.urdf'
     )
     config.rotation_type = 'rot6d'
-    config.rot6d_convention = 'columns'
-    config.domain_id = 0
+    config.rot6d_convention = 'rows'
+    config.domain_id = 0  # task_261 checkpoint
     config.denoising_steps = 10
-    config.ik = ConfigDict({'max_iterations': 100, 'stagnation_iterations': 8})
     return config
 
 
