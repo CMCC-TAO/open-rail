@@ -1133,5 +1133,3 @@ class VLAClient():
 
 if __name__ == "__main__":
     pass
-
-from client.simulation.vla_client import VLAClientAsync

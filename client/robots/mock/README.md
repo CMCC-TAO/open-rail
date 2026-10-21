@@ -13,11 +13,11 @@ conda activate gr00t
 python run_server.py --model_type gr00t_n1_5 --model_path /path/to/checkpoint
 ```
 
-Start the Web client with `robots.type` set to `mock` in `conf/default_conf.yaml`:
+Start the Client：
 
 ```bash
 conda activate gr00t
-python run_web_client.py
+python run_client.py --robots_type mock
 ```
 
 **Note：** If LeRobot is not installed, the library will generate fake random observation data and send it to the server for inference.
