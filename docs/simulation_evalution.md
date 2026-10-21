@@ -33,11 +33,12 @@ in the robot READMEs:
 - [RoboCasa / PandaOmron](../client/robots/robocasa_pandas/README.md)
 - [RoboTwin / Aloha](../client/robots/robotwin_aloha/README.md)
 
-Environment paths and hidden defaults come from `conf/web_simulation.yaml`.
-This local file is ignored by Git. For another installation, copy
-`conf/web_simulation.example.yml` and set the installed RoboTwin path.
+Environment paths, hidden defaults, and model IO layouts share `conf/simulation.yml`.
+For another installation, set the installed RoboTwin path in this file.
 The `defaults` mapping applies to both platforms; `platforms.robocasa` and
 `platforms.robotwin` override individual values using `EvaluationConfig` field names.
+`io_profiles` contains named model layouts selected with `simulation.yml#<name>`;
+robot configurations select their benchmark's layout automatically.
 An empty `python` uses the Web service's interpreter. Configuration overrides the presets
 for shared settings. Simulation task selection and saving switches belong to the
 Evaluation panel; hardware-specific controller settings may be normalized by the existing

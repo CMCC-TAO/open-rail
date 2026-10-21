@@ -30,6 +30,7 @@ def get_client_config():
     config.controller = get_controller_config()
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
+    config.vla_zmq.io_profile = ''
     config.visualize = get_visualize_config()
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()

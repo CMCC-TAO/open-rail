@@ -1,8 +1,0 @@
-defaults: {}
-platforms:
-  robocasa:
-    python: ""
-    gpu: "2"
-  robotwin:
-    python: ""
-    robotwin_root: /data/users/huangkai/project/rail_robotwin/RoboTwin

@@ -55,6 +55,14 @@ class VLAClientAsync():
         self.task_language_manager = task_language_manager
         self.vla_zmq = vla_zmq_client
         self.robot = robot
+        from client.simulation.io_adapter import SimulationIOAdapter
+
+        self.io_adapter = SimulationIOAdapter(
+            robot, vla_zmq_client, config.vla_zmq.get('io_profile', ''),
+        )
+        self.history_frames = self.io_adapter.history_frames or (2 if config.vision.history_frame else 1)
+        if self.io_adapter.model.get('action_dt'):
+            config.controller.raw_fps = 1.0 / self.io_adapter.model['action_dt']
         if hasattr(robot, 'configure_chunk_rendering'):
             robot.configure_chunk_rendering(
                 config.rdm.mode != 'async'
@@ -733,7 +741,7 @@ class VLAClientAsync():
 
         # Get observation data (thread-safe function, no lock needed)
         data = self.realtime_data_manager.pop_observe_data(
-            num_samples=1 if not self.config.vision.history_frame else 2,
+            num_samples=self.history_frames,
             latest_only=self.config.rdm.mode == 'async',
         )
         if data is not None:
@@ -846,7 +854,7 @@ class VLAClientAsync():
 
         # Get observation data (thread-safe function, no lock needed)
         data = self.realtime_data_manager.pop_observe_data(
-            num_samples=1 if not self.config.vision.history_frame else 2,
+            num_samples=self.history_frames,
             latest_only=self.config.rdm.mode == 'async',
         )
         request_observation_step = self._request_observation_step(data) if data is not None else None
@@ -1121,6 +1129,7 @@ class VLAClientAsync():
 
     def _receive_inference(self, data, timeout_ms):
         request_id = self._next_request_id()
+        data, io_context = self.io_adapter.prepare(data)
         request_meta = {'request_id': request_id}
         observation_step = self._request_observation_step(data)
         if observation_step is not None:
@@ -1151,7 +1160,7 @@ class VLAClientAsync():
                 return None
             meta = msg.get('meta') or {}
             if meta.get('request_id') == request_id:
-                return msg
+                return self.io_adapter.decode(msg, io_context)
             self.logger.warning(f"Drop stale response with unmatched request_id: {meta.get('request_id')}")
     def update_preprocess_func(self):
         """Update the preprocess function when vision.preprocess parameters change."""

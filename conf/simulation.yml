@@ -1,0 +1,32 @@
+defaults: {}
+platforms:
+  robocasa:
+    python: ""
+    gpu: "2"
+  robotwin:
+    python: ""
+    robotwin_root: /data/users/huangkai/project/rail_robotwin/RoboTwin
+
+io_profiles:
+  robocasa:
+    action:
+      - {name: base_motion, width: 4}
+      - {name: control_mode, width: 1}
+      - {name: end_effector_position, width: 3}
+      - {name: end_effector_rotation, width: 3}
+      - {name: gripper_close, width: 1}
+  robotwin_aloha:
+    action:
+      - {name: left_arm, width: 6}
+      - {name: left_gripper, width: 1}
+      - {name: right_arm, width: 6}
+      - {name: right_gripper, width: 1}
+  dual_arm_7dof_grippers:
+    name: dual_arm_7dof_grippers
+    history_frames: 1
+    state: &joints
+      - {name: left_arm, width: 7}
+      - {name: right_arm, width: 7}
+      - {name: left_gripper, width: 1}
+      - {name: right_gripper, width: 1}
+    action: *joints

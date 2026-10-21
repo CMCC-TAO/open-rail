@@ -30,7 +30,6 @@ class ModelVLA:
             device=device, 
             embodiment_tag=embodiment_tag
         )
-        self._reported_action_order = False
 
         # ============================================================
         # FIX: unitree_g1 embodiment indices are based on the original
@@ -109,19 +108,11 @@ class ModelVLA:
         data = sequence[0]
         obs = data['obs'].copy()
 
-        video_keys = list(self.cfg.get('video_keys') or (
-            ['cam_top_head', 'cam_left_wrist', 'cam_right_wrist']
-            if self.cfg.get('embodiment_tag') == 'aloha_robotwin'
-            else ['base_image', 'left_wrist_image', 'right_wrist_image']
-        ))
-        if len(video_keys) != 3 or len(set(video_keys)) != 3:
-            raise ValueError('video_keys must contain three distinct camera keys')
-        head_key, left_wrist_key, right_wrist_key = video_keys
         inp_obs = {
             'video':{
-                head_key: obs['cam.head'][None][None], # (B,T,H,W,C)
-                left_wrist_key: obs['cam.hand_left'][None][None],
-                right_wrist_key: obs['cam.hand_right'][None][None],
+                'base_image': obs['cam.head'][None][None], # (B,T,H,W,C)
+                'left_wrist_image': obs['cam.hand_left'][None][None],
+                'right_wrist_image': obs['cam.hand_right'][None][None],
             },
             'state': obs['state'][None][None], # (B,T,D)
             'language':[obs['language']]
@@ -137,44 +128,13 @@ class ModelVLA:
         if isinstance(predicted_action, dict) and 'progress' in predicted_action:
             ext_result['prob_progress'] = predicted_action['progress'][0, :, -1]
             del predicted_action['progress']
-        action_dict = predicted_action['action']
-        action_keys = list(self.cfg.get('action_keys', []))
-        known_orders = (
-            ('end_effector_position', 'end_effector_rotation', 'gripper_close',
-             'base_motion', 'control_mode'),
-            ('left_arm', 'left_gripper', 'right_arm', 'right_gripper'),
-        )
-        if self.cfg.get('embodiment_tag') == 'unitree_g1':
-            known_orders = (
-                ('left_arm', 'right_arm', 'left_hand', 'right_hand'),
-                ('left_arm', 'right_arm', 'left_gripper', 'right_gripper'),
-            )
-        if not action_keys:
-            for order in known_orders:
-                for prefix in ('', 'action.'):
-                    candidate = [prefix + key for key in order]
-                    if all(key in action_dict for key in candidate):
-                        action_keys = candidate
-                        break
-                if action_keys:
-                    break
-        if action_keys:
-            missing = [key for key in action_keys if key not in action_dict]
-            if missing:
-                raise KeyError(f'TAO action output is missing configured keys: {missing}')
-            action_values = [action_dict[key] for key in action_keys]
-        else:
-            action_values = list(action_dict.values())
-        if not self._reported_action_order:
-            print(f'TAO action order: {action_keys or list(action_dict.keys())}')
-            self._reported_action_order = True
-        predicted_action = np.concatenate([value.squeeze(0) for value in action_values], axis=1)
+        predicted_action = np.concatenate([v.squeeze(0) for v in predicted_action['action'].values()], axis=1)
         # hand_to_grasp: model outputs compact 16-dim action
         # [left_arm(7), right_arm(7), left_gripper(1), right_gripper(1)] in 0~1000.
         # Hand motor order is [little, ring, middle, index, thumb_bend, thumb_rotate].
         # Keep the four non-little fingers following the model, cap the little finger
         # at 300, and keep thumb_rotate at 750.
-        if self.cfg.get('embodiment_tag') == 'unitree_g1' and predicted_action.shape[-1] == 16:
+        if self.cfg['embodiment_tag'] == 'unitree_g1' and predicted_action.shape[-1] == 16:
             arm = predicted_action[:, :14]
             left_gripper = predicted_action[:, 14:15]
             right_gripper = predicted_action[:, 15:16]

@@ -128,6 +128,8 @@ class ZMQServer():
             dict: Message containing 'data' and 'meta' fields, or None if error
         """
         try:
+            if not self.router.poll(200):
+                return None
             # Receive message (blocking), ROUTER socket includes sender identity and multipart message
             parts = self.router.recv_multipart()
             # self.client_id = parts[0]  # Client identifier

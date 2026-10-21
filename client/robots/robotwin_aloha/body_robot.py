@@ -32,6 +32,7 @@ class RobotBody(SimulationRobot):
         sim_executor=None,
     ):
         super().__init__(config)
+        self.state_layout = config.action_layout
         self.logger = logging.getLogger(__name__)
         self.cfg = config
         self.observation_mode = ObservationMode.STEP_RESULT

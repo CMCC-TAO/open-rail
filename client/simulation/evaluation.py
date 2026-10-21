@@ -425,6 +425,7 @@ def build_parser(description=None):
     parser.add_argument('--visualize_port', type=int, default=8765)
     parser.add_argument('--preprocess', choices=['none', 'resize'], default='none')
     parser.add_argument('--user_conf')
+    parser.add_argument('--io_profile', help='Override the model layout: YAML path or YAML path#profile')
     return parser
 
 
@@ -576,6 +577,10 @@ class EvaluationRunner:
 
 
 def configure_pipeline(config, args):
+    if getattr(args, 'io_profile', None):
+        from client.simulation.io_adapter import resolve_profile_path
+
+        config.vla_zmq.io_profile = resolve_profile_path(args.io_profile)
     config.rdm.mode = args.mode
     config.rdm.skip_initial_frames = 0
     config.rdm.action_consume_mode = "sequential"

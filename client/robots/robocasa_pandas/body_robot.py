@@ -93,10 +93,15 @@ class RobotBody(SimulationRobot):
 
     def _update_state(self, obs):
         values = []
+        self.state_layout = {}
+        offset = 0
         for key in self.config.get('state_keys', []):
             if key not in obs:
                 raise KeyError(f'RoboCasa observation is missing {key!r}')
-            values.append(np.asarray(obs[key], dtype=np.float32).reshape(-1))
+            value = np.asarray(obs[key], dtype=np.float32).reshape(-1)
+            values.append(value)
+            self.state_layout[key] = {'start': offset, 'end': offset + value.size}
+            offset += value.size
         if not values:
             raise ValueError('robocasa_pandas.state_keys must not be empty')
         self.current_state = np.concatenate(values)

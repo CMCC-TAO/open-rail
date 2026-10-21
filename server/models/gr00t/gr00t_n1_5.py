@@ -26,15 +26,7 @@ class ModelVLA:
         meta_data_path = os.path.join(model_path, 'experiment_cfg/metadata.json') 
         with open(meta_data_path, "r", encoding="utf-8") as f:
             meta_data = json.load(f)
-        data_config_key = self.cfg['data_config_key']
-        if data_config_key not in meta_data:
-            embodiment_key = self.cfg.get('embodiment_tag')
-            if embodiment_key in meta_data:
-                data_config_key = embodiment_key
-            elif len(meta_data) == 1:
-                data_config_key = next(iter(meta_data))
-            else:
-                raise KeyError(f'No metadata for data config {data_config_key!r}')
+        data_config_key = self.cfg['data_config_key'] 
         meta_data_state = meta_data[data_config_key]['modalities']['state']
     
         # configure state of observations
@@ -51,9 +43,6 @@ class ModelVLA:
         # get data config and transforms
         device = "cuda" if torch.cuda.is_available() else "cpu"
         data_config = DATA_CONFIG_MAP[self.cfg['data_config_key']]
-        self.video_keys = list(data_config.video_keys)
-        self.language_keys = list(data_config.language_keys)
-        self.action_keys = list(data_config.action_keys)
         modality_config = data_config.modality_config()
         modality_transform = data_config.transform()
 
@@ -87,16 +76,19 @@ class ModelVLA:
         data = sequence[0]
         obs = data['obs'].copy()
         obs['state'] = obs['state'][None]
-        camera_values = [obs['cam.head'], obs['cam.hand_left'], obs['cam.hand_right']]
-        if len(self.video_keys) != len(camera_values):
-            raise ValueError(f'Expected {len(self.video_keys)} camera inputs, got {len(camera_values)}')
         inp_obs = {
-            key: value[None]
-            for key, value in zip(self.video_keys, camera_values)
+            # "video.cam_right_high": obs['cam.head'][None],
+            "video.cam_top_head": obs['cam.head'][None],
+            "video.cam_left_wrist": obs['cam.hand_left'][None],
+            "video.cam_right_wrist": obs['cam.hand_right'][None],
+            # "depth.cam_top":obs['cam.depth.head'][None],
+            # "state.left_arm": obs['state'][:, 0:7],
+            # "state.right_arm": obs['state'][:, 7:14],
+            # "state.left_hand": obs['state'][:, 14:15],
+            # "state.right_hand": obs['state'][:, 15:16],
+            # "state": np.random.rand(1, 20),
+            "annotation.human.task_description": obs['language'],
         }
-        if len(self.language_keys) != 1:
-            raise ValueError(f'Expected one language key, got {self.language_keys}')
-        inp_obs[self.language_keys[0]] = obs['language']
         for key in self.delta_indices.keys():
             start_index = self.delta_indices[key]['start_index']
             end_index = self.delta_indices[key]['end_index']
@@ -110,13 +102,9 @@ class ModelVLA:
         if isinstance(predicted_action, dict) and 'prob_progress' in predicted_action:
             ext_result['prob_progress'] = predicted_action['prob_progress']
             del predicted_action['prob_progress']
-        missing = [key for key in self.action_keys if key not in predicted_action]
-        if missing:
-            raise KeyError(f'GR00T action output is missing configured keys: {missing}')
         predicted_action = np.concatenate([
-            predicted_action[key].reshape(-1, 1)
-            if predicted_action[key].ndim == 1 else predicted_action[key]
-            for key in self.action_keys
+            v.reshape(-1, 1) if v.ndim == 1 else v 
+            for v in predicted_action.values()
         ], axis=1)
         print(time.time() - time1, 'action shape:', predicted_action.shape)
         return {"type": "vla_action", "pred_action": predicted_action, "ref_timestamp": data["ref_timestamp"], 'loc_timestamp': data['loc_timestamp'], 'ext': ext_result}

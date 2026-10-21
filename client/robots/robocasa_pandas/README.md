@@ -30,7 +30,8 @@ python run_server.py \
   --embodiment_tag robocasa_panda_omron
 ```
 
-The default server port is `5566`. The adapter handles camera mapping and action ordering, so `--video_keys` and `--action_keys` are not required.
+The default server port is `5566`. The adapter derives camera mapping and action
+order from the TAO embodiment configuration.
 
 For GR00T N1.5:
 
@@ -38,11 +39,12 @@ For GR00T N1.5:
 python run_server.py \
   --model_type gr00t_n1_5 \
   --model_path /path/to/checkpoint \
-  --data_config_key panda_omron \
   --embodiment_tag robocasa_panda_omron
 ```
 
-The GR00T environment must include the corresponding `panda_omron` data configuration.
+`--embodiment_tag robocasa_panda_omron` also selects the `panda_omron` data
+configuration through `get_gr00t_config().data_config_by_embodiment`.
+The GR00T environment must register both identifiers.
 
 ## Web Evaluation
 

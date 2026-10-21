@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field, model_validator
 from client.simulation.benchmarks import BENCHMARKS, benchmark_for_robot, get_benchmark
 
 ROOT = Path(__file__).resolve().parent.parent
-DEFAULTS_PATH = ROOT / "conf" / "web_simulation.yaml"
+DEFAULTS_PATH = ROOT / "conf" / "simulation.yml"
 
 
 def client_evaluation_values(config):
@@ -41,6 +41,7 @@ def client_evaluation_values(config):
         "max_transition_steps": ("inter_chunk", "max_transition_steps"),
         "server_ip": ("vla_zmq", "ip"),
         "server_port": ("vla_zmq", "port"),
+        "io_profile": ("vla_zmq", "io_profile"),
     }
     for key, (group, field) in mappings.items():
         value = config.get(group, {}).get(field)
@@ -70,6 +71,7 @@ def client_evaluation_values(config):
 
 
 class EvaluationConfig(BaseModel):
+    io_profile: str = ''
     platform: str = "robocasa"
     python: str = sys.executable
     robotwin_root: str = str(ROOT.parent / "RoboTwin")

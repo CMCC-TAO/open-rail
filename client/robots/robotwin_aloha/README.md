@@ -29,13 +29,15 @@ Start the server in the model environment:
 python run_server.py \
   --model_type tao \
   --model_path /path/to/checkpoint \
-  --embodiment_tag aloha_robotwin \
-  --action_keys left_arm left_hand right_arm right_hand
+  --embodiment_tag aloha_robotwin
 ```
 
-The default server port is `5566`. The three camera keys default to `cam_top_head`, `cam_left_wrist`, and `cam_right_wrist`, so `--video_keys` is not required.
+The default server port is `5566`. Camera names come from the TAO embodiment
+configuration, in head, left wrist, and right wrist order.
 
-Actions contain 14 absolute qpos values in this order: six left-arm joints, left gripper, six right-arm joints, and right gripper. The command above uses the `left_hand/right_hand` action fields. If the model returns `left_gripper/right_gripper`, omit `--action_keys` to use automatic ordering.
+Actions contain 14 absolute qpos values in this order: six left-arm joints,
+left gripper, six right-arm joints, and right gripper. The adapter derives
+action field order from the embodiment's action slice indices.
 
 ## Web Evaluation
 

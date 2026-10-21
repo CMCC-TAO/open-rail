@@ -19,6 +19,7 @@ Reuse these modules when adding a benchmark:
 | `data_record_manager.py` | Record observations, actions, and LeRobot datasets |
 | `preview.py` | Publish camera previews and trajectory history |
 | `vla_client.py` | Coordinate observation, model inference, and action execution |
+| `io_adapter.py` | Configure model layouts and convert observations/actions on the simulation client |
 
 Pass target camera names and RGB arrays to `build_observation`. Pass source-keyed
 RGB frames matching `config.camera.names.values()` to `VideoRecorder.write`.
@@ -35,6 +36,79 @@ retain their CLI names and benchmark defaults.
 1. Implement `SimulationRobot` in `client/robots/<robot_type>/body_robot.py` and add its robot configuration. Keep simulator creation, action mapping, reset, success detection, and cleanup in this adapter. `control_robot` returns `RobotStepResult`; observations use `build_observation`. Return the reset observation once from `retrieve_observation`.
 2. Implement the evaluation entry point using `evaluation.build_parser`, `configure_pipeline`, `build_client`, and the existing episode/statistics helpers. Reuse `EvaluationRunner` for supervised and parallel workers. Environment setup, seed selection, and benchmark-specific resume identities remain in this entry point.
 3. Register one `BenchmarkSpec` in `benchmarks.py`. Supply its robot type, script, dependencies, task catalog callback, CLI fields, and defaults. The catalog callback receives `(python, settings, project_root)` and returns `tasks` and `suites`; settings include `benchmark_options`. Discovery must not initialize simulators. Optional `validate` and `prepare` callbacks handle benchmark-specific checks.
+
+## Model adaptation
+
+Use `run_server.py` for all registered model types. `server/models/` stays identical
+to upstream. `model_bridge.py` only translates SDK camera/language keys, fixes
+named action output order, and supplies missing model configuration. GR00T N1.5
+metadata aliases use a temporary checkpoint view; original checkpoints are untouched.
+SmolVLA receives the current instruction. No IO descriptions, versions, hashes,
+or negotiation fields are added to heartbeats, requests, or responses.
+
+```bash
+python run_server.py --model_type tao \
+  --model_path /path/to/checkpoint --embodiment_tag aloha_robotwin \
+  --server_port 5566 --debug
+```
+
+All models default to the same output layout for the selected benchmark.
+`conf/simulation.yml` contains Web defaults (`defaults`, `platforms`) and named
+model layouts (`io_profiles`). The `robotwin_aloha` profile defines RoboTwin's
+14D joint action layout; `robocasa` defines RoboCasa's 12D action layout.
+Input state retains the environment's native layout unless explicitly configured.
+Robot configuration selects the default automatically; no
+`--io_profile` argument is needed for these layouts. Model names do not select
+action order. RDT still defaults to two observation frames; other models
+use the evaluator's history setting.
+
+Profiles describe the **final server output**. The model is expected to follow
+the selected benchmark's layout and semantics; incompatible widths stop
+evaluation. RoboCasa's model action order is base motion, control mode, end
+effector position, end effector rotation, and gripper. The client reorders it
+into the simulator's native action order before execution.
+
+For a different layout, override the default on the evaluator:
+
+```bash
+python scripts/aloha_robotwin_eval.py --task_name <task> --io_profile /path/to/layout.yml
+```
+
+Use `--io_profile conf/simulation.yml#<name>` to select a named profile.
+The `dual_arm_7dof_grippers` profile is a generic example, not a benchmark default.
+Standalone layout YAML files remain supported. New benchmarks select their
+default through the robot configuration's `io_profile`; explicit evaluator
+profiles take precedence. TAO uses embodiment action slice order; GR00T N1.5
+uses its data configuration's action key order. Keep those settings consistent
+with the common benchmark layout.
+Web jobs use `vla_zmq.io_profile` or the evaluation API's `io_profile` field.
+The server accepts `--embodiment_tag` and `--server_port`; it does not accept
+`--io_profile`. GR00T N1.5 resolves its data configuration through
+`get_gr00t_config().data_config_by_embodiment`: `a2d` selects `a2d_arms_only`,
+and `robocasa_panda_omron` selects `panda_omron`. Unmapped tags use the same
+identifier for embodiment and data configuration. Add an explicit mapping when
+the SDK uses different identifiers. Without `--embodiment_tag`, configured
+defaults remain unchanged.
+
+Benchmarks declare `state_layout` separately from `config.action_layout`, with
+contiguous `start`/`end` slices. `SimulationRobot.describe_io()` reads these layouts;
+`io_schema` can add units and semantics. RoboCasa discovers state widths from
+observations. Single-value `left_hand`/`right_hand` fields are treated as grippers.
+
+Profiles support `state`, `action`, `history_frames`, optional `action_dt` in
+seconds, and `camera_mapping` from wire roles to environment roles. `state_mapping`
+and `action_mapping` map target fields to `{source, scale, offset}` entries.
+`environment` can override the benchmark layout. Field metadata `unit`, `kind`,
+`frame`, and `rotation` must agree unless an explicit conversion handles them.
+SDK camera names come from the server's embodiment/data configuration,
+independently of client camera roles.
+
+Nonlinear conversions use `register_io_converter(name, converter)` and the profile's
+`converter` field. Stateless `encode(observation, context)` and
+`decode(actions, context)` methods receive the native request state in
+`context['state']`. Conversion runs before stale-action trimming and smoothing;
+recordings retain native environment vectors. Invalid dimensions or nonfinite
+values stop evaluation. Model `not_ready` responses retry without executing actions.
 
 The web API and both evaluation pages discover registered benchmarks through
 `/api/simulation/benchmarks`; their platform branches do not need editing.

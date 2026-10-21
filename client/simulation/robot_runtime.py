@@ -11,6 +11,17 @@ from client.robots.base_robot import RobotBase
 class SimulationRobot(RobotBase):
     joint_action_semantics = None
 
+    def describe_io(self):
+        from client.simulation.io_adapter import fields_from_layout
+
+        schema = {
+            'state': fields_from_layout(getattr(self, 'state_layout', {})),
+            'action': fields_from_layout(self.config.action_layout),
+        }
+        overrides = self.config.get('io_schema', {})
+        schema.update(overrides.to_dict() if hasattr(overrides, 'to_dict') else overrides)
+        return schema
+
     def control_robot(self, action):
         raise NotImplementedError('Simulation adapters must return RobotStepResult from control_robot')
 

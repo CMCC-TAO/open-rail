@@ -1,4 +1,5 @@
 from enum import Enum
+from pathlib import Path
 from ml_collections import ConfigDict
 
 
@@ -116,6 +117,7 @@ def get_mock_config():
 
 def get_robocasa_pandas_config():
     config = ConfigDict()
+    config.io_profile = f"{Path(__file__).resolve().parent / 'simulation.yml'}#robocasa"
     config.python = ''
     config.gpu = '2'
     config.n_envs = 1
@@ -159,6 +161,7 @@ def get_robocasa_pandas_config():
 
 def get_robotwin_aloha_config():
     config = ConfigDict()
+    config.io_profile = f"{Path(__file__).resolve().parent / 'simulation.yml'}#robotwin_aloha"
     config.python = ''
     config.robotwin_root = ''
     config.gpu = ''

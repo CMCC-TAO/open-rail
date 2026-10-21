@@ -41,6 +41,10 @@ def get_gr00t_config():
     config.model_path = '/path/to/model'
     config.embodiment_tag = 'a2d'
     config.data_config_key = 'a2d_arms_only'
+    config.data_config_by_embodiment = {
+        'a2d': 'a2d_arms_only',
+        'robocasa_panda_omron': 'panda_omron',
+    }
     return config
 
 

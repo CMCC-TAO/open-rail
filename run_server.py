@@ -86,9 +86,6 @@ def parse_args():
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
     parser.add_argument('--embodiment_tag', type=str, help='Model embodiment tag')
-    parser.add_argument('--data_config_key', type=str, help='GR00T data configuration key')
-    parser.add_argument('--action_keys', nargs='+', help='Explicit TAO action output order')
-    parser.add_argument('--video_keys', nargs=3, help='TAO camera keys: head, left wrist, right wrist')
     parser.add_argument('--server_port', type=int, help='Override model service port')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
@@ -143,23 +140,11 @@ def override_config_with_args(config, args):
             config.models.tao.embodiment_tag = args.embodiment_tag
         elif config.models.type == ModelType.GR00T_N1_5:
             config.models.gr00t.embodiment_tag = args.embodiment_tag
+            config.models.gr00t.data_config_key = config.models.gr00t.data_config_by_embodiment.get(
+                args.embodiment_tag, args.embodiment_tag
+            )
         else:
             raise ValueError(f'{config.models.type.value} does not support --embodiment_tag')
-    if args.data_config_key:
-        if config.models.type != ModelType.GR00T_N1_5:
-            raise ValueError('--data_config_key is only supported by GR00T N1.5')
-        config.models.gr00t.data_config_key = args.data_config_key
-    if args.action_keys:
-        if config.models.type != ModelType.TAO:
-            raise ValueError('--action_keys is only supported by TAO')
-        config.models.tao.action_keys = args.action_keys
-
-    if getattr(args, 'video_keys', None):
-        if config.models.type != ModelType.TAO:
-            raise ValueError('--video_keys is only supported by TAO')
-        if len(set(args.video_keys)) != 3:
-            raise ValueError('--video_keys must contain three distinct keys')
-        config.models.tao.video_keys = args.video_keys
     if getattr(args, 'server_port', None) is not None:
         if not 1 <= args.server_port <= 65535:
             raise ValueError('--server_port must be in [1, 65535]')
@@ -180,11 +165,13 @@ def main():
     
     # Initialize server components
     zmq_server = ZMQServer(config.zmq)
-    model = get_model(config.models)
+    from client.simulation.model_bridge import build_model
+    model = build_model(config.models, get_model)
     vla_server = VLAServer(config, zmq_server, model)
     
     try:
         # Start server in a separate thread
+        vla_server.running = True
         server_thread = threading.Thread(target=vla_server.run, daemon=True)
         server_thread.start()
         print(f"Starting VLA Server with model type: {config.models.type}")
