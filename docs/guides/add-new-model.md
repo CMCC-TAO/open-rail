@@ -197,3 +197,6 @@ Run the following command inside your virtual environment:
 ```bash
 python run_server.py --model_type your_model --model_path /path/to/your_model
 ```
+
+## 7. Document the Adapter
+Each adapter directory ships with a `README.md` that lets users run that model from this repository alone — prerequisites, configuration, a smoke test, and the interface contract. Copy [`server/models/_TEMPLATE.md`](../../server/models/_TEMPLATE.md) to `server/models/your_model/README.md` and fill in every `{{PLACEHOLDER}}`; afterwards, searching the file for `{{` should return zero matches. See [`server/models/wallx/README.md`](../../server/models/wallx/README.md) for a completed example.

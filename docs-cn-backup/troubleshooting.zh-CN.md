@@ -14,7 +14,7 @@
 	python run_web_client.py
 	```
 
-- 默认配置文件是 `conf/default_conf.yaml`。自定义配置应放在 `conf/` 下，并使用 `--conf custom_conf.yaml` 指定。
+- 默认配置文件是 `conf/default_conf.yaml`。该文件不随仓库分发，克隆后本地可能没有；首次在 Web 控制台保存配置时会自动生成。自定义配置应放在 `conf/` 下，并使用 `--conf custom_conf.yaml` 指定。
 
 ### 端口被占用或浏览器无法连接
 
@@ -67,6 +67,6 @@ Client 和 Server 是两个独立进程。检查：
 
 ## Data Recording
 
-### 不选中Runtime Monitor Control，勾选Data Recording Lerobot，可以录制，但录制显示为0
+### 未选中 Runtime Monitor 的 Control、却勾选 Data Recording 的 LeRobot 时，可以录制但录制内容为 0
 
-必须选中Control，才能实际录制lerobot数据。
+必须启用 Control 线程，LeRobot 数据才会实际写入。

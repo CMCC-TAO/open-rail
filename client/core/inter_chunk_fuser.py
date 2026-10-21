@@ -118,7 +118,7 @@ class InterChunkFuser:
     #     """
     #     This strategy uses position error and velocity feedback to compute acceleration in real time, generating a continuous and smooth velocity sequence.
     #     Note: Under the same parameter settings, this strategy is slower than 'search_action'.
-    #     Please refer to [this YuQue docs](https://www.yuque.com/zhaoyongsheng-qjvyk/wkh5s4/ghfyxptztpot0pyt) for acceleration, or contact the developers for assistance.
+    #     Please contact the developers for assistance.
 
     #     This function is **accelerated by Numba** using `@njit`, which compiles the
     #     Python code into optimized machine code in *nopython mode*.

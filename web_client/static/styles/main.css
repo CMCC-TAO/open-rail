@@ -15,10 +15,10 @@
 
 @import url('./modules/monitor.css');
 @import url('./modules/config.css');
-@import url('./modules/recording.css');
+@import url('./modules/recording.css?v=20261014-overlay-controls-2');
 @import url('./modules/language.css');
 @import url('./modules/trajectory.css');
-@import url('./modules/camera.css');
+@import url('./modules/camera.css?v=20261014-camera-expand-1');
 @import url('./modules/manual.css');
 
 /* 工具类 */

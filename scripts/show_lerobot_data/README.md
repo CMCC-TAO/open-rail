@@ -41,7 +41,7 @@ pip install opencv-python pandas pyarrow numpy matplotlib
 
 ```bash
 python3 show_data.py \
---data-path /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test \
+--data-path /path/to/dataset \
 --episode-id 2 \
 --chunk-id 0
 ```
@@ -58,9 +58,9 @@ None
 ## Output Example
 
 ```
-Successfully opened /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.hand_left/episode_000002.mp4, frame count: 1127
-Successfully opened /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.head/episode_000002.mp4, frame count: 1127
-Successfully opened /home/rm/wxz/EmbodiedAI/vla_infer_2/vla_infer/data/output/test/videos/chunk-000/cam.hand_right/episode_000002.mp4, frame count: 1127
+Successfully opened /path/to/dataset/videos/chunk-000/cam.hand_left/episode_000002.mp4, frame count: 1127
+Successfully opened /path/to/dataset/videos/chunk-000/cam.head/episode_000002.mp4, frame count: 1127
+Successfully opened /path/to/dataset/videos/chunk-000/cam.hand_right/episode_000002.mp4, frame count: 1127
 min frame_count : 1127
 20
 task_index: 1

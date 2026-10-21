@@ -26,7 +26,7 @@ Web 控制台是由 `run_web_client.py` 启动的浏览器操作台（默认 `ht
 主控面板。一个总开关加三个阶段按钮驱动整个运行循环。
 
 - **Start / Stop** 是同一个切换键。**Start** 创建客户端并一次性启动 Observe、Inference、Control 与可视化；启动前先自动应用待提交的配置修改。**Stop** 释放全部资源；下一次 Start 会按当前配置重建客户端。若 Data Recording 面板开启了 **Auto**，录制会在 Start 后自动开始。
-- **Observe → Infer → Control** 在不想一次性全跑时分段拉起循环。顺序被强制两次：按钮在前置未就绪时禁用（Infer 需要 Observe，Control 需要 Infer），服务端还会对乱序请求给出明确报错。
+- **Observe → Infer → Control** 在不想一次性全跑时分段拉起循环。顺序约束有两层保证：前置未就绪时按钮直接禁用（Infer 需要 Observe，Control 需要 Infer），服务端还会对乱序请求给出明确报错。
 - 把某一阶段**关掉**会级联停止其下游：关 Observe 会同时停 Inference 与 Control；关 Infer 停 Control。Control 自身可独立开关。
 - **Pause** 停止全部三个线程，但记住各自此前是否在运行；**Resume** 恢复到完全相同的组合。Pause 与 Resume 同时会暂停/恢复进行中的录制。（`Space` 切换 Pause；`Ctrl+Space` 切换 Control。）
 - **Reset**（也是 `Shift+R`）是一段受控流程，不是单次运动：客户端先暂停，机器人回到预设默认位（或 Robot Control 面板当前填入的位姿），客户端等待至少两倍 `1.5 × 平均推理时间` 让动作到位，然后清空内部缓冲。之后客户端**保持暂停**——按 Resume 继续。开启 **Auto** 录制时，录制会在复位后重新开始。
@@ -36,13 +36,13 @@ Web 控制台是由 `run_web_client.py` 启动的浏览器操作台（默认 `ht
 
 选择机器人要做的事。**Task** 与 **Sub-Task** 选择器填充 **Instruction** 输入框；**Apply** 把选中的指令下发给 VLA 服务，并把任务进度重置到该步。**Upd / Add / Del** 维护指令文件；**Upd** 只修改当前指令的文本。
 
-选择指令有守卫条件——录制中会被拒绝；**Auto Mode** 开启时会被拒绝（请先关闭 Auto Mode）；指令文件在加载后于磁盘上被改动时也会被拒绝（重新加载文件后再选）。
+选择指令有前置条件——录制中会被拒绝；**Auto Mode** 开启时会被拒绝（请先关闭 Auto Mode）；指令文件加载后若在磁盘上被改动，也会被拒绝（重新加载文件后再选）。
 
 **Auto Mode** 依据任务进度输出自动推进到下一条指令，其中 **Start**（起始子任务）、**Thresh**（切换阈值）、**Win-Size**（进度平均窗口）对应 `language.*` 参数。**Progress** 条可视化当前任务进度值。
 
 ## Data Recording
 
-把运行过程变成可复用的资产：执行数据落盘为 **EvalLog**（评估记录）、**LeRobot**（可直接训练的 episode）与 **ExpeData**（实验数据），每条记录可事后打分与备注，逐条回看执行质量。
+把运行过程变成可复用的资产：执行数据会保存为 **EvalLog**（评估记录）、**LeRobot**（可直接训练的 episode）与 **ExpeData**（实验数据），每条记录可事后打分与备注，逐条回看执行质量。
 
 - **Start / Stop** 配录制计时，另有 **Auto** 选项把录制与运行循环挂钩（见下方联动）。
 - **Config**：`record.*` 参数的专用子树；录制参数在每次开始录制时读取。
@@ -59,16 +59,16 @@ Web 控制台是由 `run_web_client.py` 启动的浏览器操作台（默认 `ht
 
 ## Robot Control
 
-对已连接机器人的直接手动控制——用于位姿摆置、预设调用与两次运行之间的恢复。分为 **Arm**、**Gripper/Hand**、**Body**（头部与腰部）、**Wheel/Leg** 几组；每组提供数值输入、预设下拉与预设编辑；**Send Cmd** 下发数值。
+对已连接机器人的直接手动控制，用于摆放位姿、调用预设，以及在两次运行之间恢复姿态。分为 **Arm**、**Gripper/Hand**、**Body**（头部与腰部）、**Wheel/Leg** 几组；每组提供数值输入、预设下拉与预设编辑；**Send Cmd** 下发数值。
 
-分组、数值范围与预设来自所选机器人的 `action_layout`（见[配置参考](../docs/configuration.md)）。缺少布局或预设的分组显示为禁用并在悬停时给出原因，让能力缺失可见，而不是静默失效。组内复选框先勾选启用，控件才可编辑。
+分组、数值范围与预设来自所选机器人的 `action_layout`（见[配置参考](../docs/configuration.md)）。缺少布局或预设的分组会显示为禁用，悬停时给出原因——缺什么一目了然，不会静默失效。组内复选框先勾选启用，控件才可编辑。
 
 - **Send Cmd** 立即把机器人驱动到给定数值。它需要机器人当前状态——**观测必须已启动**——否则请求被拒绝。
 - **Reset** 见 Runtime Monitor；是同一个按钮、同一段受控流程。
 
 ## Camera Viewer
 
-传输 **Head**、**Wrist-Left**、**Wrist-Right** 三路相机画面，每路有独立 **Close** 按钮，另有 **Close All**。出现哪些相机取决于所选机器人的 `camera.names` 映射与 `visualize.camera.open_*` 开关。画面在 Observe 启动时才连接，因此观测线程未运行时相机会一直是黑的。
+传输 **Head**、**Wrist-Left**、**Wrist-Right** 三路相机画面，每路有独立 **Close** 按钮，另有 **Close All**。出现哪些相机取决于所选机器人的 `camera.names` 映射与 `visualize.camera.open_*` 开关。画面在 Observe 启动时才连接，因此观测线程未运行时画面保持黑屏。
 
 ## Trajectory
 
@@ -80,7 +80,7 @@ Web 控制台是由 `run_web_client.py` 启动的浏览器操作台（默认 `ht
 
 ### Setup — 文件工作流
 
-- **文件选择器 + Apply** 从 `conf/` 加载 YAML。这是**重载**，不是参数级热切换：运行中的客户端会被停止并按文件重建，正在进行的一切随之停止。想整体切换到另一份保存好的配置时用它。
+- **文件选择器 + Apply** 从 `conf/` 加载 YAML。这是**重载**，不是参数级热切换：运行中的客户端会被停止并按文件重建，正在进行的一切随之停止。需要整体切换到另一份已保存的配置时使用。
 - **Save As** 把当前内存中的配置另存为一个新文件（对话框默认填当前文件名加 `_1` 后缀）。存出一份满意的变体后，下次启动用 `--conf <file>` 加载，或之后经 Setup 加载。目标为 `.yaml`/`.yml` 时写成 YAML；其他扩展名写成 Python 字典文件。
 
 ### 编辑 — 暂存式修改
@@ -91,16 +91,16 @@ Web 控制台是由 `run_web_client.py` 启动的浏览器操作台（默认 `ht
 
 ### 改动何时生效
 
-补丁会立即更新内存中的配置——控制台与推理服务都**无需重启**。一个参数能否影响*运行中*的客户端，取决于它被消费的方式：
+补丁会立即更新内存中的配置——控制台与推理服务都**无需重启**。一个参数能否影响*运行中*的客户端，取决于代码在什么时机读取它：
 
 | 层级 | 范围 | 示例 |
 | --- | --- | --- |
 | 运行循环即时生效 | 每个控制周期都会重读的参数：`inter_chunk.*` 与 `intra_chunk.*` 全族（融合模式及各模式全部参数），以及 `controller.period`、`controller.speed` | 机器人运动中切换 Inter-Chunk Mode 或调 `smooth_velocity` 增益 |
-| 经刷新生效 | 应用后推入运行中的客户端 | `vision.preprocess.*`（重建预处理）、`language.*`、`robots.mock.dataset_path`（客户端自动暂停，Mock 机器人重载数据集，再恢复） |
+| 经刷新生效 | 应用后即刻下发给运行中的客户端 | `vision.preprocess.*`（重建预处理）、`language.*`、`robots.mock.dataset_path`（客户端自动暂停，Mock 机器人重载数据集，再恢复） |
 | 下次使用时读取 | 该功能下次启动时生效 | `record.*`（每次开始录制时读取） |
 | 需重建客户端 | 客户端对象创建时即固定的值：`robots.type` 与 ZMQ 端点 | Stop → Start 会**复用同一个客户端对象**，这两类值不会自行重新绑定。切换请走 **Setup → Apply**（按文件重建客户端）或重启 `run_web_client.py`；运行中修改 `robots.type` 仅记录一条警告 |
 
-这正是项目主页"40+ runtime parameters, no restart required"能力的机制：客户端运行中，平滑/融合全族与刷新类参数即时可调；客户端停止时调的任何参数则在下次 Start 生效。
+这正是项目主页"40+ runtime parameters, no restart required"能力的机制：客户端运行中，平滑/融合全族与刷新类参数即时可调；客户端停止时修改的参数，则在下次 Start 时生效。
 
 ## 操作 → 效果速查
 

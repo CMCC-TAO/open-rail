@@ -33,6 +33,13 @@ def get_record_data_config() -> ConfigDict:
     # only support json to record model info into meta
     # config.evaluation.log_format = "json"  # Evaluation log save format: json | csv | both
     config.evaluation.scores = [0, 0.5, 1]  # Score options for evaluation log scoring buttons
+
+    config.image_overlay = ConfigDict()
+    config.image_overlay.path = "data/recording"
+    config.image_overlay.index = 0
+    config.image_overlay.opacity = 50
+    config.image_overlay.enable = False
+
     # LeRobot metadata (metadata)
     config.lerobot = ConfigDict(allow_dotted_keys=True)
     config.lerobot.codebase_version = "v2.0"  # Dataset version (e.g., lerobot)

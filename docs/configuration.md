@@ -17,7 +17,7 @@ description: "Configuration sources, precedence, and reference tables for Open-R
 
 The Web client accepts `--host`, `--port`, `--conf`, and `--reload`. The YAML file selected by `--conf` is both the startup configuration and the save target used by the Web console (Setup → Apply / Save As). When saving, `.yaml`/`.yml` targets are written as YAML and any other extension as a Python dictionary file.
 
-Only existing leaf keys are updated when a configuration file or patch is applied; unknown keys are ignored. Keep `default_conf.yaml` synchronized with the fields below. Two legacy key names are migrated automatically on load: `inter_chunk.search_length` is read as `inter_chunk.search_action.search_length`, and `robots.a2d.*` is read as `robots.agibot_g1.*`.
+Only existing leaf keys are updated when a configuration file or patch is applied; unknown keys are ignored. The default file `conf/default_conf.yaml` is **git-ignored**: it does not exist in a fresh clone and is created by the first save from the Web console; on startup it is applied only if present. Two legacy key names are migrated automatically on load: `inter_chunk.search_length` is read as `inter_chunk.search_action.search_length`, and `robots.a2d.*` is read as `robots.agibot_g1.*`.
 
 All durations in the following tables are milliseconds unless another unit is shown explicitly. The panels that expose these parameters in the browser are described in [Web Console](./web-console.md).
 
@@ -170,7 +170,7 @@ Supported video codecs include `mp4v`, `avc1`, `XVID`, and `MJPG`. Camera shapes
 
 ## `robots`: robot adapters
 
-`robots.type` selects `agibot_g1`, `mock`, `ti5_t170c`, or `navi_wa2`. Configure only the subsection for the selected adapter unless preparing reusable profiles.
+`robots.type` selects `unitree_g1` (default), `agibot_g1`, `mock`, `ti5_t170c`, or `navi_wa2`. Configure only the subsection for the selected adapter unless preparing reusable profiles.
 
 ### Shared action-layout convention
 
@@ -189,6 +189,7 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | Key | Meaning |
 | --- | --- |
 | `hand_type` | End-effector mode: `gripper`, `hand_as_gripper`, or `hand`. It selects camera names and proprioception layout. |
+| `camera.color_order` | Pixel order returned by `retrieve_observation()` (`rgb`). |
 | `camera.ref` | Reference camera name. |
 | `camera.names` | Mapping from canonical names (`head`, `hand_left`, `hand_right`) to robot camera identifiers. |
 | `camera.non_ref_fetch_workers` | Number of persistent worker threads used to fetch non-reference cameras. |
@@ -211,15 +212,18 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 
 | Key | Meaning |
 | --- | --- |
-| `camera.*_camera_topic` | ROS image topics for the head and hand cameras. |
-| `arms.*_joint_cmd_topic`, `arms.*_joint_states_topic` | ROS command/state topics for both arms. |
-| `arms.*_arm_joint_names` | Ordered seven-joint names for each arm. |
-| `hands.*_hand_joint_cmd_topic`, `hands.*_hand_joint_states_topic` | ROS command/state topics for both hands. |
-| `hands.hand_joint_names` | Ordered six-joint hand names. |
-| `waist.*`, `head.*` | ROS command/state topics and ordered joint names for waist and head. |
-| `reset_robot_pos` | Full robot reset target vector; its ordering must match the bridge implementation. |
-| `zero_pos` | Full robot zero/reference target vector; ordering must match the bridge implementation. |
-| `action_layout` | Arm and multi-finger gripper action ranges. |
+| `hand_type` | End-effector mode; China Mobile Lingxi uses `hand`. It selects camera names and proprioception layout. |
+| `camera.color_order` | Pixel order returned by `retrieve_observation()` (`rgb`; the adapter converts camera frames). |
+| `camera.backend` | Camera transport; `remote_forwarder` subscribes to a video forwarder. |
+| `camera.forwarder_uri` | ZMQ URI of the video forwarder (default `tcp://192.168.1.100:9100`). |
+| `camera.ref`, `camera.names` | Reference camera and mapping to forwarder topics (`head/color`, `hand_left/color`, `hand_right/color`). |
+| `camera.warmup_s` | Seconds to wait for camera streams after connecting. |
+| `camera.depth_names` | Depth topic mapping. Kept empty: depth frames are not consumed by VLA inference and are neither subscribed nor sent to the server. |
+| `proprio_names` | Ordered proprioception groups (`arm`, `hand`) used to assemble robot state. |
+| `hand_freq`, `head_freq` | Command frequencies for hand and head control; `1` means every control tick. |
+| `reset_robot_pos` | Full robot reset target vector (arms at the reset pose, hands open). Kept aligned with the arm `Default` preset and the console reset position. |
+| `manual_arm_interval` | Time interval in seconds between manually generated arm targets. |
+| `action_layout` | Arm (`gradual`, presets `Default` = reset pose / `Custom` = previous homing pose), hand (`stepwise`, `Default`/`Custom`), and head (`manual`, NECK joints, Web-only) action ranges and UI presets. |
 
 ### `robots.navi_wa2`
 
@@ -228,9 +232,19 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `tt` | Servo/control period in seconds. |
 | `gain` | Servo gain. |
 | `hand_type` | End-effector mode; NAVIAI-WA2 uses `hand`. It selects proprioception layout and hand presets. |
+| `camera.color_order` | Pixel order of incoming frames (`bgr`; cv_bridge uses bgr8). |
 | `camera.topic_dict` | Compressed ROS image topics keyed by `head`, `hand_left`, and `hand_right`. |
 | `action_layout` | Continuous arm and stepwise hand action ranges. |
 | `reset_position` | Full reset pose vector; ordering must match the NAVIAI-WA2 driver. |
+
+### `robots.unitree_g1`
+
+| Key | Meaning |
+| --- | --- |
+| `camera.color_order` | Pixel order of incoming frames (`bgr`; cv_bridge uses bgr8). |
+| `hand_type` | End-effector mode; Unitree G1 uses `hand`. It selects camera names and proprioception layout. |
+| `reset_robot_pos` | Full robot reset target vector (26 dimensions, all zeros). |
+| `action_layout` | Arm (`gradual`, `Default`/`Custom` presets) and hand (`stepwise`, six-finger values, `Default`/`Custom` presets) action ranges. |
 
 ## Server and model dictionary
 
