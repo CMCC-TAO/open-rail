@@ -35,7 +35,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 
 **Open-RAIL 就是这段链路**：一套轻量级服务端-客户端框架，把任意 VLA/WAM 模型接到任意已适配机器人上，并把「**推**（真机推理执行）→ **采**（运行即采集）→ **评**（数据驱动迭代）」的闭环端到端接进每一次运行。
 
-目前已适配 **5 款异构机器人**（含 LeRobot 仿真后端）、支持 **12 个主流 VLA/WAM 模型**（9 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
+目前已适配 **5 款异构机器人**（含 LeRobot 仿真后端）、支持 **14 个主流 VLA/WAM 模型**（10 个系列），关节加速度标准差 **10+ → 0.1 rad/s²**。
 
 - 🤖 **VLA/WAM 模型研究人员** — 开箱即用的真机部署环境，专注模型创新，不搭工程管线
 - 🔧 **机器人工程师** — 快速验证算法的工具集，无需重复实现驱动与管线
@@ -78,7 +78,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | ⚡ 推理跟不上控制周期，动作又卡又抖 | 三线程异步流水（观测 / 推理 / 控制）+ 块内/块间两级在线平滑 | 关节加速度标准差 **10+ → 0.1 rad/s²**，消除 **30–50 倍**频率差 |
 | ☁️ 机器人端算力跑不动大模型 | 服务端-客户端分离，两侧依赖树互不干涉 | 嵌入式设备也能驱动大模型；端 / 边 / 云**代码零改动**切换 |
 | 🔌 换一台机器人就要重做接口 | 轻量硬件抽象层 `RobotBase` + 统一 `action_layout` 索引 | 已适配 **5 款异构机器人**；新机器人接入**从周级降到小时级** |
-| 🧩 每接一个新模型都要重写工程管线 | 统一模型接入约定 + 服务端自动路由 | 已支持 **12 个模型**；新模型接入 **≤ 100 行** |
+| 🧩 每接一个新模型都要重写工程管线 | 统一模型接入约定 + 服务端自动路由 | 已支持 **14 个模型**；新模型接入 **≤ 100 行** |
 | 📊 推理与数采割裂，数据进不了训练管线 | 采集内置于每次推理，LeRobot 风格 Parquet，episode 可追加 | 每次运行产出可用训练数据，**零额外成本** |
 | 🎮 模型推理跑偏，没法及时纠正 | 三模式（纯推理 / 纯遥操 / 混合）+ 暂停-介入-恢复与状态预对齐（10 月开源） | 每次人工纠偏即**高质量教学样本**，无需后处理 |
 
@@ -102,7 +102,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | 模型系列 | 成员 | 状态 | 适配器 |
 | --- | --- | --- | --- |
 | ACT | ACT | ✅ 已支持 | `server/models/act/` |
-| GR00T N1 系列 | GR00T N1、N1.5、N1.6 | ✅ 已支持 | `server/models/gr00t/` |
+| GR00T N1 系列 | GR00T N1、N1.5、N1.6、N1.7 EEF | ✅ 已支持 | `server/models/gr00t/` |
 | RDT | RDT-1B | ✅ 已支持 | `server/models/rdt/` |
 | SmolVLA | SmolVLA | ✅ 已支持 | `server/models/smolvla/` |
 | GO1 | 智元 GO-1 | ✅ 已支持 | `server/models/go1/` |
@@ -110,6 +110,7 @@ VLA/WAM 模型越来越多，真机已是当下具身智能的版本答案。但
 | TAO | TAO | ✅ 已支持 | `server/models/tao/` |
 | DM0.5 | DM0.5 | ✅ 已支持 | `server/models/dm05/` |
 | WALL-X | WALL-X | ✅ 已支持 | `server/models/wallx/` |
+| X-VLA | X-VLA EEF | ✅ 已支持 | `server/models/xvla/` |
 | _你的模型_ | — | 🔜 [接入指南](docs-cn-backup/add-new-model.zh-CN.md) | — |
 
 ## 🚀 快速开始
@@ -368,7 +369,7 @@ Parquet 保存观测、状态和动作；视频按相机 key 分目录保存。
 
 - [x] 5 款异构机器人（AgiBot G1 / 中国移动灵犀（Ti5 T170C）/ NAVIAI-WA2 / Unitree G1 + 一套 LeRobot 仿真后端）
 - [x] Unitree G1 适配器（ROS 2）
-- [x] 12 个 VLA/WAM 模型（9 系列）
+- [x] 14 个 VLA/WAM 模型（10 系列）
 - [x] 可视化抽象为独立层——面向非开发人员的控制入口
 - [ ] WAM 模型接入（10 月）
   - [ ] dreamzero
@@ -443,7 +444,7 @@ Apache License 2.0，详见 [LICENSE](LICENSE)。
 ## 🙏 致谢
 
 - 数据集格式与工具链借鉴 [LeRobot](https://github.com/huggingface/lerobot) 的 Parquet 与视频组织约定
-- 模型适配基于各模型官方实现：GR00T（[NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)）、RDT（[thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)）、ACT、SmolVLA、GO1、π 系列、TAO
+- 模型适配基于各模型官方实现：GR00T（[NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)）、RDT（[thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)）、ACT、SmolVLA、GO1、π 系列、TAO、X-VLA
 - ACT 适配中的 DETR 部分修改自 [facebookresearch/detr](https://github.com/facebookresearch/detr)（Apache 2.0），扩散策略相关实现参考 [real-stanford/diffusion_policy](https://github.com/real-stanford/diffusion_policy)
 - 机器人适配依赖各厂商 SDK 与驱动：AgiBot G1、中国移动灵犀（Ti5 T170C）、NAVIAI-WA2（浙江人形）、Unitree G1
 
