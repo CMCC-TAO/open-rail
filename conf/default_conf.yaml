@@ -38,7 +38,7 @@ language:
   auto_mode_start_sub_task_id: 0
   file_path: language_cmd.json
   sub_task_id: 0
-  task_id: tea_master
+  task_id: wash_dishes
   task_progress_threshold: 0.9
   task_progress_win_size: 10
 rdm:
@@ -111,13 +111,13 @@ robots:
         presets:
           left:
             Default:
-            - -1.0748
-            - 0.6107
-            - 0.2816
-            - -1.2823
-            - 0.7292
-            - 1.4957
-            - -0.1869
+            - -1.2655
+            - 1.2505
+            - 0.8484
+            - -0.487
+            - 1.0503
+            - 0.905
+            - -0.9036
             Custom:
             - -1.0748
             - 0.6107
@@ -128,13 +128,13 @@ robots:
             - -0.1869
           right:
             Default:
-            - 1.072
-            - -0.6103
-            - -0.278
-            - 1.2822
-            - -0.7299
-            - -1.4929
-            - 0.1873
+            - 1.0743
+            - -0.611
+            - -0.2794
+            - 1.2839
+            - -0.7304
+            - -1.4953
+            - 0.1876
             Custom:
             - 1.072
             - -0.6103
@@ -150,7 +150,7 @@ robots:
         presets:
           left:
             Default:
-            - 0.0
+            - 1
             Custom:
             - 0.5
             Open:
@@ -183,8 +183,8 @@ robots:
         policy: manual
         presets:
           Default:
-          - 0.4012
-          - 27
+          - 0.7854
+          - 52
           Custom:
           - 0.7854
           - 52
@@ -579,7 +579,7 @@ robots:
     - 1000.0
     - 1000.0
     - 1000.0
-  type: mock
+  type: agibot_g1
 vision:
   history_frame: false
   preprocess:
