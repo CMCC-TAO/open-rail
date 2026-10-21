@@ -41,5 +41,11 @@
   "unitree_g1": [
     "use one hand to grab one bottle from a pile of drinks.",
     "use both hands to grab the two nearest bottles from a pile of drinks."
+  ],
+  "make_salad": [
+    "[PRIMARY_ARM=RIGHT] Pick up the enoki mushrooms and place them on the plate.",
+    "[PRIMARY_ARM=RIGHT] Pick up the shredded carrots and place them on the plate.",
+    "[PRIMARY_ARM=RIGHT] Pick up the shredded cabbage and place it on the plate.",
+    "[PRIMARY_ARM=LEFT] Toss the salad."
   ]
 }

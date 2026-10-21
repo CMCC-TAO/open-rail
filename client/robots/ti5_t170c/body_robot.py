@@ -5,25 +5,23 @@ from typing import Callable, Optional, Sequence
 import numpy as np
 import pandas as pd
 from ti5_t170c_sdk import Ti5Robot, create_camera
+from ti5_t170c_sdk._constants import end_effector_profile
 
 from ..base_robot import RobotBase
 
 
 class RobotBody(RobotBase):
-    """TI5 T170c VLA adapter (26-DOF: arm + hand; matches VLA training)."""
+    """TI5 T170c VLA adapter. Model width follows the end-effector profile."""
 
     def __init__(self, config):
         super().__init__(config)
         self.logger = logging.getLogger(__name__)
         self.cfg = config
-        # Keep model action_dim from parse_action_layout (arm+hand=26).
-        # state_dim may be larger when manual segments (e.g. head) are present.
-        if not self.action_dim:
-            self.action_dim = 26
+        self._bind_end_effector_profile()
 
         cam_cfg = self.cfg.get("camera", {})
         # Initialize DDS before ZMQ camera traffic so joint discovery is not starved.
-        self.robot = Ti5Robot()
+        self.robot = Ti5Robot(self.cfg, hand_type=self._profile.name)
         self._wait_for_joint_state(timeout_s=float(cam_cfg.get("joint_warmup_s", 5.0)))
         self.camera = create_camera(cam_cfg)
 
@@ -40,11 +38,17 @@ class RobotBody(RobotBase):
         here (arm + hand, dim=26). Segments with policy='manual' (e.g. head) are
         Web Robot Control only via execute_action / _control_robot.
         """
-        action = np.asarray(action, dtype=np.float32)
+        action = np.asarray(action, dtype=np.float32).reshape(-1)
+        if action.size != self.action_dim:
+            raise ValueError(
+                f"hand_type {self._profile.name!r} expects action_dim {self.action_dim} "
+                f"({self._profile.left.dof}+{self._profile.right.dof} end effector), "
+                f"got {action.size}"
+            )
         segments = {
             name: action[v["start"] : v["end"]]
             for name, v in self.action_layout.items()
-            if v.get("policy") != "manual" and v["end"] <= action.size
+            if v.get("policy") != "manual"
         }
 
         if "arm" in segments:
@@ -140,7 +144,7 @@ class RobotBody(RobotBase):
         peer_ip = parse_host_from_uri(self.cfg.get("camera", {}).get("forwarder_uri"))
         ensure_cyclonedds_uri(peer_ip=peer_ip, force=True)
         shutdown_bridge()
-        self.robot = Ti5Robot()
+        self.robot = Ti5Robot(self.cfg, hand_type=self._profile.name)
         if not self._wait_for_arm_samples(min(timeout_s, 2.0)):
             self.logger.warning(
                 "Arm joint state still unavailable after DDS bridge reset."
@@ -193,12 +197,11 @@ class RobotBody(RobotBase):
         self.logger.info("TI5 T170c robot closed")
 
     def load_action_data(self, parquet_path, key="action"):
-        """Load trajectory frames from parquet and normalize to action_dim.
+        """Load replay frames whose length is 14, action_dim, or head.end.
 
-        Supported source layouts:
-        - >=action_dim: truncate to action_dim (26 = arm+hand)
-        - >=16: arm + 2-dim gripper expanded to 12-dim hand
-        - >=14: arm only, remaining segments padded from reset_robot_pos
+        Arm-only frames keep the open end effector from reset_robot_pos.
+        Any other length is rejected so a short gripper trace cannot be
+        copied onto a dexterous hand.
         """
         df = pd.read_parquet(parquet_path)
         raw = df[key].tolist()
@@ -216,40 +219,27 @@ class RobotBody(RobotBase):
         hand_s = self.action_layout["hand"]["start"]
         hand_e = self.action_layout["hand"]["end"]
         head = self.action_layout.get("head")
-        waist = self.action_layout.get("waist")
+
+        accepted = {arm_e, self.action_dim}
+        if head is not None:
+            accepted.add(head["end"])
 
         processed_data = []
         for ele in raw:
             src = np.asarray(ele, dtype=np.float32).reshape(-1)
-            out = default.copy()
-
-            if src.shape[0] >= self.action_dim:
-                out = src[: self.action_dim].copy()
+            if src.shape[0] not in accepted:
+                raise ValueError(
+                    f"hand_type {self._profile.name!r} expects replay length "
+                    f"{sorted(accepted)} ({self._profile.left.dof}+{self._profile.right.dof}), "
+                    f"got {src.shape[0]}"
+                )
+            if src.shape[0] == arm_e:
+                # Arm-only frames keep the open end effector from reset_robot_pos.
+                out = default.copy()
+                out[arm_s:arm_e] = src[arm_s:arm_e]
             else:
-                if src.shape[0] >= arm_e:
-                    out[arm_s:arm_e] = src[arm_s:arm_e]
-                if src.shape[0] >= hand_e:
-                    out[hand_s:hand_e] = np.clip(src[hand_s:hand_e], 0.0, 1000.0)
-                elif src.shape[0] >= arm_e + 2:
-                    out[hand_s : hand_s + 6] = src[arm_e]
-                    out[hand_s + 6 : hand_e] = src[arm_e + 1]
-                elif src.shape[0] > arm_e:
-                    n = min(hand_e - hand_s, src.shape[0] - arm_e)
-                    out[hand_s : hand_s + n] = np.clip(
-                        src[arm_e : arm_e + n], 0.0, 1000.0
-                    )
-
-                if head is not None and waist is not None:
-                    head_s, head_e = head["start"], head["end"]
-                    waist_s, waist_e = waist["start"], waist["end"]
-                    if src.shape[0] >= waist_e:
-                        out[head_s:waist_e] = src[head_s:waist_e]
-                    elif src.shape[0] >= head_e:
-                        out[head_s:head_e] = src[head_s:head_e]
-                    elif src.shape[0] >= arm_e + 4:
-                        out[head_s : head_s + 2] = src[arm_e + 2 : arm_e + 4]
-                        out[waist_s : waist_s + 2] = src[arm_e + 4 : arm_e + 6]
-
+                out = src.copy()
+                out[hand_s:hand_e] = np.clip(src[hand_s:hand_e], 0.0, 1000.0)
             processed_data.append(out)
         return processed_data
 
@@ -347,6 +337,46 @@ class RobotBody(RobotBase):
             )
 
     def _trim_state(self, state) -> np.ndarray:
-        """Trim SDK full_joint_states (32) to state_dim (arm+hand[+manual head])."""
+        """Trim SDK full_joint_states to state_dim (arm+hand[+manual head])."""
         n = self.state_dim or self.action_dim
         return np.asarray(state, dtype=np.float32)[:n].copy()
+
+    def _bind_end_effector_profile(self) -> None:
+        """Check the yaml hand segment against the SDK profile before opening DDS."""
+        hand_type = self.cfg.get("hand_type") or "hand"
+        self._profile = end_effector_profile(hand_type)
+        hand = self.action_layout["hand"]
+        width = hand["end"] - hand["start"]
+        if width != self._profile.hand_dof:
+            raise ValueError(
+                f"hand_type {self._profile.name!r} is "
+                f"{self._profile.left.dof}+{self._profile.right.dof}, "
+                f"but action_layout.hand width is {width}"
+            )
+        head = self.action_layout.get("head")
+        if head is not None and head["start"] != hand["end"]:
+            raise ValueError(
+                f"head.start must equal hand.end ({hand['end']}), got {head['start']}"
+            )
+
+    def _control_robot(self, data):
+        """Split TI5 l_hand/r_hand by profile width, then keep the base path."""
+        payload = dict(data)
+        left = payload.pop("l_hand", None)
+        right = payload.pop("r_hand", None)
+        if left is not None or right is not None:
+            left_dof = self._profile.left.dof
+            right_dof = self._profile.right.dof
+            if left is None:
+                left = [-1000] * left_dof
+            if right is None:
+                right = [-1000] * right_dof
+            if len(left) != left_dof or len(right) != right_dof:
+                raise ValueError(
+                    f"hand_type {self._profile.name!r} expects l_hand {left_dof} and "
+                    f"r_hand {right_dof}, got {len(left)} and {len(right)}"
+                )
+            current = self._current_pose("hand")
+            target = self._target_pose(current, list(left) + list(right))
+            self.execute_action({"hand": target.tolist()})
+        super()._control_robot(payload)
