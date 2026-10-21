@@ -75,10 +75,7 @@ const populate = (selectId, checkId, action, side = null, preferredKey = null) =
   select.disabled = !supported || !check.checked;
   updateEditState(select, edit, reason);
 };
-const handAction = () => {
-  const action = String(robotConfig().hand_type || 'gripper');
-  return hasLayout(action) ? action : 'gripper';
-};
+const handAction = () => resolveHandAction(robotConfig().hand_type, robotConfig().action_layout);
 const presetSelectIds = [
   'arm-left-preset', 'arm-right-preset',
   'gripper-left-preset', 'gripper-right-preset',
@@ -334,4 +331,11 @@ $('btn-wheel')?.addEventListener('click', async () => {
 
 document.addEventListener('app-config-updated', refreshControls);
 refreshControls();
+}
+
+function resolveHandAction(handType, layout) {
+  const action = String(handType || 'gripper');
+  if (layout && Object.prototype.hasOwnProperty.call(layout, action)) return action;
+  if (layout && Object.prototype.hasOwnProperty.call(layout, 'hand')) return 'hand';
+  return 'gripper';
 }

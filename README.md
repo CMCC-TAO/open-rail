@@ -35,7 +35,7 @@ VLA/WAM models keep multiplying, and real-robot deployment is now the accepted a
 
 **Open-RAIL is exactly that link** — a lightweight server-client framework that connects any VLA/WAM model to any adapted robot and wires the closed loop of **infer** (real-robot inference and execution) → **collect** (capture data as it runs) → **evaluate** (data-driven iteration) end-to-end into every run.
 
-It currently provides **7 robot adapters** (including RoboCasa, RoboTwin, and a LeRobot simulation backend) and supports **12 mainstream VLA/WAM models** (9 families), with joint acceleration standard deviation reduced from **10+ to 0.1 rad/s²**.
+It currently provides **7 robot adapters** (including RoboCasa, RoboTwin, and a LeRobot simulation backend) and supports **14 mainstream VLA/WAM models** (10 families), with joint acceleration standard deviation reduced from **10+ to 0.1 rad/s²**.
 
 - 🤖 **VLA researchers** — a ready-to-use real-robot deployment environment; focus on model innovation, not on building the pipeline
 - 🔧 **Robotics engineers** — a toolkit for fast algorithm validation, without reimplementing drivers and plumbing
@@ -78,7 +78,7 @@ It currently provides **7 robot adapters** (including RoboCasa, RoboTwin, and a 
 | ⚡ Inference can't keep up with the control cycle; motion stutters and jitters | Three-thread asynchronous pipeline (observation / inference / control) + two-level online smoothing (intra-/inter-chunk) | Joint acceleration std **10+ → 0.1 rad/s²**, eliminating a **30–50×** frequency gap |
 | ☁️ Robot-side compute can't run large models | Server-client split, with non-overlapping dependency trees | Embedded devices can drive large models; device / edge / cloud switching with **zero code changes** |
 | 🔌 Every new robot means redoing the interface | Lightweight hardware abstraction layer `RobotBase` + unified `action_layout` indexing | **5 heterogeneous robots** adapted; onboarding a new robot **from weeks to hours** |
-| 🧩 Every new model means rewriting the pipeline | Unified model integration contract + automatic server-side routing | **12 models** supported; new models integrate in **≤ 100 lines** |
+| 🧩 Every new model means rewriting the pipeline | Unified model integration contract + automatic server-side routing | **14 models** supported; new models integrate in **≤ 100 lines** |
 | 📊 Inference and collection are split; data never reaches the training pipeline | Collection built into every inference run, LeRobot-style Parquet, appendable episodes | Every run produces usable training data, **at zero extra cost** |
 | 🎮 When inference drifts, there is no timely way to correct it | Three modes (pure inference / pure teleop / hybrid) + pause–intervene–resume with state pre-alignment (opening in October) | Every human correction is a **high-quality demonstration**, with no post-processing |
 
@@ -105,13 +105,14 @@ Smoothing happens at the **framework level** — no model changes, no training a
 | --- | --- | --- | --- |
 | TAO(ours) | TAO 0, 0.5 | ✅ Supported | `server/models/tao/` |
 | ACT | ACT | ✅ Supported | `server/models/act/` |
-| GR00T N1 series | GR00T N1, N1.5, N1.6 | ✅ Supported | `server/models/gr00t/` |
+| GR00T N1 series | GR00T N1, N1.5, N1.6, N1.7 EEF | ✅ Supported | `server/models/gr00t/` |
 | RDT | RDT-1B | ✅ Supported | `server/models/rdt/` |
 | SmolVLA | SmolVLA | ✅ Supported | `server/models/smolvla/` |
 | GO1 | AgiBot GO-1 | ✅ Supported | `server/models/go1/` |
 | π series | π0, π0.5 | ✅ Supported | `server/models/openpi/` |
 | DM0.5 | DM0.5 | ✅ Supported | `server/models/dm05/` |
 | WALL-X | Wall-OSS-0.5 | ✅ Supported | `server/models/wallx/` |
+| X-VLA | X-VLA EEF | ✅ Supported | `server/models/xvla/` |
 | _Your model_ | — | 🔜 [Integration guide](docs/guides/add-new-model.md) | — |
 
 ## 🚀 Quick Start
@@ -374,7 +375,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 
 - [x] 7 robot adapters (4 hardware adapters + RoboCasa / RoboTwin / Mock)
 - [x] Unitree G1 adapter (ROS 2)
-- [x] 12 VLA/WAM models across 9 families
+- [x] 14 VLA/WAM models across 10 families
 - [x] Visualization abstracted as its own layer — a control entry for non-developers
 - [ ] WAM integration (October)
   - [ ] dreamzero
@@ -449,7 +450,7 @@ Apache License 2.0. See [LICENSE](LICENSE).
 ## 🙏 Acknowledgements
 
 - Dataset format and tooling follow [LeRobot](https://github.com/huggingface/lerobot)'s Parquet and video organization conventions
-- Model adapters are based on each model's official implementation: GR00T ([NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)), RDT ([thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)), ACT, SmolVLA, GO1, π series, TAO
+- Model adapters are based on each model's official implementation: GR00T ([NVIDIA Isaac-GR00T](https://github.com/NVIDIA/Isaac-GR00T)), RDT ([thu-ml](https://github.com/thu-ml/RoboticsDiffusionTransformer)), ACT, SmolVLA, GO1, π series, TAO, X-VLA
 - The DETR portion of the ACT adapter is adapted from [facebookresearch/detr](https://github.com/facebookresearch/detr) (Apache 2.0), and the diffusion-policy implementations reference [real-stanford/diffusion_policy](https://github.com/real-stanford/diffusion_policy)
 - Robot adapters rely on each vendor's SDK and drivers: AgiBot G1, China Mobile Lingxi (Ti5 T170C), NAVIAI-WA2 (Zhejiang Humanoid), Unitree G1
 

@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## [20261021]
+
+- Added two end-effector (EEF) adapters — XVLA EEF (`xvla_eef`) and GR00T N1.7 EEF (`gr00t_n1_7_eef`) — on top of a new `server/utils/eef_utils/` toolchain for action-to-joint conversion (Pink IK solver, rotation transforms, A2D zero-state URDF). Setup guides: `server/models/xvla/README.md` and `server/models/gr00t/README.md`.
+- Made the TI5 T170C hand width configurable via `hand_type` (`hand`, `gripper`, `lhand_rgripper`, `lgripper_rhand`), with `action_layout` and preset poses following the selected profile; the TAO default embodiment now points at `ti5_gripper`.
+- Fixed web manual control addressing a `gripper` action that some robots' `action_layout` does not define, so gripper-only and mixed hand/gripper profiles now resolve to the layout's `hand` entry.
+
 ## [20261019]
 
 - Added a PyTorch pi0.5 (`pi05_pytorch`) adapter with CLI/configuration support, configurable execution horizons, and optional `torch.compile`.

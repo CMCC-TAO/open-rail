@@ -190,10 +190,12 @@ def get_robotwin_aloha_config():
     })
     return config
 
-def get_ti5_t170c_config():
-    """Configuration for TI5 T170c (26-DOF arm+hand; matches VLA training)."""
+def get_ti5_t170c_config(hand_type='hand'):
+    """Configuration for TI5 T170c. Width follows hand_type; default stays 26-DOF."""
+    left_dof, right_dof = _ti5_hand_widths(hand_type)
+    hand_dof = left_dof + right_dof
     config = ConfigDict()
-    config.hand_type = 'hand'
+    config.hand_type = hand_type or 'hand'
     config.camera = ConfigDict()
     config.camera.color_order = 'rgb'  # Adapter converts camera frames to RGB
     config.camera.backend = 'remote_forwarder'
@@ -224,10 +226,11 @@ def get_ti5_t170c_config():
         + [1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567,
            0.4101313352460489, -0.2251850174207321, 0.3232027944991513]
     )
-    # Hand open pose in Inspire hardware units [0, 1000]
-    config.reset_robot_pos = _arm_reset + [1000.0] * 12
+    # Hand open pose in hardware units [0, 1000]. Width follows the profile.
+    config.reset_robot_pos = _arm_reset + [1000.0] * hand_dof
     config.manual_arm_interval = 0.01
-    _hand_open = [1000.0] * 6
+    _left_open = [1000.0] * left_dof
+    _right_open = [1000.0] * right_dof
     # Head: NECK_Y / NECK_P / NECK_R (rad). policy=manual → Web-only, not in VLA action_dim.
     _head_default = [0.0, 0.0, 0.0]
     config.action_layout = {
@@ -249,24 +252,24 @@ def get_ti5_t170c_config():
         },
         'hand': {
             'start': 14,
-            'end': 26,
+            'end': 14 + hand_dof,
             'policy': 'gradual',
             # Web presets: Default/Custom only (edit Custom for open/close values).
             'presets': {
                 'left': {
-                    'Default': list(_hand_open),
-                    'Custom': list(_hand_open),
+                    'Default': list(_left_open),
+                    'Custom': list(_left_open),
                 },
                 'right': {
-                    'Default': list(_hand_open),
-                    'Custom': list(_hand_open),
+                    'Default': list(_right_open),
+                    'Custom': list(_right_open),
                 },
             },
         },
         # policy='manual' is robot/Web-only and must stay after all model policies.
         'head': {
-            'start': 26,
-            'end': 29,
+            'start': 14 + hand_dof,
+            'end': 14 + hand_dof + 3,
             'policy': 'manual',
             'presets': {
                 'Default': list(_head_default),
@@ -387,6 +390,23 @@ def get_robots_config():
     config.navi_wa2 = get_navi_wa2_config()
     config.unitree_g1 = get_unitree_g1_config()
     return config
+
+_TI5_HAND_WIDTHS = {
+    'hand': (6, 6),
+    'gripper': (1, 1),
+    'lhand_rgripper': (6, 1),
+    'lgripper_rhand': (1, 6),
+}
+
+
+def _ti5_hand_widths(hand_type):
+    """Return (left_dof, right_dof) for a TI5 end-effector profile name."""
+    try:
+        return _TI5_HAND_WIDTHS[hand_type or 'hand']
+    except KeyError:
+        valid = ', '.join(sorted(_TI5_HAND_WIDTHS))
+        raise ValueError(f'Unknown hand_type {hand_type!r}. Valid profiles: {valid}') from None
+
 
 if __name__ == '__main__':
     config = get_robots_config()
