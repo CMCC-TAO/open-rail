@@ -39,6 +39,11 @@ The `defaults` mapping applies to both platforms; `platforms.robocasa` and
 `platforms.robotwin` override individual values using `EvaluationConfig` field names.
 `io_profiles` contains named model layouts selected with `simulation.yml#<name>`;
 robot configurations select their benchmark's layout automatically.
+`embodiments` maps shared `--embodiment_tag` names to layouts and model settings.
+Use `robotwin_aloha` or `robocasa_pandas_omron` on both server and evaluator.
+Web jobs accept the same name through `vla_zmq.embodiment_tag` in Configuration
+or the evaluation API's `embodiment_tag` field. Unregistered model/robot combinations
+are rejected; a compatible checkpoint and backend dependencies are still required.
 An empty `python` uses the Web service's interpreter. Configuration overrides the presets
 for shared settings. Simulation task selection and saving switches belong to the
 Evaluation panel; hardware-specific controller settings may be normalized by the existing

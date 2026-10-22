@@ -39,20 +39,46 @@ retain their CLI names and benchmark defaults.
 
 ## Model adaptation
 
-Use `run_server.py` for all registered model types. `server/models/` stays identical
-to upstream. `model_bridge.py` only translates SDK camera/language keys, fixes
-named action output order, and supplies missing model configuration. GR00T N1.5
+Use `run_server.py` for all registered model types. Both the server and evaluators
+accept `--embodiment_tag robotwin_aloha` or `--embodiment_tag robocasa_pandas_omron`.
+`conf/simulation.yml` maps these names to IO profiles and model-specific settings.
+`model_bridge.py` translates SDK camera/language keys, converts named TAO vectors,
+and validates simulation state/action dimensions and finite values. GR00T N1.5
 metadata aliases use a temporary checkpoint view; original checkpoints are untouched.
 SmolVLA receives the current instruction. No IO descriptions, versions, hashes,
 or negotiation fields are added to heartbeats, requests, or responses.
 
 ```bash
-python run_server.py --model_type tao \
-  --model_path /path/to/checkpoint --embodiment_tag aloha_robotwin \
+python run_server.py --model_type dm05 \
+  --model_path /path/to/checkpoint --embodiment_tag robotwin_aloha \
   --server_port 5566 --debug
+
+python scripts/aloha_robotwin_eval.py --task_name stack_bowls_three \
+  --embodiment_tag robotwin_aloha --server_port 5566 --n_envs 1
 ```
 
-All models default to the same output layout for the selected benchmark.
+The server and evaluator select the same layout when given the same tag.
+They do not negotiate tags over ZMQ. TAO maps `robotwin_aloha` to its SDK tag
+`aloha_robotwin`; `robocasa_pandas_omron` resolves to `robocasa_pandas`. Evaluators
+also accept the existing names and aliases. Without a tag, configured defaults remain.
+
+| Model adapter | RoboTwin | RoboCasa |
+| --- | --- | --- |
+| TAO | Registered SDK embodiment | Registered SDK embodiment |
+| DM05, SmolVLA, GO1 | Compatible checkpoint required | Compatible checkpoint required |
+| GR00T N1.5 | Explicit SDK data configuration required | Registered `panda_omron` configuration |
+| Other registered models | Explicit adaptation required | Explicit adaptation required |
+
+Unknown model/embodiment combinations fail before loading weights. Several existing
+adapters use fixed A2D slices, action widths, or kinematics; accepting a shared flag
+does not convert those adapters to a different robot. Add a compatible implementation
+before registering it under `embodiments.<name>.models`. For OpenPI, register the
+actual external training `config` name; do not infer it from the simulation name.
+DM05 keeps its checkpoint's robot, dataset, normalization, and action-mode contract
+unless explicit model settings are registered. Repository paths, dependencies,
+backend settings, and execution horizons remain model-specific.
+
+Adapted models use the same output layout for the selected benchmark.
 `conf/simulation.yml` contains Web defaults (`defaults`, `platforms`) and named
 model layouts (`io_profiles`). The `robotwin_aloha` profile defines RoboTwin's
 14D joint action layout; `robocasa` defines RoboCasa's 12D action layout.
@@ -78,17 +104,18 @@ Use `--io_profile conf/simulation.yml#<name>` to select a named profile.
 The `dual_arm_7dof_grippers` profile is a generic example, not a benchmark default.
 Standalone layout YAML files remain supported. New benchmarks select their
 default through the robot configuration's `io_profile`; explicit evaluator
-profiles take precedence. TAO uses embodiment action slice order; GR00T N1.5
-uses its data configuration's action key order. Keep those settings consistent
+profiles take precedence over the tag's layout on the evaluator. TAO uses SDK
+slice order internally and converts named fields to the selected profile;
+GR00T N1.5 uses its data configuration's action key order. Keep those settings consistent
 with the common benchmark layout.
-Web jobs use `vla_zmq.io_profile` or the evaluation API's `io_profile` field.
+Web jobs use `vla_zmq.embodiment_tag` or the evaluation API's `embodiment_tag` field.
+The selected tag must match the job platform. `vla_zmq.io_profile` and the API's
+`io_profile` field remain available for explicit layout overrides.
 The server accepts `--embodiment_tag` and `--server_port`; it does not accept
 `--io_profile`. GR00T N1.5 resolves its data configuration through
-`get_gr00t_config().data_config_by_embodiment`: `a2d` selects `a2d_arms_only`,
-and `robocasa_panda_omron` selects `panda_omron`. Unmapped tags use the same
-identifier for embodiment and data configuration. Add an explicit mapping when
-the SDK uses different identifiers. Without `--embodiment_tag`, configured
-defaults remain unchanged.
+`embodiments` settings for simulation tags. Other GR00T N1.5 SDK tags retain
+`conf/embodiments_conf.py`'s `GR00T_DATA_CONFIG_BY_EMBODIMENT`: `a2d` selects `a2d_arms_only`;
+unmapped SDK tags use the same identifier for embodiment and data configuration.
 
 Benchmarks declare `state_layout` separately from `config.action_layout`, with
 contiguous `start`/`end` slices. `SimulationRobot.describe_io()` reads these layouts;

@@ -10,7 +10,7 @@ from typing import Callable
 
 
 COMMON_CLI_FIELDS = frozenset('''
-io_profile
+io_profile embodiment_tag
 gpu n_episodes n_envs n_action_steps control_period_ms seed mode intra_chunk_mode
 intra_chunk_sample_ratio inter_chunk_mode async_replenish_threshold
 max_async_observation_lag_steps max_episode_steps episode_timeout stall_timeout

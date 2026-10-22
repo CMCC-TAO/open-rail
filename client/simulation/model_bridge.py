@@ -6,6 +6,10 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+import numpy as np
+
+from client.simulation.io_adapter import fields_from_layout, load_profile, map_vector, vector_width
+
 _REQUEST = ContextVar('model_request', default=None)
 _WIRE_CAMERAS = {
     'tao': ('base_image', 'left_wrist_image', 'right_wrist_image'),
@@ -96,6 +100,8 @@ class SimulationModelBridge:
         self.model = model
         self.cfg = model.cfg
         self.checkpoint_view = checkpoint_view
+        self.profile = load_profile(self.cfg.get('simulation_io_profile', ''))
+        self.state_fields = self.action_fields = None
         policy = getattr(model, 'policy', None)
         cameras = _WIRE_CAMERAS.get(model_type)
         targets, language, action_keys = cameras, None, []
@@ -104,6 +110,17 @@ class SimulationModelBridge:
             targets = tuple(getattr(embodiment, 'observations', {}).get('video', {})) or cameras
             layout = getattr(embodiment, 'indices', {}).get('action', {}).get('sub_components', {})
             action_keys = sorted(layout, key=lambda key: layout[key]['start'])
+            if self.profile and layout:
+                self.action_fields = fields_from_layout(layout)
+                map_vector(
+                    np.zeros(vector_width(self.action_fields)), self.action_fields, self.profile['action'],
+                )
+            state_layout = getattr(embodiment, 'indices', {}).get('state', {}).get('sub_components', {})
+            if self.profile.get('state') and state_layout:
+                self.state_fields = fields_from_layout(state_layout)
+                map_vector(
+                    np.zeros(vector_width(self.profile['state'])), self.profile['state'], self.state_fields,
+                )
         elif model_type == 'gr00t_n1_5' and policy is not None:
             from gr00t.experiment.data_config import DATA_CONFIG_MAP
 
@@ -130,11 +147,54 @@ class SimulationModelBridge:
         return getattr(self.model, name)
 
     def infer(self, sequence):
+        if self.profile:
+            sequence = self._prepare_sequence(sequence)
         token = _REQUEST.set({'language': sequence[0]['obs']['language']})
         try:
-            return self.model.infer(sequence)
+            result = self.model.infer(sequence)
+            if self.profile and result.get('type') == 'vla_action':
+                actions = np.asarray(result['pred_action'])
+                if self.action_fields:
+                    actions = map_vector(actions, self.action_fields, self.profile['action'])
+                expected = vector_width(self.profile['action'])
+                if (
+                    actions.ndim != 2 or not len(actions) or actions.shape[1] != expected
+                    or not np.isfinite(actions).all()
+                ):
+                    raise ValueError(
+                        f'{self.cfg["simulation_embodiment"]} requires finite actions with shape '
+                        f'(steps, {expected}), got {actions.shape}'
+                    )
+                result = {**result, 'pred_action': actions}
+            return result
         finally:
             _REQUEST.reset(token)
+
+    def _prepare_sequence(self, sequence):
+        if not sequence:
+            raise ValueError('Simulation inference requires at least one observation')
+        expected = self.profile.get('state')
+        history = self.profile.get('history_frames')
+        if history is not None and len(sequence) != history:
+            raise ValueError(f'Expected {history} observation frames, got {len(sequence)}')
+        prepared = []
+        for frame in sequence:
+            observation = dict(frame['obs'])
+            state = np.asarray(observation['state'])
+            if (
+                state.ndim != 1 or not state.size or not np.isfinite(state).all()
+                or (expected and state.size != vector_width(expected))
+            ):
+                raise ValueError(f'Invalid state shape {state.shape} for {self.cfg["simulation_embodiment"]}')
+            for role in ('head', 'hand_left', 'hand_right'):
+                if f'cam.{role}' not in observation:
+                    raise ValueError(f'Missing simulation camera: cam.{role}')
+            observation['state'] = (
+                map_vector(state, expected, self.state_fields)
+                if self.state_fields else state.copy()
+            )
+            prepared.append({**frame, 'obs': observation})
+        return prepared
 
 
 def _checkpoint_view(config):

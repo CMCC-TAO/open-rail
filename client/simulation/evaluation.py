@@ -426,6 +426,7 @@ def build_parser(description=None):
     parser.add_argument('--preprocess', choices=['none', 'resize'], default='none')
     parser.add_argument('--user_conf')
     parser.add_argument('--io_profile', help='Override the model layout: YAML path or YAML path#profile')
+    parser.add_argument('--embodiment_tag', help='Simulation robot name, shared with run_server.py')
     return parser
 
 
@@ -576,11 +577,17 @@ class EvaluationRunner:
         return stats
 
 
-def configure_pipeline(config, args):
-    if getattr(args, 'io_profile', None):
+def configure_pipeline(config, args, platform=None):
+    tag = getattr(args, 'embodiment_tag', None) or config.vla_zmq.get('embodiment_tag', '')
+    profile = getattr(args, 'io_profile', None) or config.vla_zmq.get('io_profile', '')
+    if tag:
+        from conf.embodiments_conf import select_evaluation_embodiment
+
+        select_evaluation_embodiment(config, tag, platform)
+    if profile:
         from client.simulation.io_adapter import resolve_profile_path
 
-        config.vla_zmq.io_profile = resolve_profile_path(args.io_profile)
+        config.vla_zmq.io_profile = resolve_profile_path(profile)
     config.rdm.mode = args.mode
     config.rdm.skip_initial_frames = 0
     config.rdm.action_consume_mode = "sequential"

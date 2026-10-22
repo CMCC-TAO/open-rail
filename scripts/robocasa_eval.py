@@ -167,7 +167,7 @@ def _run_task(args, env_name, run_id):
     config.visualize.port = args.visualize_port
 
     from client.simulation.evaluation import configure_pipeline
-    configure_pipeline(config, args)
+    configure_pipeline(config, args, platform='robocasa')
     if args.mode == 'async' and config.inter_chunk.inter_chunk_mode == 'min_jerk':
         logging.warning(
             'RoboCasa min_jerk smooths delta/velocity command values at every async '

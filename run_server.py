@@ -85,7 +85,11 @@ def parse_args():
     parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'gr00t_n1_7_eef', 'xvla_eef', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'pi05_pytorch', 'tao', 'dm05', 'wallx'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
-    parser.add_argument('--embodiment_tag', type=str, help='Model embodiment tag')
+    parser.add_argument('--embodiment_tag', type=str,
+                       choices=['a2d', 'a2d_gripper', 'robotwin_aloha', 'navi_wa2', 'new_embodiment',
+                                'robocasa_pandas_omron',
+                                'ti5_hand', 'ti5_gripper','unitree_g1'],
+                       help='Simulation robot name or supported SDK embodiment tag')
     parser.add_argument('--server_port', type=int, help='Override model service port')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
@@ -136,15 +140,9 @@ def override_config_with_args(config, args):
             config.models.wallx.model_path = args.model_path
 
     if args.embodiment_tag:
-        if config.models.type == ModelType.TAO:
-            config.models.tao.embodiment_tag = args.embodiment_tag
-        elif config.models.type == ModelType.GR00T_N1_5:
-            config.models.gr00t.embodiment_tag = args.embodiment_tag
-            config.models.gr00t.data_config_key = config.models.gr00t.data_config_by_embodiment.get(
-                args.embodiment_tag, args.embodiment_tag
-            )
-        else:
-            raise ValueError(f'{config.models.type.value} does not support --embodiment_tag')
+        from conf.embodiments_conf import select_model_embodiment
+
+        select_model_embodiment(config.models, args.embodiment_tag)
     if getattr(args, 'server_port', None) is not None:
         if not 1 <= args.server_port <= 65535:
             raise ValueError('--server_port must be in [1, 65535]')

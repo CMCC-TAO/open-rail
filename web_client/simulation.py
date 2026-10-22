@@ -42,6 +42,7 @@ def client_evaluation_values(config):
         "server_ip": ("vla_zmq", "ip"),
         "server_port": ("vla_zmq", "port"),
         "io_profile": ("vla_zmq", "io_profile"),
+        "embodiment_tag": ("vla_zmq", "embodiment_tag"),
     }
     for key, (group, field) in mappings.items():
         value = config.get(group, {}).get(field)
@@ -72,6 +73,7 @@ def client_evaluation_values(config):
 
 class EvaluationConfig(BaseModel):
     io_profile: str = ''
+    embodiment_tag: str = ''
     platform: str = "robocasa"
     python: str = sys.executable
     robotwin_root: str = str(ROOT.parent / "RoboTwin")
@@ -128,6 +130,13 @@ class EvaluationConfig(BaseModel):
     @model_validator(mode="after")
     def validate_selection(self):
         benchmark = get_benchmark(self.platform)
+        if self.embodiment_tag:
+            from conf.embodiments_conf import simulation_embodiment
+
+            embodiment = simulation_embodiment(self.embodiment_tag)
+            if embodiment is None or embodiment.platform != self.platform:
+                raise ValueError(f'Embodiment {self.embodiment_tag!r} does not match {self.platform}')
+            self.embodiment_tag = embodiment.name
         unsupported = self.benchmark_options.keys() - benchmark.cli_fields
         if unsupported:
             raise ValueError(f'Unsupported benchmark options: {", ".join(sorted(unsupported))}')

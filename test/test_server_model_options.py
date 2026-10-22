@@ -25,26 +25,25 @@ class ServerModelOptionsTests(unittest.TestCase):
         self.assertEqual(config.models.gr00t.data_config_key, 'a2d_arms_only')
 
     def test_tao_tag_does_not_change_gr00t_settings(self):
-        config = configure('--model_type', 'tao', '--embodiment_tag', 'aloha_robotwin')
+        config = configure('--model_type', 'tao', '--embodiment_tag', 'robotwin_aloha')
         self.assertEqual(config.models.type, ModelType.TAO)
         self.assertEqual(config.models.tao.embodiment_tag, 'aloha_robotwin')
         self.assertEqual(config.models.gr00t.data_config_key, 'a2d_arms_only')
 
     def test_gr00t_tag_selects_data_configuration(self):
-        for tag, key in (
-            ('a2d', 'a2d_arms_only'),
-            ('robocasa_panda_omron', 'panda_omron'),
-            ('custom_robot', 'custom_robot'),
+        for tag, sdk_tag, key in (
+            ('a2d', 'a2d', 'a2d_arms_only'),
+            ('robocasa_pandas_omron', 'robocasa_panda_omron', 'panda_omron'),
         ):
             with self.subTest(tag=tag):
                 config = configure('--model_type', 'gr00t_n1_5', '--embodiment_tag', tag)
-                self.assertEqual(config.models.gr00t.embodiment_tag, tag)
+                self.assertEqual(config.models.gr00t.embodiment_tag, sdk_tag)
                 self.assertEqual(config.models.gr00t.data_config_key, key)
 
     def test_gr00t_aliases_can_be_configured(self):
         config = get_vla_server_config()
-        config.models.gr00t.data_config_by_embodiment['custom_robot'] = 'custom_dataset'
-        configure('--embodiment_tag', 'custom_robot', config=config)
+        config.models.gr00t.data_config_by_embodiment = {'a2d': 'custom_dataset'}
+        configure('--embodiment_tag', 'a2d', config=config)
         self.assertEqual(config.models.gr00t.data_config_key, 'custom_dataset')
 
     def test_removed_options_are_rejected(self):
@@ -62,8 +61,8 @@ class ServerModelOptionsTests(unittest.TestCase):
         config = configure('--model_type', 'mock', '--server_port', '6001')
         self.assertEqual(config.models.type, ModelType.MOCK)
         self.assertEqual(config.zmq.port, '6001')
-        with self.assertRaisesRegex(ValueError, 'does not support --embodiment_tag'):
-            configure('--model_type', 'mock', '--embodiment_tag', 'robot')
+        with self.assertRaisesRegex(ValueError, 'has no simulation adaptation'):
+            configure('--model_type', 'mock', '--embodiment_tag', 'robotwin_aloha')
 
     def test_tao_derives_camera_roles_and_action_order(self):
         seen = {}

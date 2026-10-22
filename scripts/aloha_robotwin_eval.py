@@ -87,7 +87,7 @@ def build_parser():
 
 
 def configure_pipeline(config, args):
-    configure_shared_pipeline(config, args)
+    configure_shared_pipeline(config, args, platform='robotwin')
     config.intra_chunk.preserve_input_timestamps = True
     if config.intra_chunk.intra_chunk_mode != "interpolation":
         config.intra_chunk.output_sample_ratio = 1.0

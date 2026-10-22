@@ -27,7 +27,7 @@ Start TAO in the model environment:
 python run_server.py \
   --model_type tao \
   --model_path /path/to/checkpoint \
-  --embodiment_tag robocasa_panda_omron
+  --embodiment_tag robocasa_pandas_omron
 ```
 
 The default server port is `5566`. The adapter derives camera mapping and action
@@ -39,12 +39,14 @@ For GR00T N1.5:
 python run_server.py \
   --model_type gr00t_n1_5 \
   --model_path /path/to/checkpoint \
-  --embodiment_tag robocasa_panda_omron
+  --embodiment_tag robocasa_pandas_omron
 ```
 
-`--embodiment_tag robocasa_panda_omron` also selects the `panda_omron` data
-configuration through `get_gr00t_config().data_config_by_embodiment`.
+`--embodiment_tag robocasa_pandas_omron` selects the SDK tag `robocasa_panda_omron`
+and GR00T's `panda_omron` data configuration through `conf/simulation.yml`.
 The GR00T environment must register both identifiers.
+DM05, SmolVLA, and GO1 accept the same shared tag with a compatible checkpoint.
+The evaluator also accepts `--embodiment_tag robocasa_pandas_omron`.
 
 ## Web Evaluation
 

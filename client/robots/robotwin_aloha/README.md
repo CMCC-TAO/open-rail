@@ -29,8 +29,13 @@ Start the server in the model environment:
 python run_server.py \
   --model_type tao \
   --model_path /path/to/checkpoint \
-  --embodiment_tag aloha_robotwin
+  --embodiment_tag robotwin_aloha
 ```
+
+The shared tag resolves to TAO's `aloha_robotwin` SDK name. DM05, SmolVLA, and
+GO1 accept the same shared tag with a compatible checkpoint; model-specific
+dependencies and paths must be configured separately. The evaluator also accepts
+`--embodiment_tag robotwin_aloha` to select the matching IO profile.
 
 The default server port is `5566`. Camera names come from the TAO embodiment
 configuration, in head, left wrist, and right wrist order.
