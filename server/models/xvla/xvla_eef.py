@@ -36,8 +36,7 @@ class ModelVLA:
             joint_state_key=config.joint_state_key,
             rotation_type=config.rotation_type,
             ref_frame=config.ref_frame,
-            rot6d_convention=config.rot6d_convention,
-            **config.ik.to_dict(),
+            rot6d_convention=config.rot6d_convention
         )
         self.ik_solver.q_left_init = np.asarray(config.q_left_init)
         self.ik_solver.q_right_init = np.asarray(config.q_right_init)
