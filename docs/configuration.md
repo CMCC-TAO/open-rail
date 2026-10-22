@@ -15,7 +15,9 @@ description: "Configuration sources, precedence, and reference tables for Open-R
 | `run_web_client.py` | `conf/client_conf.py` defaults → `--conf` YAML file (default: `conf/default_conf.yaml`) → runtime load/patch requests from the Web console |
 | `run_server.py` | `conf/server_conf.py` defaults → command-line overrides (`--model_type`, `--model_path`, `--debug`) |
 
-The Web client accepts `--host`, `--port`, `--conf`, and `--reload`. The YAML file selected by `--conf` is both the startup configuration and the save target used by the Web console (Setup → Apply / Save As). When saving, `.yaml`/`.yml` targets are written as YAML and any other extension as a Python dictionary file.
+The Web client accepts `--host`, `--port`, `--conf`, and `--reload`. The YAML file selected by `--conf` is both the startup configuration and the save target used by the Web console (Setup → Apply / Save As). Configuration load/save accepts `.yaml` and `.yml` files only.
+
+`conf/user_conf_example.py` shows Python overrides for commands that support `--user_conf`, such as `scripts/robocasa_eval.py`; the Web client loads YAML through `--conf`.
 
 Only existing leaf keys are updated when a configuration file or patch is applied; unknown keys are ignored. The default file `conf/default_conf.yaml` is **git-ignored**: it does not exist in a fresh clone and is created by the first save from the Web console; on startup it is applied only if present. Two legacy key names are migrated automatically on load: `inter_chunk.search_length` is read as `inter_chunk.search_action.search_length`, and `robots.a2d.*` is read as `robots.agibot_g1.*`.
 

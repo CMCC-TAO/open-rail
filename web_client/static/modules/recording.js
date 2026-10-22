@@ -729,6 +729,7 @@ function syncRecordingFileListPolling() {
 function setupLeftPanelAccordion() {
   const panels = [
     { panelId: 'panel-config',    headerId: 'panel-config-header',    bodyId: 'config-body',    btnId: 'btn-config-collapse' },
+    { panelId: 'panel-simulation', headerId: 'panel-simulation-header', bodyId: 'simulation-body', btnId: 'btn-simulation-collapse' },
     { panelId: 'panel-recording', headerId: 'panel-recording-header', bodyId: 'recording-body', btnId: 'btn-recording-collapse' },
     { panelId: 'panel-manual',    headerId: 'panel-manual-header',    bodyId: 'manual-body',    btnId: 'btn-manual-collapse' },
   ];
@@ -754,6 +755,7 @@ function setupLeftPanelAccordion() {
       body.classList.toggle('collapsed', !expanded);
       panel?.classList.toggle('panel-expanded', expanded);
       if (btn) {
+        btn.setAttribute('aria-expanded', String(expanded));
         const isConfigBtn = btnId === 'btn-config-collapse';
         btn.innerHTML = isConfigBtn
           ? (expanded ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>')

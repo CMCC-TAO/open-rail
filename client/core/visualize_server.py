@@ -19,7 +19,8 @@ class VisualizeServer:
         # including script/uvicorn execution paths.
         self.logger = logging.getLogger(__name__)
         self.config = visualize_config
-        self.kill_port(self.config.port)
+        if self.config.get('auto_start', True):
+            self.kill_port(self.config.port)
         self.clients: Set[websockets.WebSocketServerProtocol] = set()
         self.running = False
 
@@ -40,7 +41,8 @@ class VisualizeServer:
         self.vis_global_step = 0
         self.vis_prev_action, self.vis_prev_state, self.vis_prev_origin = None, None, None
         self.vis_prev_action_vel, self.vis_prev_state_vel, self.vis_prev_origin_vel = None, None, None
-        self.start_server()
+        if self.config.get('auto_start', True):
+            self.start_server()
         self.logger.info("Initializing server on %s:%d", self.config.host, self.config.port)
 
     def kill_port(self, port):

@@ -185,8 +185,6 @@ class VLAServer:
             # for idx, item in enumerate(model_data):
             #     for k, v in item.get('obs', {}).items():
             #         print(f"Debug: model_data[{idx}]['obs']['{k}'] dtype: {getattr(v, 'dtype', type(v))}")
-            future = self.executor.submit(self.model.infer, model_data)
-            future.add_done_callback(lambda f: self.inference_callback(f, client_id=client_id, start_time=image_decode_time, meta=meta))
             for key, value in model_data[0]['obs'].items():
                 if 'cam.' in key:
                     self.obs_info[key] = value.shape
@@ -196,8 +194,13 @@ class VLAServer:
                     self.obs_info[key] = value
                     self.zmq_server.set_heartbeat_info(lang_cmd=value)
             self.obs_info['obs_comm_delay'] = time.perf_counter() - model_data[0]['loc_timestamp']
+            future = self.executor.submit(self.model.infer, model_data)
+            future.add_done_callback(lambda f: self.inference_callback(f, client_id=client_id, start_time=image_decode_time, meta=meta))
         except Exception as e:
             print(f"Error processing inference queue: {e}")
+            self.zmq_server.sendMessage(
+                client_id=client_id, data={'type': 'vla_error', 'error': str(e)}, meta=meta or {},
+            )
             import traceback
             traceback.print_exc()
     
@@ -226,9 +229,13 @@ class VLAServer:
                 # Calculate rolling average from recent inference times
                 # if self.inference_times:
             self.zmq_server.sendMessage(client_id=client_id, data=result, meta=meta)
-            self.act_info['pred_action'] = result['pred_action']
+            if 'pred_action' in result:
+                self.act_info['pred_action'] = result['pred_action']
         except Exception as e:
             print(f"Error in inference callback: {e}")
+            self.zmq_server.sendMessage(
+                client_id=client_id, data={'type': 'vla_error', 'error': str(e)}, meta=meta or {},
+            )
             import traceback
             traceback.print_exc()
     
@@ -247,5 +254,8 @@ class VLAServer:
         # Stop threads
         with self.thread_lock:
             self.running = False
-        self.executor.shutdown(wait=False)
+        if self.receive_thread.is_alive():
+            self.receive_thread.join()
+        self.executor.shutdown(wait=True)
+        self.image_decode_executor.shutdown(wait=True)
         self.zmq_server.close()

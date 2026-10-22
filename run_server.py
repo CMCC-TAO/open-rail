@@ -88,6 +88,12 @@ def parse_args():
     parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'gr00t_n1_7', 'gr00t_n1_7_eef', 'xvla_eef', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'pi05_pytorch', 'tao', 'dm05', 'wallx'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
+    parser.add_argument('--embodiment_tag', type=str,
+                       choices=['a2d', 'a2d_gripper', 'robotwin_aloha', 'navi_wa2', 'new_embodiment',
+                                'robocasa_pandas_omron',
+                                'ti5_hand', 'ti5_gripper','unitree_g1'],
+                       help='Simulation robot name or supported SDK embodiment tag')
+    parser.add_argument('--server_port', type=int, help='Override model service port')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
     return parser.parse_args()
@@ -138,6 +144,15 @@ def override_config_with_args(config, args):
         elif config.models.type == ModelType.WALLX:
             config.models.wallx.model_path = args.model_path
 
+    if args.embodiment_tag:
+        from conf.embodiments_conf import select_model_embodiment
+
+        select_model_embodiment(config.models, args.embodiment_tag)
+    if getattr(args, 'server_port', None) is not None:
+        if not 1 <= args.server_port <= 65535:
+            raise ValueError('--server_port must be in [1, 65535]')
+        config.zmq.port = str(args.server_port)
+
     return config
 
 def main():
@@ -153,11 +168,13 @@ def main():
     
     # Initialize server components
     zmq_server = ZMQServer(config.zmq)
-    model = get_model(config.models)
+    from client.simulation.model_bridge import build_model
+    model = build_model(config.models, get_model)
     vla_server = VLAServer(config, zmq_server, model)
     
     try:
         # Start server in a separate thread
+        vla_server.running = True
         server_thread = threading.Thread(target=vla_server.run, daemon=True)
         server_thread.start()
         print(f"Starting VLA Server with model type: {config.models.type}")

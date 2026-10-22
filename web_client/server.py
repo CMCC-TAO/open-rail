@@ -1,6 +1,6 @@
 """
 VLA Web Client Server
-FastAPI-based web server that wraps run_client.py logic for browser-based control.
+FastAPI-based web server for browser-based robot control.
 
 Architecture:
     - REST API  : config load/save/update, client start/stop
@@ -88,6 +88,10 @@ async def _lifespan(_: FastAPI):
         except Exception as e:
             logger.warning(f"Failed to apply yaml conf: {e}")
     client_state.config = client_config
+    simulation_manager.connection_defaults = (client_config.vla_zmq.ip, int(client_config.vla_zmq.port))
+    simulation_manager.connection_provider = lambda: (
+        str(client_state.config.vla_zmq.ip), int(client_state.config.vla_zmq.port)
+    )
     # print(f"Debug: config_file = {client_state.conf_file}")
     # print(f"Initial client.record config: {client_state.config.record}")
     # print(f"Visualize trajectory config: {client_state.config.visualize.trajectory}")
@@ -104,6 +108,7 @@ async def _lifespan(_: FastAPI):
     logger.info("VLA Web Client server started on http://localhost:9000")
     yield
     # ── shutdown ──
+    await asyncio.to_thread(simulation_manager.close)
     _shutdown_stop_if_running()
     # Avoid closing low-level robot SDK from a detached daemon cleanup thread,
     # which can crash (segfault) during interpreter shutdown.
@@ -112,6 +117,9 @@ async def _lifespan(_: FastAPI):
     _finalize_pyarrow_s3()
 
 app = FastAPI(title="Open-RAIL Web Client", version="1.0.0", lifespan=_lifespan)
+
+from web_client.simulation import manager as simulation_manager, router as simulation_router
+app.include_router(simulation_router)
 
 STATIC_DIR  = Path(__file__).parent / "static"
 VISUAL_DIR  = ROOT / "visual"
@@ -576,7 +584,12 @@ def _collect_stats() -> dict:
 # ─────────────────────────────────────────────────────────────────────────────
 @app.get("/")
 async def index():
-    return FileResponse(str(STATIC_DIR / "index.html"))
+    return FileResponse(str(STATIC_DIR / "index.html"), headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/simulation")
+async def simulation_page():
+    return FileResponse(str(STATIC_DIR / "simulation.html"), headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/favicon.ico")
@@ -969,14 +982,14 @@ async def get_config():
 
 @app.get("/api/client/config/yaml_files")
 async def list_yaml_configs():
-    """List all .yaml files in the conf directory."""
+    """List client configs, excluding simulation settings."""
     conf_dir = ROOT / "conf"
     yaml_files = []
     if conf_dir.exists():
-        for f in sorted(conf_dir.glob("*.yaml")):
-            yaml_files.append(f.name)
-        for f in sorted(conf_dir.glob("*.yml")):
-            yaml_files.append(f.name)
+        for f in sorted(conf_dir.iterdir()):
+            if (f.is_file() and f.suffix in (".yaml", ".yml")
+                    and f.stem != "simulation"):
+                yaml_files.append(f.name)
     return {"status": "ok", "files": yaml_files}
 
 

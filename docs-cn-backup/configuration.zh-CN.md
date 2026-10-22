@@ -9,7 +9,9 @@
 | `run_web_client.py` | `conf/client_conf.py` 默认值 → `--conf` 指定的 YAML（默认 `conf/default_conf.yaml`）→ 来自 Web 控制台的运行时 load/patch 请求 |
 | `run_server.py` | `conf/server_conf.py` 默认值 → 命令行参数覆盖（`--model_type`、`--model_path`、`--debug`） |
 
-Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选择的 YAML 既是启动配置，也是 Web 控制台（Setup → Apply / Save As）的保存目标；保存时 `.yaml`/`.yml` 目标写成 YAML，其他扩展名写成 Python 字典文件。
+Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选择的 YAML 既是启动配置，也是 Web 控制台（Setup → Apply / Save As）的保存目标；配置加载和保存仅接受 `.yaml`、`.yml` 文件。
+
+`conf/user_conf_example.py` 展示了 `scripts/robocasa_eval.py` 等支持 `--user_conf` 的命令使用的 Python 配置；Web 客户端通过 `--conf` 加载 YAML。
 
 加载配置文件或应用 patch 时仅会更新已存在的叶子参数，未知字段会被忽略。默认配置文件 `conf/default_conf.yaml` 不随仓库分发（已列入 `.gitignore`），克隆后本地并无此文件；首次在 Web 控制台保存配置时会自动生成，启动时也只有该文件存在才会加载。加载时会自动迁移两个旧键名：`inter_chunk.search_length` 会被读取为 `inter_chunk.search_action.search_length`，`robots.a2d.*` 会被读取为 `robots.agibot_g1.*`。
 

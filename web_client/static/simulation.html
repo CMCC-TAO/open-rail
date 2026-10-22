@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>RoboCasa / RoboTwin Simulation Evaluation</title>
+    <link rel="stylesheet" href="/static/simulation.css?v=20261013-task-selection" />
+  </head>
+  <body>
+    <header>
+      <a href="/">← Dashboard</a>
+      <h1>RoboCasa / RoboTwin Simulation Evaluation</h1>
+    </header>
+    <main>
+      <section>
+        <h2>Evaluation Configuration</h2>
+        <p>
+          Run evaluation in a separate process. The Python environment must include
+          the selected simulator dependencies and assets. Start the model inference service first.
+        </p>
+        <form id="config">
+          <div id="fields"></div>
+          <details><summary>Advanced Settings</summary><div id="advanced-fields"></div></details>
+          <button type="submit" id="start" disabled><svg width="14" height="16" viewBox="0 0 16 20" fill="currentColor" aria-hidden="true"><path d="M5 0h6v2h-1v5l6 10v3H0v-3L6 7V2H5zm3 7-4 7h8L8 7z" /></svg> Run Evaluation</button>
+        </form>
+        <p id="error" role="alert"></p>
+      </section>
+      <section>
+        <h2>Jobs and Results</h2>
+        <select id="jobs" aria-label="Evaluation History"></select>
+        <div class="actions">
+          <button id="stop">Stop Evaluation</button><button id="resume">Resume Evaluation</button>
+        </div>
+        <p>Resume uses the original parameters and output directory, continuing from saved episodes.</p>
+        <p id="status"></p>
+        <div id="results"></div>
+        <h3>Result Files and Videos</h3>
+        <select id="files" aria-label="Result Files"></select
+        ><a id="download" hidden>Open File</a
+        ><video id="video" controls hidden></video>
+        <h3>Run Logs (Last 64 KB)</h3>
+        <pre id="logs"></pre>
+      </section>
+    </main>
+    <script type="module" src="/static/simulation.js?v=20261020-simulation-registry"></script>
+  </body>
+</html>

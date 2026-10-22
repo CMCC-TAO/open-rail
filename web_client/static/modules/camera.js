@@ -249,7 +249,8 @@ function setupCameraPanel() {
 }
 
 /* Called from handleWSMessage when a binary camera frame arrives */
-function handleCameraFrame(cameraId, imageBytes) {
+function handleCameraFrame(cameraId, imageBytes, source = 'robot') {
+  if (simulationPreview.active && source !== 'simulation') return;
   // imageBytes: Uint8Array JPEG data
   camState.pendingData[cameraId] = imageBytes;
   camState.pendingUpdate = true;
@@ -263,9 +264,14 @@ function updateCameraDisplay(idx, imageBytes) {
 
   const blob    = new Blob([imageBytes], { type: 'image/jpeg' });
   const blobUrl = URL.createObjectURL(blob);
+  const generation = camState.displayGeneration || 0;
 
   const tmp = new Image();
   tmp.onload = () => {
+    if (!App.camOpen[idx] || generation !== (camState.displayGeneration || 0)) {
+      URL.revokeObjectURL(blobUrl);
+      return;
+    }
     updateCameraAspectRatio(idx, tmp.naturalWidth, tmp.naturalHeight);
     // Release previous blob URL
     if (imgEl.src && imgEl.src.startsWith('blob:')) URL.revokeObjectURL(imgEl.src);
@@ -313,7 +319,7 @@ async function toggleCamera(idx, updateConfig=true) {
   const btnEl    = $(`btn-cam-${idx}`);
   const imgEl    = $(`cam-img-${idx}`);
   const phEl     = $(`cam-placeholder-${idx}`);
-  if (updateConfig) {
+  if (updateConfig && !simulationPreview.active) {
     const patch = getCameraStatePatch(idx);
     const patchRes = await apiFetch('/api/client/config/patch', {
       method: 'POST',
@@ -356,4 +362,3 @@ async function toggleCamera(idx, updateConfig=true) {
     // cam-row (title + button) always visible
   }
 }
-

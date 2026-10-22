@@ -15,7 +15,7 @@ class RealtimeDataManager():
     It also handles trajectory fitting and timing synchronization between observation and control.
     """
     
-    def __init__(self, rdm_config: ConfigDict):
+    def __init__(self, rdm_config: ConfigDict, simulation_mode: bool = False):
         """Initialize the RealtimeDataManager.
         
         Args:
@@ -23,6 +23,7 @@ class RealtimeDataManager():
         """
         self.logger = logging.getLogger(__name__)
         self.rdm_config = rdm_config
+        self.simulation_mode = simulation_mode
         self.observe_buffer = deque(maxlen=max(10, rdm_config.max_len))
         self.observe_add_timestamps = deque(maxlen=max(2, rdm_config.observe_fps_window_size))
         self.observe_fps = 0.0
@@ -69,6 +70,7 @@ class RealtimeDataManager():
         self.acc_chunk_fitted = None
         self.timestamps_fitted = None
         self.action_chunk_index = None
+        self.action_executed_index = None
         self.prob_progress = None
 
         # Timing markers for inference, trajectory fitting and control
@@ -181,7 +183,8 @@ class RealtimeDataManager():
                 return False
             self.frame_count += 1
             # Skip the first few frames as they may be unstable
-            if self.frame_count > 5:
+            warmup = int(getattr(self.rdm_config, 'skip_initial_frames', 5)) if self.simulation_mode else 5
+            if self.frame_count > warmup:
                 now = time.perf_counter()
                 self.observe_buffer.append(frame)
                 self.observe_add_timestamps.append(now)
@@ -191,6 +194,12 @@ class RealtimeDataManager():
                         observe_fps_tmp = (len(self.observe_add_timestamps) - 1) / duration
                         self.observe_fps = observe_fps_tmp * 0.8 + self.observe_fps * 0.2 if self.observe_fps > 0 else observe_fps_tmp
             return True
+
+    def get_observe_fps(self):
+        """Get observation FPS estimated from recent add_observe_data calls."""
+        with self.observe_thread_lock:
+            return float(self.observe_fps)
+
 
     def update_action_chunk_raw(self, action_chunk, timestamp_chunk):
         """Update the raw action chunk and timestamp chunk predicted by the VLA model.
@@ -303,7 +312,11 @@ class RealtimeDataManager():
             action_chunk_smoothed, step_indices, gripper_offset
         )
         with self.action_lock:
-            self.action_chunk_index = target_chunk_index if self.action_chunk_index is not None else 0
+            if self._sequential_actions():
+                self.action_chunk_index = int(target_chunk_index) - 1
+                self.action_executed_index = int(target_chunk_index) - 1
+            else:
+                self.action_chunk_index = target_chunk_index if self.action_chunk_index is not None else 0
             self.action_chunk_fitted = action_chunk_smoothed
             self.vel_chunk_fitted = vel_chunk_smoothed
             self.acc_chunk_fitted = acc_chunk_smoothed
@@ -316,6 +329,8 @@ class RealtimeDataManager():
             self.action_cond.notify_all()
 
     def get_start_chunk_index(self, next_timestamps):
+        if self.simulation_mode and not getattr(self.rdm_config, 'latency_compensation', True):
+            return 0
         start_chunk_index = 0
         time_offset = self.start_inter_traj_marker - self.observe_marker
         self.logger.info(f'total inference time: {time_offset:.3f}s')
@@ -360,7 +375,10 @@ class RealtimeDataManager():
                 # print(f"Switching to control mode, current action_chunk_index={self.action_chunk_index}, reset action_chunk_index to 0.")
                 self.action_chunk_index = 0
             self.mode = mode
+            sequential = self._sequential_actions()
             last_index = self.action_chunk_fitted.shape[1] - 1
+            if sequential and self.action_executed_index is not None and self.action_executed_index >= last_index:
+                return None, None, None, None
             prev_index = self.action_chunk_index
             self.action_chunk_index = min(prev_index + 1, last_index)
             # Notify only on the transition into the final column -- that is the
@@ -369,7 +387,7 @@ class RealtimeDataManager():
             # almost always with zero waiters (the default rdm.mode is 'async'),
             # and otherwise waking the inference thread only to re-evaluate a
             # predicate that is still false.
-            if prev_index < last_index and self.action_chunk_index == last_index:
+            if not sequential and prev_index < last_index and self.action_chunk_index == last_index:
                 self.action_cond.notify_all()
             # print(self.action_chunk_fitted.shape, len(self.action_chunks), self.action_chunks[0].shape, "!"*50)
             action_raw_index = int(
@@ -386,7 +404,34 @@ class RealtimeDataManager():
             vel_fitted = self.vel_chunk_fitted[:, self.action_chunk_index]
             acc_fitted = self.acc_chunk_fitted[:, self.action_chunk_index]
             return action_fitted, action_raw, vel_fitted, acc_fitted
-    
+
+    def mark_action_executed(self):
+        """Acknowledge completion of the action most recently selected for control."""
+        with self.action_cond:
+            if self.action_chunk_index is not None:
+                self.action_executed_index = self.action_chunk_index
+            self.action_cond.notify_all()
+
+    def _sequential_actions(self):
+        return self.simulation_mode and getattr(self.rdm_config, 'action_consume_mode', 'realtime') == 'sequential'
+
+
+    def needs_action_replenishment(self, min_remaining=0):
+        """Return True when the fitted action chunk is close to being consumed."""
+        threshold = max(0, int(min_remaining))
+        with self.action_lock:
+            if self.action_chunk_fitted is None or self.action_chunk_index is None:
+                return True
+            if self.action_chunk_fitted.shape[1] == 0:
+                return True
+            last_index = self.action_chunk_fitted.shape[1] - 1
+            sequential = self._sequential_actions()
+            index = self.action_executed_index if sequential else self.action_chunk_index
+            if index is None:
+                return True
+            return last_index - int(index) <= threshold
+
+
     def get_prob_progress(self):
         """Get the current prob_progress value indexed by action_chunk_index.
 
@@ -401,11 +446,12 @@ class RealtimeDataManager():
             index = min(self.action_chunk_index, len(self.prob_progress) - 1)
             return self.prob_progress[index]
     
-    def pop_observe_data(self, num_samples = 1):
+    def pop_observe_data(self, num_samples=1, latest_only=False):
         """Pop the latest observe data from the buffer.
 
         Args:
             num_samples (int, optional): The number of data frames to pop. Defaults to 1. If num_samples is greater than 1, a list of data frames will be returned.
+            latest_only (bool, optional): Drop older queued frames after popping the latest samples.
 
         Returns:
             dict | list: The observe data frame. None if the buffer is empty.
@@ -414,8 +460,22 @@ class RealtimeDataManager():
         with self.observe_thread_lock:
             if len(self.observe_buffer) >= num_samples:
                 data = self.observe_buffer.pop() if num_samples == 1 else [self.observe_buffer.pop() for _ in range(num_samples)]
+                if latest_only:
+                    self.observe_buffer.clear()
         return data
-    
+
+    def restore_observe_data(self, data, only_if_empty=False):
+        """Restore observations removed for an inference request that did not complete."""
+        if data is None:
+            return
+        frames = data if isinstance(data, list) else [data]
+        with self.observe_thread_lock:
+            if only_if_empty and self.observe_buffer:
+                return
+            for frame in reversed(frames):
+                self.observe_buffer.append(frame)
+
+
     def clear(self):
         """Clear all action-related data to ensure fresh action retrieval.
         
@@ -450,6 +510,7 @@ class RealtimeDataManager():
             self.acc_chunk_fitted = None
             self.timestamps_fitted = None
             self.action_chunk_index = None
+            self.action_executed_index = None
             self.prob_progress = None
             self.mode = 'control'
             self.init_observe_timestamp = None
@@ -481,6 +542,9 @@ class RealtimeDataManager():
             self._action_generation += 1
             self.action_cond.notify_all()
 
+    def cancel_waiters(self):
+        self.interrupt_wait_for_next()
+
     def wait_for_next(self, mode: str = 'sync', wait_time: float = 0.01) -> bool:
         """Wait for next action/frame according to mode.
 
@@ -505,16 +569,14 @@ class RealtimeDataManager():
                 else:
                     generation = self._action_generation
                     target_index = max(0, self.action_chunk_fitted.shape[1] - 1)
-                    # Bounded wait: an unbounded one parks the inference thread
-                    # forever once the control thread stops consuming, which in
-                    # turn makes shutdown and pause handshakes time out.
-                    # A generation change is how pause and stop interrupt the wait.
+                    sequential = self._sequential_actions()
+                    # Sequential simulation waits for execution; pause/stop cancels it.
                     result = self.action_cond.wait_for(
                         lambda: self._action_generation != generation
-                        or (self.action_chunk_index is not None
-                            and self.action_chunk_fitted is not None
-                            and self.action_chunk_index >= target_index),
-                        timeout=max(wait_time, 2.0)
+                        or (self.action_chunk_fitted is not None
+                            and (self.action_executed_index if sequential else self.action_chunk_index) is not None
+                            and (self.action_executed_index if sequential else self.action_chunk_index) >= target_index),
+                        timeout=None if sequential else max(wait_time, 2.0)
                     )
                     result = result and self._action_generation == generation
         else:

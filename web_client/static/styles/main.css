@@ -17,7 +17,7 @@
 @import url('./modules/config.css');
 @import url('./modules/recording.css?v=20261014-overlay-controls-2');
 @import url('./modules/language.css');
-@import url('./modules/trajectory.css');
+@import url('./modules/trajectory.css?v=20261013-compact-joints');
 @import url('./modules/camera.css?v=20261014-camera-expand-1');
 @import url('./modules/manual.css');
 

@@ -1,0 +1,54 @@
+defaults: {}
+platforms:
+  robocasa:
+    python: ""
+    gpu: "2"
+  robotwin:
+    python: ""
+    robotwin_root: /data/users/huangkai/project/rail_robotwin/RoboTwin
+
+embodiments:
+  robotwin_aloha:
+    aliases: [aloha_robotwin]
+    platform: robotwin
+    io_profile: robotwin_aloha
+    models:
+      tao: {embodiment_tag: aloha_robotwin}
+      dm05: {}
+      smolvla: {}
+      go1: {}
+  robocasa_pandas:
+    aliases: [robocasa, robocasa_panda_omron, robocasa_pandas_omron]
+    platform: robocasa
+    io_profile: robocasa
+    models:
+      tao: {embodiment_tag: robocasa_panda_omron}
+      gr00t_n1_5: {embodiment_tag: robocasa_panda_omron, data_config_key: panda_omron}
+      dm05: {}
+      smolvla: {}
+      go1: {}
+
+io_profiles:
+  robocasa:
+    action:
+      - {name: base_motion, width: 4}
+      - {name: control_mode, width: 1}
+      - {name: end_effector_position, width: 3}
+      - {name: end_effector_rotation, width: 3}
+      - {name: gripper_close, width: 1}
+  robotwin_aloha:
+    state: &aloha_joints
+      - {name: left_arm, width: 6}
+      - {name: left_gripper, width: 1}
+      - {name: right_arm, width: 6}
+      - {name: right_gripper, width: 1}
+    action: *aloha_joints
+  dual_arm_7dof_grippers:
+    name: dual_arm_7dof_grippers
+    history_frames: 1
+    state: &joints
+      - {name: left_arm, width: 7}
+      - {name: right_arm, width: 7}
+      - {name: left_gripper, width: 1}
+      - {name: right_gripper, width: 1}
+    action: *joints

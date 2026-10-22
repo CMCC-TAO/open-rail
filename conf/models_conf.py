@@ -113,6 +113,7 @@ def get_xvla_eef_config():
     config.rot6d_convention = 'rows'
     config.domain_id = 0  # task_261 checkpoint
     config.denoising_steps = 10
+    config.ik = ConfigDict()
     return config
 
 

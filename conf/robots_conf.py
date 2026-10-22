@@ -1,4 +1,5 @@
 from enum import Enum
+from pathlib import Path
 from ml_collections import ConfigDict
 
 
@@ -16,6 +17,8 @@ def _ordered_config(value):
 class RobotType(str, Enum):
     AGIBOT_G1 = 'agibot_g1'
     MOCK = 'mock'
+    ROBOCASA_PANDAS = 'robocasa_pandas'
+    ROBOTWIN_ALOHA = 'robotwin_aloha'
     TI5_T170C = 'ti5_t170c'
     NAVI_WA2 = 'navi_wa2'
     UNITREE_G1 = 'unitree_g1'
@@ -109,6 +112,82 @@ def get_mock_config():
     config.state_action_range = [[0, 16], [58, 70]]
     config.dataset_path = '/path/to/dataset'
     # config.dataset_path = '/path/to/dataset'
+    return config
+
+
+def get_robocasa_pandas_config():
+    config = ConfigDict()
+    config.io_profile = f"{Path(__file__).resolve().parent / 'simulation.yml'}#robocasa"
+    config.python = ''
+    config.gpu = '2'
+    config.n_envs = 1
+    config.env_name = 'PickPlaceCounterToCabinet'
+    config.split = 'target'
+    config.seed = 42
+    config.episode_offset = 0
+    config.camera_width = 256
+    config.camera_height = 256
+    config.enable_render = True
+    config.max_episode_steps = None
+    config.video_dir = ''
+    config.video_fps = 20
+    config.video_layout = 'grid'
+    config.camera = ConfigDict()
+    config.camera.ref = 'head'
+    config.camera.names = {
+        'head': 'video.robot0_agentview_left',
+        'hand_left': 'video.robot0_agentview_right',
+        'hand_right': 'video.robot0_eye_in_hand',
+    }
+    config.state_keys = [
+        'state.base_position',
+        'state.base_rotation',
+        'state.end_effector_position_relative',
+        'state.end_effector_rotation_relative',
+        'state.gripper_qpos',
+    ]
+    config.action_layout = _ordered_config({
+        'end_effector_position': {'start': 0, 'end': 3, 'policy': 'gradual'},
+        'end_effector_rotation': {'start': 3, 'end': 6, 'policy': 'gradual'},
+        'gripper_close': {
+            'start': 6, 'end': 7, 'policy': 'stepwise', 'smooth': False,
+        },
+        'base_motion': {'start': 7, 'end': 11, 'policy': 'gradual'},
+        'control_mode': {
+            'start': 11, 'end': 12, 'policy': 'stepwise', 'smooth': False,
+        },
+    })
+    return config
+
+def get_robotwin_aloha_config():
+    config = ConfigDict()
+    config.io_profile = f"{Path(__file__).resolve().parent / 'simulation.yml'}#robotwin_aloha"
+    config.python = ''
+    config.robotwin_root = ''
+    config.gpu = ''
+    config.n_envs = 1
+    config.seed = 0
+    config.task_config = 'demo_clean'
+    config.instruction_type = 'unseen'
+    config.render_observation_mode = 'chunk_boundary'
+    config.action_type = 'qpos'
+    config.camera = ConfigDict()
+    config.camera.ref = 'head'
+    config.camera.names = {
+        'head': 'head_camera',
+        'hand_left': 'left_camera',
+        'hand_right': 'right_camera',
+    }
+    config.action_layout = _ordered_config({
+        'left_arm': {'start': 0, 'end': 6, 'policy': 'gradual'},
+        'left_gripper': {
+            'start': 6, 'end': 7, 'policy': 'stepwise', 'smooth': False,
+        },
+        'right_arm': {'start': 7, 'end': 13, 'policy': 'gradual'},
+        'right_gripper': {
+            'start': 13, 'end': 14, 'policy': 'stepwise', 'smooth': False,
+        },
+    })
     return config
 
 def get_ti5_t170c_config(hand_type='hand'):
@@ -305,6 +384,8 @@ def get_robots_config():
     config.type = RobotType.UNITREE_G1
     config.agibot_g1 = get_agibot_g1_config()
     config.mock = get_mock_config()
+    config.robocasa_pandas = get_robocasa_pandas_config()
+    config.robotwin_aloha = get_robotwin_aloha_config()
     config.ti5_t170c = get_ti5_t170c_config()
     config.navi_wa2 = get_navi_wa2_config()
     config.unitree_g1 = get_unitree_g1_config()
