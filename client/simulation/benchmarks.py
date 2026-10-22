@@ -138,7 +138,7 @@ def _prepare_robotwin(config):
         raise ValueError('RoboTwin task is unavailable')
     config.robotwin_root = str(root)
     if config.task_suite:
-        from scripts.aloha_robotwin_eval import _task_names
+        from scripts.robotwin_eval import _task_names
 
         selection = Path(config.task_suite).expanduser()
         if ',' not in config.task_suite and selection.is_file():
@@ -158,7 +158,7 @@ register_benchmark(BenchmarkSpec(
     defaults={'gpu': '2'}, form_fields=('split',), named_suites=True,
 ))
 register_benchmark(BenchmarkSpec(
-    id='robotwin', robot_type='robotwin_aloha', label='RoboTwin_ALOHA', script='aloha_robotwin_eval.py',
+    id='robotwin', robot_type='robotwin_aloha', label='RoboTwin_ALOHA', script='robotwin_eval.py',
     dependencies=('zmq', 'numpy', 'sapien', 'torch', 'yaml', 'curobo'), catalog=_robotwin_catalog,
     cli_fields=COMMON_CLI_FIELDS | {
         'robotwin_root', 'task_config', 'instruction_type', 'render_observation_mode', 'instruction',

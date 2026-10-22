@@ -59,7 +59,7 @@ python run_web_client.py --port 9000
 Open `http://localhost:9000/`:
 
 1. In Configuration, select Robot Type `robocasa_pandas`, then set the simulation Python path, GPU, and model server address.
-2. Configure action chunk length, execution mode, smoothing, and fusion. A blank action chunk length uses the RoboCasa default of 16.
+2. Configure action chunk length, execution mode, smoothing, and fusion. A blank action chunk length defaults to 50.
 3. In Simulation Evaluation, select tasks or a task suite, set episodes per task, parallel environments, and video/dataset saving options, then start evaluation.
 4. View logs, statistics, and videos in the evaluation panel, or stop and resume existing jobs.
 
@@ -92,7 +92,7 @@ Evaluation captures the configuration at startup; later edits do not affect a ru
 | Camera Width / Height | Width and height of each camera image, in pixels. |
 | Max Episode Steps | Maximum actions per episode; leave blank to use the task default. |
 
-A blank action chunk length defaults to 16. Sampling ratios above 1 increase the number of executed samples. Video FPS does not determine simulation speed.
+A blank action chunk length defaults to 50. Sampling ratios above 1 increase the number of executed samples. Video FPS does not determine simulation speed.
 
 The trajectory viewer shows arm joints only, in radians. State is measured joint position. With the default OSC controller, Act Fit and Act Raw are joint-angle estimates from fitted and raw Cartesian commands, using damped differential IK from the same pre-step state. These estimates are for visualization, not controller joint targets or predicted motion; they do not change evaluation control. Select the three sources to compare them.
 
@@ -114,7 +114,7 @@ Choose a task supported by your RoboCasa installation. To run a suite, replace `
 | Model connection | `--server_ip`, `--server_port`; default `127.0.0.1:5566` |
 | Evaluation size | `--n_episodes`: total episodes per task; `--n_envs`: parallel environments |
 | GPU assignment | `--gpu 0,2` assigns workers in round-robin order; omit to inherit the environment |
-| Action chunk length | `--n_action_steps`; default 16 |
+| Action chunk length | `--n_action_steps`; default 50 |
 | Execution mode | `--mode sync/async`; default `sync` |
 | Intra-chunk processing | `--intra_chunk_mode raw/interpolation/fitting`; default `raw` |
 | Inter-chunk fusion | `--inter_chunk_mode sync/search_action/smooth_velocity/min_jerk`; default `sync` |

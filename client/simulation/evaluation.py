@@ -332,7 +332,7 @@ def build_parser(description=None):
     parser.add_argument('--n_episodes', type=int, default=50)
     parser.add_argument('--n_envs', type=int, default=10)
     parser.add_argument('--gpu', help='GPU index or comma-separated GPU indices, assigned per worker')
-    parser.add_argument('--n_action_steps', type=int, default=16)
+    parser.add_argument('--n_action_steps', type=int, default=50)
     parser.add_argument('--control_period_ms', type=float, default=1.0)
     parser.add_argument('--mode', choices=['sync', 'async'], default='sync')
     parser.add_argument(

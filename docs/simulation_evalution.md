@@ -5,7 +5,7 @@ In **Configuration**, select Robot Type `robocasa_pandas` or `robotwin_aloha`.
 Configure mode, action chunk length, smoothing, fusion, image preprocessing, and the model
 connection there. Robot-specific settings include Python, GPU, parallel environments,
 seed, and RoboTwin root/task settings. Blank environment paths use the backend presets.
-Blank action chunk length uses the platform default: 16 for RoboCasa, 50 for RoboTwin.
+Blank action chunk length defaults to 50 for both RoboCasa and RoboTwin.
 
 Expand **Simulation Evaluation**. **Task Selection** switches between single tasks and task sets;
 **Task** lists the configured platform's tasks or sets such as RoboCasa `target50` and

@@ -53,7 +53,7 @@ python run_server.py --model_type dm05 \
   --model_path /path/to/checkpoint --embodiment_tag robotwin_aloha \
   --server_port 5566 --debug
 
-python scripts/aloha_robotwin_eval.py --task_name stack_bowls_three \
+python scripts/robotwin_eval.py --task_name stack_bowls_three \
   --embodiment_tag robotwin_aloha --server_port 5566 --n_envs 1
 ```
 
@@ -97,7 +97,7 @@ into the simulator's native action order before execution.
 For a different layout, override the default on the evaluator:
 
 ```bash
-python scripts/aloha_robotwin_eval.py --task_name <task> --io_profile /path/to/layout.yml
+python scripts/robotwin_eval.py --task_name <task> --io_profile /path/to/layout.yml
 ```
 
 Use `--io_profile conf/simulation.yml#<name>` to select a named profile.

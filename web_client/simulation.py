@@ -96,7 +96,7 @@ class EvaluationConfig(BaseModel):
     split: Literal["target", "pretrain"] = "target"
     n_episodes: int = Field(10, ge=1)
     n_envs: int = Field(1, ge=1)
-    n_action_steps: int = Field(16, ge=1)
+    n_action_steps: int = Field(50, ge=1)
     control_period_ms: float = Field(1, gt=0, allow_inf_nan=False)
     seed: int = 42
     mode: Literal["sync", "async"] = "sync"

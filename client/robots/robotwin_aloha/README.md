@@ -94,7 +94,7 @@ A blank action chunk length defaults to 50. Only interpolation mode allows sampl
 Run a single task in the simulation environment:
 
 ```bash
-python scripts/aloha_robotwin_eval.py \
+python scripts/robotwin_eval.py \
   --robotwin_root /path/to/RoboTwin \
   --task_name stack_bowls_three --task_config demo_clean \
   --n_episodes 10 --n_envs 1 \
@@ -117,7 +117,7 @@ Choose tasks and task configurations supported by your RoboTwin installation. Us
 | Dataset saving | Enable with `--record`; set the directory with `--record_dir` |
 | Video saving | Enabled by default; `--no_video` disables replay videos; dataset camera videos are controlled by the dataset recording switch |
 
-Expert checks and instruction generation are enabled by default. To use a fixed instruction, pass `--no_expert_check --instruction 'task instruction'`. See `python scripts/aloha_robotwin_eval.py --help` for additional options.
+Expert checks and instruction generation are enabled by default. To use a fixed instruction, pass `--no_expert_check --instruction 'task instruction'`. See `python scripts/robotwin_eval.py --help` for additional options.
 
 ## Results and Resume
 
