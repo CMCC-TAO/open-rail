@@ -3,36 +3,36 @@
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
     "count": 77,
-    "uniques": 49
+    "uniques": 50
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
     "title": "/blob/main/README.zh-CN.md",
-    "count": 33,
-    "uniques": 20
+    "count": 37,
+    "uniques": 22
   },
   {
     "path": "/CMCC-TAO/open-rail/graphs/traffic",
     "title": "/graphs/traffic",
-    "count": 30,
+    "count": 31,
     "uniques": 1
   },
   {
     "path": "/CMCC-TAO/open-rail/issues",
     "title": "/issues",
-    "count": 15,
-    "uniques": 9
+    "count": 16,
+    "uniques": 10
   },
   {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
-    "count": 12,
-    "uniques": 3
+    "count": 13,
+    "uniques": 4
   },
   {
     "path": "/CMCC-TAO/open-rail/pulse",
     "title": "/pulse",
-    "count": 7,
+    "count": 8,
     "uniques": 3
   },
   {
