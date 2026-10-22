@@ -1,353 +1,229 @@
+# GR00T (Isaac-GR00T) adapter family
 
+Open-RAIL runs NVIDIA Isaac-GR00T policies in-process through the adapters in
+this directory. One adapter is provided per generation; all of them expose the
+same `infer(sequence)` contract used by the shared ZMQ server.
 
+| `--model_type` | Adapter | Config entry | Policy API |
+| --- | --- | --- | --- |
+| `gr00t_n1` | [`gr00t_n1.py`](gr00t_n1.py) | `config.models.gr00t` | `gr00t.model.policy.Gr00tPolicy` |
+| `gr00t_n1_5` | [`gr00t_n1_5.py`](gr00t_n1_5.py) | `config.models.gr00t` | `gr00t.model.policy.Gr00tPolicy` |
+| `gr00t_n1_6` | [`gr00t_n1_6.py`](gr00t_n1_6.py) | `config.models.gr00t` | `gr00t.policy.gr00t_policy.Gr00tPolicy` |
+| `gr00t_n1_7` | [`gr00t_n1_7.py`](gr00t_n1_7.py) | `config.models.gr00t1_7` | `gr00t.policy.gr00t_policy.Gr00tPolicy` |
+| `gr00t_n1_7_eef` | [`gr00t_n1_7_eef.py`](gr00t_n1_7_eef.py) | `config.models.gr00t_n1_7_eef` | `gr00t.policy.gr00t_policy.Gr00tPolicy` + Pink IK |
 
-## GR00T N1 & N1.5
-### Code Repositories
-- GR00T N1: http://36.140.17.36:10000/git/embodiedai/Isaac-GR00T/-/tree/GR00T_N1?ref_type=heads
-- GR00T N1.5: http://36.140.17.36:10000/git/embodiedai/Isaac-GR00T/-/tree/GR00T_N1.5?ref_type=heads
+The first four adapters return model-space actions. `gr00t_n1_7_eef` converts
+joint feedback to EEF state, calls the policy, and converts EEF actions back to
+joint targets through the bundled IK solver.
 
-### Environment Setup
+## Prerequisites
 
-#### Setting up conda environment from scratch
+- **Upstream source** — an Isaac-GR00T checkout matching the adapter. N1 and
+  N1.5 import `gr00t.model.policy`, `gr00t.data.schema` and
+  `gr00t.experiment.data_config`; N1.6, N1.7 and N1.7 EEF import
+  `gr00t.policy.gr00t_policy` and `gr00t.data.embodiment_tags`. The adapter does
+  not insert a source path, so install the checkout or put its root first on
+  `PYTHONPATH`.
+- **Checkpoint** — a fine-tuned checkpoint directory for the target robot,
+  including `config.json`, every weight shard and index, processor assets, and
+  statistics for the configured embodiment tag. N1.5 additionally reads
+  `experiment_cfg/metadata.json`; N1.7 EEF reads processor statistics first and
+  then `statistics.json` / `experiment_cfg/dataset_statistics.json`. Original
+  upstream pretrained weights do not replace a checkpoint trained for your
+  robot.
+- **Environment** — one Python environment per generation. Open-RAIL server
+  dependencies come from [pyproject.toml](../../../pyproject.toml). The EEF
+  adapter also needs `pin-pink` (import `pink`), Pinocchio (import
+  `pinocchio`), `qpsolvers` and `daqp`.
+
 ```bash
+# N1 / N1.5 generation (example upstream checkout)
 conda create -n gr00t_xx python=3.10
 conda activate gr00t_xx
+cd /path/to/Isaac-GR00T
 pip install --upgrade setuptools
 pip install -e .
 pip install --no-build-isolation flash-attn==2.7.4.post1
+pip install -e /path/to/open-rail
 ```
 
-#### Cloning from existing conda environment
+To reuse an existing environment, clone it and install the checkout without
+dependencies: `conda create --name new_env --clone old_env`, then
+`pip install -e . --no-deps` from the Isaac-GR00T root. When several GR00T
+versions share one environment, uninstall `gr00t` and select the checkout per
+run through `PYTHONPATH`.
+
+## Configuration
+
+Edit the matching factory in [conf/models_conf.py](../../../conf/models_conf.py).
+
+`gr00t_n1`, `gr00t_n1_5`, `gr00t_n1_6` — `get_gr00t_config()`:
+
+| Field | Meaning | Current default |
+| --- | --- | --- |
+| `model_path` | Checkpoint directory; overridden by `--model_path` | `/path/to/model` |
+| `embodiment_tag` | Embodiment tag passed to the policy (N1.5) | `a2d` |
+| `data_config_key` | Isaac-GR00T data config used for modalities (N1.5) | `a2d_arms_only` |
+
+N1 hardcodes `EmbodimentTag.NEW_EMBODIMENT` and `DATA_CONFIG_MAP["a2d_arms_only"]`,
+and N1.6 hardcodes `EmbodimentTag.A2D`; the factory fields apply to N1.5 only.
+
+`gr00t_n1_7` — `get_gr00t_1_7_config()`:
+
+| Field | Meaning | Current default |
+| --- | --- | --- |
+| `model_path` | Checkpoint directory; overridden by `--model_path` | `/path/to/model` |
+| `embodiment_tag` | Tag resolved through `EmbodimentTag.resolve` | `new_embodiment` |
+| `denoising_steps` | Value written to `policy.model.action_head.num_inference_timesteps` | `4` |
+
+N1.7 removed the A2D tag; A2D fine-tunes register under `new_embodiment`.
+`denoising_steps` is no longer a `Gr00tPolicy` constructor argument.
+
+`gr00t_n1_7_eef` — `get_gr00t_n1_7_eef_config()`:
+
+| Field | Meaning | Current default |
+| --- | --- | --- |
+| `model_path` | Checkpoint directory; overridden by `--model_path` | `/path/to/model` |
+| `embodiment_tag` | Tag resolved through `EmbodimentTag.resolve` | `new_embodiment` |
+| `joint_action_key` | EEF action slices passed to IK, despite the field name | Left pose `[0, 9]`, right pose `[9, 18]`, grippers `[18, 19]`, `[19, 20]` |
+| `joint_state_key` | Input joint/gripper slices | Left arm `[0, 7]`, right arm `[7, 14]`, grippers `[14, 15]`, `[15, 16]` |
+| `urdf_path` | Robot model used for FK and IK | Repository `server/utils/eef_utils/urdf/a2d_vla_zero_state.urdf` |
+| `link_name` | Arm base and TCP frames | `base_link_l` → `gripper_center`; `base_link_r` → `right_gripper_center` |
+| `q_left_init`, `q_right_init` | Fallback IK seeds | A2D seven-joint poses in `_get_a2d_eef_config()` |
+| `reset_position` | Full URDF configuration; non-arm joints stay fixed here | A2D 34-value configuration |
+| `ref_frame` | EEF frame: URDF world or arm base (`local`) | `world` |
+| `rotation_type` | EEF orientation representation | `rot6d` |
+| `rot6d_convention` | Rot6D construction; `rows` flattens the first two rotation-matrix rows | `rows` |
+
+The EEF adapter falls back from `a2d` to `NEW_EMBODIMENT` when the upstream enum
+cannot resolve it. To use a new robot, update `urdf_path`, `joint_state_key`,
+`joint_action_key`, `link_name`, `q_left_init`, `q_right_init` and
+`reset_position` to match its URDF and training layout.
+
+Shared settings:
+
+- The ZMQ port defaults to `5566` in [conf/zmq_conf.py](../../../conf/zmq_conf.py).
+- `max_infer_workers` defaults to `3` in [conf/server_conf.py](../../../conf/server_conf.py).
+  Only the EEF adapter serializes requests with an internal lock; set
+  `max_infer_workers=1` for the other adapters unless the upstream policy is
+  known to be thread-safe.
+- `image_pad_and_resize` defaults to `False` with a `640 × 640` target. Selecting
+  `gr00t_n1_7_eef` together with `--model_path` sets it to `True` in
+  [run_server.py](../../../run_server.py). All other adapters use the flag value
+  from `conf/server_conf.py`.
+
+`run_server.py` accepts only `--model_type`, `--model_path` and `--debug`; edit
+the configuration for other settings and restart the server.
+
+## Run
+
+From the Open-RAIL root, in the environment prepared for the selected
+generation:
 
 ```bash
-conda env list # List existing conda environments
-conda create --name new_env_name --clone old_env_name
-cd /path/to/Isaac-GR00T # Navigate to your gr00t project directory
-pip install -e . --no-deps # Install only the local package without dependencies
-```
+# N1 / N1.5 / N1.6 / N1.7
+PYTHONPATH="/path/to/Isaac-GR00T:${PYTHONPATH}" python run_server.py \
+  --model_type gr00t_n1_7 \
+  --model_path /path/to/checkpoint \
+  --debug
 
-#### Switching gr00t versions in the same conda environment
-```bash
-pip uninstall gr00t
-PYTHONPATH=/path/to/Isaac-GR00T:$PYTHONPATH python run_server.py # Specify PYTHONPATH when running code
-```
-
-# GR00T N1.7 EEF adapter
-
-This guide describes `run_server.py --model_type gr00t_n1_7_eef` with the A2D
-configuration: two seven-joint arms, two grippers, and three cameras.
-The adapter converts joint feedback to EEF state, calls `Gr00tPolicy`, and
-converts EEF actions back to joint targets through Pink IK. Its configuration
-is independent of the older `config.models.gr00t` entry.
-
-**How to read this guide:** Steps 1–4 prepare, configure, start, and smoke-test
-the server. Step 5 defines the client interface. Implementation limits are
-collected under Notes.
-
-## Step 1 — Prerequisites
-
-- **Upstream source** — an Isaac-GR00T checkout providing
-  `gr00t.policy.gr00t_policy.Gr00tPolicy` and
-  `gr00t.data.embodiment_tags.EmbodimentTag.resolve`.
-  Install that checkout in the active environment or add its root to
-  `PYTHONPATH`. The adapter does not insert a source path; an older
-  `gr00t` package may expose a different API.
-- **Checkpoint** — an A2D EEF fine-tuned directory with `config.json`, model
-  weights (including every shard and index for sharded checkpoints),
-  `processor_config.json`, and statistics for `new_embodiment`.
-  The local example contains `statistics.json` and
-  `experiment_cfg/dataset_statistics.json`; the adapter uses processor-loaded
-  statistics first, then these two paths in order. Keep all processor and
-  backbone assets required by the chosen upstream checkout.
-  Optimizer/trainer state is not used. Original upstream weights do not
-  replace a checkpoint fine-tuned for this EEF layout.
-- **Environment** — use the dependencies required by the N1.7 checkout,
-  the Open-RAIL server dependencies in [pyproject.toml](../../../pyproject.toml),
-  and `pin-pink` (import `pink`), Pinocchio (import `pinocchio`),
-  `qpsolvers`, and `daqp`. The adapter selects CUDA when available,
-  otherwise CPU; that selection alone does not establish CPU compatibility
-  or acceptable inference latency.
-
-## Step 2 — Configuration
-
-Fields of `get_gr00t_n1_7_eef_config()` in
-[conf/models_conf.py](../../../conf/models_conf.py):
-
-| Field | Required | Meaning | Default |
-| --- | --- | --- | --- |
-| `model_path` | yes | Fine-tuned checkpoint directory | `/path/to/model`; overridden by `--model_path` |
-| `embodiment_tag` | yes | Processor modality/statistics selection | `new_embodiment` |
-| `joint_action_key` | yes | EEF action slices passed to IK, despite the field name | Left pose `[0, 9]`, right pose `[9, 18]`, grippers `[18, 19]` and `[19, 20]` |
-| `urdf_path` | yes | Robot model used for FK and IK | Repository `server/utils/eef_utils/urdf/a2d_vla_zero_state.urdf` |
-| `reset_position` | yes | Full URDF configuration; non-arm joints are fixed at these values in the reduced models | A2D 34-value configuration in `_get_a2d_eef_config()` |
-| `joint_state_key` | yes | Input joint/gripper slices | Left arm `[0, 7]`, right arm `[7, 14]`, grippers `[14, 15]` and `[15, 16]` |
-| `link_name` | yes | Arm base and TCP frames | `base_link_l` → `gripper_center`; `base_link_r` → `right_gripper_center` |
-| `q_left_init`, `q_right_init` | yes | Fallback IK seeds; normal inference seeds each chunk from received joint feedback | A2D seven-joint poses in the config factory |
-| `ref_frame` | yes | EEF frame: URDF world or the configured arm base (`local`) | `world` |
-| `rotation_type` | yes | EEF orientation representation | `rot6d` |
-| `rot6d_convention` | yes | Rot6D construction; `rows` flattens the first two rotation-matrix rows | `rows` |
-
-The configured tag is resolved by the upstream enum. If resolving `a2d`
-raises `ValueError`, the adapter falls back to `NEW_EMBODIMENT`.
-The supplied checkpoint must support the resolved tag.
-
-To use a new robot, update `urdf_path`, `joint_state_key`, `joint_action_key`,
-`link_name`, `q_left_init`, `q_right_init`, and `reset_position` to match its
-URDF and training layout.
-
-Shared settings are described in [configuration](../../../docs/configuration.md):
-
-- `zmq.port` in [conf/zmq_conf.py](../../../conf/zmq_conf.py) defaults to
-  `5566`; the server binds `tcp://*:5566`.
-- `image_pad_and_resize` in [conf/server_conf.py](../../../conf/server_conf.py)
-  defaults to `False`, with a `640 × 640` target. In the current
-  [startup code](../../../run_server.py), selecting `gr00t_n1_7_eef` **and
-  supplying `--model_path`** sets it to `True`. Selecting the model alone
-  does not enable it. The Step 3 command therefore pads/resizes images before
-  the policy's own preprocessing. This is a server setting; adding it to
-  `conf/a2d_conf.yaml` does not configure the server.
-- The adapter uses `ActionIKSolver` defaults: `dt=0.033`,
-  `qp_solver="daqp"`, `max_iterations=100`, and
-  `stagnation_iterations=0`. It does not forward an `ik` configuration
-  dictionary. The time step constrains IK changes, not robot scheduling.
-
-`run_server.py` accepts only `--model_type`, `--model_path`, and `--debug`.
-Set the URDF, embodiment, and orientation options in the config factory;
-there are no `--urdf_path`, `--rotation_type`, `--port`, or `--device`
-flags. Restart the server after changes.
-
-## Step 3 — Run the server
-
-Run from the Open-RAIL repository root in the prepared N1.7 environment:
-
-```bash
+# N1.7 EEF
 PYTHONPATH="/path/to/Isaac-GR00T:${PYTHONPATH}" python run_server.py \
   --model_type gr00t_n1_7_eef \
   --model_path /path/to/a2d/ckpt \
   --debug
 ```
 
-The client runs separately; see the root [Quick Start](../../../README.md#-quick-start).
+Replace `gr00t_n1_7` with `gr00t_n1`, `gr00t_n1_5` or `gr00t_n1_6` as needed.
+Wait for model loading to finish; for EEF also confirm that the checkpoint video
+keys match the adapter's supported set. Run one server per port. The client
+runs separately; see the root [Quick Start](../../../README.md#-quick-start).
 
-## Step 4 — Smoke-test with one request
+## Input and output
 
-Prepare `head.jpg`, `left.jpg`, `right.jpg`, and `state.npy` from the same
-observation in one directory. Use the original `(16,)` joint/gripper values
-described in Step 5 and an instruction matching the scene.
+Send a `vla_obs` request with `ref_timestamp`, `loc_timestamp` and `obs`:
 
-Save the following standalone script as `smoke_test.py` in that directory.
-With the Step 3 server running, execute `python smoke_test.py` from the same
-directory in an environment containing `numpy` and `pyzmq`.
+| Observation field | Requirement |
+| --- | --- |
+| `cam.head` | Encoded head image |
+| `cam.hand_left` | Encoded left wrist image |
+| `cam.hand_right` | Encoded right wrist image |
+| `state` | Finite 1-D NumPy vector in training joint order and units |
+| `language` | Nonempty string, or a list/tuple containing one instruction |
 
-```python
-import json
-import pickle
-import time
-import uuid
-from pathlib import Path
+Send JPEG/PNG bytes or encoded `uint8` arrays, not raw pixel arrays. Images and
+state should describe the same observation. A list of observations uses only
+its first element; it does not enable batch or history inference.
 
-import numpy as np
-import zmq
+Camera and state mapping per adapter:
 
-ENDPOINT = "tcp://127.0.0.1:5566"  # Replace with the GPU server IP.
-EXPECTED_HORIZON = 40
-TIMEOUT_SECONDS = 180
-OUTPUT_DIR = Path("gr00t_smoke_result")
-
-state = np.load("state.npy", allow_pickle=False)
-if state.shape != (16,) or not np.isfinite(state).all():
-    raise ValueError("state.npy must contain a finite vector of shape (16,)")
-
-request_id = uuid.uuid4().hex
-request = {
-    "type": "vla_obs",
-    "ref_timestamp": time.monotonic_ns(),
-    "loc_timestamp": time.perf_counter(),
-    "obs": {
-        "cam.head": Path("head.jpg").read_bytes(),
-        "cam.hand_left": Path("left.jpg").read_bytes(),
-        "cam.hand_right": Path("right.jpg").read_bytes(),
-        "state": state,
-        "language": ["pick the bottle into the basket"],
-    },
-}
-OUTPUT_DIR.mkdir(exist_ok=False)
-context = zmq.Context()
-socket = context.socket(zmq.DEALER)
-socket.setsockopt(zmq.LINGER, 0)
-
-try:
-    socket.connect(ENDPOINT)
-    started = time.perf_counter()
-    socket.send_multipart([
-        pickle.dumps(request),
-        json.dumps({"request_id": request_id}).encode("utf8"),
-    ])
-    deadline = time.monotonic() + TIMEOUT_SECONDS
-    while True:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0 or not socket.poll(max(1, int(remaining * 1000))):
-            raise TimeoutError("No action response; inspect the server log")
-        payload, metadata = socket.recv_multipart()
-        response, meta = pickle.loads(payload), json.loads(metadata)
-        if response.get("type") == "heartbeat":
-            continue
-        if response.get("type") == "error":
-            raise RuntimeError(response.get("error"))
-        if response.get("type") != "vla_action":
-            raise ValueError(f"Unexpected response type: {response.get('type')}")
-        elapsed = time.perf_counter() - started
-        actions = np.asarray(response["pred_action"])
-        if actions.shape != (EXPECTED_HORIZON, 16) or not np.isfinite(actions).all():
-            raise ValueError(f"Invalid action shape or values: {actions.shape}")
-        for key in ("ref_timestamp", "loc_timestamp"):
-            if response.get(key) != request[key]:
-                raise ValueError(f"Response {key} does not match the request")
-        if meta.get("request_id") != request_id:
-            raise ValueError("Response request_id does not match the request")
-        infer_time = meta.get("avg_infer_time")
-        if not isinstance(infer_time, (int, float)) or not np.isfinite(infer_time) or infer_time < 0:
-            raise ValueError(f"Invalid avg_infer_time: {infer_time!r}")
-        result = {
-            "action_shape": list(actions.shape),
-            "action_dtype": str(actions.dtype),
-            "round_trip_seconds": elapsed,
-            "metadata": meta,
-        }
-        np.save(OUTPUT_DIR / "pred_action.npy", actions)
-        (OUTPUT_DIR / "response.pkl").write_bytes(pickle.dumps(response))
-        (OUTPUT_DIR / "result.json").write_text(json.dumps(result, indent=2) + "\n")
-        print(json.dumps(result, indent=2))
-        break
-finally:
-    socket.close()
-    context.term()
-```
-
-The script sends one observation and checks a finite `(40, 16)` action
-array, echoed timestamps, request ID, and inference-time metadata. It saves
-`pred_action.npy`, `response.pkl`, and `result.json` in `gr00t_smoke_result`;
-it does not send robot motion commands. Use a new `OUTPUT_DIR` for each run.
-
-The default `EXPECTED_HORIZON=40` comes from the inspected checkpoint processor's action indices.
-Change it for another checkpoint, and adjust `ENDPOINT`, `TIMEOUT_SECONDS`,
-and the language instruction as needed. On timeout, inspect the server log
-and check dependencies, checkpoint assets, and configuration. A passing
-response check does not establish IK convergence; success flags are not
-included in the wire response.
-
-## Step 5 — Connect your client or robot
-
-### Robot-side requirements
-
-| Item | Expected | Implementation |
+| Adapter | Head camera key | State layout |
 | --- | --- | --- |
-| Camera keys | `cam.head`, `cam.hand_left`, `cam.hand_right` for the example checkpoint | [Adapter](gr00t_n1_7_eef.py), `_CAMERA_KEYS` |
-| Image encoding | JPEG/PNG bytes; BGR before OpenCV encoding, RGB after server decoding | [Shared server](../../core/vla_server.py) |
-| State layout | `[0:7]` left arm, `[7:14]` right arm, `[14]` left gripper, `[15]` right gripper | [FK/IK conversion](../../utils/eef_utils/action_to_joints.py) |
-| Action output | Finite `float64 (T, 16)`, same joint/gripper order; absolute targets | [FK/IK conversion](../../utils/eef_utils/action_to_joints.py) |
-| Control frequency | Supplied by the client/controller, not the response | [Architecture](../../../docs/architecture.md) §2 |
+| `gr00t_n1` | `video.cam_right_high` | `[0:7]` left arm, `[7:14]` right arm, `[14]` left hand, `[15]` right hand |
+| `gr00t_n1_5` | `video.cam_top_head` | Slices derived from `experiment_cfg/metadata.json` for `data_config_key` |
+| `gr00t_n1_6` | `cam_top_head` | `[0:7]` left arm, `[7:14]` right arm, `[14]` left hand, `[15]` right hand |
+| `gr00t_n1_7` | `top_head` | `[0:7]` left arm, `[7:14]` right arm, `[14:15]` left gripper, `[15:16]` right gripper |
+| `gr00t_n1_7_eef` | Checkpoint-declared keys mapped to `cam.*` | Only the configured slices enter FK; extra dimensions are ignored |
 
-Arm angles follow the URDF in radians; EEF translations use its length scale
-(metres for the supplied A2D model). Gripper values pass through FK/IK without
-unit conversion and must match the training data.
+`gr00t_n1_7_eef` accepts only checkpoints whose video keys are `cam_top_head`,
+`cam_left_wrist` and `cam_right_wrist`, and requires joint feedback (not EEF
+poses or normalized state). Its output is converted to absolute joint/gripper
+targets; arm angles follow the URDF in radians and gripper values pass through
+without unit conversion.
 
-### Request and response
+Language handling differs by generation: N1 and N1.5 pass
+`annotation.human.task_description` at the top level; N1.6 and N1.7 nest it under
+`language`; EEF uses the checkpoint's own `policy.language_key`.
 
-Send one observation dictionary per inference request:
+Successful responses contain `type='vla_action'`, `pred_action`, unchanged
+timestamps and `ext`. `pred_action` is a NumPy array of shape
+`(T, action_dim)`, where `T` follows the checkpoint action horizon. N1 returns
+no `ext` key. The other adapters return `ext={}` plus `prob_progress` when the
+policy provides it; EEF returns it without indexing.
 
-```python
-request = {
-    "type": "vla_obs",
-    "ref_timestamp": time.monotonic_ns(),
-    "loc_timestamp": time.perf_counter(),
-    "obs": {
-        "cam.head": head_jpeg_bytes,
-        "cam.hand_left": left_jpeg_bytes,
-        "cam.hand_right": right_jpeg_bytes,
-        "state": state,  # np.ndarray, shape (16,)
-        "language": ["pick the bottle into the basket"],
-    },
-}
-meta = {"request_id": 0}
-```
+The server does not execute actions or set control speed; client scheduling and
+fusion do that. Use ZMQ **DEALER** with two payload frames: pickle observation
+plus JSON metadata. The server uses ROUTER and adds `avg_infer_time` to the
+response metadata. Pickle requires trusted peers. See the
+[architecture guide](../../../docs/architecture.md) for shared transport.
 
-| Field | Requirement |
-| --- | --- |
-| `type` | Must be `vla_obs`. |
-| `ref_timestamp` | Observation timestamp; the real client uses monotonic nanoseconds. Returned unchanged. |
-| `loc_timestamp` | `time.perf_counter()` in seconds. Returned unchanged; absolute monotonic timestamps cannot be compared across machines. |
-| Camera fields | JPEG/PNG-encoded bytes or a contiguous encoded `uint8` array. Do not send raw `(H, W, 3)` pixels over ZMQ. Convert RGB sources to BGR before `cv2.imencode`; the server decodes back to RGB. Convert `memoryview` to `bytes` before pickling. |
-| `state` | Finite one-dimensional vector with at least 16 values under the default mapping. Only the configured slices enter FK/IK; extra dimensions are not model state. Do not add a batch dimension. |
-| `language` | String, or a list/tuple/NumPy array containing exactly one string. Use a nonempty instruction matching the scene. |
+## Known limitations
 
-Use images and joint feedback from the same observation time. The shared server
-also accepts observation lists, but this adapter uses only `sequence[0]`.
-A list does not enable batch inference or observation history.
-
-The adapter maps checkpoint video keys to decoded observations:
-
-| Checkpoint video key | Request key |
-| --- | --- |
-| `cam_top_head` | `cam.head` |
-| `cam_left_wrist` | `cam.hand_left` |
-| `cam_right_wrist` | `cam.hand_right` |
-
-Unsupported checkpoint video keys cause a startup error. The adapter reads
-only the cameras declared by the checkpoint.
-
-The default FK result is 20-dimensional:
-`[left XYZ+Rot6D (9), right XYZ+Rot6D (9), left gripper, right gripper]`.
-The inspected checkpoint uses `left_arm`, `right_arm`, `left_hand`,
-`right_hand` in that order for both state and action. The adapter derives
-state slices from the checkpoint's ordered state keys and statistics widths,
-and concatenates action outputs in its ordered action keys. Matching total
-dimension alone is insufficient: these orders must agree with the configured
-FK/IK layout.
-
-The adapter supplies one observation time step (`B=1, T_obs=1`). Checkpoints
-requiring multiple video/state history steps are not supported by this path.
-Clients must send joint feedback, not EEF poses, normalized model state, or
-relative action offsets. `Gr00tPolicy` owns checkpoint preprocessing and
-action decoding; IK consumes its decoded pose targets.
-
-```python
-response = {
-    "type": "vla_action",
-    "pred_action": actions,  # np.ndarray, float64, shape (T, 16)
-    "ref_timestamp": request["ref_timestamp"],
-    "loc_timestamp": request["loc_timestamp"],
-    "ext": {},  # May contain prob_progress when returned by the policy.
-}
-```
-
-`T` follows the checkpoint action horizon. The output contains absolute joint
-and gripper targets, without a batch dimension. Do not add current state or
-accumulate outputs as increments. `prob_progress` is optional: the adapter
-forwards it from policy info or a NumPy-valued action field when present;
-it does not compute task progress itself.
-
-## Notes and known issues
-
-- `embodiment_tag` and the state/action modality order must match the checkpoint.
-- **Verify that IK works correctly before using a real robot.**
-- **The URDF and fixed body pose must match the observation.** Extra head/waist
-  state entries do not update the reduced FK model; its non-arm joints remain
-  fixed at `reset_position`.
+- **Version coupling:** use the Isaac-GR00T checkout that matches the adapter.
+  An older or newer `gr00t` package may expose a different `Gr00tPolicy` API.
+- **Hardcoded tags:** N1 ignores `embodiment_tag` / `data_config_key` and uses
+  `NEW_EMBODIMENT` with `a2d_arms_only`; N1.6 ignores `embodiment_tag` and uses
+  `A2D`. Set the checkpoint's actual tag when running N1.5 or N1.7.
+- **History:** every adapter uses only `sequence[0]` and one observation time
+  step. Checkpoints requiring multiple video/state history steps are not
+  supported.
+- **IK verification:** for `gr00t_n1_7_eef`, verify IK convergence and URDF /
+  fixed body pose correctness before using a real robot. A finite action array
+  does not prove task success.
+- **Concurrency:** except for EEF, the adapters have no inference lock; keep
+  `max_infer_workers=1` unless the upstream policy is known to be thread-safe.
+- **Validation:** verify camera color order, joint order, units and action
+  bounds against the training pipeline before hardware use.
 
 ## Upstream project
 
-- Source: Isaac-GR00T; the imported policy entry is
-  `gr00t.policy.gr00t_policy.Gr00tPolicy`.
-- License: upstream code and weights retain their respective licenses; this
-  repository's license does not replace their terms.
+- Source: NVIDIA Isaac-GR00T. Imported entry points are listed in the adapter
+  table above.
+- Code and weights remain subject to their own licenses; this repository's
+  license does not replace their terms.
 
 Implementation references:
 
-- [Model configuration](../../../conf/models_conf.py): `get_gr00t_n1_7_eef_config()`.
-- [Adapter](gr00t_n1_7_eef.py): policy invocation and serialized inference.
-- [FK/IK conversion](../../utils/eef_utils/action_to_joints.py): layouts, feedback seeds, output dtype.
-- [Pink solver](../../utils/eef_utils/pink_single_arm_solver.py): convergence and failure behavior.
+- [Model configuration](../../../conf/models_conf.py): `get_gr00t_config()`,
+  `get_gr00t_1_7_config()`, `get_gr00t_n1_7_eef_config()`.
+- Adapters: [`gr00t_n1.py`](gr00t_n1.py), [`gr00t_n1_5.py`](gr00t_n1_5.py),
+  [`gr00t_n1_6.py`](gr00t_n1_6.py), [`gr00t_n1_7.py`](gr00t_n1_7.py),
+  [`gr00t_n1_7_eef.py`](gr00t_n1_7_eef.py).
+- [FK/IK conversion](../../utils/eef_utils/action_to_joints.py): layouts,
+  feedback seeds, output dtype.
+- [Pink solver](../../utils/eef_utils/pink_single_arm_solver.py): convergence
+  and failure behavior.
 - [Shared server](../../core/vla_server.py): image decoding and responses.
 - [ZMQ server](../../core/zmq_server.py): framing and heartbeats.
-- [Real client](../../../client/core/vla_client.py): `_process_data()` request format.
+- [Real client](../../../client/core/vla_client.py): `_process_data()` request
+  format.

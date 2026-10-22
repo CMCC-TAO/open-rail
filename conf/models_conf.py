@@ -9,6 +9,7 @@ class ModelType(str, Enum):
     GR00T_N1 = 'gr00t_n1'
     GR00T_N1_5 = 'gr00t_n1_5'
     GR00T_N1_6 = 'gr00t_n1_6'
+    GR00T_N1_7 = 'gr00t_n1_7'
     GR00T_N1_7_EEF = 'gr00t_n1_7_eef'
     XVLA_EEF = 'xvla_eef'
     RDT = 'rdt'
@@ -42,6 +43,23 @@ def get_gr00t_config():
     config.embodiment_tag = 'a2d'
     config.data_config_key = 'a2d_arms_only'
     return config
+
+def get_gr00t_1_7_config():
+    """Generate configuration for the GR00T N1.7 model.
+
+    N1.7 removed the A2D embodiment tag; finetuned A2D checkpoints register
+    under the 'new_embodiment' tag, so reusing ``get_gr00t_config()`` (which
+    sets ``embodiment_tag='a2d'``) would fail ``EmbodimentTag.resolve``.
+
+    Returns:
+        ConfigDict: Configuration dictionary containing model path for GR00T N1.7.
+    """
+    config = ConfigDict()
+    config.model_path = '/path/to/model'
+    config.embodiment_tag = 'new_embodiment'
+    config.denoising_steps = 4
+    return config
+
 
 
 def _get_a2d_eef_config():
@@ -100,7 +118,7 @@ def get_xvla_eef_config():
 
 def get_act_config():
     """Generate configuration for ACT model.
-    
+
     Returns:
         ConfigDict: Configuration dictionary containing model path for ACT.
     """
@@ -233,6 +251,7 @@ def get_models_config():
     config.type = ModelType.GR00T_N1_5
     config.mock = get_mock_config()
     config.gr00t = get_gr00t_config()
+    config.gr00t1_7 = get_gr00t_1_7_config()
     config.gr00t_n1_7_eef = get_gr00t_n1_7_eef_config()
     config.xvla_eef = get_xvla_eef_config()
     config.act = get_act_config()
