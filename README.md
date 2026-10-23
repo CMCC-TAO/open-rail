@@ -77,7 +77,7 @@ It currently provides **7 robot adapters** (including RoboCasa, RoboTwin, and a 
 | --- | --- | --- |
 | ⚡ Inference can't keep up with the control cycle; motion stutters and jitters | Three-thread asynchronous pipeline (observation / inference / control) + two-level online smoothing (intra-/inter-chunk) | Joint acceleration std **10+ → 0.1 rad/s²**, eliminating a **30–50×** frequency gap |
 | ☁️ Robot-side compute can't run large models | Server-client split, with non-overlapping dependency trees | Embedded devices can drive large models; device / edge / cloud switching with **zero code changes** |
-| 🔌 Every new robot means redoing the interface | Lightweight hardware abstraction layer `RobotBase` + unified `action_layout` indexing | **5 heterogeneous robots** adapted; onboarding a new robot **from weeks to hours** |
+| 🔌 Every new robot means redoing the interface | Lightweight hardware abstraction layer `RobotBase` + unified `action_layout` indexing | **7 robot adapters** (4 hardware + 3 simulation) adapted; onboarding a new robot **from weeks to hours** |
 | 🧩 Every new model means rewriting the pipeline | Unified model integration contract + automatic server-side routing | **14 models** supported; new models integrate in **≤ 100 lines** |
 | 📊 Inference and collection are split; data never reaches the training pipeline | Collection built into every inference run, LeRobot-style Parquet, appendable episodes | Every run produces usable training data, **at zero extra cost** |
 | 🎮 When inference drifts, there is no timely way to correct it | Three modes (pure inference / pure teleop / hybrid) + pause–intervene–resume with state pre-alignment (opening in October) | Every human correction is a **high-quality demonstration**, with no post-processing |
@@ -105,7 +105,7 @@ Smoothing happens at the **framework level** — no model changes, no training a
 | --- | --- | --- | --- |
 | TAO(ours) | TAO 0, 0.5 | ✅ Supported | `server/models/tao/` |
 | ACT | ACT | ✅ Supported | `server/models/act/` |
-| GR00T N1 series | GR00T N1, N1.5, N1.6, N1.7 EEF | ✅ Supported | `server/models/gr00t/` |
+| GR00T N1 series | GR00T N1, N1.5, N1.6, N1.7 (joint / EEF) | ✅ Supported | `server/models/gr00t/` |
 | RDT | RDT-1B | ✅ Supported | `server/models/rdt/` |
 | SmolVLA | SmolVLA | ✅ Supported | `server/models/smolvla/` |
 | GO1 | AgiBot GO-1 | ✅ Supported | `server/models/go1/` |
@@ -342,6 +342,7 @@ Every run writes two evaluation logs under `eval/`: `eval_log.json` keeps the ra
 | 🧠 [docs/guides/add-new-model.md](docs/guides/add-new-model.md) | How to add a VLA/WAM model adapter |
 | ✨ [docs/guides/add-new-inter-chunk-fuser.md](docs/guides/add-new-inter-chunk-fuser.md) | How to add a custom inter-chunk smoothing strategy |
 | 📦 [docs/demo-running-on-dataset.md](docs/demo-running-on-dataset.md) | End-to-end example: running GR00T-N1.5 on the AgiBotWorld 2026 dataset |
+| 🧪 [docs/simulation_evalution.md](docs/simulation_evalution.md) | Simulation evaluation: RoboCasa / RoboTwin tasks, job snapshots, resume |
 
 ## TODO List 📅 <a name="todolist"></a>
 

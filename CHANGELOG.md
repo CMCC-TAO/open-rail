@@ -1,10 +1,19 @@
 # CHANGELOG
 
+## [20261022]
+
+- Added physics simulation evaluation for RoboCasa and RoboTwin: task catalogs, task sets, parallel environments, dataset export, video capture.
+- Added a Simulation Evaluation panel to the Web console: task selection, episodes per task, job snapshots, resume.
+- Changed the simulation default action chunk length to 50.
+- Added the GR00T N1.7 adapter.
+- Fixed the XVLA EEF IK solver passing configuration fields as constructor arguments.
+
 ## [20261021]
 
-- Added two end-effector (EEF) adapters — XVLA EEF (`xvla_eef`) and GR00T N1.7 EEF (`gr00t_n1_7_eef`) — on top of a new `server/utils/eef_utils/` toolchain for action-to-joint conversion (Pink IK solver, rotation transforms, A2D zero-state URDF). Setup guides: `server/models/xvla/README.md` and `server/models/gr00t/README.md`.
-- Made the TI5 T170C hand width configurable via `hand_type` (`hand`, `gripper`, `lhand_rgripper`, `lgripper_rhand`), with `action_layout` and preset poses following the selected profile; the TAO default embodiment now points at `ti5_gripper`.
-- Fixed web manual control addressing a `gripper` action that some robots' `action_layout` does not define, so gripper-only and mixed hand/gripper profiles now resolve to the layout's `hand` entry.
+- Added the `xvla_eef` and `gr00t_n1_7_eef` end-effector adapters.
+- Changed the TI5 T170C end-effector profile to be selectable through `hand_type`: action layout, camera topics, preset poses follow the selection.
+- Changed the TAO default embodiment to `ti5_gripper`.
+- Fixed web manual control sending a `gripper` action that some robots do not define.
 
 ## [20261019]
 
