@@ -2,19 +2,19 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 69,
-    "uniques": 47
+    "count": 61,
+    "uniques": 42
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
     "title": "/blob/main/README.zh-CN.md",
-    "count": 34,
-    "uniques": 22
+    "count": 31,
+    "uniques": 20
   },
   {
     "path": "/CMCC-TAO/open-rail/graphs/traffic",
     "title": "/graphs/traffic",
-    "count": 33,
+    "count": 31,
     "uniques": 1
   },
   {
@@ -26,13 +26,13 @@
   {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
-    "count": 11,
-    "uniques": 4
+    "count": 12,
+    "uniques": 5
   },
   {
     "path": "/CMCC-TAO/open-rail/pulse",
     "title": "/pulse",
-    "count": 8,
+    "count": 7,
     "uniques": 3
   },
   {
@@ -42,20 +42,20 @@
     "uniques": 6
   },
   {
+    "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/add-new-robot.zh-CN.md",
+    "title": "/blob/main/docs-cn-backup/add-new-robot.zh-CN.md",
+    "count": 3,
+    "uniques": 3
+  },
+  {
     "path": "/CMCC-TAO/open-rail/issues/2",
     "title": "/issues/2",
     "count": 3,
     "uniques": 3
   },
   {
-    "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/add-new-inter-chunk-fuser.zh-CN.md",
-    "title": "/blob/main/docs-cn-backup/add-new-inter-chunk-fuser.zh-CN.md",
-    "count": 3,
-    "uniques": 2
-  },
-  {
-    "path": "/CMCC-TAO/open-rail/blob/main/CHANGELOG.md",
-    "title": "/blob/main/CHANGELOG.md",
+    "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/architecture.zh-CN.md",
+    "title": "/blob/main/docs-cn-backup/architecture.zh-CN.md",
     "count": 2,
     "uniques": 2
   }
