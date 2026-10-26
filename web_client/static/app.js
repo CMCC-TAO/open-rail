@@ -826,7 +826,6 @@ document.addEventListener('DOMContentLoaded', () => {
     wireEvents();
   });
   setupCameraPanel();
-  pollSimulationPreview();
   setupTrajPanel();
   setupLangPanel();
   setupLeftPanelAccordion();
