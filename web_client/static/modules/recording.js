@@ -194,18 +194,36 @@ async function persistRecordingConfigChange(patch) {
 function renderRecordingConfigTree(cfg = App.config) {
   const root = $('recording-config-tree');
   if (!root) return;
+  const scrollTop = root.scrollTop;
+  const openGroups = new Set([...root.querySelectorAll('.cfg-group-header.open')].map(_cfgGroupHeaderPath));
   root.innerHTML = '';
   const recordCfg = (cfg && typeof cfg === 'object' && cfg.record && typeof cfg.record === 'object') ? cfg.record : {};
-  buildTree(recordCfg, 'record', root);
+  const recordTreeCfg = { ...recordCfg };
+  delete recordTreeCfg.image_overlay;
+  buildTree(recordTreeCfg, 'record', root);
+  root.appendChild(buildImageOverlayGroup(cfg));
+  root.querySelectorAll('.cfg-group-header').forEach(header => {
+    const open = openGroups.has(_cfgGroupHeaderPath(header));
+    header.classList.toggle('open', open);
+    header.nextElementSibling.style.display = open ? '' : 'none';
+  });
+  syncImageOverlay(cfg);
+  root.scrollTop = scrollTop;
   syncRecordingCheckboxesFromConfig(cfg);
   syncRecordingSwitchUI();
 }
 
 async function startDataRecording({} = {}) {
+  const recordCfg = App.config?.record;
+  if (!['is_record_eval_log', 'is_record_episode', 'is_record_expe_data'].some(key => !!recordCfg?.[key])) {
+    toast('Select at least one of EvalLog, LeRobot, or ExpeData before starting recording.', 'warn');
+    return false;
+  }
   try {
     const res = await apiFetch('/api/client/record/start', {
       method: 'POST',
       body: JSON.stringify({}),
+      timeoutMs: 30000,
     });
     const currentTaskDir = typeof res?.recording_task_dir === 'string' ? res.recording_task_dir : '';
     if (currentTaskDir) {
@@ -711,6 +729,7 @@ function syncRecordingFileListPolling() {
 function setupLeftPanelAccordion() {
   const panels = [
     { panelId: 'panel-config',    headerId: 'panel-config-header',    bodyId: 'config-body',    btnId: 'btn-config-collapse' },
+    { panelId: 'panel-simulation', headerId: 'panel-simulation-header', bodyId: 'simulation-body', btnId: 'btn-simulation-collapse' },
     { panelId: 'panel-recording', headerId: 'panel-recording-header', bodyId: 'recording-body', btnId: 'btn-recording-collapse' },
     { panelId: 'panel-manual',    headerId: 'panel-manual-header',    bodyId: 'manual-body',    btnId: 'btn-manual-collapse' },
   ];
@@ -736,6 +755,7 @@ function setupLeftPanelAccordion() {
       body.classList.toggle('collapsed', !expanded);
       panel?.classList.toggle('panel-expanded', expanded);
       if (btn) {
+        btn.setAttribute('aria-expanded', String(expanded));
         const isConfigBtn = btnId === 'btn-config-collapse';
         btn.innerHTML = isConfigBtn
           ? (expanded ? '<i class="fas fa-chevron-up"></i>' : '<i class="fas fa-chevron-down"></i>')
@@ -888,25 +908,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const autoCheckRecordMode = $('chk-record-auto');
   const expDataChk = $('chk-record-expdata');
 
-  const getCoreRecordCheckboxes = () => [evallogChk, episodeChk, expDataChk].filter(Boolean);
-  const ensureCoreRecordCheckboxesValid = (changedChk) => {
-    if (!changedChk || changedChk.checked) return true;
-    const checkedCount = getCoreRecordCheckboxes().filter(chk => !!chk.checked).length;
-    if (checkedCount > 0) return true;
-
-    changedChk.checked = true;
-    if (changedChk === evallogChk && typeof setEvalLogEnabled === 'function') {
-      setEvalLogEnabled(true);
-    }
-    toast('At least chooses one of EvalLog、LeRobot、ExpeData', 'warn')
-    return false;
-  };
-
   syncRecordingCheckboxesFromConfig(App.config);
 
   if (episodeChk) {
     episodeChk.addEventListener('change', async () => {
-      if (!ensureCoreRecordCheckboxesValid(episodeChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
@@ -926,7 +931,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (evallogChk) {
     evallogChk.addEventListener('change', async () => {
-      if (!ensureCoreRecordCheckboxesValid(evallogChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 
@@ -968,7 +972,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
   if (expDataChk) {
     expDataChk.addEventListener('change', async () => {
-      if (!ensureCoreRecordCheckboxesValid(expDataChk)) return;
       if (!App.config || typeof App.config !== 'object') App.config = {};
       if (!App.config.record || typeof App.config.record !== 'object') App.config.record = {};
 

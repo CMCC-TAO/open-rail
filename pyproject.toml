@@ -37,9 +37,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+sim = [
+  "gymnasium>=0.29",
+  "imageio>=2.34",
+  "imageio-ffmpeg>=0.5",
+]
 dev = [
   "build>=1.2.2",
   "pytest>=8.0.0",
+  "httpx>=0.27",
   "ruff>=0.11.0",
   "twine>=5.1.1",
 ]

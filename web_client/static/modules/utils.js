@@ -43,19 +43,25 @@ async function apiFetch(url, opts = {}) {
   // Always wrap an external AbortSignal in a local controller so timeouts still apply.
   const controller = new AbortController();
   const signal = controller.signal;
+  const forwardAbort = () => {
+    signal.__manualAbort = externalSignal.__manualAbort || false;
+    controller.abort(externalSignal.reason);
+  };
   if (externalSignal) {
     if (externalSignal.aborted) {
-      signal.__manualAbort = externalSignal.__manualAbort || false;
-      controller.abort();
+      forwardAbort();
     } else {
-      externalSignal.addEventListener('abort', () => {
-        signal.__manualAbort = externalSignal.__manualAbort || false;
-        controller.abort();
-      }, { once: true });
+      externalSignal.addEventListener('abort', forwardAbort, { once: true });
     }
   }
 
-  const timer = setTimeout(() => controller.abort(), Math.max(1000, Number(timeoutMs) || 3000));
+  const requestTimeoutMs = Math.max(1000, Number(timeoutMs) || 3000);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    if (signal.aborted) return;
+    timedOut = true;
+    controller.abort(new DOMException(`Request timed out after ${requestTimeoutMs / 1000}s: ${url}`, 'TimeoutError'));
+  }, requestTimeoutMs);
 
   try {
     const res = await fetch(url, {
@@ -71,6 +77,7 @@ async function apiFetch(url, opts = {}) {
       try {
         json = await res.json();
       } catch (parseErr) {
+        if (signal.aborted) throw signal.reason;
         console.warn('[apiFetch] failed to parse JSON', { url, parseErr });
       }
     }
@@ -78,13 +85,16 @@ async function apiFetch(url, opts = {}) {
     if (!res.ok) {
       const errorMessage = json && (json.detail || json.message) ? (json.detail || json.message) : `${res.status} ${res.statusText}`;
       console.error('[apiFetch] request failed', { url, status: res.status, statusText: res.statusText, elapsedMs: elapsed.toFixed(1), body: json });
-      throw new Error(errorMessage);
+      const error = new Error(errorMessage);
+      error.status = res.status;
+      throw error;
     }
 
     const responseLog = { url, status: res.status, statusText: res.statusText, elapsedMs: elapsed.toFixed(1), body: json };
     console.debug('[apiFetch] request success', responseLog);
     return json !== null ? json : { status: res.status, statusText: res.statusText };
   } catch (e) {
+    if (timedOut) e = signal.reason;
     const elapsed = performance.now() - startTime;
     const abortWasManual = signal && signal.__manualAbort;
     const errLog = { url, elapsedMs: elapsed.toFixed(1), error: e && e.message ? e.message : e, abortWasManual };
@@ -99,6 +109,7 @@ async function apiFetch(url, opts = {}) {
     throw e;
   } finally {
     if (timer) clearTimeout(timer);
+    if (externalSignal) externalSignal.removeEventListener('abort', forwardAbort);
   }
 }
 

@@ -7,7 +7,8 @@
   <link rel="icon" href="/favicon.ico" type="image/x-icon" />
   <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
-  <link rel="stylesheet" href="/static/styles/main.css?v=20260924-shortcuts-popover-1" />
+  <link rel="stylesheet" href="/static/styles/main.css?v=20261020-master-simulation" />
+  <link rel="stylesheet" href="/static/styles/modules/simulation.css?v=20261013-runtime-lock" />
 </head>
 <body>
 
@@ -156,6 +157,58 @@
           </div>
         </div>
       </aside>
+
+      <section class="panel panel-simulation" id="panel-simulation">
+        <div class="panel-header" id="panel-simulation-header">
+          <span><i class="fas fa-flask"></i> Simulation Evaluation</span>
+          <div class="panel-header-actions">
+            <button class="btn btn-xs btn-collapse" id="btn-simulation-collapse" title="Collapse / Expand" aria-controls="simulation-body"><i class="fas fa-chevron-up"></i></button>
+          </div>
+        </div>
+        <div class="panel-body collapsed" id="simulation-body">
+          <div class="simulation-actions simulation-toolbar">
+            <button type="submit" form="sim-config" class="btn btn-sm btn-success" id="sim-start" disabled><i class="fas fa-flask" aria-hidden="true"></i> Run Evaluation</button>
+            <button type="button" class="btn btn-sm simulation-stop" id="sim-stop" disabled><i class="fas fa-stop" aria-hidden="true"></i> Stop Evaluation</button>
+            <button type="button" class="btn btn-sm" id="sim-resume" disabled><i class="fas fa-redo" aria-hidden="true"></i> Resume Evaluation</button>
+          </div>
+          <p class="simulation-hint">Select a simulation robot in Configuration and start its model service.</p>
+          <form id="sim-config">
+            <details class="simulation-section" open>
+              <summary><i class="fas fa-sliders-h" aria-hidden="true"></i> Evaluation Configuration</summary>
+              <div class="simulation-section-body"><div id="sim-fields" class="simulation-fields"></div></div>
+            </details>
+            <details id="sim-video-settings" class="simulation-section">
+              <summary>Video Settings</summary>
+              <div class="simulation-section-body"><div id="sim-advanced-fields" class="simulation-fields"></div></div>
+            </details>
+          </form>
+          <p id="sim-error" role="alert"></p>
+          <section class="simulation-section" aria-labelledby="sim-jobs-heading">
+            <div class="simulation-section-heading" id="sim-jobs-heading"><i class="fas fa-list" aria-hidden="true"></i> Jobs and Results</div>
+            <div class="simulation-section-body">
+              <select id="sim-jobs" class="input-text" aria-label="Evaluation History"></select>
+              <p id="sim-status" aria-live="polite"></p>
+              <div id="sim-results"></div>
+              <p class="simulation-hint">Resume keeps the original settings and saved episodes.</p>
+            </div>
+          </section>
+          <label class="simulation-section simulation-field simulation-preview-source" title="Shared source for Camera Viewer and Trajectory Viewer">Preview Source
+            <select id="sim-preview-source" class="input-text">
+              <option value="simulation">Simulation</option>
+              <option value="robot">Robot Client</option>
+            </select>
+          </label>
+          <details class="simulation-section" open>
+            <summary><i class="fas fa-film" aria-hidden="true"></i> Result Files and Videos</summary>
+            <div class="simulation-section-body">
+              <select id="sim-files" class="input-text" aria-label="Result Files"></select>
+              <a class="btn btn-xs" id="sim-download" target="_blank" rel="noopener" hidden><i class="fas fa-external-link-alt" aria-hidden="true"></i> Open File</a>
+              <video id="sim-video" controls preload="metadata" hidden></video>
+            </div>
+          </details>
+          <details class="simulation-section"><summary title="Last 64 KB"><i class="fas fa-terminal" aria-hidden="true"></i> Run Logs</summary><div class="simulation-section-body"><pre id="sim-logs"></pre></div></details>
+        </div>
+      </section>
 
       <section class="panel panel-recording" id="panel-recording">
         <div class="panel-header" id="panel-recording-header">
@@ -496,7 +549,7 @@
       <!-- ── Joint Trajectory ── -->
       <section class="panel panel-traj" id="panel-traj">
         <div class="panel-header traj-panel-header" id="traj-panel-header">
-          <span><i class="fas fa-chart-area"></i> Trajectory Viewer</span>
+          <span><i class="fas fa-chart-area"></i> <span id="trajectory-source-label">Trajectory Viewer</span></span>
           <div class="panel-header-actions traj-header-actions">
             <!-- spacer: push all groups to the right -->
             <span class="traj-header-spacer"></span>
@@ -577,7 +630,7 @@
     <!-- ╔══════════════ RIGHT: CAMERA VISUAL ══════════════╗ -->
     <aside class="panel panel-visual" id="panel-visual">
       <div class="panel-header">
-        <span><i class="fas fa-camera"></i> Camera Viewer</span>
+        <span><i class="fas fa-camera"></i> <span id="camera-source-label">Camera Viewer</span></span>
         <div class="panel-header-actions">
           <button class="btn btn-danger btn-xs" id="btn-cam-all-toggle"><i class="fas fa-pause"></i> Close All</button>
         </div>
@@ -645,6 +698,8 @@
   <!-- ═══════════════════ TOAST ═══════════════════ -->
   <div id="toast-container" class="toast-container"></div>
 
+  <dialog id="camera-expanded" class="camera-expanded" aria-label="Expanded camera view"></dialog>
+
   <!-- ═══════════════════ MODAL: Save As ═══════════════════ -->
   <div id="modal-saveas" class="modal hidden">
     <div class="modal-box">
@@ -674,14 +729,18 @@
   <script src="/visual/vlib/hammer.min.js"></script>
   <script src="/visual/vlib/chartjs-plugin-zoom.min.js"></script>
   <script src="/static/constants.js"></script>
-  <script src="/static/modules/utils.js"></script>
+  <script src="/static/modules/utils.js?v=20261014-request-timeout-1"></script>
   <script src="/static/modules/websocket.js"></script>
-  <script src="/static/modules/camera.js"></script>
-  <script src="/static/modules/trajectory.js"></script>
-  <script src="/static/modules/config.js"></script>
+  <script src="/static/modules/camera.js?v=20261020-master-simulation"></script>
+  <script src="/static/modules/simulation-camera.js?v=20261020-master-simulation"></script>
+  <script src="/static/modules/trajectory.js?v=20261014-source-controls"></script>
+  <script src="/static/modules/simulation-trajectory.js?v=20261014-source-controls"></script>
+  <script src="/static/modules/config.js?v=20261020-simulation-registry"></script>
+  <script src="/static/modules/image-overlay.js?v=20261014-overlay-retry-5"></script>
   <script src="/static/modules/language.js?v=20260924-shortcuts-popover-1"></script>
-  <script src="/static/modules/recording.js"></script>
+  <script src="/static/modules/recording.js?v=20261020-master-simulation"></script>
   <script src="/static/modules/manual-control.js?v=20260924-preset-selection-2"></script>
-  <script src="/static/app.js?v=20260924-shortcuts-popover-1"></script>
+  <script src="/static/app.js?v=20261020-master-simulation"></script>
+  <script type="module" src="/static/modules/simulation-dashboard.js?v=20261020-simulation-registry"></script>
 </body>
 </html>

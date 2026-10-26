@@ -37,6 +37,15 @@ def get_model(config):
     elif config.type == ModelType.GR00T_N1_6:
         from server.models.gr00t.gr00t_n1_6 import ModelVLA as GR00T_N1_6
         return GR00T_N1_6(config.gr00t)
+    elif config.type == ModelType.GR00T_N1_7:
+        from server.models.gr00t.gr00t_n1_7 import ModelVLA as GR00T_N1_7
+        return GR00T_N1_7(config.gr00t1_7)
+    elif config.type == ModelType.GR00T_N1_7_EEF:
+        from server.models.gr00t.gr00t_n1_7_eef import ModelVLA as GR00T_N1_7_EEF
+        return GR00T_N1_7_EEF(config.gr00t_n1_7_eef)
+    elif config.type == ModelType.XVLA_EEF:
+        from server.models.xvla.xvla_eef import ModelVLA as XVLA_EEF
+        return XVLA_EEF(config.xvla_eef)
     elif config.type == ModelType.RDT:
         from server.models.rdt import ModelVLA as RDT
         return RDT(config.rdt)
@@ -52,6 +61,9 @@ def get_model(config):
     elif config.type == ModelType.PI05:
         from server.models.openpi.pi05 import ModelVLA as PI05
         return PI05(config.pi05)
+    elif config.type == ModelType.PI05_PYTORCH:
+        from server.models.openpi.pi05_pytorch import ModelVLA as PI05_PYTORCH
+        return PI05_PYTORCH(config.pi05_pytorch)
     elif config.type == ModelType.TAO:
         from server.models.tao import ModelVLA as TAO
         return TAO(config.tao)
@@ -73,9 +85,15 @@ def parse_args():
     parser = argparse.ArgumentParser(description='VLA Server')
     
     # Keep only the most commonly used parameters
-    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'tao', 'dm05', 'wallx'],
+    parser.add_argument('--model_type', type=str, choices=['mock', 'act', 'gr00t_n1', 'gr00t_n1_5', 'gr00t_n1_6', 'gr00t_n1_7', 'gr00t_n1_7_eef', 'xvla_eef', 'rdt', 'smolvla','go1', 'pi0', 'pi05', 'pi05_pytorch', 'tao', 'dm05', 'wallx'],
                        help='Model type to use for inference')
     parser.add_argument('--model_path', type=str, help='Path to the model checkpoint')
+    parser.add_argument('--embodiment_tag', type=str,
+                       choices=['a2d', 'a2d_gripper', 'robotwin_aloha', 'navi_wa2', 'new_embodiment',
+                                'robocasa_pandas_omron',
+                                'ti5_hand', 'ti5_gripper','unitree_g1'],
+                       help='Simulation robot name or supported SDK embodiment tag')
+    parser.add_argument('--server_port', type=int, help='Override model service port')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode, disable Live interface')
     
     return parser.parse_args()
@@ -93,11 +111,18 @@ def override_config_with_args(config, args):
     # Override model type
     if args.model_type:
         config.models.type = ModelType(args.model_type)
-    
+
     # Override model path
     if args.model_path:
         if config.models.type == ModelType.GR00T_N1 or config.models.type == ModelType.GR00T_N1_5 or config.models.type == ModelType.GR00T_N1_6:
             config.models.gr00t.model_path = args.model_path
+        elif config.models.type == ModelType.GR00T_N1_7:
+            config.models.gr00t1_7.model_path = args.model_path
+        elif config.models.type == ModelType.GR00T_N1_7_EEF:
+            config.models.gr00t_n1_7_eef.model_path = args.model_path
+            config.image_pad_and_resize = True
+        elif config.models.type == ModelType.XVLA_EEF:
+            config.models.xvla_eef.model_path = args.model_path
         elif config.models.type == ModelType.ACT:
             config.models.act.model_path = args.model_path
         elif config.models.type == ModelType.RDT:
@@ -110,12 +135,23 @@ def override_config_with_args(config, args):
             config.models.pi0.model_path = args.model_path
         elif config.models.type == ModelType.PI05:
             config.models.pi05.model_path = args.model_path
+        elif config.models.type == ModelType.PI05_PYTORCH:
+            config.models.pi05_pytorch.model_path = args.model_path
         elif config.models.type == ModelType.TAO:
             config.models.tao.model_path = args.model_path
         elif config.models.type == ModelType.DM05:
             config.models.dm05.model_path = args.model_path
         elif config.models.type == ModelType.WALLX:
             config.models.wallx.model_path = args.model_path
+
+    if args.embodiment_tag:
+        from conf.embodiments_conf import select_model_embodiment
+
+        select_model_embodiment(config.models, args.embodiment_tag)
+    if getattr(args, 'server_port', None) is not None:
+        if not 1 <= args.server_port <= 65535:
+            raise ValueError('--server_port must be in [1, 65535]')
+        config.zmq.port = str(args.server_port)
 
     return config
 
@@ -132,11 +168,13 @@ def main():
     
     # Initialize server components
     zmq_server = ZMQServer(config.zmq)
-    model = get_model(config.models)
+    from client.simulation.model_bridge import build_model
+    model = build_model(config.models, get_model)
     vla_server = VLAServer(config, zmq_server, model)
     
     try:
         # Start server in a separate thread
+        vla_server.running = True
         server_thread = threading.Thread(target=vla_server.run, daemon=True)
         server_thread.start()
         print(f"Starting VLA Server with model type: {config.models.type}")

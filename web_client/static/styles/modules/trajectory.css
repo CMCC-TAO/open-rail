@@ -269,3 +269,23 @@
 .traj-chart-wrap canvas {
   width: 100% !important; height: 100% !important;
 }
+
+.simulation-trajectory .traj-panel-header {
+  flex-direction: column;
+  padding-top: 8px;
+}
+.simulation-trajectory .traj-panel-header > span { padding-right: 36px; }
+.simulation-trajectory .traj-header-actions { width: 100%; }
+.simulation-trajectory .traj-header-spacer { display: none; }
+.simulation-trajectory .traj-joints-group { flex: 1; }
+.simulation-trajectory .traj-joints-rows {
+  width: 100%;
+  overflow-x: auto;
+}
+.simulation-trajectory .joint-sel-row { flex-wrap: nowrap; }
+.simulation-trajectory #btn-traj-collapse {
+  position: absolute;
+  top: 8px;
+  right: 14px;
+}
+.traj-collapsed .simulation-trajectory .traj-header-actions { display: none; }

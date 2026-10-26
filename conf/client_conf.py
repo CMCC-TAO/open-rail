@@ -30,6 +30,8 @@ def get_client_config():
     config.controller = get_controller_config()
     config.robots = get_robots_config()
     config.vla_zmq = get_vla_zmq_config()
+    config.vla_zmq.io_profile = ''
+    config.vla_zmq.embodiment_tag = ''
     config.visualize = get_visualize_config()
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
@@ -54,6 +56,11 @@ def get_rdm_config() -> ConfigDict:
     config.mode = 'async'  # inference mode, choices = ('async', 'sync')
     config.max_len = 100  # Maximum length of observation data sequence buffer
     config.observe_fps_window_size = 10  # FPS estimation window size based on latest N added observation frames
+    config.skip_initial_frames = 5
+    config.action_consume_mode = 'realtime'  # choices = ('realtime', 'sequential')
+    config.latency_compensation = True
+    config.action_replenish_threshold = 0
+    config.max_async_observation_lag_steps = 4
     return config
 
 def get_intra_chunk_config() -> ConfigDict:
@@ -78,6 +85,7 @@ def get_intra_chunk_config() -> ConfigDict:
     config.max_gripper_fitting_workers = 2
     config.max_head_fitting_workers = 2
     config.fitting_num_samples = 64
+    config.output_sample_ratio = 1.0
     config.fitting_deg = 4  # Polynomial fitting degree
     config.intra_chunk_mode = 'fitting'  # intra-chunk processing mode, choices = ('raw', 'interpolation', 'fitting')
     config.joint_dim = 14  # Degrees of freedom for dual arms
@@ -87,6 +95,7 @@ def get_intra_chunk_config() -> ConfigDict:
 
 def get_inter_chunk_config() -> ConfigDict:
     config = ConfigDict()
+    config.max_transition_steps = 5
     config.inter_chunk_mode = 'min_jerk'  # choices = ('search_action', 'smooth_velocity', 'min_jerk', 'sync')
     config.search_action = get_search_action_config()
     config.smooth_velocity = get_smooth_velocity_config()
@@ -146,6 +155,7 @@ def get_controller_config() -> ConfigDict:
     config.teleop_outlier_max_gripper_delta = 1.0  # Max accepted gripper jump in one teleop packet.
     config.teleop_outlier_reanchor_after_rejects = 5  # Clear stale teleop source after repeated rejects only when no safe hold action exists.
     config.teleop_outlier_log_interval_s = 1.0  # Rate-limit outlier warning logs.
+    config.action_steps = None  # Optional maximum number of model actions executed per chunk
     return config
 
 def get_observer_config() -> ConfigDict:

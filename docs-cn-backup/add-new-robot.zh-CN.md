@@ -127,7 +127,7 @@ def get_robots_config():
 
 ### 3. 注册 Web 工厂
 
-新机器人类型通过在 [`client/robots/robot_proxy.py`](../../client/robots/robot_proxy.py) 的 `_ROBOT_MODULES` 映射中添加一条记录完成注册，该映射把每个 `RobotType` 取值对应到暴露其 `RobotBody` 的模块：
+新机器人类型通过在 [`client/robots/robot_proxy.py`](../../client/robots/robot_proxy.py) 的 `_ROBOT_MODULES` 映射中添加一条记录完成注册，该映射把每个 `RobotType` 取值对应到定义其 `RobotBody` 的模块：
 
 ```python
 _ROBOT_MODULES: Dict[str, str] = {
@@ -139,7 +139,7 @@ _ROBOT_MODULES: Dict[str, str] = {
 }
 ```
 
-[`web_client/server.py`](../../web_client/server.py) 无需改动：`_create_robot()`（`web_client/server.py:1332`）只是把注册的类型包进 `RobotProxy`，具体的 `RobotBody` 在机器人工作子进程中从 `_ROBOT_MODULES` 导入。未在 `_ROBOT_MODULES` 中注册的类型会报 `Unsupported robot type`。
+[`web_client/server.py`](../../web_client/server.py) 无需改动：`_create_robot()`只是把注册的类型包进 `RobotProxy`，具体的 `RobotBody` 在机器人工作子进程中从 `_ROBOT_MODULES` 导入。未在 `_ROBOT_MODULES` 中注册的类型会报 `Unsupported robot type`。
 
 每次客户端启动都会新建一个 `RobotProxy`，因此不存在需要更新的 SDK 实例复用钩子。
 
@@ -152,6 +152,8 @@ _ROBOT_MODULES: Dict[str, str] = {
 ```bash
 python run_web_client.py
 ```
+
+在配置中将 `robots.type` 设为 `my_robot`。
 
 ## 当前分支的数据规则
 

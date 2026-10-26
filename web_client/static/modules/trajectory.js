@@ -113,7 +113,9 @@ function _makeTrajJointLabels(count) {
 
 function syncTrajLayoutFromConfig(cfg = App.config, fallbackCount = TRAJ_JOINT_COUNT) {
   const t = App.traj;
-  const seg = resolveTrajActionSegment(cfg, fallbackCount);
+  const seg = t.simulationLayout
+    ? { start: 0, end: t.simulationLayout.labels.length, name: `simulation:${t.simulationLayout.streamId}` }
+    : resolveTrajActionSegment(cfg, fallbackCount);
   const count = Math.max(0, seg.end - seg.start);
   const changed = t.actionStart !== seg.start || t.actionEnd !== seg.end || t.actionName !== seg.name || t.numJoints !== count;
 
@@ -121,7 +123,7 @@ function syncTrajLayoutFromConfig(cfg = App.config, fallbackCount = TRAJ_JOINT_C
   t.actionEnd = seg.end;
   t.actionName = seg.name;
   t.numJoints = count;
-  t.jointLabels = _makeTrajJointLabels(count);
+  t.jointLabels = t.simulationLayout ? [...t.simulationLayout.labels] : _makeTrajJointLabels(count);
 
   // const kept = new Set([...t.selectedJoints].filter(i => Number.isInteger(i) && i >= 0 && i < count));
   // t.selectedJoints = t.jointSelectionInitialized ? kept : _defaultSelectedJoints(count);
@@ -242,7 +244,12 @@ async function renderJointSelector() {
     const chip = document.createElement('span');
     const color = getTrajJointColor(i);
     chip.className = 'joint-sel-chip' + (t.selectedJoints.has(i) ? ' active' : '');
-    chip.textContent = labels[i] ?? `J${i}`;
+    const label = labels[i] ?? `J${i}`;
+    chip.textContent = t.simulationLayout
+      ? label.replace(/^left_arm_(\d+)$/, 'L$1').replace(/^right_arm_(\d+)$/, 'R$1')
+        .replace(/^left_gripper$/, 'LG').replace(/^right_gripper$/, 'RG')
+      : label;
+    chip.title = label;
     chip.dataset.idx = i;
     _applyChipColor(chip, t.selectedJoints.has(i), color);
     chip.addEventListener('click', async () => {
@@ -256,6 +263,7 @@ async function renderJointSelector() {
         _applyChipColor(chip, true, color);
       }
       refreshUnifiedChart();
+      if (t.simulationLayout) return;
       const patch = {
         'visualize.trajectory.selected_joints': [...t.selectedJoints].sort((a, b) => a - b),
       };
@@ -321,7 +329,8 @@ function recomputeTrajXWindow() {
 }
 
 /* ── Ingest new data point ── */
-function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampSec = null) {
+function ingestTrajData(stateArr, actionFittedArr, actionRawArr = [], timestampSec = null, source = 'robot') {
+  if (App.traj.simulationLayout && source !== 'simulation') return;
   const stateSeries = _sliceTrajArray(stateArr);
   const actionFittedSeries = _sliceTrajArray(actionFittedArr);
   const actionRawSeries = _sliceTrajArray(actionRawArr);
@@ -616,10 +625,11 @@ async function setupTrajPanel() {
     });
     if (btnAllSource) {
       const s = App.traj.source;
-      const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
+      const sources = ['state', 'action_fitted', 'action_raw'];
+      const allSelected = sources.every(source => s.has(source));
       btnAllSource.textContent = allSelected ? 'None' : 'All';
     }
-    if (updateConfig) {
+    if (updateConfig && !App.traj.simulationLayout) {
       const patch = getTrajSourceStatePatch();
       const patchRes = await apiFetch('/api/client/config/patch', {
         method: 'POST',
@@ -675,10 +685,11 @@ async function setupTrajPanel() {
   if (btnAllSource) {
     btnAllSource.addEventListener('click', () => {
       const s = App.traj.source;
-      const allSelected = s.has('state') && s.has('action_fitted') && s.has('action_raw');
+      const sources = ['state', 'action_fitted', 'action_raw'];
+      const allSelected = sources.every(source => s.has(source));
       App.traj.source = allSelected
         ? new Set()
-        : new Set(['state', 'action_fitted', 'action_raw']);
+        : new Set(sources);
       if (App.traj.source.size > 0) recomputeTrajXWindow();
       App.traj.dirty = true;
       syncSrcButtons();
@@ -695,6 +706,7 @@ async function setupTrajPanel() {
     if (App.traj.source.size > 0) recomputeTrajXWindow();
     App.traj.dirty = true;
     refreshUnifiedChart();
+    if (App.traj.simulationLayout) return;
     const patch = getTrajWindowSpanStatePatch();
     const patchRes = await apiFetch('/api/client/config/patch', {
       method: 'POST',
@@ -733,6 +745,7 @@ async function setupTrajPanel() {
       App.traj.dirty = true;
       refreshUnifiedChart();
     }
+    if (App.traj.simulationLayout) return;
     const patch = getTrajPlayStatePatch();
     const patchRes = await apiFetch('/api/client/config/patch', {
       method: 'POST',
@@ -782,6 +795,7 @@ async function setupTrajPanel() {
     }
     t.dirty = true;
     refreshUnifiedChart();
+    if (t.simulationLayout) return;
     const patch = getTrajJointsStatePatch();
     const patchRes = await apiFetch('/api/client/config/patch', {
       method: 'POST',
@@ -806,6 +820,7 @@ async function setupTrajPanel() {
     });
     t.selectedJoints.clear();
     refreshUnifiedChart();
+    if (t.simulationLayout) return;
     const patch = getTrajJointsStatePatch();
     const patchRes = await apiFetch('/api/client/config/patch', {
       method: 'POST',

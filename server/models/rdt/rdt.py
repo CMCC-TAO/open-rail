@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append('/home/gaohan/Code/VLA/zhaolei/zl/server/models/rdt/rdt_train_a2d')
+sys.path.append('/path/to/rdt_train_a2d')
 
 import time
 import yaml

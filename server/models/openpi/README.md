@@ -4,7 +4,7 @@ This guide describes `run_server.py --model_type pi0` (and `--model_type pi05`),
 using the A2D configuration with two 7-joint arms and two grippers as an
 example. open-rail handles ZMQ transport and image decoding; the adapter
 (`pi0.py` / `pi05.py`) calls the openpi policy backend through the sibling
-openpi checkout. The camera fields, state/action dimensions, and client code
+openpi source directory. The camera fields, state/action dimensions, and client code
 below describe this example. For another configuration, align the interface and
 checkpoint with its training layout.
 
@@ -38,6 +38,39 @@ fine-tuned for this state/action layout.
 configuration entries. The environment needs openpi dependencies and open-rail
 server dependencies, including `ml_collections` and `rich`.
 Run one server per port. Restart the server after changing adapter code.
+
+## PyTorch pi0.5 (`pi05_pytorch`)
+
+Use the checkpoint's matching OpenPI training source (including its
+`pi05_a2d` config and transformers patches) in an environment containing
+PyTorch, safetensors, accelerate, and the open-rail server dependencies.
+
+```bash
+OPENPI_SRC=/path/to/training_source_snapshot
+PYTHONPATH="$OPENPI_SRC/src:$PYTHONPATH" python run_server.py \
+  --model_type pi05_pytorch --model_path /path/to/checkpoint
+```
+
+The adapter discovers `packages/openpi-client/src` beside the selected OpenPI
+source. It creates a meta model and loads tensors individually, preserving
+OpenPI's mixed precision and shared weights to reduce CPU memory use.
+CUDA is selected automatically when available.
+
+The checkpoint must contain `model.safetensors` and its `assets/` directory,
+including normalization statistics for the configured asset ID. Put
+`paligemma_tokenizer.model` directly in `assets/`; a shared copy at
+`~/.cache/openpi/paligemma_tokenizer.model` or an explicit
+`PALIGEMMA_TOKENIZER` environment variable is also supported.
+
+Edit `get_pi05_pytorch_config()` in `conf/models_conf.py`: `config` defaults
+to `pi05_a2d`, `execute_horizon` to 50, and `compile_mode` to `max-autotune`.
+Use Python `None` (without quotes) to disable compilation, or select
+`default`, `reduce-overhead`, `max-autotune`, or `max-autotune-no-cudagraphs`.
+The first compiled calls require warmup.
+
+This adapter uses the same camera/request fields below, takes the first 16
+state values, and always returns absolute actions shaped `(T, 16)` in A2D
+joint/gripper order. It does not use the legacy `is_hand` conversion.
 
 ## Wire protocol
 
