@@ -42,7 +42,7 @@ Run one server per port. Restart the server after changing adapter code.
 ## PyTorch pi0.5 (`pi05_pytorch`)
 
 Use the checkpoint's matching OpenPI training source (including its
-`pi05_a2d` config and transformers patches) in an environment containing
+`pi05_a2d` or `pi05_ti5` config and transformers patches) in an environment containing
 PyTorch, safetensors, accelerate, and the open-rail server dependencies.
 
 ```bash
@@ -63,14 +63,19 @@ including normalization statistics for the configured asset ID. Put
 `PALIGEMMA_TOKENIZER` environment variable is also supported.
 
 Edit `get_pi05_pytorch_config()` in `conf/models_conf.py`: `config` defaults
-to `pi05_a2d`, `execute_horizon` to 50, and `compile_mode` to `max-autotune`.
+to `None`, which selects `pi05_a2d` or `pi05_ti5` by matching the checkpoint's
+normalization assets. Set an explicit config if selection is ambiguous.
+`execute_horizon` defaults to 50 and `compile_mode` to `max-autotune`.
 Use Python `None` (without quotes) to disable compilation, or select
 `default`, `reduce-overhead`, `max-autotune`, or `max-autotune-no-cudagraphs`.
 The first compiled calls require warmup.
 
-This adapter uses the same camera/request fields below, takes the first 16
-state values, and always returns absolute actions shaped `(T, 16)` in A2D
-joint/gripper order. It does not use the legacy `is_hand` conversion.
+Both layouts use `cam.head`, `cam.hand_left`, and `cam.hand_right` request fields.
+A2D takes the first 16 state values and returns absolute actions shaped `(T, 16)`.
+TI5 takes the first 26 state values and returns `(T, 26)` in the training order:
+left arm (7), right arm (7), left hand (6), right hand (6). The adapter maps
+TI5 images to the training policy's `head`, `left`, and `right` fields and does
+not use the legacy `is_hand` conversion.
 
 ## Wire protocol
 
