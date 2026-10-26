@@ -9,6 +9,8 @@ import math
 import time
 from typing import Iterable
 
+from conf.robots_conf import get_robot_config
+
 
 LEFT_ARM_JOINTS = [f"left_arm_joint{i}" for i in range(1, 8)]
 RIGHT_ARM_JOINTS = [f"right_arm_joint{i}" for i in range(1, 8)]
@@ -22,24 +24,7 @@ HOME_JOINT_NAMES = [
     LEFT_HAND_JOINT,
     RIGHT_HAND_JOINT,
 ]
-HOME_ACTION = [
-    -1.0748,
-    0.6107,
-    0.2816,
-    -1.2823,
-    0.7292,
-    1.4957,
-    -0.1869,
-    1.0720,
-    -0.6103,
-    -0.2780,
-    1.2822,
-    -0.7299,
-    -1.4929,
-    0.1873,
-    1.0,
-    1.0,
-]
+HOME_ACTION = list(get_robot_config('a2d').reset_robot_pos[:16])
 
 
 @dataclass(frozen=True)

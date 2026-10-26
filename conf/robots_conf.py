@@ -23,6 +23,26 @@ class RobotType(str, Enum):
     NAVI_WA2 = 'navi_wa2'
     UNITREE_G1 = 'unitree_g1'
 
+
+_ROBOT_CONFIG_ALIASES = {'a2d': 'agibot_g1'}
+
+
+def canonical_robot_type(robot_type) -> str:
+    """Return the canonical registered robot name for a type-like value."""
+
+    name = getattr(robot_type, 'value', robot_type)
+    name = str(name or '').strip().lower()
+    if name.startswith('robottype.'):
+        name = name.rsplit('.', 1)[-1]
+    return _ROBOT_CONFIG_ALIASES.get(name, name)
+
+
+def get_robot_config(robot_type):
+    """Resolve one robot configuration by type/alias, or return ``None``."""
+
+    return get_robots_config().get(canonical_robot_type(robot_type))
+
+
 def get_agibot_g1_config():
     """Generate configuration for AgiBot G1 robot.
     
@@ -74,6 +94,15 @@ def get_agibot_g1_config():
             'presets': {'Default': [0, 0], 'Forward': [0.1, 0.], 'Backward': [-0.1, 0], 'Left': [0, 0.1], 'Right': [0, -0.1]},
         },
     })
+    config.reset_robot_pos = (
+        list(config.action_layout['arm']['presets']['left']['Default'])
+        + list(config.action_layout['arm']['presets']['right']['Default'])
+        + list(config.action_layout['gripper']['presets']['left']['Default'])
+        + list(config.action_layout['gripper']['presets']['right']['Default'])
+        + list(config.action_layout['head']['presets']['Default'])
+        + list(config.action_layout['waist']['presets']['Default'])
+        + list(config.action_layout['wheel']['presets']['Default'])
+    )
     return config
 
 def get_mock_config():
@@ -192,7 +221,7 @@ def get_robotwin_aloha_config():
 
 def get_ti5_t170c_config(hand_type='hand'):
     """Configuration for TI5 T170c. Width follows hand_type; default stays 26-DOF."""
-    left_dof, right_dof = _ti5_hand_widths(hand_type)
+    left_dof, right_dof = get_ti5_hand_widths(hand_type)
     hand_dof = left_dof + right_dof
     config = ConfigDict()
     config.hand_type = hand_type or 'hand'
@@ -226,8 +255,6 @@ def get_ti5_t170c_config(hand_type='hand'):
         + [1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567,
            0.4101313352460489, -0.2251850174207321, 0.3232027944991513]
     )
-    # Hand open pose in hardware units [0, 1000]. Width follows the profile.
-    config.reset_robot_pos = _arm_reset + [1000.0] * hand_dof
     config.manual_arm_interval = 0.01
     _left_open = [1000.0] * left_dof
     _right_open = [1000.0] * right_dof
@@ -277,6 +304,13 @@ def get_ti5_t170c_config(hand_type='hand'):
             },
         },
     }
+    # Keep the Web reset target derived from the same presets exposed to the UI.
+    config.reset_robot_pos = (
+        list(config.action_layout['arm']['presets']['left']['Default'])
+        + list(config.action_layout['arm']['presets']['right']['Default'])
+        + list(config.action_layout['hand']['presets']['left']['Default'])
+        + list(config.action_layout['hand']['presets']['right']['Default'])
+    )
     return config
 
 def get_navi_wa2_config():
@@ -399,7 +433,7 @@ _TI5_HAND_WIDTHS = {
 }
 
 
-def _ti5_hand_widths(hand_type):
+def get_ti5_hand_widths(hand_type):
     """Return (left_dof, right_dof) for a TI5 end-effector profile name."""
     try:
         return _TI5_HAND_WIDTHS[hand_type or 'hand']

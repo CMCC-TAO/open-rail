@@ -32,33 +32,18 @@ reset_release_value: 0.0
 reset_pulse_on_press: true
 
 # Target for reset_mode: joint_command.
+# Sourced from conf/robots_conf.py get_robot_config(robot).reset_robot_pos,
+# which is the same reset target used by the Web Client Reset button.
 # Order: left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
-reset_action:
-  - -1.0748
-  - 0.6107
-  - 0.2816
-  - -1.2823
-  - 0.7292
-  - 1.4957
-  - -0.1869
-  - 1.0720
-  - -0.6103
-  - -0.2780
-  - 1.2822
-  - -0.7299
-  - -1.4929
-  - 0.1873
-  - 0.0
-  - 0.0
 
 # Reset interpolation timing for reset_mode: joint_command.
 reset_interp_duration_sec: 2.0
 reset_start_hold_sec: 0.1
 
-# Gripper control mode:
+# Hand/gripper control mode:
 # - incremental: grip past grip_threshold closes toward gripper_command_max; secondary button opens toward gripper_command_min.
 # - proportional: gripper command follows the analog gripper input directly.
-gripper_control_mode: incremental
+hand_control_mode: incremental
 
 # Controller gripper analog input range. In proportional mode, 0.0 maps to open and 1.0 maps to closed.
 gripper_input_min: 0.0

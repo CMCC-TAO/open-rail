@@ -4,57 +4,27 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
 import math
 import time
+from dataclasses import dataclass
 
+from conf.robots_conf import get_robot_config
 
 BRIDGE_LEFT_ARM_JOINTS = [f"left_arm_joint{i}" for i in range(1, 8)]
 BRIDGE_RIGHT_ARM_JOINTS = [f"right_arm_joint{i}" for i in range(1, 8)]
 
-TI5_LEFT_ARM_JOINTS = [
-    "L_SHOULDER_P_JOINT",
-    "L_SHOULDER_R_JOINT",
-    "L_SHOULDER_Y_JOINT",
-    "L_ELBOW_JOINT",
-    "L_WRIST_Y_JOINT",
-    "L_WRIST_R_JOINT",
-    "L_WRIST_P_JOINT",
-]
-TI5_RIGHT_ARM_JOINTS = [
-    "R_SHOULDER_P_JOINT",
-    "R_SHOULDER_R_JOINT",
-    "R_SHOULDER_Y_JOINT",
-    "R_ELBOW_JOINT",
-    "R_WRIST_Y_JOINT",
-    "R_WRIST_R_JOINT",
-    "R_WRIST_P_JOINT",
-]
+TI5_LEFT_ARM_JOINTS = [f"Joint{i}_L" for i in range(1, 8)]
+TI5_RIGHT_ARM_JOINTS = [f"Joint{i}_R" for i in range(1, 8)]
 
-LEFT_ARM_RESET_POS = [
-    -1.681951211214541,
-    1.5263110171042418,
-    2.2737134617553534,
-    -0.23620356347006893,
-    -0.5204031154482495,
-    0.1292378813793631,
-    0.19059726269759902,
-]
-RIGHT_ARM_RESET_POS = [
-    1.3119088393316176,
-    1.4473110065281325,
-    -1.6156086726673602,
-    -1.665472635653567,
-    0.4101313352460489,
-    -0.2251850174207321,
-    0.3232027944991513,
-]
+_TI5_RESET_POSITION = list(get_robot_config('ti5_t170c').reset_robot_pos)
+LEFT_ARM_RESET_POS = _TI5_RESET_POSITION[:7]
+RIGHT_ARM_RESET_POS = _TI5_RESET_POSITION[7:14]
 
 # Kept for parity with the TI5 reset definition, but this forwarder only commands arms.
 WAIST_RESET_POS = [0.0, 0.0, 0.0]
 NECK_RESET_POS = [0.0, 0.0, 0.0]
-LEFT_HAND_RESET_POS = [1.0]
-RIGHT_HAND_RESET_POS = [1.0]
+LEFT_HAND_RESET_POS = [_TI5_RESET_POSITION[14]]
+RIGHT_HAND_RESET_POS = [_TI5_RESET_POSITION[20]]
 
 
 @dataclass(frozen=True)

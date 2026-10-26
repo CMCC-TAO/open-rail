@@ -50,7 +50,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from conf.logging_conf import setup_logging
-from conf.client_conf import get_client_config
+from conf.client_conf import (
+    apply_teleop_robot_mapping,
+    get_client_config,
+    get_teleop_config_path,
+)
+from teleop.status import teleop_enabled, teleop_status_snapshot
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -538,6 +543,13 @@ def _collect_stats() -> dict:
         "img_proc_time": 0.0,
         "current_prob_progress": 0.0,
         "language": "",
+        "teleop_enabled": False,
+        "teleop_supported": False,
+        "teleop_bridge_running": False,
+        "teleop_device_connected": False,
+        "teleop_device_state": "disabled",
+        "teleop_device_message": "Teleop is disabled.",
+        "teleop_human_active": False,
         # "current_state": [],
         # "current_action": [],
         # "info_obs": {},
@@ -577,6 +589,16 @@ def _collect_stats() -> dict:
         # base["debug_info"] = f"stats error: {e}"
         logger.exception(f"Failed to collect stats: {e}")
     return base
+
+
+def _teleop_status_snapshot(vla_client=None) -> dict:
+    """Return teleop state even before a VLA client/runtime has been created."""
+
+    if vla_client is not None:
+        return vla_client.teleop_status
+    with client_state.lock:
+        config = client_state.config
+    return teleop_status_snapshot(config)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1038,6 +1060,7 @@ async def patch_config(req: ConfigPatchRequest):
         if requested_type != old_type:
             flat['robots.type'] = requested_type
             _apply_flat_patch_new(candidate, flat)
+            apply_teleop_robot_mapping(candidate, requested_type)
             return await _replace_client_config(candidate, expected_config=original)
     vision_preprocess_keys = []
     dataset_path_changed = False
@@ -1061,14 +1084,13 @@ async def patch_config(req: ConfigPatchRequest):
         client_conf = client_state.config
         current_vla_client = client_state.vla_client
         current_robot = client_state.robot
-        prev_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
+        prev_robot_type_value = getattr(getattr(client_conf, 'robots', None), 'type', '')
+        prev_robot_type = str(getattr(prev_robot_type_value, 'value', prev_robot_type_value))
         _apply_flat_patch_new(client_conf, flat)
-        next_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
-        teleop_cfg = getattr(client_conf, 'teleop', None)
-        if teleop_cfg is not None and getattr(teleop_cfg, 'use_teleop', None) is not None:
-            next_teleop_enabled = bool(getattr(teleop_cfg, 'use_teleop'))
-        else:
-            next_teleop_enabled = bool(getattr(client_conf, 'use_teleop', False))
+        next_robot_type_value = getattr(getattr(client_conf, 'robots', None), 'type', '')
+        next_robot_type = str(getattr(next_robot_type_value, 'value', next_robot_type_value))
+        apply_teleop_robot_mapping(client_conf, next_robot_type_value)
+        next_teleop_enabled = teleop_enabled(client_conf)
         teleop_switch_changed = any(k in ('teleop.use_teleop', 'use_teleop') for k in flat)
         teleop_bridge_config_changed = any(
             k == 'teleop.control_device'
@@ -1163,7 +1185,11 @@ async def patch_config(req: ConfigPatchRequest):
                         except Exception as e:
                             logger.error(f"Failed to resume client after dataset reload: {e}")
 
-    return {"status": "ok", "config": client_conf}
+    return {
+        "status": "ok",
+        "config": client_conf,
+        "teleop_status": _teleop_status_snapshot(current_vla_client),
+    }
 
 
 
@@ -1384,10 +1410,7 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
                 if v and not v.startswith('#'):
                     patch[k] = v
         _apply_flat_patch_new(config, patch)
-        try:
-            config.teleop.devices.quest3.auto_config_path = True
-        except Exception:
-            pass
+        apply_teleop_robot_mapping(config, getattr(getattr(config, 'robots', None), 'type', ''))
         _sanitize_language_sub_task_id(getattr(config, 'language', None), None)
         logger.info(f"Load and apply yaml config overrides from {yaml_conf_path} (fallback parser)")
         return
@@ -1415,10 +1438,7 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
     # print(f"config before flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config before flat patch: {cam_head}")
     _apply_flat_patch_new(config, flat)
-    try:
-        config.teleop.devices.quest3.auto_config_path = True
-    except Exception:
-        pass
+    apply_teleop_robot_mapping(config, getattr(getattr(config, 'robots', None), 'type', ''))
     # print(f"config after flat patch: {config}")
     # print(f"config after flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config after flat patch: {cam_head}")
@@ -1680,6 +1700,16 @@ def _status_payload(vla_client, message: str, running: bool = True, paused: bool
         "message": message,
     }
     status.update(state)
+    runtime = vla_client.runtime_status
+    status.update({
+        "teleop_enabled": runtime.get("teleop_enabled", False),
+        "teleop_supported": runtime.get("teleop_supported", False),
+        "teleop_human_active": runtime.get("teleop_human_active", False),
+        "teleop_bridge_running": runtime.get("teleop_bridge_running", False),
+        "teleop_device_connected": runtime.get("teleop_device_connected", False),
+        "teleop_device_state": runtime.get("teleop_device_state", "unavailable"),
+        "teleop_device_message": runtime.get("teleop_device_message", ""),
+    })
     return status
 
 def _start_observe(vla_client):
@@ -1968,6 +1998,14 @@ async def client_status():
     # print(f"Debug: {stats}")
     return {"status": "ok", "data": stats}
 
+
+@app.get("/api/client/teleop/status")
+async def teleop_status():
+    with client_state.lock:
+        vla_client = client_state.vla_client
+    status = await asyncio.to_thread(_teleop_status_snapshot, vla_client)
+    return {"status": "ok", "teleop": status}
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: runtime controls
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2050,6 +2088,12 @@ async def client_control_reset(req: Optional[ManualControlRequest] = Body(defaul
 
 async def _client_control_reset(req: Optional[ManualControlRequest]):
     vla_client, robot = _require_runtime('reset')
+    try:
+        teleop_active = bool(vla_client.is_teleop_human_active())
+    except Exception:
+        teleop_active = False
+    if teleop_active:
+        raise HTTPException(409, 'Reset is unavailable while Quest3 teleop is active.')
     try:
         with client_state.lock:
             if not client_state.paused:

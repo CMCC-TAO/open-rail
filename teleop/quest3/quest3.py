@@ -23,9 +23,9 @@ Quest3 VR headset ---[TCP JSON]---> QuestTcpServer ---> BridgeState
                                    │                  │                    │
                               FSM-driven IK    Incremental/proportional   Reset
                                    │                                       │
-                                   └────── action[:14] ──── action[14:16] ──┘
+                                   └── action[:14] ─── internal hand command ─┘
                                                           |
-                                            _publish_joint_command()
+                              _publish_joint_command() -> native hand width
                                                           |
                                             /target_robot/joint_commands
                                                           |
@@ -77,21 +77,27 @@ from typing import Any
 
 import numpy as np
 
-# ---------------------------------------------------------------------------
-# Fixed JointState command order expected by the VLA teleop bridge.
-# Layout: left arm 7 + right arm 7 + left gripper 1 + right gripper 1 = 16 dims
-# ---------------------------------------------------------------------------
-BRIDGE_JOINT_NAMES = [
-    *(f"left_arm_joint{i}" for i in range(1, 8)),
-    *(f"right_arm_joint{i}" for i in range(1, 8)),
-    "left_hand_joint1",
-    "right_hand_joint1",
-]
+from teleop.action_mapping import (
+    ARM_JOINT_NAMES,
+    action_layout_from_action_names,
+    action_layout_for_robot,
+)
+from teleop.config import normalize_reset_mode
+from teleop.hand_mapping import (
+    hand_command_to_native,
+    hand_feedback_to_control,
+    hand_output_width,
+    nearest_discrete_index,
+    normalize_discrete_values,
+    normalize_hand_control_mode,
+    normalize_hand_range,
+)
 
-# Supported reset behaviours
-RESET_MODES = {"topic", "joint_command", "none"}
-# Gripper control strategies
-GRIPPER_CONTROL_MODES = {"incremental", "proportional"}
+# ---------------------------------------------------------------------------
+# Reference scalar action layout used by legacy reset/limit configuration.
+# Layout: 14 arm joints + one normalized command per hand = 16 dimensions.
+# ---------------------------------------------------------------------------
+SCALAR_ACTION_NAMES = list(ARM_JOINT_NAMES + ("left_hand_joint1", "right_hand_joint1"))
 
 # ---------------------------------------------------------------------------
 # Arm control FSM states
@@ -107,41 +113,6 @@ ARM_CONTROL_TRANSITION_EXIT = "transition_exit"
 # ===========================================================================
 # Config parsing helpers
 # ===========================================================================
-
-def _normalize_reset_mode(value: Any) -> str:
-    """Canonicalize user-facing reset mode strings (topic / joint_command / none)."""
-    mode = str(value or "joint_command").strip().lower().replace("-", "_")
-    aliases = {
-        "disabled": "none",
-        "off": "none",
-        "joint": "joint_command",
-        "command": "joint_command",
-        "joint_commands": "joint_command",
-    }
-    mode = aliases.get(mode, mode)
-    if mode not in RESET_MODES:
-        raise ValueError(f"Unsupported reset_mode {value!r}; expected one of {sorted(RESET_MODES)}")
-    return mode
-
-
-def _normalize_gripper_control_mode(value: Any) -> str:
-    """Canonicalize gripper mode to incremental (button-based) or proportional (trigger-based)."""
-    mode = str(value or "incremental").strip().lower().replace("-", "_")
-    aliases = {
-        "button": "incremental",
-        "buttons": "incremental",
-        "legacy": "incremental",
-        "direct": "proportional",
-        "analog": "proportional",
-        "trigger": "proportional",
-    }
-    mode = aliases.get(mode, mode)
-    if mode not in GRIPPER_CONTROL_MODES:
-        raise ValueError(
-            f"Unsupported gripper_control_mode {value!r}; expected one of {sorted(GRIPPER_CONTROL_MODES)}"
-        )
-    return mode
-
 
 def _load_yaml(path: Path) -> dict[str, Any]:
     """Load a YAML config file (requires PyYAML)."""
@@ -361,6 +332,42 @@ def _is_valid_unity_transform(matrix_flat, *, origin_epsilon_m: float = 0.0) -> 
     return math.isclose(abs(det), 1.0, rel_tol=1e-2, abs_tol=1e-2)
 
 
+def _write_teleop_status(path, **payload: Any) -> None:
+    """Atomically publish Quest3 connection state for the parent client process.
+
+    The VLA Client launches this node as a subprocess, so a small JSON status
+    file is used as a process-safe handshake channel.  Writes go through a
+    temporary file in the same directory and are committed with ``os.replace``
+    so readers never observe a partially written document.
+    """
+
+    if path in (None, ""):
+        return
+    status_path = Path(str(path)).expanduser()
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "pid": os.getpid(),
+        "updated_at": time.time(),
+        **payload,
+    }
+    fd, temp_path = tempfile.mkstemp(
+        prefix=f".{status_path.name}.",
+        suffix=".tmp",
+        dir=str(status_path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(record, handle, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, status_path)
+    finally:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
+
+
 def _packet_bool(value: Any, *, default: bool = True) -> bool:
     """Parse optional bool-like fields from Quest TCP JSON packets.
 
@@ -497,6 +504,11 @@ class ControllerSide:
     # Gripper control tracking
     gripper_control_active: bool = False
     gripper_command_initialized: bool = False
+    gripper_command_pending: bool = False
+    proportional_hold_action: float | None = None
+    discrete_index: int = -1
+    hand_trigger_pressed: bool = False
+    hand_secondary_pressed: bool = False
 
 
 @dataclass
@@ -504,7 +516,7 @@ class BridgeState:
     """Shared mutable bridge state protected by a lock across ROS and TCP threads.
 
     Attributes:
-        action:           The outgoing 16-D command vector and IK seed.
+        action:           The outgoing mode-specific command vector and IK seed.
         reference_action: Latest robot feedback from /joint_states, used as the
                           activation-time seed and inactive-side fallback.
         joint_state_ready: True after at least one valid /joint_states message.
@@ -550,17 +562,22 @@ class QuestTcpServer:
         port: int,
         controller_y_rotation_rad: float,
         invalid_origin_epsilon_m: float,
+        status_file: str | None = None,
     ):
         self.node = node
         self.state = state
         self.port = int(port)
         self.controller_y_rotation_rad = float(controller_y_rotation_rad)
         self.invalid_origin_epsilon_m = max(float(invalid_origin_epsilon_m), 0.0)
+        self.status_file = status_file
         self.running = True
         self.server_sock = None
         self.client_sock = None
         self.recv_buffer = ""
         self.total_packets = 0
+        self.remote_address = None
+        self.last_error = None
+        self._status_lock = threading.Lock()
         self.thread = threading.Thread(target=self._run, name="quest3-tcp-receiver", daemon=True)
 
     def start(self) -> None:
@@ -576,18 +593,40 @@ class QuestTcpServer:
                     pass
         if self.thread.is_alive() and threading.current_thread() is not self.thread:
             self.thread.join(timeout=1.0)
+        self._publish_status("stopped", connected=False)
+
+    def _publish_status(self, state: str, *, connected: bool, error: str | None = None) -> None:
+        """Publish one snapshot of the Quest3 TCP connection state."""
+
+        if error is not None:
+            self.last_error = str(error)
+        with self._status_lock:
+            _write_teleop_status(
+                self.status_file,
+                state=str(state),
+                connected=bool(connected),
+                port=self.port,
+                remote=self.remote_address,
+                total_packets=self.total_packets,
+                error=self.last_error,
+            )
 
     def _run(self) -> None:
         """Main server loop: accept, receive, parse.
 
         Uses a 1-second accept timeout and 100ms recv timeout so the loop
         can check ``self.running`` and exit cleanly on shutdown."""
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_sock.bind(("0.0.0.0", self.port))
-        self.server_sock.listen(1)
-        self.server_sock.settimeout(1.0)
+        try:
+            self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_sock.bind(("0.0.0.0", self.port))
+            self.server_sock.listen(1)
+            self.server_sock.settimeout(1.0)
+        except Exception as exc:
+            self._publish_status("error", connected=False, error=str(exc))
+            raise
         self.node.get_logger().info(f"Quest3 TCP server listening on 0.0.0.0:{self.port}")
+        self._publish_status("listening", connected=False)
 
         while self.running:
             if self.client_sock is None:
@@ -596,7 +635,10 @@ class QuestTcpServer:
                     client.settimeout(0.1)
                     self.client_sock = client
                     self.recv_buffer = ""
+                    self.remote_address = str(addr)
+                    self.last_error = None
                     self.node.get_logger().info(f"Quest3 client connected from {addr}")
+                    self._publish_status("connected", connected=True)
                 except socket.timeout:
                     continue
                 except OSError:
@@ -637,6 +679,8 @@ class QuestTcpServer:
                 pass
         self.client_sock = None
         self.recv_buffer = ""
+        self.remote_address = None
+        self._publish_status("listening", connected=False, error=reason)
 
     def _process_packet(self, packet: dict[str, Any]) -> None:
         """Parse one JSON packet and update left/right controller state under lock.
@@ -1099,39 +1143,41 @@ class VRWholeBodyBridgeNode:
         self.Float64 = Float64
         self.node = _Node(f"quest3_{config.get('robot', 'robot')}_bridge")
         self.config = config
-        self.joint_names = list(config.get("joint_names") or BRIDGE_JOINT_NAMES)
-        if self.joint_names != BRIDGE_JOINT_NAMES:
-            self.node.get_logger().warning(
-                "RosTeleopBridge expects fixed bridge joint names; overriding configured joint_names."
-            )
-            self.joint_names = BRIDGE_JOINT_NAMES.copy()
-        self.joint_state_names = list(config.get("joint_state_names") or self.joint_names)
-        if len(self.joint_state_names) != len(self.joint_names):
-            raise ValueError(
-                f"joint_state_names must have {len(self.joint_names)} entries, "
-                f"got {len(self.joint_state_names)}"
-            )
+        self._configure_hand_layout(config)
+        self._reported_missing_hand_feedback = False
 
-        self.min_action = _as_array(config.get("min_action"), length=16, default=-math.inf)
-        self.max_action = _as_array(config.get("max_action"), length=16, default=math.inf)
+        self.min_action, self.max_action = self._load_action_limits(config)
         self.position_scale = float(config.get("position_scale", 1.0))
         self.orientation_scale = float(config.get("orientation_scale", 1.0))
         self.grip_threshold = float(config.get("grip_threshold", 0.9))
-        self.gripper_control_mode = _normalize_gripper_control_mode(config.get("gripper_control_mode", "incremental"))
         self.gripper_input_min = float(config.get("gripper_input_min", 0.0))
         self.gripper_input_max = float(config.get("gripper_input_max", 1.0))
+        self.proportional_activation_threshold = float(
+            config.get("proportional_activation_threshold", 0.05)
+        )
+        self.proportional_release_threshold = float(
+            config.get("proportional_release_threshold", 0.02)
+        )
+        self.proportional_latch_on_release = bool(
+            config.get("proportional_latch_on_release", True)
+        )
         self.gripper_command_min = float(config.get("gripper_command_min", 0.0))
         self.gripper_command_max = float(config.get("gripper_command_max", 1.0))
         if math.isclose(self.gripper_input_min, self.gripper_input_max):
             raise ValueError("gripper_input_min and gripper_input_max must be different.")
         if self.gripper_command_min > self.gripper_command_max:
             raise ValueError("gripper_command_min must be less than or equal to gripper_command_max.")
+        if not 0.0 <= self.proportional_release_threshold <= self.proportional_activation_threshold:
+            raise ValueError(
+                "proportional thresholds must satisfy "
+                "0 <= proportional_release_threshold <= proportional_activation_threshold"
+            )
         self.gripper_speed = max(float(config.get("gripper_speed", math.inf)), 0.0)
         self.trigger_threshold = float(config.get("trigger_threshold", 0.9))
         release_default = max(0.0, self.trigger_threshold - 0.1)
         self.trigger_release_threshold = float(config.get("trigger_release_threshold", release_default))
         self.trigger_release_threshold = min(max(self.trigger_release_threshold, 0.0), self.trigger_threshold)
-        self.reset_mode = _normalize_reset_mode(config.get("reset_mode", "joint_command"))
+        self.reset_mode = normalize_reset_mode(config.get("reset_mode", "joint_command"))
         self.reset_press_value = float(config.get("reset_press_value", 1.0))
         self.reset_release_value = float(config.get("reset_release_value", 0.0))
         self.reset_pulse_on_press = bool(config.get("reset_pulse_on_press", True))
@@ -1159,6 +1205,11 @@ class VRWholeBodyBridgeNode:
         )
 
         self.state = BridgeState()
+        self.state.action = np.zeros(len(self.joint_names), dtype=float)
+        self.state.reference_action = np.zeros(len(self.joint_names), dtype=float)
+        if self.reset_action is not None:
+            self.state.action[:] = self.reset_action
+            self.state.reference_action[:] = self.reset_action
         self._last_joint_state_wait_warn_s = 0.0
         self._last_invalid_joint_state_warn_s = 0.0
         # Commands are not published until /joint_states provides a feedback seed.
@@ -1189,6 +1240,7 @@ class VRWholeBodyBridgeNode:
             int(config.get("listen_port", 8002)),
             controller_y_rotation,
             float(config.get("invalid_origin_epsilon_m", 1e-3)),
+            status_file=config.get("status_file"),
         )
         self.tcp_server.start()
 
@@ -1205,13 +1257,271 @@ class VRWholeBodyBridgeNode:
             f"reading joint state from {config.get('joint_states_topic', '/joint_states')}"
         )
 
+    def _configure_hand_layout(self, config: dict[str, Any]) -> None:
+        """Resolve hand modes and the internal/external action layouts."""
+
+        action_names = config.get("action_names")
+        if action_names:
+            robot_layout = action_layout_from_action_names(action_names)
+        else:
+            robot_layout = action_layout_for_robot(str(config.get("robot", "")))
+        self.robot_action_layout = robot_layout
+        self.robot_action_names = list(robot_layout.action_names)
+        robot_left_width, robot_right_width = robot_layout.hand_widths
+
+        default_mode = config.get("hand_control_mode", config.get("gripper_control_mode", "incremental"))
+        self.left_gripper_control_mode = normalize_hand_control_mode(
+            config.get("left_hand_control_mode", config.get("left_gripper_control_mode", default_mode))
+        )
+        self.right_gripper_control_mode = normalize_hand_control_mode(
+            config.get("right_hand_control_mode", config.get("right_gripper_control_mode", default_mode))
+        )
+        left_discrete = self.left_gripper_control_mode == "discrete"
+        right_discrete = self.right_gripper_control_mode == "discrete"
+        self.left_hand_range = self._load_side_hand_range(
+            config,
+            "left",
+            self.left_gripper_control_mode,
+            robot_left_width,
+        )
+        self.right_hand_range = self._load_side_hand_range(
+            config,
+            "right",
+            self.right_gripper_control_mode,
+            robot_right_width,
+        )
+
+        try:
+            self.left_hand_output_width = hand_output_width(
+                self.left_gripper_control_mode,
+                self.left_hand_range,
+                robot_width=robot_left_width,
+            )
+            self.right_hand_output_width = hand_output_width(
+                self.right_gripper_control_mode,
+                self.right_hand_range,
+                robot_width=robot_right_width,
+            )
+        except ValueError as exc:
+            raise ValueError(f"Invalid left/right hand range configuration: {exc}") from exc
+        if self.left_hand_output_width != robot_left_width:
+            raise ValueError(
+                f"left hand control produces width {self.left_hand_output_width}, "
+                f"but robot action layout expects {robot_left_width}"
+            )
+        if self.right_hand_output_width != robot_right_width:
+            raise ValueError(
+                f"right hand control produces width {self.right_hand_output_width}, "
+                f"but robot action layout expects {robot_right_width}"
+            )
+
+        # Internal control keeps one scalar for continuous hands and the native
+        # width for discrete hands. The published action always uses robot width.
+        left_internal_width = robot_left_width if left_discrete else 1
+        right_internal_width = robot_right_width if right_discrete else 1
+        self.left_hand_slice = slice(14, 14 + left_internal_width)
+        self.right_hand_slice = slice(
+            14 + left_internal_width,
+            14 + left_internal_width + right_internal_width,
+        )
+        left_internal_names = (
+            robot_layout.left_hand_names
+            if left_discrete
+            else (robot_layout.left_hand_names[0],)
+        )
+        right_internal_names = (
+            robot_layout.right_hand_names
+            if right_discrete
+            else (robot_layout.right_hand_names[0],)
+        )
+        self.joint_names = list(ARM_JOINT_NAMES + left_internal_names + right_internal_names)
+        self.command_joint_names = list(robot_layout.action_names)
+        self.left_hand_feedback_names = list(robot_layout.left_hand_names)
+        self.right_hand_feedback_names = list(robot_layout.right_hand_names)
+        self.joint_state_optional_names = set(
+            self.left_hand_feedback_names + self.right_hand_feedback_names
+        )
+        self.left_discrete_values = (
+            normalize_discrete_values(
+                config.get("left_hand_discrete_values"),
+                name="left_hand_discrete_values",
+                width=robot_left_width,
+            )
+            if left_discrete else []
+        )
+        self.right_discrete_values = (
+            normalize_discrete_values(
+                config.get("right_hand_discrete_values"),
+                name="right_hand_discrete_values",
+                width=robot_right_width,
+            )
+            if right_discrete else []
+        )
+
     def _load_reset_action(self, config: dict[str, Any]) -> np.ndarray | None:
         if self.reset_mode != "joint_command":
             return None
+        action_dim = len(self.joint_names)
         values = config.get("reset_action", config.get("home_action"))
+        if values is not None and len(values) == action_dim:
+            return np.clip(_as_array(values, length=action_dim), self.min_action, self.max_action)
+        scalar_values = list(values) if values is not None and len(values) == len(SCALAR_ACTION_NAMES) else None
+        native_values = self._native_reset_pose(config)
+        values = self._compose_reset_action(scalar_values, native_values)
         if values is None:
-            raise ValueError("reset_mode `joint_command` requires a 16-element reset_action in config.")
-        return np.clip(_as_array(values, length=16, default=0.0), self.min_action, self.max_action)
+            raise ValueError(
+                "reset_mode `joint_command` requires robot reset_robot_pos or a "
+                f"{action_dim}-element reset_action in config."
+            )
+        return np.clip(
+            _as_array(values, length=action_dim, default=0.0),
+            self.min_action,
+            self.max_action,
+        )
+
+    @staticmethod
+    def _native_reset_pose(config: dict[str, Any]) -> list[float] | None:
+        """Return the robot's native arm + hand reset pose, if available."""
+
+        configured = config.get("native_reset_action")
+        if configured is not None:
+            return [float(value) for value in configured]
+
+        from conf.robots_conf import get_robot_config
+
+        robot_config = get_robot_config(config.get("robot"))
+        reset_pose = list((robot_config or {}).get("reset_robot_pos") or [])
+        return reset_pose or None
+
+    def _compose_reset_action(self, scalar_values, native_values) -> list[float] | None:
+        """Build the internal reset target from the 16-D scalar and native poses.
+
+        Discrete hands take the native six-coordinate pose; ranged continuous
+        hands project the native pose onto their range; other hands keep the
+        16-D scalar target.
+        """
+
+        source = scalar_values if scalar_values is not None else native_values
+        if source is None:
+            return None
+        values = [float(value) for value in source[:14]]
+        for mode, hand_range, scalar_index, native_slice, robot_width in (
+            (
+                self.left_gripper_control_mode,
+                self.left_hand_range,
+                14,
+                self.robot_action_layout.left_hand_slice,
+                self.robot_action_layout.hand_widths[0],
+            ),
+            (
+                self.right_gripper_control_mode,
+                self.right_hand_range,
+                15,
+                self.robot_action_layout.right_hand_slice,
+                self.robot_action_layout.hand_widths[1],
+            ),
+        ):
+            if native_values is not None and len(native_values) >= native_slice.stop:
+                try:
+                    values.extend(
+                        hand_feedback_to_control(
+                            native_values[native_slice],
+                            mode=mode,
+                            hand_range=hand_range,
+                            robot_width=robot_width,
+                        )
+                    )
+                    continue
+                except ValueError:
+                    if mode == "discrete":
+                        return None
+            if mode == "discrete":
+                return None
+            if hand_range is not None and native_values is not None:
+                return None
+            elif scalar_values is not None:
+                values.append(float(scalar_values[scalar_index]))
+            else:
+                return None
+        return values
+
+    def _expand_hand_command(self, action: np.ndarray) -> np.ndarray:
+        """Expand the internal command to native hand width for publishing."""
+
+        parts = [np.asarray(action[:14], dtype=float)]
+        for side_index, (mode, hand_slice, hand_range) in enumerate((
+            (self.left_gripper_control_mode, self.left_hand_slice, self.left_hand_range),
+            (self.right_gripper_control_mode, self.right_hand_slice, self.right_hand_range),
+        )):
+            robot_width = self.robot_action_layout.hand_widths[side_index]
+            parts.append(
+                np.asarray(
+                    hand_command_to_native(
+                        action[hand_slice],
+                        mode=mode,
+                        hand_range=hand_range,
+                        robot_width=robot_width,
+                    ),
+                    dtype=float,
+                )
+            )
+        return np.concatenate(parts)
+
+    def _load_side_hand_range(
+        self,
+        config: dict[str, Any],
+        side_name: str,
+        mode: str,
+        robot_width: int,
+    ):
+        """Return one side's native hand range, ignored for discrete hands."""
+
+        value = config.get(
+            f"{side_name}_hand_continuous_range",
+            config.get(f"{side_name}_hand_range"),
+        )
+        if mode == "discrete" or value is None:
+            return None
+        hand_range = normalize_hand_range(
+            value,
+            name=f"{side_name}_hand_continuous_range",
+        )
+        if len(hand_range[0]) != robot_width:
+            raise ValueError(
+                f"{side_name}_hand_continuous_range vectors must contain "
+                f"{robot_width} native hand values"
+            )
+        return hand_range
+
+    def _load_action_limits(self, config: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
+        """Build min/max clamps matching the internal per-side hand layout.
+
+        ``min_action``/``max_action`` in YAML stay 16-D (one scalar per hand);
+        discrete hands are clamped to the native [0, 1000] range instead.
+        """
+
+        limits = []
+        for key, default, native_limit in (
+            ("min_action", -math.inf, 0.0),
+            ("max_action", math.inf, 1000.0),
+        ):
+            values = list(config.get(key) or [])
+            if values and len(values) != len(SCALAR_ACTION_NAMES):
+                raise ValueError(f"{key} must contain {len(SCALAR_ACTION_NAMES)} values, got {len(values)}")
+            values = [float(value) for value in values] or [default] * len(SCALAR_ACTION_NAMES)
+            limit = values[:14]
+            for mode, index, robot_width in (
+                (self.left_gripper_control_mode, 14, self.robot_action_layout.hand_widths[0]),
+                (self.right_gripper_control_mode, 15, self.robot_action_layout.hand_widths[1]),
+            ):
+                limit.extend([native_limit] * robot_width if mode == "discrete" else [values[index]])
+            limits.append(np.asarray(limit, dtype=float))
+        return limits[0], limits[1]
+
+    def _hand_mode(self, side: ControllerSide) -> str:
+        """Return the hand-control mode configured for one controller side."""
+
+        return self.left_gripper_control_mode if side is self.state.left else self.right_gripper_control_mode
 
     def spin(self) -> None:
         try:
@@ -1275,13 +1585,25 @@ class VRWholeBodyBridgeNode:
                 right_active = self.state.right.pose_valid and self.state.right.trigger > self.trigger_threshold
                 left_output_requested = left_active or self.state.left.control_state != ARM_CONTROL_AUTO
                 right_output_requested = right_active or self.state.right.control_state != ARM_CONTROL_AUTO
-                left_gripper_requested = self._is_gripper_control_requested(self.state.left)
-                right_gripper_requested = self._is_gripper_control_requested(self.state.right)
-                if not left_gripper_requested:
-                    self.state.left.gripper_control_active = False
-                if not right_gripper_requested:
-                    self.state.right.gripper_control_active = False
-                gripper_output_requested = left_gripper_requested or right_gripper_requested
+                hand_states = (
+                    (self.state.left, self.left_gripper_control_mode, self.left_hand_slice, self.left_discrete_values),
+                    (self.state.right, self.right_gripper_control_mode, self.right_hand_slice, self.right_discrete_values),
+                )
+                gripper_requested = []
+                gripper_output_requested = False
+                for side, mode, hand_slice, discrete_values in hand_states:
+                    requested = self._is_gripper_control_requested(side)
+                    if mode == "discrete":
+                        hand_changed = self._update_discrete_gripper_locked(side, hand_slice, discrete_values)
+                        gripper_output_requested = (
+                            gripper_output_requested or hand_changed or side.gripper_command_pending
+                        )
+                    else:
+                        if not requested:
+                            side.gripper_control_active = False
+                        gripper_output_requested = gripper_output_requested or requested
+                    gripper_requested.append(requested)
+                left_gripper_requested, right_gripper_requested = gripper_requested
                 output_requested = left_output_requested or right_output_requested or gripper_output_requested
                 if not output_requested:
                     self._update_arm_locked(self.state.left, slice(0, 7))
@@ -1292,30 +1614,35 @@ class VRWholeBodyBridgeNode:
                     self._update_arm_locked(self.state.left, slice(0, 7))
                     self._update_arm_locked(self.state.right, slice(7, 14))
                     # Grippers are rate-limited separately from arm IK.
-                    self._update_gripper_locked(self.state.left, 14)
-                    self._update_gripper_locked(self.state.right, 15)
+                    for side, mode, hand_slice, _ in hand_states:
+                        if mode != "discrete":
+                            self._update_gripper_locked(side, hand_slice.start)
                     action = self.state.action.copy()
                     if not left_output_requested:
                         action[0:7] = self.state.reference_action[0:7]
                     if not right_output_requested:
                         action[7:14] = self.state.reference_action[7:14]
                     if not left_gripper_requested and not self.state.left.gripper_command_initialized:
-                        action[14] = self.state.reference_action[14]
+                        action[self.left_hand_slice] = self.state.reference_action[self.left_hand_slice]
                     if not right_gripper_requested and not self.state.right.gripper_command_initialized:
-                        action[15] = self.state.reference_action[15]
+                        action[self.right_hand_slice] = self.state.reference_action[self.right_hand_slice]
                     action_to_publish = np.clip(action, self.min_action, self.max_action).copy()
+                    for side, mode, _, _ in hand_states:
+                        if mode == "discrete":
+                            side.gripper_command_pending = False
 
         if action_to_publish is not None:
             self._publish_joint_command(action_to_publish)
 
     def _publish_joint_command(self, action: np.ndarray) -> None:
-        """Publish a JointState message with the given 16-D action vector.
+        """Publish a JointState message in the target robot's action layout.
 
         The message is published to ``/target_robot/joint_commands``, which is
         received by ``RosTeleopBridge._command_cb()`` in the VLA client."""
+        action = self._expand_hand_command(action)
         msg = self.JointState()
         msg.header.stamp = self.node.get_clock().now().to_msg()
-        msg.name = self.joint_names
+        msg.name = self.command_joint_names
         msg.position = [float(v) for v in action]
         self.pub.publish(msg)
 
@@ -1353,7 +1680,7 @@ class VRWholeBodyBridgeNode:
         """Begin interpolating from current reference_action to the configured reset_action.
 
         Clears all arm control references and holds, then linearly interpolates
-        the full 16-D action vector over ``reset_interp_steps`` ticks. An optional
+        the full mode-specific action vector over ``reset_interp_steps`` ticks. An optional
         initial hold period (``reset_start_hold_steps``) keeps the start position
         steady before interpolation begins.
         """
@@ -1365,6 +1692,8 @@ class VRWholeBodyBridgeNode:
             return
         self._clear_arm_control_refs_locked(self.state.left)
         self._clear_arm_control_refs_locked(self.state.right)
+        self._clear_hand_control_state_locked(self.state.left)
+        self._clear_hand_control_state_locked(self.state.right)
         self.state.action[:] = self.state.reference_action
         self._reset_start_action = np.clip(self.state.reference_action, self.min_action, self.max_action).copy()
         self._reset_step = 0
@@ -1383,35 +1712,93 @@ class VRWholeBodyBridgeNode:
         fallback. During MANUAL/TRANSITION_EXIT, the active arm command remains
         open-loop and is never overwritten by this feedback.
         """
-        positions = dict(zip(msg.name, msg.position))
-        if not positions:
-            return
-        missing = [name for name in self.joint_state_names if name not in positions]
-        if missing:
-            self._warn_invalid_joint_state(f"missing joints: {missing[:4]}")
+        if len(msg.name) != len(msg.position):
+            self._warn_invalid_joint_state("JointState name and position lengths differ")
             return
         try:
-            values = np.asarray([positions[name] for name in self.joint_state_names], dtype=float)
+            positions = {
+                str(name): float(position)
+                for name, position in zip(msg.name, msg.position)
+            }
         except (TypeError, ValueError):
             self._warn_invalid_joint_state("non-numeric joint positions")
             return
-        if not np.all(np.isfinite(values)):
-            self._warn_invalid_joint_state("non-finite joint positions")
+        missing_arms = [name for name in ARM_JOINT_NAMES if name not in positions]
+        if missing_arms:
+            self._warn_invalid_joint_state(f"missing joints: {missing_arms[:4]}")
             return
+        missing_optional = [
+            name
+            for name in self.left_hand_feedback_names + self.right_hand_feedback_names
+            if name not in positions
+        ]
+        if missing_optional and not self._reported_missing_hand_feedback:
+            self.node.get_logger().info(
+                "Joint state feedback omits optional joints "
+                f"{sorted(missing_optional)}; retaining configured reset/current values."
+            )
+            self._reported_missing_hand_feedback = True
         with self.state.lock:
+            reference_values = self.state.reference_action.copy()
+            for index, name in enumerate(ARM_JOINT_NAMES):
+                reference_values[index] = positions[name]
+            for mode, hand_range, native_names, hand_slice, robot_width in (
+                (
+                    self.left_gripper_control_mode,
+                    self.left_hand_range,
+                    self.left_hand_feedback_names,
+                    self.left_hand_slice,
+                    self.robot_action_layout.hand_widths[0],
+                ),
+                (
+                    self.right_gripper_control_mode,
+                    self.right_hand_range,
+                    self.right_hand_feedback_names,
+                    self.right_hand_slice,
+                    self.robot_action_layout.hand_widths[1],
+                ),
+            ):
+                if all(name in positions for name in native_names):
+                    try:
+                        reference_values[hand_slice] = hand_feedback_to_control(
+                            [positions[name] for name in native_names],
+                            mode=mode,
+                            hand_range=hand_range,
+                            robot_width=robot_width,
+                        )
+                    except ValueError as exc:
+                        self._warn_invalid_joint_state(str(exc))
+                        return
+                elif self.reset_action is not None:
+                    reference_values[hand_slice] = self.reset_action[hand_slice]
+            if not np.all(np.isfinite(reference_values)):
+                self._warn_invalid_joint_state("non-finite joint positions")
+                return
             # Do not let delayed joint feedback perturb an arm that is already
             # under open-loop manual control. Its anchor and IK seed come from
             # the command stream until the side returns to AUTO.
-            reference_values = values.copy()
-            for side, arm_slice, gripper_index in (
-                (self.state.left, slice(0, 7), 14),
-                (self.state.right, slice(7, 14), 15),
+            for side, arm_slice, hand_slice in (
+                (self.state.left, slice(0, 7), self.left_hand_slice),
+                (self.state.right, slice(7, 14), self.right_hand_slice),
             ):
                 if side.control_state in (ARM_CONTROL_MANUAL, ARM_CONTROL_TRANSITION_EXIT):
                     reference_values[arm_slice] = self.state.reference_action[arm_slice]
                 if side.gripper_control_active:
-                    reference_values[gripper_index] = self.state.reference_action[gripper_index]
+                    reference_values[hand_slice] = self.state.reference_action[hand_slice]
             self.state.reference_action[:] = reference_values
+            for side, mode, hand_slice, values in (
+                (self.state.left, self.left_gripper_control_mode, self.left_hand_slice, self.left_discrete_values),
+                (self.state.right, self.right_gripper_control_mode, self.right_hand_slice, self.right_discrete_values),
+            ):
+                if mode == "discrete":
+                    nearest = nearest_discrete_index(
+                        values,
+                        reference_values[hand_slice],
+                    )
+                    if nearest >= 0:
+                        side.discrete_index = nearest
+                        if not side.gripper_command_initialized:
+                            self.state.action[hand_slice] = np.asarray(values[nearest], dtype=float)
             self.state.joint_state_ready = True
 
     def _warn_invalid_joint_state(self, reason: str, period_s: float = 1.0) -> None:
@@ -1441,6 +1828,8 @@ class VRWholeBodyBridgeNode:
                 self.state.joint_state_ready = False
                 self._clear_arm_control_refs_locked(self.state.left)
                 self._clear_arm_control_refs_locked(self.state.right)
+                self._clear_hand_control_state_locked(self.state.left)
+                self._clear_hand_control_state_locked(self.state.right)
                 self.node.get_logger().info("Reset edge published to reset topic.")
             return
         if primary and self.reset_mode == "joint_command":
@@ -1449,6 +1838,8 @@ class VRWholeBodyBridgeNode:
         if primary and self.reset_mode == "none":
             self._clear_arm_control_refs_locked(self.state.left)
             self._clear_arm_control_refs_locked(self.state.right)
+            self._clear_hand_control_state_locked(self.state.left)
+            self._clear_hand_control_state_locked(self.state.right)
             self.node.get_logger().info("Reset button pressed; reset is disabled by reset_mode=none.")
 
     def _publish_reset_value_locked(self, value: float) -> None:
@@ -1470,8 +1861,8 @@ class VRWholeBodyBridgeNode:
     def _clear_arm_control_refs_locked(side: ControllerSide) -> None:
         """Reset all arm control state for one side back to AUTO.
 
-        Clears all trigger snapshots, exit holds, exit timing state,
-        and gripper initialization flags.
+        Clears arm trigger snapshots, exit holds, and exit timing state. Hand
+        control state is intentionally independent from the arm FSM.
         """
         side.trigger_ref_pos = None
         side.trigger_ref_quat = None
@@ -1483,8 +1874,18 @@ class VRWholeBodyBridgeNode:
         side.control_state = ARM_CONTROL_AUTO
         side.transition_elapsed_s = 0.0
         side.was_trigger_active = False
+
+    @staticmethod
+    def _clear_hand_control_state_locked(side: ControllerSide) -> None:
+        """Reset hand-control state without touching the arm FSM."""
+
         side.gripper_control_active = False
         side.gripper_command_initialized = False
+        side.gripper_command_pending = False
+        side.proportional_hold_action = None
+        side.discrete_index = -1
+        side.hand_trigger_pressed = False
+        side.hand_secondary_pressed = False
 
     def _update_arm_locked(self, side: ControllerSide, arm_slice: slice) -> None:
         """Run the arm control state machine and IK for one arm.
@@ -1514,7 +1915,11 @@ class VRWholeBodyBridgeNode:
             ARM_CONTROL_TRANSITION_EXIT,
         )
         reference_pose = (
-            self._current_reference_pose_locked(side_name, arm_slice)
+            (
+                self.ik.forward_pose(side_name, self.state.action[arm_slice])
+                if side.control_state == ARM_CONTROL_TRANSITION_EXIT
+                else self._current_reference_pose_locked(side_name, arm_slice)
+            )
             if needs_reference_pose
             else None
         )
@@ -1522,7 +1927,7 @@ class VRWholeBodyBridgeNode:
         if trigger_active and side.control_state in (ARM_CONTROL_AUTO, ARM_CONTROL_TRANSITION_EXIT):
             self._start_arm_intervention_locked(side_name, side, arm_slice, reference_pose)
         elif not trigger_active and side.control_state == ARM_CONTROL_MANUAL:
-            self._start_arm_exit_transition_locked(side_name, side)
+            self._start_arm_exit_transition_locked(side_name, side, arm_slice)
 
         side.was_trigger_active = trigger_active
         if (
@@ -1551,7 +1956,7 @@ class VRWholeBodyBridgeNode:
         if q_solution is not None:
             self.state.action[arm_slice] = q_solution
         if exit_finished:
-            self._clear_arm_control_refs_locked(side)
+            self._release_arm_to_auto_locked(side, arm_slice)
 
     def _current_reference_pose_locked(self, side_name: str, arm_slice: slice) -> np.ndarray | None:
         """Compute the current end-effector reference pose via FK.
@@ -1587,7 +1992,9 @@ class VRWholeBodyBridgeNode:
         """
         if not side.pose_valid or side.pose_pos is None or side.pose_quat is None:
             return
-        self.state.action[arm_slice] = self.state.reference_action[arm_slice]
+        resuming_from_exit = side.control_state == ARM_CONTROL_TRANSITION_EXIT
+        if not resuming_from_exit:
+            self.state.action[arm_slice] = self.state.reference_action[arm_slice]
         anchor_pose = reference_pose
         if anchor_pose is None:
             anchor_pose = self.ik.forward_pose(side_name, self.state.action[arm_slice])
@@ -1603,10 +2010,17 @@ class VRWholeBodyBridgeNode:
         side.control_state = ARM_CONTROL_MANUAL
         side.transition_elapsed_s = 0.0
 
+    def _release_arm_to_auto_locked(self, side: ControllerSide, arm_slice: slice) -> None:
+        """Seed inactive-arm fallback from the final command before returning to AUTO."""
+
+        self.state.reference_action[arm_slice] = self.state.action[arm_slice].copy()
+        self._clear_arm_control_refs_locked(side)
+
     def _start_arm_exit_transition_locked(
         self,
         side_name: str,
         side: ControllerSide,
+        arm_slice: slice,
     ) -> None:
         """Initiate the MANUAL → TRANSITION_EXIT → AUTO sequence.
 
@@ -1617,7 +2031,7 @@ class VRWholeBodyBridgeNode:
            stays still during the exit-hold period.
         """
         if side.trigger_ref_ee_pose is None:
-            self._clear_arm_control_refs_locked(side)
+            self._release_arm_to_auto_locked(side, arm_slice)
             return
         target_pose = self.ik.target_pose(
             side,
@@ -1670,13 +2084,28 @@ class VRWholeBodyBridgeNode:
             side.gripper_control_active = True
             side.gripper_command_initialized = True
         elif not requested:
+            was_active = side.gripper_control_active
             side.gripper_control_active = False
+            if (
+                was_active
+                and self._hand_mode(side) == "proportional"
+                and self.proportional_latch_on_release
+                and side.proportional_hold_action is not None
+            ):
+                self.state.action[index] = side.proportional_hold_action
+            if side.grip <= self.gripper_input_min + self.proportional_release_threshold:
+                side.proportional_hold_action = None
             return
 
-        if self.gripper_control_mode == "proportional":
+        if self._hand_mode(side) == "proportional":
             alpha = (float(side.grip) - self.gripper_input_min) / (self.gripper_input_max - self.gripper_input_min)
             alpha = float(np.clip(alpha, 0.0, 1.0))
-            self.state.action[index] = (1.0 - alpha) * self.gripper_command_min + alpha * self.gripper_command_max
+            target = (1.0 - alpha) * self.gripper_command_min + alpha * self.gripper_command_max
+            self.state.action[index] = target
+            if side.proportional_hold_action is None:
+                side.proportional_hold_action = target
+            else:
+                side.proportional_hold_action = max(side.proportional_hold_action, target)
             return
 
         step = self.gripper_speed * self.control_dt
@@ -1685,9 +2114,59 @@ class VRWholeBodyBridgeNode:
         elif side.secondary_button:
             self.state.action[index] = max(float(self.state.action[index]) - step, self.gripper_command_min)
 
+    def _update_discrete_gripper_locked(
+        self,
+        side: ControllerSide,
+        hand_slice: slice,
+        values: list[list[float]],
+    ) -> bool:
+        """Advance/retreat one hand using button rising edges in discrete mode."""
+
+        trigger_pressed = float(side.grip) > self.grip_threshold
+        secondary_pressed = bool(side.secondary_button)
+        trigger_edge = trigger_pressed and not side.hand_trigger_pressed
+        secondary_edge = secondary_pressed and not side.hand_secondary_pressed
+        was_control_active = side.gripper_control_active
+        side.hand_trigger_pressed = trigger_pressed
+        side.hand_secondary_pressed = secondary_pressed
+        side.gripper_control_active = trigger_pressed or secondary_pressed
+        if not trigger_edge and not secondary_edge:
+            return False
+
+        if not was_control_active:
+            nearest = self._nearest_discrete_index(
+                values,
+                self.state.reference_action[hand_slice],
+            )
+            if nearest >= 0:
+                side.discrete_index = nearest
+
+        if trigger_edge:
+            side.discrete_index = (side.discrete_index + 1) % len(values)
+        else:
+            side.discrete_index = (side.discrete_index - 1) % len(values)
+        side.gripper_command_initialized = True
+        side.gripper_command_pending = True
+        self.state.action[hand_slice] = np.asarray(values[side.discrete_index], dtype=float)
+        return True
+
+    @staticmethod
+    def _nearest_discrete_index(values: list[list[float]], current) -> int:
+        """Return the index of the discrete hand vector closest to feedback."""
+
+        current_arr = np.asarray(current, dtype=float).reshape(-1)
+        if current_arr.size == 0 or not np.all(np.isfinite(current_arr)):
+            return -1
+        return nearest_discrete_index(values, current_arr)
+
     def _is_gripper_control_requested(self, side: ControllerSide) -> bool:
-        if self.gripper_control_mode == "proportional":
-            return float(side.grip) > self.gripper_input_min + 1e-6
+        if self._hand_mode(side) == "proportional":
+            threshold = (
+                self.proportional_release_threshold
+                if side.gripper_control_active
+                else self.proportional_activation_threshold
+            )
+            return float(side.grip) > self.gripper_input_min + threshold
         return side.grip > self.grip_threshold or side.secondary_button
 
     def _anchor_gripper_command_locked(self, side: ControllerSide, index: int) -> None:
@@ -1702,7 +2181,7 @@ class VRWholeBodyBridgeNode:
         was already at a different gripper position.
         """
         reference = float(self.state.reference_action[index])
-        if self.gripper_control_mode != "incremental" or not side.gripper_command_initialized:
+        if self._hand_mode(side) != "incremental" or not side.gripper_command_initialized:
             self.state.action[index] = reference
             return
 
@@ -1744,6 +2223,26 @@ def parse_args() -> argparse.Namespace:
         help="Override reset behavior: publish reset topic, interpolate to reset_action on joint commands, or disable.",
     )
     parser.add_argument("--reset-topic", help="Override reset Float64 topic")
+    parser.add_argument(
+        "--reset-action",
+        type=json.loads,
+        help="Override the 16-element joint reset target as a JSON array",
+    )
+    parser.add_argument(
+        "--action-names",
+        type=json.loads,
+        help="Target robot action JointState names as a JSON array, supplied by the VLA bridge.",
+    )
+    parser.add_argument(
+        "--native-reset-action",
+        type=json.loads,
+        help="Target robot native reset vector as a JSON array, supplied by the VLA bridge.",
+    )
+    parser.add_argument(
+        "--status-file",
+        default=os.environ.get("OPENRAIL_TELEOP_STATUS_FILE"),
+        help="Write Quest3 TCP connection status as JSON for the parent client process.",
+    )
     parser.add_argument("--no-adb-reverse", action="store_true", help="Skip adb reverse tcp setup")
     return parser.parse_args()
 
@@ -1765,9 +2264,17 @@ def main() -> None:
     if args.joint_states_topic:
         config["joint_states_topic"] = args.joint_states_topic
     if args.reset_mode:
-        config["reset_mode"] = _normalize_reset_mode(args.reset_mode)
+        config["reset_mode"] = normalize_reset_mode(args.reset_mode)
     if args.reset_topic:
         config["reset_topic"] = args.reset_topic
+    if args.reset_action is not None:
+        config["reset_action"] = args.reset_action
+    if args.action_names is not None:
+        config["action_names"] = args.action_names
+    if args.native_reset_action is not None:
+        config["native_reset_action"] = args.native_reset_action
+    if args.status_file:
+        config["status_file"] = args.status_file
 
     if not args.no_adb_reverse:
         _try_adb_reverse(int(config.get("listen_port", 8002)))

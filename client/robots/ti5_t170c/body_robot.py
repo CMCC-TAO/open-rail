@@ -70,10 +70,10 @@ class RobotBody(RobotBase):
             self.logger.debug("execute_action arm=%s", data["arm"])
             self.robot.move_arm(data["arm"])
         if "hand" in data:
-            self.logger.info("execute_action hand=%s", data["hand"])
+            self.logger.debug("execute_action hand=%s", data["hand"])
             self.robot.move_hand(data["hand"])
         if "head" in data:
-            self.logger.info("execute_action head=%s", data["head"])
+            self.logger.debug("execute_action head=%s", data["head"])
             self.robot.move_head(data["head"])
         if "waist" in data:
             self.robot.move_waist(data["waist"])

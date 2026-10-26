@@ -104,6 +104,14 @@
   color: var(--warn); 
   border-color: color-mix(in srgb, var(--warn) 40%, transparent);  /* 边框颜色与文字颜色保持一致 */
 }
+.status-badge.teleop {
+  background: linear-gradient(135deg, rgba(26, 115, 232, 0.22), rgba(26, 115, 232, 0.1));
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  box-shadow:
+    0 2px 8px rgba(26, 115, 232, 0.2),
+    0 1px 2px rgba(26, 115, 232, 0.12);
+}
 
 /* Monitor resource usage group */
 .system-resource-group {

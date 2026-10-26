@@ -103,6 +103,9 @@ const App = {
   isObserveRunning: false,
   isInferenceRunning: false,
   isControlRunning: false,
+  isTeleopActive: false,
+  teleopDeviceConnected: false,
+  teleopDeviceState: 'disabled',
   currentFetchController: null,
   statusPollInFlight: false,
 

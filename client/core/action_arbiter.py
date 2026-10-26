@@ -38,7 +38,6 @@ class SelectedAction:
 
     source: ActionSource
     action: np.ndarray
-    timestamp: float
     previous_source: Optional[ActionSource] = None
     source_changed: bool = False
 
@@ -108,7 +107,6 @@ class ActionArbiter:
                     selected = SelectedAction(
                         source=source,
                         action=record.action.copy(),
-                        timestamp=record.timestamp,
                         previous_source=previous_source,
                         source_changed=source_changed,
                     )
@@ -121,7 +119,6 @@ class ActionArbiter:
             selected = SelectedAction(
                 source=ActionSource.HOLD,
                 action=self._last_selected.action.copy(),
-                timestamp=self._last_selected.timestamp,
                 previous_source=previous_source,
                 source_changed=source_changed,
             )
@@ -143,6 +140,22 @@ class ActionArbiter:
             return
         with self._lock:
             self._latest.pop(source, None)
+
+    def last_submitted_at(self, source: Union[ActionSource, str]) -> Optional[float]:
+        """Return the newest submission timestamp for one source."""
+
+        source = ActionSource(source)
+        with self._lock:
+            record = self._latest.get(source)
+            return None if record is None else record.timestamp
+
+    def latest_action(self, source: Union[ActionSource, str]) -> Optional[np.ndarray]:
+        """Return a copy of the newest action for one source."""
+
+        source = ActionSource(source)
+        with self._lock:
+            record = self._latest.get(source)
+            return None if record is None else record.action.copy()
 
     def _is_fresh(self, record: _ActionRecord, now: float) -> bool:
         """Check freshness with source-specific timeout windows."""
@@ -193,23 +206,6 @@ class ActionTransitionFilter:
         self._last_output = output.copy()
         return output
 
-    def track(self, target) -> np.ndarray:
-        """Rate-limit the output toward the latest target on every call.
-
-        Unlike :meth:`filter`, this does not freeze the first transition target.
-        It is useful when the desired target keeps changing during a handoff,
-        such as when fresh policy actions resume after teleoperation.
-        """
-
-        target = np.asarray(target, dtype=float).copy()
-        if self._last_output is None:
-            self._last_output = target
-            return target.copy()
-
-        output = self._apply_delta_limit(target)
-        self._last_output = output.copy()
-        return output
-
     def reset(self, last_output=None) -> None:
         """Clear smoothing state, optionally seeding the next output."""
 
@@ -217,11 +213,6 @@ class ActionTransitionFilter:
         self._transition_start = None
         self._transition_target = None
         self._transition_remaining = 0
-
-    def is_transitioning(self) -> bool:
-        """Return whether the filter is currently inside a blend window."""
-
-        return self._transition_remaining > 0
 
     def _apply_delta_limit(self, output: np.ndarray) -> np.ndarray:
         """Apply an optional absolute delta bound around the previous output."""

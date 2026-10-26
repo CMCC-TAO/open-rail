@@ -1,14 +1,8 @@
-"""Runtime bridges that feed human teleoperation commands into the VLA client.
+"""Runtime transport bridges between teleop producers and the VLA client.
 
-The bridge layer has two responsibilities:
-
-* receive teleoperation commands and convert them into the client's action
-  vector layout;
-* publish the client's teleop anchor state so external teleop devices can seed
-  their IK/current-command state without calling the robot interface again.
-
-The ROS2 bridge is the main path used by Quest3 and Daimon.  A small ZMQ bridge
-is kept for lightweight external producers that can send action arrays directly.
+Teleop semantics (joint layout, hand dimensions, continuous/discrete mapping)
+live under :mod:`teleop`.  This module only moves already-processed state/action
+messages over ROS2 or ZMQ and forwards valid action vectors to the client.
 """
 
 import json
@@ -19,6 +13,7 @@ import signal
 import shlex
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -26,90 +21,10 @@ from typing import Callable, Optional, Sequence
 
 import numpy as np
 
+from teleop.config import config_get as _cfg_get
+from teleop.config import normalize_reset_mode
 
-LEFT_ARM_JOINTS = tuple(f"left_arm_joint{i}" for i in range(1, 8))
-RIGHT_ARM_JOINTS = tuple(f"right_arm_joint{i}" for i in range(1, 8))
-LEFT_GRIPPER_JOINT = "left_hand_joint1"
-RIGHT_GRIPPER_JOINT = "right_hand_joint1"
-REQUIRED_JOINTS = LEFT_ARM_JOINTS + RIGHT_ARM_JOINTS + (LEFT_GRIPPER_JOINT, RIGHT_GRIPPER_JOINT)
 DEFAULT_CLIENT_JOINT_STATE_TOPIC = "/client_robot/joint_states"
-DEFAULT_CLIENT_JOINT_STATE_NAMES = (
-    LEFT_ARM_JOINTS
-    + RIGHT_ARM_JOINTS
-    + (LEFT_GRIPPER_JOINT, RIGHT_GRIPPER_JOINT)
-    + ("joint_head_yaw", "joint_head_pitch", "joint_lift_body", "joint_body_pitch")
-)
-RESET_MODES = {"topic", "joint_command", "none"}
-
-
-def _brief_array(values, limit: int = 4) -> str:
-    """Return compact numeric diagnostics suitable for periodic runtime logs."""
-
-    arr = np.asarray(values, dtype=float).reshape(-1)
-    if arr.size == 0:
-        return "shape=(0,)"
-    head = np.array2string(arr[:limit], precision=4, separator=", ")
-    tail = np.array2string(arr[-limit:], precision=4, separator=", ") if arr.size > limit else head
-    return f"shape={arr.shape} min={arr.min():.4f} max={arr.max():.4f} head={head} tail={tail}"
-
-
-def joint_state_to_action(msg, *, action_dim: int = 16) -> np.ndarray:
-    """Convert a command ``JointState`` into the fixed VLA action layout.
-
-    Quest3 and Daimon publish commands by joint name.  The VLA client executes a
-    flat action vector, so this function validates the required bridge joint
-    names and places them in the canonical order:
-
-    left arm 7, right arm 7, left gripper 1, right gripper 1.
-    """
-
-    if len(msg.name) != len(msg.position):
-        raise ValueError("JointState name and position lengths differ")
-    positions = {str(name): float(position) for name, position in zip(msg.name, msg.position)}
-    missing = [name for name in REQUIRED_JOINTS if name not in positions]
-    if missing:
-        raise ValueError("JointState missing required joints: " + ", ".join(missing))
-
-    action = np.zeros(int(action_dim), dtype=float)
-    ordered = LEFT_ARM_JOINTS + RIGHT_ARM_JOINTS + (LEFT_GRIPPER_JOINT, RIGHT_GRIPPER_JOINT)
-    if len(ordered) > action.shape[0]:
-        raise ValueError(f"action_dim {action_dim} is smaller than required command size {len(ordered)}")
-    for index, name in enumerate(ordered):
-        action[index] = positions[name]
-    return action
-
-
-def _cfg_get(config, key, default=None):
-    """Read either ConfigDict/object attributes or plain dictionary values."""
-
-    if config is None:
-        return default
-    if isinstance(config, dict):
-        return config.get(key, default)
-    return getattr(config, key, default)
-
-
-def _cfg_has(config, key) -> bool:
-    if config is None:
-        return False
-    if isinstance(config, dict):
-        return key in config
-    return hasattr(config, key)
-
-
-def _normalize_reset_mode(value) -> str:
-    mode = str(value or "joint_command").strip().lower().replace("-", "_")
-    aliases = {
-        "disabled": "none",
-        "off": "none",
-        "joint": "joint_command",
-        "command": "joint_command",
-        "joint_commands": "joint_command",
-    }
-    mode = aliases.get(mode, mode)
-    if mode not in RESET_MODES:
-        raise ValueError(f"Unsupported teleop reset_mode {value!r}; expected one of {sorted(RESET_MODES)}")
-    return mode
 
 
 def _read_quest3_config_reset_mode(device_cfg) -> Optional[str]:
@@ -177,6 +92,12 @@ def parse_zmq_teleop_message(message, *, action_dim: int = 16) -> np.ndarray:
 class TeleopBridgeBase(ABC):
     """Minimal lifecycle shared by concrete bridge implementations."""
 
+    @property
+    def running(self) -> bool:
+        """Return whether the concrete bridge has been started."""
+
+        return bool(getattr(self, "_running", False))
+
     @abstractmethod
     def start(self) -> None:
         raise NotImplementedError
@@ -189,6 +110,11 @@ class TeleopBridgeBase(ABC):
         """Publish the latest teleop anchor state when the bridge supports it."""
 
         return
+
+    def status(self) -> dict:
+        """Return a JSON-serializable snapshot of bridge and device state."""
+
+        return {"bridge_running": False, "device_connected": False, "state": "disabled"}
 
 
 class TeleopDeviceProcess:
@@ -209,15 +135,22 @@ class TeleopDeviceProcess:
         joint_state_topic: str,
         reset_topic: str,
         reset_mode: str = "joint_command",
+        action_names: Optional[Sequence[str]] = None,
+        native_reset_action: Optional[Sequence[float]] = None,
     ):
         self.device = str(device or "none").lower()
         self.config = config
         self.command_topic = command_topic
         self.joint_state_topic = joint_state_topic
         self.reset_topic = reset_topic
-        self.reset_mode = _normalize_reset_mode(reset_mode)
+        self.reset_mode = normalize_reset_mode(reset_mode)
+        self.action_names = None if action_names is None else [str(name) for name in action_names]
+        self.native_reset_action = (
+            None if native_reset_action is None else [float(value) for value in native_reset_action]
+        )
         self.logger = logging.getLogger(__name__)
         self.process: Optional[subprocess.Popen] = None
+        self.status_file: Optional[Path] = None
 
     def start(self) -> None:
         """Start the configured device unless it is already running."""
@@ -227,25 +160,39 @@ class TeleopDeviceProcess:
         if self.device in ("", "none", "manual", "external"):
             return
 
+        self._remove_status_file()
+        if self.device == "quest3":
+            fd, status_path = tempfile.mkstemp(prefix="openrail_quest3_", suffix=".json")
+            os.close(fd)
+            self.status_file = Path(status_path)
+            try:
+                self.status_file.unlink()
+            except FileNotFoundError:
+                pass
         cmd, env, cwd = self._build_command()
         if not cmd:
             return
-        self.process = subprocess.Popen(
-            cmd,
-            cwd=cwd,
-            env=env,
-            start_new_session=True,
-        )
-        # print(f"[ZLA][teleop_bridge][device] started device={self.device} pid={self.process.pid} cmd={cmd}", flush=True)
+        try:
+            self.process = subprocess.Popen(
+                cmd,
+                cwd=cwd,
+                env=env,
+                start_new_session=True,
+            )
+        except Exception:
+            self._remove_status_file()
+            raise
 
     def stop(self) -> None:
         """Terminate the device process group with a short graceful timeout."""
 
         if self.process is None:
+            self._remove_status_file()
             return
         proc = self.process
         self.process = None
         if proc.poll() is not None:
+            self._remove_status_file()
             return
         try:
             os.killpg(proc.pid, signal.SIGTERM)
@@ -259,6 +206,66 @@ class TeleopDeviceProcess:
             except Exception:
                 proc.kill()
             proc.wait(timeout=1.0)
+        finally:
+            self._remove_status_file()
+
+    def status(self) -> dict:
+        """Return process liveness and the Quest3 TCP handshake state."""
+
+        status = {
+            "device": self.device,
+            "process_running": False,
+            "process_pid": None,
+            "device_connected": False,
+            "state": "unavailable",
+            "message": "Teleop device process is not running.",
+        }
+        if self.device in ("", "none", "manual", "external"):
+            status.update(state="disabled", message="No managed teleop device is configured.")
+            return status
+        if self.process is None:
+            return status
+
+        status["process_pid"] = self.process.pid
+        return_code = self.process.poll()
+        if return_code is not None:
+            status.update(
+                state="error",
+                message=f"Quest3 process exited with code {return_code}.",
+            )
+            return status
+
+        status.update(process_running=True, state="starting", message="Quest3 process is starting.")
+        if self.status_file is None or not self.status_file.is_file():
+            return status
+        try:
+            payload = json.loads(self.status_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return status
+        if not isinstance(payload, dict):
+            return status
+
+        device_state = str(payload.get("state") or "starting")
+        connected = bool(payload.get("connected", False))
+        message = {
+            "starting": "Quest3 process is starting.",
+            "listening": "Quest3 bridge is listening; waiting for Quest3 to connect.",
+            "connected": "Quest3 device connected.",
+            "stopped": "Quest3 bridge stopped.",
+            "error": "Quest3 bridge failed to start.",
+        }.get(device_state, f"Quest3 device state: {device_state}.")
+        if device_state == "error" and payload.get("error"):
+            message = f"{message} {payload['error']}"
+        status.update(
+            device_connected=connected,
+            state=device_state,
+            message=message,
+            remote=payload.get("remote"),
+            total_packets=int(payload.get("total_packets") or 0),
+            error=payload.get("error"),
+            updated_at=payload.get("updated_at"),
+        )
+        return status
 
     def _build_command(self):
         """Build the subprocess command, environment, and working directory.
@@ -273,6 +280,8 @@ class TeleopDeviceProcess:
         repo_root = Path(__file__).resolve().parents[2]
         env = os.environ.copy()
         cwd = str(repo_root)
+        if self.status_file is not None:
+            env["OPENRAIL_TELEOP_STATUS_FILE"] = str(self.status_file)
         if custom_command:
             if isinstance(custom_command, str):
                 return shlex.split(custom_command), env, cwd
@@ -297,11 +306,17 @@ class TeleopDeviceProcess:
             ]
             if self.reset_mode == "topic":
                 cmd.extend(["--reset-topic", self.reset_topic])
+            if self.action_names is not None:
+                cmd.extend(["--action-names", json.dumps(self.action_names)])
+            if self.native_reset_action is not None:
+                cmd.extend(["--native-reset-action", json.dumps(self.native_reset_action)])
             if bool(_cfg_get(device_cfg, "no_adb_reverse", False)):
                 cmd.append("--no-adb-reverse")
             listen_port = _cfg_get(device_cfg, "listen_port", None)
             if listen_port is not None:
                 cmd.extend(["--listen-port", str(listen_port)])
+            if self.status_file is not None:
+                cmd.extend(["--status-file", str(self.status_file)])
             return cmd, env, cwd
 
         if self.device == "daimon":
@@ -342,6 +357,15 @@ class TeleopDeviceProcess:
             resolved = repo_root / resolved
         return resolved
 
+    def _remove_status_file(self) -> None:
+        if self.status_file is None:
+            return
+        try:
+            self.status_file.unlink()
+        except FileNotFoundError:
+            pass
+        self.status_file = None
+
 
 class RosTeleopBridge(TeleopBridgeBase):
     """ROS2 bridge for named joint commands and client robot state feedback.
@@ -366,14 +390,14 @@ class RosTeleopBridge(TeleopBridgeBase):
         topic: str = "/target_robot/joint_commands",
         reset_topic: str = "/custom/custom_a",
         joint_state_topic: str = DEFAULT_CLIENT_JOINT_STATE_TOPIC,
-        joint_state_names: Sequence[str] = DEFAULT_CLIENT_JOINT_STATE_NAMES,
+        action_names: Optional[Sequence[str]] = None,
         joint_state_publish_rate: float = 30.0,
-        action_dim: int = 16,
         node_name: str = "vla_infer_teleop_bridge",
         reset_threshold: float = 0.5,
         reset_mode: str = "joint_command",
         control_device: str = "quest3",
         device_config=None,
+        native_reset_action=None,
     ):
         self.submit_action = submit_action
         self.reset_handler = reset_handler
@@ -381,14 +405,17 @@ class RosTeleopBridge(TeleopBridgeBase):
         self.topic = topic
         self.reset_topic = reset_topic
         self.joint_state_topic = joint_state_topic
-        self.joint_state_names = tuple(str(name) for name in joint_state_names)
+        if not action_names:
+            raise ValueError("RosTeleopBridge requires the target robot action_names")
+        self.action_names = tuple(str(name) for name in action_names)
         self.joint_state_publish_rate = max(float(joint_state_publish_rate), 0.0)
-        self.action_dim = int(action_dim)
+        self.action_dim = len(self.action_names)
         self.node_name = node_name
         self.reset_threshold = float(reset_threshold)
-        self.reset_mode = _normalize_reset_mode(reset_mode)
+        self.reset_mode = normalize_reset_mode(reset_mode)
         self.control_device = str(control_device or "none").lower()
         self.device_config = device_config
+        self.native_reset_action = native_reset_action
         self.logger = logging.getLogger(__name__)
         self._thread: Optional[threading.Thread] = None
         self._running = False
@@ -397,10 +424,6 @@ class RosTeleopBridge(TeleopBridgeBase):
         self._JointState = None
         self._joint_state_pub = None
         self._device_process: Optional[TeleopDeviceProcess] = None
-        self._debug_count = 0
-        self._last_debug_s = 0.0
-        self._state_debug_count = 0
-        self._last_state_debug_s = 0.0
         self._reset_active = False
 
     def start(self) -> None:
@@ -437,17 +460,11 @@ class RosTeleopBridge(TeleopBridgeBase):
             joint_state_topic=self.joint_state_topic,
             reset_topic=self.reset_topic,
             reset_mode=self.reset_mode,
+            action_names=self.action_names,
+            native_reset_action=self.native_reset_action,
         )
         self._device_process.start()
         self.logger.info("ROS teleop bridge subscribed to %s", self.topic)
-        # print(
-        #     f"[ZLA][teleop_bridge][ros2] started topic={self.topic} "
-        #     f"joint_state_topic={self.joint_state_topic} control_device={self.control_device} "
-        #     f"reset_mode={self.reset_mode} "
-        #     f"reset_topic={self.reset_topic if self.reset_handler is not None and self.reset_mode == 'topic' else 'disabled'} "
-        #     f"node={self.node_name} action_dim={self.action_dim}",
-        #     flush=True,
-        # )
 
     def stop(self) -> None:
         """Stop ROS spinning, destroy the node, and stop any device subprocess."""
@@ -514,53 +531,53 @@ class RosTeleopBridge(TeleopBridgeBase):
             if values is None:
                 return
             positions = np.asarray(values, dtype=float).reshape(-1)
-            if positions.shape[0] < len(self.joint_state_names):
-                positions = np.pad(positions, (0, len(self.joint_state_names) - positions.shape[0]))
-            positions = positions[:len(self.joint_state_names)]
+            if positions.shape[0] < len(self.action_names):
+                positions = np.pad(positions, (0, len(self.action_names) - positions.shape[0]))
+            positions = positions[:len(self.action_names)]
         except Exception as exc:
             self.logger.warning("Drop invalid client robot joint state", exc_info=True)
-            # print(f"[ZLA][teleop_bridge][ros2] drop client joint state error={exc}", flush=True)
             return
 
         msg = self._JointState()
         msg.header.stamp = self._node.get_clock().now().to_msg()
-        msg.name = list(self.joint_state_names)
+        msg.name = list(self.action_names)
         msg.position = [float(v) for v in positions]
         self._joint_state_pub.publish(msg)
-        self._state_debug_count += 1
-        now = time.perf_counter()
-        if now - self._last_state_debug_s >= 1.0:
-            self._last_state_debug_s = now
-            # print(
-            #     f"[ZLA][teleop_bridge][ros2] publish client_joint_states "
-            #     f"count={self._state_debug_count} topic={self.joint_state_topic} "
-            #     f"names={len(msg.name)} state={_brief_array(positions)}",
-            #     flush=True,
-            # )
+
+    def status(self) -> dict:
+        """Expose ROS bridge and managed device connectivity for the Web UI."""
+
+        status = {
+            "bridge_running": bool(self._running),
+            "device": self.control_device,
+            "device_connected": False,
+            "state": "disabled" if not self._running else "starting",
+            "message": "Teleop bridge is stopped.",
+            "topic": self.topic,
+        }
+        if self._device_process is not None:
+            status.update(self._device_process.status())
+        elif self._running and self.control_device in ("", "none", "manual", "external"):
+            status.update(
+                state="external",
+                message="External teleop producer is expected on the configured ROS topic.",
+            )
+        return status
 
     def _command_cb(self, msg) -> None:
         """Receive a named teleop command and submit it to VLA action arbitration."""
 
-        self._debug_count += 1
         try:
-            action = joint_state_to_action(msg, action_dim=self.action_dim)
+            if len(msg.name) != len(msg.position):
+                raise ValueError("JointState name and position lengths differ")
+            if tuple(str(name) for name in msg.name) != self.action_names:
+                raise ValueError(
+                    "Teleop action JointState names do not match the target action layout"
+                )
+            action = np.asarray(msg.position, dtype=float)
         except Exception as exc:
             self.logger.warning("Drop invalid teleop JointState", exc_info=True)
-            # print(
-            #     f"[ZLA][teleop_bridge][ros2] drop invalid JointState "
-            #     f"count={self._debug_count} names={len(msg.name)} positions={len(msg.position)} "
-            #     f"first_names={list(msg.name[:6])} error={exc}",
-            #     flush=True,
-            # )
             return
-        now = time.perf_counter()
-        if now - self._last_debug_s >= 1.0:
-            self._last_debug_s = now
-            # print(
-            #     f"[ZLA][teleop_bridge][ros2] recv count={self._debug_count} "
-            #     f"names={len(msg.name)} first_names={list(msg.name[:6])} action={_brief_array(action)}",
-            #     flush=True,
-            # )
         self.submit_action(action, time.perf_counter())
 
     def _reset_cb(self, msg) -> None:
@@ -574,12 +591,10 @@ class RosTeleopBridge(TeleopBridgeBase):
         if self.reset_handler is None or self._reset_active:
             return
         self._reset_active = True
-        # print(f"[ZLA][teleop_bridge][ros2] reset request received topic={self.reset_topic} value={value:.3f}", flush=True)
         try:
             self.reset_handler()
         except Exception as exc:
             self.logger.error("Teleop reset handler failed: %s", exc, exc_info=True)
-            # print(f"[ZLA][teleop_bridge][ros2] reset handler failed error={exc}", flush=True)
 
 
 class ZmqTeleopBridge(TeleopBridgeBase):
@@ -607,8 +622,6 @@ class ZmqTeleopBridge(TeleopBridgeBase):
         self._socket = None
         self._poller = None
         self._zmq = None
-        self._debug_count = 0
-        self._last_debug_s = 0.0
 
     def start(self) -> None:
         """Connect the DEALER socket and start the receive loop."""
@@ -633,11 +646,6 @@ class ZmqTeleopBridge(TeleopBridgeBase):
         self._thread = threading.Thread(target=self._recv_loop, name="zmq-teleop-bridge", daemon=True)
         self._thread.start()
         self.logger.info("ZMQ teleop bridge connected to %s with DEALER identity %s", self.endpoint, self.identity)
-        # print(
-        #     f"[ZLA][teleop_bridge][zmq] started endpoint={self.endpoint} "
-        #     f"identity={self.identity} action_dim={self.action_dim}",
-        #     flush=True,
-        # )
 
     def stop(self) -> None:
         """Stop the receive loop and close the ZMQ socket without lingering."""
@@ -652,6 +660,16 @@ class ZmqTeleopBridge(TeleopBridgeBase):
             finally:
                 self._socket = None
         self._poller = None
+
+    def status(self) -> dict:
+        return {
+            "bridge_running": bool(self._running),
+            "device": "zmq",
+            "device_connected": bool(self._running),
+            "state": "connected" if self._running else "disabled",
+            "message": "ZMQ teleop bridge is running." if self._running else "ZMQ teleop bridge is stopped.",
+            "topic": self.endpoint,
+        }
 
     def _send_ready(self) -> None:
         """Send a heartbeat so an external router can discover this bridge."""
@@ -688,21 +706,7 @@ class ZmqTeleopBridge(TeleopBridgeBase):
                 action = parse_zmq_teleop_message(payload, action_dim=self.action_dim)
             except Exception as exc:
                 self.logger.warning("Drop invalid ZMQ teleop message", exc_info=True)
-                # print(
-                #     f"[ZLA][teleop_bridge][zmq] drop invalid message "
-                #     f"frames={len(frames) if 'frames' in locals() else 'unknown'} error={exc}",
-                #     flush=True,
-                # )
                 continue
-            self._debug_count += 1
-            now = time.perf_counter()
-            if now - self._last_debug_s >= 1.0:
-                self._last_debug_s = now
-                # print(
-                #     f"[ZLA][teleop_bridge][zmq] recv count={self._debug_count} "
-                #     f"action={_brief_array(action)}",
-                #     flush=True,
-                # )
             self.submit_action(action, time.perf_counter())
 
 
@@ -713,33 +717,26 @@ def create_teleop_bridge(
     action_dim: int,
     reset_handler: Optional[Callable[[], None]] = None,
     joint_state_provider: Optional[Callable[[], Optional[Sequence[float]]]] = None,
-    joint_state_names: Optional[Sequence[str]] = None,
+    action_names: Optional[Sequence[str]] = None,
+    native_reset_action: Optional[Sequence[float]] = None,
 ):
     """Construct the configured teleoperation bridge implementation.
 
-    ``joint_state_provider`` and ``joint_state_names`` are used only by ROS2,
-    where external teleop nodes need a live ``/client_robot/joint_states`` feed.
-    ZMQ producers send full action arrays and therefore do not need robot-state
-    publication.
+    ``action_names`` is the target robot action layout produced by the teleop
+    mapping layer.  ROS2 uses the same names for the state and command topics.
+    ZMQ producers send target-native arrays directly.
     """
 
     bridge_type = str(_cfg_get(config, "bridge_type", "ros2")).lower()
-    # print(f"[ZLA][teleop_bridge] create bridge_type={bridge_type} action_dim={action_dim}", flush=True)
     if bridge_type in ("ros", "ros2"):
         ros_cfg = _cfg_get(config, "ros2", None)
         device = _cfg_get(config, "control_device", _cfg_get(config, "device", "quest3"))
         device_cfg = _cfg_get(_cfg_get(config, "devices", None), str(device or "").lower(), None)
-        if _cfg_has(ros_cfg, "reset_mode"):
-            reset_mode_value = _cfg_get(ros_cfg, "reset_mode")
-        elif _cfg_has(device_cfg, "reset_mode"):
-            reset_mode_value = _cfg_get(device_cfg, "reset_mode")
-        elif _cfg_has(config, "reset_mode"):
-            reset_mode_value = _cfg_get(config, "reset_mode")
-        elif str(device or "").lower() == "quest3":
+        if str(device or "").lower() == "quest3":
             reset_mode_value = _read_quest3_config_reset_mode(device_cfg)
         else:
-            reset_mode_value = None
-        reset_mode = _normalize_reset_mode(reset_mode_value or "joint_command")
+            reset_mode_value = _cfg_get(config, "reset_mode", None)
+        reset_mode = normalize_reset_mode(reset_mode_value or "joint_command")
         return RosTeleopBridge(
             submit_action=submit_action,
             reset_handler=reset_handler,
@@ -747,14 +744,14 @@ def create_teleop_bridge(
             topic=_cfg_get(ros_cfg, "topic", "/target_robot/joint_commands"),
             reset_topic=_cfg_get(ros_cfg, "reset_topic", "/custom/custom_a"),
             joint_state_topic=_cfg_get(ros_cfg, "joint_state_topic", DEFAULT_CLIENT_JOINT_STATE_TOPIC),
-            joint_state_names=joint_state_names or _cfg_get(ros_cfg, "joint_state_names", DEFAULT_CLIENT_JOINT_STATE_NAMES),
+            action_names=action_names,
             joint_state_publish_rate=_cfg_get(ros_cfg, "joint_state_publish_rate", 30.0),
-            action_dim=action_dim,
             node_name=_cfg_get(ros_cfg, "node_name", "vla_infer_teleop_bridge"),
             reset_threshold=_cfg_get(ros_cfg, "reset_threshold", 0.5),
             reset_mode=reset_mode,
             control_device=device,
             device_config=config,
+            native_reset_action=native_reset_action,
         )
     if bridge_type == "zmq":
         zmq_cfg = _cfg_get(config, "zmq", None)

@@ -28,6 +28,27 @@ const SIMULATION_CONFIG_KEYS = new Set([
   'rdm.max_async_observation_lag_steps',
 ]);
 const SIMULATION_ROBOT_TYPES = new Set();
+function teleopSupportedRobotTypes() {
+  const mapping = App.config?.teleop?.devices?.quest3?.config_path_by_robot;
+  if (mapping && typeof mapping === 'object' && !Array.isArray(mapping)) {
+    return new Set(Object.keys(mapping));
+  }
+  return new Set();
+}
+
+function isTeleopSupportedRobot(robotType) {
+  return teleopSupportedRobotTypes().has(String(robotType || ''));
+}
+
+function updateTeleopGroupVisibility(robotType) {
+  const supported = isTeleopSupportedRobot(robotType);
+  $('config-tree').querySelectorAll('.cfg-group[data-config-group-key="teleop"]').forEach(group => {
+    group.dataset.teleopUnsupported = supported ? '0' : '1';
+    group.style.display = supported ? '' : 'none';
+  });
+  const query = String($('conf-search')?.value || '').trim();
+  if (supported && query) filterConfigTree(query);
+}
 
 window.registerSimulationBenchmarks = function(profiles) {
   for (const profile of profiles) {
@@ -539,6 +560,7 @@ function renderConfigTree(cfg) {
   root.innerHTML = '';
   renderMainParameters(cfg);
   buildTree(cfg, '', root);
+  updateTeleopGroupVisibility(cfg?.robots?.type);
   updateSimulationConfigVisibility();
   restoreConfigTreeUiState(uiState);
   document.dispatchEvent(new CustomEvent('app-config-updated'));
@@ -644,7 +666,9 @@ function buildTree(obj, prefix, parentEl) {
     } else {
       buildTree(val, dotKey, body);
     }
-    parentEl.appendChild(buildGroupFromEl(key, body));
+    const groupEl = buildGroupFromEl(key, body);
+    groupEl.dataset.configGroupKey = key;
+    parentEl.appendChild(groupEl);
   }
 }
 // ═══════════════════════════════════════════════════════
@@ -758,6 +782,7 @@ function _buildRobotsGroup(obj, parentEl) {
       for (const [k, el] of Object.entries(subGroupEls)) {
         el.style.display = (k === selected) ? '' : 'none';
       }
+      updateTeleopGroupVisibility(selected);
     });
   }
 }
@@ -1350,6 +1375,7 @@ function filterConfigTree(query) {
     row.style.display = (!q || row.dataset.key.toLowerCase().includes(q)) ? '' : 'none';
   });
   $('config-tree').querySelectorAll('.cfg-group').forEach(g => {
+    if (g.dataset.teleopUnsupported === '1') { g.style.display = 'none'; return; }
     // Robot type sub-groups (data-robot-type) are controlled exclusively by the
     // type select in _buildRobotsGroup; never let the filter override their visibility.
     if (g.dataset.robotType || g.dataset.interChunkMode) return;

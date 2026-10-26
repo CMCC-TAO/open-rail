@@ -24,6 +24,11 @@ from client.core.teleop_bridge import create_teleop_bridge
 from client.core.data_record_manager import DataRecordManager
 from client.core.shared_memory_manager import SharedMemoryManager
 from client.robots.base_robot import RobotBase
+from conf.robots_conf import canonical_robot_type
+from conf.client_conf import get_teleop_config_path
+from teleop.action_mapping import action_layout_from_robot_config
+from teleop.config import config_get
+from teleop.status import teleop_enabled, teleop_status_snapshot
 
 
 class VLAClient():
@@ -122,17 +127,12 @@ class VLAClient():
             max_delta_per_step=getattr(self.config.controller, 'action_transition_max_delta_per_step', None),
         )
         self.teleop_bridge = None
-        self._teleop_bridge_running = False
-        self._last_teleop_action_s = None
-        self._last_valid_teleop_action = None
         self._teleop_outlier_reject_count = 0
         self._teleop_outlier_last_log_s = 0.0
-        self._last_selected_source = None
         self._last_executed_action = None
         self._last_executed_action_lock = threading.Lock()
         self._action_select_last_debug_s = 0.0
         self._teleop_policy_handoff_active = False
-        self._teleop_policy_handoff_waiting_for_policy = False
         self._teleop_policy_handoff_hold_action = None
         self._teleop_policy_handoff_started_s = None
         self._policy_generation = 0
@@ -181,36 +181,24 @@ class VLAClient():
         self.control_thread_timer.start()
         self.logger.info('VLAClient initialized.')
 
-    @staticmethod
-    def _config_get(config, key, default=None):
-        if config is None:
-            return default
-        if isinstance(config, dict):
-            return config.get(key, default)
-        return getattr(config, key, default)
+    _config_get = staticmethod(config_get)
 
     def _teleop_bridge_config(self):
         """Return the grouped teleop config, if present."""
         return getattr(self.config, 'teleop', None)
 
     def _use_teleop_enabled(self) -> bool:
-        """Return whether bridge-based human teleoperation is enabled.
+        """Return whether bridge-based human teleoperation is enabled."""
 
-        ``teleop.use_teleop`` is authoritative when present. The root-level
-        ``use_teleop`` field is kept only for loading older configurations that
-        predate the grouped teleop config.
-        """
-        teleop_cfg = self._teleop_bridge_config()
-        if teleop_cfg is not None and self._config_get(teleop_cfg, 'use_teleop', None) is not None:
-            return bool(self._config_get(teleop_cfg, 'use_teleop'))
-        return bool(getattr(self.config, 'use_teleop', False))
+        return teleop_enabled(self.config)
 
     def set_teleop_enabled(self, enabled: bool):
         """Enable or disable the teleop bridge at runtime."""
         teleop_cfg = self._teleop_bridge_config()
         if teleop_cfg is not None:
             teleop_cfg.use_teleop = bool(enabled)
-        self.config.use_teleop = bool(enabled)
+        elif hasattr(self.config, 'use_teleop'):
+            self.config.use_teleop = bool(enabled)
         if bool(enabled) and self.is_running:
             self.start_teleop_bridge()
         else:
@@ -218,7 +206,6 @@ class VLAClient():
             self.action_arbiter.clear()
             self.action_transition_filter.reset()
             self._reset_teleop_policy_handoff()
-            self._last_selected_source = None
 
     def _resolve_teleop_device_config(self) -> bool:
         """Resolve the Quest3 YAML from the selected robot type when enabled."""
@@ -237,11 +224,10 @@ class VLAClient():
         if hasattr(robot_type, 'value'):
             robot_type = robot_type.value
         robot_type = str(robot_type or '').lower()
-        mapping = self._config_get(device_cfg, 'config_path_by_robot', None) or {}
-        config_path = self._config_get(mapping, robot_type, None)
+        config_path = get_teleop_config_path(robot_type)
         if not config_path:
             self.logger.warning(
-                "No Quest3 teleop config mapped for robot type %r; teleop bridge will not start.",
+                "Quest3 teleop is not supported for robot type %r; teleop bridge will not start.",
                 robot_type,
             )
             return False
@@ -256,32 +242,46 @@ class VLAClient():
         if not self._resolve_teleop_device_config():
             return
         if self.teleop_bridge is None:
-            action_dim = int(getattr(self.robot, 'action_dim', 0) or 16)
+            robot_type = self._config_get(getattr(self.config, 'robots', None), 'type', '')
+            if hasattr(robot_type, 'value'):
+                robot_type = robot_type.value
+            robot_type = str(robot_type or '')
+            robot_config_name = canonical_robot_type(robot_type)
+            robot_cfg = self._config_get(
+                getattr(self.config, 'robots', None),
+                robot_config_name,
+                None,
+            )
+            action_layout = action_layout_from_robot_config(robot_cfg)
+            robot_action_dim = int(getattr(self.robot, 'action_dim', 0) or 0)
+            if robot_action_dim and robot_action_dim != action_layout.action_dim:
+                raise ValueError(
+                    f"Teleop layout for {robot_config_name!r} has {action_layout.action_dim} "
+                    f"dims but the robot reports {robot_action_dim}"
+                )
+            action_dim = robot_action_dim or action_layout.action_dim
             self.teleop_bridge = create_teleop_bridge(
                 self._teleop_bridge_config(),
                 submit_action=self.submit_teleop_bridge_action,
                 action_dim=action_dim,
                 reset_handler=self.reset_robot,
                 joint_state_provider=self.get_teleop_joint_state,
-                joint_state_names=self._teleop_joint_state_names(),
+                action_names=action_layout.action_names,
+                native_reset_action=self._config_get(robot_cfg, 'reset_robot_pos', None),
             )
         self.teleop_bridge.start()
-        self._teleop_bridge_running = True
 
     def stop_teleop_bridge(self):
         """Stop the bridge and clear fresh-human-action state."""
         if self.teleop_bridge is not None:
             self.teleop_bridge.stop()
-        self._teleop_bridge_running = False
         self.action_arbiter.clear_source(ActionSource.TELEOP)
-        self._last_teleop_action_s = None
-        self._last_selected_source = None
         self._reset_teleop_policy_handoff()
         self._reset_teleop_outlier_guard()
 
     def restart_teleop_bridge(self):
         """Recreate the bridge after device/topic/joint-name config changes."""
-        was_running = self._teleop_bridge_running
+        was_running = self.teleop_bridge is not None and self.teleop_bridge.running
         self.stop_teleop_bridge()
         self.teleop_bridge = None
         self.action_arbiter.clear()
@@ -299,9 +299,7 @@ class VLAClient():
             self._hold_teleop_after_rejected_action(timestamp)
             return
         self.action_arbiter.submit(ActionSource.TELEOP, action_arr, timestamp)
-        self._last_valid_teleop_action = action_arr.copy()
         self._teleop_outlier_reject_count = 0
-        self._last_teleop_action_s = time.perf_counter()
 
     def _validate_teleop_bridge_action(self, action) -> Optional[np.ndarray]:
         """Reject malformed or implausibly large teleop jumps before arbitration."""
@@ -315,6 +313,13 @@ class VLAClient():
             return None
         if not np.all(np.isfinite(action_arr)):
             self._log_teleop_outlier('non-finite teleop action')
+            return None
+        action_layout = self._teleop_action_layout()
+        if action_arr.size != action_layout.action_dim:
+            self._log_teleop_outlier(
+                f'teleop action width {action_arr.size} does not match target layout '
+                f'{action_layout.action_dim}'
+            )
             return None
         if not bool(getattr(self.config.controller, 'teleop_outlier_guard_enabled', True)):
             return action_arr
@@ -348,20 +353,37 @@ class VLAClient():
                 )
                 return None
         if delta.shape[0] > 14:
-            max_gripper_delta = getattr(self.config.controller, 'teleop_outlier_max_gripper_delta', 1.0)
-            if max_gripper_delta is not None and np.max(delta[14:]) > float(max_gripper_delta):
+            max_hand_delta = getattr(self.config.controller, 'teleop_outlier_max_gripper_delta', 1.0)
+            if max_hand_delta is not None:
+                max_hand_delta = float(max_hand_delta) * action_layout.hand_value_scale
+            if max_hand_delta is not None and np.max(delta[14:]) > float(max_hand_delta):
                 self._teleop_outlier_reject_count += 1
                 self._log_teleop_outlier(
-                    'gripper jump %.4f exceeds %.4f; reject_count=%d'
-                    % (float(np.max(delta[14:])), float(max_gripper_delta), self._teleop_outlier_reject_count)
+                    'hand jump %.4f exceeds %.4f; reject_count=%d'
+                    % (float(np.max(delta[14:])), float(max_hand_delta), self._teleop_outlier_reject_count)
                 )
                 return None
         return action_arr
 
+    def _teleop_robot_config(self):
+        """Return the active robot configuration used by teleop conversion."""
+
+        robots_cfg = getattr(self.config, 'robots', None)
+        robot_type = self._config_get(robots_cfg, 'type', '')
+        if hasattr(robot_type, 'value'):
+            robot_type = robot_type.value
+        return self._config_get(robots_cfg, canonical_robot_type(robot_type), None)
+
+    def _teleop_action_layout(self):
+        """Return the target robot layout used by the teleop producer."""
+
+        return action_layout_from_robot_config(self._teleop_robot_config())
+
     def _teleop_outlier_baseline(self, action_dim: int) -> Optional[np.ndarray]:
         """Return the latest trusted teleop action, then the last robot command/state."""
-        if self._last_valid_teleop_action is not None:
-            return np.asarray(self._last_valid_teleop_action, dtype=float).copy()
+        last_teleop_action = self.action_arbiter.latest_action(ActionSource.TELEOP)
+        if last_teleop_action is not None:
+            return last_teleop_action
         baseline = self._coerce_state_to_action_shape(self._get_last_executed_action(), action_dim)
         if baseline is not None:
             return baseline
@@ -378,19 +400,13 @@ class VLAClient():
             return None
         if arr.shape[0] == action_dim:
             return arr.copy()
-        if action_dim == 16 and arr.shape[0] >= 21:
-            action = np.zeros(action_dim, dtype=float)
-            action[:14] = arr[:14]
-            action[14] = arr[14]
-            action[15] = arr[20]
-            return action
         if arr.shape[0] >= action_dim:
             return arr[:action_dim].copy()
         return None
 
     def _hold_teleop_after_rejected_action(self, timestamp: float) -> None:
         """Keep teleop ownership alive with the last safe action after a rejected packet."""
-        hold_action = self._last_valid_teleop_action
+        hold_action = self.action_arbiter.latest_action(ActionSource.TELEOP)
         if hold_action is None:
             hold_action = self._get_last_executed_action()
         if hold_action is None:
@@ -403,15 +419,11 @@ class VLAClient():
                 self.config.controller, 'teleop_outlier_reanchor_after_rejects', 5
             )):
                 self.action_arbiter.clear_source(ActionSource.TELEOP)
-                self._last_teleop_action_s = None
             return
         hold_action = np.asarray(hold_action, dtype=float).copy()
         self.action_arbiter.submit(ActionSource.TELEOP, hold_action, timestamp)
-        self._last_valid_teleop_action = hold_action
-        self._last_teleop_action_s = time.perf_counter()
 
     def _reset_teleop_outlier_guard(self) -> None:
-        self._last_valid_teleop_action = None
         self._teleop_outlier_reject_count = 0
 
     def _log_teleop_outlier(self, reason: str) -> None:
@@ -447,42 +459,21 @@ class VLAClient():
         with self._last_executed_action_lock:
             self._last_executed_action = value
 
-    def _teleop_joint_state_names(self):
-        """Return joint names matching the state/action vector published to Quest3."""
-        teleop_cfg = self._teleop_bridge_config()
-        ros_cfg = self._config_get(teleop_cfg, 'ros2', None)
-        configured_names = self._config_get(ros_cfg, 'joint_state_names', None)
-        if configured_names:
-            return [str(name) for name in configured_names]
-        robot_type = self._config_get(getattr(self.config, 'robots', None), 'type', '')
-        if hasattr(robot_type, 'value'):
-            robot_type = robot_type.value
-        # 'agibot_g1' is the current name of the legacy 'a2d' robot body.
-        if str(robot_type) in ('a2d', 'agibot_g1'):
-            return [
-                *(f'left_arm_joint{i}' for i in range(1, 8)),
-                *(f'right_arm_joint{i}' for i in range(1, 8)),
-                'left_hand_joint1',
-                'right_hand_joint1',
-                'joint_head_yaw',
-                'joint_head_pitch',
-                'joint_lift_body',
-                'joint_body_pitch',
-            ]
-        state = getattr(self.robot, 'current_state', None)
-        state_dim = int(np.asarray(state).reshape(-1).shape[0]) if state is not None else int(getattr(self.robot, 'action_dim', 0) or 16)
-        return [f'{robot_type or "robot"}_joint{i + 1}' for i in range(state_dim)]
-
     def is_teleop_human_active(self) -> bool:
         """Return whether fresh teleop input is currently controlling the robot."""
-        if not self._teleop_bridge_running or self._last_teleop_action_s is None:
+        if self.teleop_bridge is None or not self.teleop_bridge.running:
+            return False
+        last_teleop_s = self.action_arbiter.last_submitted_at(ActionSource.TELEOP)
+        if last_teleop_s is None:
             return False
         timeout_s = float(getattr(self.config.controller, 'teleop_timeout_s', 0.5))
-        return time.perf_counter() - self._last_teleop_action_s <= timeout_s
+        return time.perf_counter() - last_teleop_s <= timeout_s
 
     @property
-    def teleop_human_connected(self) -> bool:
-        return bool(self._teleop_bridge_running)
+    def teleop_status(self) -> dict:
+        """Return teleop bridge and managed device connectivity state."""
+
+        return teleop_status_snapshot(self.config, bridge=self.teleop_bridge)
 
     def _action_for_selected_source(self, selected: SelectedAction) -> np.ndarray:
         if selected.source == ActionSource.TELEOP:
@@ -496,7 +487,6 @@ class VLAClient():
     def _reset_teleop_policy_handoff(self) -> None:
         """Clear teleop-to-policy handoff state."""
         self._teleop_policy_handoff_active = False
-        self._teleop_policy_handoff_waiting_for_policy = False
         self._teleop_policy_handoff_hold_action = None
         self._teleop_policy_handoff_started_s = None
 
@@ -525,17 +515,17 @@ class VLAClient():
             return False
         self._teleop_policy_handoff_hold_action = np.asarray(hold_action, dtype=float).copy()
         self._teleop_policy_handoff_active = True
-        self._teleop_policy_handoff_waiting_for_policy = True
         self._teleop_policy_handoff_started_s = time.perf_counter()
         self._invalidate_policy_generation()
         self.realtime_data_manager.clear_policy_actions()
         self.action_arbiter.clear_source(ActionSource.POLICY)
+        self.action_arbiter.clear_source(ActionSource.TELEOP)
         self.action_transition_filter.reset(last_output=self._teleop_policy_handoff_hold_action)
         self._reset_teleop_outlier_guard()
         self.logger.info("Teleop exited; holding final teleop action until a fresh policy chunk is available.")
         return True
 
-    def _select_teleop_policy_handoff_action(self, action_fitted, now: float):
+    def _select_teleop_policy_handoff_action(self):
         """Return the held teleop action while waiting for fresh policy output."""
         if not self._teleop_policy_handoff_active:
             return None, None, None
@@ -565,8 +555,6 @@ class VLAClient():
         self.action_transition_filter.reset(last_output=first_policy_action)
         self.action_arbiter.clear()
         self.action_arbiter.submit(ActionSource.POLICY, first_policy_action, time.perf_counter())
-        self._last_selected_source = ActionSource.POLICY
-        self._teleop_policy_handoff_waiting_for_policy = False
         self._reset_teleop_policy_handoff()
 
     def reset_robot(self, mode='default'):
@@ -574,7 +562,6 @@ class VLAClient():
         self.action_arbiter.clear()
         self.action_transition_filter.reset()
         self._reset_teleop_policy_handoff()
-        self._last_selected_source = None
         return self.robot.reset_robot(mode=mode)
 
     ######################### VLAClient APIs #########################
@@ -762,7 +749,6 @@ class VLAClient():
             self.task_language_manager.reset()
             self.action_arbiter.clear()
             self.action_transition_filter.reset()
-            self._last_selected_source = None
             self._set_last_executed_action(None)
             self.realtime_data_manager.clear()
             self._clear_raw_observe_queue()
@@ -874,13 +860,17 @@ class VLAClient():
 
     @property
     def runtime_status(self):
+        teleop_status = self.teleop_status
         status = {
             "img_proc_time": self.image_process_time,
             "current_prob_progress": self.current_prob_progress,
-            "teleop_enabled": self._use_teleop_enabled(),
-            "teleop_human_connected": self.teleop_human_connected,
+            "teleop_enabled": teleop_status["enabled"],
+            "teleop_supported": teleop_status.get("supported", False),
             "teleop_human_active": self.is_teleop_human_active(),
-            "last_selected_source": self._last_selected_source.value if self._last_selected_source is not None else None,
+            "teleop_bridge_running": teleop_status.get("bridge_running", False),
+            "teleop_device_connected": teleop_status.get("device_connected", False),
+            "teleop_device_state": teleop_status.get("state", "unavailable"),
+            "teleop_device_message": teleop_status.get("message", ""),
             "teleop_policy_handoff_active": self._teleop_policy_handoff_active,
             "inference_error": self.inference_error,
             "inference_error_count": self.inference_error_count,
@@ -1147,23 +1137,22 @@ class VLAClient():
                     now = time.perf_counter()
                     handled_handoff = False
                     if self._teleop_policy_handoff_active:
+                        last_teleop_s = self.action_arbiter.last_submitted_at(ActionSource.TELEOP)
                         new_teleop_after_handoff = (
-                            self._last_teleop_action_s is not None
+                            last_teleop_s is not None
                             and self._teleop_policy_handoff_started_s is not None
-                            and self._last_teleop_action_s > self._teleop_policy_handoff_started_s
+                            and last_teleop_s > self._teleop_policy_handoff_started_s
                         )
                         if new_teleop_after_handoff:
                             self.logger.info("Fresh teleop input interrupted teleop-to-policy handoff.")
                             self._reset_teleop_policy_handoff()
                         else:
-                            action_to_execute, selected_source, policy_action_for_record = self._select_teleop_policy_handoff_action(
-                                action_fitted,
-                                now,
+                            action_to_execute, selected_source, policy_action_for_record = (
+                                self._select_teleop_policy_handoff_action()
                             )
                             if action_to_execute is None:
                                 update_visualization()
                                 return
-                            self._last_selected_source = selected_source
                             handled_handoff = True
                     elif action_fitted is not None:
                         self.action_arbiter.submit(ActionSource.POLICY, action_fitted, now)
@@ -1174,15 +1163,14 @@ class VLAClient():
                             update_visualization()
                             return
                         if (
-                            self._last_selected_source == ActionSource.TELEOP
+                            selected.previous_source == ActionSource.TELEOP
                             and selected.source != ActionSource.TELEOP
                         ):
                             last_executed_action = self._get_last_executed_action()
                             hold_action = last_executed_action if last_executed_action is not None else selected.action
                             if self._start_teleop_policy_handoff(hold_action):
-                                action_to_execute, selected_source, policy_action_for_record = self._select_teleop_policy_handoff_action(
-                                    None,
-                                    now,
+                                action_to_execute, selected_source, policy_action_for_record = (
+                                    self._select_teleop_policy_handoff_action()
                                 )
                                 if action_to_execute is None:
                                     update_visualization()
@@ -1195,7 +1183,6 @@ class VLAClient():
                             action_to_execute = self._action_for_selected_source(selected)
                             selected_source = selected.source
                             policy_action_for_record = action_fitted
-                        self._last_selected_source = selected_source
                         if now - self._action_select_last_debug_s >= 1.0:
                             self._action_select_last_debug_s = now
                             self.logger.debug("Action arbiter selected source=%s", selected_source.value)
@@ -1208,8 +1195,8 @@ class VLAClient():
                     self.robot.control_robot(action_np)
                     self._set_last_executed_action(action_np)
                     if (
-                        self._teleop_bridge_running
-                        and self.teleop_bridge is not None
+                        self.teleop_bridge is not None
+                        and self.teleop_bridge.running
                         and not self.is_teleop_human_active()
                     ):
                         try:

@@ -113,7 +113,6 @@ def test_control_timer_cannot_submit_an_old_action_after_pause():
     client.show_thread_lock = threading.Lock()
     client._last_executed_action = None
     client._last_executed_action_lock = threading.Lock()
-    client._teleop_bridge_running = False
     client.teleop_bridge = None
 
     tick = threading.Thread(target=client._control_thread_fun)

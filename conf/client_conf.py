@@ -2,7 +2,52 @@ from enum import Enum
 from ml_collections import ConfigDict
 from conf.zmq_conf import get_vla_zmq_config, get_vis_zmq_config
 from conf.save_conf import get_record_data_config
-from conf.robots_conf import get_robots_config
+from conf.robots_conf import canonical_robot_type, get_robots_config
+
+
+# Quest3 teleop is intentionally limited to robot bodies with a validated
+# teleop profile.  Keys are Web/Client robot types; values map them to the
+# Quest3 bridge YAML profile (the AgiBot profile intentionally keeps its
+# legacy ``a2d`` name).
+TELEOP_CONFIG_PATH_BY_ROBOT = {
+    'agibot_g1': 'teleop/quest3/config/a2d.yaml',
+    'ti5_t170c': 'teleop/quest3/config/ti5_t170c.yaml',
+}
+def get_teleop_config_path(robot_type):
+    """Map a robot type to its Quest3 profile, or ``None`` when unsupported."""
+
+    return TELEOP_CONFIG_PATH_BY_ROBOT.get(canonical_robot_type(robot_type))
+
+
+def apply_teleop_robot_mapping(config, robot_type) -> bool:
+    """Synchronize teleop profile fields with the selected robot type.
+
+    Supported robots receive the matching Quest3 YAML path.  Unsupported robots
+    have teleop disabled so stale ``use_teleop=true`` values cannot launch an
+    incompatible profile after a Web UI robot switch.
+    """
+
+    teleop_cfg = getattr(config, 'teleop', None) if config is not None else None
+    if teleop_cfg is None:
+        return False
+    quest3_cfg = getattr(getattr(teleop_cfg, 'devices', None), 'quest3', None)
+    if quest3_cfg is None:
+        return False
+
+    config_path = get_teleop_config_path(robot_type)
+    if config_path:
+        quest3_cfg.config_path = config_path
+        quest3_cfg.auto_config_path = True
+        return True
+
+    if hasattr(teleop_cfg, 'use_teleop'):
+        teleop_cfg.use_teleop = False
+    if hasattr(config, 'use_teleop'):
+        config.use_teleop = False
+    if hasattr(quest3_cfg, 'config_path'):
+        quest3_cfg.config_path = ''
+    return False
+
 
 def get_client_config():
     """Generate configuration for VLA inference client.
@@ -37,8 +82,8 @@ def get_client_config():
     config.vision = get_vision_config()
     config.language = get_language_config()
     # Teleop runtime settings are grouped under config.teleop for the web UI.
-    config.use_teleop = False
     config.teleop = get_teleop_config()
+    apply_teleop_robot_mapping(config, config.robots.type)
     return config
 
 def get_rdm_config() -> ConfigDict:
@@ -230,19 +275,11 @@ def get_teleop_config() -> ConfigDict:
     config.ros2.reset_topic = '/custom/custom_a'
     config.ros2.joint_state_topic = '/client_robot/joint_states'
     config.ros2.joint_state_publish_rate = 30.0
-    config.ros2.reset_mode = 'joint_command'
     config.ros2.reset_threshold = 0.5
     config.ros2.node_name = 'vla_infer_teleop_bridge'
     config.devices = ConfigDict()
     config.devices.quest3 = ConfigDict()
     config.devices.quest3.auto_config_path = True
-    config.devices.quest3.config_path_by_robot = {
-        # 'a2d' is kept as a legacy alias of the AgiBot G1 robot body.
-        'agibot_g1': 'teleop/quest3/config/a2d.yaml',
-        'a2d': 'teleop/quest3/config/a2d.yaml',
-        'mock': 'teleop/quest3/config/a2d.yaml',
-        'ti5_t170c': 'teleop/quest3/config/ti5_t170c.yaml',
-    }
+    config.devices.quest3.config_path_by_robot = dict(TELEOP_CONFIG_PATH_BY_ROBOT)
     config.devices.quest3.no_adb_reverse = False
-    config.devices.quest3.reset_mode = 'joint_command'
     return config

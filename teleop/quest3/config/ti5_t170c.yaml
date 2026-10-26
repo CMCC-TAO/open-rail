@@ -1,4 +1,5 @@
-# Robot identifier used in the ROS node name: quest3_<robot>_bridge.
+# Robot profile. Action dimensions and joint names are derived from
+# conf/robots_conf.py (or supplied by the VLA bridge for the active hand_type).
 robot: ti5_t170c
 
 # TCP port where the Quest3 Unity client connects to stream controller packets.
@@ -32,37 +33,54 @@ reset_release_value: 0.0
 reset_pulse_on_press: true
 
 # Target for reset_mode: joint_command.
+# Sourced from conf/robots_conf.py get_robot_config(robot).reset_robot_pos,
+# which is the same reset target used by the Web Client Reset button.
 # Order: left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
-reset_action:
-  - 2.135607
-  - -1.506890
-  - -1.575035
-  - -1.839900
-  - -0.377856
-  - -0.194309
-  - -0.382639
-  - -2.135409
-  - -1.479260
-  - 1.552336
-  - -1.839900
-  - 0.393200
-  - -0.211972
-  - 0.355065
-  - 1.0
-  - 1.0
 
 # Reset interpolation timing for reset_mode: joint_command.
 reset_interp_duration_sec: 2.0
 reset_start_hold_sec: 0.1
 
-# Gripper control mode:
+# Hand control mode:
 # - incremental: grip past grip_threshold closes toward gripper_command_max; secondary button opens toward gripper_command_min.
 # - proportional: gripper command follows the analog gripper input directly.
-gripper_control_mode: incremental
+# - discrete: each trigger rising edge advances to the next per-hand value;
+#   each secondary-button rising edge moves to the previous value (both wrap).
+hand_control_mode: incremental
+# Optional per-hand overrides; each falls back to hand_control_mode.
+left_hand_control_mode: discrete
+right_hand_control_mode: incremental
+
+# Full six-coordinate hand commands for discrete mode. These are sent directly
+# to the robot hand dimensions, without the continuous 1-D to 6-D mapping.
+left_hand_discrete_values:
+  - [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
+  - [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 200.0]
+  - [500.0, 500.0, 500.0, 500.0, 500.0, 200.0]
+right_hand_discrete_values:
+  - [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
+  - [500.0, 500.0, 500.0, 500.0, 500.0, 1000.0]
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 1000.0]
+
+# Continuous hand range: native command at scalar 0.0 and 1.0. Coordinates with
+# equal endpoints stay fixed. The range width must match the robot hand profile.
+left_hand_continuous_range:
+  - [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 1000.0]
+right_hand_continuous_range:
+  - [1000.0, 1000.0, 1000.0, 1000.0, 1000.0, 1000.0]
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 1000.0]
 
 # Controller gripper analog input range used by proportional mode.
 gripper_input_min: 0.0
 gripper_input_max: 1.0
+
+# Hysteresis for proportional hand control. The hand is activated above the
+# activation threshold and remains active until input falls below the release
+# threshold, so analog trigger noise at rest cannot re-enter control.
+proportional_activation_threshold: 0.05
+proportional_release_threshold: 0.02
+proportional_latch_on_release: true
 
 # Gripper command range. For TI5, 0.0 is open and 1.0 is closed.
 gripper_command_min: 0.0
@@ -93,22 +111,25 @@ controller_y_rotation_deg: 35.0
 
 # Coordinate transforms from the VR frame to the TI5 URDF frame.
 # The runtime applies arm relative rotations as: R_urdf = rotation_mat @ R_vr @ rotation_mat.T.
+# The tjv2 FLANGE frames use a different local-axis convention from the retired
+# T170C WRIST_P frames. Both tjv2 arms share the same flange convention, so the
+# left and right arm matrices are identical.
 rot_left_arm_from_vr_to_urdf:
-  # Left-arm controller-to-URDF rotation conversion.
+  # Left-arm controller-to-L_FLANGE_LINK rotation conversion.
   rotation_mat:
-    - [1.0, 0.0, 0.0]
-    - [0.0, 1.0, 0.0]
     - [0.0, 0.0, 1.0]
+    - [0.0, -1.0, 0.0]
+    - [1.0, 0.0, 0.0]
 
 rot_right_arm_from_vr_to_urdf:
-  # Right-arm controller-to-URDF rotation conversion.
+  # Right-arm controller-to-R_FLANGE_LINK rotation conversion.
   rotation_mat:
-    - [-1.0, 0.0, 0.0]
-    - [0.0, 1.0, 0.0]
-    - [0.0, 0.0, -1.0]
+    - [0.0, 0.0, 1.0]
+    - [0.0, -1.0, 0.0]
+    - [1.0, 0.0, 0.0]
 
 rot_base_from_vr_to_urdf:
-  # Base-frame conversion kept for compatibility with the original TI5 teleop config.
+  # BASE_LINK orientation is unchanged in ti5_robot_tjv2.urdf.
   rotation_mat:
     - [0.0, 1.0, 0.0]
     - [-1.0, 0.0, 0.0]
@@ -119,11 +140,11 @@ ik:
   # Enables IK solving. If false, the node will not produce new arm joint targets from controller motion.
   enabled: true
 
-  # IK backend implementation. TI5 uses the legacy C++ kine_solver_py backend.
+  # IK backend implementation. TI5 uses the C++ kine_solver_py backend.
   solver_backend: cpp
 
-  # URDF/xacro model used by the IK solver.
-  urdf_path: ../urdf/ti5_t170c_robot.urdf.xacro
+  # Plain URDF model used by the IK solver. The legacy T170C xacro is retired.
+  urdf_path: ../urdf/ti5_robot_tjv2.urdf
 
   # Reference frame name passed to the IK/FK solver.
   ref_frame: world
@@ -133,78 +154,56 @@ ik:
 
   # Left-arm IK chain definition.
   left:
-    # Root link for the left-arm IK chain in the URDF.
-    base_link: WAIST_Y_LINK
+    # Shoulder-mounted root link for the left-arm IK chain in the URDF.
+    base_link: L_ARM_BASE_LINK
 
-    # End-effector link for the left-arm IK target pose.
-    tip_link: L_WRIST_P_LINK
+    # Tool/flange frame used as the left-arm IK target pose.
+    tip_link: L_FLANGE_LINK
 
   # Right-arm IK chain definition.
   right:
-    # Root link for the right-arm IK chain in the URDF.
-    base_link: WAIST_Y_LINK
+    # Shoulder-mounted root link for the right-arm IK chain in the URDF.
+    base_link: R_ARM_BASE_LINK
 
-    # End-effector link for the right-arm IK target pose.
-    tip_link: R_WRIST_P_LINK
+    # Tool/flange frame used as the right-arm IK target pose.
+    tip_link: R_FLANGE_LINK
 
-# Feedback joint names, ordered to match the fixed output command vector:
-# left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
-# TI5 publishes hardware-specific names, so this mapping is required.
-joint_state_names:
-  - L_SHOULDER_P_JOINT
-  - L_SHOULDER_R_JOINT
-  - L_SHOULDER_Y_JOINT
-  - L_ELBOW_JOINT
-  - L_WRIST_Y_JOINT
-  - L_WRIST_R_JOINT
-  - L_WRIST_P_JOINT
-  - R_SHOULDER_P_JOINT
-  - R_SHOULDER_R_JOINT
-  - R_SHOULDER_Y_JOINT
-  - R_ELBOW_JOINT
-  - R_WRIST_Y_JOINT
-  - R_WRIST_R_JOINT
-  - R_WRIST_P_JOINT
-  - left_hand_joint1
-  - right_hand_joint1
-
-# Lower clamp for each value in the 16-element command vector.
-# Order: left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1.
-# Arm joints are radians; gripper joints are normalized commands in [0.0, 1.0].
+# Internal command clamps. The hand slots are normalized scalars for
+# continuous modes and native hand values for discrete mode.
 min_action:
-  - -3.106
-  - -2.094
-  - -3.106
-  - -2.53
-  - -3.106
-  - -1.047
-  - -1.57
-  - -3.106
-  - -2.094
-  - -3.106
-  - -2.53
-  - -3.106
-  - -1.047
-  - -1.57
+  - -3.0543
+  - -2.0944
+  - -3.0543
+  - -2.5307
+  - -3.0543
+  - -1.0472
+  - -1.5708
+  - -3.0543
+  - -2.0944
+  - -3.0543
+  - -2.5307
+  - -3.0543
+  - -1.0472
+  - -1.5708
   - 0.0
   - 0.0
 
 # Upper clamp for each value in the 16-element command vector.
 # The order is identical to min_action.
 max_action:
-  - 3.106
-  - 2.094
-  - 3.106
-  - 1.047
-  - 3.106
-  - 1.047
-  - 1.57
-  - 3.106
-  - 2.094
-  - 3.106
-  - 1.047
-  - 3.106
-  - 1.047
-  - 1.57
+  - 3.0543
+  - 2.0944
+  - 3.0543
+  - 0.7854
+  - 3.0543
+  - 1.0472
+  - 1.5708
+  - 3.0543
+  - 2.0944
+  - 3.0543
+  - 0.7854
+  - 3.0543
+  - 1.0472
+  - 1.5708
   - 1.0
   - 1.0

@@ -35,6 +35,22 @@ teleop/quest3/quest3_a2d_node.sh \
 
 The launch scripts change into the repository root before running `python3 -m teleop.quest3.quest3`.
 
+The Web Client only exposes this teleop bridge for two validated robot bodies:
+
+| Web `robots.type` | Quest3 profile |
+| --- | --- |
+| `agibot_g1` | `teleop/quest3/config/a2d.yaml` (`a2d` is the legacy profile name) |
+| `ti5_t170c` | `teleop/quest3/config/ti5_t170c.yaml` |
+
+Changing `robots.type` in the Web Client automatically updates this mapping and
+forces `use_teleop` off for any other robot body.
+
+When launched by the Web Client teleop bridge, the bridge passes a temporary
+JSON status file to this node. The node reports `listening`, `connected`, and
+`disconnected`/`listening` transitions there so the Web UI can distinguish a
+running process from a Quest3 headset that has actually completed the TCP
+handshake. The status file is internal to the parent/child process pair.
+
 ## Controls
 
 Arm teleop is enabled per side by pressing that controller's trigger past `trigger_threshold`.
@@ -53,17 +69,59 @@ The gripper command uses the controller grip input:
 - secondary button opens toward `0.0`
 - `gripper_speed` controls the normalized command rate in units per second
 
+With `hand_control_mode: discrete`, the hand instead steps through the
+per-side lists `left_hand_discrete_values` and `right_hand_discrete_values`.
+Each trigger rising edge advances to the next value and wraps; each secondary
+button rising edge moves to the previous value and wraps. Holding either button
+does not repeat, and releasing it preserves the selected value. Discrete entries
+are full six-coordinate native hand vectors, not normalized scalars. On feedback,
+the current six-dimensional hand state selects the nearest configured vector;
+the first intervention uses that nearest vector as its baseline.
+
+Each hand can use its own mode with `left_hand_control_mode` and
+`right_hand_control_mode`; both fall back to `hand_control_mode`. A
+multi-coordinate continuous hand requires its
+`left_hand_continuous_range` / `right_hand_continuous_range` mapping so the
+control node can publish the robot's native hand width.
+
+With proportional mode, `proportional_latch_on_release: true` keeps the highest
+hand target reached during the current trigger session when the trigger falls
+below `proportional_release_threshold`. The next trigger press starts a fresh
+proportional session instead of letting the trigger return path drive the hand
+back toward zero.
+
 ## State Source
 
 The bridge waits for `/joint_states` before publishing teleop or reset joint commands. After reset completes, it waits for fresh joint feedback again before accepting new trigger-relative teleop commands.
 
-Command vector order is fixed:
+The VLA bridge publishes `/client_robot/joint_states` using the target robot's
+canonical action layout from `teleop/action_mapping.py`: 14 arm joints followed
+by the native-width left and right hand joints. The teleop node consumes those
+names directly, so robot-specific joint-name lists and positional remaps are not
+kept in the profile YAML.
 
-```text
-left_arm_joint1..7, right_arm_joint1..7, left_hand_joint1, right_hand_joint1
+In incremental and proportional modes, each hand is still driven by one
+normalized scalar, and `left_hand_continuous_range` /
+`right_hand_continuous_range` define its native six-coordinate range as
+`[command at 0.0, command at 1.0]` (written like the discrete value lists).
+Each coordinate is interpolated linearly; coordinates whose endpoints are
+equal stay fixed. For example:
+
+```yaml
+left_hand_continuous_range:
+  - [0, 0, 1000, 1000, 0, 0]
+  - [1000, 0, 1000, 1000, 0, 1000]
 ```
 
-`min_action` and `max_action` clamp the final 16-element command vector before publishing.
+only moves the first and last joints. When ranges are configured, the node
+publishes six native coordinates per hand (the discrete command layout below),
+and native hand feedback is projected back onto the range to seed the scalar.
+The TI5 default range is `[1000]*6 -> [0,0,0,0,0,1000]`. Commands are published
+in the active robot profile's native action width, for example 26-D for a
+six-finger hand on both sides or 21-D for a 6+1 mixed profile. The VLA bridge
+only validates/order-checks this result; it does not expand or rescale hands.
+`min_action` and `max_action` clamp the internal command representation before
+the hand mapping is applied.
 
 ## Reset
 
@@ -79,7 +137,12 @@ In `topic` mode, primary button edges publish to the reset topic:
 - release publishes `reset_release_value`
 - if `reset_pulse_on_press` is true, press publishes press then release immediately
 
-In `joint_command` mode, the 16-element `reset_action` uses the fixed command vector order and is clamped by `min_action` / `max_action`. The interpolation duration is controlled by `reset_interp_duration_sec`; `reset_start_hold_sec` optionally repeats the current command briefly before moving.
+In `joint_command` mode, the reset target is derived from the active robot's
+`reset_robot_pos` in `conf/robots_conf.py`, which is also used by the Web Client
+Reset button, and is clamped by `min_action` / `max_action`. The interpolation
+duration is controlled by `reset_interp_duration_sec`;
+`reset_start_hold_sec` optionally repeats the current command briefly before
+moving.
 
 ## IK
 
@@ -97,7 +160,13 @@ Relative URDF paths are resolved from the YAML file's directory. A2D keeps its U
 teleop/quest3/urdf/a2d_vla_zero_state.urdf
 ```
 
-TI5 may keep `urdf_path` pointed at a `.xacro`. If a xacro uses ROS package lookup, add the required install prefixes to `ik.xacro_ament_prefix_paths`.
+TI5 uses the plain URDF at:
+
+```text
+teleop/quest3/urdf/ti5_robot_tjv2.urdf
+```
+
+The retired `ti5_t170c_robot.urdf.xacro` must not be used. Other robots may still point `urdf_path` at a `.xacro`; if a xacro uses ROS package lookup, add the required install prefixes to `ik.xacro_ament_prefix_paths`.
 
 The active ROS Python environment must provide the configured backend:
 

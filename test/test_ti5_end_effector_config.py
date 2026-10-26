@@ -7,6 +7,7 @@ import yaml
 from conf.robots_conf import (
     get_agibot_g1_config,
     get_navi_wa2_config,
+    get_robot_config,
     get_ti5_t170c_config,
     get_unitree_g1_config,
 )
@@ -62,6 +63,17 @@ def test_other_robots_keep_their_end_effector_layout():
     assert unitree.hand_type == "hand"
     assert (unitree.action_layout["hand"]["start"], unitree.action_layout["hand"]["end"]) == (14, 26)
     assert unitree.action_layout["hand"]["policy"] == "stepwise"
+
+
+def test_robot_config_lookup_resolves_aliases_and_reset_position():
+    agibot = get_robot_config("a2d")
+    ti5 = get_robot_config("RobotType.TI5_T170C")
+
+    assert agibot is not None
+    assert len(agibot.reset_robot_pos) == 22
+    assert ti5 is not None
+    assert len(ti5.reset_robot_pos) == 26
+    assert ti5.reset_robot_pos[14:] == [1000.0] * 12
 
 
 def test_default_yaml_matches_active_ti5_profile():
