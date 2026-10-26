@@ -1,4 +1,7 @@
-const simulationPreview = { active: false, enabled: true, jobId: null, timestamp: null, savedOpen: null };
+const simulationPreview = {
+  active: false, enabled: false, jobId: null, expectedJobId: null, timestamp: null,
+  savedOpen: null, timer: null, controller: null, generation: 0,
+};
 
 function clearCameraFrames() {
   camState.displayGeneration = (camState.displayGeneration || 0) + 1;
@@ -15,7 +18,7 @@ function clearCameraFrames() {
   }
 }
 
-async function applySimulationPreview(snapshot) {
+function applySimulationPreview(snapshot) {
   const job = snapshot.job;
   if (!job) {
     restoreSimulationTrajectory();
@@ -25,7 +28,7 @@ async function applySimulationPreview(snapshot) {
     simulationPreview.jobId = null;
     simulationPreview.timestamp = null;
     for (let i = 0; i < 3; i++) {
-      if (App.camOpen[i] !== simulationPreview.savedOpen[i]) await toggleCamera(i, false);
+      if (App.camOpen[i] !== simulationPreview.savedOpen[i]) toggleCamera(i, false);
       $(`cam-row-${i}`).querySelector('.cam-label').textContent = CAM_NAMES[i];
     }
     $('camera-source-label').textContent = 'Camera Viewer';
@@ -37,7 +40,7 @@ async function applySimulationPreview(snapshot) {
     simulationPreview.jobId = job.id;
     simulationPreview.timestamp = null;
     for (let i = 0; i < 3; i++) {
-      if (!App.camOpen[i]) await toggleCamera(i, false);
+      if (!App.camOpen[i]) toggleCamera(i, false);
     }
     clearCameraFrames();
   }
@@ -57,28 +60,44 @@ async function applySimulationPreview(snapshot) {
   }
 }
 
-async function pollSimulationPreview() {
+function setSimulationPreviewJob(jobId) {
+  if (simulationPreview.expectedJobId === jobId) return;
+  simulationPreview.expectedJobId = jobId;
+  simulationPreview.enabled = !!jobId;
+  simulationPreview.generation += 1;
+  clearTimeout(simulationPreview.timer);
+  simulationPreview.timer = null;
+  simulationPreview.controller?.abort();
+  simulationPreview.controller = null;
+  applySimulationPreview({ job: null, frames: [] });
+  if (simulationPreview.enabled) pollSimulationPreview(simulationPreview.generation);
+}
+
+async function pollSimulationPreview(generation) {
+  if (!simulationPreview.enabled || generation !== simulationPreview.generation) return;
   if (document.hidden) {
-    setTimeout(pollSimulationPreview, 1000);
-    return;
-  }
-  if (!simulationPreview.enabled) {
-    await applySimulationPreview({ job: null, frames: [] });
-    setTimeout(pollSimulationPreview, 1000);
+    simulationPreview.timer = setTimeout(() => pollSimulationPreview(generation), 1000);
     return;
   }
   const controller = new AbortController();
+  simulationPreview.controller = controller;
   const timeout = setTimeout(() => controller.abort(), 3000);
   try {
     const response = await fetch('/api/simulation/preview', { cache: 'no-store', signal: controller.signal });
     if (response.ok) {
       const snapshot = await response.json();
-      await applySimulationPreview(simulationPreview.enabled ? snapshot : { job: null, frames: [] });
+      if (generation !== simulationPreview.generation) return;
+      applySimulationPreview(snapshot.job?.id === simulationPreview.expectedJobId
+        ? snapshot : { job: null, frames: [] });
     }
   } catch (_) {
-    if (simulationPreview.active) clearCameraFrames();
+    if (generation === simulationPreview.generation && simulationPreview.active) clearCameraFrames();
   } finally {
     clearTimeout(timeout);
-    setTimeout(pollSimulationPreview, simulationPreview.active ? 200 : 1000);
+    if (generation === simulationPreview.generation) {
+      simulationPreview.controller = null;
+      simulationPreview.timer = setTimeout(() => pollSimulationPreview(generation),
+        simulationPreview.active ? 200 : 1000);
+    }
   }
 }
