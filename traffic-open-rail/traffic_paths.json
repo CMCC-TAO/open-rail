@@ -2,8 +2,8 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 57,
-    "uniques": 43
+    "count": 56,
+    "uniques": 42
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
@@ -14,7 +14,7 @@
   {
     "path": "/CMCC-TAO/open-rail/graphs/traffic",
     "title": "/graphs/traffic",
-    "count": 28,
+    "count": 22,
     "uniques": 1
   },
   {
