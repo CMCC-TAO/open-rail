@@ -1,209 +1,149 @@
-# Quest3 Teleop Bridge
+# Quest3 Teleop and Human Intervention
 
-Python ROS2 bridge for controlling A2D or TI5-style robot arms from Quest3 controller packets.
+Quest3 can override VLA policy actions while the runtime is active. A small
+ROS2 bridge receives target-native joint commands from the Quest3 node, the VLA
+client arbitrates between human and policy actions, and optional intervention
+fields are stored with new LeRobot datasets.
 
-The bridge receives newline-delimited JSON over TCP from the Quest3 Unity client and publishes the VLA teleop command interface directly:
+Detailed documentation:
 
-- `sensor_msgs/msg/JointState` on `/target_robot/joint_commands`
-- optionally, `std_msgs/msg/Float64` reset edges on `/custom/custom_a` when `reset_mode: topic`
+- [Human intervention runtime and interfaces](../docs/human-intervention.md)
+- [Quest3 and client configuration reference](../docs/config-reference.md)
+- [General client configuration](../../docs/configuration.md)
+- [Web console guide](../../docs/web-console.md)
 
-The old `joint_ros_to_tcp_node` and `tcp_to_ros_joint_node` path is not used here because the VLA client consumes ROS topics directly.
+## Supported robots
 
-## Run
+| Web `robots.type` | Quest3 profile | Native action width |
+| --- | --- | --- |
+| `agibot_g1` | `teleop/quest3/config/a2d.yaml` | 16: 14 arm + 2 gripper |
+| `ti5_t170c` | `teleop/quest3/config/ti5_t170c.yaml` | 16/21/26, selected by TI5 `hand_type` |
 
-Start A2D:
+Quest3 teleop is hidden and forced off for all other robot types. Switching
+`robots.type` automatically selects the profile above; the profile path is an
+internal setting and cannot be patched through the Web API.
 
-```bash
-teleop/quest3/quest3_a2d_node.sh
-```
+## Quick start: Web Client
 
-Start TI5 T170C:
+1. Start the inference server and Web Client.
+2. Select `agibot_g1` or `ti5_t170c` as **Robot Type**.
+3. In **Configuration → teleop**, set:
+   - `use_teleop: true`
+   - `control_device: quest3`
+4. Apply the configuration, then press **Start**. The client owns the Quest3
+   subprocess and starts the bridge automatically.
+5. Connect the Quest3 app and verify that the runtime badge changes to
+   **TELEOP** while fresh human input is controlling the robot.
 
-```bash
-teleop/quest3/quest3_ti5_t170c_node.sh
-```
-
-Useful runtime overrides:
-
-```bash
-teleop/quest3/quest3_a2d_node.sh \
-  --listen-port 8002 \
-  --joint-command-topic /target_robot/joint_commands \
-  --joint-states-topic /joint_states \
-  --reset-mode joint-command
-```
-
-The launch scripts change into the repository root before running `python3 -m teleop.quest3.quest3`.
-
-The Web Client only exposes this teleop bridge for two validated robot bodies:
-
-| Web `robots.type` | Quest3 profile |
-| --- | --- |
-| `agibot_g1` | `teleop/quest3/config/a2d.yaml` (`a2d` is the legacy profile name) |
-| `ti5_t170c` | `teleop/quest3/config/ti5_t170c.yaml` |
-
-Changing `robots.type` in the Web Client automatically updates this mapping and
-forces `use_teleop` off for any other robot body.
-
-When launched by the Web Client teleop bridge, the bridge passes a temporary
-JSON status file to this node. The node reports `listening`, `connected`, and
-`disconnected`/`listening` transitions there so the Web UI can distinguish a
-running process from a Quest3 headset that has actually completed the TCP
-handshake. The status file is internal to the parent/child process pair.
+Do not also start a standalone Quest3 node while the Web Client manages it.
 
 ## Controls
 
-Arm teleop is enabled per side by pressing that controller's trigger past `trigger_threshold`.
+The Unity app maps the physical buttons as follows:
 
-When a trigger first becomes active, the bridge captures:
+- **Grip button**: arm teleoperation enable. Each side is independent.
+- **Trigger**: hand/gripper control. Proportional mode follows its analog
+  value, incremental mode closes/opens toward the configured limits, and
+  discrete mode steps through configured native hand vectors.
+- **Secondary button**: open the gripper in incremental mode, or move to the
+  previous discrete hand value.
+- **Primary button**: reset. The default `joint_command` mode interpolates to
+  `robots.<type>.reset_robot_pos`, the same target used by the Web Reset button.
 
-- the controller pose at press time
-- the robot joint state at press time
-- the FK end-effector pose at press time
+While an arm grip is held, controller motion is applied relative to the pose
+captured at activation. Releasing it ends human control; the last human command
+is held until a fresh policy chunk arrives, then policy control resumes
+automatically. No resume command is required.
 
-While the trigger stays held, controller motion is applied as a delta from that fixed reference. Releasing the trigger clears the reference, so the next press starts from a fresh robot state. Left and right triggers are independent.
+Web Reset is disabled while fresh Quest3 input is active. Teleop is stopped on
+Pause/Stop and restarted on Resume/Start when `use_teleop` remains enabled.
 
-The gripper command uses the controller grip input:
+## Recording interventions
 
-- grip past `grip_threshold` closes toward `1.0`
-- secondary button opens toward `0.0`
-- `gripper_speed` controls the normalized command rate in units per second
+Set `record.record_teleop_fields: true` before starting a new LeRobot dataset.
+New datasets then contain:
 
-With `hand_control_mode: discrete`, the hand instead steps through the
-per-side lists `left_hand_discrete_values` and `right_hand_discrete_values`.
-Each trigger rising edge advances to the next value and wraps; each secondary
-button rising edge moves to the previous value and wraps. Holding either button
-does not repeat, and releasing it preserves the selected value. Discrete entries
-are full six-coordinate native hand vectors, not normalized scalars. On feedback,
-the current six-dimensional hand state selects the nearest configured vector;
-the first intervention uses that nearest vector as its baseline.
+- `teleop_action`, `teleop_action_mask`
+- `rejected_action`, `rejected_action_mask`
+- `is_teleop`
 
-Each hand can use its own mode with `left_hand_control_mode` and
-`right_hand_control_mode`; both fall back to `hand_control_mode`. A
-multi-coordinate continuous hand requires its
-`left_hand_continuous_range` / `right_hand_continuous_range` mapping so the
-control node can publish the robot's native hand width.
+The existing `action` column always stores the action actually sent to the
+robot. Existing datasets keep their current schema; the option does not migrate
+them. See the [runtime and recording details](../docs/human-intervention.md#recording).
 
-With proportional mode, `proportional_latch_on_release: true` keeps the highest
-hand target reached during the current trigger session when the trigger falls
-below `proportional_release_threshold`. The next trigger press starts a fresh
-proportional session instead of letting the trigger return path drive the hand
-back toward zero.
+## Configuration locations
 
-## State Source
+| Configuration | Location |
+| --- | --- |
+| Client teleop switch, topics, managed Quest3 process | `conf/client_conf.py` → `get_teleop_config()`; persisted by the Web Client YAML |
+| Arm/hand timing, freshness, transition, outlier guard | `conf/client_conf.py` → `get_controller_config()` |
+| Robot action layout, hand width, reset pose | `conf/robots_conf.py` |
+| Quest3 controls, reset, hand mapping, IK, limits | `teleop/quest3/config/*.yaml` |
+| Intervention recording columns | `conf/save_conf.py` → `record.record_teleop_fields` |
 
-The bridge waits for `/joint_states` before publishing teleop or reset joint commands. After reset completes, it waits for fresh joint feedback again before accepting new trigger-relative teleop commands.
+For every key, value ranges, topics, action-width rules, and examples, use the
+[configuration reference](../docs/config-reference.md).
 
-The VLA bridge publishes `/client_robot/joint_states` using the target robot's
-canonical action layout from `teleop/action_mapping.py`: 14 arm joints followed
-by the native-width left and right hand joints. The teleop node consumes those
-names directly, so robot-specific joint-name lists and positional remaps are not
-kept in the profile YAML.
+## Standalone bridge
 
-In incremental and proportional modes, each hand is still driven by one
-normalized scalar, and `left_hand_continuous_range` /
-`right_hand_continuous_range` define its native six-coordinate range as
-`[command at 0.0, command at 1.0]` (written like the discrete value lists).
-Each coordinate is interpolated linearly; coordinates whose endpoints are
-equal stay fixed. For example:
-
-```yaml
-left_hand_continuous_range:
-  - [0, 0, 1000, 1000, 0, 0]
-  - [1000, 0, 1000, 1000, 0, 1000]
-```
-
-only moves the first and last joints. When ranges are configured, the node
-publishes six native coordinates per hand (the discrete command layout below),
-and native hand feedback is projected back onto the range to seed the scalar.
-The TI5 default range is `[1000]*6 -> [0,0,0,0,0,1000]`. Commands are published
-in the active robot profile's native action width, for example 26-D for a
-six-finger hand on both sides or 21-D for a 6+1 mixed profile. The VLA bridge
-only validates/order-checks this result; it does not expand or rescale hands.
-`min_action` and `max_action` clamp the internal command representation before
-the hand mapping is applied.
-
-## Reset
-
-Quest primary button behavior is selected by `reset_mode`, which defaults to `joint_command`:
-
-- `joint_command` interpolates from the latest received joint state to `reset_action` and publishes each step as a `JointState` on `joint_command_topic`
-- `topic` publishes reset edges to `reset_topic`
-- `none` clears teleop trigger references without commanding a reset
-
-In `topic` mode, primary button edges publish to the reset topic:
-
-- press publishes `reset_press_value`
-- release publishes `reset_release_value`
-- if `reset_pulse_on_press` is true, press publishes press then release immediately
-
-In `joint_command` mode, the reset target is derived from the active robot's
-`reset_robot_pos` in `conf/robots_conf.py`, which is also used by the Web Client
-Reset button, and is clamped by `min_action` / `max_action`. The interpolation
-duration is controlled by `reset_interp_duration_sec`;
-`reset_start_hold_sec` optionally repeats the current command briefly before
-moving.
-
-## IK
-
-A2D uses the CasADi backend:
-
-```yaml
-ik:
-  solver_backend: casadi
-  urdf_path: ../urdf/a2d_vla_zero_state.urdf
-```
-
-Relative URDF paths are resolved from the YAML file's directory. A2D keeps its URDF at:
-
-```text
-teleop/quest3/urdf/a2d_vla_zero_state.urdf
-```
-
-TI5 uses the plain URDF at:
-
-```text
-teleop/quest3/urdf/ti5_robot_tjv2.urdf
-```
-
-The retired `ti5_t170c_robot.urdf.xacro` must not be used. Other robots may still point `urdf_path` at a `.xacro`; if a xacro uses ROS package lookup, add the required install prefixes to `ik.xacro_ament_prefix_paths`.
-
-The active ROS Python environment must provide the configured backend:
-
-- `casadi_ik_cpp.PinocchioCasadiChunkKineSolver` for `solver_backend: casadi`
-- `kine_solver_py.SingleArmKineSolver` for `solver_backend: cpp`
-
-## Coordinate Transforms
-
-The Quest packet pose is first converted from Unity coordinates into the VR base convention used by the original bridge. Controller orientation is then adjusted by `controller_y_rotation_deg`.
-
-Relative controller positions can be converted with `rot_base_from_vr_to_urdf`:
-
-```text
-p_urdf = base_rotation_mat @ p_vr
-```
-
-Relative controller rotations are converted to the URDF end-effector convention with the per-arm matrix:
-
-```text
-R_urdf = rotation_mat @ R_vr @ rotation_mat.T
-```
-
-A2D uses one shared `rot_arm_from_vr_to_urdf` matrix for both arms because the arm end-effector frames share the same axis convention. Per-side keys are still supported for robot configs that need them.
-
-## A2D Simulation Forwarder
-
-To forward `/target_robot/joint_commands` to A2D trajectory action controllers, run:
+Use these scripts for hardware debugging or when another process supplies the
+joint-state feedback. Run from the repository root with ROS2 sourced.
 
 ```bash
+teleop/quest3/quest3_a2d_node.sh
+teleop/quest3/quest3_ti5_t170c_node.sh
+```
+
+Common overrides:
+
+```bash
+teleop/quest3/quest3_ti5_t170c_node.sh \
+  --listen-port 8002 \
+  --joint-command-topic /target_robot/joint_commands \
+  --joint-states-topic /client_robot/joint_states \
+  --reset-mode joint_command
+```
+
+The node reads newline-delimited JSON over TCP and publishes
+`sensor_msgs/msg/JointState`. The VLA bridge validates exact joint names and
+uses the optional per-joint mask in `JointState.effort` to identify entries that
+are real human commands rather than feedback fallback.
+
+## Simulation forwarders
+
+Use a forwarder only when the downstream simulator/robot consumes ROS2
+`FollowJointTrajectory` actions:
+
+```bash
+# A2D: arms, head, body, and interpolated reset
 python3 -m teleop.quest3.joint_command_to_sim_a2d \
   --joint-command-topic /target_robot/joint_commands \
   --joint-states-topic /joint_states \
-  --reset-topic /custom/custom_a \
-  --left-arm-action /left_arm_controller/follow_joint_trajectory \
-  --right-arm-action /right_arm_controller/follow_joint_trajectory \
-  --head-action /head_controller/follow_joint_trajectory \
-  --body-action /body_controller/follow_joint_trajectory
+  --reset-topic /custom/custom_a
+
+# TI5 T170C: both arms and reset
+python3 -m teleop.quest3.joint_command_to_ti5_t170c \
+  --joint-command-topic /target_robot/joint_commands \
+  --reset-topic /custom/custom_a
 ```
 
-The forwarder also listens for reset edges and can interpolate the latest known arm and hand state toward its built-in A2D reset target.
+Run each module with `--help` for action-server and timing overrides.
+
+## Main-program adaptations
+
+- `client/core/action_arbiter.py` selects fresh teleop first, then fresh policy,
+  then holds the last safe action; it also provides transition blending,
+  per-source timeouts, and action masks.
+- `client/core/teleop_bridge.py` owns ROS2/ZMQ transport, launches the Quest3
+  subprocess, publishes command-biased joint feedback, reads reset edges, and
+  forwards validated native action vectors.
+- `client/core/vla_client.py` performs outlier rejection, open-loop command
+  dispatch, teleop-to-policy handoff, status reporting, and intervention-aware
+  recording.
+- The Web Client exposes teleop only for validated robots, shows connection and
+  TELEOP state, protects the auto-selected config path, and locks Reset during
+  active human control.
+- `client/robots/base_robot.py` shares `reset_robot_pos` between the Web Reset
+  button and Quest3 reset.
+- `client/core/lerobot_dataset_recorder.py` writes optional intervention
+  columns without changing the schema of existing datasets.
