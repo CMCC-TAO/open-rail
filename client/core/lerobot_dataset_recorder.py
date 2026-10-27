@@ -17,6 +17,9 @@ from multiprocessing import Queue
 from typing import Any, Dict, List, Optional, Union, Tuple
 from client.utils.util import run_time_decorator
 
+# Teleop intervention columns appended after the legacy LeRobot columns.
+TELEOP_FEATURE_KEYS = ('teleop_action', 'teleop_action_mask', 'rejected_action', 'rejected_action_mask', 'is_teleop')
+
 class LeRobotDatasetRecorder:
     """
     A class to manage writing robotic observation and action data to disk in a structured format.
@@ -58,6 +61,10 @@ class LeRobotDatasetRecorder:
         self._episode_record_crud_queue: Queue = Queue()
         self._episode_record_crud_thread: Optional[threading.Thread] = None
         self._episode_record_crud_stop_event = threading.Event()
+
+        # Whether the current dataset stores teleop intervention columns. Decided per
+        # dataset in set_task(): existing datasets keep their on-disk schema.
+        self._record_teleop_fields = True
 
         self._parse_config(lerobot_config)
         # self.record_executor = ThreadPoolExecutor(max_workers=1) # max_workers must be 1 to ensure sequence of recording
@@ -119,7 +126,7 @@ class LeRobotDatasetRecorder:
             self.logger.info(f"{self._meta_dir} has the following required files: {', '.join(required_files)}")
             return True
 
-    def set_task(self, save_path: str) -> Tuple[int, int, int, int, int]:
+    def set_task(self, save_path: str, record_teleop_fields: bool = True) -> Tuple[int, int, int, int, int]:
         """
         Set up a new task with the specified save path and initialize configuration. Called in writer process.
 
@@ -160,9 +167,32 @@ class LeRobotDatasetRecorder:
             # Refresh writer-side cache for subsequent queue-based sync.
             self._reload_browse_state()
             self._sync_episode_records_for_share(self._writer_episode_records)
+        self._resolve_teleop_schema(record_teleop_fields)
         # total_frames, total_videos, total_episodes, chunks_size = self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size']
         # self.logger.info(f"total_frames: {total_frames}, total_videos: {total_videos}, total_episodes: {total_episodes}, chunks_size: {chunks_size}")
         return self.config["total_frames"], self.config["total_videos"], self.config["total_episodes"], self.config['chunks_size'], self.config['episode_index']
+
+    def _resolve_teleop_schema(self, requested: bool) -> None:
+        """Pick the teleop column schema for the next episode.
+
+        An existing ``info.json`` fixes the schema so every episode in one dataset
+        has the same columns; ``requested`` only applies to a new dataset.
+        """
+        info_file_path = os.path.join(self._meta_dir, 'info.json') if self._meta_dir else None
+        if info_file_path and os.path.isfile(info_file_path):
+            try:
+                with open(info_file_path, 'r', encoding='utf-8') as f:
+                    features = json.load(f).get('features', {})
+                self._record_teleop_fields = all(key in features for key in TELEOP_FEATURE_KEYS)
+            except Exception as e:
+                self.logger.warning(f"Failed to read teleop schema from {info_file_path}, keep current schema: {e}")
+            if self._record_teleop_fields != bool(requested):
+                self.logger.info(
+                    f"record_teleop_fields={bool(requested)} ignored: existing dataset uses "
+                    f"teleop columns={self._record_teleop_fields}."
+                )
+            return
+        self._record_teleop_fields = bool(requested)
 
     def _set_task_path(self, save_path: str) -> bool:
         """
@@ -1007,12 +1037,12 @@ class LeRobotDatasetRecorder:
             # self._clear_queues()
             # print(f'self.shared_data.task_language_dict {self.shared_data.task_language_dict}')
 
-    def add_frame_async(self, step_state: dict, step_action: np.ndarray, step_extra: dict):
-        self.record_executor.submit(self._write_frame_fun, step_state, step_action, step_extra)
+    def add_frame_async(self, step_state: dict, step_action: np.ndarray, step_extra: dict, step_teleop: Optional[dict] = None):
+        self.record_executor.submit(self._write_frame_fun, step_state, step_action, step_extra, step_teleop)
 
     # @run_time_decorator
     # First frame takas 20ms and the others tasks 5ms
-    def _write_frame_fun(self, step_state: dict, step_action: np.ndarray, step_extra: dict):
+    def _write_frame_fun(self, step_state: dict, step_action: np.ndarray, step_extra: dict, step_teleop: Optional[dict] = None):
         """
         Main function for the write data frame responsible for writing data to disk.
 
@@ -1085,6 +1115,8 @@ class LeRobotDatasetRecorder:
                 'task_index': step_task_index,  # Placeholder for task index, can be updated based on actual task mapping
                 'timestamp': 1/30 * self.frame_index,  # Fixed frame rate assumption
             }
+            if self._record_teleop_fields:
+                parquet_frame.update(self._build_teleop_columns(step_teleop))
             with self.parquet_lock:
                 self.parquet_frame_list.append(parquet_frame)
             
@@ -1112,6 +1144,24 @@ class LeRobotDatasetRecorder:
         # finally:
             # self.logger.info("Writing frame exited.")
             # self.release_writers()
+    def _fit_action_width(self, values: Any, dtype) -> np.ndarray:
+        """Zero-pad a per-frame vector to ``action_shape`` like the ``action`` column."""
+        arr = np.zeros(self.action_shape, dtype=dtype) if values is None else np.asarray(values, dtype=dtype).reshape(-1)
+        if arr.shape[0] < self.action_shape:
+            arr = np.concatenate([arr, np.zeros(self.action_shape - arr.shape[0], dtype=dtype)], axis=0)
+        return arr
+
+    def _build_teleop_columns(self, step_teleop: Optional[dict]) -> Dict[str, Any]:
+        """Return teleop intervention columns; ``None`` means a policy-only frame."""
+        step_teleop = step_teleop or {}
+        return {
+            'teleop_action': self._fit_action_width(step_teleop.get('teleop_action'), np.float32).tolist(),
+            'teleop_action_mask': self._fit_action_width(step_teleop.get('teleop_action_mask'), bool).tolist(),
+            'rejected_action': self._fit_action_width(step_teleop.get('rejected_action'), np.float32).tolist(),
+            'rejected_action_mask': self._fit_action_width(step_teleop.get('rejected_action_mask'), bool).tolist(),
+            'is_teleop': bool(step_teleop.get('is_teleop', False)),
+        }
+
     # @run_time_decorator
     def _prepare_video_frame(self, frame: Any, save_raw: bool=True, expected_shape: tuple[int, int, int]=(480, 640, 3)) -> Optional[np.ndarray]:
         """Normalize raw ndarray frame to contiguous uint8 HWC(BGR-compatible) for VideoWriter."""
@@ -1191,14 +1241,22 @@ class LeRobotDatasetRecorder:
 
         Defines the structure of the Parquet table including observation, action, timestamps, and metadata.
         """
-        parquet_schema = pa.schema([
+        schema_fields = [
         ('observation.state', pa.list_(pa.float32())),  # NumPy array -> list[float]
-        ('action', pa.list_(pa.float32())),              # NumPy array -> list[float]
+        ('action', pa.list_(pa.float32())),              # NumPy array -> list[float], action sent to robot
         ('episode_index', pa.int32()),
         ('frame_index', pa.int32()),
         ('index', pa.int32()),
         ('task_index', pa.int32()),
-        ('timestamp', pa.float64())])
+        ('timestamp', pa.float64())]
+        if self._record_teleop_fields:
+            schema_fields.extend([
+            ('teleop_action', pa.list_(pa.float32())),        # action sent while human is in control
+            ('teleop_action_mask', pa.list_(pa.bool_())),     # entries of teleop_action with real human control
+            ('rejected_action', pa.list_(pa.float32())),      # policy action overridden by human control
+            ('rejected_action_mask', pa.list_(pa.bool_())),   # entries of rejected_action actually overridden
+            ('is_teleop', pa.bool_())])                       # human intervention signal
+        parquet_schema = pa.schema(schema_fields)
 
         parquet_file_path = os.path.join(
             self._save_path,
@@ -1408,6 +1466,14 @@ class LeRobotDatasetRecorder:
                 'total_videos': total_videos,
                 'video_path': self.config['video_path']
             }
+            if self._record_teleop_fields:
+                meta_info_dict['features'].update({
+                    'teleop_action': {'dtype': 'float32', 'shape': [self.config['action_shape']]},
+                    'teleop_action_mask': {'dtype': 'bool', 'shape': [self.config['action_shape']]},
+                    'rejected_action': {'dtype': 'float32', 'shape': [self.config['action_shape']]},
+                    'rejected_action_mask': {'dtype': 'bool', 'shape': [self.config['action_shape']]},
+                    'is_teleop': {'dtype': 'bool', 'names': None, 'shape': [1]},
+                })
             # print(f"Debug: info_file: {meta_info_dict}")
             with open(info_file_path, 'w', encoding='utf-8') as f:
                 json.dump(meta_info_dict, f, indent=2, ensure_ascii=False, default=str)

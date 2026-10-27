@@ -211,7 +211,7 @@ def test_per_side_tick_runs_each_hand_with_its_own_mode():
     node._next_reset_action_locked = lambda: None
     node._update_arm_locked = lambda side, arm_slice: None
     published = []
-    node._publish_joint_command = lambda action: published.append(np.asarray(action).copy())
+    node._publish_joint_command = lambda action, mask=None: published.append(np.asarray(action).copy())
 
     node.state.left.grip = 1.0
     node.state.right.grip = 0.5

@@ -384,7 +384,7 @@ class RosTeleopBridge(TeleopBridgeBase):
 
     def __init__(
         self,
-        submit_action: Callable[[np.ndarray, float], None],
+        submit_action: Callable[..., None],
         reset_handler: Optional[Callable[[], None]] = None,
         joint_state_provider: Optional[Callable[[], Optional[Sequence[float]]]] = None,
         topic: str = "/target_robot/joint_commands",
@@ -578,7 +578,30 @@ class RosTeleopBridge(TeleopBridgeBase):
         except Exception as exc:
             self.logger.warning("Drop invalid teleop JointState", exc_info=True)
             return
-        self.submit_action(action, time.perf_counter())
+        mask = self._command_mask(msg, action.shape[0])
+        if mask is None:
+            self.submit_action(action, time.perf_counter())
+        else:
+            self.submit_action(action, time.perf_counter(), mask=mask)
+
+    def _command_mask(self, msg, action_dim: int) -> Optional[np.ndarray]:
+        """Read the optional per-joint teleop mask carried in ``JointState.effort``.
+
+        Producers that leave ``effort`` empty (reset interpolation, external
+        publishers) yield ``None``, which the client treats as fully valid.
+        """
+
+        effort = getattr(msg, "effort", None)
+        if effort is None or len(effort) == 0:
+            return None
+        try:
+            values = np.asarray(effort, dtype=float).reshape(-1)
+        except (TypeError, ValueError):
+            values = None
+        if values is None or values.shape[0] != action_dim or not np.all(np.isfinite(values)):
+            self.logger.warning("Ignore malformed teleop command mask in JointState.effort")
+            return None
+        return values > 0.5
 
     def _reset_cb(self, msg) -> None:
         """Convert a reset-topic rising edge into one reset callback invocation."""
@@ -602,7 +625,7 @@ class ZmqTeleopBridge(TeleopBridgeBase):
 
     def __init__(
         self,
-        submit_action: Callable[[np.ndarray, float], None],
+        submit_action: Callable[..., None],
         endpoint: str = "tcp://127.0.0.1:5570",
         action_dim: int = 16,
         identity: str = "vla-infer-teleop",
@@ -713,7 +736,7 @@ class ZmqTeleopBridge(TeleopBridgeBase):
 def create_teleop_bridge(
     config,
     *,
-    submit_action: Callable[[np.ndarray, float], None],
+    submit_action: Callable[..., None],
     action_dim: int,
     reset_handler: Optional[Callable[[], None]] = None,
     joint_state_provider: Optional[Callable[[], Optional[Sequence[float]]]] = None,

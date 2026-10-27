@@ -34,12 +34,16 @@ class SelectedAction:
     output instead of inside the filter.  This keeps the arbiter responsible for
     source transitions and lets the filter focus only on shaping the numeric
     action vector.
+
+    ``mask`` marks which entries of ``action`` are real control data from the
+    producer. ``None`` means the producer did not provide one.
     """
 
     source: ActionSource
     action: np.ndarray
     previous_source: Optional[ActionSource] = None
     source_changed: bool = False
+    mask: Optional[np.ndarray] = None
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,7 @@ class _ActionRecord:
     source: ActionSource
     action: np.ndarray
     timestamp: float
+    mask: Optional[np.ndarray] = None
 
 
 class ActionArbiter:
@@ -71,18 +76,26 @@ class ActionArbiter:
         self._latest: dict[ActionSource, _ActionRecord] = {}
         self._last_selected: Optional[SelectedAction] = None
 
-    def submit(self, source: Union[ActionSource, str], action, timestamp: float) -> None:
+    def submit(self, source: Union[ActionSource, str], action, timestamp: float, mask=None) -> None:
         """Store the newest action for one real producer.
 
         ``HOLD`` is rejected here because it is not an external producer; it is a
-        fallback state synthesized by :meth:`select`.
+        fallback state synthesized by :meth:`select`. ``mask`` optionally marks
+        which entries of ``action`` are real control data.
         """
 
         source = ActionSource(source)
         if source == ActionSource.HOLD:
             raise ValueError("HOLD is a selected fallback, not an input source")
         arr = np.asarray(action, dtype=float).copy()
-        record = _ActionRecord(source=source, action=arr, timestamp=float(timestamp))
+        mask_arr = None
+        if mask is not None:
+            mask_arr = np.asarray(mask, dtype=bool).reshape(-1).copy()
+            if mask_arr.shape[0] != arr.reshape(-1).shape[0]:
+                raise ValueError(
+                    f"Action mask width {mask_arr.shape[0]} does not match action width {arr.reshape(-1).shape[0]}"
+                )
+        record = _ActionRecord(source=source, action=arr, timestamp=float(timestamp), mask=mask_arr)
         with self._lock:
             self._latest[source] = record
 
@@ -109,6 +122,7 @@ class ActionArbiter:
                         action=record.action.copy(),
                         previous_source=previous_source,
                         source_changed=source_changed,
+                        mask=None if record.mask is None else record.mask.copy(),
                     )
                     self._last_selected = selected
                     return selected
@@ -156,6 +170,14 @@ class ActionArbiter:
         with self._lock:
             record = self._latest.get(source)
             return None if record is None else record.action.copy()
+
+    def latest_mask(self, source: Union[ActionSource, str]) -> Optional[np.ndarray]:
+        """Return a copy of the newest action mask for one source, if any."""
+
+        source = ActionSource(source)
+        with self._lock:
+            record = self._latest.get(source)
+            return None if record is None or record.mask is None else record.mask.copy()
 
     def _is_fresh(self, record: _ActionRecord, now: float) -> bool:
         """Check freshness with source-specific timeout windows."""

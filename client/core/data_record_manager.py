@@ -110,11 +110,12 @@ class DataRecordManager:
         rel_save_dir = str(save_dir).strip().lstrip('/').lstrip('\\')
         return os.path.join(self.project_root_path, rel_save_dir, task_dir)
 
-    def _set_task(self, task_dir: str, sub_task_id: int, is_record_episode: bool = False, is_record_eval_log: bool = False, is_record_expe_data: bool = False) -> None:
+    def _set_task(self, task_dir: str, sub_task_id: int, is_record_episode: bool = False, is_record_eval_log: bool = False, is_record_expe_data: bool = False, record_teleop_fields: bool = True) -> None:
         """Update save path by task/date before a new recording starts. Called in the writer process."""
         self.config.is_record_episode = is_record_episode
         self.config.is_record_eval_log = is_record_eval_log
         self.config.is_record_expe_data = is_record_expe_data
+        self.config.record_teleop_fields = record_teleop_fields
         self.save_dir = self.config.get("save_dir", "data/recording")     # relative path
         self.save_path = self._build_full_save_path(self.save_dir, task_dir)  # full path
         if not os.path.exists(self.save_path):
@@ -122,7 +123,10 @@ class DataRecordManager:
             self.logger.info(f"{self.save_path} not exists, create it")
         
         if self.config.get('is_record_episode', False):
-            total_frames, total_videos, total_episodes, chunks_size, episode_index = self.lerobot_recorder.set_task(save_path=self.save_path)
+            total_frames, total_videos, total_episodes, chunks_size, episode_index = self.lerobot_recorder.set_task(
+                save_path=self.save_path,
+                record_teleop_fields=record_teleop_fields,
+            )
             self._sync_shared_data(total_frames=total_frames,
                                 total_videos=total_videos,
                                 total_episodes=total_episodes,
@@ -219,7 +223,8 @@ class DataRecordManager:
                                 sub_task_id = command.get("sub_task_id", 0),
                                 is_record_episode = command.get("is_record_episode", False),
                                 is_record_eval_log = command.get("is_record_eval_log", False),
-                                is_record_expe_data = command.get("is_record_expe_data", False))
+                                is_record_expe_data = command.get("is_record_expe_data", False),
+                                record_teleop_fields = command.get("record_teleop_fields", True))
                     write_future = write_executor.submit(self._write_process_fun)
                 elif command.get("command", "") == "stop":
                     self.shared_data.running.clear()
@@ -299,16 +304,20 @@ class DataRecordManager:
         # self.record_obs_executor.submit(self._add_observation_fun, observation, extra_info, timestamp, session_id)
         self._add_observation_fun(observation, extra_info, timestamp, session_id)
 
-    def add_action_async(self, action: np.ndarray, timestamp: int | float) -> None:
+    def add_action_async(self, action: np.ndarray, timestamp: int | float, teleop_record: Optional[Dict[str, Any]] = None) -> None:
         """
         Asynchronously writes action data into the dataset.
 
         Args:
-            action (np.ndarray): A dictionary containing action data from the environment.
+            action (np.ndarray): The action actually sent to the robot (policy or teleop).
+            timestamp (int | float): The current timestamp.
+            teleop_record (Optional[Dict[str, Any]]): Optional teleop intervention fields
+                (``teleop_action``, ``teleop_action_mask``, ``rejected_action``,
+                ``rejected_action_mask``, ``is_teleop``). ``None`` records a policy frame.
         """
         session_id = self._get_recording_session_id()
         # self.record_action_executor.submit(self._add_action_fun, action, timestamp, session_id)
-        self._add_action_fun(action, timestamp, session_id)
+        self._add_action_fun(action, timestamp, session_id, teleop_record)
     
     def start_recording(self, task_id: str, sub_task_id: int, camera_shape: dict) -> str:
         """
@@ -331,6 +340,7 @@ class DataRecordManager:
                 "is_record_episode": self.config.is_record_episode,
                 "is_record_eval_log": self.config.is_record_eval_log,
                 "is_record_expe_data": self.config.is_record_expe_data,
+                "record_teleop_fields": bool(self.config.get("record_teleop_fields", True)),
                 "camera_shape": camera_shape
             }
             self.writer_command_queue.put(command)
@@ -441,13 +451,13 @@ class DataRecordManager:
             self.logger.warning("Action frame queue is empty, discarding observation frame.")
             return
         else:
-            action, _ = self.action_frame_queue.pop()
+            action, _, teleop_record = self.action_frame_queue.pop()
         
         # observation['language_instruction'] = language_instruction
         # observation['language_instruction'] = 'Test'
         # check state shape 
 
-        self.record_queue.put((observation, action, extra_info))
+        self.record_queue.put((observation, action, extra_info, teleop_record))
 
         # elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         # queue_size = self._safe_queue_size(self.record_queue)
@@ -460,13 +470,14 @@ class DataRecordManager:
         # else:
         #     self.logger.debug(log_message)
 
-    def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int) -> None:
+    def _add_action_fun(self, action: np.ndarray, timestamp: int | float, session_id: int, teleop_record: Optional[Dict[str, Any]] = None) -> None:
         """
         Process and store the action data along with its timestamp.
 
         Args:
             action (np.ndarray): The action data to be stored, typically representing joint torques or target positions.
             timestamp (int): The timestamp associated with this action.
+            teleop_record (Optional[Dict[str, Any]]): Teleop intervention fields paired with this action.
 
         Raises:
             AssertionError: If the provided timestamp is not strictly increasing compared to the last recorded one.
@@ -477,7 +488,7 @@ class DataRecordManager:
         # check action shape 
         # if action.shape[0] < self.action_shape:
         #     action = np.concatenate([action, np.zeros(self.action_shape-action.shape[0])], axis=0)
-        self.action_frame_queue.append((action, timestamp))
+        self.action_frame_queue.append((action, timestamp, teleop_record))
 
     def _write_process_fun(self):
         """
@@ -520,7 +531,7 @@ class DataRecordManager:
             while self.shared_data.running.is_set() or (not self.record_queue.empty()):
                 # Get state and action data from queue
                 try:
-                    step_state, step_action, step_extra = self.record_queue.get(timeout=0.1)
+                    step_state, step_action, step_extra, step_teleop = self.record_queue.get(timeout=0.1)
                     # queue_size = self._safe_queue_size(self.record_queue)
                     # if queue_size > 10:
                     #     self.logger.warning(f"_write_process_fun: record_queue backlog before processing={queue_size}")
@@ -531,7 +542,8 @@ class DataRecordManager:
                             continue
                         self.lerobot_recorder.add_frame_async(step_state=decoded_state,
                                                             step_action=step_action,
-                                                            step_extra=step_extra)
+                                                            step_extra=step_extra,
+                                                            step_teleop=step_teleop)
                     if self.config.get('is_record_eval_log', False):
                         self.eval_recorder.add_frame_async(step_extra=step_extra)
                 except Empty as e:

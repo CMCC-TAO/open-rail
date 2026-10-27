@@ -159,6 +159,7 @@ body.main-params-resizing * {
 .cfg-key   { color: var(--text-muted); flex: 0 0 auto; min-width: 120px; font-size: var(--font-size-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cfg-value { flex: 1; }
 .cfg-value input, .cfg-value select { width: 100%; }
+.cfg-value input.cfg-checkbox { width: auto; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .main-params-tree .cfg-value-with-preset {
   display: flex;
   gap: 4px;

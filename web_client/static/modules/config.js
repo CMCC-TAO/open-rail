@@ -247,6 +247,15 @@ const CFG_ENTER_IMMEDIATE_APPLY_KEYS = new Set([
   // 'evaluation.scores',
 ]);
 
+// Boolean keys rendered as a checkbox and applied (and saved) as soon as they toggle.
+const CONFIG_CHECKBOX_DOT_KEYS = new Set([
+  'record.record_teleop_fields',
+]);
+
+const CONFIG_KEY_TITLES = {
+  'record.record_teleop_fields': 'Save teleop intervention fields (teleop_action, teleop_action_mask, rejected_action, rejected_action_mask, is_teleop) in new LeRobot datasets. Existing datasets keep their schema; takes effect from the next recording.',
+};
+
 function shouldApplyConfigImmediatelyOnEnter(dotKey) {
   return CFG_ENTER_IMMEDIATE_APPLY_KEYS.has(String(dotKey || '').trim());
 }
@@ -373,6 +382,11 @@ function setCfgInputValue(input, dotKey, value) {
 
   if (input.tagName === 'SELECT') {
     input.value = String(value);
+    return;
+  }
+
+  if (input.type === 'checkbox') {
+    input.checked = !!value;
     return;
   }
 
@@ -925,7 +939,7 @@ function createCfgRow(dotKey, label, value, options = {}) {
   row.dataset.key = dotKey;
 
   const keyEl = document.createElement('div');
-  keyEl.className = 'cfg-key'; keyEl.title = dotKey; keyEl.textContent = label;
+  keyEl.className = 'cfg-key'; keyEl.title = CONFIG_KEY_TITLES[dotKey] || dotKey; keyEl.textContent = label;
   if (dotKey === 'robots.robotwin_aloha.render_observation_mode') {
     keyEl.textContent = 'Camera rendering (sync)';
     keyEl.title = 'Async mode always renders every action.';
@@ -1093,6 +1107,10 @@ function createCfgRow(dotKey, label, value, options = {}) {
       }
       input.appendChild(o);
     });
+  } else if (CONFIG_CHECKBOX_DOT_KEYS.has(dotKey)) {
+    input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!value;
   } else if (typeof value === 'boolean') {
     input = document.createElement('select');
     ['true', 'false'].forEach(opt => {
@@ -1120,7 +1138,8 @@ function createCfgRow(dotKey, label, value, options = {}) {
     input.type = 'text'; input.value = value === null ? '' : String(value);
   }
 
-  input.className = 'input-text';
+  input.className = input.type === 'checkbox' ? 'cfg-checkbox' : 'input-text';
+  if (CONFIG_KEY_TITLES[dotKey]) input.title = CONFIG_KEY_TITLES[dotKey];
   if (isSimulationGpu) {
     input.placeholder = 'e.g. 0,2';
     input.title = keyEl.title;
@@ -1140,6 +1159,11 @@ function createCfgRow(dotKey, label, value, options = {}) {
     row.classList.add('cfg-row-readonly');
     input.disabled = true;
     input.title = `${dotKey} is read-only here.`;
+  } else if (input.type === 'checkbox') {
+    input.addEventListener('change', () => {
+      onCfgChange(dotKey, input, value);
+      void applySingleConfigPatchImmediately(dotKey);
+    });
   } else {
     input.addEventListener('input',  () => onCfgChange(dotKey, input, value));
     input.addEventListener('change', () => onCfgChange(dotKey, input, value));
@@ -1188,7 +1212,9 @@ function onCfgChange(dotKey, input, originalValue) {
 
   const raw = input.tagName === 'SELECT' ? input.value : input.value.trim();
   let parsed;
-  if (typeof originalValue === 'boolean') {
+  if (input.type === 'checkbox') {
+    parsed = input.checked;
+  } else if (typeof originalValue === 'boolean') {
     parsed = raw === 'true';
   } else if (CONFIG_NUMBER_RANGES[bareKey]) {
     parsed = Number(raw);

@@ -1572,9 +1572,12 @@ class VRWholeBodyBridgeNode:
            - Update grippers.
            - Assemble the final action: arms that are not requested get reference_action
              from /joint_states; uninitialized grippers also use reference.
-        5. Publish the action as a ``JointState`` message.
+        5. Publish the action as a ``JointState`` message, with a per-joint mask
+           marking which entries are real human commands (see
+           :meth:`_publish_joint_command`).
         """
         action_to_publish = None
+        mask_to_publish = None
         with self.state.lock:
             self._update_reset_edge_locked()
             reset_action = self._next_reset_action_locked()
@@ -1618,33 +1621,56 @@ class VRWholeBodyBridgeNode:
                         if mode != "discrete":
                             self._update_gripper_locked(side, hand_slice.start)
                     action = self.state.action.copy()
+                    # False marks entries filled from robot feedback instead of human input.
+                    mask = np.ones(action.shape[0], dtype=bool)
                     if not left_output_requested:
                         action[0:7] = self.state.reference_action[0:7]
+                        mask[0:7] = False
                     if not right_output_requested:
                         action[7:14] = self.state.reference_action[7:14]
+                        mask[7:14] = False
                     if not left_gripper_requested and not self.state.left.gripper_command_initialized:
                         action[self.left_hand_slice] = self.state.reference_action[self.left_hand_slice]
+                        mask[self.left_hand_slice] = False
                     if not right_gripper_requested and not self.state.right.gripper_command_initialized:
                         action[self.right_hand_slice] = self.state.reference_action[self.right_hand_slice]
+                        mask[self.right_hand_slice] = False
                     action_to_publish = np.clip(action, self.min_action, self.max_action).copy()
+                    mask_to_publish = mask
                     for side, mode, _, _ in hand_states:
                         if mode == "discrete":
                             side.gripper_command_pending = False
 
         if action_to_publish is not None:
-            self._publish_joint_command(action_to_publish)
+            self._publish_joint_command(action_to_publish, mask=mask_to_publish)
 
-    def _publish_joint_command(self, action: np.ndarray) -> None:
+    def _publish_joint_command(self, action: np.ndarray, mask: np.ndarray | None = None) -> None:
         """Publish a JointState message in the target robot's action layout.
 
         The message is published to ``/target_robot/joint_commands``, which is
-        received by ``RosTeleopBridge._command_cb()`` in the VLA client."""
+        received by ``RosTeleopBridge._command_cb()`` in the VLA client.
+
+        When ``mask`` is given, ``effort`` carries one flag per joint: ``1.0`` for
+        real human control data, ``0.0`` for entries held from robot feedback.
+        Commands without a mask (e.g. reset interpolation) leave ``effort`` empty."""
         action = self._expand_hand_command(action)
         msg = self.JointState()
         msg.header.stamp = self.node.get_clock().now().to_msg()
         msg.name = self.command_joint_names
         msg.position = [float(v) for v in action]
+        if mask is not None:
+            msg.effort = [1.0 if v else 0.0 for v in self._expand_hand_mask(mask)]
         self.pub.publish(msg)
+
+    def _expand_hand_mask(self, mask: np.ndarray) -> np.ndarray:
+        """Expand an internal-width command mask to native hand width."""
+
+        mask = np.asarray(mask, dtype=bool)
+        parts = [mask[:14]]
+        for side_index, hand_slice in enumerate((self.left_hand_slice, self.right_hand_slice)):
+            robot_width = self.robot_action_layout.hand_widths[side_index]
+            parts.append(np.full(robot_width, bool(np.any(mask[hand_slice])), dtype=bool))
+        return np.concatenate(parts)
 
     def _next_reset_action_locked(self) -> np.ndarray | None:
         """Return the next frame of the reset interpolation, or None if not active.

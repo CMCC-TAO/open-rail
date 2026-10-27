@@ -290,15 +290,27 @@ class VLAClient():
         if was_running or (self.is_running and self._use_teleop_enabled()):
             self.start_teleop_bridge()
 
-    def submit_teleop_bridge_action(self, action, timestamp=None):
-        """Receive one teleop action from the bridge and submit it to arbitration."""
+    def submit_teleop_bridge_action(self, action, timestamp=None, mask=None):
+        """Receive one teleop action from the bridge and submit it to arbitration.
+
+        ``mask`` optionally marks which entries are real human control data;
+        ``None`` means the whole action is treated as human-controlled.
+        """
         if timestamp is None:
             timestamp = time.perf_counter()
         action_arr = self._validate_teleop_bridge_action(action)
         if action_arr is None:
             self._hold_teleop_after_rejected_action(timestamp)
             return
-        self.action_arbiter.submit(ActionSource.TELEOP, action_arr, timestamp)
+        mask_arr = None
+        if mask is not None:
+            mask_arr = np.asarray(mask, dtype=bool).reshape(-1)
+            if mask_arr.shape != action_arr.shape:
+                self.logger.warning(
+                    'Ignore teleop mask with shape %s for action shape %s', mask_arr.shape, action_arr.shape
+                )
+                mask_arr = None
+        self.action_arbiter.submit(ActionSource.TELEOP, action_arr, timestamp, mask=mask_arr)
         self._teleop_outlier_reject_count = 0
 
     def _validate_teleop_bridge_action(self, action) -> Optional[np.ndarray]:
@@ -379,6 +391,49 @@ class VLAClient():
 
         return action_layout_from_robot_config(self._teleop_robot_config())
 
+    @staticmethod
+    def _teleop_record_fields(executed_action, selected_source, teleop_mask=None, policy_action=None) -> dict:
+        """Build the per-frame teleop intervention fields for data recording.
+
+        - ``teleop_action``: the executed action while a human is in control, else zeros.
+        - ``teleop_action_mask``: entries of ``teleop_action`` carrying real human
+          control data; all True when the producer did not provide a mask.
+        - ``rejected_action``: the policy action that would have been executed,
+          when a human overrode an available policy action, else zeros.
+        - ``rejected_action_mask``: entries of ``rejected_action`` actually replaced
+          by human control.
+        - ``is_teleop``: whether fresh human input selected this action.
+        """
+        executed = np.asarray(executed_action, dtype=np.float32).reshape(-1)
+        width = executed.shape[0]
+        is_teleop = selected_source == ActionSource.TELEOP
+        if is_teleop:
+            teleop_action = executed.copy()
+            if teleop_mask is None:
+                teleop_mask = np.ones(width, dtype=bool)
+            else:
+                teleop_mask = np.asarray(teleop_mask, dtype=bool).reshape(-1).copy()
+        else:
+            teleop_action = np.zeros(width, dtype=np.float32)
+            teleop_mask = np.zeros(width, dtype=bool)
+
+        if is_teleop and policy_action is not None:
+            rejected_action = np.asarray(policy_action, dtype=np.float32).reshape(-1).copy()
+            rejected_mask = np.zeros(rejected_action.shape[0], dtype=bool)
+            overlap = min(rejected_mask.shape[0], teleop_mask.shape[0])
+            rejected_mask[:overlap] = teleop_mask[:overlap]
+        else:
+            rejected_action = np.zeros(width, dtype=np.float32)
+            rejected_mask = np.zeros(width, dtype=bool)
+
+        return {
+            'teleop_action': teleop_action,
+            'teleop_action_mask': teleop_mask,
+            'rejected_action': rejected_action,
+            'rejected_action_mask': rejected_mask,
+            'is_teleop': bool(is_teleop),
+        }
+
     def _teleop_outlier_baseline(self, action_dim: int) -> Optional[np.ndarray]:
         """Return the latest trusted teleop action, then the last robot command/state."""
         last_teleop_action = self.action_arbiter.latest_action(ActionSource.TELEOP)
@@ -407,6 +462,7 @@ class VLAClient():
     def _hold_teleop_after_rejected_action(self, timestamp: float) -> None:
         """Keep teleop ownership alive with the last safe action after a rejected packet."""
         hold_action = self.action_arbiter.latest_action(ActionSource.TELEOP)
+        hold_mask = self.action_arbiter.latest_mask(ActionSource.TELEOP) if hold_action is not None else None
         if hold_action is None:
             hold_action = self._get_last_executed_action()
         if hold_action is None:
@@ -421,7 +477,7 @@ class VLAClient():
                 self.action_arbiter.clear_source(ActionSource.TELEOP)
             return
         hold_action = np.asarray(hold_action, dtype=float).copy()
-        self.action_arbiter.submit(ActionSource.TELEOP, hold_action, timestamp)
+        self.action_arbiter.submit(ActionSource.TELEOP, hold_action, timestamp, mask=hold_mask)
 
     def _reset_teleop_outlier_guard(self) -> None:
         self._teleop_outlier_reject_count = 0
@@ -1099,6 +1155,7 @@ class VLAClient():
         # Values shared with the visualization helper below.
         action_fitted, action_raw, vel_fitted, acc_fitted = (None, None, None, None)
         selected_source = ActionSource.POLICY
+        selected_mask = None
         action_to_execute = None
         policy_action_for_record = None
         action_np = None
@@ -1178,10 +1235,12 @@ class VLAClient():
                             else:
                                 action_to_execute = self._action_for_selected_source(selected)
                                 selected_source = selected.source
+                                selected_mask = selected.mask
                                 policy_action_for_record = action_fitted
                         else:
                             action_to_execute = self._action_for_selected_source(selected)
                             selected_source = selected.source
+                            selected_mask = selected.mask
                             policy_action_for_record = action_fitted
                         if now - self._action_select_last_debug_s >= 1.0:
                             self._action_select_last_debug_s = now
@@ -1204,11 +1263,21 @@ class VLAClient():
                         except Exception:
                             self.logger.warning("Failed to publish teleop anchor state", exc_info=True)
 
-                    # Data recording remains unchanged: the existing recorder
-                    # continues to receive the policy action exactly as before
-                    # this handoff change.
-                    if self.config.record.switch and action_fitted is not None:
-                        self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
+                    # Record the action actually sent to the robot, whether it
+                    # came from the policy or from human teleoperation, plus the
+                    # intervention fields describing any override.
+                    if self.config.record.switch:
+                        teleop_record = self._teleop_record_fields(
+                            action_np,
+                            selected_source,
+                            teleop_mask=selected_mask,
+                            policy_action=policy_action_for_record,
+                        )
+                        self.data_record_manager.add_action_async(
+                            action_np,
+                            time.perf_counter(),
+                            teleop_record=teleop_record,
+                        )
         except Exception as exc:
             self._stop_control_thread_on_error()
             self.logger.error("Robot control failed: %s", exc)

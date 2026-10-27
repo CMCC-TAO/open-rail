@@ -135,7 +135,7 @@ def test_arm_teleop_without_hand_input_holds_reference_hand():
     node._update_gripper_locked = lambda side, index: None
     node._is_gripper_control_requested = lambda side: False
     published = []
-    node._publish_joint_command = lambda action: published.append(np.asarray(action).copy())
+    node._publish_joint_command = lambda action, mask=None: published.append(np.asarray(action).copy())
 
     node._tick()
 
@@ -168,7 +168,7 @@ def test_releasing_hand_control_holds_last_hand_command():
     node._update_gripper_locked = lambda side, index: None
     node._is_gripper_control_requested = lambda side: False
     published = []
-    node._publish_joint_command = lambda action: published.append(np.asarray(action).copy())
+    node._publish_joint_command = lambda action, mask=None: published.append(np.asarray(action).copy())
 
     node._tick()
 
@@ -440,7 +440,7 @@ def test_inactive_arm_uses_released_reference_while_other_arm_stays_active():
     node._update_gripper_locked = lambda side, index: None
     node._is_gripper_control_requested = lambda side: False
     published = []
-    node._publish_joint_command = lambda action: published.append(np.asarray(action).copy())
+    node._publish_joint_command = lambda action, mask=None: published.append(np.asarray(action).copy())
 
     node._tick()
 

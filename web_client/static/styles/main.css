@@ -14,7 +14,7 @@
 @import url('./components/tooltip.css');
 
 @import url('./modules/monitor.css');
-@import url('./modules/config.css');
+@import url('./modules/config.css?v=20261027-teleop-record');
 @import url('./modules/recording.css?v=20261014-overlay-controls-2');
 @import url('./modules/language.css');
 @import url('./modules/trajectory.css?v=20261013-compact-joints');
