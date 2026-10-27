@@ -1611,6 +1611,12 @@ class VRWholeBodyBridgeNode:
                 if not output_requested:
                     self._update_arm_locked(self.state.left, slice(0, 7))
                     self._update_arm_locked(self.state.right, slice(7, 14))
+                    # The teleop session is over and the policy owns the hands
+                    # again. Forget the last human hand command so the next
+                    # intervention follows feedback until the hand is touched,
+                    # instead of replaying a stale (e.g. open) command.
+                    self.state.left.gripper_command_initialized = False
+                    self.state.right.gripper_command_initialized = False
                 elif not self.state.joint_state_ready:
                     self._warn_waiting_for_joint_state_locked()
                 else:

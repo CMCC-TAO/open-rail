@@ -904,6 +904,16 @@ class VLAClient():
             self.realtime_data_manager.clear()
             self._clear_raw_observe_queue()
             self.image_process_time = 0.0
+            # The web reset moves the robot directly, so drop every pre-reset
+            # command. Otherwise, with teleop enabled, the arbiter HOLDs the
+            # pre-reset action (and the transition filter blends from it) until
+            # the first fresh chunk arrives, pulling the arm back to its old pose.
+            self._invalidate_policy_generation()
+            self.action_arbiter.clear()
+            self.action_transition_filter.reset()
+            self._reset_teleop_policy_handoff()
+            self._reset_teleop_outlier_guard()
+            self._set_last_executed_action(None)
 
     @property
     def thread_status(self):

@@ -226,3 +226,53 @@ def test_per_side_tick_runs_each_hand_with_its_own_mode():
 
     np.testing.assert_allclose(published[-1][14:20], DISCRETE_VALUES[1])
     assert published[-1][20] == pytest.approx(0.5)
+
+
+def test_arm_only_intervention_does_not_replay_previous_hand_command():
+    node = _layout_node({
+        "left_gripper_control_mode": "discrete",
+        "right_gripper_control_mode": "incremental",
+        "left_hand_discrete_values": DISCRETE_VALUES,
+        "right_hand_range": [[1000.0] * 6, [0.0, 0.0, 0.0, 0.0, 0.0, 1000.0]],
+    })
+    for key, value in dict(
+        grip_threshold=0.9, trigger_threshold=0.9, gripper_input_min=0.0, gripper_input_max=1.0,
+        proportional_activation_threshold=0.05, proportional_release_threshold=0.02,
+        proportional_latch_on_release=True, gripper_command_min=0.0, gripper_command_max=1.0,
+        gripper_speed=100.0, control_dt=0.005,
+    ).items():
+        setattr(node, key, value)
+    right_hand = node.right_hand_slice
+    node.state.action = np.zeros(21)
+    node.state.reference_action = np.asarray([0.0] * 14 + [1000.0] * 6 + [0.0])
+    node.state.joint_state_ready = True
+    node._update_reset_edge_locked = lambda: None
+    node._next_reset_action_locked = lambda: None
+    node._update_arm_locked = lambda side, arm_slice: None
+    published = []
+    node._publish_joint_command = lambda action, mask=None: published.append(
+        (np.asarray(action).copy(), np.asarray(mask).copy())
+    )
+
+    # First intervention: close the right hand, then open it again.
+    node.state.right.control_state = quest3.ARM_CONTROL_MANUAL
+    node.state.right.grip = 1.0
+    for _ in range(3):
+        node._tick()
+    node.state.right.grip = 0.0
+    node.state.right.secondary_button = True
+    for _ in range(3):
+        node._tick()
+    assert published[-1][0][right_hand][0] == pytest.approx(0.0)
+    node.state.right.secondary_button = False
+    node.state.right.control_state = quest3.ARM_CONTROL_AUTO
+    node._tick()
+
+    # The policy then closes the hand; the next intervention moves only the arm.
+    node.state.reference_action[right_hand] = 0.95
+    node.state.right.control_state = quest3.ARM_CONTROL_MANUAL
+    node._tick()
+
+    action, mask = published[-1]
+    assert action[right_hand][0] == pytest.approx(0.95)
+    assert not mask[right_hand].any()

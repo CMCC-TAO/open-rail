@@ -49,5 +49,12 @@
     "[PRIMARY_ARM=RIGHT] Pick up the shredded carrots and place them on the plate.",
     "[PRIMARY_ARM=RIGHT] Pick up the shredded cabbage and place it on the plate.",
     "[PRIMARY_ARM=LEFT] Toss the salad."
+  ],
+  "make_porridge": [
+    "Scoop the oats into the pot.",
+    "Scoop the red beans into the pot.",
+    "Scoop the rice into the pot.",
+    "Pour the water into the pot.",
+    "Pour the milk into the pot."
   ]
 }
