@@ -44,6 +44,13 @@ def test_hand_range_validation():
         hand_mapping.normalize_hand_range([[1.0] * 6, [1.0] * 6], name="left_hand_range")
 
 
+def test_nearest_discrete_index_uses_manhattan_distance():
+    values = [[0.0, 0.0], [60.0, 60.0]]
+
+    # Squared Euclidean distance would select [60, 60], but Manhattan selects [0, 0].
+    assert hand_mapping.nearest_discrete_index(values, [100.0, 0.0]) == 0
+
+
 def _range_node():
     node = object.__new__(quest3.VRWholeBodyBridgeNode)
     node.state = quest3.BridgeState()

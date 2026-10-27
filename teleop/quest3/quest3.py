@@ -2178,7 +2178,7 @@ class VRWholeBodyBridgeNode:
 
     @staticmethod
     def _nearest_discrete_index(values: list[list[float]], current) -> int:
-        """Return the index of the discrete hand vector closest to feedback."""
+        """Return the discrete hand vector with the smallest Manhattan distance."""
 
         current_arr = np.asarray(current, dtype=float).reshape(-1)
         if current_arr.size == 0 or not np.all(np.isfinite(current_arr)):

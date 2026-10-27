@@ -166,7 +166,7 @@ def hand_feedback_to_control(
 
 
 def nearest_discrete_index(values: Sequence[Sequence[float]], current: Sequence[float]) -> int:
-    """Return the index of the discrete hand vector nearest to ``current``."""
+    """Return the discrete hand vector with the smallest Manhattan distance."""
 
     if not values:
         return -1
@@ -175,7 +175,7 @@ def nearest_discrete_index(values: Sequence[Sequence[float]], current: Sequence[
     if widths != {len(current_arr)}:
         return -1
     distances = [
-        sum((float(value) - target) ** 2 for value, target in zip(vector, current_arr))
+        sum(abs(float(value) - target) for value, target in zip(vector, current_arr))
         for vector in values
     ]
     return int(min(range(len(distances)), key=distances.__getitem__))
