@@ -174,7 +174,8 @@ class RobotBody(RobotBase):
             self.current_timestamp = ref_timestamp
 
             result = {"ref_timestamp": ref_timestamp}
-            result[f"cam.{cam_ref}"] = image[:, :, ::-1] if image.ndim == 3 else image
+            # SDK imdecode already returns BGR. Keep it: VideoWriter and imencode both expect BGR.
+            result[f"cam.{cam_ref}"] = image
 
             for key, stream in cam_names.items():
                 if key == cam_ref:
@@ -183,7 +184,7 @@ class RobotBody(RobotBase):
                 if image is None:
                     self.logger.warning("missing camera stream: %s", stream)
                     continue
-                result[f"cam.{key}"] = image[:, :, ::-1] if image.ndim == 3 else image
+                result[f"cam.{key}"] = image
 
             result["obs.state"] = self.current_state[: self.action_dim].copy()
             return result

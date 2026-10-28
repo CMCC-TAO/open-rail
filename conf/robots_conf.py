@@ -197,7 +197,7 @@ def get_ti5_t170c_config(hand_type='hand'):
     config = ConfigDict()
     config.hand_type = hand_type or 'hand'
     config.camera = ConfigDict()
-    config.camera.color_order = 'rgb'  # Adapter converts camera frames to RGB
+    config.camera.color_order = 'bgr'  # OpenCV imdecode output
     config.camera.backend = 'remote_forwarder'
     config.camera.forwarder_uri = 'tcp://192.168.1.100:9100'
     config.camera.ref = 'head'
@@ -221,10 +221,8 @@ def get_ti5_t170c_config(hand_type='hand'):
     )
     # Custom stays on the previous homing pose; Reset uses Default.
     _arm_custom = (
-        [-1.3119088393316176, 1.4473110065281325, 1.6156086726673602, -1.665472635653567,
-         -0.4101313352460489, -0.21850174207321, -0.3232027944991513]
-        + [1.3119088393316176, 1.4473110065281325, -1.6156086726673602, -1.665472635653567,
-           0.4101313352460489, -0.2251850174207321, 0.3232027944991513]
+        [2.135607, -1.506890, -1.575035, -1.839900, -0.377856, -0.194309, -0.382639]
+        + [-2.135409, -1.479260, 1.552336, -1.839900, 0.393200, -0.211972, 0.355065]
     )
     # Hand open pose in hardware units [0, 1000]. Width follows the profile.
     config.reset_robot_pos = _arm_reset + [1000.0] * hand_dof
