@@ -298,7 +298,7 @@ class VLAClient():
         """
         if timestamp is None:
             timestamp = time.perf_counter()
-        action_arr = self._validate_teleop_bridge_action(action)
+        action_arr = self._validate_teleop_bridge_action(action, timestamp=timestamp)
         if action_arr is None:
             self._hold_teleop_after_rejected_action(timestamp)
             return
@@ -313,8 +313,10 @@ class VLAClient():
         self.action_arbiter.submit(ActionSource.TELEOP, action_arr, timestamp, mask=mask_arr)
         self._teleop_outlier_reject_count = 0
 
-    def _validate_teleop_bridge_action(self, action) -> Optional[np.ndarray]:
+    def _validate_teleop_bridge_action(self, action, timestamp: Optional[float] = None) -> Optional[np.ndarray]:
         """Reject malformed or implausibly large teleop jumps before arbitration."""
+        if timestamp is None:
+            timestamp = time.perf_counter()
         try:
             action_arr = np.asarray(action, dtype=float).reshape(-1)
         except (TypeError, ValueError):
@@ -336,7 +338,9 @@ class VLAClient():
         if not bool(getattr(self.config.controller, 'teleop_outlier_guard_enabled', True)):
             return action_arr
 
-        baseline = self._teleop_outlier_baseline(action_arr.shape[0])
+        baseline, baseline_source = self._teleop_outlier_baseline_snapshot(
+            action_arr.shape[0], now=timestamp
+        )
         if baseline is None:
             return action_arr
         if baseline.shape != action_arr.shape:
@@ -351,17 +355,34 @@ class VLAClient():
             max_arm_joint_delta = getattr(self.config.controller, 'teleop_outlier_max_arm_joint_delta', 0.5)
             if max_arm_joint_delta is not None and np.max(delta[:arm_count]) > float(max_arm_joint_delta):
                 self._teleop_outlier_reject_count += 1
+                joint_index = int(np.argmax(delta[:arm_count]))
+                joint_name = action_layout.action_names[joint_index]
                 self._log_teleop_outlier(
-                    'arm joint jump %.4f exceeds %.4f; reject_count=%d'
-                    % (float(np.max(delta[:arm_count])), float(max_arm_joint_delta), self._teleop_outlier_reject_count)
+                    'arm joint %s[%d] jump %.4f exceeds %.4f; '
+                    'incoming=%.6f baseline=%.6f baseline_source=%s; reject_count=%d'
+                    % (
+                        joint_name,
+                        joint_index,
+                        float(delta[joint_index]),
+                        float(max_arm_joint_delta),
+                        float(action_arr[joint_index]),
+                        float(baseline[joint_index]),
+                        baseline_source,
+                        self._teleop_outlier_reject_count,
+                    )
                 )
                 return None
             max_arm_norm_delta = getattr(self.config.controller, 'teleop_outlier_max_arm_norm_delta', 1.2)
             if max_arm_norm_delta is not None and np.linalg.norm(delta[:arm_count]) > float(max_arm_norm_delta):
                 self._teleop_outlier_reject_count += 1
                 self._log_teleop_outlier(
-                    'arm norm jump %.4f exceeds %.4f; reject_count=%d'
-                    % (float(np.linalg.norm(delta[:arm_count])), float(max_arm_norm_delta), self._teleop_outlier_reject_count)
+                    'arm norm jump %.4f exceeds %.4f; baseline_source=%s; reject_count=%d'
+                    % (
+                        float(np.linalg.norm(delta[:arm_count])),
+                        float(max_arm_norm_delta),
+                        baseline_source,
+                        self._teleop_outlier_reject_count,
+                    )
                 )
                 return None
         if delta.shape[0] > 14:
@@ -434,15 +455,32 @@ class VLAClient():
             'is_teleop': bool(is_teleop),
         }
 
-    def _teleop_outlier_baseline(self, action_dim: int) -> Optional[np.ndarray]:
-        """Return the latest trusted teleop action, then the last robot command/state."""
-        last_teleop_action = self.action_arbiter.latest_action(ActionSource.TELEOP)
-        if last_teleop_action is not None:
-            return last_teleop_action
+    def _teleop_outlier_baseline_snapshot(
+        self,
+        action_dim: int,
+        now: Optional[float] = None,
+    ) -> tuple[Optional[np.ndarray], str]:
+        """Return the outlier baseline and the source used to build it."""
+        if now is None:
+            now = time.perf_counter()
+        last_teleop_s = self.action_arbiter.last_submitted_at(ActionSource.TELEOP)
+        timeout_s = float(getattr(self.config.controller, 'teleop_timeout_s', 0.5))
+        if last_teleop_s is not None and now - last_teleop_s <= timeout_s:
+            last_teleop_action = self.action_arbiter.latest_action(ActionSource.TELEOP)
+            if last_teleop_action is not None:
+                return last_teleop_action, 'teleop(age=%.3fs)' % (now - last_teleop_s)
         baseline = self._coerce_state_to_action_shape(self._get_last_executed_action(), action_dim)
         if baseline is not None:
-            return baseline
-        return self._coerce_state_to_action_shape(getattr(self.robot, 'current_state', None), action_dim)
+            return baseline, 'last_executed'
+        baseline = self._coerce_state_to_action_shape(getattr(self.robot, 'current_state', None), action_dim)
+        if baseline is not None:
+            return baseline, 'measured_state'
+        return None, 'unavailable'
+
+    def _teleop_outlier_baseline(self, action_dim: int, now: Optional[float] = None) -> Optional[np.ndarray]:
+        """Return a current-safe baseline for backward-compatible callers."""
+        baseline, _ = self._teleop_outlier_baseline_snapshot(action_dim, now=now)
+        return baseline
 
     @staticmethod
     def _coerce_state_to_action_shape(values, action_dim: int) -> Optional[np.ndarray]:
@@ -460,22 +498,28 @@ class VLAClient():
         return None
 
     def _hold_teleop_after_rejected_action(self, timestamp: float) -> None:
-        """Keep teleop ownership alive with the last safe action after a rejected packet."""
-        hold_action = self.action_arbiter.latest_action(ActionSource.TELEOP)
-        hold_mask = self.action_arbiter.latest_mask(ActionSource.TELEOP) if hold_action is not None else None
-        if hold_action is None:
-            hold_action = self._get_last_executed_action()
-        if hold_action is None:
-            hold_action = self._coerce_state_to_action_shape(
-                getattr(self.robot, 'current_state', None),
-                int(getattr(self.robot, 'action_dim', 0) or 16),
-            )
-        if hold_action is None:
-            if self._teleop_outlier_reject_count >= int(getattr(
-                self.config.controller, 'teleop_outlier_reanchor_after_rejects', 5
-            )):
-                self.action_arbiter.clear_source(ActionSource.TELEOP)
+        """Hold only a live session's safe action, or release a bad stream."""
+        reject_threshold = max(int(getattr(
+            self.config.controller, 'teleop_outlier_reanchor_after_rejects', 5
+        )), 1)
+        if self._teleop_outlier_reject_count >= reject_threshold:
+            if self._teleop_outlier_reject_count == reject_threshold:
+                self.logger.warning(
+                    'Release teleop ownership after %d consecutive rejected actions.',
+                    self._teleop_outlier_reject_count,
+                )
+            self.action_arbiter.clear_source(ActionSource.TELEOP)
             return
+
+        last_teleop_s = self.action_arbiter.last_submitted_at(ActionSource.TELEOP)
+        timeout_s = float(getattr(self.config.controller, 'teleop_timeout_s', 0.5))
+        if last_teleop_s is None or float(timestamp) - last_teleop_s > timeout_s:
+            return
+
+        hold_action = self.action_arbiter.latest_action(ActionSource.TELEOP)
+        if hold_action is None:
+            return
+        hold_mask = self.action_arbiter.latest_mask(ActionSource.TELEOP)
         hold_action = np.asarray(hold_action, dtype=float).copy()
         self.action_arbiter.submit(ActionSource.TELEOP, hold_action, timestamp, mask=hold_mask)
 

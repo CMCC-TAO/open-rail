@@ -2,13 +2,14 @@ import json
 import logging
 from pathlib import Path
 import threading
+import time
 from types import SimpleNamespace
 
 import numpy as np
 from ml_collections import ConfigDict
 
 from client.core.teleop_bridge import RosTeleopBridge, TeleopDeviceProcess
-from client.core.action_arbiter import ActionArbiter
+from client.core.action_arbiter import ActionArbiter, ActionSource
 from client.core.vla_client import VLAClient
 from client.robots.base_robot import RobotBase
 from conf.client_conf import (
@@ -232,3 +233,67 @@ def test_web_reset_reads_reset_robot_pos():
         "l_gripper": [3.0],
         "r_gripper": [4.0],
     }
+
+
+def test_stale_teleop_action_is_not_used_as_outlier_baseline():
+    client = object.__new__(VLAClient)
+    client.logger = logging.getLogger(__name__)
+    client.config = ConfigDict({
+        'robots': {'type': 'ti5_t170c', 'ti5_t170c': get_ti5_t170c_config()},
+        'controller': {
+            'teleop_timeout_s': 0.15,
+            'teleop_outlier_guard_enabled': True,
+            'teleop_outlier_max_arm_joint_delta': 0.5,
+            'teleop_outlier_max_arm_norm_delta': 1.2,
+            'teleop_outlier_max_gripper_delta': 1.0,
+            'teleop_outlier_log_interval_s': 1.0,
+        },
+    })
+    client.robot = SimpleNamespace(current_state=np.zeros(26))
+    client.action_arbiter = ActionArbiter(action_timeout_s=0.15)
+    client._last_executed_action = np.zeros(26)
+    client._last_executed_action_lock = threading.Lock()
+    client._teleop_outlier_reject_count = 0
+    client._teleop_outlier_last_log_s = 0.0
+
+    stale = np.zeros(26)
+    stale[0] = 2.0
+    client.action_arbiter.submit(ActionSource.TELEOP, stale, timestamp=time.perf_counter() - 1.0)
+    new_action = np.zeros(26)
+    new_action[0] = 0.1
+
+    accepted = client._validate_teleop_bridge_action(new_action, timestamp=time.perf_counter())
+    np.testing.assert_allclose(accepted, new_action)
+
+
+def test_rejected_teleop_stream_releases_ownership_after_threshold():
+    client = object.__new__(VLAClient)
+    client.logger = logging.getLogger(__name__)
+    client.config = ConfigDict({'controller': {
+        'teleop_timeout_s': 0.15,
+        'teleop_outlier_reanchor_after_rejects': 5,
+    }})
+    client.action_arbiter = ActionArbiter(action_timeout_s=0.15)
+    client._teleop_outlier_reject_count = 5
+
+    client._hold_teleop_after_rejected_action(time.perf_counter())
+
+    assert client.action_arbiter.last_submitted_at(ActionSource.TELEOP) is None
+
+
+def test_live_teleop_session_holds_only_its_own_last_safe_action():
+    client = object.__new__(VLAClient)
+    client.logger = logging.getLogger(__name__)
+    client.config = ConfigDict({'controller': {
+        'teleop_timeout_s': 0.15,
+        'teleop_outlier_reanchor_after_rejects': 5,
+    }})
+    client.action_arbiter = ActionArbiter(action_timeout_s=0.15)
+    client._teleop_outlier_reject_count = 1
+    safe = np.arange(26, dtype=float)
+    timestamp = time.perf_counter()
+    client.action_arbiter.submit(ActionSource.TELEOP, safe, timestamp=timestamp)
+
+    client._hold_teleop_after_rejected_action(timestamp + 0.01)
+
+    np.testing.assert_allclose(client.action_arbiter.latest_action(ActionSource.TELEOP), safe)
