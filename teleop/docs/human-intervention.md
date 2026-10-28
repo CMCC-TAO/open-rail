@@ -106,11 +106,11 @@ messages do not carry a mask, so the entire action is treated as human input.
 2. otherwise fresh `POLICY`;
 3. otherwise `HOLD` the last selected action.
 
-Default freshness windows are `controller.teleop_timeout_s = 0.15` and
-`controller.policy_timeout_s = 0.5`. A synthetic `HOLD` is not accepted as an
+Default freshness windows are `teleop.teleop_timeout_s = 0.15` and
+`teleop.policy_timeout_s = 0.5`. A synthetic `HOLD` is not accepted as an
 input source.
 
-Policy transitions use `controller.action_transition_steps` (default 64) to
+Policy transitions use `teleop.action_transition_steps` (default 64) to
 blend discontinuities. Teleop commands bypass that blend and set the filter
 anchor directly, so human motion remains open-loop and responsive.
 

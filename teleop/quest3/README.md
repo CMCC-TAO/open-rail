@@ -23,6 +23,193 @@ Quest3 teleop is hidden and forced off for all other robot types. Switching
 `robots.type` automatically selects the profile above; the profile path is an
 internal setting and cannot be patched through the Web API.
 
+## Fresh-machine installation
+
+This section installs the host-side Quest3 bridge and its runtime dependencies.
+The Unity app that runs on the headset is distributed separately and is not
+built by this repository.
+
+### Requirements
+
+| Item | Requirement |
+| --- | --- |
+| Host OS | Ubuntu 22.04 x86_64 is the validated platform |
+| ROS 2 | Humble with `rclpy`, `sensor_msgs`, `std_msgs`, and `xacro` |
+| Python | Python 3.10, matching ROS 2 Humble's Python ABI |
+| Headset | Meta Quest 3 with developer mode and USB debugging enabled |
+| Connection | USB data cable; Wi-Fi/LAN is optional for direct TCP mode |
+| Robot | A supported robot adapter and its vendor SDK/driver installed separately |
+
+Do not install ROS 2 from PyPI. Use the Ubuntu ROS 2 Humble installation and
+then source `/opt/ros/humble/setup.bash` in every terminal that starts the
+client or the Quest3 node.
+
+### 1. Install host packages
+
+```bash
+# Install ROS 2 Humble first if /opt/ros/humble does not exist:
+# https://docs.ros.org/en/humble/Installation/Ubuntu-Install-Debs.html
+sudo apt update
+sudo apt install -y \
+  adb android-sdk-platform-tools-common \
+  build-essential cmake libeigen3-dev pybind11-dev python3-venv \
+  ros-humble-ros-base ros-humble-rclpy ros-humble-sensor-msgs \
+  ros-humble-std-msgs ros-humble-xacro
+source /opt/ros/humble/setup.bash
+```
+
+### 2. Install Open-RAIL in a Python 3.10 environment
+
+```bash
+git clone https://github.com/CMCC-TAO/open-rail.git
+cd open-rail
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install -e .
+```
+
+Source ROS 2 before activating the environment in each new shell so that
+`rclpy` and the ROS message packages remain visible to the client process:
+
+```bash
+source /opt/ros/humble/setup.bash
+source .venv/bin/activate
+```
+
+### 3. Install the IK solver (`kine_opt`)
+
+Source code, native dependency details, and optional wheel-build instructions
+are maintained in the [kine_opt GitLab repository](http://36.140.17.36:10000/git/DengJiayin/kine_opt).
+
+The Quest3 node uses native IK bindings that are not vendored in this
+repository. Both backends are needed to support both robot profiles:
+
+- `kine_solver_py.SingleArmKineSolver` for `ti5_t170c`;
+- `casadi_ik_cpp.PinocchioCasadiChunkKineSolver` for `agibot_g1`.
+
+Install `kine_opt` into the same environment as Open-RAIL. Its Python wheel
+does not bundle Pinocchio, CasADi, Eigen, Boost, or urdfdom, so the native
+dependencies must be installed first:
+
+```bash
+python -m pip install 'pin==2.7.0' 'casadi==3.8.1' cmake pybind11
+```
+
+Build `kine_opt` from the repository in editable mode:
+
+```bash
+git clone http://36.140.17.36:10000/git/DengJiayin/kine_opt.git ../kine_opt
+
+SITE_PACKAGES="$(python -c 'import site; print(site.getsitepackages()[0])')"
+export PYTHONNOUSERSITE=1
+export CMAKE_PREFIX_PATH="${SITE_PACKAGES}/cmeel.prefix:${SITE_PACKAGES}/casadi:${CMAKE_PREFIX_PATH:-}"
+export BOOST_ROOT="${SITE_PACKAGES}/cmeel.prefix"
+python -m pip install -e ../kine_opt --no-build-isolation
+```
+
+Rebuild the native extensions after changing `kine_opt` C++ sources or CMake
+configuration:
+
+```bash
+python -m pip install -e ../kine_opt --no-build-isolation --force-reinstall
+```
+
+The upstream guide also supports a conda-forge environment. If Open-RAIL
+itself runs in conda, install the validated native stack into that same
+environment:
+
+```bash
+conda install -c conda-forge --strict-channel-priority \
+  eigen=3.4.0 pinocchio=3.1.0 eigenpy casadi boost-cpp pybind11 cmake
+export CMAKE_PREFIX_PATH="$CONDA_PREFIX:$CMAKE_PREFIX_PATH"
+export BOOST_ROOT="$CONDA_PREFIX"
+python -m pip install -e ../kine_opt --no-build-isolation
+```
+
+Do not mix conda-provided and pip/system native libraries in one Python
+environment. The native extensions must be built against the installed
+Pinocchio/CasADi headers and ABI.
+
+### 4. Enable USB transport on the headset
+
+1. Enable developer mode for the Quest 3 in the Meta Horizon phone app.
+2. Connect the headset with a USB data cable and accept the USB debugging
+   authorization prompt inside the headset.
+3. Verify that the host sees an authorized device:
+
+   ```bash
+   adb devices
+   # Expected: <serial>    device
+   ```
+
+4. Install and launch the Quest3 teleop app. Its TCP destination should be
+   `127.0.0.1:8002` when using the default USB transport.
+
+The Quest3 node runs `adb reverse tcp:8002 tcp:8002` automatically and
+periodically reasserts it while the headset is disconnected. To diagnose the
+mapping manually:
+
+```bash
+adb reverse tcp:8002 tcp:8002
+adb reverse --list
+```
+
+For direct Wi-Fi/LAN mode, set `teleop.devices.quest3.no_adb_reverse: true`,
+point the headset app at the host's LAN IP and port `8002`, and allow TCP
+`8002` through the host firewall. The node listens on `0.0.0.0:8002`, so no
+profile change is needed unless the port is overridden.
+
+### 5. Verify the installation
+
+Run this check from the repository root in the ROS-sourced virtual
+environment:
+
+```bash
+source /opt/ros/humble/setup.bash
+source .venv/bin/activate
+
+python - <<'PY'
+import rclpy
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64
+from kine_solver_py import SingleArmKineSolver
+from casadi_ik_cpp import PinocchioCasadiChunkKineSolver
+print("Quest3 teleop Python dependencies: OK")
+PY
+
+adb devices
+teleop/quest3/quest3_a2d_node.sh --help
+teleop/quest3/quest3_ti5_t170c_node.sh --help
+```
+
+Then follow the [Web Client quick start](#quick-start-web-client) or run one
+of the standalone scripts below. For a hardware test, first put the robot in a
+safe state, clear the workspace, and verify the configured reset pose.
+
+### Robot-specific prerequisites
+
+- **TI5 T170C:** install the laptop SDK from `ti5_t170c_robot/` with
+  `bash install1.sh`, and use the same `ROS_DOMAIN_ID`/`RMW_IMPLEMENTATION` as
+  the robot driver. The Orin-side driver and camera forwarder must already be
+  running; see the [TI5 SDK README](../../ti5_t170c_robot/README.md).
+- **AgiBot G1:** install the vendor `a2d_sdk` and start its robot service as
+  described in the [AgiBot G1 adapter README](../../client/robots/agibot_g1/README.md).
+
+Quest3 teleop installs only the host-side bridge. It does not install robot
+drivers, start the robot's controller, or deploy the headset application.
+
+### Troubleshooting
+
+| Symptom | Check |
+| --- | --- |
+| `No module named rclpy` | Source `/opt/ros/humble/setup.bash`, then activate the Python 3.10 environment that launches the Web Client. |
+| `Cannot import kine_solver_py` or `casadi_ik_cpp` | Install/rebuild `kine_opt` with the exact `python` executable used by the client; a wheel or native build for another Python version will not load. |
+| `adb devices` shows no device or `unauthorized` | Use a data cable, enable developer mode/USB debugging, accept the prompt in the headset, run `adb kill-server && adb devices`, and check the Android udev rules package. |
+| Web status stays at `listening` | The bridge is running but no headset connected. Check the app's `127.0.0.1:8002` destination, `adb reverse --list`, and `logs/quest3_teleop.log`. |
+| `Address already in use` on port `8002` | Stop the other process or set `teleop.devices.quest3.listen_port` to the same unused port used by the headset app. |
+| IK extension fails with an undefined symbol | The native Pinocchio/CasADi libraries do not match the `kine_opt` build; recreate the environment and rebuild `kine_opt` without mixing conda and system libraries. |
+
 ## Quick start: Web Client
 
 1. Start the inference server and Web Client.
@@ -75,8 +262,7 @@ them. See the [runtime and recording details](../docs/human-intervention.md#reco
 
 | Configuration | Location |
 | --- | --- |
-| Client teleop switch, topics, managed Quest3 process | `conf/client_conf.py` → `get_teleop_config()`; persisted by the Web Client YAML |
-| Arm/hand timing, freshness, transition, outlier guard | `conf/client_conf.py` → `get_controller_config()` |
+| Client teleop switch, topics, managed Quest3 process, timing, transition, outlier guard, and robot-profile mapping | `conf/client_conf.py` → `get_teleop_config()`; persisted by the Web Client YAML |
 | Robot action layout, hand width, reset pose | `conf/robots_conf.py` |
 | Quest3 controls, reset, hand mapping, IK, limits | `teleop/quest3/config/*.yaml` |
 | Intervention recording columns | `conf/save_conf.py` → `record.record_teleop_fields` |

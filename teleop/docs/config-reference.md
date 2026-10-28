@@ -8,7 +8,7 @@ broader client configuration model, see
 
 | Source | Purpose |
 | --- | --- |
-| `conf/client_conf.py` | Built-in defaults for `teleop`, `controller`, and `record`. |
+| `conf/client_conf.py` | Built-in defaults for `teleop`, `controller`, and `record`; all teleop-specific values are defined by `get_teleop_config()`. |
 | Web Client YAML (`--conf`, default `conf/default_conf.yaml`) | Persisted runtime overrides. The file is created on first Web save and is git-ignored. |
 | Web Configuration panel | Staged edits; Apply patches the running config. |
 | Quest3 YAML profiles | Robot-specific button mapping, reset, hand mapping, IK, and limits. |
@@ -34,12 +34,27 @@ Defaults are defined in `get_teleop_config()` in `conf/client_conf.py`.
 | --- | --- | --- |
 | `teleop.use_teleop` | `false` | Master switch. When true and the client is running, the bridge and managed Quest3 process start. |
 | `teleop.control_device` | `quest3` | Managed device type. The Web UI exposes only `quest3`. |
+| `teleop.bridge_type` | `ros2` | Transport used by the bridge factory (`ros2` or `zmq`). |
+| `teleop.teleop_timeout_s` | `0.15` | Teleop remains authoritative only while newer input arrives inside this window. |
+| `teleop.policy_timeout_s` | `0.5` | Freshness window for policy actions. |
+| `teleop.action_transition_steps` | `64` | Blend length when policy/hold source changes. Teleop is passed through directly. |
+| `teleop.action_transition_max_delta_per_step` | `None` | Optional absolute per-tick output clamp for blended actions. |
+| `teleop.teleop_outlier_guard_enabled` | `true` | Enable teleop jump validation. |
+| `teleop.teleop_outlier_max_arm_joint_delta` | `0.5` | Max absolute change for any one arm joint per packet. |
+| `teleop.teleop_outlier_max_arm_norm_delta` | `1.2` | Max L2 change across 14 arm joints per packet. |
+| `teleop.teleop_outlier_max_gripper_delta` | `1.0` | Max hand change, scaled by the native hand preset scale. |
+| `teleop.teleop_outlier_reanchor_after_rejects` | `5` | Release teleop ownership after this many consecutive rejected packets. |
+| `teleop.teleop_outlier_log_interval_s` | `1.0` | Warning-log rate limit. |
 | `teleop.ros2.topic` | `/target_robot/joint_commands` | Joint command topic consumed by the bridge. |
 | `teleop.ros2.reset_topic` | `/custom/custom_a` | Float64 reset topic for `reset_mode: topic`. |
 | `teleop.ros2.joint_state_topic` | `/client_robot/joint_states` | Command-biased state published for Quest3 IK/fallback. |
 | `teleop.ros2.joint_state_publish_rate` | `30.0` | State heartbeat rate in Hz; `0` disables the timer. |
 | `teleop.ros2.reset_threshold` | `0.5` | Rising-edge threshold for topic-based reset. |
 | `teleop.ros2.node_name` | `vla_infer_teleop_bridge` | ROS2 bridge node name. |
+| `teleop.zmq.endpoint` | `tcp://127.0.0.1:5570` | DEALER endpoint when `bridge_type: zmq`. |
+| `teleop.zmq.identity` | `vla-infer-teleop` | ZMQ DEALER identity. |
+| `teleop.zmq.poll_timeout_ms` | `50` | Receive poll interval in milliseconds. |
+| `teleop.zmq.heartbeat_s` | `1.0` | Ready-heartbeat period in seconds. |
 | `teleop.devices.quest3.no_adb_reverse` | `false` | Skip managed `adb reverse tcp:<port>` setup. |
 | `teleop.devices.quest3.python` | current interpreter | Optional Python executable override for the managed node. |
 | `teleop.devices.quest3.listen_port` | profile value | Optional TCP listen-port override. |
@@ -53,26 +68,6 @@ Apply behavior:
 - Pause/Stop stops the bridge; Resume/Start restarts it when enabled.
 - Start the runtime after enabling teleop if the device-connect check reports it
   unavailable.
-
-`bridge_type` and `teleop.zmq.*` are supported by the programmatic bridge factory
-(`ros2` by default, or `zmq`) but are not part of the Web default config.
-
-## Client controller timing and safety
-
-These fields live under `controller` in `conf/client_conf.py`.
-
-| Key | Default | Meaning |
-| --- | --- | --- |
-| `teleop_timeout_s` | `0.15` | Teleop remains authoritative only while newer input arrives inside this window. |
-| `policy_timeout_s` | `0.5` | Freshness window for policy actions. |
-| `action_transition_steps` | `64` | Blend length when policy/hold source changes. Teleop is passed through directly. |
-| `action_transition_max_delta_per_step` | `None` | Optional absolute per-tick output clamp for blended actions. |
-| `teleop_outlier_guard_enabled` | `true` | Enable teleop jump validation. |
-| `teleop_outlier_max_arm_joint_delta` | `0.5` | Max absolute change for any one arm joint per packet. |
-| `teleop_outlier_max_arm_norm_delta` | `1.2` | Max L2 change across 14 arm joints per packet. |
-| `teleop_outlier_max_gripper_delta` | `1.0` | Max hand change, scaled by the native hand preset scale. |
-| `teleop_outlier_reanchor_after_rejects` | `5` | Release teleop ownership after this many consecutive rejected packets. |
-| `teleop_outlier_log_interval_s` | `1.0` | Warning-log rate limit. |
 
 ## Recording configuration
 

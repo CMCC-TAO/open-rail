@@ -5,18 +5,11 @@ from conf.save_conf import get_record_data_config
 from conf.robots_conf import canonical_robot_type, get_robots_config
 
 
-# Quest3 teleop is intentionally limited to robot bodies with a validated
-# teleop profile.  Keys are Web/Client robot types; values map them to the
-# Quest3 bridge YAML profile (the AgiBot profile intentionally keeps its
-# legacy ``a2d`` name).
-TELEOP_CONFIG_PATH_BY_ROBOT = {
-    'agibot_g1': 'teleop/quest3/config/a2d.yaml',
-    'ti5_t170c': 'teleop/quest3/config/ti5_t170c.yaml',
-}
 def get_teleop_config_path(robot_type):
     """Map a robot type to its Quest3 profile, or ``None`` when unsupported."""
 
-    return TELEOP_CONFIG_PATH_BY_ROBOT.get(canonical_robot_type(robot_type))
+    profiles = get_teleop_config().devices.quest3.config_path_by_robot
+    return profiles.get(canonical_robot_type(robot_type))
 
 
 def apply_teleop_robot_mapping(config, robot_type) -> bool:
@@ -81,9 +74,8 @@ def get_client_config():
     config.record = get_record_data_config()  # Data recording configuration
     config.vision = get_vision_config()
     config.language = get_language_config()
-    # Teleop runtime settings are grouped under config.teleop for the web UI.
-    config.teleop = get_teleop_config()
-    apply_teleop_robot_mapping(config, config.robots.type)
+    # Keep every teleop-specific runtime setting in one config group.
+    config.teleop = get_teleop_config(config.robots.type)
     return config
 
 def get_rdm_config() -> ConfigDict:
@@ -190,16 +182,6 @@ def get_controller_config() -> ConfigDict:
     config.speed = 1.0     # The execution speed with respect to tele-operation speed
     config.raw_fps = 30    # The FPS of the dataset used to train vla/wam model
     config.gripper_offset = 5  # Gripper forward offset. Note: positive value, gripper slow, increase it.
-    config.teleop_timeout_s = 0.15  # Freshness window for teleop bridge actions before falling back to policy/hold.
-    config.policy_timeout_s = 0.5  # Freshness window for policy actions before holding the last selected action.
-    config.action_transition_steps = 64  # Blend window when switching between policy/teleop/hold action sources.
-    config.action_transition_max_delta_per_step = None  # Optional per-control-tick action delta clamp.
-    config.teleop_outlier_guard_enabled = True  # Reject malformed or implausibly large VR teleop jumps before arbitration.
-    config.teleop_outlier_max_arm_joint_delta = 0.5  # Max accepted absolute jump for any arm joint in one teleop packet.
-    config.teleop_outlier_max_arm_norm_delta = 1.2  # Max accepted L2 jump across arm joints in one teleop packet.
-    config.teleop_outlier_max_gripper_delta = 1.0  # Max accepted gripper jump in one teleop packet.
-    config.teleop_outlier_reanchor_after_rejects = 5  # Clear stale teleop source after repeated rejects only when no safe hold action exists.
-    config.teleop_outlier_log_interval_s = 1.0  # Rate-limit outlier warning logs.
     config.action_steps = None  # Optional maximum number of model actions executed per chunk
     return config
 
@@ -265,11 +247,39 @@ def get_vision_config() -> ConfigDict:
     return config
 
 
-def get_teleop_config() -> ConfigDict:
-    """Build the bridge-based teleop configuration used by the web client runtime."""
+def get_teleop_config(robot_type=None) -> ConfigDict:
+    """Build every teleop-specific runtime setting in one place.
+
+    The returned group contains the bridge/device settings, arbitration timing,
+    transition filtering, outlier guards, and robot-to-profile mapping.  A
+    persisted Web config may override these values, but new teleop knobs should
+    be added here first.
+    """
+    profile_by_robot = {
+        'agibot_g1': 'teleop/quest3/config/a2d.yaml',
+        'ti5_t170c': 'teleop/quest3/config/ti5_t170c.yaml',
+    }
+
     config = ConfigDict()
     config.use_teleop = False
     config.control_device = 'quest3'  # choices: quest3
+
+    # Action arbitration and source transitions.
+    config.teleop_timeout_s = 0.15
+    config.policy_timeout_s = 0.5
+    config.action_transition_steps = 64
+    config.action_transition_max_delta_per_step = None
+
+    # Teleop action validation.
+    config.teleop_outlier_guard_enabled = True
+    config.teleop_outlier_max_arm_joint_delta = 0.5
+    config.teleop_outlier_max_arm_norm_delta = 1.2
+    config.teleop_outlier_max_gripper_delta = 1.0
+    config.teleop_outlier_reanchor_after_rejects = 5
+    config.teleop_outlier_log_interval_s = 1.0
+
+    # Transport defaults.
+    config.bridge_type = 'ros2'
     config.ros2 = ConfigDict()
     config.ros2.topic = '/target_robot/joint_commands'
     config.ros2.reset_topic = '/custom/custom_a'
@@ -277,9 +287,22 @@ def get_teleop_config() -> ConfigDict:
     config.ros2.joint_state_publish_rate = 30.0
     config.ros2.reset_threshold = 0.5
     config.ros2.node_name = 'vla_infer_teleop_bridge'
+    config.zmq = ConfigDict()
+    config.zmq.endpoint = 'tcp://127.0.0.1:5570'
+    config.zmq.identity = 'vla-infer-teleop'
+    config.zmq.poll_timeout_ms = 50
+    config.zmq.heartbeat_s = 1.0
+
+    # Managed device and robot-profile selection.
     config.devices = ConfigDict()
     config.devices.quest3 = ConfigDict()
     config.devices.quest3.auto_config_path = True
-    config.devices.quest3.config_path_by_robot = dict(TELEOP_CONFIG_PATH_BY_ROBOT)
+    config.devices.quest3.config_path = profile_by_robot.get(
+        canonical_robot_type(robot_type),
+        '',
+    )
+    config.devices.quest3.config_path_by_robot = dict(profile_by_robot)
     config.devices.quest3.no_adb_reverse = False
+    if config.devices.quest3.config_path == '':
+        config.use_teleop = False
     return config

@@ -17,12 +17,23 @@ import tempfile
 import threading
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Callable, Optional, Sequence
 
 import numpy as np
 
+from client.core.action_arbiter import (
+    ActionArbiter,
+    ActionSource,
+    ActionTransitionFilter,
+    SelectedAction,
+)
+from conf.client_conf import get_teleop_config_path
+from conf.robots_conf import canonical_robot_type
+from teleop.action_mapping import action_layout_from_robot_config
 from teleop.config import config_get as _cfg_get
 from teleop.config import normalize_reset_mode
+from teleop.status import teleop_enabled, teleop_status_snapshot
 
 DEFAULT_CLIENT_JOINT_STATE_TOPIC = "/client_robot/joint_states"
 
@@ -832,6 +843,616 @@ class ZmqTeleopBridge(TeleopBridgeBase):
                 self.logger.warning("Drop invalid ZMQ teleop message", exc_info=True)
                 continue
             self.submit_action(action, time.perf_counter())
+
+
+@dataclass(frozen=True)
+class TeleopControlDecision:
+    """One action selected by the teleop runtime for the VLA control tick."""
+
+    action: np.ndarray
+    source: ActionSource
+    mask: Optional[np.ndarray] = None
+    policy_action: Optional[np.ndarray] = None
+
+
+class TeleopRuntime:
+    """Teleop state and helpers shared by the VLA client and Web runtime.
+
+    This runtime keeps teleop-specific lifecycle, outlier validation, policy
+    handoff, status, and recording logic out of the core VLA control loop.
+    """
+
+    _config_get = staticmethod(_cfg_get)
+
+    def __init__(self, client) -> None:
+        """Bind the runtime to the owning VLA client without taking over its lifecycle."""
+
+        self.client = client
+
+    def initialize(self) -> None:
+        """Initialize teleop-only state on the owning VLA client."""
+
+        client = self.client
+        teleop_config = client.config.teleop
+        self.client.action_arbiter = ActionArbiter(
+            action_timeout_s=float(getattr(teleop_config, 'teleop_timeout_s', 0.15)),
+            policy_timeout_s=float(getattr(teleop_config, 'policy_timeout_s', 0.5)),
+        )
+        self.client.action_transition_filter = ActionTransitionFilter(
+            transition_steps=int(getattr(teleop_config, 'action_transition_steps', 64)),
+            max_delta_per_step=getattr(teleop_config, 'action_transition_max_delta_per_step', None),
+        )
+        self.client.teleop_bridge = None
+        self.client._teleop_outlier_reject_count = 0
+        self.client._teleop_outlier_last_log_s = 0.0
+        self.client._last_executed_action = None
+        self.client._last_executed_action_lock = threading.Lock()
+        self.client._action_select_last_debug_s = 0.0
+        self.client._teleop_policy_handoff_active = False
+        self.client._teleop_policy_handoff_hold_action = None
+        self.client._teleop_policy_handoff_started_s = None
+        self.client._policy_generation = 0
+        self.client._policy_generation_lock = threading.Lock()
+
+    def _reset_teleop_command_state(self) -> None:
+        """Drop all command/handoff state that belongs before a robot reset."""
+
+        self.client.action_arbiter.clear()
+        self.client.action_transition_filter.reset()
+        self._reset_teleop_policy_handoff()
+
+    def _teleop_bridge_config(self):
+        """Return the grouped teleop config, if present."""
+        return getattr(self.client.config, 'teleop', None)
+
+    def _use_teleop_enabled(self) -> bool:
+        """Return whether bridge-based human teleoperation is enabled."""
+
+        return teleop_enabled(self.client.config)
+
+    def set_teleop_enabled(self, enabled: bool):
+        """Enable or disable the teleop bridge at runtime."""
+        teleop_cfg = self._teleop_bridge_config()
+        if teleop_cfg is not None:
+            teleop_cfg.use_teleop = bool(enabled)
+        elif hasattr(self.client.config, 'use_teleop'):
+            self.client.config.use_teleop = bool(enabled)
+        if bool(enabled) and self.client.is_running:
+            self.start_teleop_bridge()
+        else:
+            self.stop_teleop_bridge()
+            self.client.action_arbiter.clear()
+            self.client.action_transition_filter.reset()
+            self._reset_teleop_policy_handoff()
+
+    def _resolve_teleop_device_config(self) -> bool:
+        """Resolve the Quest3 YAML from the selected robot type when enabled."""
+        teleop_cfg = self._teleop_bridge_config()
+        device = str(self._config_get(teleop_cfg, 'control_device', '') or '').lower()
+        if device != 'quest3':
+            return True
+        device_cfg = self._config_get(self._config_get(teleop_cfg, 'devices', None), 'quest3', None)
+        if device_cfg is None:
+            self.client.logger.warning("Quest3 teleop device config is missing; teleop bridge will not start.")
+            return False
+        # This is an internal, non-user-editable setting. Keep it forced on for
+        # every bridge start so a persisted path can never override the mapping.
+        device_cfg.auto_config_path = True
+        robot_type = self._config_get(getattr(self.client.config, 'robots', None), 'type', '')
+        if hasattr(robot_type, 'value'):
+            robot_type = robot_type.value
+        robot_type = str(robot_type or '').lower()
+        config_path = get_teleop_config_path(robot_type)
+        if not config_path:
+            self.client.logger.warning(
+                "Quest3 teleop is not supported for robot type %r; teleop bridge will not start.",
+                robot_type,
+            )
+            return False
+        device_cfg.config_path = str(config_path)
+        self.client.logger.info("Resolved Quest3 teleop config for robot type %s: %s", robot_type, config_path)
+        return True
+
+    def start_teleop_bridge(self):
+        """Create and start the configured teleop bridge."""
+        if not self._use_teleop_enabled():
+            return
+        if not self._resolve_teleop_device_config():
+            return
+        if self.client.teleop_bridge is None:
+            robot_type = self._config_get(getattr(self.client.config, 'robots', None), 'type', '')
+            if hasattr(robot_type, 'value'):
+                robot_type = robot_type.value
+            robot_type = str(robot_type or '')
+            robot_config_name = canonical_robot_type(robot_type)
+            robot_cfg = self._config_get(
+                getattr(self.client.config, 'robots', None),
+                robot_config_name,
+                None,
+            )
+            action_layout = action_layout_from_robot_config(robot_cfg)
+            robot_action_dim = int(getattr(self.client.robot, 'action_dim', 0) or 0)
+            if robot_action_dim and robot_action_dim != action_layout.action_dim:
+                raise ValueError(
+                    f"Teleop layout for {robot_config_name!r} has {action_layout.action_dim} "
+                    f"dims but the robot reports {robot_action_dim}"
+                )
+            action_dim = robot_action_dim or action_layout.action_dim
+            self.client.teleop_bridge = create_teleop_bridge(
+                self._teleop_bridge_config(),
+                submit_action=self.submit_teleop_bridge_action,
+                action_dim=action_dim,
+                reset_handler=self.client.reset_robot,
+                joint_state_provider=self.get_teleop_joint_state,
+                action_names=action_layout.action_names,
+                native_reset_action=self._config_get(robot_cfg, 'reset_robot_pos', None),
+            )
+        self.client.teleop_bridge.start()
+
+    def stop_teleop_bridge(self):
+        """Stop the bridge and clear fresh-human-action state."""
+        if self.client.teleop_bridge is not None:
+            self.client.teleop_bridge.stop()
+        self.client.action_arbiter.clear_source(ActionSource.TELEOP)
+        self._reset_teleop_policy_handoff()
+        self._reset_teleop_outlier_guard()
+
+    def restart_teleop_bridge(self):
+        """Recreate the bridge after device/topic/joint-name config changes."""
+        was_running = self.client.teleop_bridge is not None and self.client.teleop_bridge.running
+        self.stop_teleop_bridge()
+        self.client.teleop_bridge = None
+        self.client.action_arbiter.clear()
+        self.client.action_transition_filter.reset()
+        self._reset_teleop_policy_handoff()
+        if was_running or (self.client.is_running and self._use_teleop_enabled()):
+            self.start_teleop_bridge()
+
+    def submit_teleop_bridge_action(self, action, timestamp=None, mask=None):
+        """Receive one teleop action from the bridge and submit it to arbitration.
+
+        ``mask`` optionally marks which entries are real human control data;
+        ``None`` means the whole action is treated as human-controlled.
+        """
+        if timestamp is None:
+            timestamp = time.perf_counter()
+        action_arr = self._validate_teleop_bridge_action(action, timestamp=timestamp)
+        if action_arr is None:
+            self._hold_teleop_after_rejected_action(timestamp)
+            return
+        mask_arr = None
+        if mask is not None:
+            mask_arr = np.asarray(mask, dtype=bool).reshape(-1)
+            if mask_arr.shape != action_arr.shape:
+                self.client.logger.warning(
+                    'Ignore teleop mask with shape %s for action shape %s', mask_arr.shape, action_arr.shape
+                )
+                mask_arr = None
+        self.client.action_arbiter.submit(ActionSource.TELEOP, action_arr, timestamp, mask=mask_arr)
+        self.client._teleop_outlier_reject_count = 0
+
+    def _validate_teleop_bridge_action(self, action, timestamp: Optional[float] = None) -> Optional[np.ndarray]:
+        """Reject malformed or implausibly large teleop jumps before arbitration."""
+        if timestamp is None:
+            timestamp = time.perf_counter()
+        try:
+            action_arr = np.asarray(action, dtype=float).reshape(-1)
+        except (TypeError, ValueError):
+            self._log_teleop_outlier('non-numeric teleop action')
+            return None
+        if action_arr.size == 0:
+            self._log_teleop_outlier('empty teleop action')
+            return None
+        if not np.all(np.isfinite(action_arr)):
+            self._log_teleop_outlier('non-finite teleop action')
+            return None
+        action_layout = self._teleop_action_layout()
+        if action_arr.size != action_layout.action_dim:
+            self._log_teleop_outlier(
+                f'teleop action width {action_arr.size} does not match target layout '
+                f'{action_layout.action_dim}'
+            )
+            return None
+        teleop_config = self.client.config.teleop
+        if not bool(getattr(teleop_config, 'teleop_outlier_guard_enabled', True)):
+            return action_arr
+
+        baseline, baseline_source = self._teleop_outlier_baseline_snapshot(
+            action_arr.shape[0], now=timestamp
+        )
+        if baseline is None:
+            return action_arr
+        if baseline.shape != action_arr.shape:
+            self._log_teleop_outlier(
+                f'teleop baseline shape mismatch action={action_arr.shape} baseline={baseline.shape}'
+            )
+            return None
+
+        delta = np.abs(action_arr - baseline)
+        arm_count = min(14, delta.shape[0])
+        if arm_count:
+            max_arm_joint_delta = getattr(teleop_config, 'teleop_outlier_max_arm_joint_delta', 0.5)
+            if max_arm_joint_delta is not None and np.max(delta[:arm_count]) > float(max_arm_joint_delta):
+                self.client._teleop_outlier_reject_count += 1
+                joint_index = int(np.argmax(delta[:arm_count]))
+                joint_name = action_layout.action_names[joint_index]
+                self._log_teleop_outlier(
+                    'arm joint %s[%d] jump %.4f exceeds %.4f; '
+                    'incoming=%.6f baseline=%.6f baseline_source=%s; reject_count=%d'
+                    % (
+                        joint_name,
+                        joint_index,
+                        float(delta[joint_index]),
+                        float(max_arm_joint_delta),
+                        float(action_arr[joint_index]),
+                        float(baseline[joint_index]),
+                        baseline_source,
+                        self.client._teleop_outlier_reject_count,
+                    )
+                )
+                return None
+            max_arm_norm_delta = getattr(teleop_config, 'teleop_outlier_max_arm_norm_delta', 1.2)
+            if max_arm_norm_delta is not None and np.linalg.norm(delta[:arm_count]) > float(max_arm_norm_delta):
+                self.client._teleop_outlier_reject_count += 1
+                self._log_teleop_outlier(
+                    'arm norm jump %.4f exceeds %.4f; baseline_source=%s; reject_count=%d'
+                    % (
+                        float(np.linalg.norm(delta[:arm_count])),
+                        float(max_arm_norm_delta),
+                        baseline_source,
+                        self.client._teleop_outlier_reject_count,
+                    )
+                )
+                return None
+        if delta.shape[0] > 14:
+            max_hand_delta = getattr(teleop_config, 'teleop_outlier_max_gripper_delta', 1.0)
+            if max_hand_delta is not None:
+                max_hand_delta = float(max_hand_delta) * action_layout.hand_value_scale
+            if max_hand_delta is not None and np.max(delta[14:]) > float(max_hand_delta):
+                self.client._teleop_outlier_reject_count += 1
+                self._log_teleop_outlier(
+                    'hand jump %.4f exceeds %.4f; reject_count=%d'
+                    % (float(np.max(delta[14:])), float(max_hand_delta), self.client._teleop_outlier_reject_count)
+                )
+                return None
+        return action_arr
+
+    def _teleop_robot_config(self):
+        """Return the active robot configuration used by teleop conversion."""
+
+        robots_cfg = getattr(self.client.config, 'robots', None)
+        robot_type = self._config_get(robots_cfg, 'type', '')
+        if hasattr(robot_type, 'value'):
+            robot_type = robot_type.value
+        return self._config_get(robots_cfg, canonical_robot_type(robot_type), None)
+
+    def _teleop_action_layout(self):
+        """Return the target robot layout used by the teleop producer."""
+
+        return action_layout_from_robot_config(self._teleop_robot_config())
+
+    @staticmethod
+    def _teleop_record_fields(executed_action, selected_source, teleop_mask=None, policy_action=None) -> dict:
+        """Build the per-frame teleop intervention fields for data recording.
+
+        - ``teleop_action``: the executed action while a human is in control, else zeros.
+        - ``teleop_action_mask``: entries of ``teleop_action`` carrying real human
+          control data; all True when the producer did not provide a mask.
+        - ``rejected_action``: the policy action that would have been executed,
+          when a human overrode an available policy action, else zeros.
+        - ``rejected_action_mask``: entries of ``rejected_action`` actually replaced
+          by human control.
+        - ``is_teleop``: whether fresh human input selected this action.
+        """
+        executed = np.asarray(executed_action, dtype=np.float32).reshape(-1)
+        width = executed.shape[0]
+        is_teleop = selected_source == ActionSource.TELEOP
+        if is_teleop:
+            teleop_action = executed.copy()
+            if teleop_mask is None:
+                teleop_mask = np.ones(width, dtype=bool)
+            else:
+                teleop_mask = np.asarray(teleop_mask, dtype=bool).reshape(-1).copy()
+        else:
+            teleop_action = np.zeros(width, dtype=np.float32)
+            teleop_mask = np.zeros(width, dtype=bool)
+
+        if is_teleop and policy_action is not None:
+            rejected_action = np.asarray(policy_action, dtype=np.float32).reshape(-1).copy()
+            rejected_mask = np.zeros(rejected_action.shape[0], dtype=bool)
+            overlap = min(rejected_mask.shape[0], teleop_mask.shape[0])
+            rejected_mask[:overlap] = teleop_mask[:overlap]
+        else:
+            rejected_action = np.zeros(width, dtype=np.float32)
+            rejected_mask = np.zeros(width, dtype=bool)
+
+        return {
+            'teleop_action': teleop_action,
+            'teleop_action_mask': teleop_mask,
+            'rejected_action': rejected_action,
+            'rejected_action_mask': rejected_mask,
+            'is_teleop': bool(is_teleop),
+        }
+
+    def _teleop_outlier_baseline_snapshot(
+        self,
+        action_dim: int,
+        now: Optional[float] = None,
+    ) -> tuple[Optional[np.ndarray], str]:
+        """Return the outlier baseline and the source used to build it."""
+        if now is None:
+            now = time.perf_counter()
+        last_teleop_s = self.client.action_arbiter.last_submitted_at(ActionSource.TELEOP)
+        timeout_s = float(getattr(self.client.config.teleop, 'teleop_timeout_s', 0.15))
+        if last_teleop_s is not None and now - last_teleop_s <= timeout_s:
+            last_teleop_action = self.client.action_arbiter.latest_action(ActionSource.TELEOP)
+            if last_teleop_action is not None:
+                return last_teleop_action, 'teleop(age=%.3fs)' % (now - last_teleop_s)
+        baseline = self._coerce_state_to_action_shape(self._get_last_executed_action(), action_dim)
+        if baseline is not None:
+            return baseline, 'last_executed'
+        baseline = self._coerce_state_to_action_shape(getattr(self.client.robot, 'current_state', None), action_dim)
+        if baseline is not None:
+            return baseline, 'measured_state'
+        return None, 'unavailable'
+
+    def _teleop_outlier_baseline(self, action_dim: int, now: Optional[float] = None) -> Optional[np.ndarray]:
+        """Return a current-safe baseline for backward-compatible callers."""
+        baseline, _ = self._teleop_outlier_baseline_snapshot(action_dim, now=now)
+        return baseline
+
+    @staticmethod
+    def _coerce_state_to_action_shape(values, action_dim: int) -> Optional[np.ndarray]:
+        """Map a robot state/action vector into the flat teleop action layout."""
+        if values is None:
+            return None
+        try:
+            arr = np.asarray(values, dtype=float).reshape(-1)
+        except (TypeError, ValueError):
+            return None
+        if arr.shape[0] == action_dim:
+            return arr.copy()
+        if arr.shape[0] >= action_dim:
+            return arr[:action_dim].copy()
+        return None
+
+    def _hold_teleop_after_rejected_action(self, timestamp: float) -> None:
+        """Hold only a live session's safe action, or release a bad stream."""
+        reject_threshold = max(int(getattr(
+            self.client.config.teleop, 'teleop_outlier_reanchor_after_rejects', 5
+        )), 1)
+        if self.client._teleop_outlier_reject_count >= reject_threshold:
+            if self.client._teleop_outlier_reject_count == reject_threshold:
+                self.client.logger.warning(
+                    'Release teleop ownership after %d consecutive rejected actions.',
+                    self.client._teleop_outlier_reject_count,
+                )
+            self.client.action_arbiter.clear_source(ActionSource.TELEOP)
+            return
+
+        last_teleop_s = self.client.action_arbiter.last_submitted_at(ActionSource.TELEOP)
+        timeout_s = float(getattr(self.client.config.teleop, 'teleop_timeout_s', 0.15))
+        if last_teleop_s is None or float(timestamp) - last_teleop_s > timeout_s:
+            return
+
+        hold_action = self.client.action_arbiter.latest_action(ActionSource.TELEOP)
+        if hold_action is None:
+            return
+        hold_mask = self.client.action_arbiter.latest_mask(ActionSource.TELEOP)
+        hold_action = np.asarray(hold_action, dtype=float).copy()
+        self.client.action_arbiter.submit(ActionSource.TELEOP, hold_action, timestamp, mask=hold_mask)
+
+    def _reset_teleop_outlier_guard(self) -> None:
+        self.client._teleop_outlier_reject_count = 0
+
+    def _log_teleop_outlier(self, reason: str) -> None:
+        now = time.perf_counter()
+        interval_s = float(getattr(self.client.config.teleop, 'teleop_outlier_log_interval_s', 1.0))
+        if now - self.client._teleop_outlier_last_log_s < interval_s:
+            return
+        self.client._teleop_outlier_last_log_s = now
+        self.client.logger.warning('Drop teleop outlier action: %s', reason)
+
+    def get_teleop_joint_state(self):
+        """Return command-biased robot state for Quest3 IK feedback."""
+        state = getattr(self.client.robot, 'current_state', None)
+        state = None if state is None else np.asarray(state, dtype=float).reshape(-1).copy()
+        last_action = self._get_last_executed_action()
+        if last_action is None:
+            return state
+        if state is None:
+            return last_action
+        merged = state.copy()
+        if merged.shape[0] < last_action.shape[0]:
+            merged = np.pad(merged, (0, last_action.shape[0] - merged.shape[0]))
+        command_dim = min(merged.shape[0], last_action.shape[0])
+        merged[:command_dim] = last_action[:command_dim]
+        return merged
+
+    def _get_last_executed_action(self):
+        with self.client._last_executed_action_lock:
+            return None if self.client._last_executed_action is None else self.client._last_executed_action.copy()
+
+    def _set_last_executed_action(self, action) -> None:
+        value = None if action is None else np.asarray(action, dtype=float).reshape(-1).copy()
+        with self.client._last_executed_action_lock:
+            self.client._last_executed_action = value
+
+    def is_teleop_human_active(self) -> bool:
+        """Return whether fresh teleop input is currently controlling the robot."""
+        if self.client.teleop_bridge is None or not self.client.teleop_bridge.running:
+            return False
+        last_teleop_s = self.client.action_arbiter.last_submitted_at(ActionSource.TELEOP)
+        if last_teleop_s is None:
+            return False
+        timeout_s = float(getattr(self.client.config.teleop, 'teleop_timeout_s', 0.15))
+        return time.perf_counter() - last_teleop_s <= timeout_s
+
+    def _publish_teleop_anchor_state(self) -> None:
+        """Publish command-biased feedback while no human input is active."""
+
+        if (
+            self.client.teleop_bridge is not None
+            and self.client.teleop_bridge.running
+            and not self.is_teleop_human_active()
+        ):
+            try:
+                self.client.teleop_bridge.publish_joint_state()
+            except Exception:
+                self.client.logger.warning("Failed to publish teleop anchor state", exc_info=True)
+
+    @property
+    def teleop_status(self) -> dict:
+        """Return teleop bridge and managed device connectivity state."""
+
+        return teleop_status_snapshot(self.client.config, bridge=self.client.teleop_bridge)
+
+    def _action_for_selected_source(self, selected: SelectedAction) -> np.ndarray:
+        if selected.source == ActionSource.TELEOP:
+            action = np.asarray(selected.action, dtype=float).copy()
+            # Keep the transition filter seeded with the exact human command so a
+            # later policy handoff starts from the robot's actual last command.
+            self.client.action_transition_filter.reset(last_output=action)
+            return action
+        return self.client.action_transition_filter.filter(selected)
+
+    def _reset_teleop_policy_handoff(self) -> None:
+        """Clear teleop-to-policy handoff state."""
+        self.client._teleop_policy_handoff_active = False
+        self.client._teleop_policy_handoff_hold_action = None
+        self.client._teleop_policy_handoff_started_s = None
+
+    def _current_policy_generation(self) -> int:
+        with self.client._policy_generation_lock:
+            return self.client._policy_generation
+
+    def _invalidate_policy_generation(self) -> int:
+        with self.client._policy_generation_lock:
+            self.client._policy_generation += 1
+            return self.client._policy_generation
+
+    def _is_policy_generation_current(self, generation: int) -> bool:
+        with self.client._policy_generation_lock:
+            return generation == self.client._policy_generation
+
+    def _start_teleop_policy_handoff(self, hold_action) -> bool:
+        """Hold the final teleop action until a fresh policy chunk arrives.
+
+        The policy generation is invalidated so inference replies that were
+        already in flight when teleop ended cannot be applied. Existing policy
+        chunks are cleared because their time base belongs to the pre-handoff
+        state; the next fresh reply will be fused from the held human action.
+        """
+        if hold_action is None:
+            return False
+        self.client._teleop_policy_handoff_hold_action = np.asarray(hold_action, dtype=float).copy()
+        self.client._teleop_policy_handoff_active = True
+        self.client._teleop_policy_handoff_started_s = time.perf_counter()
+        self._invalidate_policy_generation()
+        self.client.realtime_data_manager.clear_policy_actions()
+        self.client.action_arbiter.clear_source(ActionSource.POLICY)
+        self.client.action_arbiter.clear_source(ActionSource.TELEOP)
+        self.client.action_transition_filter.reset(last_output=self.client._teleop_policy_handoff_hold_action)
+        self._reset_teleop_outlier_guard()
+        self.client.logger.info("Teleop exited; holding final teleop action until a fresh policy chunk is available.")
+        return True
+
+    def _select_teleop_policy_handoff_action(self):
+        """Return the held teleop action while waiting for fresh policy output."""
+        if not self.client._teleop_policy_handoff_active:
+            return None, None, None
+        hold_action = self.client._teleop_policy_handoff_hold_action
+        if hold_action is None:
+            self._reset_teleop_policy_handoff()
+            return None, None, None
+        return hold_action.copy(), ActionSource.HOLD, None
+
+    def _teleop_policy_handoff_state_for_fusion(self, action_dim: int):
+        """Return the held teleop action as the inter-chunk fusion anchor."""
+        if not self.client._teleop_policy_handoff_active or self.client._teleop_policy_handoff_hold_action is None:
+            return None, None, None
+        currt_action = self._coerce_state_to_action_shape(
+            self.client._teleop_policy_handoff_hold_action,
+            action_dim,
+        )
+        if currt_action is None:
+            return None, None, None
+        currt_vel = np.zeros_like(currt_action)
+        currt_acc = np.zeros_like(currt_action)
+        return currt_action, currt_vel, currt_acc
+
+    def _complete_teleop_policy_handoff(self, action_chunk_smoothed, target_chunk_index: int) -> None:
+        """Finish handoff after the fused policy chunk has been published."""
+        first_policy_action = np.asarray(action_chunk_smoothed[:, int(target_chunk_index)], dtype=float).copy()
+        self.client.action_transition_filter.reset(last_output=first_policy_action)
+        self.client.action_arbiter.clear()
+        self.client.action_arbiter.submit(ActionSource.POLICY, first_policy_action, time.perf_counter())
+        self._reset_teleop_policy_handoff()
+
+    def _resolve_teleop_control_action(
+        self,
+        policy_action,
+        *,
+        now: Optional[float] = None,
+    ) -> Optional[TeleopControlDecision]:
+        """Resolve policy, teleop, HOLD, and teleop-to-policy handoff for one tick."""
+
+        if now is None:
+            now = time.perf_counter()
+
+        if self.client._teleop_policy_handoff_active:
+            last_teleop_s = self.client.action_arbiter.last_submitted_at(ActionSource.TELEOP)
+            new_teleop_after_handoff = (
+                last_teleop_s is not None
+                and self.client._teleop_policy_handoff_started_s is not None
+                and last_teleop_s > self.client._teleop_policy_handoff_started_s
+            )
+            if new_teleop_after_handoff:
+                self.client.logger.info("Fresh teleop input interrupted teleop-to-policy handoff.")
+                self._reset_teleop_policy_handoff()
+            else:
+                hold_action, hold_source, hold_policy_action = self._select_teleop_policy_handoff_action()
+                if hold_action is None:
+                    return None
+                return TeleopControlDecision(
+                    action=np.asarray(hold_action, dtype=float),
+                    source=hold_source,
+                    policy_action=hold_policy_action,
+                )
+
+        if policy_action is not None:
+            self.client.action_arbiter.submit(ActionSource.POLICY, policy_action, now)
+
+        selected = self.client.action_arbiter.select(now=now)
+        if selected is None:
+            return None
+
+        if (
+            selected.previous_source == ActionSource.TELEOP
+            and selected.source != ActionSource.TELEOP
+        ):
+            last_executed_action = self._get_last_executed_action()
+            hold_action = last_executed_action if last_executed_action is not None else selected.action
+            if self._start_teleop_policy_handoff(hold_action):
+                hold_action, hold_source, hold_policy_action = self._select_teleop_policy_handoff_action()
+                if hold_action is None:
+                    return None
+                return TeleopControlDecision(
+                    action=np.asarray(hold_action, dtype=float),
+                    source=hold_source,
+                    policy_action=hold_policy_action,
+                )
+
+        action = self._action_for_selected_source(selected)
+        if now - self.client._action_select_last_debug_s >= 1.0:
+            self.client._action_select_last_debug_s = now
+            self.client.logger.debug("Action arbiter selected source=%s", selected.source.value)
+        return TeleopControlDecision(
+            action=action,
+            source=selected.source,
+            mask=selected.mask,
+            policy_action=policy_action,
+        )
 
 
 def create_teleop_bridge(

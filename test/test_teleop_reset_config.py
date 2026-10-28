@@ -13,9 +13,9 @@ from client.core.action_arbiter import ActionArbiter, ActionSource
 from client.core.vla_client import VLAClient
 from client.robots.base_robot import RobotBase
 from conf.client_conf import (
-    TELEOP_CONFIG_PATH_BY_ROBOT,
     apply_teleop_robot_mapping,
     get_client_config,
+    get_teleop_config,
     get_teleop_config_path,
 )
 from conf.robots_conf import RobotType, get_ti5_t170c_config
@@ -128,7 +128,7 @@ def test_teleop_robot_mapping_switches_profiles_and_disables_unsupported():
 
 
 def test_teleop_support_is_limited_to_validated_robot_bodies():
-    assert TELEOP_CONFIG_PATH_BY_ROBOT == {
+    assert dict(get_teleop_config().devices.quest3.config_path_by_robot) == {
         'agibot_g1': 'teleop/quest3/config/a2d.yaml',
         'ti5_t170c': 'teleop/quest3/config/ti5_t170c.yaml',
     }
@@ -137,6 +137,29 @@ def test_teleop_support_is_limited_to_validated_robot_bodies():
     assert get_teleop_config_path('RobotType.TI5_T170C') == 'teleop/quest3/config/ti5_t170c.yaml'
     assert get_teleop_config_path('mock') is None
     assert get_teleop_config_path('navi_wa2') is None
+
+
+def test_teleop_defaults_are_centralized_in_one_config_group():
+    config = get_client_config()
+    teleop_keys = {
+        'teleop_timeout_s',
+        'policy_timeout_s',
+        'action_transition_steps',
+        'action_transition_max_delta_per_step',
+        'teleop_outlier_guard_enabled',
+        'teleop_outlier_max_arm_joint_delta',
+        'teleop_outlier_max_arm_norm_delta',
+        'teleop_outlier_max_gripper_delta',
+        'teleop_outlier_reanchor_after_rejects',
+        'teleop_outlier_log_interval_s',
+        'bridge_type',
+        'ros2',
+        'zmq',
+        'devices',
+    }
+
+    assert teleop_keys.issubset(config.teleop.keys())
+    assert teleop_keys.isdisjoint(config.controller.keys())
 
 
 def test_teleop_status_is_derived_from_one_shared_snapshot():
@@ -169,7 +192,7 @@ def test_ti5_native_teleop_action_is_not_remapped_or_rescaled():
             'type': 'ti5_t170c',
             'ti5_t170c': ti5_config,
         },
-        'controller': {
+        'teleop': {
             'teleop_outlier_guard_enabled': True,
             'teleop_outlier_max_arm_joint_delta': 0.5,
             'teleop_outlier_max_arm_norm_delta': 1.2,
@@ -199,7 +222,7 @@ def test_ti5_bridge_rejects_legacy_scalar_width_instead_of_remapping_it():
             'type': 'ti5_t170c',
             'ti5_t170c': get_ti5_t170c_config(),
         },
-        'controller': {'teleop_outlier_guard_enabled': False},
+        'teleop': {'teleop_outlier_guard_enabled': False},
     })
     client.logger = logging.getLogger(__name__)
     client._teleop_outlier_last_log_s = 0.0
@@ -241,7 +264,7 @@ def test_stale_teleop_action_is_not_used_as_outlier_baseline():
     client.logger = logging.getLogger(__name__)
     client.config = ConfigDict({
         'robots': {'type': 'ti5_t170c', 'ti5_t170c': get_ti5_t170c_config()},
-        'controller': {
+        'teleop': {
             'teleop_timeout_s': 0.15,
             'teleop_outlier_guard_enabled': True,
             'teleop_outlier_max_arm_joint_delta': 0.5,
@@ -270,7 +293,7 @@ def test_stale_teleop_action_is_not_used_as_outlier_baseline():
 def test_rejected_teleop_stream_releases_ownership_after_threshold():
     client = object.__new__(VLAClient)
     client.logger = logging.getLogger(__name__)
-    client.config = ConfigDict({'controller': {
+    client.config = ConfigDict({'teleop': {
         'teleop_timeout_s': 0.15,
         'teleop_outlier_reanchor_after_rejects': 5,
     }})
@@ -285,7 +308,7 @@ def test_rejected_teleop_stream_releases_ownership_after_threshold():
 def test_live_teleop_session_holds_only_its_own_last_safe_action():
     client = object.__new__(VLAClient)
     client.logger = logging.getLogger(__name__)
-    client.config = ConfigDict({'controller': {
+    client.config = ConfigDict({'teleop': {
         'teleop_timeout_s': 0.15,
         'teleop_outlier_reanchor_after_rejects': 5,
     }})
