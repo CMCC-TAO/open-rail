@@ -3,6 +3,8 @@ robot: a2d
 
 # TCP port where the Quest3 Unity client connects to stream controller packets.
 listen_port: 8002
+tcp_client_timeout_sec: 2.0
+tcp_status_publish_interval_sec: 1.0
 
 # Main control loop frequency in Hz. It also defines the IK timestep as 1 / control_frequency.
 control_frequency: 100.0

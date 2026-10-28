@@ -20,6 +20,7 @@ from conf.client_conf import (
 )
 from conf.robots_conf import RobotType, get_ti5_t170c_config
 from teleop.action_mapping import action_layout_for_robot
+from teleop.quest3.quest3 import BridgeState, QuestTcpServer
 from teleop.status import teleop_enabled, teleop_status_snapshot
 
 
@@ -318,3 +319,38 @@ def test_starting_control_starts_configured_teleop_bridge():
 
     assert calls == ['start']
     assert client.is_control_thread_running is True
+
+
+def test_quest3_tcp_watchdog_expires_silent_connection():
+    server = object.__new__(QuestTcpServer)
+    server.client_timeout_s = 2.0
+    server.last_packet_monotonic = 10.0
+    assert not server._client_timed_out(11.99)
+    assert server._client_timed_out(12.01)
+    server.client_timeout_s = 0.0
+    assert not server._client_timed_out(100.0)
+
+
+def test_quest3_tcp_status_refreshes_packet_heartbeat(tmp_path):
+    server = QuestTcpServer(
+        node=SimpleNamespace(get_logger=lambda: SimpleNamespace(info=lambda *args: None)),
+        state=BridgeState(),
+        port=8002,
+        controller_y_rotation_rad=0.0,
+        invalid_origin_epsilon_m=0.0,
+        status_file=str(tmp_path / "quest3_status.json"),
+        status_publish_interval_s=1.0,
+    )
+    server.last_packet_monotonic = time.monotonic()
+    server.last_packet_wall_time = time.time()
+    server._last_status_publish_monotonic = 0.0
+    server.state.left.pose_valid = True
+    server.state.right.pose_valid = False
+    server._publish_periodic_status("connected", connected=True)
+    payload = json.loads((tmp_path / "quest3_status.json").read_text(encoding="utf-8"))
+    assert payload["state"] == "connected"
+    assert payload["connected"] is True
+    assert payload["last_packet_at"] is not None
+    assert payload["last_packet_age_s"] >= 0.0
+    assert payload["left_tracking_valid"] is True
+    assert payload["right_tracking_valid"] is False

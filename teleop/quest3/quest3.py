@@ -563,6 +563,8 @@ class QuestTcpServer:
         controller_y_rotation_rad: float,
         invalid_origin_epsilon_m: float,
         status_file: str | None = None,
+        client_timeout_s: float = 2.0,
+        status_publish_interval_s: float = 1.0,
     ):
         self.node = node
         self.state = state
@@ -570,6 +572,8 @@ class QuestTcpServer:
         self.controller_y_rotation_rad = float(controller_y_rotation_rad)
         self.invalid_origin_epsilon_m = max(float(invalid_origin_epsilon_m), 0.0)
         self.status_file = status_file
+        self.client_timeout_s = max(float(client_timeout_s), 0.0)
+        self.status_publish_interval_s = max(float(status_publish_interval_s), 0.0)
         self.running = True
         self.server_sock = None
         self.client_sock = None
@@ -577,6 +581,9 @@ class QuestTcpServer:
         self.total_packets = 0
         self.remote_address = None
         self.last_error = None
+        self.last_packet_monotonic = None
+        self.last_packet_wall_time = None
+        self._last_status_publish_monotonic = 0.0
         self._status_lock = threading.Lock()
         self.thread = threading.Thread(target=self._run, name="quest3-tcp-receiver", daemon=True)
 
@@ -600,6 +607,10 @@ class QuestTcpServer:
 
         if error is not None:
             self.last_error = str(error)
+        packet_age_s = self._packet_age_s()
+        with self.state.lock:
+            left_tracking = bool(self.state.left.pose_valid)
+            right_tracking = bool(self.state.right.pose_valid)
         with self._status_lock:
             _write_teleop_status(
                 self.status_file,
@@ -608,8 +619,36 @@ class QuestTcpServer:
                 port=self.port,
                 remote=self.remote_address,
                 total_packets=self.total_packets,
+                last_packet_at=self.last_packet_wall_time,
+                last_packet_age_s=packet_age_s,
+                left_tracking_valid=left_tracking,
+                right_tracking_valid=right_tracking,
                 error=self.last_error,
             )
+
+    def _packet_age_s(self) -> float | None:
+        """Return seconds since the most recent socket data, if connected."""
+        if self.last_packet_monotonic is None:
+            return None
+        return max(time.monotonic() - self.last_packet_monotonic, 0.0)
+
+    def _client_timed_out(self, now: float | None = None) -> bool:
+        """Return whether an open client has stopped sending packets."""
+        if self.client_timeout_s <= 0.0 or self.last_packet_monotonic is None:
+            return False
+        if now is None:
+            now = time.monotonic()
+        return now - self.last_packet_monotonic > self.client_timeout_s
+
+    def _publish_periodic_status(self, state: str, *, connected: bool) -> None:
+        """Refresh parent status without writing once per packet."""
+        if self.status_publish_interval_s <= 0.0:
+            return
+        now = time.monotonic()
+        if now - self._last_status_publish_monotonic < self.status_publish_interval_s:
+            return
+        self._last_status_publish_monotonic = now
+        self._publish_status(state, connected=connected)
 
     def _run(self) -> None:
         """Main server loop: accept, receive, parse.
@@ -633,13 +672,29 @@ class QuestTcpServer:
                 try:
                     client, addr = self.server_sock.accept()
                     client.settimeout(0.1)
+                    client.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                    for option, value in (
+                        ("TCP_KEEPIDLE", 5),
+                        ("TCP_KEEPINTVL", 2),
+                        ("TCP_KEEPCNT", 3),
+                    ):
+                        if hasattr(socket, option):
+                            try:
+                                client.setsockopt(socket.IPPROTO_TCP, getattr(socket, option), value)
+                            except OSError:
+                                pass
+                    now = time.monotonic()
                     self.client_sock = client
                     self.recv_buffer = ""
                     self.remote_address = str(addr)
                     self.last_error = None
+                    self.last_packet_monotonic = now
+                    self.last_packet_wall_time = time.time()
+                    self._last_status_publish_monotonic = now
                     self.node.get_logger().info(f"Quest3 client connected from {addr}")
                     self._publish_status("connected", connected=True)
                 except socket.timeout:
+                    self._publish_periodic_status("listening", connected=False)
                     continue
                 except OSError:
                     break
@@ -653,6 +708,8 @@ class QuestTcpServer:
                 if not data:
                     self._close_client("Quest3 closed connection")
                     continue
+                self.last_packet_monotonic = time.monotonic()
+                self.last_packet_wall_time = time.time()
                 self.recv_buffer += data.decode("utf-8", "ignore")
                 while "\n" in self.recv_buffer:
                     line, self.recv_buffer = self.recv_buffer.split("\n", 1)
@@ -661,6 +718,10 @@ class QuestTcpServer:
                         continue
                     self._process_packet(json.loads(line))
             except socket.timeout:
+                if self._client_timed_out():
+                    self._close_client(
+                        f"Quest3 packet timeout after {self.client_timeout_s:.1f}s"
+                    )
                 continue
             except OSError as exc:
                 if not self.running:
@@ -680,6 +741,11 @@ class QuestTcpServer:
         self.client_sock = None
         self.recv_buffer = ""
         self.remote_address = None
+        self.last_packet_monotonic = None
+        self.last_packet_wall_time = None
+        with self.state.lock:
+            self.state.left.pose_valid = False
+            self.state.right.pose_valid = False
         self._publish_status("listening", connected=False, error=reason)
 
     def _process_packet(self, packet: dict[str, Any]) -> None:
@@ -703,6 +769,7 @@ class QuestTcpServer:
             self._update_pose(self.state.right, packet.get("right_matrix"), right_valid)
             self._update_buttons(self.state.left, left_buttons)
             self._update_buttons(self.state.right, right_buttons)
+        self._publish_periodic_status("connected", connected=True)
 
     @staticmethod
     def _packet_side_valid(packet: dict[str, Any], buttons: dict[str, Any], side_name: str) -> bool:
@@ -1241,6 +1308,10 @@ class VRWholeBodyBridgeNode:
             controller_y_rotation,
             float(config.get("invalid_origin_epsilon_m", 1e-3)),
             status_file=config.get("status_file"),
+            client_timeout_s=float(config.get("tcp_client_timeout_sec", 2.0)),
+            status_publish_interval_s=float(
+                config.get("tcp_status_publish_interval_sec", 1.0)
+            ),
         )
         self.tcp_server.start()
 
