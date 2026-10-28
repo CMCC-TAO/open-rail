@@ -10,7 +10,7 @@ datasets. For configuration keys, see the
 ```text
 Quest3 Unity app
   -> TCP JSON :8002
-  -> teleop/quest3/quest3.py
+  -> teleop/quest3/quest3.py (packet watchdog + status heartbeat)
        controller pose -> IK -> target-native JointState
   -> /target_robot/joint_commands
   -> client/core/teleop_bridge.py
@@ -121,10 +121,12 @@ width and finiteness and applies the outlier guard:
 - max arm-vector L2 delta (`teleop_outlier_max_arm_norm_delta`);
 - max hand delta (`teleop_outlier_max_gripper_delta`, scaled to native units).
 
-Malformed or implausible packets are dropped. If a previously trusted teleop
-action exists, it is resubmitted with its original mask to keep ownership stable;
-otherwise the source is eventually cleared after
-`teleop_outlier_reanchor_after_rejects`. Set
+Malformed or implausible packets are dropped. A teleop baseline is only used
+while it is fresh; after a session timeout the last executed command or measured
+state is used instead. While a live session has a fresh safe action, that action
+is held through an isolated bad packet. After
+`teleop_outlier_reanchor_after_rejects` consecutive rejects, teleop ownership is
+released so policy or a later intervention can recover. Set
 `teleop_outlier_guard_enabled: false` only for a trusted producer.
 
 ## Human-control session
@@ -185,7 +187,11 @@ The Web Client consumes runtime fields including:
 `GET /api/client/teleop/status` returns the same device/bridge snapshot even
 before a runtime client exists. Managed Quest3 states include `starting`,
 `listening`, `connected`, `stopped`, and `error`; the client snapshot can also
-report `disabled`, `unavailable`, or `unsupported`.
+report `disabled`, `unavailable`, or `unsupported`. A connection that stops
+sending packets is closed after `tcp_client_timeout_sec`, and the server then
+accepts the headset's next connection. The API exposes `last_packet_age_s`,
+`total_packets`, `status_age_s`, `left_tracking_valid`, and
+`right_tracking_valid` for connection and tracking diagnosis.
 
 The UI changes the runtime badge from **RUNNING** to **TELEOP** while human input
 is fresh, disables Reset, and reports whether the Quest3 TCP device connected.

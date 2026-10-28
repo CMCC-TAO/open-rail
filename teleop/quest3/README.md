@@ -109,6 +109,11 @@ The node reads newline-delimited JSON over TCP and publishes
 uses the optional per-joint mask in `JointState.effort` to identify entries that
 are real human commands rather than feedback fallback.
 
+The TCP server enables keepalive and expires a connection after
+`tcp_client_timeout_sec` without packets. While disconnected, it periodically
+reasserts the USB `adb reverse` mapping so headset sleep, USB re-enumeration, or
+an adb restart does not require restarting the entire client.
+
 ## Simulation forwarders
 
 Use a forwarder only when the downstream simulator/robot consumes ROS2

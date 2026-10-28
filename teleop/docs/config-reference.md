@@ -44,6 +44,7 @@ Defaults are defined in `get_teleop_config()` in `conf/client_conf.py`.
 | `teleop.devices.quest3.python` | current interpreter | Optional Python executable override for the managed node. |
 | `teleop.devices.quest3.listen_port` | profile value | Optional TCP listen-port override. |
 | `teleop.devices.quest3.command` | unset | Optional full command override for a custom producer. |
+| `teleop.devices.quest3.log_path` | `logs/quest3_teleop.log` | Captured stdout/stderr from the managed Quest3 process. |
 
 Apply behavior:
 
@@ -70,7 +71,7 @@ These fields live under `controller` in `conf/client_conf.py`.
 | `teleop_outlier_max_arm_joint_delta` | `0.5` | Max absolute change for any one arm joint per packet. |
 | `teleop_outlier_max_arm_norm_delta` | `1.2` | Max L2 change across 14 arm joints per packet. |
 | `teleop_outlier_max_gripper_delta` | `1.0` | Max hand change, scaled by the native hand preset scale. |
-| `teleop_outlier_reanchor_after_rejects` | `5` | Clear teleop ownership after repeated rejects when no safe hold action exists. |
+| `teleop_outlier_reanchor_after_rejects` | `5` | Release teleop ownership after this many consecutive rejected packets. |
 | `teleop_outlier_log_interval_s` | `1.0` | Warning-log rate limit. |
 
 ## Recording configuration
@@ -111,6 +112,9 @@ the YAML file's directory.
 | --- | --- |
 | `robot` | Robot identifier used in the Quest3 ROS node name and default profile lookup. |
 | `listen_port` | TCP port for newline-delimited JSON from the Unity app. |
+| `tcp_client_timeout_sec` | Close an idle/half-open Quest3 connection after this many seconds without packets; `0` disables the watchdog. |
+| `tcp_status_publish_interval_sec` | Refresh the parent-process status heartbeat while listening or connected. |
+| `adb_reverse_reassert_sec` | While disconnected, periodically recreate the USB `adb reverse` mapping; `0` disables it. |
 | `control_frequency` | Quest3 control/IK loop rate in Hz. |
 | `joint_command_topic` | Published `JointState` command topic. |
 | `joint_states_topic` | State feedback consumed for activation anchors and inactive-side fallback. |
