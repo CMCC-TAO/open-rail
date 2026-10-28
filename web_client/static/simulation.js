@@ -52,6 +52,8 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     busy = false,
     ready = false,
     submitting = false,
+    runtimeActive = false,
+    jobGeneration = 0,
     profileGeneration = 0,
     environmentPlatform = null,
     catalog = null,
@@ -65,9 +67,15 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
   const currentBenchmark = () => benchmarkProfiles.find(spec => spec.id === currentPlatform());
   const currentPlatform = () => getClientConfig
     ? platformForConfig(getClientConfig()) : $("field-platform").value;
-  function notifyRuntimeLock(active) {
+  function notifyRuntimeLock(active, job = null) {
+    runtimeActive = active;
+    const benchmark = benchmarkProfiles.find(spec => spec.id === job?.config.platform);
     if (getClientConfig) document.dispatchEvent(new CustomEvent('simulation-evaluation-state', {
-      detail: { active },
+      detail: {
+        active,
+        runningJob: job?.status === 'running' && benchmark
+          ? { id: job.id, robotType: benchmark.robot_type } : null,
+      },
     }));
   }
   async function api(path, method = "GET", body) {
@@ -151,10 +159,15 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
   }
   async function poll() {
     if (busy) return;
+    if (getClientConfig && !currentPlatform() && !runtimeActive && !submitting) return;
     busy = true;
+    const generation = jobGeneration;
     try {
       const jobs = await api("/jobs");
-      notifyRuntimeLock(submitting || jobs.some(job => ["running", "stopping"].includes(job.status)));
+      if (generation !== jobGeneration) return;
+      notifyRuntimeLock(submitting || jobs.some(job => ["running", "stopping"].includes(job.status)),
+        jobs.find(job => job.status === 'running' && job.config.platform === currentPlatform()));
+      if (getClientConfig && !currentPlatform()) return;
       const previous = selected;
       $("jobs").replaceChildren(
         ...jobs.map(
@@ -185,6 +198,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         api("/jobs/" + selected + "/logs"),
         api("/jobs/" + selected + "/files"),
       ]);
+      if (generation !== jobGeneration) return;
       const directory = job.directory || "data/simulation_web/jobs/" + job.id;
       $("status").textContent = "Status: " + job.status +
         (prefix ? "" : " | Output Directory: " + directory);
@@ -214,15 +228,18 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
   $("files").onchange = fileChanged;
   for (const action of ["stop", "resume"])
     $(action).onclick = async () => {
+      jobGeneration += 1;
       try {
         $(action).disabled = true;
         if (action === "resume") notifyRuntimeLock(true);
-        await api("/jobs/" + selected + "/" + action, "POST");
+        const job = await api("/jobs/" + selected + "/" + action, "POST");
+        notifyRuntimeLock(["running", "stopping"].includes(job.status), job);
         if (prefix && typeof window.toast === "function")
           window.toast(action === "stop" ? "Evaluation stop requested." : "Evaluation resumed.", "ok");
       } catch (e) {
         error(e);
       } finally {
+        jobGeneration += 1;
         await poll();
       }
     };
@@ -231,6 +248,7 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
     $("error").textContent = "";
     try {
       if (!ready || submitting) return;
+      jobGeneration += 1;
       submitting = true;
       notifyRuntimeLock(true);
       $("config").inert = true;
@@ -277,13 +295,14 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
         config.intra_chunk_sample_ratio = 1;
       const job = await api("/jobs", "POST", config);
       selected = job.id;
+      notifyRuntimeLock(true, job);
       if (prefix && typeof window.toast === "function")
         window.toast("Evaluation started.", "ok");
-      await poll();
     } catch (e) {
       error(e);
     } finally {
       submitting = false;
+      jobGeneration += 1;
       $("config").inert = false;
       await poll();
     }
@@ -527,8 +546,8 @@ export async function initializeSimulation(root, prefix = "", getClientConfig = 
       }
       for (const key of advancedFields) createField(key, defaults[key], "advanced-fields");
       $("field-video").onchange = updateControls;
-      await poll();
       if (!getClientConfig) {
+        await poll();
         $("field-platform").onchange = async () => {
           ready = false;
           const generation = ++profileGeneration;

@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [20261026]
+
+- Extended PyTorch pi0.5 support to TI5, with automatic A2D/TI5 training configuration selection from checkpoint assets and robot-specific camera mappings and action dimensions.
+
 ## [20261022]
 
 - Added physics simulation evaluation for RoboCasa and RoboTwin: task catalogs, task sets, parallel environments, dataset export, video capture.

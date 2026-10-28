@@ -98,6 +98,25 @@ def _create_streaming_policy(train_config, model_path, device, compile_mode="max
     )
 
 
+def _get_train_config(config_name, model_path):
+    from openpi.training import config as training_config
+
+    if config_name:
+        return training_config.get_config(config_name)
+    matches = []
+    for name in ("pi05_a2d", "pi05_ti5"):
+        try:
+            candidate = training_config.get_config(name)
+        except ValueError:
+            continue
+        asset_id = candidate.data.assets.asset_id
+        if asset_id and (Path(model_path) / "assets" / asset_id / "norm_stats.json").is_file():
+            matches.append(candidate)
+    if len(matches) != 1:
+        raise ValueError("Cannot select a unique training config from checkpoint assets; set pi05_pytorch.config")
+    return matches[0]
+
+
 class ModelVLA:
     CAMERAS = {
         "top_head": "cam.head",
@@ -113,11 +132,15 @@ class ModelVLA:
             raise ValueError("execute_horizon must be positive")
 
         _ensure_openpi_client_on_path()
-        from openpi.training import config as training_config
-
         model_path = str(self.cfg["model_path"])
-        config_name = str(self.cfg.get("config", "pi05_a2d"))
-        train_config = training_config.get_config(config_name)
+        train_config = _get_train_config(self.cfg.get("config"), model_path)
+        config_name = train_config.name
+        self.robot = train_config.policy_metadata.get("robot", "a2d_gripper")
+        if self.robot not in ("a2d_gripper", "ti5"):
+            raise ValueError(f"Unsupported pi05 robot: {self.robot}")
+        self.ACTION_DIM = int(train_config.policy_metadata.get("action_dim", 16))
+        if self.robot == "ti5":
+            self.CAMERAS = dict(zip(("head", "left", "right"), self.CAMERAS.values()))
         self.policy = _create_streaming_policy(
             train_config,
             model_path,
@@ -143,7 +166,7 @@ class ModelVLA:
 
         state = np.asarray(obs["state"], dtype=np.float32)
         if state.ndim != 1 or state.size < self.ACTION_DIM or not np.all(np.isfinite(state[: self.ACTION_DIM])):
-            raise ValueError("A2D state must be a vector with at least 16 finite entries")
+            raise ValueError(f"{self.robot} state must be a vector with at least {self.ACTION_DIM} finite entries")
 
         language = obs["language"]
         prompt = language[0] if isinstance(language, (list, tuple)) and language else language
@@ -151,10 +174,12 @@ class ModelVLA:
             raise ValueError("language must be a string or a non-empty list/tuple of strings")
 
         # OpenPI handles normalization and converts delta predictions to absolute actions.
-        output = self.policy.infer({"images": images, "state": state[: self.ACTION_DIM].copy(), "prompt": prompt})
+        inputs = {"state": state[: self.ACTION_DIM].copy(), "prompt": prompt}
+        inputs.update(images if self.robot == "ti5" else {"images": images})
+        output = self.policy.infer(inputs)
         actions = np.asarray(output["actions"], dtype=np.float32)
         if actions.ndim != 2 or actions.shape[0] == 0 or actions.shape[1] != self.ACTION_DIM:
-            raise ValueError(f"Expected A2D actions with shape (horizon, 16), got {actions.shape}")
+            raise ValueError(f"Expected {self.robot} actions with shape (horizon, {self.ACTION_DIM}), got {actions.shape}")
         if not np.all(np.isfinite(actions)):
             raise ValueError("pi05 produced non-finite actions")
         return actions[: self.execute_horizon].copy()
