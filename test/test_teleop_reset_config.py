@@ -297,3 +297,24 @@ def test_live_teleop_session_holds_only_its_own_last_safe_action():
     client._hold_teleop_after_rejected_action(timestamp + 0.01)
 
     np.testing.assert_allclose(client.action_arbiter.latest_action(ActionSource.TELEOP), safe)
+
+
+def test_starting_control_starts_configured_teleop_bridge():
+    client = object.__new__(VLAClient)
+    client._control_execution_lock = threading.RLock()
+    client.robot = SimpleNamespace()
+    client.is_running = False
+    client.is_control_thread_running = False
+    client.control_thread_timer = SimpleNamespace(
+        is_alive=lambda: False,
+        start=lambda: None,
+    )
+    client.task_language_manager = SimpleNamespace(new_task=lambda: None)
+    calls = []
+    client._use_teleop_enabled = lambda: True
+    client.start_teleop_bridge = lambda: calls.append('start')
+
+    client.start_control()
+
+    assert calls == ['start']
+    assert client.is_control_thread_running is True

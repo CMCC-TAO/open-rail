@@ -714,6 +714,10 @@ class VLAClient():
         self.logger.info('VLAClient inference thread stopped.')
 
     def start_control(self):
+        # Control can be started independently of VLAClient.start() in the Web
+        # UI. Ensure teleop is running before policy control takes ownership.
+        if self._use_teleop_enabled():
+            self.start_teleop_bridge()
         self.is_running = True
         with self._control_execution_lock:
             resume_controls = getattr(self.robot, 'resume_controls', None)
