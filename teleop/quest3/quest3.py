@@ -1301,6 +1301,8 @@ class VRWholeBodyBridgeNode:
 
         controller_y_rotation = math.radians(float(config.get("controller_y_rotation_deg", 35.0)))
         self.controller_transforms = _load_controller_transforms(config)
+        self._adb_reverse_stop = threading.Event()
+        self._adb_reverse_thread = None
         self.tcp_server = QuestTcpServer(
             self.node,
             self.state,
@@ -1314,6 +1316,7 @@ class VRWholeBodyBridgeNode:
             ),
         )
         self.tcp_server.start()
+        self._start_adb_reverse_watchdog(config)
 
         self.node.create_timer(self.control_dt, self._tick)
         reset_desc = (
@@ -1327,6 +1330,34 @@ class VRWholeBodyBridgeNode:
             f"and {reset_desc}; "
             f"reading joint state from {config.get('joint_states_topic', '/joint_states')}"
         )
+
+    def _start_adb_reverse_watchdog(self, config: dict[str, Any]) -> None:
+        """Recreate a lost USB reverse forward while no client is active."""
+        if bool(config.get("no_adb_reverse", False)):
+            return
+        interval_s = max(float(config.get("adb_reverse_reassert_sec", 10.0)), 0.0)
+        if interval_s <= 0.0:
+            return
+        port = int(config.get("listen_port", 8002))
+
+        def reassert_loop() -> None:
+            while not self._adb_reverse_stop.wait(interval_s):
+                if self.tcp_server.client_sock is None:
+                    _try_adb_reverse(port, remove_existing=False)
+
+        self._adb_reverse_thread = threading.Thread(
+            target=reassert_loop,
+            name="quest3-adb-reverse-watchdog",
+            daemon=True,
+        )
+        self._adb_reverse_thread.start()
+
+    def _stop_adb_reverse_watchdog(self) -> None:
+        self._adb_reverse_stop.set()
+        thread = self._adb_reverse_thread
+        if thread is not None and thread.is_alive() and threading.current_thread() is not thread:
+            thread.join(timeout=1.0)
+        self._adb_reverse_thread = None
 
     def _configure_hand_layout(self, config: dict[str, Any]) -> None:
         """Resolve hand modes and the internal/external action layouts."""
@@ -1602,6 +1633,7 @@ class VRWholeBodyBridgeNode:
                 raise
             self.node.get_logger().info("ROS context was shut down; stopping Quest3 bridge.")
         finally:
+            self._stop_adb_reverse_watchdog()
             self.tcp_server.stop()
             try:
                 self.node.destroy_node()
@@ -2310,16 +2342,16 @@ class VRWholeBodyBridgeNode:
             self.state.action[index] = reference
 
 
-def _try_adb_reverse(port: int) -> None:
+def _try_adb_reverse(port: int, *, remove_existing: bool = True) -> None:
     """Set up ADB reverse port forwarding for Quest3 TCP connection.
 
-    Only needed when the Quest3 app connects via USB (Android Debug Bridge).
-    The command `adb reverse tcp:<port> tcp:<port>` forwards host port to device.
+    Periodic reassertion does not remove an existing mapping first, so an active
+    reverse tunnel is refreshed without tearing down a working connection.
     """
-    for cmd in (
-        ["adb", "reverse", "--remove", f"tcp:{port}"],
-        ["adb", "reverse", f"tcp:{port}", f"tcp:{port}"],
-    ):
+    commands = [["adb", "reverse", f"tcp:{port}", f"tcp:{port}"]]
+    if remove_existing:
+        commands.insert(0, ["adb", "reverse", "--remove", f"tcp:{port}"])
+    for cmd in commands:
         try:
             subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
@@ -2392,6 +2424,7 @@ def main() -> None:
     if args.status_file:
         config["status_file"] = args.status_file
 
+    config["no_adb_reverse"] = bool(args.no_adb_reverse)
     if not args.no_adb_reverse:
         _try_adb_reverse(int(config.get("listen_port", 8002)))
 

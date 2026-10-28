@@ -477,3 +477,28 @@ def test_reset_starts_from_active_manual_command_not_stale_reference():
     np.testing.assert_allclose(node._reset_start_action[7:14], active_right_arm)
     np.testing.assert_allclose(node._reset_start_action[15:16], active_right_hand)
     np.testing.assert_allclose(node.state.action, node._reset_start_action)
+
+
+def test_adb_reverse_reassert_does_not_remove_existing_mapping(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        quest3.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append(command),
+    )
+    quest3._try_adb_reverse(8002, remove_existing=False)
+    assert calls == [["adb", "reverse", "tcp:8002", "tcp:8002"]]
+
+
+def test_adb_reverse_initial_setup_replaces_existing_mapping(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        quest3.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append(command),
+    )
+    quest3._try_adb_reverse(8002)
+    assert calls == [
+        ["adb", "reverse", "--remove", "tcp:8002"],
+        ["adb", "reverse", "tcp:8002", "tcp:8002"],
+    ]
