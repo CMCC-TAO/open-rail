@@ -1722,12 +1722,25 @@ class VRWholeBodyBridgeNode:
             self._warn_waiting_for_joint_state_locked()
             self.node.get_logger().warning("Reset request ignored because no current joint state is available.")
             return
+        # Use the command currently being tracked. During manual control,
+        # reference_action is frozen at the activation anchor and can lag the
+        # open-loop command; using it makes the first reset frame jump backwards.
+        reset_start = self.state.reference_action.copy()
+        for side, arm_slice, hand_slice in (
+            (self.state.left, slice(0, 7), self.left_hand_slice),
+            (self.state.right, slice(7, 14), self.right_hand_slice),
+        ):
+            if side.control_state in (ARM_CONTROL_MANUAL, ARM_CONTROL_TRANSITION_EXIT):
+                reset_start[arm_slice] = self.state.action[arm_slice]
+            if side.gripper_control_active or side.gripper_command_initialized:
+                reset_start[hand_slice] = self.state.action[hand_slice]
         self._clear_arm_control_refs_locked(self.state.left)
         self._clear_arm_control_refs_locked(self.state.right)
         self._clear_hand_control_state_locked(self.state.left)
         self._clear_hand_control_state_locked(self.state.right)
-        self.state.action[:] = self.state.reference_action
-        self._reset_start_action = np.clip(self.state.reference_action, self.min_action, self.max_action).copy()
+        reset_start = np.clip(reset_start, self.min_action, self.max_action)
+        self.state.action[:] = reset_start
+        self._reset_start_action = reset_start.copy()
         self._reset_step = 0
         self._reset_hold_step = 0
         self._reset_running = True

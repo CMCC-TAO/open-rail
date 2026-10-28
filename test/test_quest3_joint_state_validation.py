@@ -446,3 +446,34 @@ def test_inactive_arm_uses_released_reference_while_other_arm_stays_active():
 
     assert len(published) == 1
     np.testing.assert_allclose(published[0][7:14], released_right)
+
+
+def test_reset_starts_from_active_manual_command_not_stale_reference():
+    node = object.__new__(quest3.VRWholeBodyBridgeNode)
+    node.state = quest3.BridgeState()
+    node.state.joint_state_ready = True
+    node.state.reference_action = np.arange(16, dtype=float)
+    node.state.action = np.arange(16, dtype=float) + 20.0
+    node.state.right.control_state = quest3.ARM_CONTROL_MANUAL
+    node.state.right.gripper_control_active = True
+    node.left_hand_slice = slice(14, 15)
+    node.right_hand_slice = slice(15, 16)
+    node.reset_action = np.zeros(16)
+    node.min_action = np.full(16, -1000.0)
+    node.max_action = np.full(16, 1000.0)
+    node.reset_interp_steps = 400
+    node._reset_step = 0
+    node._reset_hold_step = 0
+    node._reset_running = False
+    node._reset_start_action = None
+    node.logger = _Logger()
+    node.node = SimpleNamespace(get_logger=lambda: node.logger)
+
+    active_right_arm = node.state.action[7:14].copy()
+    active_right_hand = node.state.action[15:16].copy()
+
+    node._start_reset_interpolation_locked()
+
+    np.testing.assert_allclose(node._reset_start_action[7:14], active_right_arm)
+    np.testing.assert_allclose(node._reset_start_action[15:16], active_right_hand)
+    np.testing.assert_allclose(node.state.action, node._reset_start_action)
