@@ -368,27 +368,23 @@ def _collect_resource_stats() -> dict:
 #  Helpers: config serialization
 # ─────────────────────────────────────────────────────────────────────────────
 def _config_to_dict(cfg) -> dict:
-    """Recursively convert a ConfigDict (or any object) to a plain dict."""
-    if cfg is None:
-        return {}
-    try:
-        from ml_collections import ConfigDict
-        if isinstance(cfg, ConfigDict):
-            result = {}
-            for k in cfg:
-                v = cfg[k]
-                if isinstance(v, ConfigDict):
-                    result[k] = _config_to_dict(v)
-                elif hasattr(v, 'value'):           # Enum
-                    result[k] = v.value
-                elif isinstance(v, (list, tuple)):
-                    result[k] = [x.value if hasattr(x, 'value') else x for x in v]
-                else:
-                    result[k] = v
-            return result
-    except Exception:
-        pass
-    return {}
+    """Recursively convert a ConfigDict or plain mapping to a plain dict."""
+    from ml_collections import ConfigDict
+
+    def _to_plain(value):
+        if isinstance(value, ConfigDict):
+            return {key: _to_plain(value[key]) for key in value}
+        if isinstance(value, dict):
+            return {key: _to_plain(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_to_plain(item) for item in value]
+        if hasattr(value, 'value'):  # Enum
+            return value.value
+        return value
+
+    converted = _to_plain(cfg)
+    return converted if isinstance(converted, dict) else {}
+
 
 def _apply_flat_patch_new(config, patch: dict):
     """Apply flat patch only to existing config leaf keys (no new key creation)."""
@@ -1286,9 +1282,10 @@ async def save_config_file(req: ConfigFileRequest):
         client_conf = _config_to_dict(client_state.config) if client_state.config is not None else None
     if client_conf is None:
         raise HTTPException(400, "No config loaded.")
+    if not client_conf:
+        raise HTTPException(500, "Refusing to save an empty configuration.")
     # print(f"DEBUG: save path = {req.path}")
     save_path = _config_path(req.path)
-    client_conf = _config_to_dict(client_conf)
     _strip_internal_teleop_config(client_conf)
     if save_path.suffix.lower() in ('.yaml', '.yml'):
         content = _dict_to_user_conf_yaml(client_conf)
