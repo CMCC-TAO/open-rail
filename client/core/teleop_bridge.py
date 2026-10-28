@@ -151,6 +151,9 @@ class TeleopDeviceProcess:
         self.logger = logging.getLogger(__name__)
         self.process: Optional[subprocess.Popen] = None
         self.status_file: Optional[Path] = None
+        self.log_path: Optional[Path] = None
+        self.log_file = None
+        self._last_status_signature = None
 
     def start(self) -> None:
         """Start the configured device unless it is already running."""
@@ -160,6 +163,7 @@ class TeleopDeviceProcess:
         if self.device in ("", "none", "manual", "external"):
             return
 
+        self._close_log_file()
         self._remove_status_file()
         if self.device == "quest3":
             fd, status_path = tempfile.mkstemp(prefix="openrail_quest3_", suffix=".json")
@@ -172,14 +176,30 @@ class TeleopDeviceProcess:
         cmd, env, cwd = self._build_command()
         if not cmd:
             return
+        device_cfg = _cfg_get(_cfg_get(self.config, "devices", None), self.device, None)
+        log_path = _cfg_get(device_cfg, "log_path", "logs/quest3_teleop.log")
+        repo_root = Path(__file__).resolve().parents[2]
+        self.log_path = self._resolve_repo_path(log_path, repo_root)
+        try:
+            self.log_path.parent.mkdir(parents=True, exist_ok=True)
+            self.log_file = self.log_path.open("a", encoding="utf-8", buffering=1)
+            self.log_file.write(
+                f"\n=== Quest3 process starting {time.strftime('%Y-%m-%d %H:%M:%S')} ===\n"
+            )
+        except OSError:
+            self.logger.exception("Failed to open Quest3 teleop log; inheriting stdio")
+            self.log_file = None
         try:
             self.process = subprocess.Popen(
                 cmd,
                 cwd=cwd,
                 env=env,
                 start_new_session=True,
+                stdout=self.log_file,
+                stderr=subprocess.STDOUT,
             )
         except Exception:
+            self._close_log_file()
             self._remove_status_file()
             raise
 
@@ -187,11 +207,13 @@ class TeleopDeviceProcess:
         """Terminate the device process group with a short graceful timeout."""
 
         if self.process is None:
+            self._close_log_file()
             self._remove_status_file()
             return
         proc = self.process
         self.process = None
         if proc.poll() is not None:
+            self._close_log_file()
             self._remove_status_file()
             return
         try:
@@ -207,11 +229,58 @@ class TeleopDeviceProcess:
                 proc.kill()
             proc.wait(timeout=1.0)
         finally:
+            self._close_log_file()
             self._remove_status_file()
+
+    def _close_log_file(self) -> None:
+        handle, self.log_file = self.log_file, None
+        if handle is not None:
+            try:
+                handle.close()
+            except Exception:
+                pass
+
+    def _record_status_transition(self, status: dict) -> None:
+        """Log teleop process/connection/tracking changes once per transition."""
+        signature = (
+            status.get("state"),
+            bool(status.get("device_connected", False)),
+            bool(status.get("process_running", False)),
+            status.get("left_tracking_valid"),
+            status.get("right_tracking_valid"),
+        )
+        if signature == self._last_status_signature:
+            return
+        previous = self._last_status_signature
+        self._last_status_signature = signature
+        was_connected = bool(previous and previous[1])
+        level = logging.WARNING if (
+            status.get("state") == "error"
+            or (was_connected and not status.get("device_connected", False))
+        ) else logging.INFO
+        self.logger.log(
+            level,
+            "Quest3 teleop status: state=%s connected=%s process_running=%s "
+            "tracking(left=%s,right=%s) packets=%s packet_age=%s status_age=%s: %s",
+            status.get("state"),
+            status.get("device_connected"),
+            status.get("process_running"),
+            status.get("left_tracking_valid"),
+            status.get("right_tracking_valid"),
+            status.get("total_packets"),
+            status.get("last_packet_age_s"),
+            status.get("status_age_s"),
+            status.get("message"),
+        )
 
     def status(self) -> dict:
         """Return process liveness and the Quest3 TCP handshake state."""
+        status = self._status_snapshot()
+        self._record_status_transition(status)
+        return status
 
+    def _status_snapshot(self) -> dict:
+        """Build one status snapshot without emitting transition logs."""
         status = {
             "device": self.device,
             "process_running": False,
@@ -236,6 +305,7 @@ class TeleopDeviceProcess:
             return status
 
         status.update(process_running=True, state="starting", message="Quest3 process is starting.")
+        process_is_running = True
         if self.status_file is None or not self.status_file.is_file():
             return status
         try:
@@ -254,16 +324,47 @@ class TeleopDeviceProcess:
             "stopped": "Quest3 bridge stopped.",
             "error": "Quest3 bridge failed to start.",
         }.get(device_state, f"Quest3 device state: {device_state}.")
-        if device_state == "error" and payload.get("error"):
+        if payload.get("error"):
             message = f"{message} {payload['error']}"
+
+        left_tracking = payload.get("left_tracking_valid")
+        right_tracking = payload.get("right_tracking_valid")
+        if connected and (left_tracking is False or right_tracking is False):
+            lost = [
+                side
+                for side, valid in (("left", left_tracking), ("right", right_tracking))
+                if valid is False
+            ]
+            message = f"{message} Controller tracking lost: {', '.join(lost)}."
+
+        updated_at = payload.get("updated_at")
+        status_age_s = None
+        try:
+            status_age_s = max(time.time() - float(updated_at), 0.0)
+        except (TypeError, ValueError):
+            pass
+        if process_is_running and status_age_s is not None and status_age_s > 5.0:
+            device_state = "error"
+            connected = False
+            message = (
+                f"Quest3 status heartbeat is stale ({status_age_s:.1f}s); "
+                "restart teleop or check the headset connection."
+            )
+
         status.update(
             device_connected=connected,
             state=device_state,
             message=message,
             remote=payload.get("remote"),
+            log_path=None if self.log_path is None else str(self.log_path),
             total_packets=int(payload.get("total_packets") or 0),
+            last_packet_at=payload.get("last_packet_at"),
+            last_packet_age_s=payload.get("last_packet_age_s"),
+            left_tracking_valid=left_tracking,
+            right_tracking_valid=right_tracking,
+            status_age_s=status_age_s,
             error=payload.get("error"),
-            updated_at=payload.get("updated_at"),
+            updated_at=updated_at,
         )
         return status
 

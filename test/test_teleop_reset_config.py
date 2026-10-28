@@ -354,3 +354,50 @@ def test_quest3_tcp_status_refreshes_packet_heartbeat(tmp_path):
     assert payload["last_packet_age_s"] >= 0.0
     assert payload["left_tracking_valid"] is True
     assert payload["right_tracking_valid"] is False
+
+
+def test_quest3_process_reports_stale_status_heartbeat(tmp_path):
+    process = TeleopDeviceProcess(
+        device="quest3",
+        config=ConfigDict({"devices": {"quest3": {}}}),
+        command_topic="/target_robot/joint_commands",
+        joint_state_topic="/client_robot/joint_states",
+        reset_topic="/custom/custom_a",
+    )
+    process.process = SimpleNamespace(pid=1234, poll=lambda: None)
+    process.status_file = tmp_path / "quest3_status.json"
+    process.status_file.write_text(json.dumps({
+        "state": "connected",
+        "connected": True,
+        "updated_at": time.time() - 10.0,
+        "total_packets": 123,
+    }), encoding="utf-8")
+    status = process.status()
+    assert status["process_running"] is True
+    assert status["device_connected"] is False
+    assert status["state"] == "error"
+    assert "stale" in status["message"]
+
+
+def test_quest3_process_reports_controller_tracking_loss(tmp_path):
+    process = TeleopDeviceProcess(
+        device="quest3",
+        config=ConfigDict({"devices": {"quest3": {}}}),
+        command_topic="/target_robot/joint_commands",
+        joint_state_topic="/client_robot/joint_states",
+        reset_topic="/custom/custom_a",
+    )
+    process.process = SimpleNamespace(pid=1234, poll=lambda: None)
+    process.status_file = tmp_path / "quest3_status.json"
+    process.status_file.write_text(json.dumps({
+        "state": "connected",
+        "connected": True,
+        "updated_at": time.time(),
+        "left_tracking_valid": False,
+        "right_tracking_valid": True,
+    }), encoding="utf-8")
+    status = process.status()
+    assert status["device_connected"] is True
+    assert status["left_tracking_valid"] is False
+    assert status["right_tracking_valid"] is True
+    assert "tracking lost: left" in status["message"]
