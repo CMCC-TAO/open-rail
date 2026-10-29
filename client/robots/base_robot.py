@@ -168,8 +168,18 @@ class RobotBase():
         )
 
     def reset_robot(self, target_pose=None, mode='default'):
-        """Reset configured actions to their Default presets."""
+        """Reset the robot from its configured reset position.
+
+        ``reset_robot_pos`` is the shared source used by both the Web Client
+        reset button and Quest3.  Robots without that field keep the legacy
+        behavior of resetting every action group to its ``Default`` preset.
+        """
         data = {'source': 'manual'}
+        if target_pose is None and mode == 'default':
+            cfg = getattr(self, 'cfg', self.config)
+            reset_pose = cfg.get('reset_robot_pos') if hasattr(cfg, 'get') else None
+            if reset_pose is not None:
+                target_pose = np.asarray(reset_pose)
         target_pose = None if target_pose is None else np.asarray(target_pose)
         for action, layout in self.action_layout.items():
             if target_pose is not None:

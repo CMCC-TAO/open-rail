@@ -19,6 +19,8 @@ from client.core.intra_chunk_smoother import IntraChunkSmoother
 from client.core.realtime_data_manager import RealtimeDataManager
 from client.core.task_language_manager import TaskLanguageManager
 from client.core.visualize_server import VisualizeServer
+from client.core.action_arbiter import ActionSource
+from client.core.teleop_bridge import TeleopRuntime
 from client.core.data_record_manager import DataRecordManager
 from client.core.shared_memory_manager import SharedMemoryManager
 from client.robots.base_robot import RobotBase
@@ -109,10 +111,14 @@ class VLAClient():
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
         self.is_control_thread_running = False
+
+        # Human teleoperation can override model actions while its input is fresh.
+        self.teleop_runtime = TeleopRuntime(self)
+        self.teleop_runtime.initialize()
+
         # A proxy starts its worker during robot creation. Until Observe is
         # requested, it must not consume Mock episodes in the background.
         self.stop_observe()
-        
         # Define image preprocess function
         self.update_preprocess_func()
 
@@ -152,6 +158,20 @@ class VLAClient():
         self.camera_shape_dict = None
         self.control_thread_timer.start()
         self.logger.info('VLAClient initialized.')
+
+    def reset_robot(self, mode='default'):
+        """Handle a reset request coming from the external teleop device."""
+        self._teleop()._reset_teleop_command_state()
+        return self.robot.reset_robot(mode=mode)
+
+    def _teleop(self) -> TeleopRuntime:
+        """Return the teleop runtime, creating one for lightweight test doubles."""
+
+        runtime = self.__dict__.get('teleop_runtime')
+        if runtime is None:
+            runtime = TeleopRuntime(self)
+            self.teleop_runtime = runtime
+        return runtime
 
     ######################### VLAClient APIs #########################
     def start_observe(self):
@@ -203,6 +223,10 @@ class VLAClient():
         self.logger.info('VLAClient inference thread stopped.')
 
     def start_control(self):
+        # Control can be started independently of VLAClient.start() in the Web
+        # UI. Ensure teleop is running before policy control takes ownership.
+        if self._teleop()._use_teleop_enabled():
+            self._teleop().start_teleop_bridge()
         self.is_running = True
         with self._control_execution_lock:
             resume_controls = getattr(self.robot, 'resume_controls', None)
@@ -259,6 +283,7 @@ class VLAClient():
 
         self.start_observe()
         self.start_inference()
+        self._teleop().start_teleop_bridge()
         self.start_control()
         self.start_visualize()
 
@@ -266,6 +291,7 @@ class VLAClient():
 
     def pause(self):
         """Pause observation, inference and control without releasing resources."""
+        self._teleop().stop_teleop_bridge()
         self.stop_observe()
         self.stop_inference()
         self.stop_control()
@@ -279,6 +305,7 @@ class VLAClient():
         # self._inference_first()
         self.start_observe()
         self.start_inference()
+        self._teleop().start_teleop_bridge()
         self.start_control()
         self.start_visualize()
         self.logger.info('VLA client resumed.')
@@ -321,6 +348,7 @@ class VLAClient():
         return self._inference_parked.wait(timeout)
 
     def stop(self):
+        self._teleop().stop_teleop_bridge()
         self.stop_observe()
         self.stop_inference()
         self.stop_control()
@@ -332,6 +360,9 @@ class VLAClient():
         with self._inference_execution_lock:
             self.image_process_time = 0.0
             self.task_language_manager.reset()
+            self.action_arbiter.clear()
+            self.action_transition_filter.reset()
+            self._teleop()._set_last_executed_action(None)
             self.realtime_data_manager.clear()
             self._clear_raw_observe_queue()
         with self.show_thread_lock:
@@ -383,6 +414,7 @@ class VLAClient():
         - Stopping visualization components
         - Cleaning up all allocated resources
         """
+        self._teleop().stop_teleop_bridge()
         self.is_observe_thread_running = False
         self.is_inference_thread_running = False
         self.is_control_thread_running = False
@@ -429,6 +461,16 @@ class VLAClient():
             self.realtime_data_manager.clear()
             self._clear_raw_observe_queue()
             self.image_process_time = 0.0
+            # The web reset moves the robot directly, so drop every pre-reset
+            # command. Otherwise, with teleop enabled, the arbiter HOLDs the
+            # pre-reset action (and the transition filter blends from it) until
+            # the first fresh chunk arrives, pulling the arm back to its old pose.
+            self._teleop()._invalidate_policy_generation()
+            self.action_arbiter.clear()
+            self.action_transition_filter.reset()
+            self._teleop()._reset_teleop_policy_handoff()
+            self._teleop()._reset_teleop_outlier_guard()
+            self._teleop()._set_last_executed_action(None)
 
     @property
     def thread_status(self):
@@ -441,9 +483,18 @@ class VLAClient():
 
     @property
     def runtime_status(self):
+        teleop_status = self._teleop().teleop_status
         status = {
             "img_proc_time": self.image_process_time,
             "current_prob_progress": self.current_prob_progress,
+            "teleop_enabled": teleop_status["enabled"],
+            "teleop_supported": teleop_status.get("supported", False),
+            "teleop_human_active": self._teleop().is_teleop_human_active(),
+            "teleop_bridge_running": teleop_status.get("bridge_running", False),
+            "teleop_device_connected": teleop_status.get("device_connected", False),
+            "teleop_device_state": teleop_status.get("state", "unavailable"),
+            "teleop_device_message": teleop_status.get("message", ""),
+            "teleop_policy_handoff_active": self._teleop_policy_handoff_active,
             "inference_error": self.inference_error,
             "inference_error_count": self.inference_error_count,
         }
@@ -665,56 +716,96 @@ class VLAClient():
                     )
             else:
                 self.visualize_server.vis_global_step += 1
-        else:
-            try:
-                # Serialize action retrieval and submission with stop/start.
-                # A timer callback from before Pause cannot submit an old action
-                # after Reset or after controls are re-enabled on Resume.
-                with self._control_execution_lock:
-                    if not self.is_control_thread_running:
-                        return
+            return
+
+        teleop_enabled = self._teleop()._use_teleop_enabled()
+        # Values shared with the visualization helper below.
+        action_fitted, action_raw, vel_fitted, acc_fitted = (None, None, None, None)
+        selected_source = ActionSource.POLICY
+        selected_mask = None
+        action_to_execute = None
+        policy_action_for_record = None
+        action_np = None
+
+        def update_visualization(action_override=None):
+            current_state = getattr(self.robot, 'current_state', None)
+            self.visualize_server.update_chart_data(
+                action_fitted=action_override if action_override is not None else action_fitted,
+                vel_fitted=vel_fitted,
+                acc_fitted=acc_fitted,
+                action_raw=action_raw,
+                current_state=current_state,
+                observe_period=self.observe_period / 1000,
+                control_period=self.config.controller.period / 1000
+                )
+
+        try:
+            # Serialize action retrieval and submission with stop/start. A timer
+            # callback from before Pause cannot submit an old action after Reset
+            # or after controls are re-enabled on Resume.
+            with self._control_execution_lock:
+                if not self.is_control_thread_running:
+                    return
+
+                # Do not advance the policy chunk index while handoff is holding
+                # the last human action. get_action_fitted() pre-increments the
+                # index, so calling it here would make the first post-handoff
+                # control tick skip a frame.
+                if not (teleop_enabled and self._teleop_policy_handoff_active):
                     action_fitted, action_raw, vel_fitted, acc_fitted = self.realtime_data_manager.get_action_fitted()
-                    if action_fitted is not None:
-                        self.robot.control_robot(action_fitted)
-            except Exception as exc:
-                self._stop_control_thread_on_error()
-                self.logger.error("Robot control failed: %s", exc)
-                raise
 
-            if action_fitted is not None:
-                # with self.show_thread_lock:
-                    # self.info_current_action = action_fitted.tolist() if hasattr(action_fitted, 'tolist') else list(action_fitted)
-                
-                if self.config.record.switch:
-                    self.data_record_manager.add_action_async(action_fitted, time.perf_counter())
-                
-                # with self.show_thread_lock:
-                #     self.info_act['action'] = action_fitted.shape
+                action_to_execute = action_fitted
+                policy_action_for_record = action_fitted
 
-            # Only use alignment processing if prob_progress array length > 1
-            prob_progress = self.realtime_data_manager.get_prob_progress()
-            if prob_progress is not None:
-                with self.show_thread_lock:
-                    self.current_prob_progress = prob_progress
-                # print(f"current prob_progress: {prob_progress}")
-                if self.config.language.auto_mode == True:
-                    # Automatically switch language instruction based on prob_progress changes
-                    self.task_language_manager.add_task_progress(progress=prob_progress)
-                    self.task_language_manager.try_advance_subtask()
+                if teleop_enabled:
+                    decision = self._teleop()._resolve_teleop_control_action(action_fitted)
+                    if decision is None:
+                        update_visualization()
+                        return
+                    action_to_execute = decision.action
+                    selected_source = decision.source
+                    selected_mask = decision.mask
+                    policy_action_for_record = decision.policy_action
 
-            if self.visualize_server.vis_global_step % 5 == 0:
-                current_state = getattr(self.robot, 'current_state', None)
-                self.visualize_server.update_chart_data(
-                    action_fitted=action_fitted,
-                    vel_fitted=vel_fitted,
-                    acc_fitted=acc_fitted,
-                    action_raw=action_raw,
-                    current_state=current_state,
-                    observe_period=self.observe_period / 1000,
-                    control_period=self.config.controller.period / 1000
-                    )
-            else:
-                self.visualize_server.vis_global_step += 1
+                if action_to_execute is not None:
+                    action_np = np.asarray(action_to_execute)
+                    # Teleop/hold commands keep their open-loop semantics: the
+                    # robot proxy control queue is non-blocking and latest-wins,
+                    # so the control timer never waits on the robot worker.
+                    self.robot.control_robot(action_np)
+                    self._teleop()._set_last_executed_action(action_np)
+                    self._teleop()._publish_teleop_anchor_state()
+
+                    # Record the action actually sent to the robot, whether it
+                    # came from the policy or from human teleoperation, plus the
+                    # intervention fields describing any override.
+                    if self.config.record.switch:
+                        teleop_record = self._teleop()._teleop_record_fields(
+                            action_np,
+                            selected_source,
+                            teleop_mask=selected_mask,
+                            policy_action=policy_action_for_record,
+                        )
+                        self.data_record_manager.add_action_async(
+                            action_np,
+                            time.perf_counter(),
+                            teleop_record=teleop_record,
+                        )
+        except Exception as exc:
+            self._stop_control_thread_on_error()
+            self.logger.error("Robot control failed: %s", exc)
+            raise
+
+        # Only use alignment processing if prob_progress array length > 1
+        prob_progress = self.realtime_data_manager.get_prob_progress()
+        if prob_progress is not None:
+            with self.show_thread_lock:
+                self.current_prob_progress = prob_progress
+            if self.config.language.auto_mode == True:
+                self.task_language_manager.add_task_progress(progress=prob_progress)
+                self.task_language_manager.try_advance_subtask()
+
+        update_visualization(action_np if action_np is not None else action_fitted)
 
     # def _visualize_thread_fun(self):
     #     # Send state data to visualization server for live plotting when control thread is not running
@@ -758,6 +849,7 @@ class VLAClient():
         # Get observation data (thread-safe function, no lock needed)
         data = self.realtime_data_manager.pop_observe_data(num_samples = 1 if not self.config.vision.history_frame else 2)
         if data is not None:
+            policy_generation = self._teleop()._current_policy_generation()
             # Record inference start timestamp for control timestamp updates
             self.realtime_data_manager.set_infer_time_marker()
             
@@ -765,6 +857,9 @@ class VLAClient():
             result = self._request_inference(data, timeout_ms=self.config.vla_zmq.infer_timeout * 4)
             if result is None or 'data' not in result:
                 # print("Debug: infer first timeout.")
+                return
+            if not self._teleop()._is_policy_generation_current(policy_generation):
+                self.logger.info("Drop stale first inference result after teleop-to-policy handoff.")
                 return
             # Record trajectory fitting timestamp
             avg_infer_time = result.get('meta', {}).get('avg_infer_time', 0.0)
@@ -793,16 +888,21 @@ class VLAClient():
 
             self.realtime_data_manager.set_inter_traj_time_marker()
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
-            # currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
+            # During handoff, blend from the exact held human action over the
+            # full fresh policy horizon instead of starting at the time-shifted
+            # index computed from a now-stale policy timeline.
+            currt_action, currt_vel, currt_acc = self._teleop()._teleop_policy_handoff_state_for_fusion(action_chunk_fitted.shape[0])
+            if currt_action is not None:
+                target_chunk_index = 0
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
                 next_action_chunk=action_chunk_fitted,
                 next_vel_chunk=vel_chunk_fitted,
                 next_acc_chunk=acc_chunk_fitted,
                 next_timestamps=timestamps_fitted,
                 target_chunk_index=target_chunk_index,
-                currt_action=None,
-                currt_vel=None,
-                currt_acc=None,
+                currt_action=currt_action,
+                currt_vel=currt_vel,
+                currt_acc=currt_acc,
                 joint_indices=None,
                 step_indices=None,
             )
@@ -817,7 +917,10 @@ class VLAClient():
                 prob_progress=task_progress_fitted,
                 step_indices=self.robot.get_step_indices(),
                 gripper_offset=self.config.controller.gripper_offset,
+                next_action_chunk_index=max(0, target_chunk_index - 1) if currt_action is not None else None,
             )
+            if currt_action is not None:
+                self._teleop()._complete_teleop_policy_handoff(action_chunk_smoothed, target_chunk_index)
 
             # Compute average inference and trajectory fitting times
             self.realtime_data_manager.compute_avg_comm_infer_time()
@@ -849,6 +952,7 @@ class VLAClient():
             currt_language_instruction = ''
         # print(f"data keys: {data.keys() if data is not None else None}, infer_count: {self.realtime_data_manager.infer_count}")
         if data is not None:
+            policy_generation = self._teleop()._current_policy_generation()
             # Record inference start timestamp
             self.realtime_data_manager.set_infer_time_marker()
             
@@ -859,6 +963,9 @@ class VLAClient():
                 return
             if 'data' not in result:
                 self.logger.warning("Inference result doesn't have data.")
+                return
+            if not self._teleop()._is_policy_generation_current(policy_generation):
+                self.logger.info("Drop stale inference result after teleop-to-policy handoff.")
                 return
 
             avg_infer_time = result.get('meta', {}).get('avg_infer_time', 0.0)
@@ -891,6 +998,14 @@ class VLAClient():
             self.realtime_data_manager.set_inter_traj_time_marker()
             target_chunk_index = self.realtime_data_manager.get_start_chunk_index(timestamps_fitted)
             currt_action, currt_vel, currt_acc = self.realtime_data_manager.get_current_state()
+            # A fresh policy chunk after teleoperation must be fused from the
+            # last human command, not from a cleared/stale policy index. Start at
+            # frame zero so the inter-chunk fuser has the full horizon available.
+            handoff_action, handoff_vel, handoff_acc = self._teleop()._teleop_policy_handoff_state_for_fusion(action_chunk_fitted.shape[0])
+            handoff_fusion = handoff_action is not None
+            if handoff_action is not None:
+                currt_action, currt_vel, currt_acc = handoff_action, handoff_vel, handoff_acc
+                target_chunk_index = 0
             # Use inter chunk fusion when control thread is running, otherwise use intra chunk smoother output directly for visualization and monitoring
             action_chunk_smoothed, vel_chunk_smoothed, acc_chunk_smoothed, target_chunk_index = self.inter_chunk_fuser.process(
                 next_action_chunk=action_chunk_fitted,
@@ -901,8 +1016,9 @@ class VLAClient():
                 currt_action=currt_action if self.is_control_thread_running else None,
                 currt_vel=currt_vel if self.is_control_thread_running else None,
                 currt_acc=currt_acc if self.is_control_thread_running else None,
-                joint_indices=self.robot.get_joint_indices() if self.is_control_thread_running else None,
-                step_indices=self.robot.get_step_indices() if self.is_control_thread_running else None,
+                # During handoff blend the full action vector from the human anchor.
+                joint_indices=None if handoff_fusion else self.robot.get_joint_indices() if self.is_control_thread_running else None,
+                step_indices=None if handoff_fusion else self.robot.get_step_indices() if self.is_control_thread_running else None,
             )
             # Record control timestamp
             self.realtime_data_manager.set_control_time_marker()
@@ -915,7 +1031,12 @@ class VLAClient():
                 prob_progress=task_progress_fitted,
                 step_indices=self.robot.get_step_indices(),
                 gripper_offset=self.config.controller.gripper_offset,
+                # get_action_fitted() increments before indexing, so pin one
+                # frame earlier to consume target_chunk_index first.
+                next_action_chunk_index=max(0, target_chunk_index - 1) if handoff_fusion else None,
             )
+            if handoff_fusion:
+                self._teleop()._complete_teleop_policy_handoff(action_chunk_smoothed, target_chunk_index)
 
             # Compute average inference and trajectory fitting times
             self.realtime_data_manager.compute_avg_comm_infer_time()

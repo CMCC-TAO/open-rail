@@ -5,7 +5,10 @@ function renderStats(data) {
   App.isObserveRunning = !!(data?.observe_running ?? (data?.running && !data?.paused));
   App.isInferenceRunning = !!(data?.inference_running ?? (data?.running && !data?.paused));
   App.isControlRunning = !!(data?.control_running ?? (data?.running && !data?.paused));
-  setRunningUI(data.running, data.paused ?? false);
+  App.isTeleopActive = !!data?.teleop_human_active;
+  App.teleopDeviceConnected = !!data?.teleop_device_connected;
+  App.teleopDeviceState = String(data?.teleop_device_state || 'disabled');
+  setRunningUI(data.running, data.paused ?? false, App.isTeleopActive);
 
   $('val-obv-fps').textContent = data.obv_fps != null
     ? Number(data.obv_fps).toFixed(1) + ' fps' : '–';
@@ -275,12 +278,44 @@ function syncStartPauseButtons(running, paused = false) {
   btnPause.disabled = !!App.simulationEvaluationActive || (btnPause.dataset.pending === '1') || !running;
 }
 
-function setRunningUI(running, paused = false) {
-  const unchanged = (App.isRunning === running && App.isPaused === paused);
-  const wasRunning = App.isRunning === true;
-  const wasPaused  = App.isPaused === true;
+function syncStatusBadge() {
+  const badge = $('status-badge');
+  if (!badge) return;
+  let badgeText, badgeClass;
+  if (!App.isRunning) {
+    badgeText = 'STOPPED';
+    badgeClass = 'stopped';
+  } else if (App.isPaused) {
+    badgeText = 'PAUSED';
+    badgeClass = 'paused';
+  } else if (App.isTeleopActive) {
+    badgeText = 'TELEOP';
+    badgeClass = 'teleop';
+  } else {
+    badgeText = 'RUNNING';
+    badgeClass = 'running';
+  }
+  badge.textContent = badgeText;
+  badge.className = `status-badge ${badgeClass}`;
+}
+
+function syncResetButton() {
+  const btnReset = $('btn-reset');
+  if (!btnReset) return;
+  const disabledByTeleop = !!App.isTeleopActive;
+  btnReset.disabled = !!App.simulationEvaluationActive || !App.isRunning || disabledByTeleop;
+  btnReset.title = disabledByTeleop ? 'Reset is unavailable while Quest3 teleop is active.' : '';
+}
+
+function setRunningUI(running, paused = false, teleopActive = false) {
+  const unchanged = (
+    App.isRunning === running
+    && App.isPaused === paused
+    && App.isTeleopActive === teleopActive
+  );
   App.isRunning = running;
   App.isPaused  = paused;
+  App.isTeleopActive = !!teleopActive;
 
   if (!unchanged) {
     // Camera Visual: connect dedicated WS server when running
@@ -290,21 +325,6 @@ function setRunningUI(running, paused = false) {
       disconnectCamWS();
     }
 
-    // Status badge
-    let badgeText, badgeClass;
-    if (!running) {
-      badgeText  = 'STOPPED';
-      badgeClass = 'stopped';
-    } else if (paused) {
-      badgeText  = 'PAUSED';
-      badgeClass = 'paused';
-    } else {
-      badgeText  = 'RUNNING';
-      badgeClass = 'running';
-    }
-    $('status-badge').textContent = badgeText;
-    $('status-badge').className   = `status-badge ${badgeClass}`;
-
     if (!running) {
       App.isRecording = false;
       App.isRecordingPaused = false;
@@ -313,7 +333,8 @@ function setRunningUI(running, paused = false) {
   }
 
   syncStartPauseButtons(running, paused);
-  $('btn-reset').disabled = !!App.simulationEvaluationActive || !running;
+  syncStatusBadge();
+  syncResetButton();
   setThreadControlUI();
 }
 
@@ -333,10 +354,56 @@ async function waitForClientStart(timeoutMs = 180000) {
   throw new Error('Client startup timed out');
 }
 
+async function reportTeleopToggle(enabled) {
+  if (!enabled) {
+    toast('Quest3 teleop disabled.', 'info');
+    return;
+  }
+
+  toast('Quest3 teleop enabled. Checking device connection…', 'info');
+  const deadline = Date.now() + 15000;
+  let latest = null;
+  while (Date.now() < deadline) {
+    try {
+      const res = await apiFetch('/api/client/teleop/status', {
+        timeoutMs: 2000,
+        suppressToast: true,
+      });
+      latest = res?.teleop || null;
+    } catch (_) {
+      latest = null;
+    }
+
+    if (latest?.device_connected || latest?.state === 'connected') {
+      toast('Quest3 connected successfully.', 'ok', 4500);
+      return;
+    }
+    if (latest?.state === 'error') {
+      toast(`Quest3 connection failed: ${latest.message || 'device process error.'}`, 'error', 6000);
+      return;
+    }
+    if (latest?.state === 'unsupported') {
+      toast(latest.message || 'Quest3 teleop is not supported for the selected robot type.', 'warn', 6500);
+      return;
+    }
+    if (latest?.state === 'unavailable') {
+      toast(`Quest3 is enabled, but not connected: ${latest.message || 'teleop runtime is unavailable.'}`, 'warn', 6500);
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+
+  if (latest?.state === 'listening') {
+    toast('Quest3 bridge is listening, but no Quest3 device connected. Check USB/network and the Quest3 app.', 'warn', 7000);
+  } else {
+    toast(`Quest3 did not connect in time. ${latest?.message || 'Check the teleop device process.'}`, 'warn', 7000);
+  }
+}
+
 document.addEventListener('simulation-evaluation-state', event => {
   App.simulationEvaluationActive = event.detail.active;
   syncStartPauseButtons(App.isRunning, App.isPaused);
-  $('btn-reset').disabled = App.simulationEvaluationActive || !App.isRunning;
+  syncResetButton();
   setThreadControlUI();
 });
 
@@ -531,6 +598,9 @@ async function wireEvents() {
     if (configOperationBusy) return;
     if (!Object.keys(App.pendingPatch).length) { toast('No pending changes.', 'warn', 2000); return; }
     const pending = { ...App.pendingPatch };
+    const teleopToggle = Object.hasOwn(pending, 'teleop.use_teleop')
+      ? Boolean(pending['teleop.use_teleop'])
+      : null;
     setConfigOperationBusy(true);
 
     const uiState = captureConfigTreeUiState();
@@ -549,6 +619,7 @@ async function wireEvents() {
       applyVisualConfig(App.config);
       restoreConfigTreeState();
       requestAnimationFrame(restoreConfigTreeState);
+      if (teleopToggle !== null) void reportTeleopToggle(teleopToggle);
       if (res.requires_restart) toast('Robot type changed. Start Observe again.', 'info');
       // Auto-save after apply
       const confRes = await apiFetch('/api/client/config/path');
@@ -598,11 +669,13 @@ async function wireEvents() {
     btnStart.dataset.pending = '1';
     btnStart.disabled = true;
     if (btnPause) btnPause.disabled = true;
+    let pendingTeleopToggle = null;
 
     try {
       if (App.isRunning) {
         // Stop request
         const prevPaused = App.isPaused;
+        const prevTeleopActive = App.isTeleopActive;
 
         // If data recording is active, stop recording first.
         if (App.isRecording && typeof stopDataRecording === 'function') {
@@ -613,7 +686,7 @@ async function wireEvents() {
         try {
           await apiFetch('/api/client/stop', { method: 'POST', timeoutMs: 8000 });
         } catch (e) {
-          setRunningUI(true, prevPaused);
+          setRunningUI(true, prevPaused, prevTeleopActive);
         }
         finally {
           try {
@@ -630,6 +703,9 @@ async function wireEvents() {
       // Apply config patch BEFORE starting
       if (Object.keys(App.pendingPatch).length) {
         try {
+          pendingTeleopToggle = Object.hasOwn(App.pendingPatch, 'teleop.use_teleop')
+            ? Boolean(App.pendingPatch['teleop.use_teleop'])
+            : null;
           const res = await apiFetch('/api/client/config/patch', { method: 'POST', body: JSON.stringify({ patch: App.pendingPatch }) });
           App.config = res.config || App.config;
           applyVisualConfig(App.config);
@@ -637,7 +713,7 @@ async function wireEvents() {
           clearPending();
         } catch (e) {
           delete btnStart.dataset.pending;
-          setRunningUI(App.isRunning, App.isPaused);
+          setRunningUI(App.isRunning, App.isPaused, App.isTeleopActive);
           return;
         }
       }
@@ -649,7 +725,8 @@ async function wireEvents() {
       // evidence that the runtime exists yet (especially after Ctrl+C).
       const startedState = await waitForClientStart();
       applyThreadState(startedState);
-      setRunningUI(true, startedState.paused ?? false);
+      setRunningUI(true, startedState.paused ?? false, !!startedState.teleop_human_active);
+      if (pendingTeleopToggle !== null) void reportTeleopToggle(pendingTeleopToggle);
 
       // Now data recording if in auto mode
       const autoCheckRecordMode = $('chk-record-auto');
@@ -660,7 +737,7 @@ async function wireEvents() {
     }
     finally {
       delete btnStart.dataset.pending;
-      setRunningUI(App.isRunning, App.isPaused);
+      setRunningUI(App.isRunning, App.isPaused, App.isTeleopActive);
     }
   });
 
@@ -693,11 +770,15 @@ async function wireEvents() {
     } catch (e) { /* toasted */ }
     finally {
       if (App.currentFetchController === controller) App.currentFetchController = null;
-      setRunningUI(App.isRunning, App.isPaused);
+      setRunningUI(App.isRunning, App.isPaused, App.isTeleopActive);
     }
   });
 
   $('btn-reset').addEventListener('click',  async () => {
+    if (App.isTeleopActive) {
+      toast('Reset is unavailable while Quest3 teleop is active.', 'warn');
+      return;
+    }
     if (!(await sendControl('reset', window.getRobotControlPayload?.() || {}))) return;
     toast('Robot reset initiated.', 'info');
     if (App.isRecording ) {

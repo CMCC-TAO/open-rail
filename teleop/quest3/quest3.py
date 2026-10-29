@@ -1,0 +1,2443 @@
+#!/usr/bin/env python3
+"""Quest3 VR whole-body teleop bridge node for ``client.core.teleop_bridge.RosTeleopBridge``.
+
+=============================================================================
+Architecture Overview
+=============================================================================
+
+This node replaces the old C++ whole-body command publishers with a pure Python
+ROS2 node that speaks the VLA teleop bridge interface directly:
+
+* Publishes ``sensor_msgs/JointState`` to ``/target_robot/joint_commands``
+* Optionally publishes ``std_msgs/Float64`` reset edge to ``/custom/custom_a``
+
+=============================================================================
+Data Flow
+=============================================================================
+
+Quest3 VR headset ---[TCP JSON]---> QuestTcpServer ---> BridgeState
+                                                          |
+                                            VRWholeBodyBridgeNode._tick()
+                                                          |
+                                   ┌── Arm Control ──┼── Gripper Control ─┐
+                                   │                  │                    │
+                              FSM-driven IK    Incremental/proportional   Reset
+                                   │                                       │
+                                   └── action[:14] ─── internal hand command ─┘
+                                                          |
+                              _publish_joint_command() -> native hand width
+                                                          |
+                                            /target_robot/joint_commands
+                                                          |
+                                            RosTeleopBridge._command_cb()
+                                                          |
+                                            VLA Client action_arbiter
+
+=============================================================================
+Arm Control State Machine
+=============================================================================
+
+        trigger pressed (trigger > threshold)
+   AUTO ─────────────────────────────────────> MANUAL
+    ^                                             │
+    │                                             │ trigger released
+    │                                             v
+    └──────────────────────────────────── TRANSITION_EXIT
+                 [fixed target hold completes]
+
+During transitions:
+  - ``trigger_ref_ee_pose`` is captured once on the trigger-press edge and
+    remains fixed for the whole intervention.
+  - Human controller deltas are applied at full scale immediately.
+  - Releasing the trigger bakes the final target into a fixed exit-hold pose.
+
+=============================================================================
+Quest3 TCP JSON Packet Format (compatible with original
+``vr_controller_bridge/tcp_receiver.py``)
+=============================================================================
+One JSON object per line, newline-delimited.
+"""
+
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass, field
+import json
+import math
+from pathlib import Path
+import os
+import shutil
+import socket
+import subprocess
+import tempfile
+import threading
+import time
+from typing import Any
+
+import numpy as np
+
+from teleop.action_mapping import (
+    ARM_JOINT_NAMES,
+    action_layout_from_action_names,
+    action_layout_for_robot,
+)
+from teleop.config import normalize_reset_mode
+from teleop.hand_mapping import (
+    hand_command_to_native,
+    hand_feedback_to_control,
+    hand_output_width,
+    nearest_discrete_index,
+    normalize_discrete_values,
+    normalize_hand_control_mode,
+    normalize_hand_range,
+)
+
+# ---------------------------------------------------------------------------
+# Reference scalar action layout used by legacy reset/limit configuration.
+# Layout: 14 arm joints + one normalized command per hand = 16 dimensions.
+# ---------------------------------------------------------------------------
+SCALAR_ACTION_NAMES = list(ARM_JOINT_NAMES + ("left_hand_joint1", "right_hand_joint1"))
+
+# ---------------------------------------------------------------------------
+# Arm control FSM states
+#   AUTO:               policy-driven, no human intervention
+#   MANUAL:             full human control via IK immediately after trigger press
+#   TRANSITION_EXIT:    trigger released → hold final target, then return to auto
+# ---------------------------------------------------------------------------
+ARM_CONTROL_AUTO = "auto"
+ARM_CONTROL_MANUAL = "manual"
+ARM_CONTROL_TRANSITION_EXIT = "transition_exit"
+
+
+# ===========================================================================
+# Config parsing helpers
+# ===========================================================================
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    """Load a YAML config file (requires PyYAML)."""
+    try:
+        import yaml
+    except ImportError as exc:
+        raise RuntimeError("PyYAML is required to load VR whole-body bridge config.") from exc
+
+    with path.open("r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    if not isinstance(data, dict):
+        raise ValueError(f"Config must be a YAML mapping: {path}")
+    return data
+
+
+def _resolve_relative_config_paths(config: dict[str, Any], config_path: Path) -> None:
+    """Resolve file paths relative to the YAML config file's directory (e.g. urdf_path)."""
+    ik_config = config.get("ik")
+    if not isinstance(ik_config, dict):
+        return
+    urdf_path = ik_config.get("urdf_path")
+    if not isinstance(urdf_path, str) or not urdf_path:
+        return
+    path = Path(urdf_path).expanduser()
+    if not path.is_absolute():
+        ik_config["urdf_path"] = str((config_path.parent / path).resolve())
+
+
+def _as_array(values, *, length: int, default: float = 0.0) -> np.ndarray:
+    """Coerce any value into a fixed-length float ndarray (fills default when None)."""
+    if values is None:
+        return np.full(length, default, dtype=float)
+    arr = np.asarray(values, dtype=float).reshape(-1)
+    if arr.size != length:
+        raise ValueError(f"Expected {length} values, got {arr.size}")
+    return arr
+
+
+def _is_finite_vector(values, length: int | None = None) -> bool:
+    """Return True if values form an all-finite vector (used for IK input validation)."""
+    try:
+        arr = np.asarray(values, dtype=float).reshape(-1)
+    except (TypeError, ValueError):
+        return False
+    if length is not None and arr.size != length:
+        return False
+    return bool(np.all(np.isfinite(arr)))
+
+
+def _as_rotation_matrix(values, *, name: str) -> np.ndarray:
+    if values is None:
+        return np.eye(3, dtype=float)
+    arr = np.asarray(values, dtype=float)
+    if arr.shape != (3, 3):
+        raise ValueError(f"{name}.rotation_mat must be a 3x3 matrix, got shape {arr.shape}")
+    if not np.allclose(arr.T @ arr, np.eye(3), atol=1e-6):
+        raise ValueError(f"{name}.rotation_mat must be orthonormal")
+    det = float(np.linalg.det(arr))
+    if not math.isclose(det, 1.0, abs_tol=1e-6):
+        raise ValueError(f"{name}.rotation_mat determinant must be 1.0, got {det}")
+    return arr
+
+
+# ===========================================================================
+# Quaternion and rotation math utilities
+# ===========================================================================
+
+def _quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    """Hamilton product: q1 * q2. Result is normalized."""
+    x1, y1, z1, w1 = q1
+    x2, y2, z2, w2 = q2
+    out = np.array(
+        [
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        ],
+        dtype=float,
+    )
+    norm = np.linalg.norm(out)
+    return out / norm if norm > 0 else np.array([0.0, 0.0, 0.0, 1.0], dtype=float)
+
+
+def _quat_inv(q: np.ndarray) -> np.ndarray:
+    """Inverse (conjugate) of a unit quaternion."""
+    x, y, z, w = q
+    return np.array([-x, -y, -z, w], dtype=float) / max(float(np.dot(q, q)), 1e-12)
+
+
+def _quat_to_rotvec(q: np.ndarray) -> np.ndarray:
+    """Convert a unit quaternion to an axis-angle rotation vector."""
+    q = np.asarray(q, dtype=float)
+    norm = np.linalg.norm(q)
+    if norm <= 0:
+        return np.zeros(3, dtype=float)
+    x, y, z, w = q / norm
+    w = float(np.clip(w, -1.0, 1.0))
+    angle = 2.0 * math.acos(w)
+    s = math.sqrt(max(1.0 - w * w, 0.0))
+    if s < 1e-8:
+        return np.zeros(3, dtype=float)
+    return np.array([x, y, z], dtype=float) / s * angle
+
+
+def _rotvec_to_quat(rotvec: np.ndarray) -> np.ndarray:
+    """Convert an axis-angle rotation vector to a unit quaternion."""
+    rotvec = np.asarray(rotvec, dtype=float).reshape(3)
+    angle = float(np.linalg.norm(rotvec))
+    if angle < 1e-8:
+        return np.array([0.0, 0.0, 0.0, 1.0], dtype=float)
+    axis = rotvec / angle
+    half = angle / 2.0
+    return np.array(
+        [axis[0] * math.sin(half), axis[1] * math.sin(half), axis[2] * math.sin(half), math.cos(half)],
+        dtype=float,
+    )
+
+
+def _rotmat_to_quat(r: np.ndarray) -> np.ndarray:
+    """Convert a 3x3 rotation matrix to a unit quaternion (numerically stable)."""
+    r = np.asarray(r, dtype=float).reshape(3, 3)
+    trace = float(np.trace(r))
+    if trace > 0:
+        s = 0.5 / math.sqrt(trace + 1.0)
+        w = 0.25 / s
+        x = (r[2, 1] - r[1, 2]) * s
+        y = (r[0, 2] - r[2, 0]) * s
+        z = (r[1, 0] - r[0, 1]) * s
+    elif r[0, 0] > r[1, 1] and r[0, 0] > r[2, 2]:
+        s = 2.0 * math.sqrt(max(1.0 + r[0, 0] - r[1, 1] - r[2, 2], 0.0))
+        w = (r[2, 1] - r[1, 2]) / max(s, 1e-12)
+        x = 0.25 * s
+        y = (r[0, 1] + r[1, 0]) / max(s, 1e-12)
+        z = (r[0, 2] + r[2, 0]) / max(s, 1e-12)
+    elif r[1, 1] > r[2, 2]:
+        s = 2.0 * math.sqrt(max(1.0 + r[1, 1] - r[0, 0] - r[2, 2], 0.0))
+        w = (r[0, 2] - r[2, 0]) / max(s, 1e-12)
+        x = (r[0, 1] + r[1, 0]) / max(s, 1e-12)
+        y = 0.25 * s
+        z = (r[1, 2] + r[2, 1]) / max(s, 1e-12)
+    else:
+        s = 2.0 * math.sqrt(max(1.0 + r[2, 2] - r[0, 0] - r[1, 1], 0.0))
+        w = (r[1, 0] - r[0, 1]) / max(s, 1e-12)
+        x = (r[0, 2] + r[2, 0]) / max(s, 1e-12)
+        y = (r[1, 2] + r[2, 1]) / max(s, 1e-12)
+        z = 0.25 * s
+    quat = np.array([x, y, z, w], dtype=float)
+    quat /= max(float(np.linalg.norm(quat)), 1e-12)
+    return quat
+
+
+def _quat_to_rotmat(q: np.ndarray) -> np.ndarray:
+    """Convert a unit quaternion to a 3x3 rotation matrix."""
+    q = np.asarray(q, dtype=float).reshape(4)
+    q = q / max(float(np.linalg.norm(q)), 1e-12)
+    x, y, z, w = q
+    return np.array(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+        ],
+        dtype=float,
+    )
+
+
+def _matrix_to_position_quaternion(matrix_flat) -> tuple[np.ndarray, np.ndarray]:
+    """Decompose a flat 16-element 4x4 homogeneous transform into position + quaternion."""
+    if len(matrix_flat) != 16:
+        raise ValueError("Expected a flat 4x4 matrix with 16 values")
+    mat = np.asarray(matrix_flat, dtype=float).reshape(4, 4)
+    position = mat[:3, 3].copy()
+    return position, _rotmat_to_quat(mat[:3, :3])
+
+
+def _is_valid_unity_transform(matrix_flat, *, origin_epsilon_m: float = 0.0) -> bool:
+    """Return True when a Unity 4x4 controller transform is finite and physically plausible.
+
+    Checks performed (in order, short-circuit on first failure):
+      1. Type and length: must be list/tuple of exactly 16 floats.
+      2. Convertible to a finite 4x4 numpy array.
+      3. Homogeneous row must be [0, 0, 0, 1] (rigid-body transform).
+      4. Translation norm must exceed ``origin_epsilon_m`` (reject near-zero poses,
+         which usually indicate lost tracking when the headset reports identity).
+      5. Rotation sub-matrix columns must be unit-length (no scale/shear).
+      6. Rotation sub-matrix must be orthogonal (R^T R ≈ I).
+      7. Determinant must be ±1 (no reflection / improper rotation).
+    """
+    # -- 1. Basic type & length guard ----------------------------------------
+    if not isinstance(matrix_flat, (list, tuple)) or len(matrix_flat) != 16:
+        return False
+    # -- 2. Convert to 4x4 matrix, reject non-numeric garbage -----------------
+    try:
+        mat = np.asarray(matrix_flat, dtype=float).reshape(4, 4)
+    except (TypeError, ValueError):
+        return False
+    # -- 3. Reject NaN / Inf values -------------------------------------------
+    if not np.all(np.isfinite(mat)):
+        return False
+    # -- 4. Verify homogeneous row is [0, 0, 0, 1] ----------------------------
+    if not np.allclose(mat[3, :], np.array([0.0, 0.0, 0.0, 1.0]), atol=1e-4):
+        return False
+    # -- 5. Reject identity / near-origin poses (tracking-loss indicator) -----
+    if origin_epsilon_m > 0.0 and float(np.linalg.norm(mat[:3, 3])) <= origin_epsilon_m:
+        return False
+    # -- 6. Rotation matrix sanity: unit column norms -------------------------
+    rot = mat[:3, :3]
+    col_norms = np.linalg.norm(rot, axis=0)
+    if not np.allclose(col_norms, np.ones(3), atol=1e-2):
+        return False
+    # -- 7. Rotation matrix orthogonality check -------------------------------
+    if not np.allclose(rot.T @ rot, np.eye(3), atol=1e-2):
+        return False
+    # -- 8. Determinant check: must be proper rotation (det ≈ ±1) -------------
+    det = float(np.linalg.det(rot))
+    return math.isclose(abs(det), 1.0, rel_tol=1e-2, abs_tol=1e-2)
+
+
+def _write_teleop_status(path, **payload: Any) -> None:
+    """Atomically publish Quest3 connection state for the parent client process.
+
+    The VLA Client launches this node as a subprocess, so a small JSON status
+    file is used as a process-safe handshake channel.  Writes go through a
+    temporary file in the same directory and are committed with ``os.replace``
+    so readers never observe a partially written document.
+    """
+
+    if path in (None, ""):
+        return
+    status_path = Path(str(path)).expanduser()
+    status_path.parent.mkdir(parents=True, exist_ok=True)
+    record = {
+        "pid": os.getpid(),
+        "updated_at": time.time(),
+        **payload,
+    }
+    fd, temp_path = tempfile.mkstemp(
+        prefix=f".{status_path.name}.",
+        suffix=".tmp",
+        dir=str(status_path.parent),
+    )
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(record, handle, ensure_ascii=False)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_path, status_path)
+    finally:
+        try:
+            os.unlink(temp_path)
+        except FileNotFoundError:
+            pass
+
+
+def _packet_bool(value: Any, *, default: bool = True) -> bool:
+    """Parse optional bool-like fields from Quest TCP JSON packets.
+
+    The Quest3 app may send tracking-validity flags in several different formats
+    depending on the Unity / app version.  This helper normalises all of them:
+
+    - ``None`` / missing → ``default`` (assume valid unless told otherwise).
+    - Python ``bool`` → returned as-is.
+    - Numeric (int/float) → standard truthiness (0 → False, non-zero → True).
+    - String → case-insensitive match against known truthy / falsy keywords
+      (e.g. ``"tracked"`` → True, ``"lost"`` → False).
+    - Any other type → ``default``.
+    """
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        # Truthy keywords (tracking is active / valid)
+        if normalized in {"1", "true", "yes", "valid", "tracked", "tracking"}:
+            return True
+        # Falsy keywords (tracking is lost / invalid)
+        if normalized in {"0", "false", "no", "invalid", "lost", "sleeping"}:
+            return False
+    return default
+
+
+def _unity_to_ros(pos_u: np.ndarray, quat_u: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Convert Unity's left-handed Y-up coordinate frame to ROS right-handed Z-up."""
+    x_u, y_u, z_u = pos_u
+    qx_u, qy_u, qz_u, qw_u = quat_u
+    pos_r = np.array([z_u, -x_u, y_u], dtype=float)
+    quat_r = np.array([-qz_u, qx_u, -qy_u, qw_u], dtype=float)
+    quat_r /= max(float(np.linalg.norm(quat_r)), 1e-12)
+    return pos_r, quat_r
+
+
+def _apply_local_y_rotation(quat_xyzw: np.ndarray, angle_rad: float) -> np.ndarray:
+    """Post-multiply a quaternion by a local Y-axis rotation (used for controller alignment)."""
+    qy = np.array([0.0, math.sin(angle_rad / 2.0), 0.0, math.cos(angle_rad / 2.0)], dtype=float)
+    return _quat_mul(quat_xyzw, qy)
+
+
+# ===========================================================================
+# Coordinate transform from VR frame to URDF / ROS frame
+# ===========================================================================
+
+@dataclass(frozen=True)
+class CoordinateTransform:
+    """VR-to-URDF coordinate transform loaded from robot config.
+
+    Attributes:
+        rotation_mat: 3x3 orthonormal rotation matrix.
+        translation_xyz: 3-element translation vector (applied to absolute poses, not deltas).
+    """
+
+    rotation_mat: np.ndarray
+    translation_xyz: np.ndarray
+
+    @classmethod
+    def from_config(
+        cls,
+        config: dict[str, Any],
+        key: str,
+        *,
+        fallback_key: str | None = None,
+    ) -> "CoordinateTransform":
+        """Construct from a YAML config dict, optionally falling back to a shared key."""
+        source_key = key
+        entry = config.get(key)
+        if entry is None and fallback_key is not None:
+            source_key = fallback_key
+            entry = config.get(fallback_key)
+        entry = entry or {}
+        if not isinstance(entry, dict):
+            raise ValueError(f"{source_key} must be a YAML mapping")
+        rotation_mat = _as_rotation_matrix(entry.get("rotation_mat"), name=source_key)
+        translation_xyz = _as_array(entry.get("translation_xyz"), length=3, default=0.0)
+        return cls(
+            rotation_mat=rotation_mat,
+            translation_xyz=translation_xyz,
+        )
+
+    def transform_relative_quat(self, quat_vr_xyzw: np.ndarray) -> np.ndarray:
+        """Convert a relative rotation: R_urdf @ R_vr @ R_urdfᵀ (A2D convention)."""
+        rot_vr = _quat_to_rotmat(quat_vr_xyzw)
+        rot_urdf = self.rotation_mat @ rot_vr @ self.rotation_mat.T
+        return _rotmat_to_quat(rot_urdf)
+
+    def transform_relative_pos(self, pos_vr_xyz: np.ndarray) -> np.ndarray:
+        """Convert a relative position delta (translation is not applied to deltas)."""
+        return self.rotation_mat @ np.asarray(pos_vr_xyz, dtype=float).reshape(3)
+
+
+# ===========================================================================
+# Runtime state data structures
+# ===========================================================================
+
+@dataclass
+class ControllerSide:
+    """Live state and trigger-held reference state for one Quest controller (left or right).
+
+    Key fields for arm control:
+        trigger:            Arm trigger value (Quest "grip" button → teleop arm trigger).
+        grip:               Gripper control value (Quest "trigger" button → hand).
+        trigger_ref_*:      Snapshots taken when the trigger is first pressed; deltas
+                            are measured from these reference values.
+        exit_hold_*:        Frozen pose when trigger is released, to prevent drift.
+        control_state:      Current FSM state (AUTO / MANUAL / TRANSITION_EXIT).
+    """
+
+    pose_pos: np.ndarray | None = None
+    pose_quat: np.ndarray | None = None
+    pose_valid: bool = False
+    grip: float = 0.0
+    trigger: float = 0.0
+    secondary_button: bool = False
+    primary_button: bool = False
+    # Snapshots captured at trigger-press time (reference for delta calculation)
+    trigger_ref_pos: np.ndarray | None = None
+    trigger_ref_quat: np.ndarray | None = None
+    trigger_ref_action: np.ndarray | None = None
+    trigger_ref_ee_pose: np.ndarray | None = None
+    # Frozen pose during exit transition
+    exit_hold_pos: np.ndarray | None = None
+    exit_hold_quat: np.ndarray | None = None
+    # FSM state and exit-hold timing
+    control_state: str = ARM_CONTROL_AUTO
+    transition_elapsed_s: float = 0.0
+    was_trigger_active: bool = False
+    # Gripper control tracking
+    gripper_control_active: bool = False
+    gripper_command_initialized: bool = False
+    gripper_command_pending: bool = False
+    proportional_hold_action: float | None = None
+    discrete_index: int = -1
+    hand_trigger_pressed: bool = False
+    hand_secondary_pressed: bool = False
+
+
+@dataclass
+class BridgeState:
+    """Shared mutable bridge state protected by a lock across ROS and TCP threads.
+
+    Attributes:
+        action:           The outgoing mode-specific command vector and IK seed.
+        reference_action: Latest robot feedback from /joint_states, used as the
+                          activation-time seed and inactive-side fallback.
+        joint_state_ready: True after at least one valid /joint_states message.
+    """
+
+    left: ControllerSide = field(default_factory=ControllerSide)
+    right: ControllerSide = field(default_factory=ControllerSide)
+    primary_pressed: bool = False
+    action: np.ndarray = field(default_factory=lambda: np.zeros(16, dtype=float))
+    reference_action: np.ndarray = field(default_factory=lambda: np.zeros(16, dtype=float))
+    joint_state_ready: bool = False
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+# ===========================================================================
+# TCP server for receiving Quest3 controller data
+# ===========================================================================
+
+class QuestTcpServer:
+    """Newline-delimited JSON TCP server for Quest3 controller packets.
+
+    Runs a dedicated daemon thread that:
+    1. Accepts a single TCP client (the Quest3 app).
+    2. Reads newline-delimited JSON lines.
+    3. Parses left/right controller matrices and buttons.
+    4. Updates the shared ``BridgeState`` under lock.
+
+    Packet format (one JSON object per line):
+        {
+            "left_matrix":  [16 floats],    # 4x4 Unity transform
+            "right_matrix": [16 floats],
+            "left_is_valid": true,           # optional tracking-valid flag
+            "right_is_valid": true,
+            "left_buttons": {"grip": 0.0, "trigger": 0.0, "primary_button": false, ...},
+            "right_buttons": {...}
+        }
+    """
+
+    def __init__(
+        self,
+        node,
+        state: BridgeState,
+        port: int,
+        controller_y_rotation_rad: float,
+        invalid_origin_epsilon_m: float,
+        status_file: str | None = None,
+        client_timeout_s: float = 2.0,
+        status_publish_interval_s: float = 1.0,
+    ):
+        self.node = node
+        self.state = state
+        self.port = int(port)
+        self.controller_y_rotation_rad = float(controller_y_rotation_rad)
+        self.invalid_origin_epsilon_m = max(float(invalid_origin_epsilon_m), 0.0)
+        self.status_file = status_file
+        self.client_timeout_s = max(float(client_timeout_s), 0.0)
+        self.status_publish_interval_s = max(float(status_publish_interval_s), 0.0)
+        self.running = True
+        self.server_sock = None
+        self.client_sock = None
+        self.recv_buffer = ""
+        self.total_packets = 0
+        self.remote_address = None
+        self.last_error = None
+        self.last_packet_monotonic = None
+        self.last_packet_wall_time = None
+        self._last_status_publish_monotonic = 0.0
+        self._status_lock = threading.Lock()
+        self.thread = threading.Thread(target=self._run, name="quest3-tcp-receiver", daemon=True)
+
+    def start(self) -> None:
+        self.thread.start()
+
+    def stop(self) -> None:
+        self.running = False
+        for sock in (self.client_sock, self.server_sock):
+            if sock is not None:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+        if self.thread.is_alive() and threading.current_thread() is not self.thread:
+            self.thread.join(timeout=1.0)
+        self._publish_status("stopped", connected=False)
+
+    def _publish_status(self, state: str, *, connected: bool, error: str | None = None) -> None:
+        """Publish one snapshot of the Quest3 TCP connection state."""
+
+        if error is not None:
+            self.last_error = str(error)
+        packet_age_s = self._packet_age_s()
+        with self.state.lock:
+            left_tracking = bool(self.state.left.pose_valid)
+            right_tracking = bool(self.state.right.pose_valid)
+        with self._status_lock:
+            _write_teleop_status(
+                self.status_file,
+                state=str(state),
+                connected=bool(connected),
+                port=self.port,
+                remote=self.remote_address,
+                total_packets=self.total_packets,
+                last_packet_at=self.last_packet_wall_time,
+                last_packet_age_s=packet_age_s,
+                left_tracking_valid=left_tracking,
+                right_tracking_valid=right_tracking,
+                error=self.last_error,
+            )
+
+    def _packet_age_s(self) -> float | None:
+        """Return seconds since the most recent socket data, if connected."""
+        if self.last_packet_monotonic is None:
+            return None
+        return max(time.monotonic() - self.last_packet_monotonic, 0.0)
+
+    def _client_timed_out(self, now: float | None = None) -> bool:
+        """Return whether an open client has stopped sending packets."""
+        if self.client_timeout_s <= 0.0 or self.last_packet_monotonic is None:
+            return False
+        if now is None:
+            now = time.monotonic()
+        return now - self.last_packet_monotonic > self.client_timeout_s
+
+    def _publish_periodic_status(self, state: str, *, connected: bool) -> None:
+        """Refresh parent status without writing once per packet."""
+        if self.status_publish_interval_s <= 0.0:
+            return
+        now = time.monotonic()
+        if now - self._last_status_publish_monotonic < self.status_publish_interval_s:
+            return
+        self._last_status_publish_monotonic = now
+        self._publish_status(state, connected=connected)
+
+    def _run(self) -> None:
+        """Main server loop: accept, receive, parse.
+
+        Uses a 1-second accept timeout and 100ms recv timeout so the loop
+        can check ``self.running`` and exit cleanly on shutdown."""
+        try:
+            self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.server_sock.bind(("0.0.0.0", self.port))
+            self.server_sock.listen(1)
+            self.server_sock.settimeout(1.0)
+        except Exception as exc:
+            self._publish_status("error", connected=False, error=str(exc))
+            raise
+        self.node.get_logger().info(f"Quest3 TCP server listening on 0.0.0.0:{self.port}")
+        self._publish_status("listening", connected=False)
+
+        while self.running:
+            if self.client_sock is None:
+                try:
+                    client, addr = self.server_sock.accept()
+                    client.settimeout(0.1)
+                    client.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                    for option, value in (
+                        ("TCP_KEEPIDLE", 5),
+                        ("TCP_KEEPINTVL", 2),
+                        ("TCP_KEEPCNT", 3),
+                    ):
+                        if hasattr(socket, option):
+                            try:
+                                client.setsockopt(socket.IPPROTO_TCP, getattr(socket, option), value)
+                            except OSError:
+                                pass
+                    now = time.monotonic()
+                    self.client_sock = client
+                    self.recv_buffer = ""
+                    self.remote_address = str(addr)
+                    self.last_error = None
+                    self.last_packet_monotonic = now
+                    self.last_packet_wall_time = time.time()
+                    self._last_status_publish_monotonic = now
+                    self.node.get_logger().info(f"Quest3 client connected from {addr}")
+                    self._publish_status("connected", connected=True)
+                except socket.timeout:
+                    self._publish_periodic_status("listening", connected=False)
+                    continue
+                except OSError:
+                    break
+                except Exception as exc:
+                    self.node.get_logger().warning(f"Quest3 accept error: {exc}")
+                    time.sleep(1.0)
+                    continue
+
+            try:
+                data = self.client_sock.recv(131072)
+                if not data:
+                    self._close_client("Quest3 closed connection")
+                    continue
+                self.last_packet_monotonic = time.monotonic()
+                self.last_packet_wall_time = time.time()
+                self.recv_buffer += data.decode("utf-8", "ignore")
+                while "\n" in self.recv_buffer:
+                    line, self.recv_buffer = self.recv_buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line:
+                        continue
+                    self._process_packet(json.loads(line))
+            except socket.timeout:
+                if self._client_timed_out():
+                    self._close_client(
+                        f"Quest3 packet timeout after {self.client_timeout_s:.1f}s"
+                    )
+                continue
+            except OSError as exc:
+                if not self.running:
+                    break
+                self._close_client(f"Quest3 receive error: {exc}")
+            except Exception as exc:
+                self._close_client(f"Quest3 receive error: {exc}")
+
+    def _close_client(self, reason: str) -> None:
+        if self.running:
+            self.node.get_logger().warning(reason)
+        if self.client_sock is not None:
+            try:
+                self.client_sock.close()
+            except Exception:
+                pass
+        self.client_sock = None
+        self.recv_buffer = ""
+        self.remote_address = None
+        self.last_packet_monotonic = None
+        self.last_packet_wall_time = None
+        with self.state.lock:
+            self.state.left.pose_valid = False
+            self.state.right.pose_valid = False
+        self._publish_status("listening", connected=False, error=reason)
+
+    def _process_packet(self, packet: dict[str, Any]) -> None:
+        """Parse one JSON packet and update left/right controller state under lock.
+
+        - ``left_matrix`` / ``right_matrix``: 4x4 Unity transforms → VR pose.
+        - Optional ``left_is_valid`` / ``right_is_valid``: controller tracking validity.
+        - ``left_buttons`` / ``right_buttons``: button/trigger/grip values.
+
+        Note: Quest "grip" button maps to ``trigger`` (arm teleop activation),
+        and Quest "trigger" maps to ``grip`` (hand/gripper control).
+        """
+        self.total_packets += 1
+        left_buttons = packet.get("left_buttons", {}) or {}
+        right_buttons = packet.get("right_buttons", {}) or {}
+
+        with self.state.lock:
+            left_valid = self._packet_side_valid(packet, left_buttons, "left")
+            right_valid = self._packet_side_valid(packet, right_buttons, "right")
+            self._update_pose(self.state.left, packet.get("left_matrix"), left_valid)
+            self._update_pose(self.state.right, packet.get("right_matrix"), right_valid)
+            self._update_buttons(self.state.left, left_buttons)
+            self._update_buttons(self.state.right, right_buttons)
+        self._publish_periodic_status("connected", connected=True)
+
+    @staticmethod
+    def _packet_side_valid(packet: dict[str, Any], buttons: dict[str, Any], side_name: str) -> bool:
+        """Resolve the tracking-validity flag for one controller side.
+
+        The Quest3 app reports tracking status in various JSON locations across
+        different versions.  We probe multiple possible keys in priority order,
+        falling back to the previous result when a key is absent:
+
+        1. ``{side}_is_valid`` at the packet root (preferred, newest format).
+        2. ``{side}_valid`` at the packet root (legacy format).
+        3. ``is_valid`` / ``valid`` / ``tracking`` inside the buttons sub-object.
+
+        If no key is found at any level the default is ``True`` (assume valid).
+        """
+        # Try packet-level keys first (most reliable)
+        valid = _packet_bool(packet.get(f"{side_name}_is_valid"), default=True)
+        valid = _packet_bool(packet.get(f"{side_name}_valid"), default=valid)
+        # Fall back to buttons sub-object keys
+        valid = _packet_bool(buttons.get("is_valid"), default=valid)
+        valid = _packet_bool(buttons.get("valid"), default=valid)
+        valid = _packet_bool(buttons.get("tracking"), default=valid)
+        return valid
+
+    def _update_pose(self, side: ControllerSide, matrix, is_valid: bool) -> None:
+        """Convert a Unity 4x4 matrix to VR-frame position and quaternion."""
+        if not is_valid or not _is_valid_unity_transform(
+            matrix,
+            origin_epsilon_m=self.invalid_origin_epsilon_m,
+        ):
+            side.pose_valid = False
+            return
+        pos_u, quat_u = _matrix_to_position_quaternion(matrix)
+        pos_vr, quat_vr = _unity_to_ros(pos_u, quat_u)
+        quat_vr = _apply_local_y_rotation(quat_vr, self.controller_y_rotation_rad)
+        side.pose_pos = pos_vr
+        side.pose_quat = quat_vr
+        side.pose_valid = True
+
+    @staticmethod
+    def _update_buttons(side: ControllerSide, buttons: dict[str, Any]) -> None:
+        """Map Quest button names to controller state fields.
+
+        Naming convention from the original Unity bridge:
+          - "grip"   → side.trigger  (arm teleop enable)
+          - "trigger" → side.grip     (hand close/open)
+        """
+        side.trigger = float(buttons.get("grip", 0.0))
+        side.grip = float(buttons.get("trigger", 0.0))
+        side.primary_button = bool(buttons.get("primary_button", False))
+        side.secondary_button = bool(buttons.get("secondary_button", False))
+
+
+# ===========================================================================
+# Inverse Kinematics solver adapter
+# ===========================================================================
+
+class KineOptTeleopIK:
+    """Adapter that turns Quest controller deltas into per-arm IK solutions.
+
+    Two solver backends are supported:
+      - ``cpp``:   ``kine_solver_py.SingleArmKineSolver`` (fast native solver).
+      - ``casadi``: ``casadi_ik_cpp.PinocchioCasadiChunkKineSolver`` (optimization-based).
+
+    The IK pipeline works as follows:
+    1. Compute a target end-effector pose from VR controller delta
+       (``target_pose()``).
+    2. Use the current joint positions as the IK seed.
+    3. Call the solver backend.
+    4. Return the solution or None on failure (caller holds previous command).
+
+    For xacro URDF files, the adapter auto-expands them via the ``xacro`` CLI tool.
+    """
+
+    def __init__(
+        self,
+        config: dict[str, Any],
+        *,
+        position_scale: float,
+        orientation_scale: float,
+        control_dt: float | None,
+        logger,
+    ):
+        self.enabled = bool(config.get("enabled", True))
+        self.position_scale = float(position_scale)
+        self.orientation_scale = float(orientation_scale)
+        self.ref_frame = str(config.get("ref_frame", "world"))
+        self.rotation_type = str(config.get("rotation_type", "quat"))
+        self.solver_backend = str(config.get("solver_backend", "cpp")).lower()
+        self.casadi_dt = float(config.get("dt", control_dt if control_dt is not None else 0.01))
+        self.casadi_kwargs = {
+            "pos_weight": float(config.get("pos_weight", 50.0)),
+            "ori_weight": float(config.get("ori_weight", 10.0)),
+            "smooth_weight": float(config.get("smooth_weight", 2.0)),
+            "accel_smooth_weight": float(
+                config.get("accel_smooth_weight", config.get("accel_weight", 0.1))
+            ),
+            "anchor_weight": float(config.get("anchor_weight", 1.0)),
+            "rest_weight": float(config.get("rest_weight", 0.1)),
+            "ipopt_max_iter": int(config.get("ipopt_max_iter", 200)),
+        }
+        self.logger = logger
+        self._last_warn_s = 0.0
+        self.solvers = {}
+        self._tmpdir: tempfile.TemporaryDirectory[str] | None = None
+        xacro_prefixes = config.get("xacro_ament_prefix_paths", [])
+        if isinstance(xacro_prefixes, (str, Path)):
+            xacro_prefixes = [str(xacro_prefixes)]
+        self.xacro_ament_prefix_paths = [str(Path(p).expanduser()) for p in xacro_prefixes]
+
+        if not self.enabled:
+            return
+
+        SingleArmKineSolver = self._import_solver()
+
+        urdf_path = self._prepare_urdf_path(str(config["urdf_path"]))
+        for side in ("left", "right"):
+            side_cfg = config.get(side, {}) or {}
+            if self.solver_backend == "casadi":
+                self.solvers[side] = SingleArmKineSolver(
+                    urdf_path,
+                    str(side_cfg["base_link"]),
+                    str(side_cfg["tip_link"]),
+                    None,
+                    **self.casadi_kwargs,
+                )
+            else:
+                self.solvers[side] = SingleArmKineSolver(
+                    urdf_path,
+                    str(side_cfg["base_link"]),
+                    str(side_cfg["tip_link"]),
+                )
+        logger.info(f"kine_opt IK initialized with backend={self.solver_backend}, URDF: {urdf_path}")
+
+    def _import_solver(self):
+        if self.solver_backend == "cpp":
+            try:
+                from kine_solver_py import SingleArmKineSolver
+            except Exception as exc:
+                raise RuntimeError(
+                    "Cannot import kine_solver_py.SingleArmKineSolver. "
+                    "Install /jiayindeng/kine_opt into the active system/ROS Python environment "
+                    "before starting Quest3 teleop."
+                ) from exc
+            return SingleArmKineSolver
+
+        if self.solver_backend == "casadi":
+            try:
+                from casadi_ik_cpp import PinocchioCasadiChunkKineSolver
+            except Exception as exc:
+                raise RuntimeError(
+                    "Cannot import casadi_ik_cpp.PinocchioCasadiChunkKineSolver. "
+                    "Install /jiayindeng/kine_opt with CasADi support into the active "
+                    "system/ROS Python environment before starting Quest3 teleop."
+                ) from exc
+            return PinocchioCasadiChunkKineSolver
+
+        if self.solver_backend != "cpp":
+            raise RuntimeError(
+                "Unsupported Quest3 IK backend "
+                f"{self.solver_backend!r}; expected `cpp` or `casadi`."
+            )
+
+    def _pose_from_solver(self, pose: np.ndarray) -> np.ndarray:
+        return np.asarray(pose, dtype=float).reshape(-1)
+
+    def _pose_to_solver(self, pose: np.ndarray) -> np.ndarray:
+        return np.asarray(pose, dtype=float).reshape(-1)
+
+    def _prepare_urdf_path(self, urdf_path: str) -> str:
+        """Resolve the URDF path; auto-expand .xacro files via the xacro CLI tool."""
+        path = Path(urdf_path).expanduser()
+        if not path.exists():
+            raise FileNotFoundError(f"kine_opt URDF does not exist: {path}")
+        if path.suffix != ".xacro":
+            return str(path)
+
+        xacro = shutil.which("xacro")
+        if not xacro:
+            raise RuntimeError(f"kine_opt URDF is xacro but `xacro` is not available: {path}")
+
+        self._tmpdir = tempfile.TemporaryDirectory(prefix="quest3_ik_")
+        output = Path(self._tmpdir.name) / f"{path.stem}.urdf"
+        try:
+            env = os.environ.copy()
+            if self.xacro_ament_prefix_paths:
+                current_prefix = env.get("AMENT_PREFIX_PATH", "")
+                env["AMENT_PREFIX_PATH"] = os.pathsep.join(
+                    [*self.xacro_ament_prefix_paths, current_prefix]
+                ).rstrip(os.pathsep)
+            result = subprocess.run(
+                [xacro, str(path)],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+            )
+        except subprocess.CalledProcessError as exc:
+            raise RuntimeError(
+                f"Failed to expand xacro for kine_opt: {path}\n{exc.stderr.strip()}"
+            ) from exc
+        output.write_text(result.stdout, encoding="utf-8")
+        self.logger.info(f"Expanded xacro for kine_opt: {path} -> {output}")
+        return str(output)
+
+    def forward_pose(self, side_name: str, q: np.ndarray) -> np.ndarray | None:
+        """Compute forward kinematics: joint angles → 7-D end-effector pose (pos + quat)."""
+        if not self.enabled:
+            return None
+        if not _is_finite_vector(q, 7):
+            self._warn_throttled(f"Skip kine_opt FK for {side_name} arm because q is invalid.")
+            return None
+        solver = self.solvers[side_name]
+        try:
+            pose = self._pose_from_solver(
+                solver.solve_fk_local_model(
+                    np.asarray(q, dtype=float),
+                    self.ref_frame,
+                    self.rotation_type,
+                )
+            )
+        except Exception as exc:
+            self._warn_throttled(f"kine_opt FK failed for {side_name} arm: {exc}")
+            return None
+        if pose.size != 7:
+            self._warn_throttled(f"kine_opt FK returned pose length {pose.size}, expected 7.")
+            return None
+        if not np.all(np.isfinite(pose)):
+            self._warn_throttled(f"kine_opt FK returned non-finite pose for {side_name} arm.")
+            return None
+        return pose
+
+    def solve(
+        self,
+        side_name: str,
+        side: ControllerSide,
+        q_init: np.ndarray,
+        vr_to_urdf: CoordinateTransform,
+        base_vr_to_urdf: CoordinateTransform,
+    ) -> np.ndarray | None:
+        """Run IK for one arm given the current controller state.
+
+        Steps:
+        1. Compute target end-effector pose from VR controller delta.
+        2. Use ``q_init`` (current joint command) as the IK seed.
+        3. Call the solver backend and return the 7-D joint solution.
+
+        Returns None if IK fails or inputs are invalid; caller should hold.
+        """
+        if not self.enabled:
+            return None
+        if (
+            side.pose_pos is None
+            or side.pose_quat is None
+            or side.trigger_ref_pos is None
+            or side.trigger_ref_quat is None
+            or side.trigger_ref_ee_pose is None
+        ):
+            return None
+
+        target_pose = self.target_pose(side, vr_to_urdf, base_vr_to_urdf)
+        if target_pose is None:
+            return None
+
+        solver = self.solvers[side_name]
+        q_seed = np.asarray(q_init, dtype=float)
+        if not _is_finite_vector(q_seed, 7):
+            self._warn_throttled(f"Skip kine_opt IK for {side_name} arm because q_seed is invalid.")
+            return None
+        solver_target = self._pose_to_solver(target_pose)
+        if not _is_finite_vector(solver_target, 7):
+            self._warn_throttled(f"Skip kine_opt IK for {side_name} arm because target pose is invalid.")
+            return None
+        # CasADi and the older C++ backend expose slightly different solve APIs.
+        try:
+            if self.solver_backend == "casadi":
+                q_solution, success_flags = solver.solve_ik_local_model_traj_simple(
+                    solver_target.reshape(1, -1),
+                    q_seed,
+                    self.casadi_dt,
+                    self.rotation_type,
+                )
+                success = bool(success_flags and success_flags[0])
+                q_solution = np.asarray(q_solution, dtype=float).reshape(-1)[:7]
+            else:
+                q_solution, success = solver.solve_ik_local_model(
+                    solver_target,
+                    q_seed,
+                    self.ref_frame,
+                    self.rotation_type,
+                )
+                q_solution = np.asarray(q_solution, dtype=float).reshape(-1)[:7]
+        except Exception as exc:
+            self._warn_throttled(f"kine_opt IK failed for {side_name} arm: {exc}")
+            return None
+        if not success:
+            self._warn_throttled(f"kine_opt IK failed for {side_name} arm; holding previous command.")
+            return None
+        if not _is_finite_vector(q_solution, 7):
+            self._warn_throttled(f"kine_opt IK returned non-finite solution for {side_name} arm; holding previous command.")
+            return None
+        return q_solution
+
+    def target_pose(
+        self,
+        side: ControllerSide,
+        vr_to_urdf: CoordinateTransform,
+        base_vr_to_urdf: CoordinateTransform,
+    ) -> np.ndarray | None:
+        """Compute the target end-effector pose (7-D: position + quaternion).
+
+        The target is derived from:
+          - trigger_ref_ee_pose:  the anchor EE pose at trigger-press time.
+          - pose_pos / pose_quat: current VR controller pose.
+
+        During TRANSITION_EXIT, the controller pose is frozen (exit_hold_*)
+        so releasing the trigger does not cause positional drift.
+
+        Returns the 7-D target pose or None if inputs are invalid.
+        """
+        if (
+            side.pose_pos is None
+            or side.pose_quat is None
+            or side.trigger_ref_pos is None
+            or side.trigger_ref_quat is None
+            or side.trigger_ref_ee_pose is None
+        ):
+            return None
+
+        if not (
+            _is_finite_vector(side.pose_pos, 3)
+            and _is_finite_vector(side.pose_quat, 4)
+            and _is_finite_vector(side.trigger_ref_pos, 3)
+            and _is_finite_vector(side.trigger_ref_quat, 4)
+            and _is_finite_vector(side.trigger_ref_ee_pose, 7)
+        ):
+            self._warn_throttled("Skip kine_opt IK because teleop target inputs are invalid.")
+            return None
+
+        base_pose = np.asarray(side.trigger_ref_ee_pose, dtype=float).reshape(7)
+        pose_pos = side.pose_pos
+        pose_quat = side.pose_quat
+        if side.control_state == ARM_CONTROL_TRANSITION_EXIT:
+            pose_pos = side.exit_hold_pos if side.exit_hold_pos is not None else pose_pos
+            pose_quat = side.exit_hold_quat if side.exit_hold_quat is not None else pose_quat
+            if not (_is_finite_vector(pose_pos, 3) and _is_finite_vector(pose_quat, 4)):
+                self._warn_throttled("Skip kine_opt IK because teleop exit-hold pose is invalid.")
+                return None
+
+        # Controller deltas are always measured from the pose captured when trigger was pressed.
+        delta_pos_vr = pose_pos - side.trigger_ref_pos
+        delta_pos = base_vr_to_urdf.transform_relative_pos(delta_pos_vr) * self.position_scale
+        delta_quat_vr = _quat_mul(_quat_inv(side.trigger_ref_quat), pose_quat)
+        # Match the C++ A2D controller: convert the relative rotation by R * delta_R * R.T.
+        delta_quat_urdf = vr_to_urdf.transform_relative_quat(delta_quat_vr)
+        delta_rot = _quat_to_rotvec(delta_quat_urdf)
+        delta_quat = _rotvec_to_quat(delta_rot * self.orientation_scale)
+
+        target_pose = np.empty(7, dtype=float)
+        target_pose[:3] = base_pose[:3] + delta_pos
+        target_pose[3:7] = _quat_mul(base_pose[3:7], delta_quat)
+        if not np.all(np.isfinite(target_pose)):
+            self._warn_throttled("Skip kine_opt IK because target pose became non-finite.")
+            return None
+        return target_pose
+
+    def _warn_throttled(self, message: str, period_s: float = 1.0) -> None:
+        """Log a warning at most once per ``period_s`` seconds to avoid log spam."""
+        now = time.time()
+        if now - self._last_warn_s >= period_s:
+            self._last_warn_s = now
+            self.logger.warning(message)
+
+
+def _load_controller_transforms(config: dict[str, Any]) -> dict[str, CoordinateTransform]:
+    """Load per-side transforms, falling back to one shared arm transform when present."""
+    return {
+        "head": CoordinateTransform.from_config(config, "rot_head_from_vr_to_urdf"),
+        "base": CoordinateTransform.from_config(config, "rot_base_from_vr_to_urdf"),
+        "left": CoordinateTransform.from_config(
+            config,
+            "rot_left_arm_from_vr_to_urdf",
+            fallback_key="rot_arm_from_vr_to_urdf",
+        ),
+        "right": CoordinateTransform.from_config(
+            config,
+            "rot_right_arm_from_vr_to_urdf",
+            fallback_key="rot_arm_from_vr_to_urdf",
+        ),
+    }
+
+
+# ===========================================================================
+# Main ROS2 bridge node
+# ===========================================================================
+
+class VRWholeBodyBridgeNode:
+    """ROS2 node that publishes robot joint commands from Quest3 controller motion.
+
+    This is the central coordinator that ties everything together:
+
+    **Inputs:**
+      - Quest3 controller data via ``QuestTcpServer`` (TCP JSON).
+      - Robot joint state feedback via ``/joint_states`` subscription.
+
+    **Outputs:**
+      - Joint commands via ``/target_robot/joint_commands`` publication.
+      - Optional reset signal via ``/custom/custom_a``.
+
+    **Control loop** (``_tick()``, runs at ``control_frequency``):
+      1. Check for reset edge (primary button rising edge).
+      2. If reset interpolation is active, publish interpolated reset action.
+      3. Otherwise, for each arm:
+         a. Run the arm control state machine (AUTO ↔ MANUAL ↔ TRANSITION_EXIT).
+         b. If any manual control is active, run IK and update the action vector.
+         c. Update gripper control (incremental or proportional).
+      4. Assemble and publish the final ``JointState`` command.
+
+    **Key config parameters:**
+      - ``trigger_threshold``:     Above this value, the trigger is considered "pressed" (default 0.9).
+      - ``teleop_transition_duration_sec``: Compatibility key for the fixed exit-hold duration (default 0.25s).
+      - ``control_frequency``:     Tick rate in Hz (default 200).
+      - ``reset_mode``:            ``topic`` (publish reset edge), ``joint_command`` (interpolate to reset_action), or ``none``.
+    """
+
+    def __init__(self, config: dict[str, Any]):
+        import rclpy
+        from rclpy.node import Node
+        from sensor_msgs.msg import JointState
+        from std_msgs.msg import Float64
+
+        class _Node(Node):
+            pass
+
+        self.rclpy = rclpy
+        self.JointState = JointState
+        self.Float64 = Float64
+        self.node = _Node(f"quest3_{config.get('robot', 'robot')}_bridge")
+        self.config = config
+        self._configure_hand_layout(config)
+        self._reported_missing_hand_feedback = False
+
+        self.min_action, self.max_action = self._load_action_limits(config)
+        self.position_scale = float(config.get("position_scale", 1.0))
+        self.orientation_scale = float(config.get("orientation_scale", 1.0))
+        self.grip_threshold = float(config.get("grip_threshold", 0.9))
+        self.gripper_input_min = float(config.get("gripper_input_min", 0.0))
+        self.gripper_input_max = float(config.get("gripper_input_max", 1.0))
+        self.proportional_activation_threshold = float(
+            config.get("proportional_activation_threshold", 0.05)
+        )
+        self.proportional_release_threshold = float(
+            config.get("proportional_release_threshold", 0.02)
+        )
+        self.proportional_latch_on_release = bool(
+            config.get("proportional_latch_on_release", True)
+        )
+        self.gripper_command_min = float(config.get("gripper_command_min", 0.0))
+        self.gripper_command_max = float(config.get("gripper_command_max", 1.0))
+        if math.isclose(self.gripper_input_min, self.gripper_input_max):
+            raise ValueError("gripper_input_min and gripper_input_max must be different.")
+        if self.gripper_command_min > self.gripper_command_max:
+            raise ValueError("gripper_command_min must be less than or equal to gripper_command_max.")
+        if not 0.0 <= self.proportional_release_threshold <= self.proportional_activation_threshold:
+            raise ValueError(
+                "proportional thresholds must satisfy "
+                "0 <= proportional_release_threshold <= proportional_activation_threshold"
+            )
+        self.gripper_speed = max(float(config.get("gripper_speed", math.inf)), 0.0)
+        self.trigger_threshold = float(config.get("trigger_threshold", 0.9))
+        release_default = max(0.0, self.trigger_threshold - 0.1)
+        self.trigger_release_threshold = float(config.get("trigger_release_threshold", release_default))
+        self.trigger_release_threshold = min(max(self.trigger_release_threshold, 0.0), self.trigger_threshold)
+        self.reset_mode = normalize_reset_mode(config.get("reset_mode", "joint_command"))
+        self.reset_press_value = float(config.get("reset_press_value", 1.0))
+        self.reset_release_value = float(config.get("reset_release_value", 0.0))
+        self.reset_pulse_on_press = bool(config.get("reset_pulse_on_press", True))
+        self.control_frequency = max(float(config.get("control_frequency", 200.0)), 1.0)
+        self.control_dt = 1.0 / self.control_frequency
+        self.teleop_exit_hold_duration_s = max(float(config.get("teleop_transition_duration_sec", 0.25)), 0.0)
+        self.reset_action = self._load_reset_action(config)
+        reset_duration = max(float(config.get("reset_interp_duration_sec", 2.0)), 0.0)
+        default_reset_steps = max(int(round(reset_duration * self.control_frequency)), 1)
+        self.reset_interp_steps = max(int(config.get("reset_interp_steps", default_reset_steps)), 1)
+        self.reset_start_hold_steps = max(
+            int(round(max(float(config.get("reset_start_hold_sec", 0.0)), 0.0) * self.control_frequency)),
+            0,
+        )
+        self._reset_running = False
+        self._reset_start_action: np.ndarray | None = None
+        self._reset_step = 0
+        self._reset_hold_step = 0
+        self.ik = KineOptTeleopIK(
+            config.get("ik", {"enabled": True}),
+            position_scale=self.position_scale,
+            orientation_scale=self.orientation_scale,
+            control_dt=self.control_dt,
+            logger=self.node.get_logger(),
+        )
+
+        self.state = BridgeState()
+        self.state.action = np.zeros(len(self.joint_names), dtype=float)
+        self.state.reference_action = np.zeros(len(self.joint_names), dtype=float)
+        if self.reset_action is not None:
+            self.state.action[:] = self.reset_action
+            self.state.reference_action[:] = self.reset_action
+        self._last_joint_state_wait_warn_s = 0.0
+        self._last_invalid_joint_state_warn_s = 0.0
+        # Commands are not published until /joint_states provides a feedback seed.
+        self.pub = self.node.create_publisher(
+            JointState,
+            str(config.get("joint_command_topic", "/target_robot/joint_commands")),
+            10,
+        )
+        self.reset_pub = None
+        if self.reset_mode == "topic":
+            self.reset_pub = self.node.create_publisher(
+                Float64,
+                str(config.get("reset_topic", "/custom/custom_a")),
+                10,
+            )
+        self.node.create_subscription(
+            JointState,
+            str(config.get("joint_states_topic", "/joint_states")),
+            self._joint_state_cb,
+            10,
+        )
+
+        controller_y_rotation = math.radians(float(config.get("controller_y_rotation_deg", 35.0)))
+        self.controller_transforms = _load_controller_transforms(config)
+        self._adb_reverse_stop = threading.Event()
+        self._adb_reverse_thread = None
+        self.tcp_server = QuestTcpServer(
+            self.node,
+            self.state,
+            int(config.get("listen_port", 8002)),
+            controller_y_rotation,
+            float(config.get("invalid_origin_epsilon_m", 1e-3)),
+            status_file=config.get("status_file"),
+            client_timeout_s=float(config.get("tcp_client_timeout_sec", 2.0)),
+            status_publish_interval_s=float(
+                config.get("tcp_status_publish_interval_sec", 1.0)
+            ),
+        )
+        self.tcp_server.start()
+        self._start_adb_reverse_watchdog(config)
+
+        self.node.create_timer(self.control_dt, self._tick)
+        reset_desc = (
+            f"reset Float64 to {config.get('reset_topic', '/custom/custom_a')}"
+            if self.reset_mode == "topic"
+            else f"reset_mode={self.reset_mode}"
+        )
+        self.node.get_logger().info(
+            "Quest3 bridge publishing JointState to "
+            f"{config.get('joint_command_topic', '/target_robot/joint_commands')} "
+            f"and {reset_desc}; "
+            f"reading joint state from {config.get('joint_states_topic', '/joint_states')}"
+        )
+
+    def _start_adb_reverse_watchdog(self, config: dict[str, Any]) -> None:
+        """Recreate a lost USB reverse forward while no client is active."""
+        if bool(config.get("no_adb_reverse", False)):
+            return
+        interval_s = max(float(config.get("adb_reverse_reassert_sec", 10.0)), 0.0)
+        if interval_s <= 0.0:
+            return
+        port = int(config.get("listen_port", 8002))
+
+        def reassert_loop() -> None:
+            while not self._adb_reverse_stop.wait(interval_s):
+                if self.tcp_server.client_sock is None:
+                    _try_adb_reverse(port, remove_existing=False)
+
+        self._adb_reverse_thread = threading.Thread(
+            target=reassert_loop,
+            name="quest3-adb-reverse-watchdog",
+            daemon=True,
+        )
+        self._adb_reverse_thread.start()
+
+    def _stop_adb_reverse_watchdog(self) -> None:
+        self._adb_reverse_stop.set()
+        thread = self._adb_reverse_thread
+        if thread is not None and thread.is_alive() and threading.current_thread() is not thread:
+            thread.join(timeout=1.0)
+        self._adb_reverse_thread = None
+
+    def _configure_hand_layout(self, config: dict[str, Any]) -> None:
+        """Resolve hand modes and the internal/external action layouts."""
+
+        action_names = config.get("action_names")
+        if action_names:
+            robot_layout = action_layout_from_action_names(action_names)
+        else:
+            robot_layout = action_layout_for_robot(str(config.get("robot", "")))
+        self.robot_action_layout = robot_layout
+        self.robot_action_names = list(robot_layout.action_names)
+        robot_left_width, robot_right_width = robot_layout.hand_widths
+
+        default_mode = config.get("hand_control_mode", config.get("gripper_control_mode", "incremental"))
+        self.left_gripper_control_mode = normalize_hand_control_mode(
+            config.get("left_hand_control_mode", config.get("left_gripper_control_mode", default_mode))
+        )
+        self.right_gripper_control_mode = normalize_hand_control_mode(
+            config.get("right_hand_control_mode", config.get("right_gripper_control_mode", default_mode))
+        )
+        left_discrete = self.left_gripper_control_mode == "discrete"
+        right_discrete = self.right_gripper_control_mode == "discrete"
+        self.left_hand_range = self._load_side_hand_range(
+            config,
+            "left",
+            self.left_gripper_control_mode,
+            robot_left_width,
+        )
+        self.right_hand_range = self._load_side_hand_range(
+            config,
+            "right",
+            self.right_gripper_control_mode,
+            robot_right_width,
+        )
+
+        try:
+            self.left_hand_output_width = hand_output_width(
+                self.left_gripper_control_mode,
+                self.left_hand_range,
+                robot_width=robot_left_width,
+            )
+            self.right_hand_output_width = hand_output_width(
+                self.right_gripper_control_mode,
+                self.right_hand_range,
+                robot_width=robot_right_width,
+            )
+        except ValueError as exc:
+            raise ValueError(f"Invalid left/right hand range configuration: {exc}") from exc
+        if self.left_hand_output_width != robot_left_width:
+            raise ValueError(
+                f"left hand control produces width {self.left_hand_output_width}, "
+                f"but robot action layout expects {robot_left_width}"
+            )
+        if self.right_hand_output_width != robot_right_width:
+            raise ValueError(
+                f"right hand control produces width {self.right_hand_output_width}, "
+                f"but robot action layout expects {robot_right_width}"
+            )
+
+        # Internal control keeps one scalar for continuous hands and the native
+        # width for discrete hands. The published action always uses robot width.
+        left_internal_width = robot_left_width if left_discrete else 1
+        right_internal_width = robot_right_width if right_discrete else 1
+        self.left_hand_slice = slice(14, 14 + left_internal_width)
+        self.right_hand_slice = slice(
+            14 + left_internal_width,
+            14 + left_internal_width + right_internal_width,
+        )
+        left_internal_names = (
+            robot_layout.left_hand_names
+            if left_discrete
+            else (robot_layout.left_hand_names[0],)
+        )
+        right_internal_names = (
+            robot_layout.right_hand_names
+            if right_discrete
+            else (robot_layout.right_hand_names[0],)
+        )
+        self.joint_names = list(ARM_JOINT_NAMES + left_internal_names + right_internal_names)
+        self.command_joint_names = list(robot_layout.action_names)
+        self.left_hand_feedback_names = list(robot_layout.left_hand_names)
+        self.right_hand_feedback_names = list(robot_layout.right_hand_names)
+        self.joint_state_optional_names = set(
+            self.left_hand_feedback_names + self.right_hand_feedback_names
+        )
+        self.left_discrete_values = (
+            normalize_discrete_values(
+                config.get("left_hand_discrete_values"),
+                name="left_hand_discrete_values",
+                width=robot_left_width,
+            )
+            if left_discrete else []
+        )
+        self.right_discrete_values = (
+            normalize_discrete_values(
+                config.get("right_hand_discrete_values"),
+                name="right_hand_discrete_values",
+                width=robot_right_width,
+            )
+            if right_discrete else []
+        )
+
+    def _load_reset_action(self, config: dict[str, Any]) -> np.ndarray | None:
+        if self.reset_mode != "joint_command":
+            return None
+        action_dim = len(self.joint_names)
+        values = config.get("reset_action", config.get("home_action"))
+        if values is not None and len(values) == action_dim:
+            return np.clip(_as_array(values, length=action_dim), self.min_action, self.max_action)
+        scalar_values = list(values) if values is not None and len(values) == len(SCALAR_ACTION_NAMES) else None
+        native_values = self._native_reset_pose(config)
+        values = self._compose_reset_action(scalar_values, native_values)
+        if values is None:
+            raise ValueError(
+                "reset_mode `joint_command` requires robot reset_robot_pos or a "
+                f"{action_dim}-element reset_action in config."
+            )
+        return np.clip(
+            _as_array(values, length=action_dim, default=0.0),
+            self.min_action,
+            self.max_action,
+        )
+
+    @staticmethod
+    def _native_reset_pose(config: dict[str, Any]) -> list[float] | None:
+        """Return the robot's native arm + hand reset pose, if available."""
+
+        configured = config.get("native_reset_action")
+        if configured is not None:
+            return [float(value) for value in configured]
+
+        from conf.robots_conf import get_robot_config
+
+        robot_config = get_robot_config(config.get("robot"))
+        reset_pose = list((robot_config or {}).get("reset_robot_pos") or [])
+        return reset_pose or None
+
+    def _compose_reset_action(self, scalar_values, native_values) -> list[float] | None:
+        """Build the internal reset target from the 16-D scalar and native poses.
+
+        Discrete hands take the native six-coordinate pose; ranged continuous
+        hands project the native pose onto their range; other hands keep the
+        16-D scalar target.
+        """
+
+        source = scalar_values if scalar_values is not None else native_values
+        if source is None:
+            return None
+        values = [float(value) for value in source[:14]]
+        for mode, hand_range, scalar_index, native_slice, robot_width in (
+            (
+                self.left_gripper_control_mode,
+                self.left_hand_range,
+                14,
+                self.robot_action_layout.left_hand_slice,
+                self.robot_action_layout.hand_widths[0],
+            ),
+            (
+                self.right_gripper_control_mode,
+                self.right_hand_range,
+                15,
+                self.robot_action_layout.right_hand_slice,
+                self.robot_action_layout.hand_widths[1],
+            ),
+        ):
+            if native_values is not None and len(native_values) >= native_slice.stop:
+                try:
+                    values.extend(
+                        hand_feedback_to_control(
+                            native_values[native_slice],
+                            mode=mode,
+                            hand_range=hand_range,
+                            robot_width=robot_width,
+                        )
+                    )
+                    continue
+                except ValueError:
+                    if mode == "discrete":
+                        return None
+            if mode == "discrete":
+                return None
+            if hand_range is not None and native_values is not None:
+                return None
+            elif scalar_values is not None:
+                values.append(float(scalar_values[scalar_index]))
+            else:
+                return None
+        return values
+
+    def _expand_hand_command(self, action: np.ndarray) -> np.ndarray:
+        """Expand the internal command to native hand width for publishing."""
+
+        parts = [np.asarray(action[:14], dtype=float)]
+        for side_index, (mode, hand_slice, hand_range) in enumerate((
+            (self.left_gripper_control_mode, self.left_hand_slice, self.left_hand_range),
+            (self.right_gripper_control_mode, self.right_hand_slice, self.right_hand_range),
+        )):
+            robot_width = self.robot_action_layout.hand_widths[side_index]
+            parts.append(
+                np.asarray(
+                    hand_command_to_native(
+                        action[hand_slice],
+                        mode=mode,
+                        hand_range=hand_range,
+                        robot_width=robot_width,
+                    ),
+                    dtype=float,
+                )
+            )
+        return np.concatenate(parts)
+
+    def _load_side_hand_range(
+        self,
+        config: dict[str, Any],
+        side_name: str,
+        mode: str,
+        robot_width: int,
+    ):
+        """Return one side's native hand range, ignored for discrete hands."""
+
+        value = config.get(
+            f"{side_name}_hand_continuous_range",
+            config.get(f"{side_name}_hand_range"),
+        )
+        if mode == "discrete" or value is None:
+            return None
+        hand_range = normalize_hand_range(
+            value,
+            name=f"{side_name}_hand_continuous_range",
+        )
+        if len(hand_range[0]) != robot_width:
+            raise ValueError(
+                f"{side_name}_hand_continuous_range vectors must contain "
+                f"{robot_width} native hand values"
+            )
+        return hand_range
+
+    def _load_action_limits(self, config: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
+        """Build min/max clamps matching the internal per-side hand layout.
+
+        ``min_action``/``max_action`` in YAML stay 16-D (one scalar per hand);
+        discrete hands are clamped to the native [0, 1000] range instead.
+        """
+
+        limits = []
+        for key, default, native_limit in (
+            ("min_action", -math.inf, 0.0),
+            ("max_action", math.inf, 1000.0),
+        ):
+            values = list(config.get(key) or [])
+            if values and len(values) != len(SCALAR_ACTION_NAMES):
+                raise ValueError(f"{key} must contain {len(SCALAR_ACTION_NAMES)} values, got {len(values)}")
+            values = [float(value) for value in values] or [default] * len(SCALAR_ACTION_NAMES)
+            limit = values[:14]
+            for mode, index, robot_width in (
+                (self.left_gripper_control_mode, 14, self.robot_action_layout.hand_widths[0]),
+                (self.right_gripper_control_mode, 15, self.robot_action_layout.hand_widths[1]),
+            ):
+                limit.extend([native_limit] * robot_width if mode == "discrete" else [values[index]])
+            limits.append(np.asarray(limit, dtype=float))
+        return limits[0], limits[1]
+
+    def _hand_mode(self, side: ControllerSide) -> str:
+        """Return the hand-control mode configured for one controller side."""
+
+        return self.left_gripper_control_mode if side is self.state.left else self.right_gripper_control_mode
+
+    def spin(self) -> None:
+        try:
+            self.rclpy.spin(self.node)
+        except Exception as exc:
+            if not self._is_ros_shutdown_exception(exc):
+                raise
+            self.node.get_logger().info("ROS context was shut down; stopping Quest3 bridge.")
+        finally:
+            self._stop_adb_reverse_watchdog()
+            self.tcp_server.stop()
+            try:
+                self.node.destroy_node()
+            except Exception as exc:
+                if not self._is_ros_shutdown_exception(exc):
+                    raise
+
+    @staticmethod
+    def _is_ros_shutdown_exception(exc: Exception) -> bool:
+        """Return True only for ROS exceptions caused by normal context shutdown."""
+        try:
+            from rclpy.executors import ExternalShutdownException
+        except Exception:
+            ExternalShutdownException = ()
+        try:
+            from rclpy._rclpy_pybind11 import RCLError
+        except Exception:
+            RCLError = ()
+
+        if isinstance(exc, ExternalShutdownException):
+            return True
+        if isinstance(exc, RCLError):
+            message = str(exc)
+            return "context is not valid" in message and "rcl_shutdown" in message
+        return False
+
+    def _tick(self) -> None:
+        """Main control loop callback (invoked by a ROS timer at ``control_frequency``).
+
+        Order of operations per tick:
+        1. Process reset button edge.
+        2. If reset interpolation is active, publish the interpolated action.
+        3. Otherwise, determine which arms/grippers need output:
+           a. ``left_output_requested``: left trigger active OR left arm not in AUTO.
+           b. ``right_output_requested``: same for right.
+           c. ``gripper_output_requested``: either grip button active.
+        4. If any output is requested and joint state is ready:
+           - Run arm FSM + IK for each arm.
+           - Update grippers.
+           - Assemble the final action: arms that are not requested get reference_action
+             from /joint_states; uninitialized grippers also use reference.
+        5. Publish the action as a ``JointState`` message, with a per-joint mask
+           marking which entries are real human commands (see
+           :meth:`_publish_joint_command`).
+        """
+        action_to_publish = None
+        mask_to_publish = None
+        with self.state.lock:
+            self._update_reset_edge_locked()
+            reset_action = self._next_reset_action_locked()
+            if reset_action is not None:
+                action_to_publish = reset_action
+            else:
+                left_active = self.state.left.pose_valid and self.state.left.trigger > self.trigger_threshold
+                right_active = self.state.right.pose_valid and self.state.right.trigger > self.trigger_threshold
+                left_output_requested = left_active or self.state.left.control_state != ARM_CONTROL_AUTO
+                right_output_requested = right_active or self.state.right.control_state != ARM_CONTROL_AUTO
+                hand_states = (
+                    (self.state.left, self.left_gripper_control_mode, self.left_hand_slice, self.left_discrete_values),
+                    (self.state.right, self.right_gripper_control_mode, self.right_hand_slice, self.right_discrete_values),
+                )
+                gripper_requested = []
+                gripper_output_requested = False
+                for side, mode, hand_slice, discrete_values in hand_states:
+                    requested = self._is_gripper_control_requested(side)
+                    if mode == "discrete":
+                        hand_changed = self._update_discrete_gripper_locked(side, hand_slice, discrete_values)
+                        gripper_output_requested = (
+                            gripper_output_requested or hand_changed or side.gripper_command_pending
+                        )
+                    else:
+                        if not requested:
+                            side.gripper_control_active = False
+                        gripper_output_requested = gripper_output_requested or requested
+                    gripper_requested.append(requested)
+                left_gripper_requested, right_gripper_requested = gripper_requested
+                output_requested = left_output_requested or right_output_requested or gripper_output_requested
+                if not output_requested:
+                    self._update_arm_locked(self.state.left, slice(0, 7))
+                    self._update_arm_locked(self.state.right, slice(7, 14))
+                    # The teleop session is over and the policy owns the hands
+                    # again. Forget the last human hand command so the next
+                    # intervention follows feedback until the hand is touched,
+                    # instead of replaying a stale (e.g. open) command.
+                    self.state.left.gripper_command_initialized = False
+                    self.state.right.gripper_command_initialized = False
+                elif not self.state.joint_state_ready:
+                    self._warn_waiting_for_joint_state_locked()
+                else:
+                    self._update_arm_locked(self.state.left, slice(0, 7))
+                    self._update_arm_locked(self.state.right, slice(7, 14))
+                    # Grippers are rate-limited separately from arm IK.
+                    for side, mode, hand_slice, _ in hand_states:
+                        if mode != "discrete":
+                            self._update_gripper_locked(side, hand_slice.start)
+                    action = self.state.action.copy()
+                    # False marks entries filled from robot feedback instead of human input.
+                    mask = np.ones(action.shape[0], dtype=bool)
+                    if not left_output_requested:
+                        action[0:7] = self.state.reference_action[0:7]
+                        mask[0:7] = False
+                    if not right_output_requested:
+                        action[7:14] = self.state.reference_action[7:14]
+                        mask[7:14] = False
+                    if not left_gripper_requested and not self.state.left.gripper_command_initialized:
+                        action[self.left_hand_slice] = self.state.reference_action[self.left_hand_slice]
+                        mask[self.left_hand_slice] = False
+                    if not right_gripper_requested and not self.state.right.gripper_command_initialized:
+                        action[self.right_hand_slice] = self.state.reference_action[self.right_hand_slice]
+                        mask[self.right_hand_slice] = False
+                    action_to_publish = np.clip(action, self.min_action, self.max_action).copy()
+                    mask_to_publish = mask
+                    for side, mode, _, _ in hand_states:
+                        if mode == "discrete":
+                            side.gripper_command_pending = False
+
+        if action_to_publish is not None:
+            self._publish_joint_command(action_to_publish, mask=mask_to_publish)
+
+    def _publish_joint_command(self, action: np.ndarray, mask: np.ndarray | None = None) -> None:
+        """Publish a JointState message in the target robot's action layout.
+
+        The message is published to ``/target_robot/joint_commands``, which is
+        received by ``RosTeleopBridge._command_cb()`` in the VLA client.
+
+        When ``mask`` is given, ``effort`` carries one flag per joint: ``1.0`` for
+        real human control data, ``0.0`` for entries held from robot feedback.
+        Commands without a mask (e.g. reset interpolation) leave ``effort`` empty."""
+        action = self._expand_hand_command(action)
+        msg = self.JointState()
+        msg.header.stamp = self.node.get_clock().now().to_msg()
+        msg.name = self.command_joint_names
+        msg.position = [float(v) for v in action]
+        if mask is not None:
+            msg.effort = [1.0 if v else 0.0 for v in self._expand_hand_mask(mask)]
+        self.pub.publish(msg)
+
+    def _expand_hand_mask(self, mask: np.ndarray) -> np.ndarray:
+        """Expand an internal-width command mask to native hand width."""
+
+        mask = np.asarray(mask, dtype=bool)
+        parts = [mask[:14]]
+        for side_index, hand_slice in enumerate((self.left_hand_slice, self.right_hand_slice)):
+            robot_width = self.robot_action_layout.hand_widths[side_index]
+            parts.append(np.full(robot_width, bool(np.any(mask[hand_slice])), dtype=bool))
+        return np.concatenate(parts)
+
+    def _next_reset_action_locked(self) -> np.ndarray | None:
+        """Return the next frame of the reset interpolation, or None if not active.
+
+        The sequence is:
+          1. Hold at start position for ``reset_start_hold_steps`` ticks.
+          2. Linear interpolation from ``_reset_start_action`` to ``reset_action``
+             over ``reset_interp_steps`` ticks.
+          3. When complete, clear joint_state_ready so the system re-syncs with
+             fresh /joint_states feedback.
+        """
+        if not self._reset_running or self._reset_start_action is None or self.reset_action is None:
+            return None
+        if self._reset_hold_step < self.reset_start_hold_steps:
+            self._reset_hold_step += 1
+            action = self._reset_start_action.copy()
+        else:
+            self._reset_step += 1
+            alpha = min(self._reset_step / self.reset_interp_steps, 1.0)
+            action = (1.0 - alpha) * self._reset_start_action + alpha * self.reset_action
+            if alpha >= 1.0:
+                self._reset_running = False
+                self._reset_start_action = None
+                self._reset_step = 0
+                self._reset_hold_step = 0
+                self.state.joint_state_ready = False
+                self.node.get_logger().info("Reset joint-command interpolation completed; waiting for fresh joint state.")
+        action = np.clip(action, self.min_action, self.max_action)
+        self.state.action[:] = action
+        return action.copy()
+
+    def _start_reset_interpolation_locked(self) -> None:
+        """Begin interpolating from current reference_action to the configured reset_action.
+
+        Clears all arm control references and holds, then linearly interpolates
+        the full mode-specific action vector over ``reset_interp_steps`` ticks. An optional
+        initial hold period (``reset_start_hold_steps``) keeps the start position
+        steady before interpolation begins.
+        """
+        if self.reset_action is None:
+            return
+        if not self.state.joint_state_ready:
+            self._warn_waiting_for_joint_state_locked()
+            self.node.get_logger().warning("Reset request ignored because no current joint state is available.")
+            return
+        # Use the command currently being tracked. During manual control,
+        # reference_action is frozen at the activation anchor and can lag the
+        # open-loop command; using it makes the first reset frame jump backwards.
+        reset_start = self.state.reference_action.copy()
+        for side, arm_slice, hand_slice in (
+            (self.state.left, slice(0, 7), self.left_hand_slice),
+            (self.state.right, slice(7, 14), self.right_hand_slice),
+        ):
+            if side.control_state in (ARM_CONTROL_MANUAL, ARM_CONTROL_TRANSITION_EXIT):
+                reset_start[arm_slice] = self.state.action[arm_slice]
+            if side.gripper_control_active or side.gripper_command_initialized:
+                reset_start[hand_slice] = self.state.action[hand_slice]
+        self._clear_arm_control_refs_locked(self.state.left)
+        self._clear_arm_control_refs_locked(self.state.right)
+        self._clear_hand_control_state_locked(self.state.left)
+        self._clear_hand_control_state_locked(self.state.right)
+        reset_start = np.clip(reset_start, self.min_action, self.max_action)
+        self.state.action[:] = reset_start
+        self._reset_start_action = reset_start.copy()
+        self._reset_step = 0
+        self._reset_hold_step = 0
+        self._reset_running = True
+        self.node.get_logger().info(
+            "Reset request received; interpolating to reset_action over "
+            f"{self.reset_interp_steps} command steps on joint_command_topic."
+        )
+
+    def _joint_state_cb(self, msg) -> None:
+        """Receive /joint_states messages and update the reference action vector.
+
+        This is the robot feedback path. Valid joint states set ``joint_state_ready = True``
+        and populate ``reference_action`` for activation anchors and inactive-side
+        fallback. During MANUAL/TRANSITION_EXIT, the active arm command remains
+        open-loop and is never overwritten by this feedback.
+        """
+        if len(msg.name) != len(msg.position):
+            self._warn_invalid_joint_state("JointState name and position lengths differ")
+            return
+        try:
+            positions = {
+                str(name): float(position)
+                for name, position in zip(msg.name, msg.position)
+            }
+        except (TypeError, ValueError):
+            self._warn_invalid_joint_state("non-numeric joint positions")
+            return
+        missing_arms = [name for name in ARM_JOINT_NAMES if name not in positions]
+        if missing_arms:
+            self._warn_invalid_joint_state(f"missing joints: {missing_arms[:4]}")
+            return
+        missing_optional = [
+            name
+            for name in self.left_hand_feedback_names + self.right_hand_feedback_names
+            if name not in positions
+        ]
+        if missing_optional and not self._reported_missing_hand_feedback:
+            self.node.get_logger().info(
+                "Joint state feedback omits optional joints "
+                f"{sorted(missing_optional)}; retaining configured reset/current values."
+            )
+            self._reported_missing_hand_feedback = True
+        with self.state.lock:
+            reference_values = self.state.reference_action.copy()
+            for index, name in enumerate(ARM_JOINT_NAMES):
+                reference_values[index] = positions[name]
+            for mode, hand_range, native_names, hand_slice, robot_width in (
+                (
+                    self.left_gripper_control_mode,
+                    self.left_hand_range,
+                    self.left_hand_feedback_names,
+                    self.left_hand_slice,
+                    self.robot_action_layout.hand_widths[0],
+                ),
+                (
+                    self.right_gripper_control_mode,
+                    self.right_hand_range,
+                    self.right_hand_feedback_names,
+                    self.right_hand_slice,
+                    self.robot_action_layout.hand_widths[1],
+                ),
+            ):
+                if all(name in positions for name in native_names):
+                    try:
+                        reference_values[hand_slice] = hand_feedback_to_control(
+                            [positions[name] for name in native_names],
+                            mode=mode,
+                            hand_range=hand_range,
+                            robot_width=robot_width,
+                        )
+                    except ValueError as exc:
+                        self._warn_invalid_joint_state(str(exc))
+                        return
+                elif self.reset_action is not None:
+                    reference_values[hand_slice] = self.reset_action[hand_slice]
+            if not np.all(np.isfinite(reference_values)):
+                self._warn_invalid_joint_state("non-finite joint positions")
+                return
+            # Do not let delayed joint feedback perturb an arm that is already
+            # under open-loop manual control. Its anchor and IK seed come from
+            # the command stream until the side returns to AUTO.
+            for side, arm_slice, hand_slice in (
+                (self.state.left, slice(0, 7), self.left_hand_slice),
+                (self.state.right, slice(7, 14), self.right_hand_slice),
+            ):
+                if side.control_state in (ARM_CONTROL_MANUAL, ARM_CONTROL_TRANSITION_EXIT):
+                    reference_values[arm_slice] = self.state.reference_action[arm_slice]
+                if side.gripper_control_active:
+                    reference_values[hand_slice] = self.state.reference_action[hand_slice]
+            self.state.reference_action[:] = reference_values
+            for side, mode, hand_slice, values in (
+                (self.state.left, self.left_gripper_control_mode, self.left_hand_slice, self.left_discrete_values),
+                (self.state.right, self.right_gripper_control_mode, self.right_hand_slice, self.right_discrete_values),
+            ):
+                if mode == "discrete":
+                    nearest = nearest_discrete_index(
+                        values,
+                        reference_values[hand_slice],
+                    )
+                    if nearest >= 0:
+                        side.discrete_index = nearest
+                        if not side.gripper_command_initialized:
+                            self.state.action[hand_slice] = np.asarray(values[nearest], dtype=float)
+            self.state.joint_state_ready = True
+
+    def _warn_invalid_joint_state(self, reason: str, period_s: float = 1.0) -> None:
+        now = time.time()
+        if now - self._last_invalid_joint_state_warn_s >= period_s:
+            self._last_invalid_joint_state_warn_s = now
+            self.node.get_logger().warning(f"Drop invalid joint state feedback: {reason}.")
+
+    def _update_reset_edge_locked(self) -> None:
+        """Detect rising/falling edges on the primary button for reset behavior.
+
+        Depending on ``reset_mode``:
+          - ``topic``:           Publish a Float64 edge (rising=press_value, falling=release_value).
+          - ``joint_command``:   Start interpolating toward the configured reset_action.
+          - ``none``:           Just clear arm control references (safe fallback).
+        """
+        primary = self.state.left.primary_button or self.state.right.primary_button
+        if primary == self.state.primary_pressed:
+            return
+        self.state.primary_pressed = primary
+        if self.reset_mode == "topic":
+            self._publish_reset_value_locked(self.reset_press_value if primary else self.reset_release_value)
+            if primary:
+                if self.reset_pulse_on_press:
+                    self._publish_reset_value_locked(self.reset_release_value)
+                # Wait for fresh feedback after reset instead of falling back to a configured home pose.
+                self.state.joint_state_ready = False
+                self._clear_arm_control_refs_locked(self.state.left)
+                self._clear_arm_control_refs_locked(self.state.right)
+                self._clear_hand_control_state_locked(self.state.left)
+                self._clear_hand_control_state_locked(self.state.right)
+                self.node.get_logger().info("Reset edge published to reset topic.")
+            return
+        if primary and self.reset_mode == "joint_command":
+            self._start_reset_interpolation_locked()
+            return
+        if primary and self.reset_mode == "none":
+            self._clear_arm_control_refs_locked(self.state.left)
+            self._clear_arm_control_refs_locked(self.state.right)
+            self._clear_hand_control_state_locked(self.state.left)
+            self._clear_hand_control_state_locked(self.state.right)
+            self.node.get_logger().info("Reset button pressed; reset is disabled by reset_mode=none.")
+
+    def _publish_reset_value_locked(self, value: float) -> None:
+        if self.reset_pub is None:
+            return
+        msg = self.Float64()
+        msg.data = float(value)
+        self.reset_pub.publish(msg)
+
+    def _warn_waiting_for_joint_state_locked(self, period_s: float = 1.0) -> None:
+        now = time.time()
+        if now - self._last_joint_state_wait_warn_s >= period_s:
+            self._last_joint_state_wait_warn_s = now
+            self.node.get_logger().warning(
+                "Quest3 teleop is active, but no joint state has been received yet; holding commands."
+            )
+
+    @staticmethod
+    def _clear_arm_control_refs_locked(side: ControllerSide) -> None:
+        """Reset all arm control state for one side back to AUTO.
+
+        Clears arm trigger snapshots, exit holds, and exit timing state. Hand
+        control state is intentionally independent from the arm FSM.
+        """
+        side.trigger_ref_pos = None
+        side.trigger_ref_quat = None
+        side.trigger_ref_action = None
+        side.trigger_ref_ee_pose = None
+        side.pose_valid = False
+        side.exit_hold_pos = None
+        side.exit_hold_quat = None
+        side.control_state = ARM_CONTROL_AUTO
+        side.transition_elapsed_s = 0.0
+        side.was_trigger_active = False
+
+    @staticmethod
+    def _clear_hand_control_state_locked(side: ControllerSide) -> None:
+        """Reset hand-control state without touching the arm FSM."""
+
+        side.gripper_control_active = False
+        side.gripper_command_initialized = False
+        side.gripper_command_pending = False
+        side.proportional_hold_action = None
+        side.discrete_index = -1
+        side.hand_trigger_pressed = False
+        side.hand_secondary_pressed = False
+
+    def _update_arm_locked(self, side: ControllerSide, arm_slice: slice) -> None:
+        """Run the arm control state machine and IK for one arm.
+
+        State transitions:
+          AUTO/EXIT + trigger_active → _start_arm_intervention_locked (MANUAL)
+          MANUAL + !trigger          → _start_arm_exit_transition_locked (EXIT)
+
+        If in MANUAL or EXIT and all reference data is valid, keep the
+        trigger-edge EE anchor fixed and run IK for the full human delta.
+
+        Args:
+            side:      ControllerSide for left or right controller.
+            arm_slice: slice(0,7) for left arm, slice(7,14) for right arm.
+        """
+        side_name = "left" if arm_slice.start == 0 else "right"
+        # Schmitt-trigger threshold: use a lower release threshold once an arm
+        # has left AUTO. This prevents tiny grip-button noise around the press
+        # threshold from repeatedly re-capturing the joint-state anchor.
+        trigger_on = self.trigger_threshold if side.control_state == ARM_CONTROL_AUTO else self.trigger_release_threshold
+        trigger_active = side.pose_valid and side.trigger > trigger_on
+        if not trigger_active and side.control_state == ARM_CONTROL_AUTO:
+            side.was_trigger_active = False
+            return
+        needs_reference_pose = trigger_active and side.control_state in (
+            ARM_CONTROL_AUTO,
+            ARM_CONTROL_TRANSITION_EXIT,
+        )
+        reference_pose = (
+            (
+                self.ik.forward_pose(side_name, self.state.action[arm_slice])
+                if side.control_state == ARM_CONTROL_TRANSITION_EXIT
+                else self._current_reference_pose_locked(side_name, arm_slice)
+            )
+            if needs_reference_pose
+            else None
+        )
+
+        if trigger_active and side.control_state in (ARM_CONTROL_AUTO, ARM_CONTROL_TRANSITION_EXIT):
+            self._start_arm_intervention_locked(side_name, side, arm_slice, reference_pose)
+        elif not trigger_active and side.control_state == ARM_CONTROL_MANUAL:
+            self._start_arm_exit_transition_locked(side_name, side, arm_slice)
+
+        side.was_trigger_active = trigger_active
+        if (
+            side.control_state == ARM_CONTROL_AUTO
+            or (not side.pose_valid and side.control_state != ARM_CONTROL_TRANSITION_EXIT)
+            or side.pose_pos is None
+            or side.pose_quat is None
+            or side.trigger_ref_pos is None
+            or side.trigger_ref_quat is None
+            or side.trigger_ref_action is None
+            or side.trigger_ref_ee_pose is None
+        ):
+            return
+
+        exit_finished = self._advance_arm_transition_locked(side)
+
+        # Open-loop manual control: seed IK with the last command produced by
+        # this controller, not with delayed robot joint-state feedback.
+        q_solution = self.ik.solve(
+            side_name,
+            side,
+            self.state.action[arm_slice],
+            self.controller_transforms[side_name],
+            self.controller_transforms["base"],
+        )
+        if q_solution is not None:
+            self.state.action[arm_slice] = q_solution
+        if exit_finished:
+            self._release_arm_to_auto_locked(side, arm_slice)
+
+    def _current_reference_pose_locked(self, side_name: str, arm_slice: slice) -> np.ndarray | None:
+        """Compute the current end-effector reference pose via FK.
+
+        Prefers FK on ``reference_action`` (from /joint_states); falls back to
+        FK on the current ``action`` (last command) if the reference FK fails.
+        """
+        q_reference = self.state.reference_action[arm_slice]
+        pose = self.ik.forward_pose(side_name, q_reference)
+        if pose is not None:
+            return pose
+        return self.ik.forward_pose(side_name, self.state.action[arm_slice])
+
+    def _start_arm_intervention_locked(
+        self,
+        side_name: str,
+        side: ControllerSide,
+        arm_slice: slice,
+        reference_pose: np.ndarray | None,
+    ) -> None:
+        """Capture a static trigger-edge anchor and enter MANUAL immediately.
+
+        Steps:
+        1. Reset the action arm slice to the current /joint_states reference
+           (avoids IK jumping from a stale action value).
+        2. Compute the anchor end-effector pose from the current reference via FK.
+        3. Snapshot the current VR controller pose and reference action as the
+           delta baseline (trigger_ref_*).
+
+        The EE anchor captured here is intentionally immutable until the trigger
+        is released.  In particular, subsequent command-biased joint-state
+        feedback must not feed the generated motion back into the anchor.
+        """
+        if not side.pose_valid or side.pose_pos is None or side.pose_quat is None:
+            return
+        resuming_from_exit = side.control_state == ARM_CONTROL_TRANSITION_EXIT
+        if not resuming_from_exit:
+            self.state.action[arm_slice] = self.state.reference_action[arm_slice]
+        anchor_pose = reference_pose
+        if anchor_pose is None:
+            anchor_pose = self.ik.forward_pose(side_name, self.state.action[arm_slice])
+        if anchor_pose is None:
+            return
+
+        side.trigger_ref_pos = side.pose_pos.copy()
+        side.trigger_ref_quat = side.pose_quat.copy()
+        side.trigger_ref_action = self.state.action[arm_slice].copy()
+        side.trigger_ref_ee_pose = anchor_pose.copy()
+        side.exit_hold_pos = None
+        side.exit_hold_quat = None
+        side.control_state = ARM_CONTROL_MANUAL
+        side.transition_elapsed_s = 0.0
+
+    def _release_arm_to_auto_locked(self, side: ControllerSide, arm_slice: slice) -> None:
+        """Seed inactive-arm fallback from the final command before returning to AUTO."""
+
+        self.state.reference_action[arm_slice] = self.state.action[arm_slice].copy()
+        self._clear_arm_control_refs_locked(side)
+
+    def _start_arm_exit_transition_locked(
+        self,
+        side_name: str,
+        side: ControllerSide,
+        arm_slice: slice,
+    ) -> None:
+        """Initiate the MANUAL → TRANSITION_EXIT → AUTO sequence.
+
+        Steps:
+        1. Bake the current human offset into the EE anchor so the anchor is
+           already at the target (releasing won't snap back to old press-time position).
+        2. Freeze the current VR controller pose (exit_hold_*) so the arm
+           stays still during the exit-hold period.
+        """
+        if side.trigger_ref_ee_pose is None:
+            self._release_arm_to_auto_locked(side, arm_slice)
+            return
+        target_pose = self.ik.target_pose(
+            side,
+            self.controller_transforms[side_name],
+            self.controller_transforms["base"],
+        )
+        if target_pose is not None:
+            # Bake the current human offset into the anchor so release never
+            # pulls the target back toward the original press-time anchor.
+            side.trigger_ref_ee_pose = target_pose.copy()
+            if side.pose_pos is not None:
+                side.trigger_ref_pos = side.pose_pos.copy()
+            if side.pose_quat is not None:
+                side.trigger_ref_quat = side.pose_quat.copy()
+        side.exit_hold_pos = None if side.pose_pos is None else side.pose_pos.copy()
+        side.exit_hold_quat = None if side.pose_quat is None else side.pose_quat.copy()
+        side.control_state = ARM_CONTROL_TRANSITION_EXIT
+        side.transition_elapsed_s = 0.0
+
+    def _advance_arm_transition_locked(self, side: ControllerSide) -> bool:
+        """Advance the fixed-target hold after trigger release.
+
+        Returns:
+            True if the exit transition just finished, False otherwise.
+        """
+        if side.control_state != ARM_CONTROL_TRANSITION_EXIT:
+            return False
+        side.transition_elapsed_s += self.control_dt
+        return (
+            self.teleop_exit_hold_duration_s <= 0.0
+            or side.transition_elapsed_s >= self.teleop_exit_hold_duration_s
+        )
+
+    def _update_gripper_locked(self, side: ControllerSide, index: int) -> None:
+        """Update the gripper command for one hand.
+
+        Two modes:
+          - ``proportional``:  Map grip value linearly from [gripper_input_min, gripper_input_max]
+                               to [gripper_command_min, gripper_command_max].
+          - ``incremental``:   Step toward max when grip > grip_threshold,
+                               step toward min when secondary_button is pressed.
+                               Speed is governed by ``gripper_speed``.
+
+        On first activation, the command is anchored to the reference_action value
+        to avoid jumps.
+        """
+        requested = self._is_gripper_control_requested(side)
+        if requested and not side.gripper_control_active:
+            self._anchor_gripper_command_locked(side, index)
+            side.gripper_control_active = True
+            side.gripper_command_initialized = True
+        elif not requested:
+            was_active = side.gripper_control_active
+            side.gripper_control_active = False
+            if (
+                was_active
+                and self._hand_mode(side) == "proportional"
+                and self.proportional_latch_on_release
+                and side.proportional_hold_action is not None
+            ):
+                self.state.action[index] = side.proportional_hold_action
+            if side.grip <= self.gripper_input_min + self.proportional_release_threshold:
+                side.proportional_hold_action = None
+            return
+
+        if self._hand_mode(side) == "proportional":
+            alpha = (float(side.grip) - self.gripper_input_min) / (self.gripper_input_max - self.gripper_input_min)
+            alpha = float(np.clip(alpha, 0.0, 1.0))
+            target = (1.0 - alpha) * self.gripper_command_min + alpha * self.gripper_command_max
+            self.state.action[index] = target
+            if side.proportional_hold_action is None:
+                side.proportional_hold_action = target
+            else:
+                side.proportional_hold_action = max(side.proportional_hold_action, target)
+            return
+
+        step = self.gripper_speed * self.control_dt
+        if side.grip > self.grip_threshold:
+            self.state.action[index] = min(float(self.state.action[index]) + step, self.gripper_command_max)
+        elif side.secondary_button:
+            self.state.action[index] = max(float(self.state.action[index]) - step, self.gripper_command_min)
+
+    def _update_discrete_gripper_locked(
+        self,
+        side: ControllerSide,
+        hand_slice: slice,
+        values: list[list[float]],
+    ) -> bool:
+        """Advance/retreat one hand using button rising edges in discrete mode."""
+
+        trigger_pressed = float(side.grip) > self.grip_threshold
+        secondary_pressed = bool(side.secondary_button)
+        trigger_edge = trigger_pressed and not side.hand_trigger_pressed
+        secondary_edge = secondary_pressed and not side.hand_secondary_pressed
+        was_control_active = side.gripper_control_active
+        side.hand_trigger_pressed = trigger_pressed
+        side.hand_secondary_pressed = secondary_pressed
+        side.gripper_control_active = trigger_pressed or secondary_pressed
+        if not trigger_edge and not secondary_edge:
+            return False
+
+        if not was_control_active:
+            nearest = self._nearest_discrete_index(
+                values,
+                self.state.reference_action[hand_slice],
+            )
+            if nearest >= 0:
+                side.discrete_index = nearest
+
+        if trigger_edge:
+            side.discrete_index = (side.discrete_index + 1) % len(values)
+        else:
+            side.discrete_index = (side.discrete_index - 1) % len(values)
+        side.gripper_command_initialized = True
+        side.gripper_command_pending = True
+        self.state.action[hand_slice] = np.asarray(values[side.discrete_index], dtype=float)
+        return True
+
+    @staticmethod
+    def _nearest_discrete_index(values: list[list[float]], current) -> int:
+        """Return the discrete hand vector with the smallest Manhattan distance."""
+
+        current_arr = np.asarray(current, dtype=float).reshape(-1)
+        if current_arr.size == 0 or not np.all(np.isfinite(current_arr)):
+            return -1
+        return nearest_discrete_index(values, current_arr)
+
+    def _is_gripper_control_requested(self, side: ControllerSide) -> bool:
+        if self._hand_mode(side) == "proportional":
+            threshold = (
+                self.proportional_release_threshold
+                if side.gripper_control_active
+                else self.proportional_activation_threshold
+            )
+            return float(side.grip) > self.gripper_input_min + threshold
+        return side.grip > self.grip_threshold or side.secondary_button
+
+    def _anchor_gripper_command_locked(self, side: ControllerSide, index: int) -> None:
+        """Set the initial gripper command based on the current reference and intent.
+
+        For incremental mode on first activation:
+          - If gripping (grip > threshold): start from max(current, reference).
+          - If releasing (secondary_button): start from min(current, reference).
+          - Otherwise: use reference directly.
+
+        This prevents the gripper from snapping to reference when the user
+        was already at a different gripper position.
+        """
+        reference = float(self.state.reference_action[index])
+        if self._hand_mode(side) != "incremental" or not side.gripper_command_initialized:
+            self.state.action[index] = reference
+            return
+
+        current_command = float(self.state.action[index])
+        if side.grip > self.grip_threshold:
+            self.state.action[index] = max(current_command, reference)
+        elif side.secondary_button:
+            self.state.action[index] = min(current_command, reference)
+        else:
+            self.state.action[index] = reference
+
+
+def _try_adb_reverse(port: int, *, remove_existing: bool = True) -> None:
+    """Set up ADB reverse port forwarding for Quest3 TCP connection.
+
+    Periodic reassertion does not remove an existing mapping first, so an active
+    reverse tunnel is refreshed without tearing down a working connection.
+    """
+    commands = [["adb", "reverse", f"tcp:{port}", f"tcp:{port}"]]
+    if remove_existing:
+        commands.insert(0, ["adb", "reverse", "--remove", f"tcp:{port}"])
+    for cmd in commands:
+        try:
+            subprocess.run(cmd, check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            return
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse CLI arguments. Config file overrides are applied in main()."""
+    parser = argparse.ArgumentParser(description="VR whole-body bridge to VLA RosTeleopBridge topics")
+    parser.add_argument("--config", required=True, help="Path to a2d.yaml or ti5_t170c.yaml")
+    parser.add_argument("--listen-port", type=int, help="Override Quest3 TCP listen port")
+    parser.add_argument("--joint-command-topic", help="Override JointState topic")
+    parser.add_argument("--joint-states-topic", help="Override source JointState topic")
+    parser.add_argument(
+        "--reset-mode",
+        choices=("topic", "joint_command", "joint-command", "none"),
+        help="Override reset behavior: publish reset topic, interpolate to reset_action on joint commands, or disable.",
+    )
+    parser.add_argument("--reset-topic", help="Override reset Float64 topic")
+    parser.add_argument(
+        "--reset-action",
+        type=json.loads,
+        help="Override the 16-element joint reset target as a JSON array",
+    )
+    parser.add_argument(
+        "--action-names",
+        type=json.loads,
+        help="Target robot action JointState names as a JSON array, supplied by the VLA bridge.",
+    )
+    parser.add_argument(
+        "--native-reset-action",
+        type=json.loads,
+        help="Target robot native reset vector as a JSON array, supplied by the VLA bridge.",
+    )
+    parser.add_argument(
+        "--status-file",
+        default=os.environ.get("OPENRAIL_TELEOP_STATUS_FILE"),
+        help="Write Quest3 TCP connection status as JSON for the parent client process.",
+    )
+    parser.add_argument("--no-adb-reverse", action="store_true", help="Skip adb reverse tcp setup")
+    return parser.parse_args()
+
+
+def main() -> None:
+    """Entry point: load config, apply CLI overrides, set up ADB, launch the bridge node.
+
+    Usage example:
+        python -m teleop.quest3.quest3 --config teleop/quest3/config/a2d.yaml
+    """
+    args = parse_args()
+    config_path = Path(args.config).expanduser()
+    config = _load_yaml(config_path)
+    _resolve_relative_config_paths(config, config_path.resolve())
+    if args.listen_port is not None:
+        config["listen_port"] = args.listen_port
+    if args.joint_command_topic:
+        config["joint_command_topic"] = args.joint_command_topic
+    if args.joint_states_topic:
+        config["joint_states_topic"] = args.joint_states_topic
+    if args.reset_mode:
+        config["reset_mode"] = normalize_reset_mode(args.reset_mode)
+    if args.reset_topic:
+        config["reset_topic"] = args.reset_topic
+    if args.reset_action is not None:
+        config["reset_action"] = args.reset_action
+    if args.action_names is not None:
+        config["action_names"] = args.action_names
+    if args.native_reset_action is not None:
+        config["native_reset_action"] = args.native_reset_action
+    if args.status_file:
+        config["status_file"] = args.status_file
+
+    config["no_adb_reverse"] = bool(args.no_adb_reverse)
+    if not args.no_adb_reverse:
+        _try_adb_reverse(int(config.get("listen_port", 8002)))
+
+    import rclpy
+
+    rclpy.init(args=None)
+    try:
+        node = VRWholeBodyBridgeNode(config)
+        node.spin()
+    finally:
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

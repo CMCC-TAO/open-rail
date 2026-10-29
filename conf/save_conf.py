@@ -26,6 +26,9 @@ def get_record_data_config() -> ConfigDict:
     config.is_record_eval_log = False  # Runtime flag: whether eval log recording is active
     config.is_record_expe_data = False  # Runtime flag: whether experiment data recording is active
     config.save_raw = True  # Save raw image without resizing or not.
+    # Store teleop intervention columns (teleop_action, teleop_action_mask, rejected_action,
+    # rejected_action_mask, is_teleop) in new LeRobot datasets. Existing datasets keep their schema.
+    config.record_teleop_fields = True
 
     # Evaluation info
     config.evaluation = ConfigDict(allow_dotted_keys=True)

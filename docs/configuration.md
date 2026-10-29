@@ -184,7 +184,7 @@ An `action_layout` section divides a flat action vector into named segments. Eve
 | `stepwise` | Discrete or near-discrete dimensions, normally grippers/hands. |
 | `manual` | Robot/Web-controlled dimensions that are not inferred by the model. Place these after model-controlled segments. |
 
-Where available, `presets` provides UI reset/manual targets. `Default` and `Custom` are general presets; AgiBot G1 grippers also provide `Open` and `Close`, its wheels provide `Forward`, `Backward`, `Left`, and `Right`, and NAVIAI-WA2 hands provide `Open` and `Finger`.
+Where available, `presets` provides UI manual-control targets. Robot reset uses `reset_robot_pos` when present and otherwise falls back to the `Default` presets. `Default` and `Custom` are general presets; AgiBot G1 grippers also provide `Open` and `Close`, its wheels provide `Forward`, `Backward`, `Left`, and `Right`, and NAVIAI-WA2 hands provide `Open` and `Finger`.
 
 ### `robots.agibot_g1`
 
@@ -198,6 +198,7 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `proprio_names` | Ordered proprioception groups used to assemble robot state. |
 | `gripper_freq`, `head_freq` | Command frequencies for gripper and head control. |
 | `manual_arm_interval` | Time interval in seconds between manually generated arm targets. |
+| `reset_robot_pos` | Full reset target used by the Web Client Reset button and to derive the Quest3 reset action. |
 | `action_layout` | AgiBot G1 arm, gripper, head, waist, and wheel action ranges and UI presets. |
 
 ### `robots.mock`
@@ -223,7 +224,7 @@ Where available, `presets` provides UI reset/manual targets. `Default` and `Cust
 | `camera.depth_names` | Depth topic mapping. Kept empty: depth frames are not consumed by VLA inference and are neither subscribed nor sent to the server. |
 | `proprio_names` | Ordered proprioception groups (`arm`, `hand`) used to assemble robot state. |
 | `hand_freq`, `head_freq` | Command frequencies for hand and head control; `1` means every control tick. |
-| `reset_robot_pos` | Full robot reset target vector (arms at the reset pose, hands open). Kept aligned with the arm `Default` preset and the console reset position. |
+| `reset_robot_pos` | Full robot reset target vector (arms at the reset pose, hands open). Shared by the Web Client Reset button and the Quest3 reset path. |
 | `manual_arm_interval` | Time interval in seconds between manually generated arm targets. |
 | `action_layout` | Arm (`gradual`, presets `Default` = reset pose / `Custom` = previous homing pose), hand (`stepwise`, `Default`/`Custom`), and head (`manual`, NECK joints, Web-only) action ranges and UI presets. |
 

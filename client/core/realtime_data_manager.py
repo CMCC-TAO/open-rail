@@ -295,7 +295,8 @@ class RealtimeDataManager():
                                 target_chunk_index,
                                 prob_progress=None,
                                 step_indices=None,
-                                gripper_offset=0):
+                                gripper_offset=0,
+                                next_action_chunk_index=None):
         """Update action chunk with the new fitted action chunk.
 
         Args:
@@ -307,12 +308,21 @@ class RealtimeDataManager():
             prob_progress (np.array, optional): Array of prob_progress values aligned with action chunk. Defaults to None.
             step_indices (list[int], optional): Stepwise action dimensions.
             gripper_offset (int): Frames to shift stepwise commands forward/backward.
+            next_action_chunk_index (int, optional): Explicit index for the next
+                ``get_action_fitted()`` call. During teleop-to-policy handoff this
+                is pinned one step before the desired fused frame because
+                ``get_action_fitted()`` pre-increments the index.
         """
         action_chunk_smoothed = self._apply_gripper_offset(
             action_chunk_smoothed, step_indices, gripper_offset
         )
         with self.action_lock:
-            if self._sequential_actions():
+            if next_action_chunk_index is not None:
+                last_index = max(0, action_chunk_smoothed.shape[1] - 1)
+                self.action_chunk_index = int(np.clip(next_action_chunk_index, 0, last_index))
+                if self._sequential_actions():
+                    self.action_executed_index = self.action_chunk_index
+            elif self._sequential_actions():
                 self.action_chunk_index = int(target_chunk_index) - 1
                 self.action_executed_index = int(target_chunk_index) - 1
             else:
@@ -463,6 +473,27 @@ class RealtimeDataManager():
                 if latest_only:
                     self.observe_buffer.clear()
         return data
+    def clear_policy_actions(self):
+        """Clear only policy action state for teleop-to-policy handoff.
+
+        Observation buffers remain intact so the next inference can use the
+        freshest available robot frames. The fitted chunk and action index are
+        removed so the control loop cannot consume a stale policy trajectory
+        while the held teleop action is waiting for a fresh policy result.
+        """
+        with self.action_lock:
+            self.action_chunks = np.empty((0, 0), dtype=np.float32)
+            self.timestamp_chunks = np.empty(0, dtype=np.float32)
+            self.raw_action_count = 0
+            self.action_chunk_fitted = None
+            self.vel_chunk_fitted = None
+            self.acc_chunk_fitted = None
+            self.timestamps_fitted = None
+            self.action_chunk_index = None
+            self.action_executed_index = None
+            self.prob_progress = None
+            self.action_cond.notify_all()
+        self.logger.info("Policy action chunks cleared for teleop-to-policy handoff.")
 
     def restore_observe_data(self, data, only_if_empty=False):
         """Restore observations removed for an inference request that did not complete."""
@@ -474,7 +505,6 @@ class RealtimeDataManager():
                 return
             for frame in reversed(frames):
                 self.observe_buffer.append(frame)
-
 
     def clear(self):
         """Clear all action-related data to ensure fresh action retrieval.

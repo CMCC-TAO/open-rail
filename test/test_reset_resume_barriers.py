@@ -109,8 +109,11 @@ def test_control_timer_cannot_submit_an_old_action_after_pause():
         language=SimpleNamespace(auto_mode=False),
         controller=SimpleNamespace(period=3.75),
     )
-    client.visualize_server = SimpleNamespace(vis_global_step=1)
+    client.visualize_server = SimpleNamespace(vis_global_step=1, update_chart_data=lambda **_: None)
     client.show_thread_lock = threading.Lock()
+    client._last_executed_action = None
+    client._last_executed_action_lock = threading.Lock()
+    client.teleop_bridge = None
 
     tick = threading.Thread(target=client._control_thread_fun)
     tick.start()
@@ -122,3 +125,86 @@ def test_control_timer_cannot_submit_an_old_action_after_pause():
     pause.join(timeout=2)
     assert not tick.is_alive() and not pause.is_alive()
     assert events == [('action', 7.0), ('paused', None)]
+
+
+def test_teleop_enabled_reset_does_not_hold_pre_reset_action():
+    import logging
+    import threading
+    from queue import Queue
+    from types import SimpleNamespace
+
+    from client.core.action_arbiter import ActionArbiter, ActionSource, ActionTransitionFilter
+    from client.core.vla_client import VLAClient
+
+    sent = []
+    policy = {'action': None}
+
+    class FakeDataManager:
+        def get_action_fitted(self):
+            return policy['action'], None, None, None
+
+        def get_prob_progress(self):
+            return None
+
+        def clear(self):
+            policy['action'] = None
+
+    class FakeRobot:
+        def control_robot(self, action):
+            sent.append(np.asarray(action, dtype=float).copy())
+
+    client = VLAClient.__new__(VLAClient)
+    client.logger = logging.getLogger(__name__)
+    client._control_execution_lock = threading.Lock()
+    client._inference_execution_lock = threading.Lock()
+    client.is_control_thread_running = True
+    client.realtime_data_manager = FakeDataManager()
+    client.robot = FakeRobot()
+    client.config = SimpleNamespace(
+        record=SimpleNamespace(switch=False),
+        language=SimpleNamespace(auto_mode=False),
+        controller=SimpleNamespace(period=3.75),
+        teleop=SimpleNamespace(use_teleop=True),
+    )
+    client.visualize_server = SimpleNamespace(vis_global_step=1, update_chart_data=lambda **_: None)
+    client.show_thread_lock = threading.Lock()
+    client.observe_period = 1.0
+    client._raw_observe_queue = Queue(maxsize=2)
+    client._raw_observe_shm_cache = {}
+    client.image_process_time = 0.0
+    client._last_executed_action = None
+    client._last_executed_action_lock = threading.Lock()
+    client.teleop_bridge = None
+    # A zero timeout makes every policy record stale by the next tick, matching
+    # the real reset wait, so the pre-fix code falls into the HOLD path.
+    client.action_arbiter = ActionArbiter(policy_timeout_s=0.0)
+    client.action_transition_filter = ActionTransitionFilter(transition_steps=4)
+    client._action_select_last_debug_s = 0.0
+    client._teleop_policy_handoff_active = False
+    client._teleop_policy_handoff_hold_action = None
+    client._teleop_policy_handoff_started_s = None
+    client._teleop_outlier_reject_count = 3
+    client._policy_generation = 0
+    client._policy_generation_lock = threading.Lock()
+
+    pre_reset = np.array([5.0, 5.0])
+    policy['action'] = pre_reset
+    client._control_thread_fun()
+    assert len(sent) == 1 and np.allclose(sent[0], pre_reset)
+
+    client.reset()
+    assert client._teleop()._get_last_executed_action() is None
+    assert client.action_arbiter.latest_action(ActionSource.POLICY) is None
+    assert client._teleop_outlier_reject_count == 0
+    assert client._policy_generation == 1
+
+    # Before the first post-reset chunk arrives nothing may be sent: a HOLD of
+    # the pre-reset action would drag the arm away from the reset pose.
+    client._control_thread_fun()
+    assert len(sent) == 1
+
+    # The first fresh chunk is executed as-is, not blended from the old pose.
+    fresh = np.array([0.0, 0.0])
+    policy['action'] = fresh
+    client._control_thread_fun()
+    assert len(sent) == 2 and np.allclose(sent[1], fresh)

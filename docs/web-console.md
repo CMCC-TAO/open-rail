@@ -31,6 +31,7 @@ Panels are documented below in that order — most-used first.
 The main control surface. One toggle plus three stage buttons drive the whole run loop.
 
 - **Start / Stop** is a single toggle. **Start** creates the client and launches Observe, Inference, Control, and visualization together; pending configuration edits are applied first. **Stop** releases everything; the next Start recreates the client from the current configuration. If **Auto** recording is enabled in the Data Recording panel, recording starts automatically after Start.
+- While Quest3 teleop input is fresh, the top-left status badge changes from **Running** to **Teleop** and robot **Reset** is disabled. Reset becomes available again after the teleop signal times out.
 - **Observe → Infer → Control** stage the loop when you do not want everything at once. The order is enforced twice: buttons stay disabled until their prerequisite runs (Infer needs Observe, Control needs Infer), and the server rejects out-of-order requests with an explicit message.
 - Toggling a stage **off** stops everything downstream: Observe off stops Inference and Control; Infer off stops Control. Control toggles on/off by itself.
 - **Pause** stops all three threads but remembers exactly which were running; **Resume** restores that exact combination. Pause and Resume also pause and resume an active recording. (`Space` toggles Pause; `Ctrl+Space` toggles Control.)
@@ -69,7 +70,7 @@ Direct manual control of the connected robot — useful for pose setup, presets,
 Sections, value ranges, and presets come from the selected robot's `action_layout` (see the [Configuration Reference](./configuration.md)). A section whose layout or presets are missing shows as disabled with the reason on hover, so a missing capability is visible rather than silently dead. A group checkbox arms the section before its controls become editable.
 
 - **Send Cmd** moves the robot to the given values immediately. It requires a current robot state — **Observe must be running** — otherwise the request is rejected.
-- **Reset** is described under Runtime Monitor; it is the same button and the same managed sequence.
+- **Reset** is described under Runtime Monitor; it is the same button and the same managed sequence. It is unavailable while Quest3 teleop input is active.
 
 ## Camera Viewer
 
@@ -91,6 +92,8 @@ Loads, tunes, and saves client parameters. Field semantics are documented in the
 ### Editing — staged changes
 
 - **Main Parameters** pins the most-used entries at the top: Robot Type, Mode, Wait Time [ms], Control Period [ms], Control Speed, Gripper Offset, Inter-Chunk Mode, Intra-Chunk Mode, Img Proc Method, Img Proc Width. Which entries get pinned is itself configurable via `visualize.main_parameters`.
+- Applying a change to `teleop.use_teleop` shows a bottom-right notification after the Web Client checks whether the Quest3 TCP device connected. Enabling teleop while the client is stopped reports that the runtime must be started first.
+- Quest3 teleop profiles are available only for `agibot_g1` and `ti5_t170c`. Switching **Robot Type** automatically maps those types to `teleop/quest3/config/a2d.yaml` and `teleop/quest3/config/ti5_t170c.yaml`; for any other robot body the `teleop` group is hidden and `use_teleop` is forced off.
 - The **configuration tree** below lists every remaining parameter group, with dropdowns for enum values (custom fusers added via [Add a Smoother](./guides/add-new-inter-chunk-fuser.md) appear in the Inter-Chunk Mode dropdown). The **Key filter** narrows the tree by key name.
 - Edits are **staged**, not sent: a **● unsaved changes** badge appears, and **Apply** sends all staged changes at once and then auto-saves them back to the current config file. If you click **Start** with staged edits, they are applied automatically first. `record.evaluation.scores` applies immediately on Enter.
 

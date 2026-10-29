@@ -50,7 +50,12 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from conf.logging_conf import setup_logging
-from conf.client_conf import get_client_config
+from conf.client_conf import (
+    apply_teleop_robot_mapping,
+    get_client_config,
+    get_teleop_config_path,
+)
+from teleop.status import teleop_enabled, teleop_status_snapshot
 from client.core.zmq_client import ZMQClient
 from client.core.inter_chunk_fuser import InterChunkFuser
 from client.core.intra_chunk_smoother import IntraChunkSmoother
@@ -363,27 +368,23 @@ def _collect_resource_stats() -> dict:
 #  Helpers: config serialization
 # ─────────────────────────────────────────────────────────────────────────────
 def _config_to_dict(cfg) -> dict:
-    """Recursively convert a ConfigDict (or any object) to a plain dict."""
-    if cfg is None:
-        return {}
-    try:
-        from ml_collections import ConfigDict
-        if isinstance(cfg, ConfigDict):
-            result = {}
-            for k in cfg:
-                v = cfg[k]
-                if isinstance(v, ConfigDict):
-                    result[k] = _config_to_dict(v)
-                elif hasattr(v, 'value'):           # Enum
-                    result[k] = v.value
-                elif isinstance(v, (list, tuple)):
-                    result[k] = [x.value if hasattr(x, 'value') else x for x in v]
-                else:
-                    result[k] = v
-            return result
-    except Exception:
-        pass
-    return {}
+    """Recursively convert a ConfigDict or plain mapping to a plain dict."""
+    from ml_collections import ConfigDict
+
+    def _to_plain(value):
+        if isinstance(value, ConfigDict):
+            return {key: _to_plain(value[key]) for key in value}
+        if isinstance(value, dict):
+            return {key: _to_plain(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [_to_plain(item) for item in value]
+        if hasattr(value, 'value'):  # Enum
+            return value.value
+        return value
+
+    converted = _to_plain(cfg)
+    return converted if isinstance(converted, dict) else {}
+
 
 def _apply_flat_patch_new(config, patch: dict):
     """Apply flat patch only to existing config leaf keys (no new key creation)."""
@@ -538,6 +539,13 @@ def _collect_stats() -> dict:
         "img_proc_time": 0.0,
         "current_prob_progress": 0.0,
         "language": "",
+        "teleop_enabled": False,
+        "teleop_supported": False,
+        "teleop_bridge_running": False,
+        "teleop_device_connected": False,
+        "teleop_device_state": "disabled",
+        "teleop_device_message": "Teleop is disabled.",
+        "teleop_human_active": False,
         # "current_state": [],
         # "current_action": [],
         # "info_obs": {},
@@ -577,6 +585,16 @@ def _collect_stats() -> dict:
         # base["debug_info"] = f"stats error: {e}"
         logger.exception(f"Failed to collect stats: {e}")
     return base
+
+
+def _teleop_status_snapshot(vla_client=None) -> dict:
+    """Return teleop state even before a VLA client/runtime has been created."""
+
+    if vla_client is not None:
+        return vla_client._teleop().teleop_status
+    with client_state.lock:
+        config = client_state.config
+    return teleop_status_snapshot(config)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1017,6 +1035,16 @@ async def patch_config(req: ConfigPatchRequest):
         return out
 
     flat = _flatten(req.patch)
+    protected_teleop_keys = [
+        key for key in flat
+        if key in ('teleop.devices.quest3.config_path', 'teleop.devices.quest3.auto_config_path')
+        or key.startswith('teleop.devices.quest3.config_path_by_robot')
+    ]
+    if protected_teleop_keys:
+        raise HTTPException(
+            400,
+            "Quest3 teleop config_path is managed automatically by robots.type and cannot be patched.",
+        )
     if 'robots.type' in flat:
         requested_type = _robot_type(flat['robots.type'])
         with client_state.lock:
@@ -1028,11 +1056,15 @@ async def patch_config(req: ConfigPatchRequest):
         if requested_type != old_type:
             flat['robots.type'] = requested_type
             _apply_flat_patch_new(candidate, flat)
+            apply_teleop_robot_mapping(candidate, requested_type)
             return await _replace_client_config(candidate, expected_config=original)
     vision_preprocess_keys = []
     dataset_path_changed = False
     robot_type_changed = False
     language_patch_changed = False
+    teleop_switch_changed = False
+    teleop_bridge_config_changed = False
+    next_teleop_enabled = False
     current_vla_client = None
     current_robot = None
     is_running = False
@@ -1048,9 +1080,21 @@ async def patch_config(req: ConfigPatchRequest):
         client_conf = client_state.config
         current_vla_client = client_state.vla_client
         current_robot = client_state.robot
-        prev_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
+        prev_robot_type_value = getattr(getattr(client_conf, 'robots', None), 'type', '')
+        prev_robot_type = str(getattr(prev_robot_type_value, 'value', prev_robot_type_value))
         _apply_flat_patch_new(client_conf, flat)
-        next_robot_type = str(getattr(getattr(client_conf, 'robots', None), 'type', ''))
+        next_robot_type_value = getattr(getattr(client_conf, 'robots', None), 'type', '')
+        next_robot_type = str(getattr(next_robot_type_value, 'value', next_robot_type_value))
+        apply_teleop_robot_mapping(client_conf, next_robot_type_value)
+        next_teleop_enabled = teleop_enabled(client_conf)
+        teleop_switch_changed = any(k in ('teleop.use_teleop', 'use_teleop') for k in flat)
+        teleop_bridge_config_changed = any(
+            k == 'teleop.control_device'
+            or k.startswith('teleop.devices.')
+            or k in ('teleop.ros2.topic', 'teleop.ros2.reset_topic', 'teleop.ros2.joint_state_topic')
+            or k.startswith('teleop.ros2.joint_state')
+            for k in flat
+        )
         client_conf = _config_to_dict(client_conf)
         is_running = bool(client_state.running)
 
@@ -1092,6 +1136,31 @@ async def patch_config(req: ConfigPatchRequest):
                 logger.error(f"Failed to update preprocess function: {e}")
     finally:
         client_state.lock.release()
+
+    # Teleop runtime settings are applied after the config lock is released so a
+    # slow ROS2 bridge restart cannot block other config requests. The language
+    # sync already ran under the lock above (and fails the request on error).
+    if current_vla_client is not None and (teleop_switch_changed or (teleop_bridge_config_changed and next_teleop_enabled)):
+        try:
+            if teleop_switch_changed:
+                await asyncio.to_thread(current_vla_client._teleop().set_teleop_enabled, next_teleop_enabled)
+            elif next_teleop_enabled:
+                await asyncio.to_thread(current_vla_client._teleop().restart_teleop_bridge)
+        except Exception as e:
+            logger.error(f"Failed to apply teleop runtime config: {e}", exc_info=True)
+            raise HTTPException(500, f"Failed to apply teleop runtime config: {e}")
+
+    if (
+        robot_type_changed
+        and is_running
+        and current_vla_client is not None
+        and prev_robot_type != next_robot_type
+    ):
+        logger.warning(
+            f"Robot type changed: {prev_robot_type} -> {next_robot_type}. "
+            "Runtime robot recreation is disabled; restart client to take effect."
+        )
+
     if dataset_path_changed and not (robot_type_changed and prev_robot_type != next_robot_type):
         if current_robot is not None:
             module_name = getattr(current_robot.__class__, "__module__", "")
@@ -1112,7 +1181,11 @@ async def patch_config(req: ConfigPatchRequest):
                         except Exception as e:
                             logger.error(f"Failed to resume client after dataset reload: {e}")
 
-    return {"status": "ok", "config": client_conf}
+    return {
+        "status": "ok",
+        "config": client_conf,
+        "teleop_status": _teleop_status_snapshot(current_vla_client),
+    }
 
 
 
@@ -1209,11 +1282,15 @@ async def save_config_file(req: ConfigFileRequest):
         client_conf = _config_to_dict(client_state.config) if client_state.config is not None else None
     if client_conf is None:
         raise HTTPException(400, "No config loaded.")
+    if not client_conf:
+        raise HTTPException(500, "Refusing to save an empty configuration.")
     # print(f"DEBUG: save path = {req.path}")
     save_path = _config_path(req.path)
-    if save_path.suffix.lower() not in ('.yaml', '.yml'):
-        raise HTTPException(400, 'Configuration file must be YAML.')
-    content = _dict_to_user_conf_yaml(client_conf)
+    _strip_internal_teleop_config(client_conf)
+    if save_path.suffix.lower() in ('.yaml', '.yml'):
+        content = _dict_to_user_conf_yaml(client_conf)
+    else:
+        content = _dict_to_user_conf_py(client_conf)
     save_path.parent.mkdir(parents=True, exist_ok=True)
     save_path.write_text(content, encoding="utf-8")
     with client_state.lock:
@@ -1330,6 +1407,7 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
                 if v and not v.startswith('#'):
                     patch[k] = v
         _apply_flat_patch_new(config, patch)
+        apply_teleop_robot_mapping(config, getattr(getattr(config, 'robots', None), 'type', ''))
         _sanitize_language_sub_task_id(getattr(config, 'language', None), None)
         logger.info(f"Load and apply yaml config overrides from {yaml_conf_path} (fallback parser)")
         return
@@ -1357,6 +1435,7 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
     # print(f"config before flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config before flat patch: {cam_head}")
     _apply_flat_patch_new(config, flat)
+    apply_teleop_robot_mapping(config, getattr(getattr(config, 'robots', None), 'type', ''))
     # print(f"config after flat patch: {config}")
     # print(f"config after flat patch: {config.record.lerobot.features.keys()}")
     # print(f"config after flat patch: {cam_head}")
@@ -1378,6 +1457,17 @@ def _apply_yaml_config(config, yaml_conf_path: Path):
         logger.info(f"Reset language.sub_task_id to {sanitized_sub_task_id} after config load.")
 
     logger.info(f"Load and apply yaml config overrides from {yaml_conf_path}")
+
+
+def _strip_internal_teleop_config(config: dict) -> None:
+    """Remove teleop fields that are derived internally and must not be persisted."""
+    try:
+        quest3_cfg = config['teleop']['devices']['quest3']
+    except (KeyError, TypeError):
+        return
+    quest3_cfg.pop('config_path', None)
+    quest3_cfg.pop('auto_config_path', None)
+    quest3_cfg.pop('config_path_by_robot', None)
 
 
 def _dict_to_user_conf_py(d: dict, indent=0) -> str:
@@ -1607,6 +1697,16 @@ def _status_payload(vla_client, message: str, running: bool = True, paused: bool
         "message": message,
     }
     status.update(state)
+    runtime = vla_client.runtime_status
+    status.update({
+        "teleop_enabled": runtime.get("teleop_enabled", False),
+        "teleop_supported": runtime.get("teleop_supported", False),
+        "teleop_human_active": runtime.get("teleop_human_active", False),
+        "teleop_bridge_running": runtime.get("teleop_bridge_running", False),
+        "teleop_device_connected": runtime.get("teleop_device_connected", False),
+        "teleop_device_state": runtime.get("teleop_device_state", "unavailable"),
+        "teleop_device_message": runtime.get("teleop_device_message", ""),
+    })
     return status
 
 def _start_observe(vla_client):
@@ -1895,6 +1995,14 @@ async def client_status():
     # print(f"Debug: {stats}")
     return {"status": "ok", "data": stats}
 
+
+@app.get("/api/client/teleop/status")
+async def teleop_status():
+    with client_state.lock:
+        vla_client = client_state.vla_client
+    status = await asyncio.to_thread(_teleop_status_snapshot, vla_client)
+    return {"status": "ok", "teleop": status}
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  REST: runtime controls
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1977,6 +2085,12 @@ async def client_control_reset(req: Optional[ManualControlRequest] = Body(defaul
 
 async def _client_control_reset(req: Optional[ManualControlRequest]):
     vla_client, robot = _require_runtime('reset')
+    try:
+        teleop_active = bool(vla_client._teleop().is_teleop_human_active())
+    except Exception:
+        teleop_active = False
+    if teleop_active:
+        raise HTTPException(409, 'Reset is unavailable while Quest3 teleop is active.')
     try:
         with client_state.lock:
             if not client_state.paused:

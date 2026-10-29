@@ -1,0 +1,1503 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 可以在MUJOCO中直接打开的URDF文件 -->
+<robot
+  name="ti5_robot">
+  <mujoco>
+    <compiler
+      meshdir="package://ti5_description/meshes/"
+      balanceinertia="true"
+      discardvisual="false" />
+  </mujoco>
+  <link
+    name="BASE_LINK">
+    <inertial>
+      <origin
+        xyz="0.0087158 0.027185 0.06735"
+        rpy="0 0 0" />
+      <mass
+        value="5.9998573" />
+      <inertia
+        ixx="0.019373"
+        ixy="-0.00069599"
+        ixz="0.00069146"
+        iyy="0.023345"
+        iyz="-7.8938E-07"
+        izz="0.018366" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/BASE_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/BASE_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="LEG_P1_LINK">
+    <inertial>
+      <origin
+        xyz="-0.17016 0.095783 -0.00017741"
+        rpy="0 0 0" />
+      <mass
+        value="29.232645" />
+      <inertia
+        ixx="0.5437"
+        ixy="0.0047373"
+        ixz="0.02335"
+        iyy="0.58361"
+        iyz="-0.03892"
+        izz="0.10332" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/LEG_P1_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/LEG_P1_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="LEG_P1_JOINT"
+    type="revolute">
+    <origin
+      xyz="0 0.027203 0.085"
+      rpy="1.5708 0 -1.5708" />
+    <parent
+      link="BASE_LINK" />
+    <child
+      link="LEG_P1_LINK" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="1.57"
+      effort="267"
+      velocity="29" />
+  </joint>
+  <link
+    name="LEG_P2_LINK">
+    <inertial>
+      <origin
+        xyz="-0.10534 0.018687 -0.0063695"
+        rpy="0 0 0" />
+      <mass
+        value="8.7547515" />
+      <inertia
+        ixx="0.16172"
+        ixy="0.011476"
+        ixz="0.0015632"
+        iyy="0.22144"
+        iyz="-0.016758"
+        izz="0.087467" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/LEG_P2_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/LEG_P2_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="LEG_P2_JOINT"
+    type="revolute">
+    <origin
+      xyz="-0.38 0.068 0"
+      rpy="3.1416 0 3.1416" />
+    <parent
+      link="LEG_P1_LINK" />
+    <child
+      link="LEG_P2_LINK" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="0"
+      upper="3.141"
+      effort="267"
+      velocity="29" />
+  </joint>
+  <link
+    name="WAIST_P_LINK">
+    <inertial>
+      <origin
+        xyz="0.00096865 0.051453 -0.0054961"
+        rpy="0 0 0" />
+      <mass
+        value="6.8393053" />
+      <inertia
+        ixx="0.02702"
+        ixy="-0.00042359"
+        ixz="0.00016491"
+        iyy="0.013553"
+        iyz="-0.0019641"
+        izz="0.027992" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/WAIST_P_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/WAIST_P_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="WAIST_P_JOINT"
+    type="revolute">
+    <origin
+      xyz="-0.40795 0.083664 0"
+      rpy="3.1416 0 3.1416" />
+    <parent
+      link="LEG_P2_LINK" />
+    <child
+      link="WAIST_P_LINK" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-1.57"
+      upper="0.523"
+      effort="194"
+      velocity="36" />
+  </joint>
+  <link
+    name="WAIST_R_LINK">
+    <inertial>
+      <origin
+        xyz="2.33E-05 0.03866 0.0021532"
+        rpy="0 0 0" />
+      <mass
+        value="0.42851588" />
+      <inertia
+        ixx="0.001009"
+        ixy="1.3653E-07"
+        ixz="-3.7981E-08"
+        iyy="0.00085866"
+        iyz="0.00010295"
+        izz="0.00039784" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/WAIST_R_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/WAIST_R_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="WAIST_R_JOINT"
+    type="revolute">
+    <origin
+      xyz="0 0.105 0"
+      rpy="0 -1.5708 0" />
+    <parent
+      link="WAIST_P_LINK" />
+    <child
+      link="WAIST_R_LINK" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-0.523"
+      upper="0.523"
+      effort="61"
+      velocity="40" />
+  </joint>
+  <link
+    name="WAIST_Y_LINK">
+    <inertial>
+      <origin
+        xyz="0.00079788 -0.0016451 -0.12851"
+        rpy="0 0 0" />
+      <mass
+        value="2.0645187" />
+      <inertia
+        ixx="0.010221"
+        ixy="-7.5801E-06"
+        ixz="-1.2908E-05"
+        iyy="0.011663"
+        iyz="4.0188E-05"
+        izz="0.0040753" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/WAIST_Y_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/WAIST_Y_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="WAIST_Y_JOINT"
+    type="revolute">
+    <origin
+      xyz="0 0.066 0.00074968"
+      rpy="1.5708 0 0" />
+    <parent
+      link="WAIST_R_LINK" />
+    <child
+      link="WAIST_Y_LINK" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-2.7396"
+      upper="3.3161"
+      effort="49"
+      velocity="41" />
+  </joint>
+  <link
+    name="NECK_Y_LINK">
+    <inertial>
+      <origin
+        xyz="-0.0154353960059849 0.00730454232172484 0.0462888400806468"
+        rpy="0 0 0" />
+      <mass
+        value="0.473357840721712" />
+      <inertia
+        ixx="0.000243926405796326"
+        ixy="2.73794849170612E-05"
+        ixz="5.31451711719193E-05"
+        iyy="0.000281545749198852"
+        iyz="-2.17556940676557E-05"
+        izz="0.000201201503701749" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/NECK_Y_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.776470588235294 0.756862745098039 0.737254901960784 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/NECK_Y_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="NECK_Y_JOINT"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.2965"
+      rpy="-3.1416 0 -3.1416" />
+    <parent
+      link="WAIST_Y_LINK" />
+    <child
+      link="NECK_Y_LINK" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-2.967"
+      upper="2.967"
+      effort="5.5"
+      velocity="118" />
+  </joint>
+  <link
+    name="NECK_P_LINK">
+    <inertial>
+      <origin
+        xyz="-0.025000510656547 0.0444257389260928 0.015734829161301"
+        rpy="0 0 0" />
+      <mass
+        value="0.363565685880851" />
+      <inertia
+        ixx="6.37462603549791E-05"
+        ixy="9.29980231893699E-06"
+        ixz="7.28293862376126E-08"
+        iyy="0.000143473834865705"
+        iyz="-9.33278662442401E-07"
+        izz="0.000169304676838389" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/NECK_P_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/NECK_P_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="NECK_P_JOINT"
+    type="revolute">
+    <origin
+      xyz="0.029 0 0.056"
+      rpy="1.5708 0 -1.5708" />
+    <parent
+      link="NECK_Y_LINK" />
+    <child
+      link="NECK_P_LINK" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-0.523"
+      upper="0.523"
+      effort="2.3"
+      velocity="118" />
+  </joint>
+  <link
+    name="NECK_R_LINK">
+    <inertial>
+      <origin
+        xyz="-4.78898315396659E-06 0.0464289930249414 0.00861670457182551"
+        rpy="0 0 0" />
+      <mass
+        value="0.0548595708067953" />
+      <inertia
+        ixx="7.04353317604939E-05"
+        ixy="1.51155953290734E-08"
+        ixz="6.67329915647513E-09"
+        iyy="2.08093314710565E-05"
+        iyz="-2.16464555676611E-05"
+        izz="6.40556250817672E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/NECK_R_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/NECK_R_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="NECK_R_JOINT"
+    type="revolute">
+    <origin
+      xyz="0.022 0.052 0.029"
+      rpy="0 1.5708 0" />
+    <parent
+      link="NECK_P_LINK" />
+    <child
+      link="NECK_R_LINK" />
+    <axis
+      xyz="0 0 1" />
+    <limit
+      lower="-0.523"
+      upper="0.523"
+      effort="2.3"
+      velocity="118" />
+  </joint>
+  <link
+    name="R_SHOULDER_P1_LINK">
+    <inertial>
+      <origin
+        xyz="-9.5591E-10 -0.0031437 -0.0077329"
+        rpy="0 0 0" />
+      <mass
+        value="0.20481169" />
+      <inertia
+        ixx="0.00062819"
+        ixy="1.1359E-05"
+        ixz="1.5672E-12"
+        iyy="0.00023656"
+        iyz="9.1822E-12"
+        izz="0.00041154" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/R_SHOULDER_P1_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/R_SHOULDER_P1_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R_SHOULDER_P1_JOINT"
+    type="fixed">
+    <origin
+      xyz="0.046 0 -0.2655"
+      rpy="-1.5708 0 -1.5708" />
+    <parent
+      link="WAIST_Y_LINK" />
+    <child
+      link="R_SHOULDER_P1_LINK" />
+    <axis
+      xyz="0 0 0" />
+    <limit
+      lower="-3.106"
+      upper="3.106"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="R_ZJJ_Link">
+    <inertial>
+      <origin
+        xyz="-0.05726959 -0.03969936 0.00413997"
+        rpy="0 0 0" />
+      <mass
+        value="0.088569323" />
+      <inertia
+        ixx="6.2976E-05"
+        ixy="2.9422E-06"
+        ixz="1.536E-07"
+        iyy="2.8307E-05"
+        iyz="2.6805E-07"
+        izz="3.9553E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/R_ZJJ_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.89804 0.91765 0.92941 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/R_ZJJ_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="R_ZJJ_JOINT"
+    type="fixed">
+    <origin
+      xyz="0 -0.0958 0"
+      rpy="1.5708 -1.5708 0" />
+    <parent
+      link="Link7_R" />
+    <child
+      link="R_ZJJ_Link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="z_r_camera_Link">
+    <inertial>
+      <origin
+        xyz="0.01146 -6.1161E-05 1.4377E-14"
+        rpy="0 0 0" />
+      <mass
+        value="0.08" />
+      <inertia
+        ixx="1.0867E-05"
+        ixy="-7.205E-21"
+        ixz="1.1666E-08"
+        iyy="7.0883E-06"
+        iyz="-1.0057E-20"
+        izz="7.1529E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/z_r_camera_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/z_r_camera_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="z_r_camera_joint"
+    type="fixed">
+    <origin
+      xyz="0 -0.058415 -0.0155"
+      rpy="-1.5708 -1.5708 0" />
+    <parent
+      link="R_ZJJ_Link" />
+    <child
+      link="z_r_camera_Link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="L_SHOULDER_P1_LINK">
+    <inertial>
+      <origin
+        xyz="-9.55907131228173E-10 -0.00314371809528069 -0.00773291158712766"
+        rpy="0 0 0" />
+      <mass
+        value="0.204811685449087" />
+      <inertia
+        ixx="0.000628193915112188"
+        ixy="-1.13592516113213E-05"
+        ixz="1.56718885639185E-12"
+        iyy="0.000236562929681846"
+        iyz="-9.18217971465716E-12"
+        izz="0.000411541515144931" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/L_SHOULDER_P1_LINK.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/L_SHOULDER_P1_LINK.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L_SHOULDER_P1_JOINT"
+    type="fixed">
+    <origin
+      xyz="-0.046 0 -0.2655"
+      rpy="-1.5708 0 1.5708" />
+    <parent
+      link="WAIST_Y_LINK" />
+    <child
+      link="L_SHOULDER_P1_LINK" />
+    <axis
+      xyz="0 0 0" />
+    <limit
+      lower="-3.106"
+      upper="3.106"
+      effort="0"
+      velocity="0" />
+  </joint>
+  <link
+    name="L_ZJJ_Link">
+    <inertial>
+      <origin
+        xyz="-0.0104583807344056 -0.00481299076750413 -0.00447968755746775"
+        rpy="0 0 0" />
+      <mass
+        value="0.0885693226090735" />
+      <inertia
+        ixx="6.29764701252922E-05"
+        ixy="-2.94220797694543E-06"
+        ixz="1.53602069906413E-07"
+        iyy="2.83069923266712E-05"
+        iyz="-2.68054924516763E-07"
+        izz="3.95532339454695E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/L_ZJJ_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/L_ZJJ_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="L_ZJJ_Joint"
+    type="fixed">
+       <origin
+      xyz="0 -0.0958 -0.01"
+      rpy="1.5708 1.5708 0" />
+    <parent
+      link="Link7_L" />
+    <child
+      link="L_ZJJ_Link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="z_l_camera_Link">
+    <inertial>
+      <origin
+        xyz="0.0114596434184285 -3.89209891649145E-07 -6.11597360797855E-05"
+        rpy="0 0 0" />
+      <mass
+        value="0.08" />
+      <inertia
+        ixx="1.086689240653E-05"
+        ixy="1.40691888026617E-21"
+        ixz="1.16658669623678E-08"
+        iyy="7.08830000398189E-06"
+        iyz="-1.3154669383544E-20"
+        izz="7.15285354898359E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/z_l_camera_Link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.752941176470588 0.752941176470588 0.752941176470588 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://ti5_description/meshes/z_l_camera_Link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="z_l_camera_joint"
+    type="fixed">
+    <origin
+      xyz="-0.0093951 -0.057998 -0.0155"
+      rpy="-3.1352 -1.5708 0" />
+    <parent
+      link="L_ZJJ_Link" />
+    <child
+      link="z_l_camera_Link" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+
+<!-- 左侧机械臂 Marvin M3-L -->
+  <joint name="M3-L-V2.0_JOINT" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 -3.1415" />
+    <parent link="L_SHOULDER_P1_LINK" />
+    <child link="L_ARM_BASE_LINK" />
+  </joint>
+
+  <link name="L_ARM_BASE_LINK">
+    <inertial>
+      <origin xyz="0.0001228 -9.319E-05 0.034031" rpy="0 0 0" />
+      <mass value="0.84354" />
+      <inertia ixx="0.00063835" ixy="-1.5E-07" ixz="7.82E-06" iyy="0.0006526" iyz="2.02E-06" izz="0.00078471" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Base_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Base_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="Link1_L">
+    <inertial>
+      <origin xyz="-0.00033218 -0.0042972 -0.035302" rpy="0 0 0" />
+      <mass value="1.5215" />
+      <inertia ixx="0.0036317" ixy="1.8E-06" ixz="1.321E-05" iyy="0.0038966" iyz="-0.00023392" izz="0.001293" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link1_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 1 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link1_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint1_L" type="revolute">
+    <origin xyz="0 0 0.1586" rpy="0 0 0" />
+    <parent link="L_ARM_BASE_LINK" />
+    <child link="Link1_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.0543" upper="3.0543" effort="35" velocity="3.1416" />
+  </joint>
+
+  <link name="Link2_L">
+    <inertial>
+      <origin xyz="-0.00016509 0.049828 -0.0084845" rpy="0 0 0" />
+      <mass value="1.5144" />
+      <inertia ixx="0.0059014" ixy="1.655E-05" ixz="8.52E-06" iyy="0.0017802" iyz="0.00064326" izz="0.0055676" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link2_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 0 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link2_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint2_L" type="revolute">
+    <origin xyz="0 0 0" rpy="1.5708 0 0" />
+    <parent link="Link1_L" />
+    <child link="Link2_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.0944" upper="2.0944" effort="35" velocity="3.1416" />
+  </joint>
+
+  <link name="Link3_L">
+    <inertial>
+      <origin xyz="0.0083738 -0.0041711 -0.049249" rpy="0 0 0" />
+      <mass value="1.3385" />
+      <inertia ixx="0.0078818" ixy="-0.00010303" ixz="3.124E-05" iyy="0.0082477" iyz="3.43E-06" izz="0.001281" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link3_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link3_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint3_L" type="revolute">
+    <origin xyz="0 0.264 0" rpy="-1.5708 0 0" />
+    <parent link="Link2_L" />
+    <child link="Link3_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.0543" upper="3.0543" effort="18" velocity="3.1416" />
+  </joint>
+
+  <link name="Link4_L">
+    <inertial>
+      <origin xyz="0.0077979 -0.035033 -0.0087441" rpy="0 0 0" />
+      <mass value="0.94955" />
+      <inertia ixx="0.0027803" ixy="-0.00033995" ixz="6.165E-05" iyy="0.0011232" iyz="-0.00028081" izz="0.0026268" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link4_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 1 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link4_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint4_L" type="revolute">
+    <origin xyz="0.018 0 0" rpy="-1.5708 0 3.1416" />
+    <parent link="Link3_L" />
+    <child link="Link4_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.5307" upper="0.7854" effort="18" velocity="3.1416" />
+  </joint>
+
+  <link name="Link5_L">
+    <inertial>
+      <origin xyz="-0.00048856 0.00035152 -0.090995" rpy="0 0 0" />
+      <mass value="0.9828" />
+      <inertia ixx="0.0020465" ixy="-1.358E-05" ixz="-6.66E-06" iyy="0.0018146" iyz="2.572E-05" izz="0.00083101" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link5_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 0 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link5_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint5_L" type="revolute">
+    <origin xyz="0.018 -0.264 0" rpy="-1.5708 0 3.1416" />
+    <parent link="Link4_L" />
+    <child link="Link5_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.0543" upper="3.0543" effort="5.5" velocity="3.1416" />
+  </joint>
+
+  <link name="Link6_L">
+    <inertial>
+      <origin xyz="0.0002469 -0.00017271 -0.00067554" rpy="0 0 0" />
+      <mass value="0.32576" />
+      <inertia ixx="0.00018567" ixy="1.43E-06" ixz="-3.3E-07" iyy="0.00015718" iyz="-3.49E-06" izz="0.00017167" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link6_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link6_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint6_L" type="revolute">
+    <origin xyz="0 0 0" rpy="1.5708 -1.5708 0" />
+    <parent link="Link5_L" />
+    <child link="Link6_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.0472" upper="1.0472" effort="5.5" velocity="3.1416" />
+  </joint>
+
+  <link name="Link7_L">
+    <inertial>
+      <origin xyz="-0.00059048 -0.042042 0.0057773" rpy="0 0 0" />
+      <mass value="0.31798" />
+      <inertia ixx="0.0005709" ixy="5.35E-06" ixz="4.3E-07" iyy="0.00025839" iyz="8.332E-05" izz="0.00048102" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link7_L.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 1 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-L-CCS-615-V2.0urdf/meshes/Link7_L.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint7_L" type="revolute">
+    <origin xyz="0 0 0" rpy="1.5708 -1.5708 0" />
+    <parent link="Link6_L" />
+    <child link="Link7_L" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.5708" upper="1.5708" effort="5.5" velocity="3.1416" />
+  </joint>
+
+<!-- 右侧机械臂 Marvin M3-R -->
+  <joint name="M3-R-V2.0_JOINT" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0" />
+    <parent link="R_SHOULDER_P1_LINK" />
+    <child link="R_ARM_BASE_LINK" />
+  </joint>
+
+  <link name="R_ARM_BASE_LINK">
+    <inertial>
+      <origin xyz="0.0001228 -9.319E-05 0.034031" rpy="0 0 0" />
+      <mass value="0.84354" />
+      <inertia ixx="0.00063835" ixy="-1.5E-07" ixz="7.82E-06" iyy="0.0006526" iyz="2.02E-06" izz="0.00078471" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Base_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Base_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <link name="Link1_R">
+    <inertial>
+      <origin xyz="-0.00033218 -0.0042972 -0.035302" rpy="0 0 0" />
+      <mass value="1.5215" />
+      <inertia ixx="0.0036317" ixy="1.8E-06" ixz="1.321E-05" iyy="0.0038966" iyz="-0.00023392" izz="0.001293" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link1_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 1 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link1_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint1_R" type="revolute">
+    <origin xyz="0 0 0.1586" rpy="0 0 0" />
+    <parent link="R_ARM_BASE_LINK" />
+    <child link="Link1_R" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.0543" upper="3.0543" effort="35" velocity="3.1416" />
+  </joint>
+
+  <link name="Link2_R">
+    <inertial>
+      <origin xyz="-0.00016509 0.049828 -0.0084845" rpy="0 0 0" />
+      <mass value="1.5144" />
+      <inertia ixx="0.0059014" ixy="1.655E-05" ixz="8.52E-06" iyy="0.0017802" iyz="0.00064326" izz="0.0055676" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link2_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 0 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link2_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint2_R" type="revolute">
+    <origin xyz="0 0 0" rpy="1.5708 0 0" />
+    <parent link="Link1_R" />
+    <child link="Link2_R" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.0944" upper="2.0944" effort="35" velocity="3.1416" />
+  </joint>
+
+  <link name="Link3_R">
+    <inertial>
+      <origin xyz="0.0083738 -0.0041711 -0.049249" rpy="0 0 0" />
+      <mass value="1.3385" />
+      <inertia ixx="0.0078818" ixy="-0.00010303" ixz="3.124E-05" iyy="0.0082477" iyz="3.43E-06" izz="0.001281" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link3_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link3_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint3_R" type="revolute">
+    <origin xyz="0 0.264 0" rpy="-1.5708 0 0" />
+    <parent link="Link2_R" />
+    <child link="Link3_R" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.0543" upper="3.0543" effort="18" velocity="3.1416" />
+  </joint>
+
+  <link name="Link4_R">
+    <inertial>
+      <origin xyz="0.0077979 -0.035033 -0.0087441" rpy="0 0 0" />
+      <mass value="0.94955" />
+      <inertia ixx="0.0027803" ixy="-0.00033995" ixz="6.165E-05" iyy="0.0011232" iyz="-0.00028081" izz="0.0026268" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link4_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 1 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link4_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint4_R" type="revolute">
+    <origin xyz="0.018 0 0" rpy="-1.5708 0 3.1416" />
+    <parent link="Link3_R" />
+    <child link="Link4_R" />
+    <axis xyz="0 0 1" />
+    <limit lower="-2.5307" upper="0.7854" effort="18" velocity="3.1416" />
+  </joint>
+
+  <link name="Link5_R">
+    <inertial>
+      <origin xyz="0.00048856 -0.00035152 -0.090995" rpy="0 0 0" />
+      <mass value="0.9828" />
+      <inertia ixx="0.0020465" ixy="-1.358E-05" ixz="6.66E-06" iyy="0.0018146" iyz="-2.572E-05" izz="0.00083101" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link5_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 0 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link5_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint5_R" type="revolute">
+    <origin xyz="0.018 -0.264 0" rpy="-1.5708 0 3.1416" />
+    <parent link="Link4_R" />
+    <child link="Link5_R" />
+    <axis xyz="0 0 1" />
+    <limit lower="-3.0543" upper="3.0543" effort="5.5" velocity="3.1416" />
+  </joint>
+
+  <link name="Link6_R">
+    <inertial>
+      <origin xyz="-0.0002469 -0.00017271 0.00067554" rpy="0 0 0" />
+      <mass value="0.32576" />
+      <inertia ixx="0.00018567" ixy="-1.43E-06" ixz="-3.3E-07" iyy="0.00015718" iyz="3.49E-06" izz="0.00017167" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link6_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link6_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint6_R" type="revolute">
+    <origin xyz="0 0 0" rpy="1.5708 -1.5708 0" />
+    <parent link="Link5_R" />
+    <child link="Link6_R" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.0472" upper="1.0472" effort="5.5" velocity="3.1416" />
+  </joint>
+
+  <link name="Link7_R">
+    <inertial>
+      <origin xyz="-0.00059048 -0.042042 0.0057773" rpy="0 0 0" />
+      <mass value="0.31798" />
+      <inertia ixx="0.0005709" ixy="5.35E-06" ixz="4.3E-07" iyy="0.00025839" iyz="8.332E-05" izz="0.00048102" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link7_R.STL" />
+      </geometry>
+      <material name="">
+        <color rgba="0 1 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <mesh filename="package://ti5_description/MarvinM3-S-R-CCS-615-V2.0urdf/meshes/Link7_R.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="Joint7_R" type="revolute">
+    <origin xyz="0 0 0" rpy="1.5708 -1.5708 0" />
+    <parent link="Link6_R" />
+    <child link="Link7_R" />
+    <axis xyz="0 0 1" />
+    <limit lower="-1.5708" upper="1.5708" effort="5.5" velocity="3.1416" />
+  </joint>
+
+  <link name="R_FLANGE_LINK" />
+  <joint name="R_FLANGE_JOINT" type="fixed">
+    <origin
+      xyz="0 -0.087 0"
+      rpy="1.57079632679488 -1.57079632679488 0" />
+    <parent
+      link="Link7_R" />
+    <child
+      link="R_FLANGE_LINK" />
+    <axis
+      xyz="0 0 -1" />
+  </joint>
+  <link name="L_FLANGE_LINK" />
+  <joint name="L_FLANGE_JOINT" type="fixed">
+    <origin
+      xyz="0 -0.087 0"
+      rpy="1.57079632679488 -1.57079632679488 0" />
+    <parent
+      link="Link7_L" />
+    <child
+      link="L_FLANGE_LINK" />
+    <axis
+      xyz="0 0 -1" />
+  </joint>
+
+  <joint name="head_camera_joint" type="fixed">
+    <origin rpy="0 -1.1868 -1.5708" xyz="6.6574E-05 0.0874 0.03985"/>
+    <parent link="NECK_R_LINK"/>
+    <child link="head_camera_bottom_screw_frame"/>
+  </joint>
+  <link name="head_camera_bottom_screw_frame"/>
+  <joint name="head_camera_link_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.010600000000000002 0.0175 0.0125"/>
+    <parent link="head_camera_bottom_screw_frame"/>
+    <child link="head_camera_link"/>
+  </joint>
+  <link name="head_camera_link">
+    <visual>
+      <!-- the mesh origin is at front plate in between the two infrared camera axes -->
+      <origin rpy="1.5707963267948966 0 1.5707963267948966" xyz="0.0043 -0.0175 0"/>
+      <geometry>
+        <mesh filename="package://ti5_description/meshes/d435.dae"/>
+      </geometry>
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="0 -0.0175 0"/>
+      <geometry>
+        <box size="0.02505 0.09 0.025"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <!-- The following are not reliable values, and should not be used for modeling -->
+      <mass value="0.072"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.003881243" ixy="0.0" ixz="0.0" iyy="0.000498940" iyz="0.0" izz="0.003879257"/>
+    </inertial>
+  </link>
+  <!-- camera color joints and links -->
+  <joint name="head_camera_color_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.015 0"/>
+    <parent link="head_camera_link"/>
+    <child link="head_camera_color_frame"/>
+  </joint>
+  <link name="head_camera_color_frame"/>
+  <joint name="head_camera_color_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0"/>
+    <parent link="head_camera_color_frame"/>
+    <child link="head_camera_color_optical_frame"/>
+  </joint>
+  <link name="head_camera_color_optical_frame"/>
+
+
+  <joint name="hand_left_camera_joint" type="fixed">
+    <origin rpy="0 -1.5708 -1.5708" xyz="-0.0093951 -0.079 -0.0073"/>
+    <parent link="L_ZJJ_Link"/>
+    <child link="hand_left_camera_bottom_screw_frame"/>
+  </joint>
+  <link name="hand_left_camera_bottom_screw_frame"/>
+  <joint name="hand_left_camera_link_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.01085 0.009 0.021"/>
+    <parent link="hand_left_camera_bottom_screw_frame"/>
+    <child link="hand_left_camera_link"/>
+  </joint>
+  <link name="hand_left_camera_link">
+    <visual>
+      <!-- the mesh origin is at front plate in between the two infrared camera axes -->
+      <origin rpy="1.5707963267948966 0 1.5707963267948966" xyz="0.0038 -0.009 0"/>
+      <geometry>
+        <mesh filename="package://ti5_description/meshes/d405.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <!-- <material name="aluminum"/> -->
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.0078 -0.009 0"/>
+      <geometry>
+        <box size="0.023 0.042 0.042"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <!-- The following are not reliable values, and should not be used for modeling -->
+      <mass value="0.072"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.003881243" ixy="0.0" ixz="0.0" iyy="0.000498940" iyz="0.0" izz="0.003879257"/>
+    </inertial>
+  </link>
+  <joint name="hand_left_camera_color_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.0 0"/>
+    <parent link="hand_left_camera_link"/>
+    <child link="hand_left_camera_color_frame"/>
+  </joint>
+  <link name="hand_left_camera_color_frame"/>
+  <joint name="hand_left_camera_color_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0"/>
+    <parent link="hand_left_camera_color_frame"/>
+    <child link="hand_left_camera_color_optical_frame"/>
+  </joint>
+  <link name="hand_left_camera_color_optical_frame"/>
+  
+  
+  <joint name="hand_right_camera_joint" type="fixed">
+    <origin rpy="0 -1.5708 -1.5708" xyz="0 -0.0795 -0.0073"/>
+    <parent link="R_ZJJ_Link"/>
+    <child link="hand_right_camera_bottom_screw_frame"/>
+  </joint>
+  <link name="hand_right_camera_bottom_screw_frame"/>
+  <joint name="hand_right_camera_link_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0.01085 0.009 0.021"/>
+    <parent link="hand_right_camera_bottom_screw_frame"/>
+    <child link="hand_right_camera_link"/>
+  </joint>
+  <link name="hand_right_camera_link">
+    <visual>
+      <!-- the mesh origin is at front plate in between the two infrared camera axes -->
+      <origin rpy="1.5707963267948966 0 1.5707963267948966" xyz="0.0038 -0.009 0"/>
+      <geometry>
+        <mesh filename="package://ti5_description/meshes/d405.stl" scale="0.001 0.001 0.001"/>
+      </geometry>
+      <!-- <material name="aluminum"/> -->
+    </visual>
+    <collision>
+      <origin rpy="0 0 0" xyz="-0.0078 -0.009 0"/>
+      <geometry>
+        <box size="0.023 0.042 0.042"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <!-- The following are not reliable values, and should not be used for modeling -->
+      <mass value="0.072"/>
+      <origin xyz="0 0 0"/>
+      <inertia ixx="0.003881243" ixy="0.0" ixz="0.0" iyy="0.000498940" iyz="0.0" izz="0.003879257"/>
+    </inertial>
+  </link>
+  <!-- camera color joints and links -->
+  <joint name="hand_right_camera_color_joint" type="fixed">
+    <origin rpy="0 0 0" xyz="0 0.0 0"/>
+    <parent link="hand_right_camera_link"/>
+    <child link="hand_right_camera_color_frame"/>
+  </joint>
+  <link name="hand_right_camera_color_frame"/>
+  <joint name="hand_right_camera_color_optical_joint" type="fixed">
+    <origin rpy="-1.5707963267948966 0 -1.5707963267948966" xyz="0 0 0"/>
+    <parent link="hand_right_camera_color_frame"/>
+    <child link="hand_right_camera_color_optical_frame"/>
+  </joint>
+  <link name="hand_right_camera_color_optical_frame"/>
+</robot>

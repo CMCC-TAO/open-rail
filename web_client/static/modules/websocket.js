@@ -103,9 +103,13 @@ function handleWSMessage(msg) {
         if (typeof msg.data.observe_running === 'boolean') App.isObserveRunning = msg.data.observe_running;
         if (typeof msg.data.inference_running === 'boolean') App.isInferenceRunning = msg.data.inference_running;
         if (typeof msg.data.control_running === 'boolean') App.isControlRunning = msg.data.control_running;
+        if (msg.data.running === false) App.isTeleopActive = false;
+        else if (typeof msg.data.teleop_human_active === 'boolean') App.isTeleopActive = msg.data.teleop_human_active;
+        if (typeof msg.data.teleop_device_connected === 'boolean') App.teleopDeviceConnected = msg.data.teleop_device_connected;
+        if (typeof msg.data.teleop_device_state === 'string') App.teleopDeviceState = msg.data.teleop_device_state;
       }
       toast(msg.data?.message, msg.data?.running || msg.data?.paused ? 'ok' : 'warn');
-      setRunningUI(msg.data.running, msg.data.paused ?? false);
+      setRunningUI(msg.data.running, msg.data.paused ?? false, App.isTeleopActive);
       break;
     case 'error':  toast(msg.data.message, 'error'); setRunningUI(false, false); break;
     case 'pong':   break;

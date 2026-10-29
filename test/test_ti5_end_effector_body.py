@@ -43,6 +43,12 @@ def test_mixed_profile_does_not_drive_gripper_from_a_finger():
     assert robot.robot._endpoints._sim.published == []
 
 
+def test_legacy_16d_action_is_rejected_by_native_body():
+    robot = _body("hand")
+    with pytest.raises(ValueError, match=r"26.*16"):
+        robot.control_robot(np.zeros(16, dtype=np.float32))
+
+
 def test_layout_wider_than_profile_is_rejected():
     shutdown_bridge()
     config = get_ti5_t170c_config("lhand_rgripper")

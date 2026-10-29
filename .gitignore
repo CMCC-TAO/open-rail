@@ -138,6 +138,7 @@ demo_data/gr00t-gr1-apple-to-shelf/
 tmp/
 output/
 a2d_sdk*/
+ti5_t170c_robot/
 camera.txt
 hal.txt
 user_conf_*.py
@@ -147,8 +148,9 @@ AGENTS.md
 a2d_description
 install
 log
+logs
 conf/*.yaml
-!config/default_conf.yaml
+config/default_conf.yaml
 *.svg
 
 # Website (site/, Astro + Starlight) build intermediates

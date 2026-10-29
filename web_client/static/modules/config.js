@@ -7,6 +7,9 @@ const CONFIG_EXCLUDED_GROUP_KEYS = new Set(['language', 'record', 'controller'])
 
 // Sub-sub conf groups to exclude from Configuration panel (dot-path)
 const CONFIG_EXCLUDED_SUB_GROUP_KEYS = new Set([
+  'teleop.devices',
+  'teleop.ros2',
+  'teleop.devices.quest3.config_path_by_robot',
   'intra_chunk.action_layout',
   'rdm.action_layout',
   'visualize.camera',
@@ -25,6 +28,27 @@ const SIMULATION_CONFIG_KEYS = new Set([
   'rdm.max_async_observation_lag_steps',
 ]);
 const SIMULATION_ROBOT_TYPES = new Set();
+function teleopSupportedRobotTypes() {
+  const mapping = App.config?.teleop?.devices?.quest3?.config_path_by_robot;
+  if (mapping && typeof mapping === 'object' && !Array.isArray(mapping)) {
+    return new Set(Object.keys(mapping));
+  }
+  return new Set();
+}
+
+function isTeleopSupportedRobot(robotType) {
+  return teleopSupportedRobotTypes().has(String(robotType || ''));
+}
+
+function updateTeleopGroupVisibility(robotType) {
+  const supported = isTeleopSupportedRobot(robotType);
+  $('config-tree').querySelectorAll('.cfg-group[data-config-group-key="teleop"]').forEach(group => {
+    group.dataset.teleopUnsupported = supported ? '0' : '1';
+    group.style.display = supported ? '' : 'none';
+  });
+  const query = String($('conf-search')?.value || '').trim();
+  if (supported && query) filterConfigTree(query);
+}
 
 window.registerSimulationBenchmarks = function(profiles) {
   for (const profile of profiles) {
@@ -78,6 +102,7 @@ const CONFIG_SELECT_OPTIONS = {
   method: ['resize', 'none'],
   type: ['agibot_g1', 'mock', 'ti5_t170c', 'navi_wa2', 'unitree_g1'],
   mode: ['async', 'sync'],
+  control_device: ['quest3'],
   codec: ['mp4v', 'avc1'],
   video_layout: ['grid', 'single'],
   eval_log_format: ['json', 'csv', 'both'],
@@ -125,6 +150,9 @@ const CONFIG_HIDDEN_DOT_KEYS = new Set([
   'vision.preprocess.method',
   'vision.preprocess.width',
   'rdm.mode',
+  'use_teleop',
+  'teleop.devices.quest3.config_path',
+  'teleop.devices.quest3.auto_config_path',
 ]);
 
 // Read-only keys in config tree UI (display only, not editable in panel)
@@ -218,6 +246,15 @@ const CFG_ENTER_IMMEDIATE_APPLY_KEYS = new Set([
   'record.evaluation.scores',
   // 'evaluation.scores',
 ]);
+
+// Boolean keys rendered as a checkbox and applied (and saved) as soon as they toggle.
+const CONFIG_CHECKBOX_DOT_KEYS = new Set([
+  'record.record_teleop_fields',
+]);
+
+const CONFIG_KEY_TITLES = {
+  'record.record_teleop_fields': 'Save teleop intervention fields (teleop_action, teleop_action_mask, rejected_action, rejected_action_mask, is_teleop) in new LeRobot datasets. Existing datasets keep their schema; takes effect from the next recording.',
+};
 
 function shouldApplyConfigImmediatelyOnEnter(dotKey) {
   return CFG_ENTER_IMMEDIATE_APPLY_KEYS.has(String(dotKey || '').trim());
@@ -345,6 +382,11 @@ function setCfgInputValue(input, dotKey, value) {
 
   if (input.tagName === 'SELECT') {
     input.value = String(value);
+    return;
+  }
+
+  if (input.type === 'checkbox') {
+    input.checked = !!value;
     return;
   }
 
@@ -532,6 +574,7 @@ function renderConfigTree(cfg) {
   root.innerHTML = '';
   renderMainParameters(cfg);
   buildTree(cfg, '', root);
+  updateTeleopGroupVisibility(cfg?.robots?.type);
   updateSimulationConfigVisibility();
   restoreConfigTreeUiState(uiState);
   document.dispatchEvent(new CustomEvent('app-config-updated'));
@@ -637,7 +680,9 @@ function buildTree(obj, prefix, parentEl) {
     } else {
       buildTree(val, dotKey, body);
     }
-    parentEl.appendChild(buildGroupFromEl(key, body));
+    const groupEl = buildGroupFromEl(key, body);
+    groupEl.dataset.configGroupKey = key;
+    parentEl.appendChild(groupEl);
   }
 }
 // ═══════════════════════════════════════════════════════
@@ -751,6 +796,7 @@ function _buildRobotsGroup(obj, parentEl) {
       for (const [k, el] of Object.entries(subGroupEls)) {
         el.style.display = (k === selected) ? '' : 'none';
       }
+      updateTeleopGroupVisibility(selected);
     });
   }
 }
@@ -893,7 +939,7 @@ function createCfgRow(dotKey, label, value, options = {}) {
   row.dataset.key = dotKey;
 
   const keyEl = document.createElement('div');
-  keyEl.className = 'cfg-key'; keyEl.title = dotKey; keyEl.textContent = label;
+  keyEl.className = 'cfg-key'; keyEl.title = CONFIG_KEY_TITLES[dotKey] || dotKey; keyEl.textContent = label;
   if (dotKey === 'robots.robotwin_aloha.render_observation_mode') {
     keyEl.textContent = 'Camera rendering (sync)';
     keyEl.title = 'Async mode always renders every action.';
@@ -1061,6 +1107,10 @@ function createCfgRow(dotKey, label, value, options = {}) {
       }
       input.appendChild(o);
     });
+  } else if (CONFIG_CHECKBOX_DOT_KEYS.has(dotKey)) {
+    input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!value;
   } else if (typeof value === 'boolean') {
     input = document.createElement('select');
     ['true', 'false'].forEach(opt => {
@@ -1088,7 +1138,8 @@ function createCfgRow(dotKey, label, value, options = {}) {
     input.type = 'text'; input.value = value === null ? '' : String(value);
   }
 
-  input.className = 'input-text';
+  input.className = input.type === 'checkbox' ? 'cfg-checkbox' : 'input-text';
+  if (CONFIG_KEY_TITLES[dotKey]) input.title = CONFIG_KEY_TITLES[dotKey];
   if (isSimulationGpu) {
     input.placeholder = 'e.g. 0,2';
     input.title = keyEl.title;
@@ -1108,6 +1159,11 @@ function createCfgRow(dotKey, label, value, options = {}) {
     row.classList.add('cfg-row-readonly');
     input.disabled = true;
     input.title = `${dotKey} is read-only here.`;
+  } else if (input.type === 'checkbox') {
+    input.addEventListener('change', () => {
+      onCfgChange(dotKey, input, value);
+      void applySingleConfigPatchImmediately(dotKey);
+    });
   } else {
     input.addEventListener('input',  () => onCfgChange(dotKey, input, value));
     input.addEventListener('change', () => onCfgChange(dotKey, input, value));
@@ -1156,7 +1212,9 @@ function onCfgChange(dotKey, input, originalValue) {
 
   const raw = input.tagName === 'SELECT' ? input.value : input.value.trim();
   let parsed;
-  if (typeof originalValue === 'boolean') {
+  if (input.type === 'checkbox') {
+    parsed = input.checked;
+  } else if (typeof originalValue === 'boolean') {
     parsed = raw === 'true';
   } else if (CONFIG_NUMBER_RANGES[bareKey]) {
     parsed = Number(raw);
@@ -1343,6 +1401,7 @@ function filterConfigTree(query) {
     row.style.display = (!q || row.dataset.key.toLowerCase().includes(q)) ? '' : 'none';
   });
   $('config-tree').querySelectorAll('.cfg-group').forEach(g => {
+    if (g.dataset.teleopUnsupported === '1') { g.style.display = 'none'; return; }
     // Robot type sub-groups (data-robot-type) are controlled exclusively by the
     // type select in _buildRobotsGroup; never let the filter override their visibility.
     if (g.dataset.robotType || g.dataset.interChunkMode) return;
