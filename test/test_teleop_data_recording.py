@@ -9,8 +9,7 @@ import pyarrow.parquet as pq
 from client.core.action_arbiter import ActionArbiter, ActionSource
 from client.core.data_record_manager import DataRecordManager
 from client.core.lerobot_dataset_recorder import TELEOP_FEATURE_KEYS, LeRobotDatasetRecorder
-from client.core.teleop_bridge import RosTeleopBridge
-from client.core.vla_client import VLAClient
+from client.core.teleop_bridge import RosTeleopBridge, TeleopRuntime
 from conf.save_conf import get_record_data_config
 from teleop.action_mapping import action_layout_for_robot
 from teleop.quest3 import quest3
@@ -113,7 +112,7 @@ def test_record_fields_for_teleop_override():
     policy = np.full(4, 9.0)
     mask = np.array([True, True, False, False])
 
-    fields = VLAClient._teleop_record_fields(executed, ActionSource.TELEOP, teleop_mask=mask, policy_action=policy)
+    fields = TeleopRuntime._teleop_record_fields(executed, ActionSource.TELEOP, teleop_mask=mask, policy_action=policy)
 
     assert fields['is_teleop'] is True
     np.testing.assert_allclose(fields['teleop_action'], executed)
@@ -125,18 +124,18 @@ def test_record_fields_for_teleop_override():
 def test_record_fields_for_policy_and_teleop_without_policy():
     executed = np.ones(3)
 
-    policy_fields = VLAClient._teleop_record_fields(executed, ActionSource.POLICY, policy_action=executed)
+    policy_fields = TeleopRuntime._teleop_record_fields(executed, ActionSource.POLICY, policy_action=executed)
     assert policy_fields['is_teleop'] is False
     assert not policy_fields['teleop_action'].any()
     assert not policy_fields['teleop_action_mask'].any()
     assert not policy_fields['rejected_action_mask'].any()
 
-    teleop_fields = VLAClient._teleop_record_fields(executed, ActionSource.TELEOP)
+    teleop_fields = TeleopRuntime._teleop_record_fields(executed, ActionSource.TELEOP)
     assert teleop_fields['teleop_action_mask'].all()
     assert not teleop_fields['rejected_action'].any()
     assert not teleop_fields['rejected_action_mask'].any()
 
-    hold_fields = VLAClient._teleop_record_fields(executed, ActionSource.HOLD)
+    hold_fields = TeleopRuntime._teleop_record_fields(executed, ActionSource.HOLD)
     assert hold_fields['is_teleop'] is False
 
 
@@ -187,7 +186,7 @@ def _record_episode(recorder, save_path, frames, record_teleop_fields=True):
 
 def test_new_dataset_records_teleop_columns(tmp_path):
     recorder = LeRobotDatasetRecorder(get_record_data_config().lerobot)
-    teleop = VLAClient._teleop_record_fields(
+    teleop = TeleopRuntime._teleop_record_fields(
         np.full(4, 2.0),
         ActionSource.TELEOP,
         teleop_mask=[True, False, True, False],
@@ -223,7 +222,7 @@ def test_legacy_dataset_keeps_legacy_parquet_schema(tmp_path):
 
     # A fresh process appending to the same legacy dataset must not mix schemas.
     recorder = LeRobotDatasetRecorder(get_record_data_config().lerobot)
-    teleop = VLAClient._teleop_record_fields(np.ones(4), ActionSource.TELEOP)
+    teleop = TeleopRuntime._teleop_record_fields(np.ones(4), ActionSource.TELEOP)
     table = _record_episode(recorder, tmp_path, [(np.ones(4), teleop)])
 
     assert table.column_names == legacy_table.column_names

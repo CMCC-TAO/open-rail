@@ -114,7 +114,7 @@ Policy transitions use `teleop.action_transition_steps` (default 64) to
 blend discontinuities. Teleop commands bypass that blend and set the filter
 anchor directly, so human motion remains open-loop and responsive.
 
-Before submission, `VLAClient._validate_teleop_bridge_action()` enforces action
+Before submission, `VLAClient._teleop()._validate_teleop_bridge_action()` enforces action
 width and finiteness and applies the outlier guard:
 
 - max single-arm-joint delta (`teleop_outlier_max_arm_joint_delta`);

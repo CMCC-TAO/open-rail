@@ -209,7 +209,7 @@ def test_ti5_native_teleop_action_is_not_remapped_or_rescaled():
     client._teleop_outlier_last_log_s = 0.0
 
     native_action = [0.0] * 14 + [0.0, 0.0, 0.0, 0.0, 0.0, 1000.0] * 2
-    action = client._validate_teleop_bridge_action(native_action)
+    action = client._teleop()._validate_teleop_bridge_action(native_action)
 
     np.testing.assert_allclose(action[:14], np.zeros(14))
     np.testing.assert_allclose(action, native_action)
@@ -227,7 +227,7 @@ def test_ti5_bridge_rejects_legacy_scalar_width_instead_of_remapping_it():
     client.logger = logging.getLogger(__name__)
     client._teleop_outlier_last_log_s = 0.0
 
-    assert client._validate_teleop_bridge_action([0.0] * 16) is None
+    assert client._teleop()._validate_teleop_bridge_action([0.0] * 16) is None
 
 
 def test_web_reset_reads_reset_robot_pos():
@@ -286,7 +286,7 @@ def test_stale_teleop_action_is_not_used_as_outlier_baseline():
     new_action = np.zeros(26)
     new_action[0] = 0.1
 
-    accepted = client._validate_teleop_bridge_action(new_action, timestamp=time.perf_counter())
+    accepted = client._teleop()._validate_teleop_bridge_action(new_action, timestamp=time.perf_counter())
     np.testing.assert_allclose(accepted, new_action)
 
 
@@ -300,7 +300,7 @@ def test_rejected_teleop_stream_releases_ownership_after_threshold():
     client.action_arbiter = ActionArbiter(action_timeout_s=0.15)
     client._teleop_outlier_reject_count = 5
 
-    client._hold_teleop_after_rejected_action(time.perf_counter())
+    client._teleop()._hold_teleop_after_rejected_action(time.perf_counter())
 
     assert client.action_arbiter.last_submitted_at(ActionSource.TELEOP) is None
 
@@ -318,7 +318,7 @@ def test_live_teleop_session_holds_only_its_own_last_safe_action():
     timestamp = time.perf_counter()
     client.action_arbiter.submit(ActionSource.TELEOP, safe, timestamp=timestamp)
 
-    client._hold_teleop_after_rejected_action(timestamp + 0.01)
+    client._teleop()._hold_teleop_after_rejected_action(timestamp + 0.01)
 
     np.testing.assert_allclose(client.action_arbiter.latest_action(ActionSource.TELEOP), safe)
 
@@ -335,8 +335,10 @@ def test_starting_control_starts_configured_teleop_bridge():
     )
     client.task_language_manager = SimpleNamespace(new_task=lambda: None)
     calls = []
-    client._use_teleop_enabled = lambda: True
-    client.start_teleop_bridge = lambda: calls.append('start')
+    client.teleop_runtime = SimpleNamespace(
+        _use_teleop_enabled=lambda: True,
+        start_teleop_bridge=lambda: calls.append('start'),
+    )
 
     client.start_control()
 

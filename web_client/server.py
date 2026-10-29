@@ -591,7 +591,7 @@ def _teleop_status_snapshot(vla_client=None) -> dict:
     """Return teleop state even before a VLA client/runtime has been created."""
 
     if vla_client is not None:
-        return vla_client.teleop_status
+        return vla_client._teleop().teleop_status
     with client_state.lock:
         config = client_state.config
     return teleop_status_snapshot(config)
@@ -1143,9 +1143,9 @@ async def patch_config(req: ConfigPatchRequest):
     if current_vla_client is not None and (teleop_switch_changed or (teleop_bridge_config_changed and next_teleop_enabled)):
         try:
             if teleop_switch_changed:
-                await asyncio.to_thread(current_vla_client.set_teleop_enabled, next_teleop_enabled)
+                await asyncio.to_thread(current_vla_client._teleop().set_teleop_enabled, next_teleop_enabled)
             elif next_teleop_enabled:
-                await asyncio.to_thread(current_vla_client.restart_teleop_bridge)
+                await asyncio.to_thread(current_vla_client._teleop().restart_teleop_bridge)
         except Exception as e:
             logger.error(f"Failed to apply teleop runtime config: {e}", exc_info=True)
             raise HTTPException(500, f"Failed to apply teleop runtime config: {e}")
@@ -2086,7 +2086,7 @@ async def client_control_reset(req: Optional[ManualControlRequest] = Body(defaul
 async def _client_control_reset(req: Optional[ManualControlRequest]):
     vla_client, robot = _require_runtime('reset')
     try:
-        teleop_active = bool(vla_client.is_teleop_human_active())
+        teleop_active = bool(vla_client._teleop().is_teleop_human_active())
     except Exception:
         teleop_active = False
     if teleop_active:

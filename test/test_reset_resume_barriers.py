@@ -193,7 +193,7 @@ def test_teleop_enabled_reset_does_not_hold_pre_reset_action():
     assert len(sent) == 1 and np.allclose(sent[0], pre_reset)
 
     client.reset()
-    assert client._get_last_executed_action() is None
+    assert client._teleop()._get_last_executed_action() is None
     assert client.action_arbiter.latest_action(ActionSource.POLICY) is None
     assert client._teleop_outlier_reject_count == 0
     assert client._policy_generation == 1
