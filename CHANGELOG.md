@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## [20261030]
+
+- Updated PyTorch pi0.5 asset loading and automatic config selection.
+- Removed gripper thresholds and forced `0`/`1` snapping.
+
 ## [20261026]
 
 - Extended PyTorch pi0.5 support to TI5, with automatic A2D/TI5 training configuration selection from checkpoint assets and robot-specific camera mappings and action dimensions.

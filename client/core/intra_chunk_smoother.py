@@ -295,16 +295,9 @@ class IntraChunkSmoother():
         if length == 0:
             return np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0)), np.zeros((num_grippers, 0))
 
-        # Sliding-window mean + threshold snap, vectorised over every output
-        # index at once via a cumulative sum.
-        #
-        # BEHAVIOUR CHANGE: the loop this replaces wrote each result back into
-        # the array it was also reading from, so a window averaged values that
-        # had already been filtered -- an accidental IIR,
-        #     f[i] = clamp(mean(f[i-h .. i-1], x[i .. i+h])).
-        # This now averages the raw input only, which is what the config names
-        # describe (`filter_window_size`, and the 0.05 / 0.95 thresholds that
-        # snap the smoothed command to fully open / fully closed).
+        # Sliding-window mean, vectorised via a cumulative sum. Average the raw
+        # input only and preserve its native units; stepwise dimensions are not
+        # necessarily normalized to [0, 1].
         #
         # Window bounds are preserved exactly: every window has the same width
         # w = 2h+1 (clamped to `length`), and at the edges the window slides as
@@ -320,13 +313,7 @@ class IntraChunkSmoother():
             axis=1,
         )
         window_min = np.clip(np.arange(length) - window_size_half, 0, length - w)
-        mean_all = (prefix[:, window_min + w] - prefix[:, window_min]) / w
-
-        filtered = np.where(
-            mean_all > self.config.max_gripper_action_threshold,
-            1.0,
-            np.where(mean_all < self.config.min_gripper_action_threshold, 0.0, mean_all)
-        )
+        filtered = (prefix[:, window_min + w] - prefix[:, window_min]) / w
 
         # Keep interpolation behavior consistent with legacy implementation.
         timestamps_fitted = self._sample_timestamps(start_time, end_time, time_step, output_samples)

@@ -53,9 +53,7 @@ All durations in the following tables are milliseconds unless another unit is sh
 | Key | Type / valid values | Meaning |
 | --- | --- | --- |
 | `intra_chunk_mode` | `raw`, `interpolation`, or `fitting` | Action output mode: use raw actions, interpolate them, or use polynomial fitting. |
-| `filter_window_size` | non-negative integer | Half-window used to filter gripper actions; the effective window is $2n+1$. |
-| `min_gripper_action_threshold` | number | Gripper values below this threshold are treated as fully open (`0.0`). |
-| `max_gripper_action_threshold` | number | Gripper values above this threshold are treated as fully closed (`1.0`). |
+| `filter_window_size` | non-negative integer | Half-window used to average stepwise actions in their native units; the effective window is $2n+1$. No snapping to `0` or `1` is applied. |
 | `fitting_num_samples` | positive integer | Reserved trajectory-sampling setting; the current implementation uses the controller-period time grid instead. |
 | `fitting_deg` | non-negative integer | Polynomial degree for fitted trajectories. |
 | `max_joint_fitting_workers` | positive integer | Reserved worker setting; the current batch implementation does not create a joint-fitting executor. |
