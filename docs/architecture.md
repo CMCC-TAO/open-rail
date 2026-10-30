@@ -229,7 +229,7 @@ $$
 q(t)=p(t), \qquad v(t)=p'(t), \qquad a(t)=p''(t)
 $$
 
-For stepwise gripper dimensions, each point is replaced by a local mean over `2 * filter_window_size + 1` samples, with values below `min_gripper_action_threshold` mapped to `0` and values above `max_gripper_action_threshold` mapped to `1`. The filtered values are then sampled between neighboring action points. Gripper velocity and acceleration are explicitly zero.
+For stepwise gripper dimensions, each point is replaced by a local mean over `2 * filter_window_size + 1` samples, preserving the input's native units without threshold snapping to `0` or `1`. The filtered values are then sampled between neighboring action points. Gripper velocity and acceleration are explicitly zero.
 
 The default configuration selects `fitting`; `raw` and `interpolation` are useful diagnostic baselines.
 

@@ -224,7 +224,7 @@ $$
 q(t)=p(t), \qquad v(t)=p'(t), \qquad a(t)=p''(t)
 $$
 
-对于阶跃夹爪维度，每个点会用 `2 * filter_window_size + 1` 左右的局部窗口求均值；低于 `min_gripper_action_threshold` 的值映射为 `0`，高于 `max_gripper_action_threshold` 的值映射为 `1`，再在相邻动作点之间采样。夹爪速度和加速度明确设为零。
+对于阶跃夹爪维度，每个点会用 `2 * filter_window_size + 1` 左右的局部窗口求均值，保留输入的原始单位，不再按阈值强制映射为 `0` 或 `1`，再在相邻动作点之间采样。夹爪速度和加速度明确设为零。
 
 默认配置使用 `fitting`；`raw` 和 `interpolation` 适合做诊断基线。
 

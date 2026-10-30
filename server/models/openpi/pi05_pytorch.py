@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, replace
 from importlib.util import find_spec
+import json
 import os
 from pathlib import Path
 import sys
@@ -91,30 +92,36 @@ def _create_streaming_policy(train_config, model_path, device, compile_mode="max
         def load_pytorch(self, train_config, weight_path):
             return _load_pytorch_model(self, weight_path, device)
 
+    from openpi.shared import normalize
+
+    norm_stats = normalize.load(Path(model_path) / "assets")
     model_args = asdict(train_config.model)
     model_args["pytorch_compile_mode"] = compile_mode
     return policy_config.create_trained_policy(
-        replace(train_config, model=StreamingConfig(**model_args)), model_path, pytorch_device=device
+        replace(train_config, model=StreamingConfig(**model_args)),
+        model_path, pytorch_device=device, norm_stats=norm_stats,
     )
 
 
 def _get_train_config(config_name, model_path):
     from openpi.training import config as training_config
 
-    if config_name:
-        return training_config.get_config(config_name)
-    matches = []
-    for name in ("pi05_a2d", "pi05_ti5"):
-        try:
-            candidate = training_config.get_config(name)
-        except ValueError:
-            continue
-        asset_id = candidate.data.assets.asset_id
-        if asset_id and (Path(model_path) / "assets" / asset_id / "norm_stats.json").is_file():
-            matches.append(candidate)
-    if len(matches) != 1:
-        raise ValueError("Cannot select a unique training config from checkpoint assets; set pi05_pytorch.config")
-    return matches[0]
+    if not config_name:
+        manifest = json.loads((Path(model_path) / "assets/dataset_manifest.json").read_text())
+        config_name = manifest.get("config_name")
+        if not config_name:
+            asset_id = manifest.get("asset_id")
+            matches = [
+                candidate.name for candidate in training_config._CONFIGS
+                if asset_id and (candidate.data.assets.asset_id or candidate.data.repo_id) == asset_id
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"Expected one training config for asset_id={asset_id!r}, found {matches}; "
+                    "set pi05_pytorch.config explicitly"
+                )
+            config_name = matches[0]
+    return training_config.get_config(config_name)
 
 
 class ModelVLA:

@@ -47,9 +47,7 @@ Web 客户端接受 `--host`、`--port`、`--conf` 和 `--reload`。`--conf` 选
 | 字段 | 类型 / 可选值 | 含义 |
 | --- | --- | --- |
 | `intra_chunk_mode` | `raw`、`interpolation` 或 `fitting` | 动作输出方式：直接使用原始动作、插值或多项式拟合。 |
-| `filter_window_size` | 非负整数 | 夹爪动作滤波半窗口，实际窗口长度为 $2n+1$。 |
-| `min_gripper_action_threshold` | 数值 | 小于此阈值的夹爪动作视为完全打开（`0.0`）。 |
-| `max_gripper_action_threshold` | 数值 | 大于此阈值的夹爪动作视为完全闭合（`1.0`）。 |
+| `filter_window_size` | 非负整数 | 阶跃动作的均值滤波半窗口，实际窗口长度为 $2n+1$；保留输入的原始单位，不再强制吸附到 `0` 或 `1`。 |
 | `fitting_num_samples` | 正整数 | 预留的轨迹采样参数；当前实现实际使用由控制周期生成的时间网格。 |
 | `fitting_deg` | 非负整数 | 轨迹拟合的多项式阶数。 |
 | `max_joint_fitting_workers` | 正整数 | 预留的工作线程参数；当前批量实现不会创建关节拟合执行器。 |

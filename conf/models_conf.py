@@ -188,12 +188,11 @@ def get_pi05_config():
 def get_pi05_pytorch_config():
     """PyTorch pi0.5 for A2D or TI5 with the matching training source."""
     config = ConfigDict()
-    config.config = None  # Auto-select from checkpoint assets, or set 'pi05_a2d' / 'pi05_ti5'.
+    config.config = None  # Auto-select checkpoint training config, or set a name explicitly.
     config.model_path = '/path/to/model'  # Contains model.safetensors and assets/.
     config.compile_mode = 'max-autotune'  # Options: None (off, no quotes), 'default', 'reduce-overhead', 'max-autotune', 'max-autotune-no-cudagraphs'.
     config.execute_horizon = 50
     return config
-
 
 def get_tao_config():
     """Generate configuration for TAO model.

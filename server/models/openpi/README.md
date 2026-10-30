@@ -57,14 +57,16 @@ OpenPI's mixed precision and shared weights to reduce CPU memory use.
 CUDA is selected automatically when available.
 
 The checkpoint must contain `model.safetensors` and its `assets/` directory,
-including normalization statistics for the configured asset ID. Put
+including normalization statistics for this checkpoint. New checkpoints store
+`norm_stats.json` and `dataset_manifest.json` directly in `assets/`. Put
 `paligemma_tokenizer.model` directly in `assets/`; a shared copy at
 `~/.cache/openpi/paligemma_tokenizer.model` or an explicit
 `PALIGEMMA_TOKENIZER` environment variable is also supported.
 
 Edit `get_pi05_pytorch_config()` in `conf/models_conf.py`: `config` defaults
-to `None`, which selects `pi05_a2d` or `pi05_ti5` by matching the checkpoint's
-normalization assets. Set an explicit config if selection is ambiguous.
+to `None`, which reads `config_name` from `assets/dataset_manifest.json`.
+If it is absent, the adapter matches the manifest's `asset_id` against the training
+configs. Set an explicit config name if no unique match exists or to override it.
 `execute_horizon` defaults to 50 and `compile_mode` to `max-autotune`.
 Use Python `None` (without quotes) to disable compilation, or select
 `default`, `reduce-overhead`, `max-autotune`, or `max-autotune-no-cudagraphs`.
