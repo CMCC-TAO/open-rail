@@ -188,7 +188,7 @@ def get_pi05_config():
 def get_pi05_pytorch_config():
     """PyTorch pi0.5 for A2D or TI5 with the matching training source."""
     config = ConfigDict()
-    config.config = None  # Auto-select checkpoint training config, or set a name explicitly.
+    config.config = 'pi05_a2d'  # Training config name.
     config.model_path = '/path/to/model'  # Contains model.safetensors and assets/.
     config.compile_mode = 'max-autotune'  # Options: None (off, no quotes), 'default', 'reduce-overhead', 'max-autotune', 'max-autotune-no-cudagraphs'.
     config.execute_horizon = 50
