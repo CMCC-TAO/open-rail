@@ -2,7 +2,6 @@
 
 from dataclasses import asdict, replace
 from importlib.util import find_spec
-import json
 import os
 from pathlib import Path
 import sys
@@ -94,34 +93,14 @@ def _create_streaming_policy(train_config, model_path, device, compile_mode="max
 
     from openpi.shared import normalize
 
-    norm_stats = normalize.load(Path(model_path) / "assets")
+    asset_id = train_config.data.assets.asset_id or train_config.data.repo_id
+    norm_stats = normalize.load(Path(model_path) / "assets" / asset_id)
     model_args = asdict(train_config.model)
     model_args["pytorch_compile_mode"] = compile_mode
     return policy_config.create_trained_policy(
         replace(train_config, model=StreamingConfig(**model_args)),
         model_path, pytorch_device=device, norm_stats=norm_stats,
     )
-
-
-def _get_train_config(config_name, model_path):
-    from openpi.training import config as training_config
-
-    if not config_name:
-        manifest = json.loads((Path(model_path) / "assets/dataset_manifest.json").read_text())
-        config_name = manifest.get("config_name")
-        if not config_name:
-            asset_id = manifest.get("asset_id")
-            matches = [
-                candidate.name for candidate in training_config._CONFIGS
-                if asset_id and (candidate.data.assets.asset_id or candidate.data.repo_id) == asset_id
-            ]
-            if len(matches) != 1:
-                raise ValueError(
-                    f"Expected one training config for asset_id={asset_id!r}, found {matches}; "
-                    "set pi05_pytorch.config explicitly"
-                )
-            config_name = matches[0]
-    return training_config.get_config(config_name)
 
 
 class ModelVLA:
@@ -139,8 +118,10 @@ class ModelVLA:
             raise ValueError("execute_horizon must be positive")
 
         _ensure_openpi_client_on_path()
+        from openpi.training import config as training_config
+
         model_path = str(self.cfg["model_path"])
-        train_config = _get_train_config(self.cfg.get("config"), model_path)
+        train_config = training_config.get_config(self.cfg["config"])
         config_name = train_config.name
         self.robot = train_config.policy_metadata.get("robot", "a2d_gripper")
         if self.robot not in ("a2d_gripper", "ti5"):
