@@ -2,38 +2,32 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 71,
-    "uniques": 40
+    "count": 78,
+    "uniques": 42
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
     "title": "/blob/main/README.zh-CN.md",
-    "count": 44,
-    "uniques": 21
-  },
-  {
-    "path": "/CMCC-TAO/open-rail/graphs/traffic",
-    "title": "/graphs/traffic",
-    "count": 19,
-    "uniques": 1
+    "count": 46,
+    "uniques": 23
   },
   {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
+    "count": 21,
+    "uniques": 16
+  },
+  {
+    "path": "/CMCC-TAO/open-rail/graphs/traffic",
+    "title": "/graphs/traffic",
     "count": 18,
-    "uniques": 14
+    "uniques": 1
   },
   {
     "path": "/CMCC-TAO/open-rail/issues",
     "title": "/issues",
-    "count": 11,
+    "count": 10,
     "uniques": 8
-  },
-  {
-    "path": "/CMCC-TAO/open-rail/issues/3",
-    "title": "/issues/3",
-    "count": 4,
-    "uniques": 3
   },
   {
     "path": "/CMCC-TAO/open-rail/issues/4",
@@ -48,14 +42,20 @@
     "uniques": 3
   },
   {
-    "path": "/CMCC-TAO/open-rail/commits/main",
-    "title": "/commits/main",
+    "path": "/CMCC-TAO/open-rail/issues/3",
+    "title": "/issues/3",
     "count": 3,
     "uniques": 2
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/server/models/tao/tao.py",
     "title": "/blob/main/server/models/tao/tao.py",
+    "count": 3,
+    "uniques": 1
+  },
+  {
+    "path": "/CMCC-TAO/open-rail/releases",
+    "title": "/releases",
     "count": 3,
     "uniques": 1
   }
