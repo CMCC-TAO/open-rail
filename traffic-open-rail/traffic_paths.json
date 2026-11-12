@@ -2,25 +2,25 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 79,
-    "uniques": 43
+    "count": 68,
+    "uniques": 39
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
     "title": "/blob/main/README.zh-CN.md",
-    "count": 56,
-    "uniques": 28
+    "count": 51,
+    "uniques": 26
   },
   {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
-    "count": 19,
+    "count": 17,
     "uniques": 13
   },
   {
     "path": "/CMCC-TAO/open-rail/graphs/traffic",
     "title": "/graphs/traffic",
-    "count": 16,
+    "count": 15,
     "uniques": 1
   },
   {
@@ -42,6 +42,12 @@
     "uniques": 4
   },
   {
+    "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/add-new-robot.zh-CN.md",
+    "title": "/blob/main/docs-cn-backup/add-new-robot.zh-CN.md",
+    "count": 3,
+    "uniques": 2
+  },
+  {
     "path": "/CMCC-TAO/open-rail/blob/main/server/models/tao/tao.py",
     "title": "/blob/main/server/models/tao/tao.py",
     "count": 3,
@@ -50,12 +56,6 @@
   {
     "path": "/CMCC-TAO/open-rail/blob/main/data/media/data-teleop.png",
     "title": "/blob/main/data/media/data-teleop.png",
-    "count": 2,
-    "uniques": 2
-  },
-  {
-    "path": "/CMCC-TAO/open-rail/issues/2",
-    "title": "/issues/2",
     "count": 2,
     "uniques": 2
   }
