@@ -2,32 +2,32 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 78,
-    "uniques": 40
+    "count": 72,
+    "uniques": 35
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
     "title": "/blob/main/README.zh-CN.md",
-    "count": 52,
-    "uniques": 28
+    "count": 50,
+    "uniques": 27
   },
   {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
-    "count": 23,
-    "uniques": 14
+    "count": 21,
+    "uniques": 13
   },
   {
     "path": "/CMCC-TAO/open-rail/graphs/traffic",
     "title": "/graphs/traffic",
-    "count": 15,
+    "count": 16,
     "uniques": 1
   },
   {
     "path": "/CMCC-TAO/open-rail/issues",
     "title": "/issues",
-    "count": 10,
-    "uniques": 8
+    "count": 9,
+    "uniques": 7
   },
   {
     "path": "/CMCC-TAO/open-rail/issues/4",
@@ -36,10 +36,16 @@
     "uniques": 5
   },
   {
+    "path": "/CMCC-TAO/open-rail/issues/2",
+    "title": "/issues/2",
+    "count": 3,
+    "uniques": 3
+  },
+  {
     "path": "/CMCC-TAO/open-rail/issues/3",
     "title": "/issues/3",
-    "count": 5,
-    "uniques": 4
+    "count": 3,
+    "uniques": 3
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/add-new-robot.zh-CN.md",
@@ -50,12 +56,6 @@
   {
     "path": "/CMCC-TAO/open-rail/blob/main/server/models/tao/tao.py",
     "title": "/blob/main/server/models/tao/tao.py",
-    "count": 3,
-    "uniques": 1
-  },
-  {
-    "path": "/CMCC-TAO/open-rail/tags",
-    "title": "/tags",
     "count": 3,
     "uniques": 1
   }
