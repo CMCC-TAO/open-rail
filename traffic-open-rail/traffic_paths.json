@@ -2,32 +2,32 @@
   {
     "path": "/CMCC-TAO/open-rail",
     "title": "Overview",
-    "count": 75,
-    "uniques": 37
+    "count": 70,
+    "uniques": 32
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/README.zh-CN.md",
     "title": "/blob/main/README.zh-CN.md",
-    "count": 43,
-    "uniques": 26
+    "count": 41,
+    "uniques": 23
   },
   {
     "path": "/CMCC-TAO/open-rail/graphs/traffic",
     "title": "/graphs/traffic",
-    "count": 22,
+    "count": 21,
     "uniques": 1
   },
   {
     "path": "/CMCC-TAO/open-rail/tree/main",
     "title": "/tree/main",
-    "count": 19,
-    "uniques": 8
+    "count": 18,
+    "uniques": 7
   },
   {
     "path": "/CMCC-TAO/open-rail/issues",
     "title": "/issues",
-    "count": 6,
-    "uniques": 5
+    "count": 4,
+    "uniques": 4
   },
   {
     "path": "/CMCC-TAO/open-rail/blob/main/docs-cn-backup/add-new-robot.zh-CN.md",
@@ -48,15 +48,15 @@
     "uniques": 3
   },
   {
-    "path": "/CMCC-TAO/open-rail/issues/3",
-    "title": "/issues/3",
-    "count": 3,
-    "uniques": 3
-  },
-  {
     "path": "/CMCC-TAO/open-rail/tree/main/client",
     "title": "/tree/main/client",
     "count": 3,
     "uniques": 2
+  },
+  {
+    "path": "/CMCC-TAO/open-rail/pulse",
+    "title": "/pulse",
+    "count": 3,
+    "uniques": 1
   }
 ]
