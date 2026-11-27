@@ -1,12 +1,7 @@
 {
-  "count": 58,
-  "uniques": 29,
+  "count": 83,
+  "uniques": 33,
   "views": [
-    {
-      "timestamp": "2026-11-19T00:00:00Z",
-      "count": 6,
-      "uniques": 4
-    },
     {
       "timestamp": "2026-11-20T00:00:00Z",
       "count": 10,
@@ -31,6 +26,11 @@
       "timestamp": "2026-11-24T00:00:00Z",
       "count": 24,
       "uniques": 7
+    },
+    {
+      "timestamp": "2026-11-25T00:00:00Z",
+      "count": 31,
+      "uniques": 8
     }
   ]
 }
